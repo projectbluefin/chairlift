@@ -5,9 +5,9 @@ alwaysApply: true
 
 # ChairLift agent rules
 
-Before planning or editing, read `AGENTS.md` and every file in
-`docs/agents/skills/`. Those files are authoritative; this rule is a concise
-entry point, not a replacement for them.
+Before planning or editing, read `AGENTS.md`, `docs/SKILL.md`, and the matching
+package in `docs/skills/`. Those files are authoritative; this rule is a
+concise entry point, not a replacement for them.
 
 ## Architecture and safety
 

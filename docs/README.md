@@ -12,6 +12,10 @@ the question they answer:
 | [design/](design/) | **How** does it fit together? | Living documents describing the current architecture; [design/overview.md](design/overview.md) is the entry point |
 | [specs/](specs/) | **What exactly** is the contract? | Precise, testable interface definitions, changed only alongside implementing code |
 | [plans/](plans/) | **When/in what order** do we build? | Phased plans with "Done when" outcomes |
+| [factory/](factory/) | **How** do we work across the Project Bluefin factory? | Local navigation for factory-assigned work; Common remains the authority for cross-repository process |
+
+The `factory/` entry is a process and navigation surface; the four core
+documentation categories remain `adr/`, `design/`, `specs/`, and `plans/`.
 
 The user-facing docs-site home is [index.md](index.md) (rendered by
 `mkdocs.yml`); this file is the contributor-facing index of everything under
@@ -87,6 +91,17 @@ current behavior):
 - [plans/2026-08-17-bluefin-suite-parity-plan.md](plans/2026-08-17-bluefin-suite-parity-plan.md)
 - [walkthrough.md](walkthrough.md) — every screen, captured from the real application
 
+### Factory and agent process
+
+- [SKILL.md](SKILL.md) — local skill router
+- [skills/index.md](skills/index.md) — canonical catalog of agent skill packages
+- [factory/README.md](factory/README.md) — local Project Bluefin factory
+  navigation and Common sidecar links
+- [skills/](skills/) — canonical agent knowledge base; edit the matching
+  `SKILL.md` package, never a compatibility surface
+- [agents/skills/](agents/skills/) — legacy compatibility aliases only; do not
+  edit these files
+
 ### Process and policy docs (uncategorized, indexed in place)
 
 - [index.md](index.md) — user-facing overview: pages, shortcuts, optional
@@ -103,8 +118,6 @@ current behavior):
 - [SECURITY-AI.md](SECURITY-AI.md) — AI security policy
 - [org-adrs.md](org-adrs.md) — frostyard/core ADRs that bind this repository
 - [prompts/index.md](prompts/index.md) — reusable agent prompt catalog
-- [agents/skills/](agents/skills/) — durable learned lessons (mill harvest)
-  and core-synced skills; binding guidance for agents
 - [superpowers/](superpowers/) — historical plan/spec artifacts from past
   superpowers runs (not sources of current behavior)
 

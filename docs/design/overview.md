@@ -57,7 +57,7 @@ The `views.go` file defines the central `UserHome` struct that holds references 
 - `New(cfg, toastAdder)` — constructor that initializes `UserHome`
 - `ToastAdder` interface — `ShowToast(msg)`, `ShowErrorToast(msg)`, `SetUpdateBadge(count)` — implemented by Window
 
-`internal/views` imports puregotk, so it can never hold a `_test.go` (see `docs/agents/skills/gtk-headless-tests.md`). Decidable logic is therefore pushed down into nine puregotk-free leaf packages beneath it — `internal/views/actionmsg` and `internal/views/trustmsg` (toast text and UI decisions, see [package-managers.md](./package-managers.md#view-layer-toast-and-decision-helpers-internalviewsactionmsg-internalviewstrustmsg)), `internal/views/actionstate` (Homebrew update command/refresh outcomes and repeated-click gates, see [package-managers.md](./package-managers.md#view-layer-update-action-state-internalviewsactionstate)), `internal/views/badgestate` (thread-safe per-provider update counts and totals, see [package-managers.md](./package-managers.md#view-layer-update-badge-state-internalviewsbadgestate)), `internal/views/bundleview` (Brew bundle empty/error/unavailable presentation and per-row install gating, see [package-managers.md](./package-managers.md#view-layer-brew-bundle-state-internalviewsbundleview)), `internal/views/rowset` (single-row removal plus clear-then-repopulate bookkeeping, see [package-managers.md](./package-managers.md#view-layer-row-bookkeeping-internalviewsrowset)), `internal/views/flatpakstatus` (the Flatpak updates expander's subtitle text and expandable decision, applied by `loadFlatpakUpdates` from both retained `ListUpdates` errors, see [package-managers.md](./package-managers.md#view-layer-flatpak-update-status-internalviewsflatpakstatus)), `internal/views/featurestatus` (the Features page's per-feature update-status subtitle, the any-component update decision and the features group description for all three check outcomes — `GroupDescriptionCheckFailed` when the check itself failed, and `GroupDescription` when it completed with zero features updatable or with updates found — applied by `checkFeatureUpdates`, which composes no subtitle or description text of its own, see [package-managers.md](./package-managers.md#view-layer-feature-update-status-internalviewsfeaturestatus)), and `internal/views/pageview` (the row text, page status, os-release parsing, Help resource ordering, and maintenance-command selection shared by all six page builders, see [package-managers.md](./package-managers.md#view-layer-page-presentation-internalviewspageview)) — each table- or scenario-tested headlessly. This layout is decision record
+`internal/views` imports puregotk, so it can never hold a `_test.go` (see `docs/skills/gtk-headless-testing/SKILL.md`). Decidable logic is therefore pushed down into nine puregotk-free leaf packages beneath it — `internal/views/actionmsg` and `internal/views/trustmsg` (toast text and UI decisions, see [package-managers.md](./package-managers.md#view-layer-toast-and-decision-helpers-internalviewsactionmsg-internalviewstrustmsg)), `internal/views/actionstate` (Homebrew update command/refresh outcomes and repeated-click gates, see [package-managers.md](./package-managers.md#view-layer-update-action-state-internalviewsactionstate)), `internal/views/badgestate` (thread-safe per-provider update counts and totals, see [package-managers.md](./package-managers.md#view-layer-update-badge-state-internalviewsbadgestate)), `internal/views/bundleview` (Brew bundle empty/error/unavailable presentation and per-row install gating, see [package-managers.md](./package-managers.md#view-layer-brew-bundle-state-internalviewsbundleview)), `internal/views/rowset` (single-row removal plus clear-then-repopulate bookkeeping, see [package-managers.md](./package-managers.md#view-layer-row-bookkeeping-internalviewsrowset)), `internal/views/flatpakstatus` (the Flatpak updates expander's subtitle text and expandable decision, applied by `loadFlatpakUpdates` from both retained `ListUpdates` errors, see [package-managers.md](./package-managers.md#view-layer-flatpak-update-status-internalviewsflatpakstatus)), `internal/views/featurestatus` (the Features page's per-feature update-status subtitle, the any-component update decision and the features group description for all three check outcomes — `GroupDescriptionCheckFailed` when the check itself failed, and `GroupDescription` when it completed with zero features updatable or with updates found — applied by `checkFeatureUpdates`, which composes no subtitle or description text of its own, see [package-managers.md](./package-managers.md#view-layer-feature-update-status-internalviewsfeaturestatus)), and `internal/views/pageview` (the row text, page status, os-release parsing, Help resource ordering, and maintenance-command selection shared by all six page builders, see [package-managers.md](./package-managers.md#view-layer-page-presentation-internalviewspageview)) — each table- or scenario-tested headlessly. This layout is decision record
 [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md).
 
 ### Pages
@@ -245,7 +245,7 @@ this package's source-graph slice that the spec singles out for a direct
 unit test (`TestMergeKeyRecognition`, `TestShortYAMLTagNormalization` in
 `sourcegraph_test.go`) rather than only exercising them through an exported
 entry point, per
-`docs/agents/skills/helper-functions-need-direct-test-calls.md`; neither
+`docs/skills/helper-test-surface/SKILL.md`; neither
 helper is called directly by runtime loading, but both are reached indirectly
 through `resolveEffective` in the strict validator pipeline.
 
@@ -321,7 +321,7 @@ later, still-unimplemented merge-precedence pass would go on to discard in
 favor of a later `<<` entry — because this function proves every reachable
 node well-formed, not just the nodes an eventual effective-merge result
 would keep
-(`docs/agents/skills/discarded-merge-branches-still-need-validation.md`).
+(`docs/skills/merge-validation/SKILL.md`).
 
 **Duplicate explicit-key detection (`internal/config/sourcegraph.go`).**
 Every reachable mapping's explicit keys must be pairwise unique under
@@ -331,7 +331,7 @@ parser recorded a positive line for it, that line. The identity
 deliberately compares only `Kind` and `Value`, reproducing `gopkg.in/yaml.v3`
 v3.0.1 `decode.go`'s own `uniqueKeys` predicate (inside `decoder.mapping`)
 exactly rather than the tag-aware key identity
-`docs/agents/skills/yaml-scalar-key-identity-needs-tag-not-just-value.md`
+`docs/skills/yaml-key-identity/SKILL.md`
 requires elsewhere in this package for merge-precedence purposes — that rule
 is about a different concern (`effectiveKeyIdentity`, described just below)
 and does not apply here, because yaml.v3's own duplicate-key guard never
@@ -372,7 +372,7 @@ yaml.ScalarNode, tag: target.ShortTag(), value: target.Value}` —
 `gopkg.in/yaml.v3` v3.0.1's `yaml.go` implements it to resolve an unset or
 `"!"` tag from the node's own value (`resolve("", n.Value)` for scalars),
 so this rule is exactly the tag-aware identity
-`docs/agents/skills/yaml-scalar-key-identity-needs-tag-not-just-value.md`
+`docs/skills/yaml-key-identity/SKILL.md`
 requires: a bare `1` and an explicitly `!!int`-tagged `1` are the same
 key, but a bare `1` and an explicitly `!!str`-tagged (quoted) `"1"` are not,
 and `01` and `1` are not (different `Value`). A `yaml.MappingNode` or
@@ -677,7 +677,7 @@ schema authority here — it is `Config`'s pointer-typed YAML-decoding mirror
 (`TestRawConfigMatchesConfigFields`) proves its exported fields, field order,
 and yaml tag names match `Config`'s exactly, so it stays a provably-in-sync
 mirror rather than a second source of truth per
-`docs/agents/skills/derive-schema-from-canonical-struct-not-shadow-representation.md`.
+`docs/skills/canonical-schema/SKILL.md`.
 Both exported functions return a freshly allocated slice (and `SchemaGroups`
 an error for a page name outside `SchemaPages()`) on every call, so a caller
 mutating a returned slice cannot affect a later call. An empty or duplicate
@@ -695,7 +695,7 @@ same field count, same names and yaml tags per index, and each
 `rawGroupConfig` field type equal to `GroupConfig`'s or exactly a pointer to
 it (ignoring only that pointer-vs-value difference and `omitempty`) — so
 `rawGroupConfig` cannot silently drift from `GroupConfig` per
-`docs/agents/skills/derive-schema-from-canonical-struct-not-shadow-representation.md`.
+`docs/skills/canonical-schema/SKILL.md`.
 `SchemaActionFields()` reads `ActionConfig`'s yaml tags directly, since
 `ActionConfig` has no raw/pointer mirror. Both return a freshly allocated
 slice on every call and report an empty or duplicate field name as an error,
