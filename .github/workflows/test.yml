@@ -97,16 +97,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             dbus-x11 \
+            flatpak \
             imagemagick \
             libadwaita-1-0 \
             libgtk-4-1 \
+            x11-apps \
             x11-utils \
             xauth \
             xdotool \
             xvfb
 
-      # imagemagick (import), x11-utils (xdpyinfo), and xdotool are the
-      # screenshot walkthrough's additional requirements; the GTK runtime
+      # imagemagick (import), x11-utils (xdpyinfo), x11-apps (xwd — a
+      # separate Debian/Ubuntu package from x11-utils, easy to miss since
+      # both sound like "the X utilities"), and xdotool are the
+      # screenshot walkthrough's additional requirements. flatpak matters
+      # for a different reason: buildUpdateAllGroup (internal/views/update_all.go)
+      # omits the whole Update All group when no provider — OS staging,
+      # Flatpak, or Homebrew — is available on the host, and the walkthrough
+      # asserts that group gets built. ubuntu-latest ships Homebrew, but not
+      # on PATH by default (needs `brew shellenv`), and never ships bootc, so
+      # without `flatpak` installed here nothing is available and the group
+      # silently vanishes — which is exactly the failure this step used to
+      # hit once the missing-xwd error above it was fixed. Installing flatpak
+      # is simpler than wiring Homebrew onto PATH, and more representative:
+      # it's what a real Bluefin/Dakota host actually has. The GTK runtime
       # above already covers the startup smoke test.
       - name: Run E2E tests
         env:
