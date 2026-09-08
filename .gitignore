@@ -45,5 +45,8 @@ Thumbs.db
 # Local Go build cache used when TMPDIR is noexec
 .gotmp/
 
+# Host-local agent handoff; never commit a repository session summary.
+.claude/session-summary.md
+
 # Screenshot walkthrough output (CHAIRLIFT_WALKTHROUGH_DIR)
 .walkthrough/

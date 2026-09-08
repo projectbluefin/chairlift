@@ -12,15 +12,17 @@ drifting between stores.
    durable lessons from prior automated runs.
 3. Read `.memory/README.md` and `.memory/corrections.jsonl`, when present, for
    verified corrections.
-4. Read `.claude/session-summary.md` for the latest in-progress handoff.
+4. Check the host-provided session/workspace handoff outside this repository,
+   when present. It is transient context and must not be committed here.
 5. Read `docs/design/overview.md` and the relevant `docs/design/` subsystem
    documents (formerly `yeti/`) for architecture and decision rationale.
 
 ## Record knowledge in its canonical location
 
 - Put verified corrections in `.memory/corrections.jsonl`.
-- Replace `.claude/session-summary.md` when another session must continue
-  active work.
+- Put active handoffs only in the host-provided, non-committed
+  session/workspace state; do not create or restore
+  `.claude/session-summary.md`.
 - Promote stable operating rules to `AGENTS.md`, reusable lessons to
   `docs/skills/`, architecture to `docs/design/`, and repo-local
   decision rationale to `docs/adr/`.
