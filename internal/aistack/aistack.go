@@ -171,7 +171,9 @@ func RenderUnit(stack Stack) string {
 	for _, arg := range stack.PodmanArgs {
 		fmt.Fprintf(&b, "PodmanArgs=%s\n", arg)
 	}
-	fmt.Fprintf(&b, "PublishPort=%d:%d\n", Port, Port)
+	// Bind loopback explicitly: Podman publishes on 0.0.0.0 when no host IP
+	// is given, which would expose the unauthenticated model API to the LAN.
+	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", Port, Port)
 	b.WriteString("Volume=%h/ai-workspaces/ramalama:/root/.cache/ramalama:z\n\n")
 
 	b.WriteString("[Service]\nRestart=on-failure\nRestartSec=10\n\n")

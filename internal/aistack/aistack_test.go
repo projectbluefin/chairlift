@@ -106,7 +106,7 @@ func TestEveryStackRendersAStartableUnit(t *testing.T) {
 			"[Container]",
 			"Image=" + stack.Image,
 			"ContainerName=chairlift-ai",
-			"PublishPort=8080:8080",
+			"PublishPort=127.0.0.1:8080:8080",
 			"WantedBy=default.target",
 		} {
 			if !strings.Contains(unit, required) {
