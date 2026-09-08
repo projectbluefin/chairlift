@@ -25,32 +25,15 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
-      # More assembly might be required: Docker logins, GPG, etc.
-      # It all depends on your needs.
+      # GoReleaser OSS (free): publishes binaries, archives, and the rpm/deb/apk
+      # nFPM packages straight to the GitHub Release for this tag. No Pro
+      # license or external package-repo credentials needed.
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
-          # either 'goreleaser' (default) or 'goreleaser-pro'
-          distribution: goreleaser-pro
+          distribution: goreleaser
           # 'latest', 'nightly', or a semver
           version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Your GoReleaser Pro key, if you are using the 'goreleaser-pro' distribution
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-
-      - name: Publish to frostyard repo
-        uses: frostyard/repogen/.github/actions/publish-to-r2@6648671cec7015231fac1f278f09ee5799281bc9 # main
-        with:
-          r2-account-id: ${{ secrets.R2_ACCOUNT_ID }}
-          r2-access-key-id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2-secret-access-key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          gpg-private-key: ${{ secrets.REPOGEN_GPG_KEY }}
-          r2-bucket: frostyardrepo
-          purge-cache: "true"
-          cloudflare-zone: ${{ secrets.CLOUDFLARE_ZONE }}
-          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          packages-dir: ./dist
-          package-type: deb # or sysext
-          base-url: https://repository.frostyard.org # required for sysext

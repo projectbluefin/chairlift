@@ -31,23 +31,16 @@ func RepoRoot() string {
 // .goreleaser.yaml this package's tests care about. yaml.v3's default
 // unmarshaling silently ignores every field not named here, so this struct
 // does not need to (and deliberately does not) mirror the whole schema.
-type GoreleaserConfig struct {
-	Metadata MetadataConfig `yaml:"metadata"`
-	Release  ReleaseConfig  `yaml:"release"`
-	Nfpms    []NfpmConfig   `yaml:"nfpms"`
-}
-
-// MetadataConfig is the subset of the top-level metadata: block relevant to
-// license consistency (License) and to the repository URL (Homepage).
 //
-// Homepage is load-bearing, not decorative: release.footer's "Full Changelog"
-// link derives its repository URL from the {{ .Metadata.Homepage }} template
-// variable, so this is the single source of truth for the repository URL in
-// .goreleaser.yaml. Like License, it must be named here or yaml.v3 silently
-// drops the value and any test asserting on it passes vacuously.
-type MetadataConfig struct {
-	Homepage string `yaml:"homepage"`
-	License  string `yaml:"license"`
+// There is deliberately no top-level metadata: block here. GoReleaser OSS
+// (unlike Pro) does not support metadata.description/homepage/license/
+// maintainers — see the "switch to plain GitHub Releases" note in
+// docs/design/package-managers.md — so license and repository-URL identity
+// live only in each nfpms[] entry and in release.footer's literal text,
+// both already covered below.
+type GoreleaserConfig struct {
+	Release ReleaseConfig `yaml:"release"`
+	Nfpms   []NfpmConfig  `yaml:"nfpms"`
 }
 
 // ReleaseConfig is the subset of the top-level release: block relevant to the
