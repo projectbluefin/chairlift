@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/navigation"
 )
 
 const walkthroughTimeout = 3 * time.Minute

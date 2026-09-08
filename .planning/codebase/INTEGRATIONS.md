@@ -51,8 +51,8 @@
 
 **Auth Provider:**
 - PolicyKit (pkexec) for privileged operations
-  - PolicyKit policies in `data/org.frostyard.ChairLift.*.policy`
-  - PolicyKit rules in `data/org.frostyard.ChairLift.*.rules`
+  - PolicyKit policies in `data/io.projectbluefin.chairlift.*.policy`
+  - PolicyKit rules in `data/io.projectbluefin.chairlift.*.rules`
   - Used for: nbc operations, updex feature enable/disable/update, snap operations
 
 **Operations Requiring Elevation:**

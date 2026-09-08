@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 // setupTimeout bounds goose-mcp-setup, which only writes a file.

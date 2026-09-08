@@ -4,7 +4,7 @@ Thank you for helping improve ChairLift.
 
 ## Before you start
 
-- Search the [issue tracker](https://github.com/frostyard/chairlift/issues) for
+- Search the [issue tracker](https://github.com/projectbluefin/chairlift/issues) for
   existing work.
 - Open an issue before making a large behavioral or architectural change.
 - Review [AGENTS.md](AGENTS.md) for repository invariants and development
@@ -25,7 +25,7 @@ Fork the repository, clone your fork, and register the upstream repository:
 ```sh
 git clone git@github.com:YOUR-USER/chairlift.git
 cd chairlift
-git remote add upstream https://github.com/frostyard/chairlift.git
+git remote add upstream https://github.com/projectbluefin/chairlift.git
 git fetch upstream
 make deps
 make build

@@ -540,7 +540,7 @@ That part was already correct and already tested (`internal/bootc/stage_test.go`
 |----------|---------|-----------|---------|-------|
 | `GetStatus(ctx)` | `bootc status --format json` | none | 30min (`DefaultContext`); views use the standard 30min context | JSON parsed into `Status` |
 | `IsBootcBooted(ctx)` / `IsBootcBootedCached()` | (calls `GetStatus`) | none | 5s (cached variant) | Boot gate; cached variant memoizes via `sync.Once` |
-| `StageUpdate(ctx, progressCh)` | `pkexec /usr/libexec/bootc-update-stage` | pkexec (`org.frostyard.ChairLift.bootc.stage`) | 30min (`DefaultContext`) | Streaming; idempotent; dry-run aware |
+| `StageUpdate(ctx, progressCh)` | `pkexec /usr/libexec/bootc-update-stage` | pkexec (`io.projectbluefin.chairlift.bootc.stage`) | 30min (`DefaultContext`) | Streaming; idempotent; dry-run aware |
 | `StageScriptAvailable()` | `os.Stat(StageScriptPath)` | none | — | Used to hide the updates-page group when the script isn't installed |
 
 ### Streaming pattern
@@ -645,8 +645,8 @@ root-only).
 ### StageUpdate (privileged)
 
 `StageUpdate(ctx, progressCh)` runs `pkexec /usr/libexec/snosi-sysupdate-stage`
-(polkit action `org.frostyard.ChairLift.sysupdate.stage`,
-`data/org.frostyard.ChairLift.sysupdate.policy`, exec.path annotation, no
+(polkit action `io.projectbluefin.chairlift.sysupdate.stage`,
+`data/io.projectbluefin.chairlift.sysupdate.policy`, exec.path annotation, no
 argv). The script — shipped by the OS image, not ChairLift — checks the
 sysupdate target for a newer version, downloads it into the inactive
 root/verity slots via `systemd-sysupdate update`, verifies the result
@@ -690,7 +690,7 @@ split: only the toast (`actionmsg.SysupdateStage`) is dry-run-aware.
 | `GetStatus()` | reads `/run/snosi/update-check` + `/run/snosi/update-staged` | none | — (local file reads) | Absent files are normal states, not errors |
 | `IsNativeAB()` / `IsNativeABCached()` | `os.Stat(MarkerPath)` | none | — | Host-type gate; cached variant memoizes via `sync.Once` |
 | `RollbackVersion(ctx)` | `lsblk -J -o PATH,PARTLABEL` + `/usr/lib/os-release` | none | caller's ctx | Older-only candidate rule |
-| `StageUpdate(ctx, progressCh)` | `pkexec /usr/libexec/snosi-sysupdate-stage` | pkexec (`org.frostyard.ChairLift.sysupdate.stage`) | 30min (`DefaultContext`) | Streaming; idempotent; dry-run aware |
+| `StageUpdate(ctx, progressCh)` | `pkexec /usr/libexec/snosi-sysupdate-stage` | pkexec (`io.projectbluefin.chairlift.sysupdate.stage`) | 30min (`DefaultContext`) | Streaming; idempotent; dry-run aware |
 | `StageScriptAvailable()` | `os.Stat(StageScriptPath)` | none | — | Hides the updates-page group when the script isn't installed |
 
 ### Progress UI (`internal/views/updates_page.go`)
@@ -706,7 +706,7 @@ initial gate + reveal.
 
 ## Updex (`internal/updex/updex.go`)
 
-Manages system features (add-on software/configuration modules). Unlike other wrappers, updex does **not** shell out to a CLI for reads. It uses the `github.com/frostyard/updex/updex` Go library directly for read operations, with a singleton `*updexapi.Client`. Write operations that require root are delegated via pkexec to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`, built from `cmd/chairlift-updex-helper/main.go`) — never a bare, `$PATH`-resolved name, since `pkexec` matches the resolved absolute path against `data/org.frostyard.ChairLift.updex.policy`'s `org.freedesktop.policykit.exec.path` annotation to select the right action; see [overview.md](./overview.md#privileged-operations) for the full rationale and the matching `PREFIX=/usr` Makefile requirement.
+Manages system features (add-on software/configuration modules). Unlike other wrappers, updex does **not** shell out to a CLI for reads. It uses the `github.com/frostyard/updex/updex` Go library directly for read operations, with a singleton `*updexapi.Client`. Write operations that require root are delegated via pkexec to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`, built from `cmd/chairlift-updex-helper/main.go`) — never a bare, `$PATH`-resolved name, since `pkexec` matches the resolved absolute path against `data/io.projectbluefin.chairlift.updex.policy`'s `org.freedesktop.policykit.exec.path` annotation to select the right action; see [overview.md](./overview.md#privileged-operations) for the full rationale and the matching `PREFIX=/usr` Makefile requirement.
 
 ### Key types
 
@@ -866,9 +866,9 @@ maintainer defaults at `/usr/share/chairlift/config.yml`. None installs
 `/etc/chairlift/config.yml`: that higher-precedence path belongs to the
 administrator and must survive package installation and upgrades unchanged.
 
-GoReleaser has two nFPM entries. `frostyard-chairlift` is self-contained and
+GoReleaser has two nFPM entries. `projectbluefin-chairlift` is self-contained and
 selects both `chairlift` and `chairlift-updex-helper` builds.
-`frostyard-chairlift-system-integration` selects only the helper and packages
+`projectbluefin-chairlift-system-integration` selects only the helper and packages
 only maintainer config plus the bootc/sysupdate/updex policies, for pairing with a
 user-scoped app installation. The two package names conflict to prevent
 simultaneous ownership of the same fixed system files. The companion does not
@@ -973,7 +973,7 @@ owner. Deriving the footer from the homepage removes the duplicate rather
 than policing it, and the two tests keep the now-load-bearing source of truth
 honest:
 
-- **`TestGoreleaserMetadataHomepageIsFrostyardRepo`** asserts
+- **`TestGoreleaserMetadataHomepageIsCanonicalRepo`** asserts
   `cfg.Metadata.Homepage` still equals `https://github.com/frostyard/chairlift`,
   so the value the footer depends on cannot silently drift.
 - **`TestGoreleaserReleaseFooterUsesMetadataHomepage`** asserts the parsed

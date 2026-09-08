@@ -147,14 +147,14 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 
 	for _, path := range []string{
 		"usr/share/chairlift/config.yml",
-		"usr/share/applications/org.frostyard.ChairLift.desktop",
-		"usr/share/icons/hicolor/scalable/apps/org.frostyard.ChairLift.svg",
-		"usr/share/icons/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg",
-		"usr/share/icons/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg",
-		"usr/share/polkit-1/actions/org.frostyard.ChairLift.bootc.policy",
-		"usr/share/polkit-1/actions/org.frostyard.ChairLift.updex.policy",
-		"usr/share/polkit-1/actions/org.frostyard.ChairLift.sysupdate.policy",
-		"usr/share/polkit-1/actions/org.frostyard.ChairLift.ublue.policy",
+		"usr/share/applications/io.projectbluefin.chairlift.desktop",
+		"usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg",
+		"usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg",
+		"usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg",
+		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
+		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy",
+		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy",
+		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 		"usr/share/doc/chairlift/channels.example.yml",
 	} {
 		if info, err := os.Stat(filepath.Join(stage, path)); err != nil {

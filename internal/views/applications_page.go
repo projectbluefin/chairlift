@@ -7,12 +7,12 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/frostyard/chairlift/internal/flatpak"
-	"github.com/frostyard/chairlift/internal/homebrew"
-	"github.com/frostyard/chairlift/internal/views/actionmsg"
-	"github.com/frostyard/chairlift/internal/views/actionstate"
-	"github.com/frostyard/chairlift/internal/views/bundleview"
-	"github.com/frostyard/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/bundleview"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

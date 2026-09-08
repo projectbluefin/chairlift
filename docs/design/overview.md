@@ -1075,12 +1075,12 @@ Decision records: [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md
 [ADR-0006](../adr/0006-split-system-integration-package-with-mutual-conflicts.md)
 (the system-integration package split).
 
-bootc staging, native A/B staging, and updex require root for state-changing operations. They invoke commands through `pkexec` (PolicyKit). bootc runs `pkexec /usr/libexec/bootc-update-stage` directly (polkit action id `org.frostyard.ChairLift.bootc.stage`), native A/B staging runs `pkexec /usr/libexec/snosi-sysupdate-stage` directly (`internal/sysupdate.StageScriptPath`, action id `org.frostyard.ChairLift.sysupdate.stage`), and updex delegates to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`) via `pkexec`. Polkit policy files are installed for all three: `data/org.frostyard.ChairLift.bootc.policy`, `data/org.frostyard.ChairLift.sysupdate.policy`, and `data/org.frostyard.ChairLift.updex.policy`. ChairLift deliberately ships no `.rules` files: the policies require normal administrator authentication (`auth_admin`, with `auth_admin_keep` for an active local session) rather than granting blanket passwordless access to a login group. Source installation removes the two legacy ChairLift `.rules` files so an older passwordless rule cannot survive an upgrade. Homebrew tap trust (`brew trust`) is explicitly per-user and does _not_ go through pkexec — see [package-managers.md](./package-managers.md).
+bootc staging, native A/B staging, and updex require root for state-changing operations. They invoke commands through `pkexec` (PolicyKit). bootc runs `pkexec /usr/libexec/bootc-update-stage` directly (polkit action id `io.projectbluefin.chairlift.bootc.stage`), native A/B staging runs `pkexec /usr/libexec/snosi-sysupdate-stage` directly (`internal/sysupdate.StageScriptPath`, action id `io.projectbluefin.chairlift.sysupdate.stage`), and updex delegates to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`) via `pkexec`. Polkit policy files are installed for all three: `data/io.projectbluefin.chairlift.bootc.policy`, `data/io.projectbluefin.chairlift.sysupdate.policy`, and `data/io.projectbluefin.chairlift.updex.policy`. ChairLift deliberately ships no `.rules` files: the policies require normal administrator authentication (`auth_admin`, with `auth_admin_keep` for an active local session) rather than granting blanket passwordless access to a login group. Source installation removes the two legacy ChairLift `.rules` files so an older passwordless rule cannot survive an upgrade. Homebrew tap trust (`brew trust`) is explicitly per-user and does _not_ go through pkexec — see [package-managers.md](./package-managers.md).
 
 **Why the helper path must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on
-each action in `data/org.frostyard.ChairLift.updex.policy` (all three actions
+each action in `data/io.projectbluefin.chairlift.updex.policy` (all three actions
 annotate `/usr/bin/chairlift-updex-helper`). The policy also uses
 `org.freedesktop.policykit.exec.argv1` to select the corresponding
 `enable-feature`, `disable-feature`, or `update` action from the first helper
@@ -1097,8 +1097,8 @@ action. `internal/updex/updex.go`'s `runHelper` therefore always invokes
 **The Bluefin-family helper.** The release-channel switch and developer-mode
 toggle use a second fixed-path helper, `internal/ublue.HelperPath`
 (`/usr/bin/chairlift-ublue-helper`), with its own policy file
-`data/org.frostyard.ChairLift.ublue.policy` declaring the three actions
-`org.frostyard.ChairLift.ublue.{channel-switch,dx-enable,dx-disable}`. It
+`data/io.projectbluefin.chairlift.ublue.policy` declaring the three actions
+`io.projectbluefin.chairlift.ublue.{channel-switch,dx-enable,dx-disable}`. It
 follows the updex helper's contract exactly — fixed absolute `exec.path`, one
 `exec.argv1` per action, and a pure `internal/ubluehelper.ParseInvocation`
 boundary that accepts only `channel-switch <stable|testing> [--dry-run]`,
@@ -1377,9 +1377,9 @@ system facts, not values ChairLift decides; the Makefile and
 `.goreleaser.yaml`'s nFPM packages already use.
 
 **System-integration delivery:** GoReleaser publishes two mutually exclusive
-package shapes. `frostyard-chairlift` is the existing self-contained package
+package shapes. `projectbluefin-chairlift` is the existing self-contained package
 with both application binaries, desktop assets, maintainer config, and
-policies. `frostyard-chairlift-system-integration` is the root-owned companion
+policies. `projectbluefin-chairlift-system-integration` is the root-owned companion
 for a user-scoped GUI delivery such as the Homebrew cask: its build filter
 contains only `chairlift-updex-helper`, and its contents contain all three
 policies plus `/usr/share/chairlift/config.yml`. The packages declare conflicts

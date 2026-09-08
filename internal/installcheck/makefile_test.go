@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/ublue"
-	"github.com/frostyard/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/updex"
 )
 
 // PolicyKit's polkitd is compiled with fixed actions/rules directories and
@@ -91,10 +91,10 @@ func assertInstallsPackageLayout(t *testing.T, output, destDir string) {
 	}
 
 	for _, rel := range []string{
-		filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.updex.policy"),
-		filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.bootc.policy"),
-		filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.sysupdate.policy"),
-		filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.ublue.policy"),
+		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy"),
+		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy"),
+		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy"),
+		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy"),
 	} {
 		want := filepath.Join(destDir, rel)
 		if !strings.Contains(output, want) {

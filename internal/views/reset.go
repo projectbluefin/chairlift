@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/frostyard/chairlift/internal/distrobox"
-	"github.com/frostyard/chairlift/internal/flatpak"
-	"github.com/frostyard/chairlift/internal/powerwash"
-	"github.com/frostyard/chairlift/internal/ublue"
-	"github.com/frostyard/chairlift/internal/views/actionmsg"
-	"github.com/frostyard/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/distrobox"
+	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/powerwash"
+	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

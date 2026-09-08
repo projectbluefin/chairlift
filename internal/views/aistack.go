@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/frostyard/chairlift/internal/aistack"
-	"github.com/frostyard/chairlift/internal/views/actionmsg"
-	"github.com/frostyard/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/aistack"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

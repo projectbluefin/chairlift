@@ -264,7 +264,7 @@ import (
 )
 
 const (
-	AppID            = "org.frostyard.ChairLift"
+	AppID            = "io.projectbluefin.chairlift"
 	dataKeyGoInstance = "go_instance"
 )
 

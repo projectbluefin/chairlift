@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/stageexec"
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 func TestStageUpdateDryRunUsesFixedPath(t *testing.T) {

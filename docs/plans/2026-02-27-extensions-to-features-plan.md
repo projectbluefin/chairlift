@@ -14,16 +14,16 @@
 
 **Files:**
 - Delete: `internal/instex/instex.go`
-- Delete: `data/org.frostyard.ChairLift.instex.policy`
-- Delete: `data/org.frostyard.ChairLift.instex.rules`
+- Delete: `data/io.projectbluefin.chairlift.instex.policy`
+- Delete: `data/io.projectbluefin.chairlift.instex.rules`
 
 **Step 1: Remove instex files**
 
 ```bash
 rm internal/instex/instex.go
 rmdir internal/instex
-rm data/org.frostyard.ChairLift.instex.policy
-rm data/org.frostyard.ChairLift.instex.rules
+rm data/io.projectbluefin.chairlift.instex.policy
+rm data/io.projectbluefin.chairlift.instex.rules
 ```
 
 **Step 2: Commit**

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/updex"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,11 +27,11 @@ const wantSPDXLicense = "GPL-3.0-or-later"
 // file: release.footer's "Full Changelog" link derives from
 // {{ .Metadata.Homepage }} rather than repeating an owner literal, so a silent
 // edit here would silently redirect every generated release note.
-const wantHomepage = "https://github.com/frostyard/chairlift"
+const wantHomepage = "https://github.com/projectbluefin/chairlift"
 
 const (
-	fullPackageName        = "frostyard-chairlift"
-	integrationPackageName = "frostyard-chairlift-system-integration"
+	fullPackageName        = "projectbluefin-chairlift"
+	integrationPackageName = "projectbluefin-chairlift-system-integration"
 )
 
 // loadGoreleaserConfig parses the real, repo-root .goreleaser.yaml — not a
@@ -119,10 +119,10 @@ func TestGoreleaserNfpmLayoutMatchesUsrPrefix(t *testing.T) {
 		want      string
 	}{
 		{"maintainer config", "config.yml", "/usr/share/chairlift/config.yml"},
-		{"updex policy", "org.frostyard.ChairLift.updex.policy", filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.updex.policy")},
-		{"bootc policy", "org.frostyard.ChairLift.bootc.policy", filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.bootc.policy")},
-		{"sysupdate policy", "org.frostyard.ChairLift.sysupdate.policy", filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.sysupdate.policy")},
-		{"ublue policy", "org.frostyard.ChairLift.ublue.policy", filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.ublue.policy")},
+		{"updex policy", "io.projectbluefin.chairlift.updex.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy")},
+		{"bootc policy", "io.projectbluefin.chairlift.bootc.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy")},
+		{"sysupdate policy", "io.projectbluefin.chairlift.sysupdate.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy")},
+		{"ublue policy", "io.projectbluefin.chairlift.ublue.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy")},
 		{"channel table example", "channels.example.yml", "/usr/share/doc/chairlift/channels.example.yml"},
 	}
 
@@ -193,12 +193,12 @@ func TestGoreleaserPublishesSystemIntegrationPackage(t *testing.T) {
 	}
 
 	wantIntegrationContents := map[string]string{
-		"config.yml":                               "/usr/share/chairlift/config.yml",
-		"org.frostyard.ChairLift.bootc.policy":     filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.bootc.policy"),
-		"org.frostyard.ChairLift.updex.policy":     filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.updex.policy"),
-		"org.frostyard.ChairLift.sysupdate.policy": filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.sysupdate.policy"),
-		"org.frostyard.ChairLift.ublue.policy":     filepath.Join(polkitActionsDir, "org.frostyard.ChairLift.ublue.policy"),
-		"channels.example.yml":                     "/usr/share/doc/chairlift/channels.example.yml",
+		"config.yml": "/usr/share/chairlift/config.yml",
+		"io.projectbluefin.chairlift.bootc.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy"),
+		"io.projectbluefin.chairlift.updex.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy"),
+		"io.projectbluefin.chairlift.sysupdate.policy": filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy"),
+		"io.projectbluefin.chairlift.ublue.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy"),
+		"channels.example.yml":                         "/usr/share/doc/chairlift/channels.example.yml",
 	}
 	if len(integration.Contents) != len(wantIntegrationContents) {
 		t.Errorf("%s contents has %d entries, want %d", integrationPackageName, len(integration.Contents), len(wantIntegrationContents))
@@ -241,13 +241,13 @@ func TestGoreleaserLicenseIsGPL(t *testing.T) {
 	}
 }
 
-// TestGoreleaserMetadataHomepageIsFrostyardRepo parses the real
+// TestGoreleaserMetadataHomepageIsCanonicalRepo parses the real
 // .goreleaser.yaml and asserts metadata.homepage still names this
 // repository. The value became load-bearing when release.footer started
 // deriving its Full Changelog URL from {{ .Metadata.Homepage }}: a drifting
 // homepage now silently points every release note's changelog link at the
 // wrong repository, which this test catches instead.
-func TestGoreleaserMetadataHomepageIsFrostyardRepo(t *testing.T) {
+func TestGoreleaserMetadataHomepageIsCanonicalRepo(t *testing.T) {
 	cfg := loadGoreleaserConfig(t)
 
 	if cfg.Metadata.Homepage != wantHomepage {

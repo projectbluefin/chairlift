@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/updex"
 )
 
 // featureName is the single feature name used by every case, so the

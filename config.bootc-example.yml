@@ -3,7 +3,7 @@
 # while keeping universal features enabled.
 #
 # To use this configuration:
-# 1. Install frostyard-chairlift-system-integration when the GUI is user-scoped
+# 1. Install projectbluefin-chairlift-system-integration when the GUI is user-scoped
 # 2. Provide a trusted staging helper at /usr/libexec/bootc-update-stage
 # 3. Copy this file to /etc/chairlift/config.yml
 # 4. Modify as needed for your distribution
@@ -58,6 +58,6 @@ features_page:
 help_page:
   help_resources_group:
     enabled: true  # Show help resources
-    website: https://github.com/frostyard/chairlift
-    issues: https://github.com/frostyard/chairlift/issues
-    chat: https://github.com/frostyard/chairlift/discussions
+    website: https://github.com/projectbluefin/chairlift
+    issues: https://github.com/projectbluefin/chairlift/issues
+    chat: https://github.com/projectbluefin/chairlift/discussions

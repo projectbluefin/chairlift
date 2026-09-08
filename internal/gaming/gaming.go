@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/frostyard/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/flatpak"
 )
 
 // Component is one Flatpak in the gaming stack.

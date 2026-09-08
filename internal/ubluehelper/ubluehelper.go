@@ -27,14 +27,14 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/frostyard/chairlift/internal/autoupdate"
-	"github.com/frostyard/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/autoupdate"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 )
 
 // The complete first-argument surface of the privileged helper. Each value
 // is selected by exactly one PolicyKit action's
 // org.freedesktop.policykit.exec.argv1 annotation in
-// data/org.frostyard.ChairLift.ublue.policy.
+// data/io.projectbluefin.chairlift.ublue.policy.
 const (
 	CommandChannelSwitch = "channel-switch"
 	CommandDXEnable      = "dx-enable"

@@ -28,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/gpu"
 )
 
 const commandTimeout = 5 * time.Minute

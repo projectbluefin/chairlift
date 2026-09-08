@@ -12,7 +12,7 @@ BUILD_DIR=build
 #
 # PREFIX defaults to /usr, matching both the fixed absolute path pkexec
 # matches against PolicyKit's org.freedesktop.policykit.exec.path annotation
-# (data/org.frostyard.ChairLift.updex.policy, internal/updex.HelperPath) and
+# (data/io.projectbluefin.chairlift.updex.policy, internal/updex.HelperPath) and
 # the layout .goreleaser.yaml's nFPM packages already install to. PolicyKit
 # itself only ever reads actions from /usr/share/polkit-1/actions — it does
 # not consult PREFIX or XDG_DATA_DIRS — so installing under any other PREFIX
@@ -161,13 +161,13 @@ install: build
 	# Install wrapper script
 	install -Dm755 data/chairlift-wrapper.sh $(DESTDIR)$(BINDIR)/chairlift-wrapper
 	# Install desktop file
-	install -Dm644 data/org.frostyard.ChairLift.desktop $(DESTDIR)$(APPLICATIONSDIR)/org.frostyard.ChairLift.desktop
+	install -Dm644 data/io.projectbluefin.chairlift.desktop $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	# Install package-maintainer defaults; /etc/chairlift/config.yml remains the administrator-owned override
 	install -Dm644 config.yml $(DESTDIR)$(CONFIGDIR)/config.yml
 	# Install icons
-	install -Dm644 data/icons/hicolor/scalable/apps/org.frostyard.ChairLift.svg $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/org.frostyard.ChairLift.svg
-	install -Dm644 data/icons/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg
-	install -Dm644 data/icons/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg
+	install -Dm644 data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
+	install -Dm644 data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
+	install -Dm644 data/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	# Install updex helper binary
 	install -Dm755 $(BUILD_DIR)/$(HELPER_NAME) $(DESTDIR)$(BINDIR)/$(HELPER_NAME)
 	# Install Bluefin-family (channel switch / developer mode) helper binary
@@ -181,32 +181,32 @@ install: build
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.bootc.rules
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.updex.rules
 	# Install PolicyKit policy for bootc
-	install -Dm644 data/org.frostyard.ChairLift.bootc.policy $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.bootc.policy
+	install -Dm644 data/io.projectbluefin.chairlift.bootc.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.bootc.policy
 	# Install PolicyKit policy for updex
-	install -Dm644 data/org.frostyard.ChairLift.updex.policy $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.updex.policy
+	install -Dm644 data/io.projectbluefin.chairlift.updex.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.updex.policy
 	# Install PolicyKit policy for native A/B sysupdate staging
-	install -Dm644 data/org.frostyard.ChairLift.sysupdate.policy $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.sysupdate.policy
+	install -Dm644 data/io.projectbluefin.chairlift.sysupdate.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.sysupdate.policy
 	# Install PolicyKit policy for the Bluefin-family channel/developer helper
-	install -Dm644 data/org.frostyard.ChairLift.ublue.policy $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.ublue.policy
+	install -Dm644 data/io.projectbluefin.chairlift.ublue.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.ublue.policy
 
 # Uninstall the application
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	rm -f $(DESTDIR)$(BINDIR)/chairlift-wrapper
-	rm -f $(DESTDIR)$(APPLICATIONSDIR)/org.frostyard.ChairLift.desktop
+	rm -f $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	rm -f $(DESTDIR)$(CONFIGDIR)/config.yml
-	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/org.frostyard.ChairLift.svg
-	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg
-	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg
+	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
+	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
+	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	rm -f $(DESTDIR)$(BINDIR)/$(HELPER_NAME)
 	rm -f $(DESTDIR)$(BINDIR)/$(UBLUE_HELPER_NAME)
 	rm -f $(DESTDIR)$(DATADIR)/doc/chairlift/channels.example.yml
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.ublue.policy
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.bootc.policy
+	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.ublue.policy
+	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.bootc.policy
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.bootc.rules
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.updex.policy
+	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.updex.policy
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.updex.rules
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.sysupdate.policy
+	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.sysupdate.policy
 
 # One command mirrors CI's host-independent gates (verify → lint → unit → race
 # → build), in fail-fast order. The GTK/Xvfb-dependent E2E job runs separately

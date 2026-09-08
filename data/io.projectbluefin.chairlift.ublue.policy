@@ -4,11 +4,11 @@
  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
 
 <policyconfig>
-  <vendor>Frostyard</vendor>
-  <vendor_url>https://github.com/frostyard/chairlift</vendor_url>
-  <icon_name>org.frostyard.ChairLift</icon_name>
+  <vendor>Project Bluefin</vendor>
+  <vendor_url>https://github.com/projectbluefin/chairlift</vendor_url>
+  <icon_name>io.projectbluefin.chairlift</icon_name>
 
-  <action id="org.frostyard.ChairLift.ublue.channel-switch">
+  <action id="io.projectbluefin.chairlift.ublue.channel-switch">
     <description>Switch the system release channel</description>
     <message>Authentication is required to switch the system release channel</message>
     <defaults>
@@ -20,7 +20,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">channel-switch</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.dx-enable">
+  <action id="io.projectbluefin.chairlift.ublue.dx-enable">
     <description>Enable developer mode</description>
     <message>Authentication is required to enable developer mode</message>
     <defaults>
@@ -32,7 +32,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">dx-enable</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.dx-disable">
+  <action id="io.projectbluefin.chairlift.ublue.dx-disable">
     <description>Disable developer mode</description>
     <message>Authentication is required to disable developer mode</message>
     <defaults>
@@ -44,7 +44,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">dx-disable</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.restart">
+  <action id="io.projectbluefin.chairlift.ublue.restart">
     <description>Restart the system</description>
     <message>Authentication is required to restart the system</message>
     <defaults>
@@ -56,7 +56,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">restart</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.rollback">
+  <action id="io.projectbluefin.chairlift.ublue.rollback">
     <description>Roll back to the previous system image</description>
     <message>Authentication is required to roll back to the previous system image</message>
     <defaults>
@@ -68,7 +68,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">rollback</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.auto-updates-enable">
+  <action id="io.projectbluefin.chairlift.ublue.auto-updates-enable">
     <description>Enable automatic background updates</description>
     <message>Authentication is required to enable automatic background updates</message>
     <defaults>
@@ -80,7 +80,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">auto-updates-enable</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.auto-updates-disable">
+  <action id="io.projectbluefin.chairlift.ublue.auto-updates-disable">
     <description>Disable automatic background updates</description>
     <message>Authentication is required to disable automatic background updates</message>
     <defaults>
@@ -92,7 +92,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">auto-updates-disable</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.driver-switch">
+  <action id="io.projectbluefin.chairlift.ublue.driver-switch">
     <description>Switch the system graphics driver image</description>
     <message>Authentication is required to switch the system graphics driver image</message>
     <defaults>
@@ -104,7 +104,7 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">driver-switch</annotate>
   </action>
 
-  <action id="org.frostyard.ChairLift.ublue.factory-reset">
+  <action id="io.projectbluefin.chairlift.ublue.factory-reset">
     <description>Factory reset the system</description>
     <message>Authentication is required to factory reset the system</message>
     <defaults>

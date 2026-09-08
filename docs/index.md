@@ -92,10 +92,10 @@ never created or overwritten by ChairLift's source or nFPM packages. PolicyKit
 integration requires the default prefix.
 
 For distributions that install the GUI through a user-scoped Homebrew cask,
-releases also provide a `frostyard-chairlift-system-integration` deb/rpm/apk.
+releases also provide a `projectbluefin-chairlift-system-integration` deb/rpm/apk.
 It installs the fixed-path updex helper, PolicyKit policies, and maintainer
 configuration without installing the GUI. It intentionally conflicts with the
-self-contained `frostyard-chairlift` package. Bootc staging additionally
+self-contained `projectbluefin-chairlift` package. Bootc staging additionally
 requires the distribution to provide its trusted implementation at
 `/usr/libexec/bootc-update-stage`; the integration package does not supply
 one. Native A/B staging uses `/usr/libexec/snosi-sysupdate-stage`, which

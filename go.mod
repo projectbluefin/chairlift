@@ -1,4 +1,4 @@
-module github.com/frostyard/chairlift
+module github.com/projectbluefin/chairlift
 
 go 1.26.6
 

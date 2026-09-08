@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/config"
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/config"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/navigation"
 )
 
 const (

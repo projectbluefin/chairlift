@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/frostyard/chairlift/internal/gaming"
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/ublue"
-	"github.com/frostyard/chairlift/internal/updex"
-	"github.com/frostyard/chairlift/internal/views/actionmsg"
-	"github.com/frostyard/chairlift/internal/views/featurestatus"
-	"github.com/frostyard/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/gaming"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/featurestatus"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

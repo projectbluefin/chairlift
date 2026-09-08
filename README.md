@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="data/icons/hicolor/scalable/apps/org.frostyard.ChairLift.svg">
+    <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg">
     <h1>ChairLift</h1>
     <p>A modern system management tool for <a href="https://github.com/frostyard/snosi">Snow Linux</a></p>
     <p>Manage your Homebrew packages, monitor system health, and maintain your system with ease.</p>
@@ -84,21 +84,21 @@ fails does not stop the others.
 
 ### Installing a Release
 
-Each [ChairLift release](https://github.com/frostyard/chairlift/releases)
+Each [ChairLift release](https://github.com/projectbluefin/chairlift/releases)
 provides ready-to-install packages for 64-bit Intel/AMD and Arm systems.
 Choose the package format for your distribution:
 
 | Distribution family | Full-package filename | Install command |
 |---|---|---|
-| Debian/Ubuntu | `frostyard-chairlift_<version>_<arch>.deb` (`amd64` or `arm64`) | `sudo apt install ./<downloaded-filename>` |
-| Fedora/RHEL | `frostyard-chairlift-<version>-1.<arch>.rpm` (`x86_64` or `aarch64`) | `sudo dnf install ./<downloaded-filename>` |
-| Alpine | `frostyard-chairlift_<version>_<arch>.apk` (`x86_64` or `aarch64`) | `sudo apk add --allow-untrusted ./<downloaded-filename>` |
+| Debian/Ubuntu | `projectbluefin-chairlift_<version>_<arch>.deb` (`amd64` or `arm64`) | `sudo apt install ./<downloaded-filename>` |
+| Fedora/RHEL | `projectbluefin-chairlift-<version>-1.<arch>.rpm` (`x86_64` or `aarch64`) | `sudo dnf install ./<downloaded-filename>` |
+| Alpine | `projectbluefin-chairlift_<version>_<arch>.apk` (`x86_64` or `aarch64`) | `sudo apk add --allow-untrusted ./<downloaded-filename>` |
 
-For a normal system installation, download the full `frostyard-chairlift`
+For a normal system installation, download the full `projectbluefin-chairlift`
 package. It includes the GUI, privileged helper, desktop assets, PolicyKit
 policies, and package-maintainer configuration.
 
-Use the similarly named `frostyard-chairlift-system-integration` package
+Use the similarly named `projectbluefin-chairlift-system-integration` package
 **only** when the ChairLift GUI is already delivered through a user-scoped
 mechanism such as the Homebrew cask. That package supplies only the root-owned
 helper, policies, and configuration needed by such an installation; it does
@@ -119,7 +119,7 @@ ChairLift is written in Go using [puregotk](https://codeberg.org/puregotk/purego
 
 ```bash
 # Clone the repository
-git clone https://github.com/frostyard/chairlift.git
+git clone https://github.com/projectbluefin/chairlift.git
 cd chairlift
 
 # Build
@@ -140,13 +140,13 @@ default — no need to pass `PREFIX` explicitly). PolicyKit's `polkitd` reads
 `/usr/share/polkit-1/actions`, and `pkexec` matches the updex helper it's
 asked to run against the absolute path
 `/usr/bin/chairlift-updex-helper` recorded in
-`data/org.frostyard.ChairLift.updex.policy`'s
+`data/io.projectbluefin.chairlift.updex.policy`'s
 `org.freedesktop.policykit.exec.path` annotation and its first argument
 against an `org.freedesktop.policykit.exec.argv1` annotation. Installing under
 any other prefix places those files where polkit never looks, so the privileged
 updex, bootc-staging, and sysupdate-staging features silently stop working (or fall back to a
 more restrictive, always-reprompting authentication rule). This also matches
-the layout used by ChairLift's full `frostyard-chairlift` nFPM package, so a
+the layout used by ChairLift's full `projectbluefin-chairlift` nFPM package, so a
 source install and a full packaged install end up identical.
 
 ChairLift does not install passwordless PolicyKit rules. Bootc staging,
@@ -162,7 +162,7 @@ Both paths install package-maintainer configuration defaults at
 administrator-owned `/etc/chairlift/config.yml` override.
 
 Releases also publish a small
-`frostyard-chairlift-system-integration` deb/rpm/apk for distributions that
+`projectbluefin-chairlift-system-integration` deb/rpm/apk for distributions that
 deliver the GUI through a user-scoped mechanism such as the Homebrew cask. It
 installs only the fixed `/usr/bin/chairlift-updex-helper`, all three PolicyKit
 policies, and `/usr/share/chairlift/config.yml`; it does not install the GUI.

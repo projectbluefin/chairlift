@@ -19,10 +19,10 @@ two packages owning the same `/usr` files must never be co-installable.
 GoReleaser publishes two mutually exclusive nFPM package shapes from the same
 release (`.goreleaser.yaml`, nfpms):
 
-- **`frostyard-chairlift`** — self-contained: both binaries (build ids
+- **`projectbluefin-chairlift`** — self-contained: both binaries (build ids
   `chairlift`, `chairlift-updex-helper`), desktop file, icons, maintainer
   config, and all three policies.
-- **`frostyard-chairlift-system-integration`** — root-owned companion for a
+- **`projectbluefin-chairlift-system-integration`** — root-owned companion for a
   user-scoped GUI delivery such as the Homebrew cask: build id
   `chairlift-updex-helper` only, and contents of exactly the three policies
   plus `/usr/share/chairlift/config.yml`. No GUI, no desktop assets.
