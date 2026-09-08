@@ -127,7 +127,7 @@ make bump           # Create new version tag and push
 - Installation includes:
   - Binary: `/usr/local/bin/chairlift`
   - Wrapper: `/usr/local/bin/chairlift-wrapper`
-  - Desktop file: `/usr/share/applications/org.frostyard.ChairLift.desktop`
+  - Desktop file: `/usr/share/applications/io.projectbluefin.chairlift.desktop`
   - Icons: `/usr/share/icons/hicolor/...`
   - PolicyKit policies: `/usr/share/polkit-1/actions/...`
   - PolicyKit rules: `/usr/share/polkit-1/rules.d/...`

@@ -3,7 +3,7 @@ package pageview
 import (
 	"fmt"
 
-	"github.com/frostyard/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 )
 
 // TroubleshootRow returns the Enhanced Troubleshooting row text for a host's

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/autoupdate"
-	"github.com/frostyard/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/autoupdate"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 )
 
 func TestParseInvocationAcceptsSupportedShapes(t *testing.T) {

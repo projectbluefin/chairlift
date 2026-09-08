@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/sbom"
+	"github.com/projectbluefin/chairlift/internal/sbom"
 )
 
 func sampleResult() sbom.Result {

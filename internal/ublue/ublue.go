@@ -24,17 +24,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/gpu"
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/journal"
-	"github.com/frostyard/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/journal"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 const (
 	// HelperPath is the fixed, absolute installed path of the privileged
 	// ublue helper binary. It must match the
 	// org.freedesktop.policykit.exec.path annotation on all three actions in
-	// data/org.frostyard.ChairLift.ublue.policy exactly, and each action
+	// data/io.projectbluefin.chairlift.ublue.policy exactly, and each action
 	// additionally selects one supported helper command through the
 	// exec.argv1 annotation. A path mismatch (for example a bare,
 	// $PATH-resolved name) makes pkexec fall back to the generic, more

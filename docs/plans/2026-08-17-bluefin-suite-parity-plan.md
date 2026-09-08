@@ -66,7 +66,7 @@ headline feature, with a single restart prompt at the end.
 
 Composition, not new privilege: the OS phase calls the existing
 `internal/bootc` staging path (`pkexec /usr/libexec/bootc-update-stage`,
-action `org.frostyard.ChairLift.bootc.stage`), because
+action `io.projectbluefin.chairlift.bootc.stage`), because
 [AGENTS.md](../../AGENTS.md) fixes both "OS staging execution has one owner"
 and the system-integration package's fixed-path contract. Flatpak and Homebrew
 phases are already unprivileged. The only new privileged surface is
@@ -76,7 +76,7 @@ phases are already unprivileged. The only new privileged surface is
   aggregate progress/outcome contract, with the per-provider work delegated
   to `internal/bootc`, `internal/flatpak`, and `internal/homebrew`.
 - New `restart` subcommand on the existing `chairlift-ublue-helper`, with a
-  matching action in `data/org.frostyard.ChairLift.ublue.policy` — not a
+  matching action in `data/io.projectbluefin.chairlift.ublue.policy` — not a
   third helper binary.
 - One `updates_page` group: a single primary action plus per-phase status.
 - **Done when:** the walkthrough captures the Updates page showing the Update

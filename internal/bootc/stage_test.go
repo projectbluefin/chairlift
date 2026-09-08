@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/stageexec"
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 func writeScript(t *testing.T, body string) string {

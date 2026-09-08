@@ -5,22 +5,22 @@ It links to live reports rather than copying pass rates or coverage percentages
 that would immediately become stale. The [public metrics catalog](metrics/)
 collects those read-only sources and their interpretation boundaries.
 
-[![Tests](https://github.com/frostyard/chairlift/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/frostyard/chairlift/actions/workflows/test.yml?query=branch%3Amain)
-[![Codecov](https://codecov.io/gh/frostyard/chairlift/branch/main/graph/badge.svg)](https://app.codecov.io/gh/frostyard/chairlift)
+[![Tests](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml?query=branch%3Amain)
+[![Codecov](https://codecov.io/gh/projectbluefin/chairlift/branch/main/graph/badge.svg)](https://app.codecov.io/gh/projectbluefin/chairlift)
 
 ## Live signals
 
 | Signal | What it reports | Source |
 |---|---|---|
-| Tests workflow | Latest lint, unit-test, race-detection, verification, and cross-architecture build results | [GitHub Actions](https://github.com/frostyard/chairlift/actions/workflows/test.yml) |
-| Nightly compliance | Daily full CI, E2E, and known-vulnerability scan results for the default branch | [GitHub Actions](https://github.com/frostyard/chairlift/actions/workflows/nightly-compliance.yml) |
-| Issue triage | Deterministic labels applied from structured issue titles and bodies | [GitHub Actions](https://github.com/frostyard/chairlift/actions/workflows/triage.yml) |
+| Tests workflow | Latest lint, unit-test, race-detection, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
+| Nightly compliance | Daily full CI, E2E, and known-vulnerability scan results for the default branch | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/nightly-compliance.yml) |
+| Issue triage | Deterministic labels applied from structured issue titles and bodies | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/triage.yml) |
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
-| Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/frostyard/chairlift/actions/workflows/claude-code-review.yml) |
+| Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
-| Coverage | Line coverage produced by tests under `internal/...` | [Codecov](https://app.codecov.io/gh/frostyard/chairlift) |
+| Coverage | Line coverage produced by tests under `internal/...` | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) |
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
-| Release history | Published versions and release assets | [GitHub Releases](https://github.com/frostyard/chairlift/releases) |
+| Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
 
 `codecov.yml` compares project coverage with the pull request's base and fails
 its project status only when coverage drops by more than one percentage point.

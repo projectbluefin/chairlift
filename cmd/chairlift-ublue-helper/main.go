@@ -6,7 +6,7 @@
 //
 // It is invoked only as `pkexec /usr/bin/chairlift-ublue-helper <command>`,
 // with each command selected by one PolicyKit action in
-// data/org.frostyard.ChairLift.ublue.policy. pkexec authenticates the action
+// data/io.projectbluefin.chairlift.ublue.policy. pkexec authenticates the action
 // and matches the executable path and first argument; everything after that
 // is validated here, by internal/ubluehelper.ParseInvocation.
 //
@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 const defaultTimeout = 10 * time.Minute

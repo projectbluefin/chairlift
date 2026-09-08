@@ -13,7 +13,7 @@ project_name: chairlift
 
 metadata:
   description: chairlift - modern GTK4/Libadwaita system management tool
-  homepage: "https://github.com/frostyard/chairlift"
+  homepage: "https://github.com/projectbluefin/chairlift"
   license: GPL-3.0-or-later
   maintainers:
     - "Brian Ketelsen <bketelsen@gmail.com>"
@@ -89,12 +89,12 @@ archives:
       - LICENSE
       - config.yml
       - data/chairlift-wrapper.sh
-      - data/org.frostyard.ChairLift.desktop
+      - data/io.projectbluefin.chairlift.desktop
       - data/icons/**/*
-      - data/org.frostyard.ChairLift.bootc.policy
-      - data/org.frostyard.ChairLift.updex.policy
-      - data/org.frostyard.ChairLift.sysupdate.policy
-      - data/org.frostyard.ChairLift.ublue.policy
+      - data/io.projectbluefin.chairlift.bootc.policy
+      - data/io.projectbluefin.chairlift.updex.policy
+      - data/io.projectbluefin.chairlift.sysupdate.policy
+      - data/io.projectbluefin.chairlift.ublue.policy
       - channels.example.yml
 
 
@@ -137,7 +137,7 @@ nfpms:
       - chairlift-updex-helper
       - chairlift-ublue-helper
     file_name_template: "{{ .ConventionalFileName }}"
-    package_name: frostyard-chairlift
+    package_name: projectbluefin-chairlift
     # Every build id's binary (chairlift, chairlift-updex-helper,
     # chairlift-ublue-helper) is packaged automatically into bindir; do not
     # add them as contents entries (build outputs live in dist/, not the
@@ -148,7 +148,7 @@ nfpms:
       Manage flatpaks, homebrew and system updates with a modern GTK4/Libadwaita interface.
     license: GPL-3.0-or-later
     conflicts:
-      - frostyard-chairlift-system-integration
+      - projectbluefin-chairlift-system-integration
     contents:
       # Wrapper script
       - src: ./data/chairlift-wrapper.sh
@@ -156,38 +156,38 @@ nfpms:
         file_info:
           mode: 0755
       # Desktop file
-      - src: ./data/org.frostyard.ChairLift.desktop
-        dst: /usr/share/applications/org.frostyard.ChairLift.desktop
+      - src: ./data/io.projectbluefin.chairlift.desktop
+        dst: /usr/share/applications/io.projectbluefin.chairlift.desktop
       # Package-maintainer defaults; never install into the administrator-owned /etc path
       - src: ./config.yml
         dst: /usr/share/chairlift/config.yml
         file_info:
           mode: 0644
       # Icons
-      - src: ./data/icons/hicolor/scalable/apps/org.frostyard.ChairLift.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/org.frostyard.ChairLift.svg
-      - src: ./data/icons/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/org.frostyard.ChairLift-flower.svg
-      - src: ./data/icons/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg
-        dst: /usr/share/icons/hicolor/symbolic/apps/org.frostyard.ChairLift-symbolic.svg
+      - src: ./data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
+      - src: ./data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
+        dst: /usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
+      - src: ./data/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
+        dst: /usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
       # PolicyKit policy for bootc
-      - src: ./data/org.frostyard.ChairLift.bootc.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.bootc.policy
+      - src: ./data/io.projectbluefin.chairlift.bootc.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy
         file_info:
           mode: 0644
       # PolicyKit policy for updex
-      - src: ./data/org.frostyard.ChairLift.updex.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.updex.policy
+      - src: ./data/io.projectbluefin.chairlift.updex.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy
         file_info:
           mode: 0644
       # PolicyKit policy for native A/B sysupdate staging
-      - src: ./data/org.frostyard.ChairLift.sysupdate.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.sysupdate.policy
+      - src: ./data/io.projectbluefin.chairlift.sysupdate.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy
         file_info:
           mode: 0644
       # PolicyKit policy for the Bluefin-family channel/developer helper
-      - src: ./data/org.frostyard.ChairLift.ublue.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.ublue.policy
+      - src: ./data/io.projectbluefin.chairlift.ublue.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy
         file_info:
           mode: 0644
       # Documented release-channel table template. Installed as an example
@@ -213,33 +213,33 @@ nfpms:
       - chairlift-updex-helper
       - chairlift-ublue-helper
     file_name_template: "{{ .ConventionalFileName }}"
-    package_name: frostyard-chairlift-system-integration
+    package_name: projectbluefin-chairlift-system-integration
     bindir: /usr/bin
     description: |-
       System integration for a user-scoped ChairLift installation.
       Installs the privileged updex and ublue helpers, PolicyKit policies, and maintainer configuration defaults.
     license: GPL-3.0-or-later
     conflicts:
-      - frostyard-chairlift
+      - projectbluefin-chairlift
     contents:
       - src: ./config.yml
         dst: /usr/share/chairlift/config.yml
         file_info:
           mode: 0644
-      - src: ./data/org.frostyard.ChairLift.bootc.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.bootc.policy
+      - src: ./data/io.projectbluefin.chairlift.bootc.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy
         file_info:
           mode: 0644
-      - src: ./data/org.frostyard.ChairLift.updex.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.updex.policy
+      - src: ./data/io.projectbluefin.chairlift.updex.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy
         file_info:
           mode: 0644
-      - src: ./data/org.frostyard.ChairLift.sysupdate.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.sysupdate.policy
+      - src: ./data/io.projectbluefin.chairlift.sysupdate.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy
         file_info:
           mode: 0644
-      - src: ./data/org.frostyard.ChairLift.ublue.policy
-        dst: /usr/share/polkit-1/actions/org.frostyard.ChairLift.ublue.policy
+      - src: ./data/io.projectbluefin.chairlift.ublue.policy
+        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy
         file_info:
           mode: 0644
       - src: ./channels.example.yml

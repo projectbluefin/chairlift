@@ -13,16 +13,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/journal"
-	"github.com/frostyard/chairlift/internal/updexhelper"
 	updexapi "github.com/frostyard/updex/updex"
+	"github.com/projectbluefin/chairlift/internal/journal"
+	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
 const (
 	// HelperPath is the fixed, absolute installed path of the privileged
 	// updex helper binary. It must match the
 	// org.freedesktop.policykit.exec.path annotation on all three actions in
-	// data/org.frostyard.ChairLift.updex.policy exactly. Each action also
+	// data/io.projectbluefin.chairlift.updex.policy exactly. Each action also
 	// selects one supported helper command through the exec.argv1 annotation.
 	// A path mismatch (e.g. a bare, $PATH-resolved name) makes pkexec fall
 	// back to the generic, more restrictive

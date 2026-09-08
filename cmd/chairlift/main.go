@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/app"
-	"github.com/frostyard/chairlift/internal/version"
+	"github.com/projectbluefin/chairlift/internal/app"
+	"github.com/projectbluefin/chairlift/internal/version"
 )
 
 // Build information set via ldflags by goreleaser

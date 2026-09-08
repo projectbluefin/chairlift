@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/gpu"
 )
 
 func TestSelectCoversEveryHardwareCase(t *testing.T) {

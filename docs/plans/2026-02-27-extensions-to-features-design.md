@@ -124,10 +124,10 @@ Show "Feature Manager Not Available" message (same pattern as current code).
 ## Deletions
 
 - `internal/instex/` — entire directory
-- `data/org.frostyard.ChairLift.instex.policy`
-- `data/org.frostyard.ChairLift.instex.rules`
+- `data/io.projectbluefin.chairlift.instex.policy`
+- `data/io.projectbluefin.chairlift.instex.rules`
 
 ## Kept As-Is
 
-- `data/org.frostyard.ChairLift.updex.policy` — existing actions cover new commands
-- `data/org.frostyard.ChairLift.updex.rules` — sudo group rules still apply
+- `data/io.projectbluefin.chairlift.updex.policy` — existing actions cover new commands
+- `data/io.projectbluefin.chairlift.updex.rules` — sudo group rules still apply

@@ -9,10 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/gpu"
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/journal"
-	"github.com/frostyard/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/journal"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 // writeFakePkexec writes an executable shell script standing in for pkexec:
@@ -96,7 +96,7 @@ func TestRunHelperPassesFixedHelperPathAndCommandOnly(t *testing.T) {
 				t.Fatalf("pkexec argv = %v, want %v", got, test.want)
 			}
 			if got[0] != HelperPath {
-				t.Errorf("helper path passed to pkexec = %q, want the fixed absolute path matching data/org.frostyard.ChairLift.ublue.policy's exec.path annotation", got[0])
+				t.Errorf("helper path passed to pkexec = %q, want the fixed absolute path matching data/io.projectbluefin.chairlift.ublue.policy's exec.path annotation", got[0])
 			}
 			for _, arg := range got[1:] {
 				if strings.Contains(arg, "/") {

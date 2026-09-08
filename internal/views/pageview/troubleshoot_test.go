@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 )
 
 func TestTroubleshootRowStates(t *testing.T) {

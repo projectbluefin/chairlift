@@ -7,19 +7,19 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/frostyard/chairlift/internal/aistack"
-	"github.com/frostyard/chairlift/internal/bootc"
-	"github.com/frostyard/chairlift/internal/distrobox"
-	"github.com/frostyard/chairlift/internal/flatpak"
-	"github.com/frostyard/chairlift/internal/homebrew"
-	"github.com/frostyard/chairlift/internal/imageinfo"
-	"github.com/frostyard/chairlift/internal/navigation"
-	"github.com/frostyard/chairlift/internal/sysupdate"
-	"github.com/frostyard/chairlift/internal/troubleshoot"
-	"github.com/frostyard/chairlift/internal/ublue"
-	"github.com/frostyard/chairlift/internal/updex"
-	"github.com/frostyard/chairlift/internal/views"
-	"github.com/frostyard/chairlift/internal/window"
+	"github.com/projectbluefin/chairlift/internal/aistack"
+	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/distrobox"
+	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/sysupdate"
+	"github.com/projectbluefin/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/views"
+	"github.com/projectbluefin/chairlift/internal/window"
 
 	"github.com/frostyard/snowkit/gobj"
 
@@ -30,7 +30,7 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-const appID = "org.frostyard.ChairLift"
+const appID = "io.projectbluefin.chairlift"
 
 var (
 	gTypeApplication gobject.Type

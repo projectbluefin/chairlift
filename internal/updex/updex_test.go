@@ -45,7 +45,7 @@ func TestRunHelperNonDryRunInvokesPkexecWithAbsoluteHelperPath(t *testing.T) {
 		t.Fatalf("pkexec argv = %v, want %v", got, want)
 	}
 	if got[0] != "/usr/bin/chairlift-updex-helper" {
-		t.Fatalf("helper path passed to pkexec = %q, want the fixed absolute path matching data/org.frostyard.ChairLift.updex.policy's exec.path annotation", got[0])
+		t.Fatalf("helper path passed to pkexec = %q, want the fixed absolute path matching data/io.projectbluefin.chairlift.updex.policy's exec.path annotation", got[0])
 	}
 }
 

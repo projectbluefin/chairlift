@@ -69,7 +69,7 @@ If the host is bootc-booted but `/usr/libexec/bootc-update-stage` is missing (no
 
 ### Polkit and packaging
 
-- Delete `data/org.frostyard.ChairLift.nbc.policy`; add `data/org.frostyard.ChairLift.bootc.policy` authorizing `/usr/libexec/bootc-update-stage` (auth_admin_keep, active sessions).
+- Delete `data/io.projectbluefin.chairlift.nbc.policy`; add `data/io.projectbluefin.chairlift.bootc.policy` authorizing `/usr/libexec/bootc-update-stage` (auth_admin_keep, active sessions).
 - `make install` / goreleaser packaging updated accordingly.
 
 ### Config

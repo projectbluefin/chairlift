@@ -32,7 +32,7 @@ that is a Go constant, matching the policy's `exec.path` annotation exactly:
 - native A/B staging runs `internal/sysupdate.StageScriptPath =
   "/usr/libexec/snosi-sysupdate-stage"` (`internal/sysupdate/stage.go:20`).
 
-The updex policy (`data/org.frostyard.ChairLift.updex.policy`) declares one
+The updex policy (`data/io.projectbluefin.chairlift.updex.policy`) declares one
 action per helper subcommand, each selecting its command through
 `exec.argv1` (`enable-feature`, `disable-feature`, `update`). Because
 PolicyKit does not validate the rest of argv, the helper is a second
@@ -93,7 +93,7 @@ installed helper's argv-rejection paths.
 - Related: [ADR-0002](0002-usr-prefix-is-the-only-supported-install-prefix.md),
   [ADR-0006](0006-split-system-integration-package-with-mutual-conflicts.md)
 - Builds on: [core ADR-0016 — Reverse-DNS org.frostyard.* identifiers](https://github.com/frostyard/core/blob/main/docs/adr/0016-reverse-dns-org-frostyard-identifiers.md)
-  (the `org.frostyard.ChairLift.*` action naming; this ADR is the boundary
+  (the `io.projectbluefin.chairlift.*` action naming; this ADR is the boundary
   mechanics)
 - Enforced by: `internal/installcheck/polkit_test.go`,
   `test/e2e/e2e_test.go` (`TestInstalledBundleAndHelperBoundary`)

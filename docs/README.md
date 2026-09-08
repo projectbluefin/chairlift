@@ -43,8 +43,8 @@ are listed in [org-adrs.md](org-adrs.md).
   unknown keys hard-error; files are field-by-field overlays (explicit empty
   clears, omitted inherits)
 - [adr/0006-split-system-integration-package-with-mutual-conflicts.md](adr/0006-split-system-integration-package-with-mutual-conflicts.md)
-  — self-contained `frostyard-chairlift` vs GUI-less
-  `frostyard-chairlift-system-integration`, conflicting both ways, for
+  — self-contained `projectbluefin-chairlift` vs GUI-less
+  `projectbluefin-chairlift-system-integration`, conflicting both ways, for
   user-scoped GUI installs such as the Homebrew cask
 - [adr/0007-pure-leaf-packages-route-around-untestable-gtk.md](adr/0007-pure-leaf-packages-route-around-untestable-gtk.md)
   — puregotk-importing packages stay test-free; all decidable logic lives in

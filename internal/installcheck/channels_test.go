@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 )
 
 // The example channel table is the documentation an image maintainer copies

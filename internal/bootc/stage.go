@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/frostyard/chairlift/internal/stageexec"
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 // StageScriptPath is the snow-shipped workaround script that pulls the OS

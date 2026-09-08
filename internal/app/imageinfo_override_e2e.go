@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/frostyard/chairlift/internal/autoupdate"
-	"github.com/frostyard/chairlift/internal/gpu"
-	"github.com/frostyard/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/autoupdate"
+	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/ublue"
 )
 
 // applyImageInfoOverride points the unprivileged image-descriptor read at

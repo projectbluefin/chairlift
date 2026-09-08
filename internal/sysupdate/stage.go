@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/frostyard/chairlift/internal/stageexec"
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 // StageScriptPath is the snosi-shipped native A/B stager. It checks the

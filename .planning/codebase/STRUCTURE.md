@@ -79,8 +79,8 @@ chairlift/
 - Purpose: Static files installed with the application
 - Contains: Desktop file, icons, PolicyKit policies/rules
 - Key files: 
-  - `data/org.frostyard.ChairLift.desktop`
-  - `data/org.frostyard.ChairLift.nbc.policy`
+  - `data/io.projectbluefin.chairlift.desktop`
+  - `data/io.projectbluefin.chairlift.nbc.policy`
   - `data/chairlift-wrapper.sh`
 
 ## Key File Locations

@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/bootc"
-	"github.com/frostyard/chairlift/internal/sbom"
-	"github.com/frostyard/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/sbom"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

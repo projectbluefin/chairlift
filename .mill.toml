@@ -35,7 +35,7 @@ security_invariants = """
 Privileged (root) operations must go only through pkexec (PolicyKit) with the
 fixed, installed polkit policies and fixed helper targets: the
 `/usr/libexec/bootc-update-stage` script (action
-org.frostyard.ChairLift.bootc.stage) and the `chairlift-updex-helper` binary.
+io.projectbluefin.chairlift.bootc.stage) and the `chairlift-updex-helper` binary.
 No change may add arbitrary privileged command execution, broaden what pkexec
 runs, invoke a shell/command built from untrusted or user-controlled input, or
 route a new state-changing operation around the fixed helper/policy pair.

@@ -39,8 +39,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   boundary invariant below). It installs maintainer defaults at
   `/usr/share/chairlift/config.yml` and must never install or overwrite the
   administrator-owned `/etc/chairlift/config.yml`. GoReleaser publishes both
-  the self-contained `frostyard-chairlift` package and the mutually exclusive
-  `frostyard-chairlift-system-integration` companion for user-scoped GUI
+  the self-contained `projectbluefin-chairlift` package and the mutually exclusive
+  `projectbluefin-chairlift-system-integration` companion for user-scoped GUI
   installs; every nFPM entry carrying policies must retain the same fixed
   paths.
 
@@ -70,13 +70,13 @@ An agent must not break these:
 - **Privilege boundary.** State-changing operations that require root go
   through `pkexec` (PolicyKit) with fixed, installed polkit policies and fixed
   helper binaries only: `pkexec /usr/libexec/bootc-update-stage` (action
-  `org.frostyard.ChairLift.bootc.stage`), `pkexec
+  `io.projectbluefin.chairlift.bootc.stage`), `pkexec
   /usr/libexec/snosi-sysupdate-stage` (`internal/sysupdate.StageScriptPath`,
-  action `org.frostyard.ChairLift.sysupdate.stage`, native A/B hosts),
+  action `io.projectbluefin.chairlift.sysupdate.stage`, native A/B hosts),
   `pkexec /usr/bin/chairlift-updex-helper` (`internal/updex.HelperPath`, actions
-  `org.frostyard.ChairLift.updex.{enable-feature,disable-feature,update}`), and
+  `io.projectbluefin.chairlift.updex.{enable-feature,disable-feature,update}`), and
   `pkexec /usr/bin/chairlift-ublue-helper` (`internal/ublue.HelperPath`,
-  actions `org.frostyard.ChairLift.ublue.*` — see the helper-extension
+  actions `io.projectbluefin.chairlift.ublue.*` — see the helper-extension
   invariant below for the full subcommand list)
   — always that fixed absolute path, matching the
   `org.freedesktop.policykit.exec.path` annotation, with the updex subcommand
@@ -174,7 +174,7 @@ An agent must not break these:
   Provider packages retain their fixed paths, host detection, dry-run logging,
   and public error adapters; do not copy the process loop back into either one.
 - **System-integration split.** The
-  `frostyard-chairlift-system-integration` nFPM package contains the fixed-path
+  `projectbluefin-chairlift-system-integration` nFPM package contains the fixed-path
   updex helper, all three PolicyKit policies, and package-maintainer config,
   but not the GUI or an OS staging implementation. Distributions pairing it
   with a user-scoped ChairLift install must provide their trusted stage helper

@@ -7,10 +7,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/frostyard/chairlift/internal/config"
-	"github.com/frostyard/chairlift/internal/navigation"
-	"github.com/frostyard/chairlift/internal/version"
-	"github.com/frostyard/chairlift/internal/views"
+	"github.com/projectbluefin/chairlift/internal/config"
+	"github.com/projectbluefin/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/version"
+	"github.com/projectbluefin/chairlift/internal/views"
 
 	"github.com/frostyard/snowkit/gobj"
 
@@ -30,7 +30,7 @@ var (
 // replaces the desktop's still-visible notification from an earlier one
 // instead of stacking a second, matching how a single Updates row already
 // represents "the current state," not a log of past runs.
-const notificationID = "org.frostyard.ChairLift.background-task"
+const notificationID = "io.projectbluefin.chairlift.background-task"
 
 // Window represents the main application window
 type Window struct {
@@ -421,13 +421,13 @@ func (w *Window) onShowAbout() {
 	about := adw.NewAboutWindow()
 	about.SetTransientFor(&w.Window)
 	about.SetApplicationName("ChairLift")
-	about.SetApplicationIcon("org.frostyard.ChairLift")
+	about.SetApplicationIcon("io.projectbluefin.chairlift")
 	about.SetVersion(version.Version)
-	about.SetDeveloperName("Frostyard")
-	about.SetWebsite("https://github.com/frostyard/chairlift")
-	about.SetIssueUrl("https://github.com/frostyard/chairlift/issues")
+	about.SetDeveloperName("Project Bluefin")
+	about.SetWebsite("https://github.com/projectbluefin/chairlift")
+	about.SetIssueUrl("https://github.com/projectbluefin/chairlift/issues")
 	about.SetLicenseType(gtk.LicenseGpl30Value)
-	about.SetCopyright("© 2024-2026 Frostyard")
+	about.SetCopyright("© 2024-2026 Project Bluefin")
 	about.SetDevelopers([]string{"Brian Ketelsen", "ChairLift Contributors"})
 	about.Present()
 }

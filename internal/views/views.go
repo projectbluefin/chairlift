@@ -5,11 +5,11 @@ import (
 	"log"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/config"
-	"github.com/frostyard/chairlift/internal/troubleshoot"
-	"github.com/frostyard/chairlift/internal/views/actionstate"
-	"github.com/frostyard/chairlift/internal/views/badgestate"
-	"github.com/frostyard/chairlift/internal/views/rowset"
+	"github.com/projectbluefin/chairlift/internal/config"
+	"github.com/projectbluefin/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/badgestate"
+	"github.com/projectbluefin/chairlift/internal/views/rowset"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 

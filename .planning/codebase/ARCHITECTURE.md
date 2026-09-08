@@ -172,8 +172,8 @@ ChairLift has two fixed privileged update paths:
 | Enable, disable, or update Updex features | `internal/updex` | `/usr/bin/chairlift-updex-helper` |
 
 The executable paths are fixed in code and must exactly match the annotations
-in `data/org.frostyard.ChairLift.bootc.policy` and
-`data/org.frostyard.ChairLift.updex.policy`. The Updex policy additionally
+in `data/io.projectbluefin.chairlift.bootc.policy` and
+`data/io.projectbluefin.chairlift.updex.policy`. The Updex policy additionally
 selects the permitted operation by the helper's first argument, while
 `internal/updexhelper` rejects unsupported or extra arguments before any
 write.

@@ -34,7 +34,7 @@ package featurestatus
 import (
 	"fmt"
 
-	"github.com/frostyard/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/updex"
 )
 
 // Status is the row state derived from one feature's check results. Both

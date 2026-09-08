@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/frostyard/chairlift/internal/bootc"
-	"github.com/frostyard/chairlift/internal/sysupdate"
-	"github.com/frostyard/chairlift/internal/ublue"
-	"github.com/frostyard/chairlift/internal/ubluehelper"
-	"github.com/frostyard/chairlift/internal/updex"
-	"github.com/frostyard/chairlift/internal/updexhelper"
+	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/sysupdate"
+	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
 const (
@@ -137,23 +137,23 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		t.Fatalf("updexhelper.SupportedCommands() = %v, want %v", commands, expectedCommands)
 	}
 
-	assertPolicyActions(t, "org.frostyard.ChairLift.updex.policy", []expectedPolicyAction{
+	assertPolicyActions(t, "io.projectbluefin.chairlift.updex.policy", []expectedPolicyAction{
 		{
-			ID:          "org.frostyard.ChairLift.updex.enable-feature",
+			ID:          "io.projectbluefin.chairlift.updex.enable-feature",
 			Description: "Enable a system feature using updex",
 			Message:     "Authentication is required to enable a system feature",
 			Path:        updex.HelperPath,
 			Argv1:       updexhelper.CommandEnableFeature,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.updex.disable-feature",
+			ID:          "io.projectbluefin.chairlift.updex.disable-feature",
 			Description: "Disable a system feature using updex",
 			Message:     "Authentication is required to disable a system feature",
 			Path:        updex.HelperPath,
 			Argv1:       updexhelper.CommandDisableFeature,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.updex.update",
+			ID:          "io.projectbluefin.chairlift.updex.update",
 			Description: "Update enabled system features using updex",
 			Message:     "Authentication is required to update enabled system features",
 			Path:        updex.HelperPath,
@@ -177,65 +177,65 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		t.Fatalf("ubluehelper.SupportedCommands() = %v, want %v", ublueCommands, expectedUblueCommands)
 	}
 
-	assertPolicyActions(t, "org.frostyard.ChairLift.ublue.policy", []expectedPolicyAction{
+	assertPolicyActions(t, "io.projectbluefin.chairlift.ublue.policy", []expectedPolicyAction{
 		{
-			ID:          "org.frostyard.ChairLift.ublue.channel-switch",
+			ID:          "io.projectbluefin.chairlift.ublue.channel-switch",
 			Description: "Switch the system release channel",
 			Message:     "Authentication is required to switch the system release channel",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandChannelSwitch,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.dx-enable",
+			ID:          "io.projectbluefin.chairlift.ublue.dx-enable",
 			Description: "Enable developer mode",
 			Message:     "Authentication is required to enable developer mode",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDXEnable,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.dx-disable",
+			ID:          "io.projectbluefin.chairlift.ublue.dx-disable",
 			Description: "Disable developer mode",
 			Message:     "Authentication is required to disable developer mode",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDXDisable,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.restart",
+			ID:          "io.projectbluefin.chairlift.ublue.restart",
 			Description: "Restart the system",
 			Message:     "Authentication is required to restart the system",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandRestart,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.rollback",
+			ID:          "io.projectbluefin.chairlift.ublue.rollback",
 			Description: "Roll back to the previous system image",
 			Message:     "Authentication is required to roll back to the previous system image",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandRollback,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.auto-updates-enable",
+			ID:          "io.projectbluefin.chairlift.ublue.auto-updates-enable",
 			Description: "Enable automatic background updates",
 			Message:     "Authentication is required to enable automatic background updates",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandAutoEnable,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.auto-updates-disable",
+			ID:          "io.projectbluefin.chairlift.ublue.auto-updates-disable",
 			Description: "Disable automatic background updates",
 			Message:     "Authentication is required to disable automatic background updates",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandAutoDisable,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.driver-switch",
+			ID:          "io.projectbluefin.chairlift.ublue.driver-switch",
 			Description: "Switch the system graphics driver image",
 			Message:     "Authentication is required to switch the system graphics driver image",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDriverSwitch,
 		},
 		{
-			ID:          "org.frostyard.ChairLift.ublue.factory-reset",
+			ID:          "io.projectbluefin.chairlift.ublue.factory-reset",
 			Description: "Factory reset the system",
 			Message:     "Authentication is required to factory reset the system",
 			Path:        ublue.HelperPath,
@@ -243,18 +243,18 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		},
 	})
 
-	assertPolicyActions(t, "org.frostyard.ChairLift.bootc.policy", []expectedPolicyAction{
+	assertPolicyActions(t, "io.projectbluefin.chairlift.bootc.policy", []expectedPolicyAction{
 		{
-			ID:          "org.frostyard.ChairLift.bootc.stage",
+			ID:          "io.projectbluefin.chairlift.bootc.stage",
 			Description: "Download and stage a system image update",
 			Message:     "Authentication is required to stage a system update",
 			Path:        bootc.StageScriptPath,
 		},
 	})
 
-	assertPolicyActions(t, "org.frostyard.ChairLift.sysupdate.policy", []expectedPolicyAction{
+	assertPolicyActions(t, "io.projectbluefin.chairlift.sysupdate.policy", []expectedPolicyAction{
 		{
-			ID:          "org.frostyard.ChairLift.sysupdate.stage",
+			ID:          "io.projectbluefin.chairlift.sysupdate.stage",
 			Description: "Download and stage a system image update",
 			Message:     "Authentication is required to stage a system update",
 			Path:        sysupdate.StageScriptPath,
@@ -264,10 +264,10 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 
 func TestPolkitPasswordlessRulesAreAbsent(t *testing.T) {
 	for _, name := range []string{
-		"org.frostyard.ChairLift.updex.rules",
-		"org.frostyard.ChairLift.bootc.rules",
-		"org.frostyard.ChairLift.sysupdate.rules",
-		"org.frostyard.ChairLift.ublue.rules",
+		"io.projectbluefin.chairlift.updex.rules",
+		"io.projectbluefin.chairlift.bootc.rules",
+		"io.projectbluefin.chairlift.sysupdate.rules",
+		"io.projectbluefin.chairlift.ublue.rules",
 	} {
 		t.Run(name, func(t *testing.T) {
 			path := filepath.Join(RepoRoot(), "data", name)
@@ -279,7 +279,7 @@ func TestPolkitPasswordlessRulesAreAbsent(t *testing.T) {
 }
 
 func TestEveryUpdexCommandHasOnePolicyAction(t *testing.T) {
-	document := loadPolicy(t, "org.frostyard.ChairLift.updex.policy")
+	document := loadPolicy(t, "io.projectbluefin.chairlift.updex.policy")
 	counts := make(map[string]int)
 	for _, action := range document.Actions {
 		for _, annotation := range action.Annotations {
@@ -308,7 +308,7 @@ func TestEveryUpdexCommandHasOnePolicyAction(t *testing.T) {
 // action cannot be authorized at all, and an action selecting a command the
 // helper rejects authorizes a privilege for nothing.
 func TestEveryUblueCommandHasOnePolicyAction(t *testing.T) {
-	document := loadPolicy(t, "org.frostyard.ChairLift.ublue.policy")
+	document := loadPolicy(t, "io.projectbluefin.chairlift.ublue.policy")
 	counts := make(map[string]int)
 	for _, action := range document.Actions {
 		for _, annotation := range action.Annotations {

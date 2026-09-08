@@ -3,7 +3,7 @@ package pageview
 import (
 	"fmt"
 
-	"github.com/frostyard/chairlift/internal/sbom"
+	"github.com/projectbluefin/chairlift/internal/sbom"
 )
 
 // ChangelogRow returns the drill-down row inside the staged-update expander,

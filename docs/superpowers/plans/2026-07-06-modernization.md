@@ -1061,17 +1061,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ### Task 6: PolicyKit, Makefile, goreleaser, and config renames
 
 **Files:**
-- Create: `data/org.frostyard.ChairLift.bootc.policy`, `data/org.frostyard.ChairLift.bootc.rules`
-- Delete: `data/org.frostyard.ChairLift.nbc.policy`, `data/org.frostyard.ChairLift.nbc.rules`
+- Create: `data/io.projectbluefin.chairlift.bootc.policy`, `data/io.projectbluefin.chairlift.bootc.rules`
+- Delete: `data/io.projectbluefin.chairlift.nbc.policy`, `data/io.projectbluefin.chairlift.nbc.rules`
 - Modify: `Makefile` (lines 95–97, 111–112), `.goreleaser.yaml` (lines 109, 128–132), `config.yml`, `config.nbc-example.yml` → rename to `config.bootc-example.yml` semantics (see step 4), `CONFIG.md`
 
 **Interfaces:**
 - Consumes: `bootc.StageScriptPath` convention (`/usr/libexec/bootc-update-stage`, Task 2).
-- Produces: polkit action id `org.frostyard.ChairLift.bootc.stage` (referenced in docs).
+- Produces: polkit action id `io.projectbluefin.chairlift.bootc.stage` (referenced in docs).
 
 - [ ] **Step 1: Create the bootc polkit policy**
 
-`data/org.frostyard.ChairLift.bootc.policy`:
+`data/io.projectbluefin.chairlift.bootc.policy`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -1082,9 +1082,9 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 <policyconfig>
   <vendor>Frostyard</vendor>
   <vendor_url>https://github.com/frostyard/chairlift</vendor_url>
-  <icon_name>org.frostyard.ChairLift</icon_name>
+  <icon_name>io.projectbluefin.chairlift</icon_name>
 
-  <action id="org.frostyard.ChairLift.bootc.stage">
+  <action id="io.projectbluefin.chairlift.bootc.stage">
     <description>Download and stage a system image update</description>
     <message>Authentication is required to stage a system update</message>
     <defaults>
@@ -1098,12 +1098,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 </policyconfig>
 ```
 
-`data/org.frostyard.ChairLift.bootc.rules`:
+`data/io.projectbluefin.chairlift.bootc.rules`:
 
 ```js
 // Allow users in the sudo group to stage bootc updates via ChairLift without authentication
 polkit.addRule(function(action, subject) {
-    if (action.id.startsWith("org.frostyard.ChairLift.bootc.") &&
+    if (action.id.startsWith("io.projectbluefin.chairlift.bootc.") &&
         subject.active == true &&
         subject.local == true &&
         subject.isInGroup("sudo")) {
@@ -1113,7 +1113,7 @@ polkit.addRule(function(action, subject) {
 });
 ```
 
-Then: `git rm data/org.frostyard.ChairLift.nbc.policy data/org.frostyard.ChairLift.nbc.rules`
+Then: `git rm data/io.projectbluefin.chairlift.nbc.policy data/io.projectbluefin.chairlift.nbc.rules`
 
 - [ ] **Step 2: Update Makefile**
 
@@ -1121,15 +1121,15 @@ Replace the nbc install/uninstall lines with bootc equivalents (same install fla
 
 ```makefile
 	# Install PolicyKit policy and rules for bootc
-	install -Dm644 data/org.frostyard.ChairLift.bootc.policy $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.bootc.policy
-	install -Dm644 data/org.frostyard.ChairLift.bootc.rules $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.bootc.rules
+	install -Dm644 data/io.projectbluefin.chairlift.bootc.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.bootc.policy
+	install -Dm644 data/io.projectbluefin.chairlift.bootc.rules $(DESTDIR)$(POLKITRULESDIR)/io.projectbluefin.chairlift.bootc.rules
 ```
 
 and in uninstall:
 
 ```makefile
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/org.frostyard.ChairLift.bootc.policy
-	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.bootc.rules
+	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.bootc.policy
+	rm -f $(DESTDIR)$(POLKITRULESDIR)/io.projectbluefin.chairlift.bootc.rules
 ```
 
 - [ ] **Step 3: Update .goreleaser.yaml**
@@ -1869,7 +1869,7 @@ Rewrite every NBC reference for bootc. Specifically:
 - "Streaming progress (NBC)" and "Shared NBC progress UI helper" sections → describe `bootc.StageUpdate` line-streaming (EventMessage/EventError/EventComplete) and `onBootcStageClicked`, including WHY the stage script is used instead of `bootc upgrade` (upstream registry-transport composefs bug; podman does the pull; single source of truth in snosi).
 - Key config groups table: `nbc_status_group` → `bootc_status_group`, `nbc_updates_group` → `bootc_updates_group`, add `brew_trust_group`.
 - Update badge section: `nbcUpdateCount` → `bootcUpdateCount` (1 when a deployment is staged).
-- Privileged operations section: nbc paragraph → bootc stage script + polkit action id `org.frostyard.ChairLift.bootc.stage`.
+- Privileged operations section: nbc paragraph → bootc stage script + polkit action id `io.projectbluefin.chairlift.bootc.stage`.
 - Key external Go dependencies table: remove `github.com/frostyard/nbc`; updex row version note.
 - Runtime dependencies: replace NBC entry with `bootc` + `/usr/libexec/bootc-update-stage` (optional; UI gated on bootc-booted status).
 

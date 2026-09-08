@@ -17,7 +17,7 @@ metadata) are absent. The mill's gate host and GitHub's CI runners are
 > ```
 > panic: Path for library: graphene not found ...
 >   codeberg.org/puregotk/puregotk/v4/graphene/graphene-box.go:305
-> FAIL github.com/frostyard/chairlift/internal/views
+> FAIL github.com/projectbluefin/chairlift/internal/views
 > ```
 
 `internal/views`, `internal/window`, and `internal/app` all import puregotk, so

@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/frostyard/chairlift/internal/updexhelper"
 	"github.com/frostyard/updex/updex"
+	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
 const defaultTimeout = 5 * time.Minute
