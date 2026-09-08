@@ -1,0 +1,100 @@
+name: Release screenshots
+
+# Regenerates docs/screenshots/*.png from the real app and commits any change
+# to main, once per published release — so the README and walkthrough always
+# picture what's actually shipping, without anyone remembering to run
+# `make screenshots` by hand.
+#
+# Triggered by `release: published`, not by release.yml directly: GoReleaser
+# publishes the GitHub Release as its last step, so this only fires once that
+# has actually succeeded — a build or packaging failure never gets this far.
+#
+# Deliberately not run per-push (see docs/walkthrough.md "How these are
+# made" — font/theme drift would churn the repo on every commit); tying it to
+# releases instead gives every regeneration a natural, infrequent cadence and
+# a reason (something shipped) rather than a schedule.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to screenshot (defaults to the latest release)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-screenshots
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || '' }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+
+      # Same package list as test.yml's E2E job — see that workflow's
+      # comment for why each package is here: x11-apps for xwd (a separate
+      # Debian/Ubuntu package from x11-utils) and flatpak so the Update All
+      # group's provider check finds at least one provider (Homebrew is on
+      # the runner but not on PATH; bootc is never present in a container).
+      - name: Install headless GTK runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            dbus-x11 \
+            flatpak \
+            imagemagick \
+            libadwaita-1-0 \
+            libgtk-4-1 \
+            x11-apps \
+            x11-utils \
+            xauth \
+            xdotool \
+            xvfb
+
+      - name: Regenerate walkthrough screenshots
+        run: make screenshots
+
+      # The tag is a point in time; main may have moved since it was cut.
+      # Build against the tag (so the screenshots picture exactly what was
+      # released), then land the result on current main rather than on the
+      # immutable tag: stash the regenerated PNGs, switch to main, and copy
+      # them back in — simpler and safer than cherry-picking across a branch
+      # switch.
+      - name: Stash regenerated screenshots
+        run: |
+          mkdir -p /tmp/screenshots-out
+          cp -a docs/screenshots/. /tmp/screenshots-out/
+
+      - name: Switch to main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Commit updated screenshots
+        run: |
+          rm -rf docs/screenshots
+          mkdir -p docs/screenshots
+          cp -a /tmp/screenshots-out/. docs/screenshots/
+          git config user.name "screenshot-bot"
+          git config user.email "actions@github.com"
+          git add docs/screenshots
+          if git diff --cached --quiet; then
+            echo "screenshots unchanged"
+            exit 0
+          fi
+          RELEASE_TAG="${{ github.event.release.tag_name || inputs.tag || 'workflow_dispatch' }}"
+          git commit -m "docs: refresh walkthrough screenshots for ${RELEASE_TAG} [skip ci]"
+          git push origin main

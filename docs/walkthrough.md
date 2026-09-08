@@ -95,6 +95,10 @@ page to `docs/screenshots/`. Always `--dry-run`, so nothing on the capture
 machine changes. Hardware the runner doesn't have is stubbed, and `make ci`
 checks no released binary can read those stubs.
 
-Run it when something's appearance changes; it isn't regenerated per commit,
-since font and theme drift would churn the repo. `make ci` checks that every
-page and configurable group has a screenshot and an entry here.
+Run it locally when something's appearance changes and you want to preview
+before a release. It isn't regenerated per commit, since font and theme
+drift would churn the repo — instead, `.github/workflows/release-screenshots.yml`
+runs it automatically after each published GitHub Release (building from that
+release's tag) and commits any changed PNGs to `main`, so what ships is what's
+pictured here without anyone remembering to do it by hand. `make ci` checks
+that every page and configurable group has a screenshot and an entry here.
