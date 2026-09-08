@@ -5,17 +5,24 @@ name: Release screenshots
 # picture what's actually shipping, without anyone remembering to run
 # `make screenshots` by hand.
 #
-# Triggered by `release: published`, not by release.yml directly: GoReleaser
-# publishes the GitHub Release as its last step, so this only fires once that
-# has actually succeeded — a build or packaging failure never gets this far.
+# Triggered by `workflow_run` on release.yml's "goreleaser" workflow, NOT by
+# `release: published`. That would be the obvious choice — GoReleaser
+# publishes the GitHub Release as its last step, so it'd only fire once that
+# actually succeeded — but it silently never fires in practice: GoReleaser
+# authenticates with the default GITHUB_TOKEN, and GitHub does not trigger
+# new workflow runs from events created by GITHUB_TOKEN (the standard
+# loop-prevention rule). Confirmed on v0.12.1: the release published cleanly
+# and no "Release screenshots" run ever appeared. `workflow_run` is exempt
+# from that rule and is the documented workaround.
 #
 # Deliberately not run per-push (see docs/walkthrough.md "How these are
 # made" — font/theme drift would churn the repo on every commit); tying it to
 # releases instead gives every regeneration a natural, infrequent cadence and
 # a reason (something shipped) rather than a schedule.
 on:
-  release:
-    types: [published]
+  workflow_run:
+    workflows: [goreleaser]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,12 +38,13 @@ concurrency:
 
 jobs:
   capture:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout the released tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.release.tag_name || inputs.tag || '' }}
+          ref: ${{ github.event.workflow_run.head_branch || inputs.tag || '' }}
           fetch-depth: 0
 
       - name: Set up Go
@@ -95,6 +103,6 @@ jobs:
             echo "screenshots unchanged"
             exit 0
           fi
-          RELEASE_TAG="${{ github.event.release.tag_name || inputs.tag || 'workflow_dispatch' }}"
+          RELEASE_TAG="${{ github.event.workflow_run.head_branch || inputs.tag || 'workflow_dispatch' }}"
           git commit -m "docs: refresh walkthrough screenshots for ${RELEASE_TAG} [skip ci]"
           git push origin main
