@@ -1,6 +1,7 @@
 package installcheck
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,6 +38,128 @@ var expectedLegacySkillAliases = map[string]string{
 }
 
 const factoryCanonicalSkillPackageCount = 26
+
+type factorySkillFrontMatter struct {
+	name         string
+	description  string
+	version      string
+	lastUpdated  string
+	tags         []string
+	metadataType string
+}
+
+func factoryParseSkillFrontMatter(packageName, content string) (factorySkillFrontMatter, error) {
+	var frontMatter factorySkillFrontMatter
+	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+	if len(lines) < 2 || lines[0] != "---" {
+		return frontMatter, fmt.Errorf("does not start with YAML front matter")
+	}
+
+	end := -1
+	for i := 1; i < len(lines); i++ {
+		if lines[i] == "---" {
+			end = i
+			break
+		}
+	}
+	if end < 0 {
+		return frontMatter, fmt.Errorf("has an unterminated YAML front matter block")
+	}
+
+	topLevel := make(map[string]string)
+	seenTopLevel := make(map[string]bool)
+	section := ""
+	for _, line := range lines[1:end] {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+		trimmed := strings.TrimSpace(line)
+		if indent == 0 {
+			key, value, ok := strings.Cut(trimmed, ":")
+			if !ok || strings.TrimSpace(key) == "" {
+				return frontMatter, fmt.Errorf("malformed front matter line %q", line)
+			}
+			key = strings.TrimSpace(key)
+			value = strings.TrimSpace(value)
+			if seenTopLevel[key] {
+				return frontMatter, fmt.Errorf("duplicate front matter field %q", key)
+			}
+			seenTopLevel[key] = true
+
+			switch key {
+			case "tags", "metadata":
+				if value != "" {
+					return frontMatter, fmt.Errorf("front matter field %q must contain an indented mapping or list", key)
+				}
+				section = key
+			default:
+				if value == "" || value == "#" || value == "null" || value == "~" {
+					return frontMatter, fmt.Errorf("front matter field %q is empty", key)
+				}
+				topLevel[key] = value
+				section = ""
+			}
+			continue
+		}
+
+		switch section {
+		case "tags":
+			if !strings.HasPrefix(trimmed, "-") {
+				return frontMatter, fmt.Errorf("malformed tags entry %q", line)
+			}
+			tag := strings.TrimSpace(strings.TrimPrefix(trimmed, "-"))
+			if tag == "" || tag == "#" || tag == "null" || tag == "~" {
+				return frontMatter, fmt.Errorf("tags contains an empty entry")
+			}
+			frontMatter.tags = append(frontMatter.tags, tag)
+		case "metadata":
+			key, value, ok := strings.Cut(trimmed, ":")
+			if !ok || strings.TrimSpace(key) != "type" {
+				return frontMatter, fmt.Errorf("metadata contains an unsupported field %q", trimmed)
+			}
+			if strings.TrimSpace(value) == "" || strings.TrimSpace(value) == "#" ||
+				strings.TrimSpace(value) == "null" || strings.TrimSpace(value) == "~" {
+				return frontMatter, fmt.Errorf("metadata.type is empty")
+			}
+			if frontMatter.metadataType != "" {
+				return frontMatter, fmt.Errorf("metadata.type is duplicated")
+			}
+			frontMatter.metadataType = strings.TrimSpace(value)
+		default:
+			return frontMatter, fmt.Errorf("unexpected indented front matter line %q", line)
+		}
+	}
+
+	var ok bool
+	if frontMatter.name, ok = topLevel["name"]; !ok || frontMatter.name == "" {
+		return frontMatter, fmt.Errorf("name is empty or missing")
+	}
+	if frontMatter.description, ok = topLevel["description"]; !ok || frontMatter.description == "" {
+		return frontMatter, fmt.Errorf("description is empty or missing")
+	}
+	if !strings.HasPrefix(frontMatter.description, "Use when") {
+		return frontMatter, fmt.Errorf("description must begin with %q", "Use when")
+	}
+	if frontMatter.version, ok = topLevel["version"]; !ok || frontMatter.version == "" {
+		return frontMatter, fmt.Errorf("version is empty or missing")
+	}
+	if frontMatter.lastUpdated, ok = topLevel["last_updated"]; !ok || frontMatter.lastUpdated == "" {
+		return frontMatter, fmt.Errorf("last_updated is empty or missing")
+	}
+	if len(frontMatter.tags) == 0 {
+		return frontMatter, fmt.Errorf("tags is empty or missing")
+	}
+	if frontMatter.metadataType != "reference" {
+		return frontMatter, fmt.Errorf("metadata.type must equal %q", "reference")
+	}
+	if frontMatter.name != packageName {
+		return frontMatter, fmt.Errorf("name %q does not match directory %q", frontMatter.name, packageName)
+	}
+
+	return frontMatter, nil
+}
 
 func factoryDocumentationReadFile(t *testing.T, relative string) string {
 	t.Helper()
@@ -86,35 +209,8 @@ func factoryCanonicalSkillPackages(t *testing.T) []string {
 		if err != nil {
 			t.Fatalf("read canonical package %q: %v", entry.Name(), err)
 		}
-		lines := strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n")
-		if len(lines) < 2 || lines[0] != "---" {
-			t.Fatalf("canonical package %q does not start with YAML front matter", entry.Name())
-		}
-
-		end := -1
-		for i := 1; i < len(lines); i++ {
-			if lines[i] == "---" {
-				end = i
-				break
-			}
-		}
-		if end < 0 {
-			t.Fatalf("canonical package %q has an unterminated YAML front matter block", entry.Name())
-		}
-
-		frontMatter := lines[1:end]
-		requiredFields := []string{"name", "description", "version", "last_updated", "tags", "metadata"}
-		for _, field := range requiredFields {
-			found := false
-			for _, line := range frontMatter {
-				if strings.HasPrefix(line, field+":") {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Fatalf("canonical package %q front matter is missing %q", entry.Name(), field)
-			}
+		if _, err := factoryParseSkillFrontMatter(entry.Name(), string(content)); err != nil {
+			t.Fatalf("canonical package %q has invalid front matter: %v", entry.Name(), err)
 		}
 		packages = append(packages, entry.Name())
 	}
@@ -148,15 +244,13 @@ func factoryMarkdownFenceMarker(line string) byte {
 
 var factoryMarkdownInlineLinkPattern = regexp.MustCompile(`\[[^\]\n]+\]\(([^)\s]+)(\s+("[^"]*"|'[^']*'|\([^)]*\)))?\)`)
 
-func factoryMarkdownCodeFreeSegments(line string) []string {
-	var segments []string
-	start := 0
+func factoryMarkdownInlineCodeAt(line string, offset int) bool {
 	for i := 0; i < len(line); {
 		if line[i] != '`' {
 			i++
 			continue
 		}
-		segments = append(segments, line[start:i])
+
 		run := 1
 		for i+run < len(line) && line[i+run] == '`' {
 			run++
@@ -164,12 +258,16 @@ func factoryMarkdownCodeFreeSegments(line string) []string {
 		delimiter := line[i : i+run]
 		closeOffset := strings.Index(line[i+run:], delimiter)
 		if closeOffset < 0 {
-			return segments
+			return offset >= i
 		}
-		i += run + closeOffset + run
-		start = i
+
+		end := i + run + closeOffset + run
+		if offset >= i && offset < end {
+			return true
+		}
+		i = end
 	}
-	return append(segments, line[start:])
+	return false
 }
 
 func factoryMarkdownInlineLinkTargets(markdown string) []string {
@@ -187,10 +285,11 @@ func factoryMarkdownInlineLinkTargets(markdown string) []string {
 			fenceMarker = marker
 			continue
 		}
-		for _, segment := range factoryMarkdownCodeFreeSegments(line) {
-			for _, match := range factoryMarkdownInlineLinkPattern.FindAllStringSubmatch(segment, -1) {
-				targets = append(targets, match[1])
+		for _, match := range factoryMarkdownInlineLinkPattern.FindAllStringSubmatchIndex(line, -1) {
+			if factoryMarkdownInlineCodeAt(line, match[0]) {
+				continue
 			}
+			targets = append(targets, line[match[2]:match[3]])
 		}
 	}
 	return targets
@@ -332,16 +431,52 @@ func TestFactoryDocumentationContract(t *testing.T) {
 	})
 
 	t.Run("factory entry points agree", func(t *testing.T) {
+		root := RepoRoot()
 		localSkillRouter := factoryDocumentationReadFile(t, filepath.Join("docs", "SKILL.md"))
-		if !strings.Contains(localSkillRouter, "skills/index.md") {
-			t.Error("docs/SKILL.md does not point to skills/index.md")
+		routerTargets := factoryMarkdownInlineLinkTargets(localSkillRouter)
+		catalogPath := filepath.Join(root, "docs", "skills", "index.md")
+		catalogInfo, err := os.Stat(catalogPath)
+		if err != nil {
+			t.Fatalf("stat canonical skill catalog: %v", err)
+		}
+		if catalogInfo.IsDir() {
+			t.Fatal("canonical skill catalog is a directory")
+		}
+		foundCatalogLink := false
+		for _, target := range routerTargets {
+			if target != "skills/index.md" {
+				continue
+			}
+			foundCatalogLink = true
+			resolved := filepath.Clean(filepath.Join(filepath.Dir(filepath.Join(root, "docs", "SKILL.md")), filepath.FromSlash(target)))
+			if resolved != catalogPath {
+				t.Errorf("docs/SKILL.md link %q resolves to %q, want %q", target, resolved, catalogPath)
+			}
+		}
+		if !foundCatalogLink {
+			t.Error("docs/SKILL.md does not contain the exact local link target skills/index.md")
 		}
 
+		requiredCommonLinks := []string{
+			"https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md",
+			"https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md",
+			"https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md",
+			"https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md",
+			"https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md",
+		}
 		for _, relative := range []string{"AGENTS.md", filepath.Join("docs", "factory", "README.md")} {
 			document := factoryDocumentationReadFile(t, relative)
-			for _, required := range []string{"projectbluefin/common", "factory-onboarding", "agentic-model"} {
-				if !strings.Contains(document, required) {
-					t.Errorf("%s does not name %q", relative, required)
+			targets := factoryMarkdownInlineLinkTargets(document)
+			for _, required := range requiredCommonLinks {
+				found := false
+				for _, target := range targets {
+					if target == required {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("%s does not link %q", relative, required)
 				}
 			}
 		}
