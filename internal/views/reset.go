@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/distrobox"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/powerwash"
 	"github.com/projectbluefin/chairlift/internal/ublue"
@@ -115,7 +116,7 @@ func (uh *UserHome) runPowerwash(button *gtk.Button, row *adw.ActionRow) {
 			button.SetSensitive(true)
 			button.SetLabel("Remove Everything")
 
-			decision := actionmsg.Powerwash(flatpak.IsDryRun(), summary.Succeeded, summary.Failed)
+			decision := actionmsg.Powerwash(dryrun.Enabled(), summary.Succeeded, summary.Failed)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.PowerwashRow(summary.Headline).Subtitle)
 			}
@@ -172,7 +173,7 @@ func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 				return
 			}
 
-			decision := actionmsg.FactoryReset(ublue.IsDryRun())
+			decision := actionmsg.FactoryReset(dryrun.Enabled())
 			if decision.Confirm {
 				row.SetSubtitle(pageview.FactoryResetResultSubtitle())
 			}

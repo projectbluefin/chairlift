@@ -14,6 +14,7 @@ import (
 	"time"
 
 	updexapi "github.com/frostyard/updex/updex"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
@@ -34,19 +35,6 @@ const (
 	pkexecCommand  = "pkexec"
 	DefaultTimeout = 5 * time.Minute
 )
-
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("updex dry-run mode: %v", mode)
-}
-
-// IsDryRun returns whether dry-run mode is enabled
-func IsDryRun() bool {
-	return dryRun
-}
 
 // DefaultContext returns a context with the default timeout
 func DefaultContext() (context.Context, context.CancelFunc) {
@@ -174,7 +162,7 @@ func runHelper(ctx context.Context, pkexecPath string, args ...string) (string, 
 		action = args[0]
 	}
 
-	if dryRun {
+	if dryrun.Enabled() {
 		args = append(args, "--dry-run")
 		wouldRun := append([]string{pkexecPath, HelperPath}, args...)
 		journal.Record(action, journalArgs(args), wouldRun, journal.SuppressedDryRun)

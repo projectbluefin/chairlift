@@ -27,7 +27,7 @@ func TestUpdatesPageUsesGuardedRefreshDecisions(t *testing.T) {
 		`go uh.updateHomebrew(btn, updateGate)`,
 		`if !upgradeGate.TryStart()`,
 		`btn.SetLabel("Upgrading...")`,
-		`dryRun := homebrew.IsDryRun()`,
+		`dryRun := dryrun.Enabled()`,
 		`actionstate.PackageUpgrade(err == nil, dryRun)`,
 		`actionstate.OutdatedRefresh(err == nil, currentCount, len(packages))`,
 		`actionstate.OutdatedPresentation(refresh.Count)`,

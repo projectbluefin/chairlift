@@ -11,17 +11,11 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 const commandTimeout = 2 * time.Minute
-
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode.
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("distrobox dry-run mode: %v", mode)
-}
 
 // IsInstalled reports whether the distrobox command is on $PATH.
 func IsInstalled() bool {
@@ -34,7 +28,7 @@ func IsInstalled() bool {
 func RemoveAll(ctx context.Context) error {
 	args := []string{"rm", "--all", "--force"}
 
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would execute: distrobox %s", strings.Join(args, " "))
 		return nil
 	}

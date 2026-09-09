@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/sysupdate"
@@ -268,7 +269,7 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 			return
 		}
 
-		decision := actionmsg.TapTrust(homebrew.IsDryRun(), tap.Name)
+		decision := actionmsg.TapTrust(dryrun.Enabled(), tap.Name)
 		if decision.MutateUI {
 			if row, ok := uh.brewTrustRows[tap.Name]; ok {
 				uh.brewTrustGroup.Remove(&row.Widget)
@@ -395,7 +396,7 @@ func (uh *UserHome) loadOutdatedPackagesGeneration(generation uint64, done func(
 				btn.SetLabel("Upgrading...")
 				go func() {
 					err := homebrew.Upgrade(pkgName)
-					dryRun := homebrew.IsDryRun()
+					dryRun := dryrun.Enabled()
 					decision := actionstate.PackageUpgrade(err == nil, dryRun)
 					if err != nil {
 						var trustErr *homebrew.UntrustedTapError
@@ -543,7 +544,7 @@ func (uh *UserHome) loadFlatpakUpdates() {
 						return
 					}
 					sgtk.RunOnMainThread(func() {
-						uh.toastAdder.ShowToast(actionmsg.Update(flatpak.IsDryRun(), appID))
+						uh.toastAdder.ShowToast(actionmsg.Update(dryrun.Enabled(), appID))
 						// Refresh the updates list
 						go uh.loadFlatpakUpdates()
 					})
@@ -696,7 +697,7 @@ func (uh *UserHome) onBootcStageClicked() {
 				version = status.Status.Staged.Version()
 			}
 			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version, lastMessage))
-			uh.toastAdder.ShowToast(actionmsg.BootcStage(bootc.IsDryRun(), staged))
+			uh.toastAdder.ShowToast(actionmsg.BootcStage(dryrun.Enabled(), staged))
 		})
 	}()
 }
@@ -836,7 +837,7 @@ func (uh *UserHome) onSysupdateStageClicked() {
 			}
 
 			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version, lastMessage))
-			uh.toastAdder.ShowToast(actionmsg.SysupdateStage(sysupdate.IsDryRun(), staged))
+			uh.toastAdder.ShowToast(actionmsg.SysupdateStage(dryrun.Enabled(), staged))
 		})
 	}()
 }
@@ -845,7 +846,7 @@ func (uh *UserHome) onSysupdateStageClicked() {
 // before restoring the top-level action.
 func (uh *UserHome) updateHomebrew(button gtk.Button, gate *actionstate.Gate) {
 	err := homebrew.Update()
-	dryRun := homebrew.IsDryRun()
+	dryRun := dryrun.Enabled()
 	decision := actionstate.MetadataUpdate(err == nil, dryRun)
 	if err != nil {
 		sgtk.RunOnMainThread(func() {
@@ -929,7 +930,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				return
 			}
 
-			decision := actionmsg.Rollback(ublue.IsDryRun())
+			decision := actionmsg.Rollback(dryrun.Enabled())
 			if decision.Confirm {
 				row.SetSubtitle(pageview.BootcRollbackResultSubtitle())
 			}

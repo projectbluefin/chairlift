@@ -2,6 +2,7 @@ package troubleshoot
 
 import (
 	"errors"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"strings"
 	"testing"
 )
@@ -114,7 +115,7 @@ func stubEnvironment(t *testing.T, config string, present map[string]bool) *[]st
 	t.Cleanup(func() {
 		lookPath, readConfig, runSetup = previousLook, previousRead, previousSetup
 		tapPackage, installPackage = previousTap, previousInstall
-		dryRun = false
+		dryrun.Set(false)
 	})
 
 	// Never reach real brew: a test that did would tap a repository on the
@@ -227,9 +228,9 @@ func TestSetupReturnsTheStateItActuallyLeft(t *testing.T) {
 
 func TestDryRunRunsNothing(t *testing.T) {
 	previousSetup := runSetup
-	t.Cleanup(func() { runSetup = previousSetup; dryRun = false })
+	t.Cleanup(func() { runSetup = previousSetup; dryrun.Set(false) })
 	runSetup = defaultRunSetup
-	SetDryRun(true)
+	dryrun.Set(true)
 
 	if err := runSetup(); err != nil {
 		t.Fatalf("dry-run setup: %v", err)

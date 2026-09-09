@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -186,7 +187,7 @@ func (uh *UserHome) onBrewCleanupClicked(button *gtk.Button) {
 				return
 			}
 
-			uh.toastAdder.ShowToast(actionmsg.Cleanup(homebrew.IsDryRun(), "Homebrew", output))
+			uh.toastAdder.ShowToast(actionmsg.Cleanup(dryrun.Enabled(), "Homebrew", output))
 		})
 	}()
 }
@@ -208,7 +209,7 @@ func (uh *UserHome) onFlatpakCleanupClicked(button *gtk.Button) {
 				return
 			}
 
-			uh.toastAdder.ShowToast(actionmsg.Cleanup(flatpak.IsDryRun(), "Flatpak", output))
+			uh.toastAdder.ShowToast(actionmsg.Cleanup(dryrun.Enabled(), "Flatpak", output))
 		})
 	}()
 }
@@ -225,7 +226,7 @@ func (uh *UserHome) onBrewBundleDumpClicked() {
 			return
 		}
 		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowToast(actionmsg.BundleDump(homebrew.IsDryRun(), path))
+			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled(), path))
 		})
 	}()
 }
@@ -234,7 +235,7 @@ func (uh *UserHome) onBrewBundleDumpClicked() {
 func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button *gtk.Button) {
 	log.Printf("Running action: %s (script: %s, sudo: %v)", title, script, sudo)
 
-	decision := actionmsg.MaintenanceScript(IsDryRun(), title)
+	decision := actionmsg.MaintenanceScript(dryrun.Enabled(), title)
 
 	button.SetSensitive(false)
 	button.SetLabel("Running...")

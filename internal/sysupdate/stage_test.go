@@ -5,12 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 func TestStageUpdateDryRunUsesFixedPath(t *testing.T) {
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	ch := make(chan ProgressEvent)
 	done := make(chan error, 1)

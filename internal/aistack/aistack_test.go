@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 )
 
@@ -154,7 +155,7 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	t.Cleanup(func() {
 		unitDir = previousDir
 		runSystemctl = previousSystemctl
-		dryRun = false
+		dryrun.Set(false)
 	})
 
 	unitDir = func() (string, error) { return tmp, nil }
@@ -265,7 +266,7 @@ func TestDisableSucceedsWhenTheServiceIsAlreadyDown(t *testing.T) {
 
 func TestDryRunTouchesNothing(t *testing.T) {
 	dir, calls := stubUnitDir(t)
-	SetDryRun(true)
+	dryrun.Set(true)
 
 	if err := Enable(context.Background(), Select(gpu.Set{AMD: true})); err != nil {
 		t.Fatalf("Enable: %v", err)

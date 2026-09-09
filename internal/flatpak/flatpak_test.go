@@ -2,6 +2,7 @@ package flatpak
 
 import (
 	"errors"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -84,8 +85,8 @@ func TestParseApplicationList(t *testing.T) {
 }
 
 func TestCommandWrappersUseExpectedArguments(t *testing.T) {
-	SetDryRun(false)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	body := `case "$1" in
 list) printf 'Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp/org.mozilla.firefox/x86_64/stable\n' ;;
@@ -179,8 +180,8 @@ esac`
 }
 
 func TestQueryFailuresPropagate(t *testing.T) {
-	SetDryRun(false)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
 	installCapturingFlatpak(t, `echo 'query failed' >&2; exit 7`)
 
 	tests := []struct {
@@ -203,8 +204,8 @@ func TestQueryFailuresPropagate(t *testing.T) {
 }
 
 func TestDryRunSkipsEveryStateChangingCommand(t *testing.T) {
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
 	t.Setenv("PATH", t.TempDir())
 
 	for command := range stateChangingCommands {
@@ -219,8 +220,8 @@ func TestDryRunSkipsEveryStateChangingCommand(t *testing.T) {
 			}
 		})
 	}
-	if !IsDryRun() {
-		t.Fatal("IsDryRun() = false after SetDryRun(true)")
+	if !dryrun.Enabled() {
+		t.Fatal("dryrun.Enabled() = false after dryrun.Set(true)")
 	}
 }
 

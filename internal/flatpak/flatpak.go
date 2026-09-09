@@ -13,6 +13,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 const (
@@ -27,19 +29,6 @@ const (
 	// forever even though the command itself is gone.
 	waitDelay = 5 * time.Second
 )
-
-var dryRun = false
-
-// SetDryRun sets the dry-run mode
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("Flatpak dry-run mode: %v", mode)
-}
-
-// IsDryRun returns whether dry-run mode is enabled
-func IsDryRun() bool {
-	return dryRun
-}
 
 // Error represents a Flatpak-related error. Err, when non-nil, carries the
 // underlying cause (for example context.DeadlineExceeded or
@@ -97,7 +86,7 @@ func commandTimeout(args []string) time.Duration {
 
 // runFlatpakCommand executes a flatpak command and returns the output
 func runFlatpakCommand(args ...string) (string, error) {
-	if len(args) > 0 && stateChangingCommands[args[0]] && dryRun {
+	if len(args) > 0 && stateChangingCommands[args[0]] && dryrun.Enabled() {
 		msg := fmt.Sprintf("[DRY-RUN] Would execute: flatpak %s", strings.Join(args, " "))
 		log.Println(msg)
 		return msg, nil

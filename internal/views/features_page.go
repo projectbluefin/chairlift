@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/ublue"
@@ -207,7 +208,7 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *gtk.Swit
 				return
 			}
 
-			decision := actionmsg.FeatureToggle(updex.IsDryRun(), enabled, name)
+			decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)
 			if decision.Confirm {
 				// Confirm the visual state change
 				toggle.SetActive(enabled)
@@ -242,7 +243,7 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 				return
 			}
 
-			uh.toastAdder.ShowToast(actionmsg.FeatureUpdate(updex.IsDryRun()))
+			uh.toastAdder.ShowToast(actionmsg.FeatureUpdate(dryrun.Enabled()))
 		})
 	}()
 }
@@ -407,7 +408,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *ad
 				return
 			}
 
-			decision := actionmsg.DeveloperMode(ublue.IsDryRun(), enabled)
+			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled)
 			toggle.SetActive(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
@@ -436,7 +437,7 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *gtk.Switch, row *adw.A
 		sgtk.RunOnMainThread(func() {
 			toggle.SetSensitive(true)
 
-			decision := actionmsg.GamingMode(ublue.IsDryRun(), enabled, len(changed), len(failures), len(skipped))
+			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
 			toggle.SetActive(decision.Confirm == enabled)
 			row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)))
 
