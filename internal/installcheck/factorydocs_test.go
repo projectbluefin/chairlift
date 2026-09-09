@@ -3,6 +3,7 @@ package installcheck
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -34,6 +35,8 @@ var expectedLegacySkillAliases = map[string]string{
 	"trace-one-concrete-input-through-pipeline-order.md":                   "../../skills/pipeline-tracing/SKILL.md",
 	"yaml-scalar-key-identity-needs-tag-not-just-value.md":                 "../../skills/yaml-key-identity/SKILL.md",
 }
+
+const factoryCanonicalSkillPackageCount = 26
 
 func factoryDocumentationReadFile(t *testing.T, relative string) string {
 	t.Helper()
@@ -122,8 +125,75 @@ func factoryCanonicalSkillPackages(t *testing.T) []string {
 	if len(packages) == 0 {
 		t.Fatal("canonical skills directory contains no packages")
 	}
+	if len(packages) != factoryCanonicalSkillPackageCount {
+		t.Fatalf("canonical skills directory contains %d packages, want exactly %d", len(packages), factoryCanonicalSkillPackageCount)
+	}
 	sort.Strings(packages)
 	return packages
+}
+
+func factoryMarkdownFenceMarker(line string) byte {
+	if len(line) < 3 || (line[0] != '`' && line[0] != '~') {
+		return 0
+	}
+	run := 1
+	for run < len(line) && line[run] == line[0] {
+		run++
+	}
+	if run < 3 {
+		return 0
+	}
+	return line[0]
+}
+
+var factoryMarkdownInlineLinkPattern = regexp.MustCompile(`\[[^\]\n]+\]\(([^)\s]+)(\s+("[^"]*"|'[^']*'|\([^)]*\)))?\)`)
+
+func factoryMarkdownCodeFreeSegments(line string) []string {
+	var segments []string
+	start := 0
+	for i := 0; i < len(line); {
+		if line[i] != '`' {
+			i++
+			continue
+		}
+		segments = append(segments, line[start:i])
+		run := 1
+		for i+run < len(line) && line[i+run] == '`' {
+			run++
+		}
+		delimiter := line[i : i+run]
+		closeOffset := strings.Index(line[i+run:], delimiter)
+		if closeOffset < 0 {
+			return segments
+		}
+		i += run + closeOffset + run
+		start = i
+	}
+	return append(segments, line[start:])
+}
+
+func factoryMarkdownInlineLinkTargets(markdown string) []string {
+	var targets []string
+	fenceMarker := byte(0)
+	for _, line := range strings.Split(strings.ReplaceAll(markdown, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimLeft(line, " \t")
+		if fenceMarker != 0 {
+			if factoryMarkdownFenceMarker(trimmed) == fenceMarker {
+				fenceMarker = 0
+			}
+			continue
+		}
+		if marker := factoryMarkdownFenceMarker(trimmed); marker != 0 {
+			fenceMarker = marker
+			continue
+		}
+		for _, segment := range factoryMarkdownCodeFreeSegments(line) {
+			for _, match := range factoryMarkdownInlineLinkPattern.FindAllStringSubmatch(segment, -1) {
+				targets = append(targets, match[1])
+			}
+		}
+	}
+	return targets
 }
 
 func TestFactoryDocumentationContract(t *testing.T) {
@@ -135,15 +205,36 @@ func TestFactoryDocumentationContract(t *testing.T) {
 		packages := factoryCanonicalSkillPackages(t)
 		index := factoryDocumentationReadFile(t, filepath.Join("docs", "skills", "index.md"))
 
+		canonicalTargets := make(map[string]struct{}, len(packages))
+		for _, packageName := range packages {
+			canonicalTargets[packageName+"/SKILL.md"] = struct{}{}
+		}
+
+		catalogTargets := make(map[string]int)
+		for _, target := range factoryMarkdownInlineLinkTargets(index) {
+			catalogTargets[target]++
+		}
+
 		for _, packageName := range packages {
 			relative := packageName + "/SKILL.md"
-			links := strings.Count(index, "]("+relative+")")
+			links := catalogTargets[relative]
 			switch links {
 			case 0:
 				t.Errorf("package %q is missing its catalog link", packageName)
 			case 1:
 			default:
 				t.Errorf("package %q has %d catalog links, want exactly one", packageName, links)
+			}
+		}
+
+		catalogTargetNames := make([]string, 0, len(catalogTargets))
+		for target := range catalogTargets {
+			catalogTargetNames = append(catalogTargetNames, target)
+		}
+		sort.Strings(catalogTargetNames)
+		for _, target := range catalogTargetNames {
+			if _, ok := canonicalTargets[target]; !ok {
+				t.Errorf("catalog contains unknown link target %q", target)
 			}
 		}
 
