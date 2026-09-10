@@ -208,7 +208,7 @@ test binary to the puregotk-importing parent package.
 
 ### View-layer toast and decision helpers (`internal/views/actionmsg`, `internal/views/trustmsg`)
 
-Two of the nine small, puregotk-free packages under `internal/views/` (the others are `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/rowset`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`, each documented in its own subsection) hold the text and, at four call sites, the accompanying UI decision that view handlers use once a wrapper call returns. Both follow `docs/agents/skills/gtk-headless-tests.md`'s prescribed fix: `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs), so the decidable logic is extracted into a pure package and table-tested there instead. Decision records: [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md) (the leaf-package layout) and [ADR-0009](../adr/0009-dry-run-output-convention-and-single-decision-structs.md) (the decision-struct rule these packages implement).
+Two of the nine small, puregotk-free packages under `internal/views/` (the others are `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/rowset`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`, each documented in its own subsection) hold the text and, at four call sites, the accompanying UI decision that view handlers use once a wrapper call returns. Both follow `docs/skills/gtk-headless-testing/SKILL.md`'s prescribed fix: `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs), so the decidable logic is extracted into a pure package and table-tested there instead. Decision records: [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md) (the leaf-package layout) and [ADR-0009](../adr/0009-dry-run-output-convention-and-single-decision-structs.md) (the decision-struct rule these packages implement).
 
 - **`internal/views/trustmsg`** (added for issue #57) — `UpgradeMessage(pkgName string, trustGroupAvailable bool) string`, the toast shown when a Homebrew upgrade fails with an `*homebrew.UntrustedTapError`; see "Tap trust" above.
 - **`internal/views/actionmsg`** (added for issue #56 and extended for issue #8) — builds the toast text for every state-changing view action across the maintenance, applications, updates, and features pages, and, at the four call sites where the view also mutates a row/group/switch on success, the execute/complete/mutate/confirm decision itself, so the same table-driven test in `actionmsg_test.go` that checks the toast also checks the gate (see "Dry-run mode" in [overview.md](./overview.md#dry-run-mode) for the general rule this implements). Exported surface:
@@ -315,7 +315,7 @@ button mutation on the main thread.
 
 ### View-layer row bookkeeping (`internal/views/rowset`)
 
-`internal/views/rowset` is one of the nine puregotk-free leaf packages under `internal/views/` (its siblings are `internal/views/actionmsg`, `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/trustmsg`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`). It holds single-row removal and clear-then-repopulate bookkeeping for rows a view adds to an expander, so a successful action can remove exactly its row and a later list reload does not accumulate stale rows. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview` and `trustmsg`, it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs — `docs/agents/skills/gtk-headless-tests.md`); unlike them it imports nothing at all outside the standard library.
+`internal/views/rowset` is one of the nine puregotk-free leaf packages under `internal/views/` (its siblings are `internal/views/actionmsg`, `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/trustmsg`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`). It holds single-row removal and clear-then-repopulate bookkeeping for rows a view adds to an expander, so a successful action can remove exactly its row and a later list reload does not accumulate stale rows. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview` and `trustmsg`, it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); unlike them it imports nothing at all outside the standard library.
 
 Exported surface:
 
@@ -331,7 +331,7 @@ Exported surface:
 
 ### View-layer Flatpak update status (`internal/views/flatpakstatus`)
 
-`internal/views/flatpakstatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It turns the outcome of the two Flatpak update queries — how many updates are known, and which of the user/system installations could not be checked — into the Flatpak updates expander's subtitle text plus whether the expander should be expandable. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/agents/skills/gtk-headless-tests.md`); like `rowset` it imports nothing at all outside the standard library (`fmt`).
+`internal/views/flatpakstatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It turns the outcome of the two Flatpak update queries — how many updates are known, and which of the user/system installations could not be checked — into the Flatpak updates expander's subtitle text plus whether the expander should be expandable. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); like `rowset` it imports nothing at all outside the standard library (`fmt`).
 
 Exported surface:
 
@@ -348,7 +348,7 @@ The practical consequence is that a total failure — both installations unquery
 
 ### View-layer feature update status (`internal/views/featurestatus`)
 
-`internal/views/featurestatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It owns every string and every decision the Features page's updex update check needs: a feature row's subtitle, whether that feature has an update, and the features group's description. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset`, `flatpakstatus` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/agents/skills/gtk-headless-tests.md`). Unlike them it imports one non-standard-library package, `internal/updex`, for the `CheckResult` type; that is safe because `internal/updex` is itself puregotk-free (`go list -deps ./internal/updex | grep -c puregotk` prints `0`), and `go list -deps ./internal/views/featurestatus | grep -c puregotk` prints `0` too.
+`internal/views/featurestatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It owns every string and every decision the Features page's updex update check needs: a feature row's subtitle, whether that feature has an update, and the features group's description. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset`, `flatpakstatus` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`). Unlike them it imports one non-standard-library package, `internal/updex`, for the `CheckResult` type; that is safe because `internal/updex` is itself puregotk-free (`go list -deps ./internal/updex | grep -c puregotk` prints `0`), and `go list -deps ./internal/views/featurestatus | grep -c puregotk` prints `0` too.
 
 Exported surface:
 
@@ -907,7 +907,7 @@ installed layout itself:
   `gopkg.in/yaml.v3` and, iterating **every** `nfpms[]` entry (not just
   `nfpms[0]`, so adding or reordering a second package with the wrong layout
   still fails — per
-  `docs/agents/skills/regression-tests-must-cover-every-collection-entry.md`),
+  `docs/skills/collection-regressions/SKILL.md`),
   asserts each entry's `bindir` matches the directory of
   `internal/updex.HelperPath`, its updex/bootc/sysupdate policy
   `contents[].dst` entries
@@ -927,11 +927,11 @@ Both tests fail — not skip — if `internal/updex.HelperPath`, the Makefile's
 of one another; each was hand-verified during development by reverting one
 of the three at a time and confirming only the test(s) that source depends
 on turn red. The package imports no puregotk, directly or transitively, so it
-never trips `docs/agents/skills/gtk-headless-tests.md`'s constraint, and it
+never trips `docs/skills/gtk-headless-testing/SKILL.md`'s constraint, and it
 lives under `internal/...` so `gates_chunk`, `make ci`, and CI's identical
 `go test ./internal/... -run "^Test[^I]" -skip "Integration"` filter all
 exercise it on every run, per
-`docs/agents/skills/gate-test-scope-is-internal-only.md` — not just the
+`docs/skills/gated-test-placement/SKILL.md` — not just the
 heavier, less-frequent `make ci` deep gate.
 
 A third regression test, **`TestGoreleaserLicenseIsGPL`**, guards a related
@@ -944,7 +944,7 @@ from `LicenseGpl30OnlyValue`). Like the layout test above, it parses the
 real, repo-root `.goreleaser.yaml` via the shared `loadGoreleaserConfig`
 helper (no fixture) and asserts `cfg.Metadata.License` and, iterating
 **every** `nfpms[]` entry with a per-index `t.Run` (not just `nfpms[0]`, per
-`docs/agents/skills/regression-tests-must-cover-every-collection-entry.md`),
+`docs/skills/collection-regressions/SKILL.md`),
 each entry's `License` field equal the fixed SPDX identifier
 `GPL-3.0-or-later`. `GoreleaserConfig.Metadata` (`MetadataConfig.License`)
 and `NfpmConfig.License` (`internal/installcheck/installcheck.go`) exist

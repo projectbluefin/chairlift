@@ -5,9 +5,9 @@ common ChairLift tasks. Copy a prompt, replace its bracketed placeholders, and
 include the relevant issue or diff.
 
 The prompts supplement rather than replace repository instructions. Agents
-must read and follow `AGENTS.md` and the files under `docs/agents/skills/`
-before changing code. When a prompt conflicts with repository instructions,
-the repository instructions take precedence.
+must read and follow `AGENTS.md`, `docs/SKILL.md`, and the matching package
+from `docs/skills/` before changing code. When a prompt conflicts with
+repository instructions, the repository instructions take precedence.
 
 ## Catalog
 

@@ -342,18 +342,47 @@ locations instead of duplicated into competing stores.
 agents. Read `.memory/README.md` and any learning artifacts in that directory
 before working. Record verified corrections there when a session establishes
 that a prior belief about ChairLift was wrong, and promote stable rules into
-this file, `docs/agents/skills/`, or `docs/design/` as appropriate. Never record
+this file, `docs/skills/`, or `docs/design/` as appropriate. Never record
 secrets or personal data because the directory is version-controlled.
 
-## Learned agent skills
+## Agent read order
 
-**docs/agents/skills/** Read every file in `docs/agents/skills/` before
-planning, implementing, or reviewing changes. Each file is a durable lesson
-distilled from a previous automated run of
-[the mill](https://github.com/frostyard/mill) (the spec→PR harness, configured
-here via `.mill.toml`); they are binding guidance, not suggestions. New skills
-are added by the mill's harvest step and reviewed like any other change in the
-PR that carries them.
+Before planning, implementing, or reviewing a change, read:
+
+1. [`AGENTS.md`](AGENTS.md) for ChairLift-specific build commands, ownership,
+   and application invariants.
+2. [`docs/SKILL.md`](docs/SKILL.md), then the matching package in
+   [`docs/skills/`](docs/skills/) selected by
+   [`docs/skills/index.md`](docs/skills/index.md).
+3. Common's linked factory-onboarding and agentic-model documentation when work
+   crosses repositories, uses Hive, affects labels, or needs a human decision
+   gate.
+
+The former `docs/agents/skills/*.md` paths are compatibility aliases only; the
+canonical agent knowledge base is `docs/skills/`.
+
+## Project Bluefin factory
+
+ChairLift's product and safety rules remain local. Project Bluefin Common is
+the linked sidecar authority for cross-repository factory process; do not copy
+its policy into this file. For local navigation, start at
+[`docs/factory/README.md`](docs/factory/README.md).
+
+| Topic | Common source |
+| --- | --- |
+| Factory onboarding | [`docs/skills/factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md) |
+| Agentic operating model | [`docs/factory/agentic-model.md`](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md) |
+| Human decision gates | [`docs/skills/human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md) |
+| Issue lifecycle and labels | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
+| Skill improvement | [`docs/skills/skill-improvement.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md) |
+
+Every completed factory task has two outputs: the requested repository change
+and a knowledge decision. Preserve a durable lesson in the closest canonical
+package under `docs/skills/`, or record a verified correction in `.memory/`.
+Banned stale-artifact patterns: no committed session notes, no append-only
+changelog/status files, and no "append here" instructions. ChairLift's normal
+PR and review rules remain in force; Common's `common`-only direct-push
+exception does not apply here.
 
 ## Org-wide decisions
 
