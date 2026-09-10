@@ -1,0 +1,6 @@
+# Global default code owners
+* @projectbluefin/maintainers
+
+# BEGIN TRIAGERS — managed by projectbluefin/common, do not edit manually in downstream repos
+**/*.md  @repires @KiKaraage @projectbluefin/maintainers
+# END TRIAGERS
