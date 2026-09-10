@@ -1,0 +1,34 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 2c9f875913ee60ca25ce70243dc24d5b6415598c # v4.6.0
+    hooks:
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-merge-conflict
+      - id: detect-private-key
+  - repo: https://github.com/rhysd/actionlint
+    rev: 03d0035246f3e81f36aed592ffb4bebf33a03106 # v1.7.7
+    hooks:
+      - id: actionlint
+  - repo: local
+    hooks:
+      - id: no-floating-action-tags
+        name: Block floating GitHub Action tags (@main, @v*)
+        language: pygrep
+        entry: 'uses:(?!.*projectbluefin/).*@(main|master|latest|v[0-9])'
+        types: [yaml]
+        files: '\.github/workflows/'
+      - id: no-discord-token
+        name: Block Discord bot tokens
+        language: pygrep
+        entry: '[A-Za-z0-9_-]{24,28}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,38}'
+        exclude: '\.pre-commit-config\.yaml$'
+      - id: make-ci
+        name: Run make ci gate
+        language: system
+        entry: make ci
+        pass_filenames: false
+        always_run: true
