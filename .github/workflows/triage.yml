@@ -31,6 +31,16 @@ jobs:
             const body = (issue.body ?? '').slice(0, 100000);
             const labels = new Set();
 
+            // Factory contract: new issues start in 1-triage unless a numbered workflow label exists.
+            const existingNames = new Set(
+              issue.labels.map((label) => typeof label === 'string' ? label : label.name),
+            );
+            const hasWorkflowLabel = [...existingNames].some((name) =>
+              ['1-triage', '2-discussing', '3-human-queue', '3-clanker-queue', '4-review'].includes(name),
+            );
+            if (!hasWorkflowLabel) {
+              labels.add('1-triage');
+            }
             const acmmTitle = /^\[ACMM L\d+\]\s+/i.test(title);
             const acmmCriterion = /\*\*Criterion ID:\*\*\s*`acmm:[^`]+`/i.test(body);
             if (acmmTitle && acmmCriterion) {
