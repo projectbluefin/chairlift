@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
@@ -37,7 +38,7 @@ func StageScriptAvailable() bool {
 // events; EventComplete is sent on success. progressCh is closed when done.
 // The script is idempotent: it exits 0 without staging when already current.
 func StageUpdate(ctx context.Context, progressCh chan<- ProgressEvent) error {
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would execute: pkexec %s", StageScriptPath)
 		return adaptStageError(stageexec.DryRun(ctx, progressCh, StageScriptPath))
 	}

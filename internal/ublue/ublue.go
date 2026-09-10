@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/journal"
@@ -50,19 +51,6 @@ const (
 	// so it gets the same generous ceiling the updex helper uses.
 	DefaultTimeout = 10 * time.Minute
 )
-
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode.
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("ublue dry-run mode: %v", mode)
-}
-
-// IsDryRun returns whether dry-run mode is enabled.
-func IsDryRun() bool {
-	return dryRun
-}
 
 // DefaultContext returns a context with the default timeout.
 func DefaultContext() (context.Context, context.CancelFunc) {
@@ -353,7 +341,7 @@ func runHelper(ctx context.Context, pkexecPath string, args ...string) (string, 
 		action = args[0]
 	}
 
-	if dryRun {
+	if dryrun.Enabled() {
 		args = append(args, "--dry-run")
 		wouldRun := append([]string{pkexecPath, HelperPath}, args...)
 		journal.Record(action, journalArgs(args), wouldRun, journal.SuppressedDryRun)

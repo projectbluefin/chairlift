@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
@@ -134,7 +135,7 @@ func (uh *UserHome) onTroubleshootClicked() {
 			}
 
 			row.SetSubtitle(pageview.TroubleshootSetupSubtitle(after))
-			if troubleshoot.IsDryRun() {
+			if dryrun.Enabled() {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made")
 				return
 			}

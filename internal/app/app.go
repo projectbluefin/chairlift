@@ -7,18 +7,9 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/projectbluefin/chairlift/internal/aistack"
-	"github.com/projectbluefin/chairlift/internal/bootc"
-	"github.com/projectbluefin/chairlift/internal/distrobox"
-	"github.com/projectbluefin/chairlift/internal/flatpak"
-	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/navigation"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
-	"github.com/projectbluefin/chairlift/internal/troubleshoot"
-	"github.com/projectbluefin/chairlift/internal/ublue"
-	"github.com/projectbluefin/chairlift/internal/updex"
-	"github.com/projectbluefin/chairlift/internal/views"
 	"github.com/projectbluefin/chairlift/internal/window"
 
 	"github.com/frostyard/snowkit/gobj"
@@ -87,20 +78,14 @@ func New() *Application {
 		if arg == "--dry-run" || arg == "-d" {
 			log.Println("Running in dry-run mode")
 			app.dryRun = true
-			flatpak.SetDryRun(true)
-			homebrew.SetDryRun(true)
-			bootc.SetDryRun(true)
-			sysupdate.SetDryRun(true)
-			updex.SetDryRun(true)
-			ublue.SetDryRun(true)
-			distrobox.SetDryRun(true)
-			aistack.SetDryRun(true)
-			troubleshoot.SetDryRun(true)
+			// One process-wide flag; every integration package reads
+			// dryrun.Enabled() directly, so a new integration cannot
+			// silently fall out of dry-run mode by missing a setter here.
+			dryrun.Set(true)
 			// Lets the screenshot walkthrough render the Bluefin-family
 			// rows on a host that is not a Bluefin system. This is a no-op
 			// in every ordinary build; see imageinfo_override.go.
 			applyImageInfoOverride()
-			views.SetDryRun(true)
 			break
 		}
 	}

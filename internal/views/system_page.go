@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -322,7 +323,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 				return
 			}
 
-			decision := actionmsg.DriverSwitch(ublue.IsDryRun(), driver.DisplayName())
+			decision := actionmsg.DriverSwitch(dryrun.Enabled(), driver.DisplayName())
 			if decision.Confirm {
 				row.SetSubtitle(pageview.GraphicsDriverResultSubtitle(driver.DisplayName()))
 				button.SetVisible(false)
@@ -356,7 +357,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *gtk.Switch, row *ad
 				return
 			}
 
-			decision := actionmsg.ChannelSwitch(ublue.IsDryRun(), toTesting)
+			decision := actionmsg.ChannelSwitch(dryrun.Enabled(), toTesting)
 			toggle.SetActive(decision.Confirm == toTesting)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.ChannelSwitchResultSubtitle(toTesting))

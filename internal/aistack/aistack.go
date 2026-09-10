@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 )
 
@@ -210,19 +211,6 @@ func execSystemctl(ctx context.Context, args ...string) error {
 	return nil
 }
 
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode.
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("aistack dry-run mode: %v", mode)
-}
-
-// IsDryRun reports whether dry-run mode is active.
-func IsDryRun() bool {
-	return dryRun
-}
-
 // IsAvailable reports whether this host can run the stack at all. Quadlet is
 // a Podman feature, so without Podman there is nothing to install into.
 func IsAvailable() bool {
@@ -260,7 +248,7 @@ func Enable(ctx context.Context, stack Stack) error {
 		return err
 	}
 
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would write %s for %s and start %s", path, stack.Image, ServiceName)
 		return nil
 	}
@@ -297,7 +285,7 @@ func Disable(ctx context.Context) error {
 		return err
 	}
 
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would stop %s and remove %s", ServiceName, path)
 		return nil
 	}

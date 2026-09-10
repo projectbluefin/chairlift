@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/aistack"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -106,7 +107,7 @@ func (uh *UserHome) onAIStackToggled(enabled bool, toggle *gtk.Switch, row *adw.
 				return
 			}
 
-			decision := actionmsg.AIStack(aistack.IsDryRun(), enabled, stack.Accelerator)
+			decision := actionmsg.AIStack(dryrun.Enabled(), enabled, stack.Accelerator)
 			toggle.SetActive(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.AIStackResultSubtitle(enabled, aistack.Port))

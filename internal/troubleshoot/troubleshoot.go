@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
@@ -103,19 +104,6 @@ func ParseConfig(data []byte) State {
 		}
 	}
 	return state
-}
-
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode.
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("troubleshoot dry-run mode: %v", mode)
-}
-
-// IsDryRun reports whether dry-run mode is active.
-func IsDryRun() bool {
-	return dryRun
 }
 
 // lookPath is an injection seam for binary detection, so Detect is testable
@@ -204,7 +192,7 @@ func Steps() []Step {
 var runSetup = defaultRunSetup
 
 func defaultRunSetup() error {
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would execute: %s", setupCommand)
 		return nil
 	}

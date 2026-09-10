@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -242,7 +243,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 						return
 					}
 
-					decision := actionmsg.BundleInstall(homebrew.IsDryRun(), bundle.Name)
+					decision := actionmsg.BundleInstall(dryrun.Enabled(), bundle.Name)
 					sgtk.RunOnMainThread(func() {
 						if decision.Complete {
 							gate.Complete()
@@ -446,7 +447,7 @@ func (uh *UserHome) runHomebrewPin(
 	} else {
 		err = homebrew.Unpin(name)
 	}
-	dryRun := homebrew.IsDryRun()
+	dryRun := dryrun.Enabled()
 	decision := actionstate.PackagePin(err == nil, dryRun)
 
 	idleLabel := "Unpin"
@@ -506,7 +507,7 @@ func (uh *UserHome) runHomebrewUninstall(
 	gate *actionstate.Gate,
 ) {
 	err := homebrew.Uninstall(name, kind == homebrew.Cask)
-	dryRun := homebrew.IsDryRun()
+	dryRun := dryrun.Enabled()
 	decision := actionstate.PackageUninstall(err == nil, dryRun)
 	uh.finishHomebrewPackageMutation(
 		decision,
@@ -612,7 +613,7 @@ func (uh *UserHome) loadFlatpakApplications() {
 								return
 							}
 							sgtk.RunOnMainThread(func() {
-								uh.toastAdder.ShowToast(actionmsg.Uninstall(flatpak.IsDryRun(), appID))
+								uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), appID))
 								// Refresh the list
 								go uh.loadFlatpakApplications()
 							})
@@ -666,7 +667,7 @@ func (uh *UserHome) loadFlatpakApplications() {
 								return
 							}
 							sgtk.RunOnMainThread(func() {
-								uh.toastAdder.ShowToast(actionmsg.Uninstall(flatpak.IsDryRun(), appID))
+								uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), appID))
 								// Refresh the list
 								go uh.loadFlatpakApplications()
 							})
@@ -773,7 +774,7 @@ func (uh *UserHome) confirmHomebrewInstall(result homebrew.SearchResult, button 
 
 func (uh *UserHome) installHomebrewSearchResult(result homebrew.SearchResult, button *gtk.Button, gate *actionstate.Gate) {
 	err := homebrew.Install(result.Name, result.Kind == homebrew.Cask)
-	dryRun := homebrew.IsDryRun()
+	dryRun := dryrun.Enabled()
 	decision := actionstate.PackageInstall(err == nil, dryRun)
 
 	sgtk.RunOnMainThread(func() {

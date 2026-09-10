@@ -10,7 +10,6 @@ package sysupdate
 
 import (
 	"context"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -28,19 +27,6 @@ const (
 	pkexecCommand  = "pkexec"
 	DefaultTimeout = 30 * time.Minute
 )
-
-var dryRun = false
-
-// SetDryRun enables/disables dry-run mode
-func SetDryRun(mode bool) {
-	dryRun = mode
-	log.Printf("sysupdate dry-run mode: %v", mode)
-}
-
-// IsDryRun returns whether dry-run mode is enabled
-func IsDryRun() bool {
-	return dryRun
-}
 
 // DefaultContext returns a context with the default 30-minute timeout
 func DefaultContext() (context.Context, context.CancelFunc) {

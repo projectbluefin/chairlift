@@ -2,6 +2,7 @@ package distrobox
 
 import (
 	"context"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"strings"
@@ -72,8 +73,8 @@ func TestRemoveAllSurfacesFailureOutput(t *testing.T) {
 }
 
 func TestDryRunNeverExecutesDistrobox(t *testing.T) {
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	t.Setenv("PATH", t.TempDir()) // no distrobox binary at all
 	if err := RemoveAll(context.Background()); err != nil {

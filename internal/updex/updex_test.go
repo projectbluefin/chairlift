@@ -3,6 +3,7 @@ package updex
 import (
 	"context"
 	"errors"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -25,7 +26,7 @@ func writeFakePkexec(t *testing.T, capturedArgsFile string) string {
 }
 
 func TestRunHelperNonDryRunInvokesPkexecWithAbsoluteHelperPath(t *testing.T) {
-	SetDryRun(false)
+	dryrun.Set(false)
 
 	capturedArgsFile := filepath.Join(t.TempDir(), "captured-args")
 	fakePkexec := writeFakePkexec(t, capturedArgsFile)
@@ -50,8 +51,8 @@ func TestRunHelperNonDryRunInvokesPkexecWithAbsoluteHelperPath(t *testing.T) {
 }
 
 func TestRunHelperDryRunNeverInvokesPkexec(t *testing.T) {
-	SetDryRun(true)
-	defer SetDryRun(false)
+	dryrun.Set(true)
+	defer dryrun.Set(false)
 
 	// A path that does not exist: if runHelper failed to short-circuit and
 	// tried to actually run it, cmd.Run() would return an error and this
@@ -69,8 +70,8 @@ func TestRunHelperDryRunNeverInvokesPkexec(t *testing.T) {
 }
 
 func TestEnableDisableUpdateFeaturesDryRunNeverInvokePkexec(t *testing.T) {
-	SetDryRun(true)
-	defer SetDryRun(false)
+	dryrun.Set(true)
+	defer dryrun.Set(false)
 
 	ctx := context.Background()
 	if err := EnableFeature(ctx, "demo"); err != nil {
@@ -85,8 +86,8 @@ func TestEnableDisableUpdateFeaturesDryRunNeverInvokePkexec(t *testing.T) {
 }
 
 func TestPrivilegedOperationsUseExactHelperArguments(t *testing.T) {
-	SetDryRun(false)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	dir := t.TempDir()
 	capturedArgsFile := filepath.Join(dir, "captured-args")
@@ -138,8 +139,8 @@ func TestPrivilegedOperationsUseExactHelperArguments(t *testing.T) {
 }
 
 func TestRunHelperClassifiesFailures(t *testing.T) {
-	SetDryRun(false)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	t.Run("missing pkexec", func(t *testing.T) {
 		_, _, err := runHelper(context.Background(), "chairlift-pkexec-that-does-not-exist", "update")
@@ -181,10 +182,10 @@ func TestRunHelperClassifiesFailures(t *testing.T) {
 }
 
 func TestDryRunStateAndDefaultContext(t *testing.T) {
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
-	if !IsDryRun() {
-		t.Fatal("IsDryRun() = false after SetDryRun(true)")
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+	if !dryrun.Enabled() {
+		t.Fatal("dryrun.Enabled() = false after dryrun.Set(true)")
 	}
 
 	ctx, cancel := DefaultContext()

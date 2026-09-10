@@ -1,6 +1,7 @@
 package homebrew
 
 import (
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -130,9 +131,9 @@ func TestAvailableBundlesBoundsDescriptionRead(t *testing.T) {
 }
 
 func TestBundleInstallHonorsDryRun(t *testing.T) {
-	original := IsDryRun()
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(original) })
+	original := dryrun.Enabled()
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(original) })
 
 	if err := BundleInstall("/definitely/not/a/real/Brewfile"); err != nil {
 		t.Fatalf("BundleInstall() dry-run error = %v, want nil without invoking brew", err)

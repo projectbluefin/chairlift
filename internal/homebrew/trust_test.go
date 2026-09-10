@@ -1,6 +1,7 @@
 package homebrew
 
 import (
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -140,8 +141,8 @@ func TestUntrustedTapMessageDetection(t *testing.T) {
 }
 
 func TestTrustPackagesDryRun(t *testing.T) {
-	SetDryRun(true)
-	defer SetDryRun(false)
+	dryrun.Set(true)
+	defer dryrun.Set(false)
 	err := TrustPackages(UntrustedTap{
 		Name:     "multica-ai/tap",
 		Formulae: []string{"multica-ai/tap/multica"},

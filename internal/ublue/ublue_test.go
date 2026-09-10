@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/journal"
@@ -108,8 +109,8 @@ func TestRunHelperPassesFixedHelperPathAndCommandOnly(t *testing.T) {
 }
 
 func TestDryRunNeverExecutesPkexec(t *testing.T) {
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	nonexistentPkexec := filepath.Join(t.TempDir(), "pkexec-should-never-run")
 	if _, _, err := runHelper(context.Background(), nonexistentPkexec, ubluehelper.CommandDXEnable); err != nil {
@@ -502,8 +503,8 @@ func TestRunHelperJournalsDryRunAsSuppressed(t *testing.T) {
 	journal.Reset()
 	t.Cleanup(journal.Reset)
 
-	SetDryRun(true)
-	t.Cleanup(func() { SetDryRun(false) })
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
 
 	if _, _, err := runHelper(context.Background(), "pkexec-should-never-run", ubluehelper.CommandDXEnable); err != nil {
 		t.Fatalf("runHelper() error = %v, want nil", err)

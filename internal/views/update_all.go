@@ -9,6 +9,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/notify"
@@ -168,7 +169,7 @@ func (uh *UserHome) onAutomaticUpdatesToggled(enabled bool, toggle *gtk.Switch, 
 				return
 			}
 
-			decision := actionmsg.AutomaticUpdates(ublue.IsDryRun(), enabled)
+			decision := actionmsg.AutomaticUpdates(dryrun.Enabled(), enabled)
 			toggle.SetActive(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.AutomaticUpdatesResultSubtitle(enabled))
@@ -335,7 +336,7 @@ func (uh *UserHome) onRestartClicked(button *gtk.Button) {
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
 				return
 			}
-			if ublue.IsDryRun() {
+			if dryrun.Enabled() {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: the system would restart now — no changes made")
 			}
 		})
