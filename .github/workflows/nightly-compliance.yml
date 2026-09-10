@@ -40,9 +40,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             dbus-x11 \
+            flatpak \
+            imagemagick \
             libadwaita-1-0 \
             libgtk-4-1 \
+            x11-apps \
+            x11-utils \
             xauth \
+            xdotool \
             xvfb
 
       - name: Run host-independent compliance gates
