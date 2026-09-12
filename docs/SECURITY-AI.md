@@ -76,7 +76,9 @@ unsafe automation:
 
 1. Stop the affected automation and avoid further exploitation or disclosure.
 2. Notify the maintainers privately; do not publish exploit details or secrets
-   in a public issue or pull request.
+   in a public issue or pull request. Use the private reporting channel
+   described in [`SECURITY.md`](../SECURITY.md) (GitHub Private Vulner
+   Reporting).
 3. Preserve useful evidence without copying sensitive values into repository
    artifacts.
 4. Revoke or rotate exposed credentials and correct the trust boundary before
