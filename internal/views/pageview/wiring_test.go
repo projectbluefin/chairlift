@@ -52,11 +52,32 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
-			file:     "maintenance_page.go",
-			required: []string{"pageview.MaintenanceCommand("},
+			file: "maintenance_page.go",
+			required: []string{
+				"pageview.MaintenanceCommand(",
+				"actionmsg.MaintenanceScript(",
+				"actionmsg.Cleanup(",
+			},
 			retired: []string{
 				`exec.CommandContext(ctx, "pkexec", script)`,
 				"exec.CommandContext(ctx, script)",
+			},
+		},
+		{
+			file: "reset.go",
+			required: []string{
+				"pageview.PowerwashRow(",
+				"pageview.PowerwashConfirmation()",
+				"pageview.FactoryResetRow()",
+				"pageview.FactoryResetConfirmation()",
+				"pageview.FactoryResetResultSubtitle()",
+				"actionmsg.Powerwash(",
+				"actionmsg.FactoryReset(",
+			},
+			retired: []string{
+				`"Remove Everything I Installed"`,
+				`"This action cannot be undone"`,
+				`"fresh install"`,
 			},
 		},
 		{
