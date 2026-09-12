@@ -8,8 +8,14 @@
 // caller (it must match the polkit policy's exec.path annotation and is
 // never overridable here); every invocation — dry-run or live — is recorded
 // in internal/journal; dry-run appends --dry-run and never spawns pkexec;
-// failures are classified as *NotFoundError (pkexec or helper absent),
-// *Error (timeout or non-zero exit), or the raw error otherwise.
+// failure is classified as *NotFoundError (pkexec or helper absent) or
+// *Error (timeout, non-zero exit, or any other start/wait failure, with the
+// underlying message preserved).
+//
+// internal/ublue and internal/updex alias both error types, so the taxonomy
+// is deliberately shared across helpers: a failure's type never identifies
+// which helper failed. A caller that needs that attribution must carry the
+// invocation context itself rather than discriminate on the error type.
 //
 // pkexecPath is a parameter, always "pkexec" in production, so tests can
 // substitute a fake pkexec stand-in without invoking the real pkexec/polkit
@@ -92,18 +98,31 @@ func Run(ctx context.Context, pkexecPath, helperPath string, args ...string) (st
 		if ctx.Err() == context.DeadlineExceeded {
 			return "", stderr.String(), &Error{Message: "command timed out"}
 		}
-		var execErr *exec.Error
-		if errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound) {
-			return "", stderr.String(), &NotFoundError{Message: fmt.Sprintf("pkexec or %s not found", path.Base(helperPath))}
-		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return "", stderr.String(), &Error{
-				Message: fmt.Sprintf("command failed (exit %d): %s", exitErr.ExitCode(), stderr.String()),
-			}
-		}
-		return "", stderr.String(), &Error{Message: err.Error()}
+		return "", stderr.String(), classifyFailure(err, helperPath, stderr.String())
 	}
 
 	return stdout.String(), stderr.String(), nil
+}
+
+// classifyFailure maps a failed invocation's error onto the shared taxonomy:
+// *NotFoundError when the process never started because pkexec (or the
+// helper) is absent, *Error otherwise. It uses errors.As rather than the
+// pre-extraction comma-ok assertions internal/updex carried, so a wrapped
+// *exec.Error or *exec.ExitError still classifies instead of falling through
+// to the generic *Error. os/exec returns these types unwrapped today, so the
+// two forms agree on every error Run can currently observe; the
+// wrap-transparency is the drift this package exists to prevent, and
+// TestClassifyFailureSeesThroughWrappedErrors pins it.
+func classifyFailure(err error, helperPath, stderr string) error {
+	var execErr *exec.Error
+	if errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound) {
+		return &NotFoundError{Message: fmt.Sprintf("pkexec or %s not found", path.Base(helperPath))}
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return &Error{
+			Message: fmt.Sprintf("command failed (exit %d): %s", exitErr.ExitCode(), stderr),
+		}
+	}
+	return &Error{Message: err.Error()}
 }

@@ -2,14 +2,18 @@ package helperexec
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/journal"
 )
 
 // writeFakePkexec writes an executable shell script standing in for pkexec:
@@ -80,21 +84,104 @@ func TestRunClassifiesMissingPkexecAsNotFound(t *testing.T) {
 	}
 }
 
-func TestRunClassifiesWrappedExecErrors(t *testing.T) {
+func TestRunClassifiesNonExecutablePkexecAsError(t *testing.T) {
 	dryrun.Set(false)
 
-	// A non-executable file: exec returns a wrapped *exec.Error (EACCES,
-	// not ErrNotFound). The errors.As classification must see through the
-	// wrap — the pre-extraction comma-ok assertion in internal/updex did
-	// not, which is the drift this package eliminates.
+	// A non-executable file: os/exec reports EACCES, which is not
+	// exec.ErrNotFound. The classification must fall through the ladder to
+	// *Error carrying the OS message — a present-but-unexecutable pkexec is
+	// not "pkexec not found".
 	notExecutable := filepath.Join(t.TempDir(), "not-executable")
 	if err := os.WriteFile(notExecutable, []byte("#!/bin/sh\n"), 0o644); err != nil {
 		t.Fatalf("writing non-executable file: %v", err)
 	}
 
 	_, _, err := Run(context.Background(), notExecutable, "/usr/bin/chairlift-example-helper", "do-thing")
+	var notFound *NotFoundError
+	if errors.As(err, &notFound) {
+		t.Fatalf("Run error = %T (%v), want EACCES not to classify as *NotFoundError", err, err)
+	}
 	var helperErr *Error
 	if !errors.As(err, &helperErr) {
 		t.Fatalf("Run error = %T (%v), want *Error", err, err)
 	}
+}
+
+// TestClassifyFailureSeesThroughWrappedErrors pins the guarantee that no
+// input to Run can provide: os/exec returns *exec.Error and *exec.ExitError
+// unwrapped, so the errors.As ladder and the pre-extraction comma-ok ladder
+// internal/updex carried agree on every error Run can observe. The ladders
+// diverge only on a wrapped error — and the comma-ok form silently degrades
+// a wrapped exec.ErrNotFound to a generic *Error. That drift is the one this
+// package exists to make impossible, so it is pinned here at the seam where
+// it can actually be exercised.
+func TestClassifyFailureSeesThroughWrappedErrors(t *testing.T) {
+	wrappedNotFound := fmt.Errorf("spawning pkexec: %w", &exec.Error{Name: "pkexec", Err: exec.ErrNotFound})
+	err := classifyFailure(wrappedNotFound, "/usr/bin/chairlift-example-helper", "")
+	var notFound *NotFoundError
+	if !errors.As(err, &notFound) {
+		t.Fatalf("classifyFailure(wrapped exec.ErrNotFound) = %T (%v), want *NotFoundError", err, err)
+	}
+	if !strings.Contains(err.Error(), "chairlift-example-helper") {
+		t.Fatalf("NotFoundError message = %q, want it to name the helper basename", err.Error())
+	}
+}
+
+// TestRunJournalsDryRunFlagAsSuppressed pins the safety-critical half of
+// dry-run in the package that owns it. The short-circuit stops pkexec
+// spawning (TestRunDryRunNeverInvokesPkexec); the appended --dry-run is what
+// tells the helper to preview rather than act on every invocation that does
+// reach it, and the journal is the machine-readable record of both.
+func TestRunJournalsDryRunFlagAsSuppressed(t *testing.T) {
+	journalPath := filepath.Join(t.TempDir(), "journal.jsonl")
+	t.Setenv(journal.PathEnv, journalPath)
+	journal.Reset()
+	t.Cleanup(journal.Reset)
+
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	pkexecPath := "pkexec-should-never-run"
+	helperPath := "/usr/bin/chairlift-example-helper"
+	if _, _, err := Run(context.Background(), pkexecPath, helperPath, "do-thing", "arg1"); err != nil {
+		t.Fatalf("Run dry-run error = %v, want nil", err)
+	}
+
+	entries := readJournal(t, journalPath)
+	if len(entries) != 1 {
+		t.Fatalf("journal has %d entries, want 1", len(entries))
+	}
+	entry := entries[0]
+	if entry.Action != "do-thing" {
+		t.Errorf("journalled action = %q, want %q", entry.Action, "do-thing")
+	}
+	if entry.Suppressed != journal.SuppressedDryRun {
+		t.Errorf("journalled suppressed = %q, want %q", entry.Suppressed, journal.SuppressedDryRun)
+	}
+	wantArgv := []string{pkexecPath, helperPath, "do-thing", "arg1", "--dry-run"}
+	if !reflect.DeepEqual(entry.WouldRun, wantArgv) {
+		t.Errorf("journalled WouldRun = %v, want %v (--dry-run appended last)", entry.WouldRun, wantArgv)
+	}
+}
+
+func readJournal(t *testing.T, path string) []journal.Entry {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading journal %s: %v", path, err)
+	}
+
+	var entries []journal.Entry
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry journal.Entry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("decoding journal line %q: %v", line, err)
+		}
+		entries = append(entries, entry)
+	}
+	return entries
 }
