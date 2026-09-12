@@ -45,19 +45,19 @@ func TestStageUpdateDryRunUsesFixedPath(t *testing.T) {
 	}
 }
 
-func TestStageErrorAdapterPreservesProviderTypes(t *testing.T) {
-	deadline := adaptStageError(&stageexec.Error{
-		Message: "Update staging timed out",
-		Err:     context.DeadlineExceeded,
-	})
-	var bootcErr *Error
-	if !errors.As(deadline, &bootcErr) || !errors.Is(deadline, context.DeadlineExceeded) {
-		t.Errorf("deadline adapter = %T %v", deadline, deadline)
+// The stage-update error contract is stageexec's: the provider aliases the
+// shared types instead of re-mapping them, so a staging failure is
+// interchangeable with a status-read failure for errors.Is/errors.As.
+func TestStageErrorContractIsStageexec(t *testing.T) {
+	var deadline error = &Error{Message: "Update staging timed out", Err: context.DeadlineExceeded}
+	var stageErr *stageexec.Error
+	if !errors.As(deadline, &stageErr) || !errors.Is(deadline, context.DeadlineExceeded) {
+		t.Errorf("deadline error = %T %v", deadline, deadline)
 	}
 
-	missing := adaptStageError(&stageexec.NotFoundError{Message: "pkexec not found"})
-	var notFound *NotFoundError
+	var missing error = &NotFoundError{Message: "pkexec not found"}
+	var notFound *stageexec.NotFoundError
 	if !errors.As(missing, &notFound) {
-		t.Errorf("missing adapter = %T %v", missing, missing)
+		t.Errorf("missing error = %T %v", missing, missing)
 	}
 }

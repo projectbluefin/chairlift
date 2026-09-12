@@ -13,6 +13,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 const (
@@ -35,29 +37,14 @@ func DefaultContext() (context.Context, context.CancelFunc) {
 
 // Error represents a sysupdate-related error. Err, when non-nil, carries the
 // underlying cause (for example context.DeadlineExceeded or
-// context.Canceled) so callers can classify it with errors.Is.
-type Error struct {
-	Message string
-	Err     error
-}
+// context.Canceled) so callers can classify it with errors.Is. It aliases
+// stageexec.Error so rollback, status, and update staging share one error
+// contract.
+type Error = stageexec.Error
 
-func (e *Error) Error() string {
-	return e.Message
-}
-
-// Unwrap exposes the underlying cause to errors.Is/errors.As.
-func (e *Error) Unwrap() error {
-	return e.Err
-}
-
-// NotFoundError is returned when a required executable is not installed
-type NotFoundError struct {
-	Message string
-}
-
-func (e *NotFoundError) Error() string {
-	return e.Message
-}
+// NotFoundError is returned when a required executable is not installed. It
+// aliases stageexec.NotFoundError.
+type NotFoundError = stageexec.NotFoundError
 
 // IsNativeAB reports whether this host is a native A/B (systemd-sysupdate)
 // install, by the presence of snosi's marker file.

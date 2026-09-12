@@ -14,6 +14,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
 const (
@@ -29,29 +31,14 @@ func DefaultContext() (context.Context, context.CancelFunc) {
 
 // Error represents a bootc-related error. Err, when non-nil, carries the
 // underlying cause (for example context.DeadlineExceeded or
-// context.Canceled) so callers can classify it with errors.Is.
-type Error struct {
-	Message string
-	Err     error
-}
+// context.Canceled) so callers can classify it with errors.Is. It aliases
+// stageexec.Error so status reads and update staging share one error
+// contract.
+type Error = stageexec.Error
 
-func (e *Error) Error() string {
-	return e.Message
-}
-
-// Unwrap exposes the underlying cause to errors.Is/errors.As.
-func (e *Error) Unwrap() error {
-	return e.Err
-}
-
-// NotFoundError is returned when bootc is not installed
-type NotFoundError struct {
-	Message string
-}
-
-func (e *NotFoundError) Error() string {
-	return e.Message
-}
+// NotFoundError is returned when bootc (or the stage script's pkexec
+// launcher) is not installed. It aliases stageexec.NotFoundError.
+type NotFoundError = stageexec.NotFoundError
 
 // ImageReference identifies a container image (org.containers.bootc/v1).
 type ImageReference struct {

@@ -34,20 +34,20 @@ func TestStageUpdateDryRunUsesFixedPath(t *testing.T) {
 	}
 }
 
-func TestStageErrorAdapterPreservesProviderTypes(t *testing.T) {
-	canceled := adaptStageError(&stageexec.Error{
-		Message: "Update staging was canceled",
-		Err:     context.Canceled,
-	})
-	var updateErr *Error
-	if !errors.As(canceled, &updateErr) || !errors.Is(canceled, context.Canceled) {
-		t.Errorf("cancellation adapter = %T %v", canceled, canceled)
+// The stage-update error contract is stageexec's: the provider aliases the
+// shared types instead of re-mapping them, so a staging failure is
+// interchangeable with a status-read failure for errors.Is/errors.As.
+func TestStageErrorContractIsStageexec(t *testing.T) {
+	var canceled error = &Error{Message: "Update staging was canceled", Err: context.Canceled}
+	var stageErr *stageexec.Error
+	if !errors.As(canceled, &stageErr) || !errors.Is(canceled, context.Canceled) {
+		t.Errorf("cancellation error = %T %v", canceled, canceled)
 	}
 
-	missing := adaptStageError(&stageexec.NotFoundError{Message: "pkexec not found"})
-	var notFound *NotFoundError
+	var missing error = &NotFoundError{Message: "pkexec not found"}
+	var notFound *stageexec.NotFoundError
 	if !errors.As(missing, &notFound) {
-		t.Errorf("missing adapter = %T %v", missing, missing)
+		t.Errorf("missing error = %T %v", missing, missing)
 	}
 }
 

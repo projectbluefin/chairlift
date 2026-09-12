@@ -1,5 +1,7 @@
 // Package stageexec runs the fixed privileged staging commands used by OS
-// update providers. It owns their widget-free progress and process contract.
+// update providers. It owns their widget-free progress and process contract,
+// including the dry-run gate and the script-availability probe, so each
+// provider package only names its script path.
 package stageexec
 
 import (
@@ -9,8 +11,12 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
+	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 // EventType classifies a ProgressEvent.
@@ -55,6 +61,24 @@ func (e *NotFoundError) Error() string {
 // Unwrap exposes the executable lookup error.
 func (e *NotFoundError) Unwrap() error {
 	return e.Err
+}
+
+// ScriptAvailable reports whether the stage script is installed.
+func ScriptAvailable(scriptPath string) bool {
+	_, err := os.Stat(scriptPath)
+	return err == nil
+}
+
+// Stage is the full stage-update contract shared by every OS update
+// provider: when dry-run mode is active it logs and emits the preview
+// events without invoking pkexec; otherwise it runs
+// `pkexec scriptPath`, streaming progress. It always closes progressCh.
+func Stage(ctx context.Context, progressCh chan<- ProgressEvent, pkexec, scriptPath string) error {
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would execute: %s %s", pkexec, scriptPath)
+		return DryRun(ctx, progressCh, scriptPath)
+	}
+	return Run(ctx, progressCh, pkexec, scriptPath)
 }
 
 // DryRun emits the standard preview and completion events without starting a
