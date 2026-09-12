@@ -12,22 +12,18 @@
 package ublue
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log"
-	"os/exec"
 	"os/user"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/helperexec"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
-	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
@@ -57,23 +53,13 @@ func DefaultContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), DefaultTimeout)
 }
 
-// Error represents a ublue helper error.
-type Error struct {
-	Message string
-}
-
-func (e *Error) Error() string {
-	return e.Message
-}
+// Error represents a ublue helper error. It aliases
+// internal/helperexec.Error: all privileged helper invocations share one
+// plumbing implementation and one failure taxonomy.
+type Error = helperexec.Error
 
 // NotFoundError is returned when pkexec or the privileged helper is absent.
-type NotFoundError struct {
-	Message string
-}
-
-func (e *NotFoundError) Error() string {
-	return e.Message
-}
+type NotFoundError = helperexec.NotFoundError
 
 // Status is the complete unprivileged view of this host's Bluefin-family
 // state. A zero Status with Available false is what every non-ublue host
@@ -316,71 +302,19 @@ func SwitchDriver(ctx context.Context, driver imageinfo.Driver) error {
 	return err
 }
 
-// journalArgs turns a privileged helper's argv (minus the leading command
-// word, which becomes journal.Entry.Action) into the journal's args map.
-func journalArgs(args []string) map[string]string {
-	if len(args) <= 1 {
-		return nil
-	}
-	return map[string]string{"args": strings.Join(args[1:], " ")}
-}
-
-// runHelper executes HelperPath via pkexec for privileged operations.
-// pkexecPath is the pkexec binary to invoke — always pkexecCommand in
-// production, but an explicit parameter (mirroring internal/updex.runHelper
-// and internal/stageexec.Run's executable seam) so tests can substitute a
-// fake pkexec stand-in without invoking the real pkexec/polkit stack or
+// runHelper executes HelperPath via pkexec for privileged operations. The
+// plumbing — dry-run short-circuit, journaling, failure classification — is
+// owned by internal/helperexec; this wrapper only binds the package's fixed
+// HelperPath. pkexecPath stays an explicit parameter (mirroring
+// internal/stageexec.Run's executable seam) so tests can substitute a fake
+// pkexec stand-in without invoking the real pkexec/polkit stack or
 // requiring root. HelperPath itself is never overridden: it is the fixed
 // absolute path that must match the policy's exec.path annotation, so tests
 // assert it by inspecting the fake pkexec's captured argv. Every invocation
-// — dry-run or live — is also journal.Record'd, so a test can assert the
-// argv ChairLift assembled without granting privilege; see internal/journal.
+// — dry-run or live — is journal.Record'd, so a test can assert the argv
+// ChairLift assembled without granting privilege; see internal/journal.
 func runHelper(ctx context.Context, pkexecPath string, args ...string) (string, string, error) {
-	action := ""
-	if len(args) > 0 {
-		action = args[0]
-	}
-
-	if dryrun.Enabled() {
-		args = append(args, "--dry-run")
-		wouldRun := append([]string{pkexecPath, HelperPath}, args...)
-		journal.Record(action, journalArgs(args), wouldRun, journal.SuppressedDryRun)
-		log.Printf("[DRY-RUN] would execute: %s %s %v", pkexecPath, HelperPath, args)
-		return "", "", nil
-	}
-
-	fullArgs := append([]string{HelperPath}, args...)
-	journal.Record(action, journalArgs(args), append([]string{pkexecPath}, fullArgs...), journal.SuppressedNone)
-	cmd := exec.CommandContext(ctx, pkexecPath, fullArgs...)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
-	if stderr.Len() > 0 {
-		log.Printf("ublue helper stderr: %s", stderr.String())
-	}
-
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			return "", stderr.String(), &Error{Message: "command timed out"}
-		}
-		var execErr *exec.Error
-		if errors.As(err, &execErr) && errors.Is(execErr.Err, exec.ErrNotFound) {
-			return "", stderr.String(), &NotFoundError{Message: "pkexec or chairlift-ublue-helper not found"}
-		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return "", stderr.String(), &Error{
-				Message: fmt.Sprintf("command failed (exit %d): %s", exitErr.ExitCode(), stderr.String()),
-			}
-		}
-		return "", stderr.String(), &Error{Message: err.Error()}
-	}
-
-	return stdout.String(), stderr.String(), nil
+	return helperexec.Run(ctx, pkexecPath, HelperPath, args...)
 }
 
 var (
