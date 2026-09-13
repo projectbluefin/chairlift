@@ -11,6 +11,7 @@ import (
 
 	updexapi "github.com/frostyard/updex/updex"
 	"github.com/projectbluefin/chairlift/internal/helperexec"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
@@ -27,7 +28,6 @@ const (
 	// Makefile, which requires PREFIX=/usr (the default) to match.
 	HelperPath = "/usr/bin/chairlift-updex-helper"
 
-	pkexecCommand  = "pkexec"
 	DefaultTimeout = 5 * time.Minute
 )
 
@@ -106,19 +106,19 @@ func CheckFeatures(ctx context.Context) ([]FeatureCheck, error) {
 
 // EnableFeature enables a feature for download
 func EnableFeature(ctx context.Context, name string) error {
-	_, _, err := runHelper(ctx, pkexecCommand, updexhelper.CommandEnableFeature, name)
+	_, _, err := runHelper(ctx, pkexec.Command, updexhelper.CommandEnableFeature, name)
 	return err
 }
 
 // DisableFeature disables a feature
 func DisableFeature(ctx context.Context, name string) error {
-	_, _, err := runHelper(ctx, pkexecCommand, updexhelper.CommandDisableFeature, name)
+	_, _, err := runHelper(ctx, pkexec.Command, updexhelper.CommandDisableFeature, name)
 	return err
 }
 
 // UpdateFeatures downloads enabled features
 func UpdateFeatures(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, updexhelper.CommandUpdate)
+	_, _, err := runHelper(ctx, pkexec.Command, updexhelper.CommandUpdate)
 	return err
 }
 

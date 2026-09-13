@@ -20,7 +20,6 @@ import (
 
 const (
 	bootcCommand   = "bootc"
-	pkexecCommand  = "pkexec"
 	DefaultTimeout = 30 * time.Minute
 )
 
