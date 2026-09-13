@@ -3,6 +3,7 @@ package bootc
 import (
 	"context"
 
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 )
 
@@ -37,5 +38,5 @@ func StageScriptAvailable() bool {
 // returned error is a *stageexec.Error (aliased here as *Error) or
 // *stageexec.NotFoundError (aliased as *NotFoundError).
 func StageUpdate(ctx context.Context, progressCh chan<- ProgressEvent) error {
-	return stageexec.Stage(ctx, progressCh, pkexecCommand, StageScriptPath)
+	return stageexec.Stage(ctx, progressCh, pkexec.Command, StageScriptPath)
 }
