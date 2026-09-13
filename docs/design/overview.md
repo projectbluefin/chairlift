@@ -1166,14 +1166,29 @@ argument crossing the boundary is another value the caller would control.
 
 `internal/journal` is a port of finupdate's `action_journal.rs`: one JSON
 line per privileged action, appended when `$CHAIRLIFT_ACTION_JOURNAL` is set,
-a no-op otherwise. It is wired into the single dispatch point both privileged
-helpers already share — `internal/ublue.runHelper` and
-`internal/updex.runHelper` — so it is a genuine choke point, not a call added
-at each of the eleven call sites that reach it. A dry-run invocation is
-recorded with `Suppressed: SuppressedDryRun` and the argv that would have run,
-which is what lets a test assert intent ("clicking Switch would have run
+a no-op otherwise. A dry-run invocation is recorded with
+`Suppressed: SuppressedDryRun` and the argv that would have run, which is
+what lets a test assert intent ("clicking Switch would have run
 `bootc switch ghcr.io/…/dakota:testing`") without granting privilege; see
 `internal/ublue`'s `TestRunHelperJournalsEveryInvocation`.
+
+ChairLift escalates through three choke points, and the record is written at
+each of them rather than at the call sites that reach them:
+
+| choke point | covers | polkit actions |
+|---|---|---|
+| `internal/helperexec.Run` | both fixed-path helper binaries, via `internal/ublue.runHelper` and `internal/updex.runHelper` | 9 `…ublue.*` + 3 `…updex.*` |
+| `internal/stageexec.Stage` | both stage scripts, via `internal/bootc.StageUpdate` and `internal/sysupdate.StageUpdate` | `…bootc.stage`, `…sysupdate.stage` |
+| `views.UserHome.runMaintenanceAction` | config-declared maintenance scripts run `sudo` | none; falls back to `org.freedesktop.policykit.exec` |
+
+The staging and maintenance rows were added late: `helperexec` was for a long
+time the only package honoring the contract, so the OS update — the least
+undoable thing ChairLift does — left no audit entry, and an empty region of a
+journal could mean either "staging never ran" or "staging ran and was not
+recorded". `internal/installcheck`'s journal-contract gate now classifies
+every `os/exec` call site under `internal/` as privileged or unprivileged and
+requires each privileged one to record both suppression states, so a fourth
+executor cannot reopen the hole silently.
 
 `internal/notify` sends exactly one desktop `GNotification`: Update All's
 completion, through `views.ToastAdder.NotifyBackground` (implemented by

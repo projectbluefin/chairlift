@@ -1,7 +1,20 @@
 // Package stageexec runs the fixed privileged staging commands used by OS
 // update providers. It owns their widget-free progress and process contract,
-// including the dry-run gate and the script-availability probe, so each
-// provider package only names its script path.
+// including the dry-run gate, the script-availability probe, and the
+// internal/journal record every privileged escalation owes, so each provider
+// package only names its script path.
+//
+// The journal record is not incidental. internal/journal documents its
+// contract in universal terms — "records every privileged action ChairLift
+// takes or would take" — but for a long time the only package honoring it was
+// internal/helperexec, so the two staging actions
+// (io.projectbluefin.chairlift.bootc.stage and
+// io.projectbluefin.chairlift.sysupdate.stage) escalated with no audit entry.
+// Staging writes the inactive slot or a bootc switch; it is the least
+// undoable thing ChairLift does, which is exactly where the audit trail
+// mattered most. Stage now records both branches, and
+// internal/installcheck's journal-contract gate keeps a future privileged
+// executor from reopening the hole.
 package stageexec
 
 import (
@@ -14,9 +27,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/journal"
 )
 
 // EventType classifies a ProgressEvent.
@@ -70,14 +85,27 @@ func ScriptAvailable(scriptPath string) bool {
 }
 
 // Stage is the full stage-update contract shared by every OS update
-// provider: when dry-run mode is active it logs and emits the preview
-// events without invoking pkexec; otherwise it runs
-// `pkexec scriptPath`, streaming progress. It always closes progressCh.
+// provider: it journals the escalation, then, when dry-run mode is active,
+// logs and emits the preview events without invoking pkexec; otherwise it
+// runs `pkexec scriptPath`, streaming progress. It always closes progressCh.
+//
+// The journal entry is written before dispatch so the argv ChairLift
+// assembled is recorded whether or not the process is allowed to start,
+// matching helperexec.Run. Action is the script's base name — the staging
+// operation's stable identity, independent of the /usr/libexec prefix — and
+// WouldRun is the argv a real run executes, so a dry-run entry and a live
+// entry differ only in Suppressed.
 func Stage(ctx context.Context, progressCh chan<- ProgressEvent, pkexec, scriptPath string) error {
+	// The stage scripts take no arguments, so Entry.Args stays nil and the
+	// whole invocation is carried by WouldRun.
+	action, wouldRun := path.Base(scriptPath), []string{pkexec, scriptPath}
+
 	if dryrun.Enabled() {
+		journal.Record(action, nil, wouldRun, journal.SuppressedDryRun)
 		log.Printf("[DRY-RUN] would execute: %s %s", pkexec, scriptPath)
 		return DryRun(ctx, progressCh, scriptPath)
 	}
+	journal.Record(action, nil, wouldRun, journal.SuppressedNone)
 	return Run(ctx, progressCh, pkexec, scriptPath)
 }
 

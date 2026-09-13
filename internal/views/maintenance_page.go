@@ -6,11 +6,15 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -243,18 +247,29 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 	go func() {
 		var err error
 
+		// One command value serves both branches, so the journalled argv is
+		// the argv a real run executes rather than a separately formatted
+		// preview string that could drift from it.
+		command := pageview.MaintenanceCommand(script, sudo)
+		wouldRun := append([]string{command.Name}, command.Args...)
+		suppressed := journal.SuppressedNone
+		if !decision.Execute {
+			suppressed = journal.SuppressedDryRun
+		}
+		journal.Record(
+			path.Base(script),
+			map[string]string{"title": title, "sudo": strconv.FormatBool(sudo)},
+			wouldRun,
+			suppressed,
+		)
+
 		if decision.Execute {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			command := pageview.MaintenanceCommand(script, sudo)
 			err = exec.CommandContext(ctx, command.Name, command.Args...).Run()
 		} else {
-			cmdline := script
-			if sudo {
-				cmdline = "pkexec " + script
-			}
-			log.Printf("[DRY-RUN] Would execute: %s", cmdline)
+			log.Printf("[DRY-RUN] Would execute: %s", strings.Join(wouldRun, " "))
 		}
 
 		sgtk.RunOnMainThread(func() {
