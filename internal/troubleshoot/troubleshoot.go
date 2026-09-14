@@ -27,6 +27,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"gopkg.in/yaml.v3"
 )
 
 // setupTimeout bounds goose-mcp-setup, which only writes a file.
@@ -87,23 +88,53 @@ func ConfigPath() (string, error) {
 
 // ParseConfig reads Goose's configuration for the two facts ChairLift needs.
 //
-// It deliberately does not decode the file as YAML. ChairLift neither owns
-// nor rewrites this file; it only needs to know whether the linux-tools
-// extension is present and which provider is set, and a line scan cannot
-// corrupt a document written by another tool.
+// It decodes the file as YAML so it can require the linux-tools extension to
+// actually be present under `extensions:`, enabled, and able to run — rather
+// than trusting any line that merely looks like a linux-tools reference. A
+// file that is not valid YAML, or that is missing a usable extension, yields a
+// State with Wired false, which is the safe outcome for a feature that must
+// not claim readiness it does not have.
 func ParseConfig(data []byte) State {
-	var state State
+	var cfg gooseConfig
+	// A malformed config is treated as not wired, never as wired.
+	_ = yaml.Unmarshal(data, &cfg)
 
-	for _, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		switch {
-		case strings.HasPrefix(trimmed, "linux-tools:"), trimmed == "name: linux-tools":
-			state.Wired = true
-		case strings.HasPrefix(trimmed, "GOOSE_PROVIDER:"):
-			state.Provider = strings.TrimSpace(strings.TrimPrefix(trimmed, "GOOSE_PROVIDER:"))
-		}
+	var state State
+	if cfg.Provider != "" {
+		state.Provider = cfg.Provider
+	}
+	if ext, ok := cfg.Extensions["linux-tools"]; ok && ext.enabled() && ext.valid() {
+		state.Wired = true
 	}
 	return state
+}
+
+// gooseConfig is Goose's configuration file. ChairLift only reads the provider
+// and the linux-tools extension; every other key (GOOSE_MODEL, and any env
+// var goose-mcp-setup or the user wrote) is ignored.
+type gooseConfig struct {
+	Provider   string              `yaml:"GOOSE_PROVIDER"`
+	Extensions map[string]gooseExt `yaml:"extensions"`
+}
+
+// gooseExt is one extension entry. ChairLift only cares that the linux-tools
+// extension is enabled and can actually launch, so it reads just those fields.
+type gooseExt struct {
+	Enabled *bool  `yaml:"enabled"`
+	Type    string `yaml:"type"`
+	Cmd     string `yaml:"cmd"`
+}
+
+// enabled reports whether the extension is active. Goose enables an extension
+// unless `enabled` is explicitly false, so an absent flag still counts as on.
+func (e gooseExt) enabled() bool {
+	return e.Enabled == nil || *e.Enabled
+}
+
+// valid reports whether the extension can run: a stdio extension needs a type
+// and a command, the same two things the buggy line scan ignored.
+func (e gooseExt) valid() bool {
+	return e.Type != "" && e.Cmd != ""
 }
 
 // lookPath is an injection seam for binary detection, so Detect is testable
