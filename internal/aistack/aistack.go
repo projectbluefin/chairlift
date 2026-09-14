@@ -118,18 +118,31 @@ var stacks = map[gpu.Vendor]Stack{
 //
 // An unknown vendor key is an error rather than a silent no-op, since a
 // typo'd key would otherwise leave the site believing its mirror was in use.
+//
+// The whole override is validated before anything is changed. Map iteration
+// order is nondeterministic, so applying one entry at a time could commit an
+// earlier entry before a later invalid one is rejected — leaving a rejected
+// image selected depending on which entry the loop happened to reach first.
+// Validate first, then commit, so an invalid entry changes no image and no
+// model at all.
 func ApplyOverrides(images map[string]string, model string) error {
+	// Validate every entry before mutating the shared stacks.
 	for name, image := range images {
 		vendor := gpu.Vendor(name)
-		stack, known := stacks[vendor]
-		if !known {
+		if _, known := stacks[vendor]; !known {
 			return fmt.Errorf("ai_images: unknown vendor %q", name)
 		}
 		if image == "" {
 			return fmt.Errorf("ai_images: vendor %q has an empty image", name)
 		}
-		stack.Image = image
-		stacks[vendor] = stack
+	}
+
+	// Everything checked out; apply the image overrides and the model.
+	for name, image := range images {
+		vendor := gpu.Vendor(name)
+		existing := stacks[vendor]
+		existing.Image = image
+		stacks[vendor] = existing
 	}
 	if model != "" {
 		servedModel = model
