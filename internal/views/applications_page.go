@@ -249,6 +249,11 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 							gate.Complete()
 							btn.SetLabel("Installed")
 							btn.SetSensitive(false)
+							// A live bundle install can add formulae and casks the
+							// current inventory snapshot predates, so refresh the
+							// installed list to match. Under dry-run decision.Complete
+							// is false — nothing was changed — so the inventory stays put.
+							go uh.loadHomebrewPackages()
 						} else {
 							gate.Reset()
 							btn.SetLabel("Install")
