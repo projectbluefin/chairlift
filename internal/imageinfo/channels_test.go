@@ -467,6 +467,11 @@ func TestDriverOverrideRejectsBadEntries(t *testing.T) {
 			yaml: "drivers:\n  ghcr.io/tuna-os/tromso:\n    standard: [latest]\n    nvidia: []\n",
 			want: "empty stream list",
 		},
+		{
+			name: "driver stream absent from standard",
+			yaml: "drivers:\n  ghcr.io/tuna-os/tromso:\n    standard: [latest]\n    nvidia: [testing]\n",
+			want: "could not switch back",
+		},
 	}
 
 	for _, tt := range tests {

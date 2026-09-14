@@ -221,7 +221,8 @@ func convertDriverEntry(ref string, entry map[string][]string) ([]driverStreams,
 			return nil, fmt.Errorf("driver table entry %q: unknown driver %q", ref, name)
 		}
 	}
-	if len(entry[string(DriverStandard)]) == 0 {
+	standardStreams := entry[string(DriverStandard)]
+	if len(standardStreams) == 0 {
 		return nil, fmt.Errorf("driver table entry %q needs a %s stream list, otherwise a host on a driver image could not switch back", ref, DriverStandard)
 	}
 
@@ -233,6 +234,13 @@ func convertDriverEntry(ref string, entry map[string][]string) ([]driverStreams,
 		}
 		if len(streams) == 0 {
 			return nil, fmt.Errorf("driver table entry %q: driver %q has an empty stream list", ref, driver)
+		}
+		if driver != DriverStandard {
+			for _, stream := range streams {
+				if !contains(standardStreams, stream) {
+					return nil, fmt.Errorf("driver table entry %q: driver %q stream %q is not in the standard stream list, so a host could not switch back", ref, driver, stream)
+				}
+			}
 		}
 		converted = append(converted, driverStreams{
 			driver:  driver,
