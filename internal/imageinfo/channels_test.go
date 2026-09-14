@@ -178,6 +178,46 @@ func TestParseTableAcceptsAnEmptyDocument(t *testing.T) {
 	}
 }
 
+// A file with more than one YAML document (content after `---`) is rejected
+// wholesale: the parser decodes only the first document, so a second mapping
+// or malformed document would otherwise be silently dropped — exactly the
+// situation that could hide a different privileged image-resolution table.
+func TestParseTableRejectsAdditionalYAMLDocuments(t *testing.T) {
+	tests := []struct {
+		name     string
+		document string
+		wantHas  string
+	}{
+		{
+			name:     "additional mapping document",
+			document: tunaOSTable + "---\nimages:\n  ghcr.io/other/os:\n    stable_tags: [latest]\n    testing_tags: [testing]\n    to_testing:\n      latest: testing\n    to_stable:\n      testing: latest\n",
+			wantHas:  "exactly one YAML document",
+		},
+		{
+			name:     "additional empty document",
+			document: tunaOSTable + "---\n",
+			wantHas:  "exactly one YAML document",
+		},
+		{
+			name:     "malformed trailing document",
+			document: tunaOSTable + "---\n: : : not yaml\n",
+			wantHas:  "parsing channel table",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := ParseTable(strings.NewReader(test.document))
+			if err == nil {
+				t.Fatal("ParseTable() error = nil, want a rejection for additional YAML documents")
+			}
+			if !strings.Contains(err.Error(), test.wantHas) {
+				t.Errorf("ParseTable() error = %q, want it to mention %q", err, test.wantHas)
+			}
+		})
+	}
+}
+
 func TestLoadTableAppliesTheFirstExistingCandidate(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "etc-channels.yml")
