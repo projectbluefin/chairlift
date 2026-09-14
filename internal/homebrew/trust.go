@@ -80,9 +80,13 @@ func installedFormulaeByTap(cellarDir string) map[string][]string {
 }
 
 // installedCasksByTap maps tap name -> qualified installed cask tokens by
-// reading Caskroom metadata. Casks installed from the Homebrew API have no
-// Casks/<token>.json metadata and are skipped (they are homebrew/cask,
-// which is always trusted).
+// reading each cask's INSTALL_RECEIPT.json, whose source.tap field is the
+// authoritative origin Homebrew records at install time. This mirrors
+// installedFormulaeByTap: the receipt is the only reliable source, because
+// brew itself refuses to load (and therefore list) casks from untrusted
+// taps. The older versioned Casks/<token>.json metadata is not used: current
+// Homebrew no longer records the source tap there, so casks from untrusted
+// taps would otherwise be silently omitted from the remediation UI.
 func installedCasksByTap(caskroomDir string) map[string][]string {
 	byTap := make(map[string][]string)
 	entries, err := os.ReadDir(caskroomDir)
@@ -94,39 +98,20 @@ func installedCasksByTap(caskroomDir string) map[string][]string {
 			continue
 		}
 		token := entry.Name()
-		matches, err := filepath.Glob(filepath.Join(caskroomDir, token, ".metadata", "*", "*", "Casks", "*.json"))
-		if err != nil || len(matches) == 0 {
-			continue
-		}
-		// Glob order is lexical, not chronological (e.g. "9" sorts after
-		// "10"), so pick the metadata file with the most recent mtime
-		// instead of assuming the last match is newest.
-		var newest string
-		var newestModTime int64
-		for _, m := range matches {
-			info, err := os.Stat(m)
-			if err != nil {
-				continue
-			}
-			if mt := info.ModTime().UnixNano(); newest == "" || mt > newestModTime {
-				newest = m
-				newestModTime = mt
-			}
-		}
-		if newest == "" {
-			continue
-		}
-		data, err := os.ReadFile(newest)
+		receiptPath := filepath.Join(caskroomDir, token, "INSTALL_RECEIPT.json")
+		data, err := os.ReadFile(receiptPath)
 		if err != nil {
 			continue
 		}
-		var meta struct {
-			Tap string `json:"tap"`
+		var receipt struct {
+			Source struct {
+				Tap string `json:"tap"`
+			} `json:"source"`
 		}
-		if err := json.Unmarshal(data, &meta); err != nil || meta.Tap == "" {
+		if err := json.Unmarshal(data, &receipt); err != nil || receipt.Source.Tap == "" {
 			continue
 		}
-		byTap[meta.Tap] = append(byTap[meta.Tap], meta.Tap+"/"+token)
+		byTap[receipt.Source.Tap] = append(byTap[receipt.Source.Tap], receipt.Source.Tap+"/"+token)
 	}
 	return byTap
 }
