@@ -563,8 +563,12 @@ func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 
 // loadFlatpakApplications loads installed Flatpak applications asynchronously
 func (uh *UserHome) loadFlatpakApplications() {
+	generation := uh.flatpakPackagesRefresh.Begin()
 	if !flatpak.IsInstalledCached() {
 		sgtk.RunOnMainThread(func() {
+			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+				return
+			}
 			if uh.flatpakUserExpander != nil {
 				uh.flatpakUserExpander.SetSubtitle("Flatpak not installed")
 			}
@@ -580,10 +584,16 @@ func (uh *UserHome) loadFlatpakApplications() {
 		userApps, err := flatpak.ListUserApplications()
 		if err != nil {
 			sgtk.RunOnMainThread(func() {
+				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+					return
+				}
 				uh.flatpakUserExpander.SetSubtitle(fmt.Sprintf("Error: %v", err))
 			})
 		} else {
 			sgtk.RunOnMainThread(func() {
+				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+					return
+				}
 				// Clear rows added by a previous load before repopulating
 				uh.flatpakUserRows.Clear(func(r *adw.ActionRow) { uh.flatpakUserExpander.Remove(&r.Widget) })
 
@@ -634,10 +644,16 @@ func (uh *UserHome) loadFlatpakApplications() {
 		systemApps, err := flatpak.ListSystemApplications()
 		if err != nil {
 			sgtk.RunOnMainThread(func() {
+				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+					return
+				}
 				uh.flatpakSystemExpander.SetSubtitle(fmt.Sprintf("Error: %v", err))
 			})
 		} else {
 			sgtk.RunOnMainThread(func() {
+				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+					return
+				}
 				// Clear rows added by a previous load before repopulating
 				uh.flatpakSystemRows.Clear(func(r *adw.ActionRow) { uh.flatpakSystemExpander.Remove(&r.Widget) })
 
