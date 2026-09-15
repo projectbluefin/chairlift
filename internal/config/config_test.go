@@ -502,3 +502,50 @@ func TestAIOverridesMergeLikeEveryOtherGroupField(t *testing.T) {
 		t.Error("ai_group was disabled by an unrelated override")
 	}
 }
+
+// TestLoadDanglingAuthoritativeSymlinkFailsClosed confirms that a present
+// authoritative config path that is a dangling symlink (its target is
+// missing) is treated as an unusable authoritative config and fails closed,
+// rather than being indistinguishable from an absent candidate that falls
+// back to package defaults. Lstat sees the symlink entry where the read
+// (and Stat) do not, so the entry's presence is what distinguishes the two.
+func TestLoadDanglingAuthoritativeSymlinkFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "missing-target.yml")
+	dangling := filepath.Join(dir, "config.yml")
+	if err := os.Symlink(target, dangling); err != nil {
+		t.Fatalf("creating dangling symlink: %v", err)
+	}
+	withConfigPaths(t, []string{dangling})
+
+	cfg, loadErr := Load()
+	if loadErr == nil {
+		t.Fatal("Load() error = nil, want authoritative failure for dangling symlink")
+	}
+	if loadErr.Kind != KindRead {
+		t.Fatalf("Load() error kind = %q, want %q", loadErr.Kind, KindRead)
+	}
+	if loadErr.Path != dangling {
+		t.Fatalf("Load() error path = %q, want %q", loadErr.Path, dangling)
+	}
+	if cfg == nil {
+		t.Fatal("Load() config = nil, want fail-closed config")
+	}
+	assertAllKnownGroupsDisabled(t, cfg)
+}
+
+// TestLoadAbsentCandidateStillFallsBackToDefaults confirms that a genuinely
+// absent candidate (no directory entry at all) still falls through to the
+// built-in defaults, unlike a dangling symlink. Only the entry's presence
+// (per Lstat) should flip the behavior.
+func TestLoadAbsentCandidateStillFallsBackToDefaults(t *testing.T) {
+	withConfigPaths(t, []string{filepath.Join(t.TempDir(), "does-not-exist.yml")})
+
+	cfg, loadErr := Load()
+	if loadErr != nil {
+		t.Fatalf("Load() error = %v, want nil for a genuinely absent candidate", loadErr)
+	}
+	if !reflect.DeepEqual(cfg, defaultConfig()) {
+		t.Fatal("absent candidate did not fall back to built-in defaults")
+	}
+}

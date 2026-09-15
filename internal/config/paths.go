@@ -11,6 +11,7 @@ var (
 	executablePath = os.Executable
 	workingDir     = os.Getwd
 	statPath       = os.Stat
+	lstatPath      = os.Lstat
 )
 
 // resolveCandidatePath returns the exact path loadFromPath will read and a

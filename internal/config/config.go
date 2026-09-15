@@ -106,6 +106,17 @@ func Load() (*Config, *LoadError) {
 			return cfg, nil
 		}
 		if err.Kind == KindRead && errors.Is(err, fs.ErrNotExist) {
+			// A plain missing directory entry falls through to the next
+			// candidate. But a dangling symlink — a present directory entry
+			// whose target is missing — is an authoritative, unusable config:
+			// Lstat sees the entry where Stat (and thus the failed read) does
+			// not. Treat it as authoritative and fail closed rather than
+			// silently falling back to package defaults, which can re-enable
+			// groups the administrator intended to control.
+			if _, lstatErr := lstatPath(path); lstatErr == nil {
+				log.Print(err.LogMessage())
+				return disabledConfig(), err
+			}
 			continue
 		}
 
