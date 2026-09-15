@@ -43,13 +43,30 @@ func TestParseConfig(t *testing.T) {
 			wantProvider: "anthropic",
 		},
 		{
-			name:      "extension added by hand under another key order",
+			// The bug this fixes: the old line scan matched a `name: linux-tools`
+			// field anywhere, so an extension under a different key counted as
+			// wired. Structurally it is not the linux-tools extension, so it is
+			// not wired.
+			name:      "linux-tools name under a different extension key",
 			data:      "extensions:\n  something:\n    name: linux-tools\n",
-			wantWired: true,
+			wantWired: false,
 		},
 		{
 			name: "empty file",
 			data: "",
+		},
+		{
+			// An explicitly disabled extension is present but not usable.
+			name:      "linux-tools present but disabled",
+			data:      "extensions:\n  linux-tools:\n    enabled: false\n    type: stdio\n    cmd: /usr/bin/linux-mcp-server\n",
+			wantWired: false,
+		},
+		{
+			// Present and enabled but missing the command that makes it run is
+			// not a usable extension.
+			name:      "linux-tools enabled but no command",
+			data:      "extensions:\n  linux-tools:\n    enabled: true\n    type: stdio\n",
+			wantWired: false,
 		},
 	}
 
