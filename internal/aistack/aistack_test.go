@@ -502,6 +502,38 @@ func TestApplyOverridesRejectsBadInput(t *testing.T) {
 	}
 }
 
+func TestApplyOverridesRejectsTheWholeOverrideWhenAnyEntryIsInvalid(t *testing.T) {
+	// A valid entry paired with an invalid one must not commit the valid one.
+	// Map iteration order is nondeterministic, so this is the case the bug
+	// hid: with the old per-entry mutation a valid earlier entry could survive
+	// even though a later entry was rejected.
+	nvidiaBefore := Select(gpu.Set{NVIDIA: true}).Image
+	amdBefore := Select(gpu.Set{AMD: true}).Image
+	modelBefore := servedModel
+	t.Cleanup(func() {
+		stacks[gpu.VendorNVIDIA] = Stack{Vendor: gpu.VendorNVIDIA, Image: nvidiaBefore, Accelerator: "CUDA", Devices: stacks[gpu.VendorNVIDIA].Devices, PodmanArgs: stacks[gpu.VendorNVIDIA].PodmanArgs}
+		stacks[gpu.VendorAMD] = Stack{Vendor: gpu.VendorAMD, Image: amdBefore, Accelerator: "ROCm", Devices: stacks[gpu.VendorAMD].Devices, PodmanArgs: stacks[gpu.VendorAMD].PodmanArgs}
+		servedModel = modelBefore
+	})
+
+	err := ApplyOverrides(
+		map[string]string{"nvidia": "registry.example.internal/ramalama/cuda:pinned", "matrox": "example.com/x:1"},
+		"ollama://qwen2.5:7b",
+	)
+	if err == nil {
+		t.Fatal("ApplyOverrides accepted an override containing an unknown vendor")
+	}
+	if got := Select(gpu.Set{NVIDIA: true}).Image; got != nvidiaBefore {
+		t.Errorf("the valid entry was committed anyway: image = %q", got)
+	}
+	if got := Select(gpu.Set{AMD: true}).Image; got != amdBefore {
+		t.Errorf("the amd stack was disturbed: image = %q", got)
+	}
+	if servedModel != modelBefore {
+		t.Errorf("the model was committed anyway: model = %q", servedModel)
+	}
+}
+
 func TestNoOverridesIsANoOp(t *testing.T) {
 	if err := ApplyOverrides(nil, ""); err != nil {
 		t.Fatalf("ApplyOverrides(nil, \"\"): %v", err)
