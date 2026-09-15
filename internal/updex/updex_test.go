@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -91,7 +92,7 @@ func TestPrivilegedOperationsUseExactHelperArguments(t *testing.T) {
 
 	dir := t.TempDir()
 	capturedArgsFile := filepath.Join(dir, "captured-args")
-	fakePkexec := filepath.Join(dir, pkexecCommand)
+	fakePkexec := filepath.Join(dir, pkexec.Command)
 	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$CHAIRLIFT_UPDEX_ARGS\"\n"
 	if err := os.WriteFile(fakePkexec, []byte(script), 0o755); err != nil {
 		t.Fatalf("writing fake pkexec: %v", err)
