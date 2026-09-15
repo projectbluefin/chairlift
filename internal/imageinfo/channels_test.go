@@ -166,6 +166,33 @@ func TestParseTableRejectsUnusableOverrides(t *testing.T) {
 	}
 }
 
+// A registry port (":5000") is part of the host, not a tag, so a key such as
+// "registry.example:5000/team/image" must be accepted — that is the case this
+// fix exists to support — while a real tag is still rejected.
+func TestParseTableAcceptsRegistryPorts(t *testing.T) {
+	document := `
+images:
+  registry.example:5000/team/image:
+    stable_tags: [latest, stable]
+    testing_tags: [testing]
+    to_testing:
+      latest: testing
+      stable: testing
+    to_stable:
+      testing: stable
+`
+	applyTable(t, document)
+
+	if !contains(KnownImages(), "registry.example:5000/team/image") {
+		t.Fatalf("KnownImages() = %v, want it to include the ported key", KnownImages())
+	}
+
+	back := Info{Name: "image", Tag: "testing", Ref: "docker://registry.example:5000/team/image"}
+	if target, ok := back.SwitchTarget(ChannelStable); !ok || target != "registry.example:5000/team/image:stable" {
+		t.Errorf("SwitchTarget(stable) = (%q, %v), want (%q, true)", target, ok, "registry.example:5000/team/image:stable")
+	}
+}
+
 func TestParseTableAcceptsAnEmptyDocument(t *testing.T) {
 	for _, document := range []string{"", "images:\n", "images: {}\n"} {
 		table, err := ParseTable(strings.NewReader(document))
@@ -296,6 +323,9 @@ drivers:
   ghcr.io/tuna-os/tromso:
     standard: [latest, stable]
     nvidia: [latest]
+  registry.example:5000/tuna-os/tromso:
+    standard: [latest, stable]
+    nvidia: [latest]
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +334,13 @@ drivers:
 		t.Fatalf("LoadTable: %v", err)
 	}
 
-	drivers := AvailableDrivers("ghcr.io/tuna-os/tromso", "latest")
+	// A registry port in the key is accepted, not mistaken for a tag.
+	drivers := AvailableDrivers("registry.example:5000/tuna-os/tromso", "latest")
+	if len(drivers) != 2 || drivers[0] != DriverStandard || drivers[1] != DriverNVIDIA {
+		t.Fatalf("AvailableDrivers on a ported key = %v, want [standard nvidia]", drivers)
+	}
+
+	drivers = AvailableDrivers("ghcr.io/tuna-os/tromso", "latest")
 	if len(drivers) != 2 || drivers[0] != DriverStandard || drivers[1] != DriverNVIDIA {
 		t.Fatalf("AvailableDrivers = %v, want [standard nvidia]", drivers)
 	}

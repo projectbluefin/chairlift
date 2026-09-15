@@ -181,11 +181,14 @@ func parseTables(reader io.Reader) (map[string]imageChannels, map[string][]drive
 // present — a host on the base image that could not switch back to it would
 // be stranded on a driver image.
 func convertDriverEntry(ref string, entry map[string][]string) ([]driverStreams, error) {
-	if strings.Contains(ref, ":") {
-		return nil, fmt.Errorf("driver table key %q must be a registry path without a tag", ref)
-	}
 	if !strings.Contains(ref, "/") {
 		return nil, fmt.Errorf("driver table key %q must be a full registry path (registry/org/image)", ref)
+	}
+	// A registry port (":5000" before a "/") is not a tag: stripTag keeps it,
+	// so a key stripTag shortens carries a real tag, which must be rejected.
+	// Same port/tag split as stripTag in this package (imageinfo.go).
+	if stripTag(ref) != ref {
+		return nil, fmt.Errorf("driver table key %q must be a registry path without a tag", ref)
 	}
 	for _, driver := range knownDrivers {
 		if strings.HasSuffix(ref, driver.suffix()) {
@@ -235,11 +238,14 @@ func convertEntry(ref string, entry rawImageChannels) (imageChannels, error) {
 	if ref == "" {
 		return imageChannels{}, fmt.Errorf("channel table has an entry with an empty image reference")
 	}
-	if strings.Contains(ref, ":") {
-		return imageChannels{}, fmt.Errorf("channel table key %q must be a registry path without a tag", ref)
-	}
 	if !strings.Contains(ref, "/") {
 		return imageChannels{}, fmt.Errorf("channel table key %q must be a full registry path (registry/org/image)", ref)
+	}
+	// A registry port (":5000" before a "/") is not a tag: stripTag keeps it,
+	// so a key stripTag shortens carries a real tag, which must be rejected.
+	// Same port/tag split as stripTag in this package (imageinfo.go).
+	if stripTag(ref) != ref {
+		return imageChannels{}, fmt.Errorf("channel table key %q must be a registry path without a tag", ref)
 	}
 	if len(entry.TestingTags) == 0 || len(entry.StableTags) == 0 {
 		return imageChannels{}, fmt.Errorf("channel table entry %q needs both stable_tags and testing_tags", ref)
