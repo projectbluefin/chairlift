@@ -195,6 +195,45 @@ func defaultUnitDir() (string, error) {
 	return filepath.Join(config, "containers", "systemd"), nil
 }
 
+// writeQuadletFile is an injection seam for writing the quadlet file atomically.
+var writeQuadletFile = writeQuadletAtomically
+
+// writeQuadletAtomically writes content to a temporary file in the same directory
+// as dest and atomically renames it over dest, ensuring that dest is never left
+// in a partial or truncated state if an error occurs.
+func writeQuadletAtomically(dest string, content []byte) error {
+	dir := filepath.Dir(dest)
+	tmp, err := os.CreateTemp(dir, UnitName+".tmp.*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanTemp := true
+	defer func() {
+		if cleanTemp {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o644); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpName, dest); err != nil {
+		return err
+	}
+	cleanTemp = false
+	return nil
+}
+
 // runSystemctl is an injection seam for the `systemctl --user` calls.
 var runSystemctl = execSystemctl
 
@@ -256,7 +295,7 @@ func Enable(ctx context.Context, stack Stack) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(RenderUnit(stack)), 0o644); err != nil {
+	if err := writeQuadletFile(path, []byte(RenderUnit(stack))); err != nil {
 		return err
 	}
 

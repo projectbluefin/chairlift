@@ -152,9 +152,11 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	tmp := t.TempDir()
 	previousDir := unitDir
 	previousSystemctl := runSystemctl
+	previousWriteQuadlet := writeQuadletFile
 	t.Cleanup(func() {
 		unitDir = previousDir
 		runSystemctl = previousSystemctl
+		writeQuadletFile = previousWriteQuadlet
 		dryrun.Set(false)
 	})
 
@@ -280,6 +282,158 @@ func TestDryRunTouchesNothing(t *testing.T) {
 	}
 	if len(*calls) != 0 {
 		t.Errorf("dry-run ran systemctl: %v", *calls)
+	}
+}
+
+func TestEnableAtomicallyCreatesUnitWithPermissionsAndNoTempFiles(t *testing.T) {
+	dir, calls := stubUnitDir(t)
+
+	stack := Select(gpu.Set{AMD: true})
+	if err := Enable(context.Background(), stack); err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+
+	unitPath := filepath.Join(dir, UnitName)
+	info, err := os.Stat(unitPath)
+	if err != nil {
+		t.Fatalf("stat written unit: %v", err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o644 {
+		t.Errorf("quadlet permissions = %#o, want 0644", perm)
+	}
+
+	content, err := os.ReadFile(unitPath)
+	if err != nil {
+		t.Fatalf("reading written unit: %v", err)
+	}
+	wantContent := RenderUnit(stack)
+	if string(content) != wantContent {
+		t.Errorf("written unit content mismatch:\ngot:\n%s\nwant:\n%s", string(content), wantContent)
+	}
+
+	wantCalls := []string{"daemon-reload", "start " + ServiceName}
+	if strings.Join(*calls, "|") != strings.Join(wantCalls, "|") {
+		t.Errorf("systemctl calls = %v, want %v", *calls, wantCalls)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != UnitName {
+		t.Errorf("directory contains unexpected files: %v, want only %s", entries, UnitName)
+	}
+}
+
+func TestEnableReplacesExistingUnitAtomically(t *testing.T) {
+	dir, _ := stubUnitDir(t)
+
+	unitPath := filepath.Join(dir, UnitName)
+	oldContent := []byte("[Unit]\nDescription=Old Unit\n")
+	if err := os.WriteFile(unitPath, oldContent, 0o644); err != nil {
+		t.Fatalf("writing old unit: %v", err)
+	}
+
+	newStack := Select(gpu.Set{NVIDIA: true})
+	if err := Enable(context.Background(), newStack); err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+
+	got, err := os.ReadFile(unitPath)
+	if err != nil {
+		t.Fatalf("reading replaced unit: %v", err)
+	}
+	if string(got) != RenderUnit(newStack) {
+		t.Errorf("replaced unit content mismatch:\ngot:\n%s\nwant:\n%s", string(got), RenderUnit(newStack))
+	}
+}
+
+func TestEnablePreservesExistingUnitOnWriteFailure(t *testing.T) {
+	dir, calls := stubUnitDir(t)
+
+	unitPath := filepath.Join(dir, UnitName)
+	existingContent := []byte("[Unit]\nDescription=Preserve Me\n")
+	if err := os.WriteFile(unitPath, existingContent, 0o644); err != nil {
+		t.Fatalf("writing initial unit: %v", err)
+	}
+
+	writeErr := errors.New("simulated disk full")
+	writeQuadletFile = func(_ string, _ []byte) error {
+		return writeErr
+	}
+
+	stack := Select(gpu.Set{Intel: true})
+	err := Enable(context.Background(), stack)
+	if !errors.Is(err, writeErr) {
+		t.Fatalf("Enable error = %v, want %v", err, writeErr)
+	}
+
+	got, err := os.ReadFile(unitPath)
+	if err != nil {
+		t.Fatalf("reading existing unit: %v", err)
+	}
+	if string(got) != string(existingContent) {
+		t.Errorf("existing unit modified on write failure:\ngot:\n%s\nwant:\n%s", string(got), string(existingContent))
+	}
+
+	if len(*calls) != 0 {
+		t.Errorf("systemctl called on write failure: %v", *calls)
+	}
+}
+
+func TestWriteQuadletAtomicallyCleansTempFileOnFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	unitPath := filepath.Join(tmpDir, UnitName)
+
+	existingContent := []byte("[Unit]\nDescription=Intact\n")
+	if err := os.WriteFile(unitPath, existingContent, 0o644); err != nil {
+		t.Fatalf("writing initial unit: %v", err)
+	}
+
+	// Writing into a read-only directory causes os.CreateTemp to fail before rename
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0o555); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(readOnlyDir, 0o755)
+	})
+
+	destInReadOnly := filepath.Join(readOnlyDir, UnitName)
+	if err := writeQuadletAtomically(destInReadOnly, []byte("test")); err == nil {
+		t.Error("writeQuadletAtomically into read-only dir succeeded unexpectedly")
+	}
+
+	entries, err := os.ReadDir(readOnlyDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("abandoned temporary files found in read-only dir: %v", entries)
+	}
+}
+
+func TestWriteQuadletAtomicallyCleansTempFileOnRenameFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	// If the destination path is a directory, os.Rename will fail on Linux (EISDIR/EEXIST).
+	destDir := filepath.Join(tmpDir, UnitName)
+	if err := os.Mkdir(destDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	err := writeQuadletAtomically(destDir, []byte("test content"))
+	if err == nil {
+		t.Fatal("writeQuadletAtomically succeeded when renaming over a directory")
+	}
+
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() != UnitName {
+			t.Errorf("found abandoned temp file: %s", entry.Name())
+		}
 	}
 }
 
