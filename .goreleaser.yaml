@@ -93,6 +93,36 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+sboms:
+  # Machine-readable bill of materials for every published archive, so signers
+  # and verifiers have provenance alongside the binary.
+  - artifacts: archive
+
+signs:
+  # Keyless cosign signing (Fulcio/Rekor) of the archives and the checksums
+  # file. Requires the id-token: write permission in .github/workflows/release
+  # and the cosign binary installed there. Emits <asset>.sig and <asset>.crt
+  # alongside each asset. Verify against the release notes instructions below.
+  - id: cosign-archives
+    cmd: cosign
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-certificate=${artifact}.crt"
+      - "--output-signature=${artifact}.sig"
+      - "${artifact}"
+    artifacts: archive
+
+  - id: cosign-checksums
+    cmd: cosign
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-certificate=${artifact}.crt"
+      - "--output-signature=${artifact}.sig"
+      - "${artifact}"
+    artifacts: checksum
+
 changelog:
   sort: asc
   use: github
@@ -246,6 +276,30 @@ nfpms:
       - apk
 
 release:
+  header: |
+    ## Verifying this release
+
+    The archives and `checksums.txt` in this release are signed keyless with
+    [cosign](https://docs.sigstore.dev/) (Fulcio/Rekor). A `.sig` and `.crt`
+    ship alongside each asset. Verify an archive:
+
+    ```bash
+    cosign verify-blob \
+      --yes \
+      --signature <archive>.tar.gz.sig \
+      --certificate <archive>.tar.gz.crt \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      --expected-https-repository https://github.com/projectbluefin/chairlift \
+      <archive>.tar.gz
+    ```
+
+    Verify the checksum file the same way, replacing the paths with
+    `checksums.txt.sig` / `checksums.txt.crt`. Then confirm asset integrity
+    against the signed checksums:
+
+    ```bash
+    sha256sum -c checksums.txt
+    ```
   footer: |
     **Full Changelog**: https://github.com/projectbluefin/chairlift/compare/{{ .PreviousTag }}...{{ .Tag }}
 
