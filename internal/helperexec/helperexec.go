@@ -73,10 +73,13 @@ func Run(ctx context.Context, pkexecPath, helperPath string, args ...string) (st
 	}
 
 	if dryrun.Enabled() {
-		args = append(args, "--dry-run")
-		wouldRun := append([]string{pkexecPath, helperPath}, args...)
+		// Journal Args must reflect the caller's actual inputs, so build the
+		// --dry-run-appended argv in a separate slice rather than mutating
+		// args (which journalArgs(args) below still reads unmodified).
+		dryRunArgs := append(append([]string{}, args...), "--dry-run")
+		wouldRun := append([]string{pkexecPath, helperPath}, dryRunArgs...)
 		journal.Record(action, journalArgs(args), wouldRun, journal.SuppressedDryRun)
-		log.Printf("[DRY-RUN] would execute: %s %s %v", pkexecPath, helperPath, args)
+		log.Printf("[DRY-RUN] would execute: %s %s %v", pkexecPath, helperPath, dryRunArgs)
 		return "", "", nil
 	}
 
