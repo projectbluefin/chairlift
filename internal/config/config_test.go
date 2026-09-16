@@ -234,11 +234,13 @@ func TestOmittedEnabledInheritsDocumentedDefault(t *testing.T) {
 			"        script: /usr/libexec/custom\n" +
 			"        sudo: true\n"
 		path := writeConfigFile(t, content)
+		origTrusted := trustedConfigDirectories
+		trustedConfigDirectories = append([]string{filepath.Dir(path)}, origTrusted...)
+		t.Cleanup(func() { trustedConfigDirectories = origTrusted })
 		cfg, err := loadFromPath(path)
 		if err != nil {
 			t.Fatalf("loadFromPath(%q): %v", path, err)
 		}
-
 		got := cfg.MaintenancePage["maintenance_cleanup_group"]
 		if got.Enabled {
 			t.Errorf("maintenance_cleanup_group: omitted `enabled` got %v, want false (default, not the Go zero-value coincidence)", got.Enabled)
