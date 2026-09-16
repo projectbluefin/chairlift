@@ -1214,6 +1214,31 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 		}
 	})
 
+	t.Run("untrusted config with non-sudo action accepted", func(t *testing.T) {
+		const path = "/home/user/.config/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: false\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if err != nil {
+			t.Fatalf("parseAndValidate(...) err = %v, want nil", err)
+		}
+		if raw == nil {
+			t.Fatalf("parseAndValidate(...) raw = nil, want non-nil")
+		}
+	})
+
+	t.Run("path traversal out of trusted dir rejected", func(t *testing.T) {
+		const path = "/etc/chairlift/../tmp/evil/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, path)
+		if !strings.Contains(err.Detail, "sudo actions are only permitted in trusted configurations") {
+			t.Fatalf("err.Detail = %q, want provenance error", err.Detail)
+		}
+	})
+
 	t.Run("trusted config with sudo true and relative script rejected", func(t *testing.T) {
 		const path = "/etc/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: ./clean.sh\n        sudo: true\n"
