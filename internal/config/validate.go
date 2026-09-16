@@ -355,9 +355,8 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 	}
 
 	if hasSudo {
-		anchorNode := sudoNode
 		if !isTrustedConfigPath(path) {
-			return validatorSudoProvenanceError(path, anchorNode)
+			return validatorSudoProvenanceError(path, sudoNode)
 		}
 		if scriptNode != nil && !filepath.IsAbs(scriptVal) {
 			return validatorSudoScriptAbsError(path, scriptNode, scriptVal)
@@ -640,6 +639,9 @@ func effectiveNodeLine(n *yaml.Node) int {
 	return n.Line
 }
 
+// validatorSudoProvenanceError builds a KindSchema *LoadError reporting that
+// an action declared sudo: true in an untrusted configuration location. Detail
+// names the allowed trusted directories and a positive source line.
 func validatorSudoProvenanceError(path string, node *yaml.Node) *LoadError {
 	return &LoadError{
 		Path:   path,
@@ -648,6 +650,9 @@ func validatorSudoProvenanceError(path string, node *yaml.Node) *LoadError {
 	}
 }
 
+// validatorSudoScriptAbsError builds a KindSchema *LoadError reporting that
+// an action declared sudo: true with a non-absolute script path. Detail names
+// the script value and a positive source line.
 func validatorSudoScriptAbsError(path string, node *yaml.Node, script string) *LoadError {
 	return &LoadError{
 		Path:   path,
