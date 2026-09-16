@@ -162,6 +162,12 @@ func TestRunJournalsDryRunFlagAsSuppressed(t *testing.T) {
 	if !reflect.DeepEqual(entry.WouldRun, wantArgv) {
 		t.Errorf("journalled WouldRun = %v, want %v (--dry-run appended last)", entry.WouldRun, wantArgv)
 	}
+	// Args must record only the caller's real inputs, not the internal
+	// --dry-run flag appended for WouldRun/logging.
+	wantArgs := map[string]string{"args": "arg1"}
+	if !reflect.DeepEqual(entry.Args, wantArgs) {
+		t.Errorf("journalled Args = %v, want %v (must not include --dry-run)", entry.Args, wantArgs)
+	}
 }
 
 func readJournal(t *testing.T, path string) []journal.Entry {
