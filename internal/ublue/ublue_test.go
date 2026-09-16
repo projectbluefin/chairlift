@@ -377,6 +377,39 @@ func TestDetectReportsMalformedDescriptor(t *testing.T) {
 	}
 }
 
+// Detect must fail closed when the authoritative channel table is broken:
+// it reports the error and offers no switch, even on an otherwise perfectly
+// recognized host, because the privileged helper re-reads channels.yml and
+// refuses after authentication.
+func TestDetectFailsClosedOnABrokenChannelTable(t *testing.T) {
+	dir := t.TempDir()
+	broken := filepath.Join(dir, "channels.yml")
+	if err := os.WriteFile(broken, []byte("images:\n  ghcr.io/x/y:\n    stable_tags: [latest]\n"), 0o644); err != nil {
+		t.Fatalf("writing broken table: %v", err)
+	}
+
+	t.Cleanup(imageinfo.ResetTable)
+
+	if _, err := imageinfo.LoadTable([]string{broken}); err == nil {
+		t.Fatal("LoadTable() error = nil, want a rejection for the broken table")
+	}
+
+	stubDetection(t,
+		imageinfo.Info{Name: "dakota", Tag: "latest", Ref: "docker://ghcr.io/projectbluefin/dakota"},
+		nil, nil)
+
+	got, err := Detect()
+	if err != nil {
+		t.Fatalf("Detect() error = %v, want nil", err)
+	}
+	if got.ChannelTableError == "" {
+		t.Error("Detect() left ChannelTableError empty on a broken channel table")
+	}
+	if got.CanSwitchTo != imageinfo.ChannelUnknown {
+		t.Errorf("Detect() CanSwitchTo = %v, want %v on a broken channel table", got.CanSwitchTo, imageinfo.ChannelUnknown)
+	}
+}
+
 // The driver recommendation must only appear where a switch is both possible
 // and useful, so Detect is asserted across the hardware/image matrix rather
 // than only on the machine the tests happen to run on.

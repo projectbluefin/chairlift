@@ -208,6 +208,16 @@ func (uh *UserHome) buildImageIdentityGroup(page *adw.PreferencesPage) {
 		return
 	}
 
+	// Fail closed on a broken authoritative channel table: render a
+	// diagnostic instead of the release-channel switch and the driver row,
+	// so no rebase action can be requested against a table the privileged
+	// helper rejects. See imageinfo.SystemTableError.
+	if status.ChannelTableError != "" {
+		uh.buildChannelErrorGroup(page, status.ChannelTableError)
+		log.Printf("views: image identity group failed closed channel_table_error=%q", status.ChannelTableError)
+		return
+	}
+
 	description := pageview.BluefinGroupDescription(status.Variant.DisplayName(), status.Tag)
 	uh.buildChannelGroup(page, status, description)
 	uh.buildDriverRow(status)
@@ -215,6 +225,27 @@ func (uh *UserHome) buildImageIdentityGroup(page *adw.PreferencesPage) {
 	log.Printf("views: image identity group built variant=%s tag=%s channel=%s switchable=%v driver=%s",
 		status.Variant, status.Tag, status.Channel,
 		status.CanSwitchTo != imageinfo.ChannelUnknown, status.Driver)
+}
+
+// buildChannelErrorGroup replaces the release-channel switch and graphics
+// driver row with a single readonly diagnostic when the authoritative
+// channel table could not be applied. Both rebase actions resolve their
+// target through that table, and the privileged helper re-reads it and
+// refuses after authentication, so keeping the controls enabled would only
+// stage an error the user cannot have.
+func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage, configError string) {
+	group := adw.NewPreferencesGroup()
+	group.SetTitle("System Image")
+	group.SetDescription("Channel and driver switching are unavailable")
+
+	row := adw.NewActionRow()
+	row.SetTitle("Configuration Error")
+	row.SetSubtitle(fmt.Sprintf("Switching is disabled: %s", configError))
+	group.Add(&row.Widget)
+
+	page.Add(group)
+	uh.channelGroup = group
+	uh.channelRow = row
 }
 
 // buildChannelGroup builds the release-channel switch. The switch is

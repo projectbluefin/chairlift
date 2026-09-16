@@ -81,6 +81,11 @@ type Status struct {
 	RecommendedDriver imageinfo.Driver
 	// GPU describes the detected graphics hardware.
 	GPU string
+	// ChannelTableError is non-empty when the authoritative channel table
+	// (channels.yml) exists but could not be applied. The views must fail
+	// closed and disable the rebase controls when it is set; see
+	// imageinfo.SystemTableError.
+	ChannelTableError string
 }
 
 // Detect returns the current Bluefin-family status. A host with no image
@@ -154,6 +159,7 @@ func Detect() (Status, error) {
 	status.Driver = info.Driver()
 	hardware := detectGPU()
 	status.GPU = hardware.Describe()
+
 	if recommended, offer := info.RecommendedDriver(hardware.NVIDIA); offer {
 		status.RecommendedDriver = recommended
 	}
@@ -165,6 +171,15 @@ func Detect() (Status, error) {
 	} else if _, ok := info.SwitchTarget(imageinfo.ChannelStable); ok {
 		status.CanSwitchTo = imageinfo.ChannelStable
 	} else {
+		status.CanSwitchTo = imageinfo.ChannelUnknown
+	}
+
+	// Fail closed on a broken authoritative channel table: mark it for the
+	// views and never offer a switch from a table the system could not
+	// apply, because the privileged helper re-reads channels.yml and
+	// refuses after authentication.
+	status.ChannelTableError = imageinfo.SystemTableError()
+	if status.ChannelTableError != "" {
 		status.CanSwitchTo = imageinfo.ChannelUnknown
 	}
 

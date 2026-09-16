@@ -257,6 +257,44 @@ func TestLoadTableLeavesTheActiveTableOnError(t *testing.T) {
 	}
 }
 
+// The views fail closed when the authoritative table is broken, so
+// SystemTableError must distinguish a rejected override from a clean load.
+func TestSystemTableErrorTracksTheLastLoad(t *testing.T) {
+	dir := t.TempDir()
+	broken := filepath.Join(dir, "broken.yml")
+	if err := os.WriteFile(broken, []byte("images:\n  ghcr.io/x/y:\n    stable_tags: [latest]\n"), 0o644); err != nil {
+		t.Fatalf("writing broken table: %v", err)
+	}
+	clean := filepath.Join(dir, "clean.yml")
+	if err := os.WriteFile(clean, []byte(tunaOSTable), 0o644); err != nil {
+		t.Fatalf("writing clean table: %v", err)
+	}
+
+	t.Cleanup(ResetTable)
+
+	if _, err := LoadTable([]string{broken}); err == nil {
+		t.Fatal("LoadTable() error = nil, want a rejection for the broken table")
+	}
+	if SystemTableError() == "" {
+		t.Error("SystemTableError() = \"\", want a message after a broken load")
+	}
+
+	// A subsequent clean load clears the error.
+	if _, err := LoadTable([]string{clean}); err != nil {
+		t.Fatalf("LoadTable() error = %v, want nil for the clean table", err)
+	}
+	if SystemTableError() != "" {
+		t.Errorf("SystemTableError() = %q, want \"\" after a clean load", SystemTableError())
+	}
+
+	// Reset restores the zero state too.
+	_, _ = LoadTable([]string{broken})
+	ResetTable()
+	if SystemTableError() != "" {
+		t.Errorf("SystemTableError() = %q, want \"\" after ResetTable", SystemTableError())
+	}
+}
+
 // The GUI and the privileged helper must resolve the same table, so both
 // read the same fixed, root-owned locations. A user-writable candidate here
 // would let a local user redirect a PolicyKit-authenticated bootc switch.

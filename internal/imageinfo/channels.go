@@ -75,6 +75,22 @@ var activeTable = builtinTable()
 // resolves through, on the same terms as activeTable.
 var activeDriverTable = builtinDriverTable()
 
+// systemTableError is non-empty when the most recent LoadTable call could
+// not apply a channel-table override. The views read it through
+// SystemTableError and fail closed: an override that exists but cannot be
+// applied must disable the rebase controls it cannot resolve, rather than
+// silently falling back to the built-in table and offering a switch the
+// privileged helper would then refuse after authentication.
+var systemTableError string
+
+// SystemTableError returns why the channel-table override could not be
+// applied, or "" when the last load applied cleanly — including the ordinary
+// case of no override file at all, which keeps the compiled-in table
+// authoritative and the rebase controls usable.
+func SystemTableError() string {
+	return systemTableError
+}
+
 // builtinDriverTable returns a fresh copy of the compiled-in driver table.
 func builtinDriverTable() map[string][]driverStreams {
 	result := make(map[string][]driverStreams, len(imageDriverMap))
@@ -287,7 +303,10 @@ func convertEntry(ref string, entry rawImageChannels) (imageChannels, error) {
 // candidate that exists but is invalid is an error and leaves the previously
 // active table untouched: a broken override must not silently degrade into
 // "no images are switchable", nor into a partially applied mapping.
-func LoadTable(paths []string) (string, error) {
+// loadTable is LoadTable's implementation. It is split out so the public
+// LoadTable can record whether the load succeeded for the views' fail-closed
+// behavior while keeping the return values identical for existing callers.
+func loadTable(paths []string) (string, error) {
 	for _, path := range paths {
 		file, err := os.Open(path)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -313,6 +332,24 @@ func LoadTable(paths []string) (string, error) {
 	return "", nil
 }
 
+// LoadTable reads and applies the first existing channel-table file in
+// paths. It returns the path it applied, or "" when no candidate exists —
+// which is the ordinary case, and leaves the built-in table active. A
+// candidate that exists but is invalid is an error and leaves the previously
+// active table untouched: a broken override must not silently degrade into
+// "no images are switchable", nor into a partially applied mapping.
+//
+// Every call also refreshes systemTableError so the views know whether the
+// authoritative table applied cleanly.
+func LoadTable(paths []string) (string, error) {
+	path, err := loadTable(paths)
+	systemTableError = ""
+	if err != nil {
+		systemTableError = fmt.Sprintf("%v", err)
+	}
+	return path, err
+}
+
 // LoadSystemTable applies the channel-table override from the fixed system
 // paths. Both the GUI and the privileged helper call it at startup, so they
 // always resolve the same table — a helper that used the built-in table
@@ -325,4 +362,5 @@ func LoadSystemTable() (string, error) {
 func ResetTable() {
 	activeTable = builtinTable()
 	activeDriverTable = builtinDriverTable()
+	systemTableError = ""
 }
