@@ -17,18 +17,6 @@ import (
 // program name. Everything else names internal/pkexec.Command.
 const pkexecOwner = "internal/pkexec/pkexec.go"
 
-// pkexecLiteralExemptions are the non-owner files still allowed to carry the
-// literal, each with the reason it is not yet converted. An exemption is a
-// debt entry, not a licence: nothing may be added here without a reason a
-// reader can check.
-var pkexecLiteralExemptions = map[string]string{
-	// pageview.MaintenanceCommand builds the config-declared maintenance
-	// command. Converting it is deliberately deferred: internal/views/pageview
-	// is the subject of an open PR (chairlift#46) whose wiring assertions pin
-	// this call site's source text.
-	"internal/views/pageview/pageview.go": "deferred while chairlift#46 pins internal/views/pageview source text",
-}
-
 // TestPkexecCommandHasOneOwner is the drift gate behind internal/pkexec.
 //
 // pkexec is the single route by which ChairLift reaches root, and the program
@@ -48,10 +36,6 @@ func TestPkexecCommandHasOneOwner(t *testing.T) {
 
 	offenders := make([]string, 0)
 	seenOwner := false
-	unusedExemptions := make(map[string]struct{}, len(pkexecLiteralExemptions))
-	for path := range pkexecLiteralExemptions {
-		unusedExemptions[path] = struct{}{}
-	}
 
 	for _, dir := range []string{"internal", "cmd"} {
 		walkRoot := filepath.Join(root, dir)
@@ -84,14 +68,9 @@ func TestPkexecCommandHasOneOwner(t *testing.T) {
 					return true
 				}
 
-				switch relative {
-				case pkexecOwner:
+				if relative == pkexecOwner {
 					seenOwner = true
-				default:
-					if _, exempt := pkexecLiteralExemptions[relative]; exempt {
-						delete(unusedExemptions, relative)
-						return true
-					}
+				} else {
 					position := fileSet.Position(literal.Pos())
 					offenders = append(offenders, relative+":"+strconv.Itoa(position.Line))
 				}
@@ -110,9 +89,5 @@ func TestPkexecCommandHasOneOwner(t *testing.T) {
 
 	for _, offender := range offenders {
 		t.Errorf("%s spells %q directly; use pkexec.Command so the escalation entrypoint has one owner", offender, pkexec.Command)
-	}
-
-	for path := range unusedExemptions {
-		t.Errorf("%s is exempted in pkexecLiteralExemptions but no longer carries the literal — drop the exemption", path)
 	}
 }

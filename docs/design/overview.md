@@ -34,6 +34,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
         ├── internal/sysupdate/ native A/B detection, status, rollback, fixed stage adapter
+        ├── internal/pkexec/    Sole owner of the privilege-escalation program name (`pkexec.Command`)
         ├── internal/stageexec/ Pure-Go shared OS staging stream/event executor
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
