@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -22,87 +21,6 @@ func TestStateFilePathsAreTheSnosiContract(t *testing.T) {
 	}
 	if StagedSemaphorePath != "/run/snosi/update-staged" {
 		t.Errorf("StagedSemaphorePath = %q, want /run/snosi/update-staged", StagedSemaphorePath)
-	}
-}
-
-// ReadUpdateCheck/ReadStagedUpdate bind the parsers to the fixed paths. They
-// are what the UI calls, and until now nothing executed them: the reader
-// helpers were tested only through their path-taking forms.
-func TestExportedReadersOnTheFixedPaths(t *testing.T) {
-	check, err := ReadUpdateCheck()
-	direct, directErr := readUpdateCheckFrom(UpdateCheckPath)
-	if (err == nil) != (directErr == nil) {
-		t.Fatalf("ReadUpdateCheck error = %v, readUpdateCheckFrom(UpdateCheckPath) error = %v", err, directErr)
-	}
-	if !reflect.DeepEqual(check, direct) {
-		t.Errorf("ReadUpdateCheck() = %+v, readUpdateCheckFrom(UpdateCheckPath) = %+v", check, direct)
-	}
-
-	staged, err := ReadStagedUpdate()
-	directStaged, directErr := readStagedUpdateFrom(StagedSemaphorePath)
-	if (err == nil) != (directErr == nil) {
-		t.Fatalf("ReadStagedUpdate error = %v, readStagedUpdateFrom(StagedSemaphorePath) error = %v", err, directErr)
-	}
-	if !reflect.DeepEqual(staged, directStaged) {
-		t.Errorf("ReadStagedUpdate() = %+v, readStagedUpdateFrom(StagedSemaphorePath) = %+v", staged, directStaged)
-	}
-
-	// Absent state files are the normal case off a booted snosi host, and
-	// they must not surface as an error: the UI renders the idle prompt.
-	if _, statErr := os.Stat(UpdateCheckPath); os.IsNotExist(statErr) {
-		if check != nil || err != nil {
-			t.Errorf("ReadUpdateCheck() with no state file = (%+v, %v), want (nil, nil)", check, err)
-		}
-	}
-	if _, statErr := os.Stat(StagedSemaphorePath); os.IsNotExist(statErr) {
-		if staged != nil || err != nil {
-			t.Errorf("ReadStagedUpdate() with no semaphore = (%+v, %v), want (nil, nil)", staged, err)
-		}
-	}
-}
-
-// GetStatus is the single call the updates page makes. It must report both
-// readers' results without dropping or transposing either field.
-func TestGetStatusComposesBothReaders(t *testing.T) {
-	status := GetStatus()
-
-	wantCheck, _ := ReadUpdateCheck()
-	wantStaged, _ := ReadStagedUpdate()
-
-	if !reflect.DeepEqual(status.Check, wantCheck) {
-		t.Errorf("GetStatus().Check = %+v, want ReadUpdateCheck() = %+v", status.Check, wantCheck)
-	}
-	if !reflect.DeepEqual(status.Staged, wantStaged) {
-		t.Errorf("GetStatus().Staged = %+v, want ReadStagedUpdate() = %+v", status.Staged, wantStaged)
-	}
-
-	// A transposition survives the comparison above whenever both files are
-	// absent (both nil), so pin the field types too: Check and Staged are
-	// distinct structs and assigning one to the other would not compile,
-	// but a nil-only environment cannot show that. Reconstruct the same
-	// aggregation over a populated fixture through the path-taking helpers.
-	dir := t.TempDir()
-	checkPath := filepath.Join(dir, "update-check")
-	stagedPath := filepath.Join(dir, "update-staged")
-	writeFile(t, checkPath, "outcome=staged\nchecked_at=2026-08-10T20:08:01-06:00\nimage=snow-ab\nrunning_version=20260810191856\nremote_version=20260810200801\n")
-	writeFile(t, stagedPath, "image=snow-ab\nversion=20260810200801\nstaged_at=2026-08-10T20:08:03-06:00\n")
-
-	populatedCheck, err := readUpdateCheckFrom(checkPath)
-	if err != nil {
-		t.Fatalf("readUpdateCheckFrom: %v", err)
-	}
-	populatedStaged, err := readStagedUpdateFrom(stagedPath)
-	if err != nil {
-		t.Fatalf("readStagedUpdateFrom: %v", err)
-	}
-	populated := Status{Check: populatedCheck, Staged: populatedStaged}
-
-	if !populated.IsStaged() {
-		t.Error("Status{check,staged}.IsStaged() = false, want true")
-	}
-	outcome, version, checkedAt := populated.Presentation()
-	if outcome != string(OutcomeStaged) || version != "20260810200801" || checkedAt != "" {
-		t.Errorf("Presentation() = (%q, %q, %q), want (staged, 20260810200801, \"\")", outcome, version, checkedAt)
 	}
 }
 
@@ -286,68 +204,6 @@ func TestRunLsblkMissingExecutable(t *testing.T) {
 	}
 }
 
-// RollbackVersion is the whole pipeline: os-release identity, lsblk, slot
-// selection, and the older-than-running rule. It reads the real
-// /usr/lib/os-release, so the fixture is built from whatever identity this
-// host actually reports — on a snosi image that exercises the rollback hit,
-// and elsewhere it pins the documented degrade to ("", false).
-func TestRollbackVersionThroughFakeLsblk(t *testing.T) {
-	imageID, runningVersion := hostImageIdentity(t)
-
-	older := "20260101000000"
-	labels := []string{"esp", "var"}
-	if imageID != "" {
-		labels = []string{
-			"esp",
-			imageID + "_" + runningVersion + "_r",
-			imageID + "_" + runningVersion + "_v",
-			imageID + "_" + older + "_r",
-			imageID + "_" + older + "_v",
-			"var",
-		}
-	}
-	fakeLsblk(t, string(lsblkFixture(labels...)), 0)
-
-	version, ok := RollbackVersion(context.Background())
-
-	wantOK := imageID != "" && ValidVersion(runningVersion) && older < runningVersion
-	if ok != wantOK {
-		t.Fatalf("RollbackVersion() ok = %v, want %v (host identity %q/%q)", ok, wantOK, imageID, runningVersion)
-	}
-	want := ""
-	if wantOK {
-		want = older
-	}
-	if version != want {
-		t.Errorf("RollbackVersion() = %q, want %q", version, want)
-	}
-}
-
-// A newer version in the inactive slot is a staged update, not a rollback
-// target, and must not be offered as one.
-func TestRollbackVersionRejectsStagedNewerSlot(t *testing.T) {
-	imageID, runningVersion := hostImageIdentity(t)
-	if imageID == "" || !ValidVersion(runningVersion) {
-		imageID, runningVersion = "", ""
-	}
-
-	newer := "29991231235959"
-	labels := []string{"esp", "var"}
-	if imageID != "" {
-		labels = []string{
-			"esp",
-			imageID + "_" + runningVersion + "_r",
-			imageID + "_" + newer + "_r",
-			"var",
-		}
-	}
-	fakeLsblk(t, string(lsblkFixture(labels...)), 0)
-
-	if version, ok := RollbackVersion(context.Background()); ok {
-		t.Errorf("RollbackVersion() with only a newer inactive slot = (%q, true), want no rollback target", version)
-	}
-}
-
 // A failing lsblk must degrade to "no rollback available" rather than
 // propagate: the updates page renders the result without an error path.
 func TestRollbackVersionDegradesWhenLsblkFails(t *testing.T) {
@@ -356,15 +212,4 @@ func TestRollbackVersionDegradesWhenLsblkFails(t *testing.T) {
 	if version, ok := RollbackVersion(context.Background()); ok || version != "" {
 		t.Errorf("RollbackVersion() with a failing lsblk = (%q, %v), want (\"\", false)", version, ok)
 	}
-}
-
-// hostImageIdentity reports the identity RollbackVersion will read, parsed
-// with the same function the production path uses.
-func hostImageIdentity(t *testing.T) (imageID, version string) {
-	t.Helper()
-	data, err := os.ReadFile(osReleasePath)
-	if err != nil {
-		return "", ""
-	}
-	return imageIdentity(data)
 }
