@@ -1,4 +1,21 @@
-.PHONY: all build build-e2e run clean deps tidy install uninstall e2e
+# Every target in this Makefile is a command, not a file recipe: none of them
+# produces a file of its own name. All of them must therefore be declared
+# .PHONY, and internal/installcheck.TestMakefilePhonyCoversEveryTarget
+# enforces exactly that, over the full inventory rather than a sample.
+#
+# `test` is why this is a defect rather than a style nit. The repository has a
+# `test/` directory, so while the target was undeclared make considered it
+# already satisfied: `make test` printed "'test' is up to date" and ran
+# nothing, silently, for as long as AGENTS.md documented it as `go test ./...`.
+# The others worked only because no directory happens to share their names.
+.PHONY: all deps tidy
+.PHONY: build build-app build-helper build-ublue-helper
+.PHONY: build-linux-amd64 build-linux-arm64
+.PHONY: run dev clean
+.PHONY: test fmt lint
+.PHONY: build-e2e e2e install-deps
+.PHONY: install uninstall
+.PHONY: bump
 
 # Binary names
 BINARY_NAME=chairlift

@@ -90,7 +90,7 @@ func listingScript(userIDs, systemIDs []string, failScopes ...string) string {
 // the only place the two Flatpak scopes are merged. Nothing else exercises it,
 // so the user/system split the whole Enable/Disable contract rests on is
 // established here.
-func TestInstalledApplicationsMergesUserAndSystemScopes(t *testing.T) {
+func TestGamingInstalledAppsMergeUserAndSystemScopes(t *testing.T) {
 	fakeFlatpak(t, listingScript([]string{protonUp}, []string{steam, mangohud}))
 
 	scope, err := installedApplications()
@@ -113,7 +113,7 @@ func TestInstalledApplicationsMergesUserAndSystemScopes(t *testing.T) {
 	}
 }
 
-func TestInstalledApplicationsSurvivesOneUnavailableScope(t *testing.T) {
+func TestGamingInstalledAppsSurviveOneUnavailableScope(t *testing.T) {
 	tests := []struct {
 		name     string
 		script   string
@@ -148,7 +148,7 @@ func TestInstalledApplicationsSurvivesOneUnavailableScope(t *testing.T) {
 	}
 }
 
-func TestInstalledApplicationsFailsWhenBothScopesFail(t *testing.T) {
+func TestGamingInstalledAppsFailWhenBothScopesFail(t *testing.T) {
 	fakeFlatpak(t, listingScript(nil, nil, "--user", "--system"))
 
 	scope, err := installedApplications()

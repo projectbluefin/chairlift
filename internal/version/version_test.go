@@ -28,7 +28,7 @@ func TestDefaultBuildValues(t *testing.T) {
 	}
 }
 
-func TestInfoReturnsVersionOnly(t *testing.T) {
+func TestVersionInfoReturnsVersionOnly(t *testing.T) {
 	withBuildInfo(t, "1.2.3", "abcdef1")
 
 	if got := Info(); got != "1.2.3" {

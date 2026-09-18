@@ -922,11 +922,21 @@ installed layout itself:
   map the repository `config.yml` to
   `/usr/share/chairlift/config.yml` and rejects any content entry targeting
   `/etc/chairlift/config.yml`.
-- **`TestGoreleaserPublishesSystemIntegrationPackage`** requires exactly one
+- **`TestGoreleaserPublishesTheSystemCompanionPackage`** requires exactly one
   full package and one integration package, verifies their build filters,
   mutual conflicts, unique IDs, and the integration package's exact four
   content mappings. This prevents the companion from accidentally acquiring
   the GUI binary or losing one of the root-owned integration files.
+  It was named `TestGoreleaserPublishesSystemIntegrationPackage` until
+  2026-09-18 — the name ADR-0006 records, and the one still correct as that
+  decision's historical context. `Integration` in the name matched the
+  `-skip "Integration"` half of the filter described below, so despite being
+  cited by AGENTS.md and the ADR as the enforcement for the
+  system-integration split, the filtered unit-test step never selected it. Renaming it
+  was the fix; `internal/installcheck`'s
+  `TestNoInternalTestNameIsExcludedByTheCIFilter` now rejects any test under
+  `internal/` that the filter would drop, so no other gate can be silently
+  inert the same way.
 
 Both tests fail — not skip — if `internal/updex.HelperPath`, the Makefile's
 `PREFIX` default, or `.goreleaser.yaml`'s `nfpms` block change independently

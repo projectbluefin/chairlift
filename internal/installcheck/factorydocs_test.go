@@ -37,7 +37,12 @@ var expectedLegacySkillAliases = map[string]string{
 	"yaml-scalar-key-identity-needs-tag-not-just-value.md":                 "../../skills/yaml-key-identity/SKILL.md",
 }
 
-const factoryCanonicalSkillPackageCount = 26
+// Adding a canonical package means bumping this deliberately, so that a
+// stray directory under docs/skills cannot quietly become a skill. The
+// 2026-09-18 triage session added five: exemption-justification,
+// fixture-path-fidelity, multi-arch-digest-pinning, phony-target-shadowing,
+// and self-referential-assertions.
+const factoryCanonicalSkillPackageCount = 31
 
 type factorySkillFrontMatter struct {
 	name         string

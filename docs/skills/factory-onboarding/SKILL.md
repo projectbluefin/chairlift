@@ -2,7 +2,7 @@
 name: factory-onboarding
 description: Use when starting or resuming a Project Bluefin factory-assigned change in ChairLift.
 version: 1.0.0
-last_updated: 2026-09-08
+last_updated: 2026-09-18
 tags:
   - factory
   - onboarding
@@ -30,3 +30,68 @@ factory-assigned change:
 
 This package is ChairLift's local entry point. Common remains authoritative for
 cross-repository factory rules.
+
+## Local mechanic: the merge queue, and how to get back out of it
+
+The gates themselves are Common's policy, not ChairLift's. Who may approve,
+when the Merge Gate is satisfied, what the independent Security Gate covers,
+and why `hold` is workflow-controlled all live in Common's
+[`human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md)
+and
+[`label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md);
+read them there rather than reasoning from a local copy.
+
+What is local, and what a factory agent has to know before touching a pull
+request here, is that this repository merges through a **merge queue**:
+
+- `gh pr merge <n>` enqueues the pull request; it does not merge it.
+- While queued, the pull request still reports `state=OPEN` with
+  `autoMergeRequest=null`, so neither field is evidence that nothing has
+  happened yet.
+- A queued pull request **can** be removed, but not with `gh pr merge
+  --disable-auto`: that subcommand only cancels auto-merge, and against a
+  queued or already-merged pull request it fails with
+  `disablePullRequestAutoMerge`. The real operation is the GraphQL
+  `dequeuePullRequest` mutation, which `gh` does not wrap:
+
+  ```sh
+  gh api graphql -f query='
+    mutation($id: ID!) {
+      dequeuePullRequest(input: {pullRequestId: $id}) {
+        mergeQueueEntry { position }
+      }
+    }' -F id="$(gh pr view <n> --repo projectbluefin/chairlift --json id --jq .id)"
+  ```
+
+  Inspect the queue first with the `mergeQueue { entries }` field on
+  `repository`, since a merged entry is already gone and cannot be dequeued.
+- Irreversibility begins when the queue COMPLETES the merge, not when the
+  pull request is enqueued. The window is short and is not visible in the
+  pull request's own fields, so treat it as small but real rather than
+  absent.
+- Nothing under `.github/workflows/` declares a `merge_group` trigger, so the
+  queue is invisible in the workflow files; it is branch-protection
+  configuration. Do not conclude from the workflows that there is no queue.
+
+The practical rule: resolve every gate question — merge and security alike,
+per pull request, not once per batch instruction — **before** the
+`gh pr merge` call, because the window in which `dequeuePullRequest` can
+still save you is measured in seconds. Default to
+preparing and pushing the verified branch and stopping there; enqueue nothing
+without an explicit, current instruction from the session owner. ADMIN
+permission, a green `make ci`, and an agent-submitted approving review are
+none of them the human gate.
+
+Record findings as at most one consolidated comment per pull request rather
+than narrating agent actions turn by turn.
+
+**Learned from:** the 2026-09-18 triage session. Pull requests #124, #109 and
+#127 were all enqueued with `gh pr merge` and completed by the queue before a
+gate objection could be acted on; they are on `main` as the squash commits
+`1373e2c (#124)`, `d208e56 (#109)` and `f55ee40 (#127)`. The #127 recovery
+attempt also recorded the wrong lesson at first: `gh pr merge 127
+--disable-auto` returned `disablePullRequestAutoMerge`, which was read as
+"there is no dequeue". That inference was false — `dequeuePullRequest` exists
+in the GraphQL schema — and the real reason the call failed is that the merge
+had already completed. Reaching for the wrong tool and then generalising from
+its error message is the mistake worth remembering here.

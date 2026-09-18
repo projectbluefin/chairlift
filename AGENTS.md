@@ -12,7 +12,14 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
 
 - `make build` — builds `build/chairlift`, `build/chairlift-updex-helper`, and
   `build/chairlift-ublue-helper` (all `CGO_ENABLED=0`).
-- `make test` — `go test ./...`.
+- `make test` — `go test ./...`. Every target in the Makefile is a command
+  that produces no file of its own name, so every one must be declared
+  `.PHONY`. This is not a style nit: the repository has a `test/` directory,
+  and while the `test` target was undeclared make considered it already
+  satisfied — `make test` printed `'test' is up to date` and ran nothing,
+  exiting 0. `internal/installcheck`'s
+  `TestMakefilePhonyCoversEveryTarget` now holds the full target inventory in
+  both directions, so adding a target without declaring it fails CI.
 - `make fmt` — `gofmt -s -w .`.
 - `make lint` — `golangci-lint run`.
 - `make ci` — runs every **host-independent** CI gate, in CI's order (go.mod
@@ -46,14 +53,28 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
 
 CI (`.github/workflows/test.yml`) filters tests with `-run "^Test[^I]"
 -skip "Integration"`. That filter excludes *any* test whose name begins `TestI`
-— not only `TestIntegration` — or contains `Integration` anywhere. Those names
-are reserved for tests that require a real environment (a live `brew`,
-`flatpak`, `bootc`, or GTK display). Ordinary unit tests must not use the
-`TestI` prefix: a test that trips the filter is never executed by `make ci` or
-by CI and therefore protects nothing. The accident is easy to make, because
-plain unit-test names such as `TestIsValid`, `TestInitConfig`, or `TestIndexOf`
-all start with `TestI` and would be silently skipped; name them so the first
-letter after `Test` is not `I` (see the GTK-headless skill below).
+— not only `TestIntegration` — or contains `Integration` anywhere. Those two
+name shapes are reserved for tests that require a real environment (a live
+`brew`, `flatpak`, `bootc`, or GTK display), and such tests live under
+`test/e2e/`, which `make e2e` runs unfiltered. That placement is the whole
+reservation: no enforced gate runs `./internal/...` unfiltered, so a reserved
+name under `internal/` is executed by no gate at all — the unit-test step
+skips it and the E2E step never looks at that directory. The local `make
+test` convenience target does run `go test ./...` unfiltered and will
+execute such a test on a developer's machine, which is precisely how the
+shape survives review: it passes locally and is never selected in CI.
+
+Inside `internal/`, therefore, a reserved name is always an accident, and
+`internal/installcheck`'s `TestNoInternalTestNameIsExcludedByTheCIFilter`
+rejects it. The accident is easy to make, because plain unit-test names such
+as `TestIsValid`, `TestInitConfig`, or `TestIndexOf` all start with `TestI`;
+name them so the first letter after `Test` is the subject (see the
+GTK-headless and gated-test-placement skills below). When that gate was added
+it found nine such tests across `internal/distrobox`, `internal/gaming`,
+`internal/sysupdate`, `internal/version`, and `internal/installcheck` — among
+them the goreleaser test this file and ADR-0006 both cite as enforcing the
+system-integration package split; its name matched `-skip "Integration"`, so the
+filtered unit-test step never selected it.
 
 The separately invoked tests under `test/e2e/` are outside the
 `./internal/...` unit-test scope by design. They are enforced by the E2E
@@ -293,6 +314,21 @@ An agent must not break these:
   container at another image grants nothing running podman directly would
   not. Do not give it a pkexec route, and do not reintroduce a vendor/stack
   matrix in the UI.
+  The four images in `internal/aistack`'s `stacks` map are pinned by digest,
+  and the digest must be the multi-arch **manifest index**, never one of its
+  per-architecture children. `.github/workflows/test.yml` ships a
+  `[amd64, arm64]` matrix, so a child-manifest pin silently removes the AI
+  stack from arm64 hosts. A request without the index `Accept` headers is how
+  the wrong digests were obtained: on 2026-09-18 a bare
+  `curl -sI quay.io/v2/ramalama/<image>/manifests/latest` against all four
+  images content-negotiated down to the amd64 child manifest rather than the
+  index. That is why the roll procedure recorded beside the map sends the
+  index `Accept` headers and confirms the response's `mediaType` is an index
+  before the value is used. `TestEveryStackIsPinnedByAnImmutableDigest`
+  holds the shape of the pin — `@sha256:` present, `:latest` absent — but it
+  cannot check architecture coverage or freshness, so both belong to whoever
+  rolls the digests. See
+  [`docs/skills/multi-arch-digest-pinning/SKILL.md`](docs/skills/multi-arch-digest-pinning/SKILL.md).
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are
@@ -375,6 +411,8 @@ its policy into this file. For local navigation, start at
 | Human decision gates | [`docs/skills/human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md) |
 | Issue lifecycle and labels | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
 | Skill improvement | [`docs/skills/skill-improvement.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md) |
+| Commit attribution | [`docs/contributing/style-guide.md`](https://github.com/projectbluefin/common/blob/main/docs/contributing/style-guide.md) and Common's `AGENTS.md` PR rules |
+| Merge queue mechanics (local) | [`docs/skills/factory-onboarding/SKILL.md`](docs/skills/factory-onboarding/SKILL.md) |
 
 Every completed factory task has two outputs: the requested repository change
 and a knowledge decision. Preserve a durable lesson in the closest canonical
@@ -383,6 +421,18 @@ Banned stale-artifact patterns: no committed session notes, no append-only
 changelog/status files, and no "append here" instructions. ChairLift's normal
 PR and review rules remain in force; Common's `common`-only direct-push
 exception does not apply here.
+
+Two of those imports are load-bearing often enough to name here, without
+restating the policy behind them. First, an AI-authored commit carries **both**
+attribution trailers — `Assisted-by: <Model> via GitHub Copilot` and
+`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` — which
+is what `.github/pull_request_template.md` already asks a submitter to confirm;
+a single `Assisted-by:` naming some other runtime does not satisfy it. Second,
+this repository merges through a merge queue, so `gh pr merge` enqueues rather
+than merges and the gate question has to be settled before that call; the local
+mechanics, including the GraphQL `dequeuePullRequest` escape hatch and its
+narrow window, are in
+[`docs/skills/factory-onboarding/SKILL.md`](docs/skills/factory-onboarding/SKILL.md).
 
 ## Org-wide decisions
 

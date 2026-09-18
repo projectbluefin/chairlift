@@ -24,7 +24,7 @@ func withFakeDistrobox(t *testing.T, script string) string {
 	return dir
 }
 
-func TestIsInstalledReflectsPATH(t *testing.T) {
+func TestDistroboxInstalledReflectsPATH(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if IsInstalled() {
 		t.Error("IsInstalled() = true with an empty PATH")

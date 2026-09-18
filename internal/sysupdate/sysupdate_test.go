@@ -99,7 +99,7 @@ func TestNotFoundErrorMessage(t *testing.T) {
 	}
 }
 
-func TestIsNativeABFollowsMarkerFile(t *testing.T) {
+func TestNativeABGateFollowsMarkerFile(t *testing.T) {
 	_, statErr := os.Stat(MarkerPath)
 	want := statErr == nil
 
@@ -116,7 +116,7 @@ func TestMarkerPathIsSnosiContract(t *testing.T) {
 	}
 }
 
-func TestIsNativeABCachedMatchesAndIsStable(t *testing.T) {
+func TestNativeABCachedMatchesAndIsStable(t *testing.T) {
 	first := IsNativeABCached()
 
 	if first != IsNativeAB() {
@@ -129,7 +129,7 @@ func TestIsNativeABCachedMatchesAndIsStable(t *testing.T) {
 	}
 }
 
-func TestIsNativeABCachedIsRaceFree(t *testing.T) {
+func TestNativeABCachedIsRaceFree(t *testing.T) {
 	done := make(chan bool, 8)
 	for i := 0; i < 8; i++ {
 		go func() { done <- IsNativeABCached() }()

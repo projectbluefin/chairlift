@@ -37,6 +37,10 @@ documents remain authoritative for cross-repository policy.
   when later work changes an earlier contract.
 - [error-classification](error-classification/SKILL.md) — fix error-kind
   boundaries with an explicit decision table.
+- [exemption-justification](exemption-justification/SKILL.md) — require an
+  exemption's stated reason to be verifiable.
+- [fixture-path-fidelity](fixture-path-fidelity/SKILL.md) — justify fixture
+  paths against the external tool's own layout.
 - [frozen-allowlists](frozen-allowlists/SKILL.md) — keep allowlist
   authorization scoped to the named entry.
 - [gated-test-placement](gated-test-placement/SKILL.md) — place tests where
@@ -53,14 +57,20 @@ documents remain authoritative for cross-repository policy.
   package enumerations with the package they describe.
 - [merge-validation](merge-validation/SKILL.md) — validate discarded or
   overridden merge branches.
+- [multi-arch-digest-pinning](multi-arch-digest-pinning/SKILL.md) — pin the
+  manifest index, not a per-architecture child.
 - [package-namespace](package-namespace/SKILL.md) — avoid package-level
   identifier collisions with tests.
+- [phony-target-shadowing](phony-target-shadowing/SKILL.md) — declare every
+  command target `.PHONY` before a directory shadows it.
 - [pipeline-tracing](pipeline-tracing/SKILL.md) — trace a concrete input
   through layered validation order.
 - [removal-verification](removal-verification/SKILL.md) — verify a removed
   identifier with a scoped repository search.
 - [scope-control](scope-control/SKILL.md) — respect rename-only and
   no-production-code boundaries.
+- [self-referential-assertions](self-referential-assertions/SKILL.md) — never
+  compute an expectation from the code or host under test.
 - [yaml-key-identity](yaml-key-identity/SKILL.md) — include YAML scalar tags
   when comparing keys.
 
