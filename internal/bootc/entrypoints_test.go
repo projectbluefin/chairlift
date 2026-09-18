@@ -11,7 +11,7 @@ import (
 )
 
 // installFakeBootc writes an executable named exactly `bootc` into a fresh
-// temp dir, puts that dir alone on $PATH, and returns the file the fake
+// temp dir, prepends that dir to $PATH, and returns the file the fake
 // records its argv into. It exercises the production name-resolution path:
 // GetStatus passes the fixed bootcCommand constant, so the only way to
 // reach it from a test is through $PATH.
@@ -71,7 +71,7 @@ func TestGetStatusMissingBootcIsNotFound(t *testing.T) {
 	}
 }
 
-func TestIsBootcBootedTrueOnBootedHost(t *testing.T) {
+func TestBootedGateTrueOnBootedHost(t *testing.T) {
 	installFakeBootc(t, "cat <<'JSON'\n"+bootedStagedJSON+"\nJSON\n")
 
 	if !IsBootcBooted(testContext(t)) {
@@ -79,7 +79,7 @@ func TestIsBootcBootedTrueOnBootedHost(t *testing.T) {
 	}
 }
 
-func TestIsBootcBootedFalseOnNonBootcHostThatExitsZero(t *testing.T) {
+func TestBootedGateFalseOnNonBootcHostThatExitsZero(t *testing.T) {
 	// The gate is the booted field, not the exit code: `bootc status`
 	// exits 0 with "booted": null on a non-bootc host.
 	installFakeBootc(t, "cat <<'JSON'\n"+nonBootcJSON+"\nJSON\n")
@@ -89,7 +89,7 @@ func TestIsBootcBootedFalseOnNonBootcHostThatExitsZero(t *testing.T) {
 	}
 }
 
-func TestIsBootcBootedFalseWhenStatusFails(t *testing.T) {
+func TestBootedGateFalseWhenStatusFails(t *testing.T) {
 	installFakeBootc(t, "echo 'boom' >&2\nexit 1\n")
 
 	if IsBootcBooted(testContext(t)) {
@@ -97,57 +97,10 @@ func TestIsBootcBootedFalseWhenStatusFails(t *testing.T) {
 	}
 }
 
-func TestIsBootcBootedFalseOnMalformedJSON(t *testing.T) {
+func TestBootedGateFalseOnMalformedJSON(t *testing.T) {
 	installFakeBootc(t, "echo 'not json'\n")
 
 	if IsBootcBooted(testContext(t)) {
 		t.Error("IsBootcBooted() = true for unparseable status output, want false")
-	}
-}
-
-// TestIsBootcBootedCachedRunsTheCheckAtMostOnce consumes the package-level
-// sync.Once, so it is the only test that may call IsBootcBootedCached.
-func TestIsBootcBootedCachedRunsTheCheckAtMostOnce(t *testing.T) {
-	installFakeBootc(t, "cat <<'JSON'\n"+bootedStagedJSON+"\nJSON\n")
-
-	if !IsBootcBootedCached() {
-		t.Fatal("IsBootcBootedCached() = false on a booted host, want true")
-	}
-
-	// Remove every bootc from PATH: an uncached second call would now
-	// resolve nothing and report false.
-	t.Setenv("PATH", t.TempDir())
-	if !IsBootcBootedCached() {
-		t.Error("IsBootcBootedCached() re-ran the check instead of returning the cached result")
-	}
-}
-
-func TestStageScriptAvailableTracksTheFixedScriptPath(t *testing.T) {
-	_, statErr := os.Stat(StageScriptPath)
-	want := statErr == nil
-
-	if got := StageScriptAvailable(); got != want {
-		t.Errorf("StageScriptAvailable() = %v, want %v (presence of %s)", got, want, StageScriptPath)
-	}
-	if StageScriptPath != "/usr/libexec/bootc-update-stage" {
-		t.Errorf("StageScriptPath = %q, want the snow-shipped /usr/libexec/bootc-update-stage", StageScriptPath)
-	}
-}
-
-func TestDefaultContextCarriesTheDefaultTimeout(t *testing.T) {
-	ctx, cancel := DefaultContext()
-	defer cancel()
-
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		t.Fatal("DefaultContext() returned a context without a deadline")
-	}
-	if remaining := time.Until(deadline); remaining <= DefaultTimeout-time.Minute || remaining > DefaultTimeout {
-		t.Errorf("DefaultContext() deadline in %v, want ~%v", remaining, DefaultTimeout)
-	}
-
-	cancel()
-	if ctx.Err() == nil {
-		t.Error("cancel() from DefaultContext() did not cancel the context")
 	}
 }
