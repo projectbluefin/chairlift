@@ -84,8 +84,8 @@ func TestPkexecCommandHasOneOwner(t *testing.T) {
 					return true
 				}
 
-				switch {
-				case relative == pkexecOwner:
+				switch relative {
+				case pkexecOwner:
 					seenOwner = true
 				default:
 					if _, exempt := pkexecLiteralExemptions[relative]; exempt {
