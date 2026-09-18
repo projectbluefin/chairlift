@@ -10,6 +10,8 @@ import (
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 )
 
 // Row is the text displayed by a view row.
@@ -207,7 +209,7 @@ func HelpResources(website, issues, chat string) []HelpResource {
 // MaintenanceCommand returns the invocation for a configured maintenance action.
 func MaintenanceCommand(script string, sudo bool) Command {
 	if sudo {
-		return Command{Name: "pkexec", Args: []string{script}}
+		return Command{Name: pkexec.Command, Args: []string{script}}
 	}
 	return Command{Name: script}
 }
