@@ -1000,3 +1000,16 @@ test shells out or renders anything. As with the license guard,
 somewhere to put those values, exactly as `MetadataConfig.License` does;
 without the struct fields yaml.v3 drops them and both tests would pass
 vacuously regardless of what the YAML says.
+
+Two further gates in `navigationschema_test.go` close the page/group contract's
+last unenforced edge. `internal/config` owns the page/group grammar — it derives
+it by reflection from `Config`'s yaml tags and `defaultConfig()` and publishes it
+as `config.SchemaPages()` / `config.SchemaGroups(page)` — while
+`internal/navigation` restates the same grammar as the `ConfigPage` and `Groups`
+fields of its sidebar inventory. **`TestNavigationPagesMatchConfigSchema`** holds
+`navigation.Items()[].ConfigPage` and `config.SchemaPages()` to a bijection,
+rejecting an empty or duplicated `ConfigPage` claim; **`TestNavigationGroupsMatchConfigSchema`**
+holds each item's `Groups` to `config.SchemaGroups(item.ConfigPage)` as per-page
+set equality. Both compare sets, not order: `config.SchemaGroups` sorts its
+result, while navigation's slices carry sidebar presentation order, which is
+navigation's own concern.

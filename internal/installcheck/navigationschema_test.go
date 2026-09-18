@@ -25,9 +25,13 @@ import (
 //   - a group added to config but not to navigation is configurable and
 //     documented but can never make its page appear in the sidebar, because
 //     navigation.VisibleItems only consults the groups it knows about;
-//   - a group named by navigation but absent from config is unreachable, as
-//     config.IsGroupEnabled cannot resolve a group the schema never declares,
-//     so the guard around it is dead.
+//   - a group named by navigation but absent from config is silently
+//     un-disableable: config.IsGroupEnabled returns true for any group a
+//     known page's map does not declare, so the guard around it is always
+//     taken, and an administrator who names that group in config.yml to
+//     turn it off instead trips the schema validator, which rejects a group
+//     name unknown to config.SchemaGroups and fails closed — disabling
+//     every configurable group until the file is fixed.
 //
 // These tests close that edge. They assert set equality, not order:
 // config.SchemaGroups sorts its result, while navigation's slices are in
