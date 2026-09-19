@@ -4,9 +4,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -92,39 +94,46 @@ func gatedHelpers() []helperUnderGate {
 func stringConstants(t *testing.T, dir string) map[string]string {
 	t.Helper()
 
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		t.Fatalf("parsing %s: %v", dir, err)
+		t.Fatalf("reading %s: %v", dir, err)
 	}
 
+	fset := token.NewFileSet()
 	values := make(map[string]string)
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				genDecl, ok := decl.(*ast.GenDecl)
-				if !ok || genDecl.Tok != token.CONST {
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+
+		file, err := parser.ParseFile(fset, filepath.Join(dir, entry.Name()), nil, 0)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", entry.Name(), err)
+		}
+
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range genDecl.Specs {
+				valueSpec, ok := spec.(*ast.ValueSpec)
+				if !ok {
 					continue
 				}
-				for _, spec := range genDecl.Specs {
-					valueSpec, ok := spec.(*ast.ValueSpec)
-					if !ok {
+				for i, name := range valueSpec.Names {
+					if i >= len(valueSpec.Values) {
 						continue
 					}
-					for i, name := range valueSpec.Names {
-						if i >= len(valueSpec.Values) {
-							continue
-						}
-						literal, ok := valueSpec.Values[i].(*ast.BasicLit)
-						if !ok || literal.Kind != token.STRING {
-							continue
-						}
-						unquoted, err := strconv.Unquote(literal.Value)
-						if err != nil {
-							continue
-						}
-						values[name.Name] = unquoted
+					literal, ok := valueSpec.Values[i].(*ast.BasicLit)
+					if !ok || literal.Kind != token.STRING {
+						continue
 					}
+					unquoted, err := strconv.Unquote(literal.Value)
+					if err != nil {
+						continue
+					}
+					values[name.Name] = unquoted
 				}
 			}
 		}
