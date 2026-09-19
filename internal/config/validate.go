@@ -358,7 +358,7 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 		if !isTrustedConfigPath(path) {
 			return validatorSudoProvenanceError(path, sudoNode)
 		}
-		if scriptNode != nil && !filepath.IsAbs(scriptVal) {
+		if scriptNode == nil || !filepath.IsAbs(scriptVal) {
 			return validatorSudoScriptAbsError(path, scriptNode, scriptVal)
 		}
 	}

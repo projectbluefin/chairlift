@@ -21,11 +21,18 @@ var trustedConfigDirectories = []string{
 }
 
 // isTrustedConfigPath reports whether path resides in an administrator- or package-owned
-// location permitted to define sudo actions.
+// location permitted to define sudo actions. Symlinks are resolved to prevent
+// untrusted paths from escaping through trusted symlinks.
 func isTrustedConfigPath(path string) bool {
 	clean := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = resolved
+	}
 	for _, dir := range trustedConfigDirectories {
 		cleanDir := filepath.Clean(dir)
+		if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
+			cleanDir = resolvedDir
+		}
 		if clean == cleanDir || filepath.Dir(clean) == cleanDir {
 			return true
 		}
