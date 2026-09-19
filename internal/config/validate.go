@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -366,8 +367,45 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 	return nil
 }
 
-// actionFieldTypes reflects over ActionConfig's exported fields, returning
-// a freshly allocated map from each field's yaml tag name to its declared
+// validateEffectiveSudoProvenance re-applies the sudo provenance rule to the
+// merged configuration, after defaults have been overlaid. The node-level
+// gate in validateActionFieldEntries only sees what the file spells out, so a
+// file that omits "actions" while enabling a group would otherwise inherit
+// defaultConfig()'s privileged action (mergeGroup keeps the default Actions
+// slice) and surface it without ever declaring sudo: true. Untrusted
+// provenance therefore fails closed whenever an enabled group carries a sudo
+// action, however that action got there. Disabled groups are left alone: the
+// built-in privileged default ships disabled, so every untrusted config that
+// does not opt into it keeps loading.
+func validateEffectiveSudoProvenance(path string, cfg *Config) *LoadError {
+	if isTrustedConfigPath(path) {
+		return nil
+	}
+
+	for _, page := range configPages(cfg) {
+		names := make([]string, 0, len(page))
+		for name := range page {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			group := page[name]
+			if !group.Enabled {
+				continue
+			}
+			for _, action := range group.Actions {
+				if action.Sudo {
+					return validatorEffectiveSudoProvenanceError(path, name, action.Title)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// actionFieldTypes reflects over ActionConfig's exported fields, returning// a freshly allocated map from each field's yaml tag name to its declared
 // Go type — the type-carrying counterpart to SchemaActionFields (schema.go),
 // matching groupFieldTypes one schema level down.
 func actionFieldTypes() (map[string]reflect.Type, error) {
@@ -658,5 +696,18 @@ func validatorSudoScriptAbsError(path string, node *yaml.Node, script string) *L
 		Path:   path,
 		Kind:   KindSchema,
 		Detail: fmt.Sprintf("sudo action script %q must be an absolute path (line %d)", script, effectiveNodeLine(node)),
+	}
+}
+
+// validatorEffectiveSudoProvenanceError builds a KindSchema *LoadError
+// reporting that an untrusted configuration enabled a group whose effective
+// actions include a privileged one. The offending action has no source line
+// because it can come from the built-in defaults rather than the file, so the
+// detail names the group and action title instead.
+func validatorEffectiveSudoProvenanceError(path, group, title string) *LoadError {
+	return &LoadError{
+		Path:   path,
+		Kind:   KindSchema,
+		Detail: fmt.Sprintf("group %q enables sudo action %q; sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift)", group, title),
 	}
 }

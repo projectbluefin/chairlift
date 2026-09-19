@@ -98,7 +98,7 @@ valid page.
   - `actions`: Array of maintenance scripts that can be executed
     - `title`: Display name for the action
     - `script`: Absolute path to the script to execute. Required when `sudo: true`.
-    - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec). `sudo: true` is accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations.
+    - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec). `sudo: true` is accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The rule is applied to the effective configuration, so an untrusted file may not enable a group whose actions include a privileged one, even when it inherits that action from the built-in defaults rather than declaring `sudo: true` itself.
 - `maintenance_brew_group`: Homebrew cleanup (runs `brew cleanup` to remove old versions and cache)
 - `maintenance_flatpak_group`: Flatpak cleanup (runs `flatpak uninstall --unused` to remove unused runtimes)
 - `maintenance_optimization_group`: System optimization tools

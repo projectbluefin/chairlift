@@ -1294,9 +1294,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		origTrusted := trustedConfigDirectories
-		trustedConfigDirectories = []string{trustedFake}
-		t.Cleanup(func() { trustedConfigDirectories = origTrusted })
+		withTrustedConfigDirectories(t, []string{trustedFake})
 
 		raw, err := parseAndValidate(linkPath, []byte(data))
 		if raw != nil {

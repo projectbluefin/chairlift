@@ -145,7 +145,25 @@ func loadResolvedPath(path string) (*Config, *LoadError) {
 		return nil, loadErr
 	}
 
-	return mergeConfig(defaultConfig(), raw), nil
+	merged := mergeConfig(defaultConfig(), raw)
+	if loadErr := validateEffectiveSudoProvenance(path, merged); loadErr != nil {
+		return nil, loadErr
+	}
+
+	return merged, nil
+}
+
+// configPages returns cfg's pages in a fixed order so any whole-config walk
+// visits the same pages the rest of the package knows about.
+func configPages(cfg *Config) []PageConfig {
+	return []PageConfig{
+		cfg.SystemPage,
+		cfg.UpdatesPage,
+		cfg.ApplicationsPage,
+		cfg.MaintenancePage,
+		cfg.FeaturesPage,
+		cfg.HelpPage,
+	}
 }
 
 // danglingAuthoritativeSymlink reports whether path is a symlink whose target
@@ -169,14 +187,7 @@ func danglingAuthoritativeSymlink(path string) bool {
 // returned for an authoritative read, parse/type, or schema failure.
 func disabledConfig() *Config {
 	cfg := defaultConfig()
-	pages := []PageConfig{
-		cfg.SystemPage,
-		cfg.UpdatesPage,
-		cfg.ApplicationsPage,
-		cfg.MaintenancePage,
-		cfg.FeaturesPage,
-		cfg.HelpPage,
-	}
+	pages := configPages(cfg)
 	for _, page := range pages {
 		for name, group := range page {
 			group.Enabled = false

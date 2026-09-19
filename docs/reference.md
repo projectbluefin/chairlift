@@ -127,7 +127,7 @@ Each action has:
 |-------|-------------|
 | `title` | Display name |
 | `script` | Absolute path to the script. Required when `sudo` is `true`. |
-| `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. |
+| `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The check covers the effective configuration: an untrusted file may not enable a group whose actions include a privileged one, including a privileged action inherited from the built-in defaults. |
 
 ### Features Page (`features_page`)
 

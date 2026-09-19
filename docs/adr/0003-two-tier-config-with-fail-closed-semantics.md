@@ -1,7 +1,11 @@
-# 0003 — Load configuration from two ownership tiers and fail closed
+# 0003 — Load configuration from ownership tiers and fail closed
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
+- **Amended:** 2026-09-19 — the search order grew a third development
+  fallback (`config.dev.yml`), so the record is no longer literally
+  two-tier; the filename is kept as-is so existing links stay valid. The
+  same amendment records the sudo provenance rule below.
 
 ## Context
 
@@ -43,6 +47,17 @@ unparseable, or schema-invalid — `Load` returns `disabledConfig()`
 groups but forces every feature group off, together with the diagnostic
 described in [ADR-0004](0004-configuration-error-diagnostic-vocabulary.md).
 Built-in defaults apply only when every candidate is absent.
+
+The tiers also define trust: `sudo: true` maintenance actions are accepted
+only from the two ownership tiers (`/etc/chairlift`, `/usr/share/chairlift`,
+`isTrustedConfigPath` in `internal/config/paths.go`), never from the
+development fallbacks or any other user-writable location. The rule is
+enforced twice — on the parsed file, which rejects an explicit `sudo: true`
+node from an untrusted path, and on the merged effective configuration
+(`validateEffectiveSudoProvenance`, `internal/config/validate.go`), which
+rejects an untrusted file that enables a group whose effective actions
+include a privileged one inherited from the built-in defaults. Both
+rejections fail closed exactly like any other schema failure above.
 
 Packaging honors the tiers: `make install` and both nFPM packages install
 only the `/usr/share` copy and are test-forbidden from touching
