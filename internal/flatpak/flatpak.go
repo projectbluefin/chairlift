@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	// readTimeout bounds read-only flatpak commands (listing, info, remotes).
+	// readTimeout bounds read-only flatpak commands.
 	readTimeout = 30 * time.Second
 	// mutationTimeout bounds state-changing flatpak commands, which may
 	// download large application images and therefore need a far larger budget.
@@ -56,15 +56,12 @@ func (e *NotFoundError) Error() string {
 	return e.Message
 }
 
-// Application represents an installed Flatpak application
+// Application represents an installed Flatpak application.
 type Application struct {
 	Name          string `json:"name"`
 	ApplicationID string `json:"application"`
 	Version       string `json:"version"`
-	Branch        string `json:"branch"`
-	Origin        string `json:"origin"`
 	Installation  string `json:"installation"` // "user" or "system"
-	Ref           string `json:"ref"`
 }
 
 // stateChangingCommands are commands that modify system state
@@ -190,7 +187,7 @@ func ListSystemApplications() ([]Application, error) {
 // listApplications lists installed applications for a given installation type
 func listApplications(installFlag string) ([]Application, error) {
 	// Use columns format for structured output
-	output, err := runFlatpakCommand("list", installFlag, "--app", "--columns=name,application,version,branch,origin,ref")
+	output, err := runFlatpakCommand("list", installFlag, "--app", "--columns=name,application,version")
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +213,7 @@ func parseApplicationList(output string, installFlag string) ([]Application, err
 
 		// Split by tab (flatpak uses tabs as column separators)
 		fields := strings.Split(line, "\t")
-		if len(fields) < 6 {
+		if len(fields) < 3 {
 			// Try splitting by multiple spaces for systems that might use spaces
 			fields = strings.Fields(line)
 			if len(fields) < 2 {
@@ -236,15 +233,6 @@ func parseApplicationList(output string, installFlag string) ([]Application, err
 		}
 		if len(fields) >= 3 {
 			app.Version = strings.TrimSpace(fields[2])
-		}
-		if len(fields) >= 4 {
-			app.Branch = strings.TrimSpace(fields[3])
-		}
-		if len(fields) >= 5 {
-			app.Origin = strings.TrimSpace(fields[4])
-		}
-		if len(fields) >= 6 {
-			app.Ref = strings.TrimSpace(fields[5])
 		}
 
 		apps = append(apps, app)
@@ -297,13 +285,11 @@ func Update(appID string, user bool) error {
 	return err
 }
 
-// UpdateInfo represents an available Flatpak update
+// UpdateInfo represents an available Flatpak update.
 type UpdateInfo struct {
 	Name          string `json:"name"`
 	ApplicationID string `json:"application"`
 	NewVersion    string `json:"new_version"`
-	Branch        string `json:"branch"`
-	Origin        string `json:"origin"`
 	Installation  string `json:"installation"` // "user" or "system"
 }
 
@@ -311,7 +297,7 @@ type UpdateInfo struct {
 // updates. "--app" restricts the query to applications so runtimes never
 // appear as updates.
 func updateListArgs(user bool) []string {
-	args := []string{"remote-ls", "--updates", "--app", "--columns=name,application,version,branch,origin"}
+	args := []string{"remote-ls", "--updates", "--app", "--columns=name,application,version"}
 	if user {
 		args = append(args, "--user")
 	} else {
@@ -348,7 +334,7 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 
 		// Split by tab (flatpak uses tabs as column separators)
 		fields := strings.Split(line, "\t")
-		if len(fields) < 5 {
+		if len(fields) < 3 {
 			// Try splitting by multiple spaces for systems that might use spaces
 			fields = strings.Fields(line)
 			if len(fields) < 2 {
@@ -369,106 +355,11 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 		if len(fields) >= 3 {
 			update.NewVersion = strings.TrimSpace(fields[2])
 		}
-		if len(fields) >= 4 {
-			update.Branch = strings.TrimSpace(fields[3])
-		}
-		if len(fields) >= 5 {
-			update.Origin = strings.TrimSpace(fields[4])
-		}
 
 		updates = append(updates, update)
 	}
 
 	return updates, nil
-}
-
-// GetRemotes returns the list of configured remotes
-func GetRemotes(user bool) ([]string, error) {
-	args := []string{"remotes", "--columns=name"}
-	if user {
-		args = append(args, "--user")
-	} else {
-		args = append(args, "--system")
-	}
-
-	output, err := runFlatpakCommand(args...)
-	if err != nil {
-		return nil, err
-	}
-
-	var remotes []string
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			remotes = append(remotes, line)
-		}
-	}
-
-	return remotes, nil
-}
-
-// ApplicationInfo represents detailed info about a Flatpak application
-type ApplicationInfo struct {
-	Application
-	Description string            `json:"description"`
-	Runtime     string            `json:"runtime"`
-	Permissions map[string]string `json:"permissions"`
-}
-
-// Info gets detailed information about a Flatpak application
-func Info(appID string, user bool) (*ApplicationInfo, error) {
-	args := []string{"info", "--show-metadata"}
-	if user {
-		args = append(args, "--user")
-	} else {
-		args = append(args, "--system")
-	}
-	args = append(args, appID)
-
-	output, err := runFlatpakCommand(args...)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse the metadata output
-	info := &ApplicationInfo{
-		Application: Application{
-			ApplicationID: appID,
-			Installation:  "system",
-		},
-		Permissions: make(map[string]string),
-	}
-
-	if user {
-		info.Installation = "user"
-	}
-
-	// Parse key=value pairs from the output
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "=") {
-			parts := strings.SplitN(line, "=", 2)
-			if len(parts) == 2 {
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				switch key {
-				case "name":
-					info.Name = value
-				case "version":
-					info.Version = value
-				case "branch":
-					info.Branch = value
-				case "origin":
-					info.Origin = value
-				case "runtime":
-					info.Runtime = value
-				}
-			}
-		}
-	}
-
-	return info, nil
 }
 
 // UninstallUnused removes unused Flatpak runtimes and extensions in both the

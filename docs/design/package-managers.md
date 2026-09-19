@@ -389,23 +389,20 @@ Wraps the `flatpak` CLI. Parses tabular (tab-delimited, falling back to whitespa
 
 ### Key types
 
-- **`Application`** — name, applicationID, version, branch, origin, installation (user/system), ref
-- **`UpdateInfo`** — name, applicationID, newVersion, branch, origin, installation
-- **`ApplicationInfo`** — embeds `Application`, adds description, runtime, permissions map
+- **`Application`** — name, applicationID, version, installation (user/system)
+- **`UpdateInfo`** — name, applicationID, newVersion, installation
 
 ### Operations
 
 | Function | CLI command | Timeout | Notes |
 |----------|------------|---------|-------|
-| `ListUserApplications()` | `flatpak list --user --app --columns=name,application,version,branch,origin,ref` | 30s | Tabular parsed |
-| `ListSystemApplications()` | `flatpak list --system --app --columns=name,application,version,branch,origin,ref` | 30s | Tabular parsed |
-| `ListUpdates(user)` | `flatpak remote-ls --updates --app --columns=name,application,version,branch,origin [--user\|--system]` | 30s | Separate calls for user/system; `--app` excludes runtimes |
+| `ListUserApplications()` | `flatpak list --user --app --columns=name,application,version` | 30s | Tabular parsed |
+| `ListSystemApplications()` | `flatpak list --system --app --columns=name,application,version` | 30s | Tabular parsed |
+| `ListUpdates(user)` | `flatpak remote-ls --updates --app --columns=name,application,version [--user\|--system]` | 30s | Separate calls for user/system; `--app` excludes runtimes |
 | `Install(appID, user)` | `flatpak install -y [--user\|--system] <appID>` | 30m | State-changing |
 | `Uninstall(appID, user)` | `flatpak uninstall -y [--user\|--system] <appID>` | 30m | State-changing |
 | `Update(appID, user)` | `flatpak update -y [--user\|--system] [<appID>]` | 30m | State-changing; empty appID updates all |
 | `UninstallUnused()` | `flatpak uninstall --unused -y` | 30m | Maintenance cleanup |
-| `Info(appID, user)` | `flatpak info --show-metadata [--user\|--system] <appID>` | 30s | Key-value parsed |
-| `GetRemotes(user)` | `flatpak remotes --columns=name [--user\|--system]` | 30s | Lists configured remotes |
 
 ### State-changing commands
 

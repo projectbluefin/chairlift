@@ -2,7 +2,6 @@ package flatpak
 
 import (
 	"errors"
-	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 func installCapturingFlatpak(t *testing.T, body string) string {
@@ -44,22 +45,20 @@ func TestParseApplicationList(t *testing.T) {
 	}{
 		{
 			name:        "tab-separated system applications",
-			output:      "Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp/org.mozilla.firefox/x86_64/stable\n",
+			output:      "Firefox\torg.mozilla.firefox\t120.0\n",
 			installFlag: "--system",
 			want: []Application{{
 				Name: "Firefox", ApplicationID: "org.mozilla.firefox", Version: "120.0",
-				Branch: "stable", Origin: "flathub", Installation: "system",
-				Ref: "app/org.mozilla.firefox/x86_64/stable",
+				Installation: "system",
 			}},
 		},
 		{
 			name:        "space-separated user application",
-			output:      "GIMP org.gimp.GIMP 2.10 stable flathub app/org.gimp.GIMP/x86_64/stable",
+			output:      "GIMP org.gimp.GIMP 2.10",
 			installFlag: "--user",
 			want: []Application{{
 				Name: "GIMP", ApplicationID: "org.gimp.GIMP", Version: "2.10",
-				Branch: "stable", Origin: "flathub", Installation: "user",
-				Ref: "app/org.gimp.GIMP/x86_64/stable",
+				Installation: "user",
 			}},
 		},
 		{
@@ -89,10 +88,8 @@ func TestCommandWrappersUseExpectedArguments(t *testing.T) {
 	t.Cleanup(func() { dryrun.Set(false) })
 
 	body := `case "$1" in
-list) printf 'Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp/org.mozilla.firefox/x86_64/stable\n' ;;
-remote-ls) printf 'Firefox\torg.mozilla.firefox\t121.0\tstable\tflathub\n' ;;
-remotes) printf 'flathub\nvendor\n' ;;
-info) printf 'name=Firefox\nversion=120.0\nbranch=stable\norigin=flathub\nruntime=org.freedesktop.Platform\n' ;;
+list) printf 'Firefox\torg.mozilla.firefox\t120.0\n' ;;
+remote-ls) printf 'Firefox\torg.mozilla.firefox\t121.0\n' ;;
 esac`
 	capture := installCapturingFlatpak(t, body)
 
@@ -110,7 +107,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--user", "--app", "--columns=name,application,version,branch,origin,ref"},
+			want: []string{"list", "--user", "--app", "--columns=name,application,version"},
 		},
 		{
 			name: "list system applications",
@@ -121,7 +118,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--system", "--app", "--columns=name,application,version,branch,origin,ref"},
+			want: []string{"list", "--system", "--app", "--columns=name,application,version"},
 		},
 		{name: "install user", run: func() error { return Install("org.example.App", true) }, want: []string{"install", "-y", "--user", "org.example.App"}},
 		{name: "install system", run: func() error { return Install("org.example.App", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},
@@ -138,30 +135,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version,branch,origin", "--user"},
-		},
-		{
-			name: "list remotes",
-			run: func() error {
-				remotes, err := GetRemotes(false)
-				if err == nil && !reflect.DeepEqual(remotes, []string{"flathub", "vendor"}) {
-					return errors.New("remote result was not parsed")
-				}
-				return err
-			},
-			want: []string{"remotes", "--columns=name", "--system"},
-		},
-		{
-			name: "application info",
-			run: func() error {
-				info, err := Info("org.mozilla.firefox", true)
-				if err == nil && (info.Name != "Firefox" || info.Installation != "user" ||
-					info.Runtime != "org.freedesktop.Platform") {
-					return errors.New("application info was not parsed")
-				}
-				return err
-			},
-			want: []string{"info", "--show-metadata", "--user", "org.mozilla.firefox"},
+			want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user"},
 		},
 		{name: "remove all user apps", run: RemoveAllUser, want: []string{"uninstall", "--user", "--all", "-y"}},
 	}
@@ -235,8 +209,6 @@ func TestQueryFailuresPropagate(t *testing.T) {
 	}{
 		{name: "applications", run: func() error { _, err := ListUserApplications(); return err }},
 		{name: "updates", run: func() error { _, err := ListUpdates(false); return err }},
-		{name: "remotes", run: func() error { _, err := GetRemotes(true); return err }},
-		{name: "info", run: func() error { _, err := Info("org.example.App", false); return err }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -306,43 +278,43 @@ func TestParseUpdateList(t *testing.T) {
 	}{
 		{
 			name:   "tab separated rows",
-			output: "Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\nGIMP\torg.gimp.GIMP\t2.10.36\tstable\tflathub\n",
+			output: "Firefox\torg.mozilla.firefox\t120.0\nGIMP\torg.gimp.GIMP\t2.10.36\n",
 			user:   false,
 			want: []UpdateInfo{
-				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Branch: "stable", Origin: "flathub", Installation: "system"},
-				{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "2.10.36", Branch: "stable", Origin: "flathub", Installation: "system"},
+				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "system"},
+				{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "2.10.36", Installation: "system"},
 			},
 		},
 		{
 			name:   "whitespace separated fallback",
-			output: "Firefox   org.mozilla.firefox   120.0   stable   flathub",
-			user:   false,
-			want: []UpdateInfo{
-				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Branch: "stable", Origin: "flathub", Installation: "system"},
-			},
-		},
-		{
-			name:   "short row is partially parsed",
-			output: "Firefox org.mozilla.firefox 120.0",
+			output: "Firefox   org.mozilla.firefox   120.0",
 			user:   false,
 			want: []UpdateInfo{
 				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "system"},
 			},
 		},
 		{
-			name:   "row with fewer than two fields is skipped",
-			output: "Firefox\nGIMP\torg.gimp.GIMP\t2.10.36\tstable\tflathub",
+			name:   "short row is partially parsed",
+			output: "Firefox org.mozilla.firefox",
 			user:   false,
 			want: []UpdateInfo{
-				{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "2.10.36", Branch: "stable", Origin: "flathub", Installation: "system"},
+				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", Installation: "system"},
+			},
+		},
+		{
+			name:   "row with fewer than two fields is skipped",
+			output: "Firefox\nGIMP\torg.gimp.GIMP\t2.10.36",
+			user:   false,
+			want: []UpdateInfo{
+				{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "2.10.36", Installation: "system"},
 			},
 		},
 		{
 			name:   "blank and whitespace-only lines are skipped",
-			output: "\n   \nFirefox\torg.mozilla.firefox\t120.0\tstable\tflathub\n\t\n",
+			output: "\n   \nFirefox\torg.mozilla.firefox\t120.0\n\t\n",
 			user:   false,
 			want: []UpdateInfo{
-				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Branch: "stable", Origin: "flathub", Installation: "system"},
+				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "system"},
 			},
 		},
 		{
@@ -353,10 +325,10 @@ func TestParseUpdateList(t *testing.T) {
 		},
 		{
 			name:   "user installation label",
-			output: "Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub",
+			output: "Firefox\torg.mozilla.firefox\t120.0",
 			user:   true,
 			want: []UpdateInfo{
-				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Branch: "stable", Origin: "flathub", Installation: "user"},
+				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "user"},
 			},
 		},
 	}
@@ -398,7 +370,6 @@ func TestCommandTimeout(t *testing.T) {
 	}{
 		{name: "read/list", args: []string{"list", "--user", "--app"}},
 		{name: "read/remote-ls", args: []string{"remote-ls", "--updates", "--app"}},
-		{name: "read/info", args: []string{"info", "--show-metadata", "org.example.App"}},
 		{name: "empty args", args: nil},
 	}
 
