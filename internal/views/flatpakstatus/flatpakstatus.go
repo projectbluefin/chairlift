@@ -50,7 +50,7 @@ func Subtitle(count int, userFailed, systemFailed bool) Result {
 	return Result{
 		Subtitle:      subtitleText(count, userFailed, systemFailed),
 		Expandable:    count > 0,
-		Authoritative: !(userFailed && systemFailed),
+		Authoritative: !userFailed || !systemFailed,
 	}
 }
 
