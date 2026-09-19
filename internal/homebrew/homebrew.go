@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/outputtail"
 )
 
 const (
@@ -29,7 +30,22 @@ const (
 	// stdout/stderr pipes, so a straggler could otherwise hold Wait open
 	// forever even though the command itself is gone.
 	waitDelay = 5 * time.Second
+	// commandOutputTailLimit bounds retained mutation output used only for
+	// diagnostics after a command fails. Successful mutation output is discarded.
+	commandOutputTailLimit = 64 * 1024
 )
+
+type commandOutputWriter interface {
+	Write([]byte) (int, error)
+	String() string
+}
+
+func commandOutputWriters(args []string) (commandOutputWriter, commandOutputWriter, bool) {
+	if len(args) > 0 && stateChangingCommands[args[0]] {
+		return outputtail.New(commandOutputTailLimit), outputtail.New(commandOutputTailLimit), true
+	}
+	return &bytes.Buffer{}, &bytes.Buffer{}, false
+}
 
 // Error represents a Homebrew-related error. Err, when non-nil, carries the
 // underlying cause (for example context.DeadlineExceeded or
@@ -131,7 +147,9 @@ func runBrewCommand(args ...string) (string, error) {
 	return runBrewCommandAt(ctx, "brew", args...)
 }
 
-// runBrewCommandAt runs exe with args under ctx and returns its stdout. The
+// runBrewCommandAt runs exe with args under ctx. Read-only commands return
+// full stdout for parsers; state-changing commands discard successful output
+// and retain only bounded stdout/stderr tails for failure diagnostics. The
 // executable and context are parameters so tests can drive a fake script and
 // control the deadline; runBrewCommand is the only production caller and
 // always passes "brew".
@@ -147,9 +165,9 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 	}
 	cmd.WaitDelay = waitDelay
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	stdout, stderr, boundedOutput := commandOutputWriters(args)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	if err != nil {
@@ -172,12 +190,17 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 				Err:     context.Canceled,
 			}
 		}
+		stderrText := stderr.String()
+		diagnosticText := stderrText
+		if boundedOutput && diagnosticText == "" {
+			diagnosticText = stdout.String()
+		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			if isUntrustedTapMessage(stderr.String()) {
-				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", stderr.String())}
+			if isUntrustedTapMessage(stderrText) {
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", stderrText)}
 			}
-			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", stderr.String()), Err: err}
+			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", diagnosticText), Err: err}
 		}
 		// exec.ErrNotFound covers a bare name missing from $PATH;
 		// fs.ErrNotExist covers an explicit path that does not exist.
@@ -187,6 +210,9 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 		return "", &Error{Message: err.Error(), Err: err}
 	}
 
+	if boundedOutput {
+		return "", nil
+	}
 	return stdout.String(), nil
 }
 

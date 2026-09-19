@@ -281,6 +281,42 @@ sleep 300`)
 	}
 }
 
+func TestRunBrewCommandAtBoundsMutationOutput(t *testing.T) {
+	t.Run("successful mutation discards stdout", func(t *testing.T) {
+		script := fakeBrew(t, "printf '%s' '"+strings.Repeat("x", commandOutputTailLimit+1)+"'")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		out, err := runBrewCommandAt(ctx, script, "update")
+		if err != nil {
+			t.Fatalf("runBrewCommandAt: %v", err)
+		}
+		if out != "" {
+			t.Fatalf("stdout = %q, want discarded mutation output", out)
+		}
+	})
+
+	t.Run("failed mutation reports stderr tail", func(t *testing.T) {
+		stderr := "prefix-marker" + strings.Repeat("x", commandOutputTailLimit) + "tail-marker"
+		script := fakeBrew(t, "printf '%s' '"+stderr+"' >&2\nexit 3")
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "update")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		if strings.Contains(err.Error(), "prefix-marker") {
+			t.Fatalf("error retained dropped prefix: %q", err.Error())
+		}
+		if !strings.Contains(err.Error(), "tail-marker") {
+			t.Fatalf("error = %q, want retained tail marker", err.Error())
+		}
+	})
+}
+
 // waitForPID polls pidFile until the fake script has recorded its background
 // helper's PID, failing rather than hanging if it never does.
 func waitForPID(t *testing.T, pidFile string) int {
