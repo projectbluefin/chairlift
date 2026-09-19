@@ -159,6 +159,12 @@ type UserHome struct {
 	// slower reload can complete last and re-add a removed row or overwrite
 	// a newer status. See chairlift#69.
 	flatpakPackagesRefresh actionstate.RefreshGate
+	// flatpakUpdatesRefresh bounds overlapping Flatpak *update* inventory
+	// reloads. Every completed update and uninstall kicks a reload, so two
+	// finishing close together race; without a generation guard the older,
+	// slower reload publishes last and re-adds a row that was already updated
+	// or overwrites a newer badge count. See chairlift#69.
+	flatpakUpdatesRefresh actionstate.RefreshGate
 }
 
 // New creates a new UserHome views manager
