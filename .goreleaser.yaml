@@ -40,7 +40,7 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.buildVersion={{ .Version }} -X main.buildCommit={{ .Commit }} -X main.buildDate={{ .CommitDate }} -X main.buildBy=goreleaser
+      - -s -w -X main.buildVersion={{ .Version }}
     main: ./cmd/chairlift/main.go
 
   - id: chairlift-updex-helper

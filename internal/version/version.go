@@ -1,20 +1,5 @@
-// Package version provides build version information
+// Package version provides the displayed application version.
 package version
 
-// Build information set via ldflags
-var (
-	Version = "dev"
-	Commit  = "unknown"
-	Date    = "unknown"
-	BuiltBy = "unknown"
-)
-
-// Info returns formatted version information
-func Info() string {
-	return Version
-}
-
-// Full returns detailed version information
-func Full() string {
-	return Version + " (" + Commit + ")"
-}
+// Version is the application version shown in the About dialog.
+var Version = "dev"

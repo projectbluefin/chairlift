@@ -324,7 +324,7 @@ chairlift/
 │   ├── bootc/     # bootc wrapper (status reads, pkexec stage script)
 │   ├── sysupdate/ # Native A/B wrapper (state-file reads, pkexec stage script)
 │   ├── updex/     # Updex feature manager
-│   └── version/   # Build metadata (ldflags injection)
+│   └── version/   # Displayed application version
 ├── data/          # Desktop file, icons, and PolicyKit policies
 └── Makefile       # Build configuration
 ```

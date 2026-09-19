@@ -18,7 +18,6 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/glib"
 	"codeberg.org/puregotk/puregotk/v4/gobject"
-	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 const appID = "io.projectbluefin.chairlift"
@@ -32,7 +31,6 @@ var (
 type Application struct {
 	adw.Application
 	window *window.Window
-	dryRun bool
 }
 
 func init() {
@@ -77,7 +75,6 @@ func New() *Application {
 	for _, arg := range os.Args[1:] {
 		if arg == "--dry-run" || arg == "-d" {
 			log.Println("Running in dry-run mode")
-			app.dryRun = true
 			// One process-wide flag; every integration package reads
 			// dryrun.Enabled() directly, so a new integration cannot
 			// silently fall out of dry-run mode by missing a setter here.
@@ -159,9 +156,4 @@ func (a *Application) registerOptions() {
 		"Don't make any changes to the system.",
 		"",
 	)
-}
-
-// GetGtkApplication returns the underlying GTK Application
-func (a *Application) GetGtkApplication() *gtk.Application {
-	return &a.Application.Application
 }

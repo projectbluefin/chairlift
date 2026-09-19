@@ -11,24 +11,15 @@ import (
 	"github.com/projectbluefin/chairlift/internal/version"
 )
 
-// Build information set via ldflags by goreleaser
-var (
-	buildVersion = "dev"
-	buildCommit  = "unknown"
-	buildDate    = "unknown"
-	buildBy      = "unknown"
-)
+// Application version set via ldflags by goreleaser
+var buildVersion = "dev"
 
 func main() {
 	processStart := time.Now()
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	log.Println("main: process start")
 
-	// Set version info for use by the rest of the application
 	version.Version = buildVersion
-	version.Commit = buildCommit
-	version.Date = buildDate
-	version.BuiltBy = buildBy
 
 	application := app.New()
 	defer application.Unref()
