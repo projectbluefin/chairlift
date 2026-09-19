@@ -13,6 +13,33 @@ var (
 	statPath       = os.Stat
 )
 
+// trustedConfigDirectories are the only directories from which privilege-escalating
+// actions (sudo: true) may be loaded.
+var trustedConfigDirectories = []string{
+	"/etc/chairlift",
+	"/usr/share/chairlift",
+}
+
+// isTrustedConfigPath reports whether path resides in an administrator- or package-owned
+// location permitted to define sudo actions. Symlinks are resolved to prevent
+// untrusted paths from escaping through trusted symlinks.
+func isTrustedConfigPath(path string) bool {
+	clean := filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = resolved
+	}
+	for _, dir := range trustedConfigDirectories {
+		cleanDir := filepath.Clean(dir)
+		if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
+			cleanDir = resolvedDir
+		}
+		if clean == cleanDir || filepath.Dir(clean) == cleanDir {
+			return true
+		}
+	}
+	return false
+}
+
 // resolveCandidatePath returns the exact path loadFromPath will read and a
 // diagnostic will report. Relative candidates prefer a file alongside the
 // executable, preserving ChairLift's existing development behavior, then

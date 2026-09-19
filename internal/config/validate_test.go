@@ -5,6 +5,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -1016,7 +1018,12 @@ func TestParseAndValidateEveryActionFieldAccepted(t *testing.T) {
 			t.Fatalf("no reflect.Type found for action field %q", field)
 		}
 		t.Run(field, func(t *testing.T) {
-			data := "system_page:\n  system_info_group:\n    actions:\n      - " + field + ": " + sampleYAMLValueForType(fieldType) + "\n"
+			val := sampleYAMLValueForType(fieldType)
+			extra := ""
+			if field == "sudo" {
+				extra = "        script: /usr/bin/clean\n"
+			}
+			data := "system_page:\n  system_info_group:\n    actions:\n      - " + field + ": " + val + "\n" + extra
 			raw, loadErr := parseAndValidate(path, []byte(data))
 			if loadErr != nil {
 				t.Fatalf("parseAndValidate(%q) error = %v, want nil", data, loadErr)
@@ -1198,4 +1205,118 @@ func TestParseAndValidatePathDeclaredType(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
+	t.Run("untrusted config with sudo true rejected", func(t *testing.T) {
+		const path = "/home/user/.config/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, path)
+		if !strings.Contains(err.Detail, "sudo actions are only permitted in trusted configurations") {
+			t.Fatalf("err.Detail = %q, want provenance error", err.Detail)
+		}
+	})
+
+	t.Run("untrusted config with non-sudo action accepted", func(t *testing.T) {
+		const path = "/home/user/.config/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: false\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if err != nil {
+			t.Fatalf("parseAndValidate(...) err = %v, want nil", err)
+		}
+		if raw == nil {
+			t.Fatalf("parseAndValidate(...) raw = nil, want non-nil")
+		}
+	})
+
+	t.Run("path traversal out of trusted dir rejected", func(t *testing.T) {
+		const path = "/etc/chairlift/../tmp/evil/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, path)
+		if !strings.Contains(err.Detail, "sudo actions are only permitted in trusted configurations") {
+			t.Fatalf("err.Detail = %q, want provenance error", err.Detail)
+		}
+	})
+
+	t.Run("trusted config with sudo true and relative script rejected", func(t *testing.T) {
+		const path = "/etc/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: ./clean.sh\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, path)
+		if !strings.Contains(err.Detail, "must be an absolute path") {
+			t.Fatalf("err.Detail = %q, want absolute path error", err.Detail)
+		}
+	})
+
+	t.Run("trusted config with sudo true and missing script rejected", func(t *testing.T) {
+		const path = "/etc/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, path)
+		if !strings.Contains(err.Detail, "must be an absolute path") {
+			t.Fatalf("err.Detail = %q, want absolute path error", err.Detail)
+		}
+	})
+
+	t.Run("symlink out of trusted dir rejected", func(t *testing.T) {
+		tmp := t.TempDir()
+		evilDir := filepath.Join(tmp, "evil")
+		if err := os.MkdirAll(evilDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		evilConfig := filepath.Join(evilDir, "config.yml")
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
+		if err := os.WriteFile(evilConfig, []byte(data), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		// Create a symlink in a trusted dir pointing to evilConfig
+		trustedFake := filepath.Join(tmp, "trusted")
+		if err := os.MkdirAll(trustedFake, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		linkPath := filepath.Join(trustedFake, "config.yml")
+		if err := os.Symlink(evilConfig, linkPath); err != nil {
+			t.Fatal(err)
+		}
+
+		origTrusted := trustedConfigDirectories
+		trustedConfigDirectories = []string{trustedFake}
+		t.Cleanup(func() { trustedConfigDirectories = origTrusted })
+
+		raw, err := parseAndValidate(linkPath, []byte(data))
+		if raw != nil {
+			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
+		}
+		wantSchema(t, err, linkPath)
+		if !strings.Contains(err.Detail, "sudo actions are only permitted in trusted configurations") {
+			t.Fatalf("err.Detail = %q, want provenance error", err.Detail)
+		}
+	})
+
+	t.Run("trusted config with sudo true and absolute script accepted", func(t *testing.T) {
+		const path = "/etc/chairlift/config.yml"
+		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
+		raw, err := parseAndValidate(path, []byte(data))
+		if err != nil {
+			t.Fatalf("parseAndValidate(...) err = %v, want nil", err)
+		}
+		if raw == nil {
+			t.Fatalf("parseAndValidate(...) raw = nil, want non-nil")
+		}
+	})
 }

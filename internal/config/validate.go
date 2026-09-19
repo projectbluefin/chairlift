@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 
 	"gopkg.in/yaml.v3"
@@ -316,6 +317,11 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 		return validatorActionFieldTypesError(path, err)
 	}
 
+	var hasSudo bool
+	var scriptVal string
+	var sudoNode *yaml.Node
+	var scriptNode *yaml.Node
+
 	for i := 0; i+1 < len(entryNode.Content); i += 2 {
 		key := entryNode.Content[i]
 		value := entryNode.Content[i+1]
@@ -332,6 +338,28 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 		target := reflect.New(fieldType)
 		if err := value.Decode(target.Interface()); err != nil {
 			return validatorDecodeError(path, err)
+		}
+
+		if name == "sudo" {
+			if b, ok := target.Interface().(*bool); ok && b != nil && *b {
+				hasSudo = true
+				sudoNode = value
+			}
+		}
+		if name == "script" {
+			if s, ok := target.Interface().(*string); ok && s != nil {
+				scriptVal = *s
+				scriptNode = value
+			}
+		}
+	}
+
+	if hasSudo {
+		if !isTrustedConfigPath(path) {
+			return validatorSudoProvenanceError(path, sudoNode)
+		}
+		if scriptNode == nil || !filepath.IsAbs(scriptVal) {
+			return validatorSudoScriptAbsError(path, scriptNode, scriptVal)
 		}
 	}
 
@@ -605,8 +633,30 @@ func validatorDecodeError(path string, err error) *LoadError {
 // it unset, and a reported "line 0" or negative line would be a confusing
 // diagnostic, so the lowest value ever reported here is 1.
 func effectiveNodeLine(n *yaml.Node) int {
-	if n.Line <= 0 {
+	if n == nil || n.Line <= 0 {
 		return 1
 	}
 	return n.Line
+}
+
+// validatorSudoProvenanceError builds a KindSchema *LoadError reporting that
+// an action declared sudo: true in an untrusted configuration location. Detail
+// names the allowed trusted directories and a positive source line.
+func validatorSudoProvenanceError(path string, node *yaml.Node) *LoadError {
+	return &LoadError{
+		Path:   path,
+		Kind:   KindSchema,
+		Detail: fmt.Sprintf("sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift) (line %d)", effectiveNodeLine(node)),
+	}
+}
+
+// validatorSudoScriptAbsError builds a KindSchema *LoadError reporting that
+// an action declared sudo: true with a non-absolute script path. Detail names
+// the script value and a positive source line.
+func validatorSudoScriptAbsError(path string, node *yaml.Node, script string) *LoadError {
+	return &LoadError{
+		Path:   path,
+		Kind:   KindSchema,
+		Detail: fmt.Sprintf("sudo action script %q must be an absolute path (line %d)", script, effectiveNodeLine(node)),
+	}
 }
