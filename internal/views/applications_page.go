@@ -10,6 +10,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/launcher"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
@@ -829,22 +830,17 @@ func (uh *UserHome) launchApp(appID string) {
 	cmd := exec.Command("gtk-launch", appID)
 	cmd.Env = os.Environ()
 
-	if err := cmd.Start(); err != nil {
+	if err := launcher.Start(cmd, func(err error) {
+		log.Printf("Failed to launch app %s: %v", appID, err)
+		// gtk-launch exits nonzero when the desktop app ID is missing or
+		// the launch fails; surface that async failure instead of silently
+		// dropping it. Must run on the GTK main thread.
+		sgtk.RunOnMainThread(func() {
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to launch %s", appID))
+		})
+	}); err != nil {
 		log.Printf("Failed to launch app %s: %v", appID, err)
 		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to launch %s", appID))
 		return
 	}
-
-	// Don't wait for the command to finish - it's a GUI app
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			log.Printf("Failed to launch app %s: %v", appID, err)
-			// gtk-launch exits nonzero when the desktop app ID is missing or
-			// the launch fails; surface that async failure instead of silently
-			// dropping it. Must run on the GTK main thread.
-			sgtk.RunOnMainThread(func() {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to launch %s", appID))
-			})
-		}
-	}()
 }

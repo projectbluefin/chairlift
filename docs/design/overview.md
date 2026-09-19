@@ -30,6 +30,7 @@ internal/views/                 Page builders and event handlers (one file per p
         │
         ├── internal/config/    YAML config loading, feature group enablement
         ├── internal/navigation/ Canonical pages, shortcuts, and pure navigation transitions
+        ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
@@ -42,7 +43,7 @@ internal/views/                 Page builders and event handlers (one file per p
 
 ### Dependency flow
 
-`cmd → app → window → views → {config, homebrew, flatpak, bootc, sysupdate, updex}`.
+`cmd → app → window → views → {config, launcher, homebrew, flatpak, bootc, sysupdate, updex}`.
 `app` and `window` also depend on the pure `navigation` package.
 
 External shared library: `github.com/frostyard/snowkit` (published module, pinned in go.mod) provides:

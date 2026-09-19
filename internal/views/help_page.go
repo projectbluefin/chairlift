@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/projectbluefin/chairlift/internal/launcher"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -60,21 +61,17 @@ func (uh *UserHome) openURL(url string) {
 	cmd := exec.Command("xdg-open", url)
 	cmd.Env = os.Environ()
 
-	if err := cmd.Start(); err != nil {
+	if err := launcher.Start(cmd, func(err error) {
+		log.Printf("Failed to open URL %s: %v", url, err)
+		// xdg-open exits nonzero when the session has no URL handler or the
+		// URL is malformed; surface that async failure instead of silently
+		// dropping it. Must run on the GTK main thread.
+		sgtk.RunOnMainThread(func() {
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
+		})
+	}); err != nil {
 		log.Printf("Failed to open URL %s: %v", url, err)
 		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
 		return
 	}
-
-	go func() {
-		if err := cmd.Wait(); err != nil {
-			log.Printf("Failed to open URL %s: %v", url, err)
-			// xdg-open exits nonzero when the session has no URL handler or the
-			// URL is malformed; surface that async failure instead of silently
-			// dropping it. Must run on the GTK main thread.
-			sgtk.RunOnMainThread(func() {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
-			})
-		}
-	}()
 }
