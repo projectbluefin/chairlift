@@ -195,6 +195,107 @@ func TestVariantCoversEverySupportedImage(t *testing.T) {
 	}
 }
 
+// The gaming images ship the stack as system packages, so ChairLift's
+// Flatpak-based gaming mode must not be offered on them: it would install a
+// second, shadowing copy of Steam and friends. Reported against
+// ghcr.io/projectbluefin/dakota-gaming:next and
+// ghcr.io/projectbluefin/dakota-nvidia-gaming:next.
+func TestGamingImagesAreRecognizedFromTheDescriptor(t *testing.T) {
+	tests := []struct {
+		name string
+		info Info
+		want bool
+	}{
+		{
+			name: "dakota-gaming by flavor and name",
+			info: parseOrFatal(t, `{
+			  "image-name": "dakota-gaming",
+			  "image-tag": "next",
+			  "image-ref": "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming:next",
+			  "image-vendor": "projectbluefin",
+			  "image-flavor": "gaming"
+			}`),
+			want: true,
+		},
+		{
+			// The driver suffix sits *before* the gaming suffix, so a
+			// match on "-gaming" has to be a suffix test on the whole
+			// name rather than an equality test against a known list.
+			name: "dakota-nvidia-gaming",
+			info: parseOrFatal(t, `{
+			  "image-name": "dakota-nvidia-gaming",
+			  "image-tag": "next",
+			  "image-ref": "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-nvidia-gaming:next",
+			  "image-vendor": "projectbluefin",
+			  "image-flavor": "gaming"
+			}`),
+			want: true,
+		},
+		{
+			// image-flavor alone is enough: it is the authoritative
+			// signal, and a descriptor may carry a generic image-name.
+			name: "flavor only",
+			info: Info{Name: "os", Ref: "docker://ghcr.io/projectbluefin/dakota:next", Flavor: "gaming"},
+			want: true,
+		},
+		{
+			// And the name alone is enough too, for a descriptor that
+			// omits image-flavor entirely.
+			name: "name suffix only, no flavor",
+			info: Info{Name: "dakota-gaming", Ref: "docker://ghcr.io/projectbluefin/dakota-gaming:next"},
+			want: true,
+		},
+		{
+			name: "ref suffix only, generic name and no flavor",
+			info: Info{Name: "os", Ref: "docker://ghcr.io/projectbluefin/dakota-gaming:next"},
+			want: true,
+		},
+		{
+			name: "flavor is compared case-insensitively",
+			info: Info{Name: "os", Ref: "docker://ghcr.io/projectbluefin/dakota:next", Flavor: "Gaming"},
+			want: true,
+		},
+		{
+			// The three supported non-gaming descriptors must keep the
+			// toggle, or this fix would remove the feature everywhere.
+			name: "dakota is not a gaming image",
+			info: parseOrFatal(t, dakotaDescriptor),
+			want: false,
+		},
+		{
+			name: "bluefin is not a gaming image",
+			info: parseOrFatal(t, bluefinDescriptor),
+			want: false,
+		},
+		{
+			name: "bluefin lts is not a gaming image",
+			info: parseOrFatal(t, bluefinLTSDescriptor),
+			want: false,
+		},
+		{
+			// "gaming" appearing anywhere other than the flavor or the
+			// end of the image name is not a gaming image. A substring
+			// match would strip the toggle from an unrelated image.
+			name: "gaming in the middle of the name is not a suffix",
+			info: Info{Name: "gaming-tools-demo", Ref: "docker://ghcr.io/example/gaming-tools-demo:latest"},
+			want: false,
+		},
+		{
+			name: "empty descriptor fields offer the toggle",
+			info: Info{Name: "dakota", Ref: "docker://ghcr.io/projectbluefin/dakota:latest"},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.info.IsGaming(); got != test.want {
+				t.Errorf("IsGaming() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestCleanRefStripsTransportAndTag(t *testing.T) {
 	tests := []struct {
 		name string

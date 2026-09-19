@@ -86,6 +86,11 @@ type Status struct {
 	// closed and disable the rebase controls when it is set; see
 	// imageinfo.SystemTableError.
 	ChannelTableError string
+	// Gaming reports that the running image already ships the gaming stack
+	// as system packages. The views must not offer gaming mode when it is
+	// set: that toggle installs the same applications as user Flatpaks, so
+	// on these images it would only shadow what the image already provides.
+	Gaming bool
 }
 
 // Detect returns the current Bluefin-family status. A host with no image
@@ -148,6 +153,7 @@ func Detect() (Status, error) {
 		Channel:   info.Channel(),
 		Tag:       info.EffectiveTag(),
 		Ref:       info.CleanRef(),
+		Gaming:    info.IsGaming(),
 	}
 
 	groups, err := currentUserGroups()

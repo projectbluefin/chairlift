@@ -410,6 +410,61 @@ func TestDetectFailsClosedOnABrokenChannelTable(t *testing.T) {
 	}
 }
 
+// Detect must carry the gaming-image signal through to the views, which use
+// it to suppress the gaming-mode toggle. See imageinfo.IsGaming.
+func TestDetectReportsWhenTheImageShipsTheGamingStack(t *testing.T) {
+	tests := []struct {
+		name string
+		info imageinfo.Info
+		want bool
+	}{
+		{
+			name: "dakota-gaming",
+			info: imageinfo.Info{
+				Name:   "dakota-gaming",
+				Tag:    "next",
+				Ref:    "docker://ghcr.io/projectbluefin/dakota-gaming:next",
+				Flavor: "gaming",
+			},
+			want: true,
+		},
+		{
+			name: "dakota-nvidia-gaming",
+			info: imageinfo.Info{
+				Name:   "dakota-nvidia-gaming",
+				Tag:    "next",
+				Ref:    "docker://ghcr.io/projectbluefin/dakota-nvidia-gaming:next",
+				Flavor: "gaming",
+			},
+			want: true,
+		},
+		{
+			name: "plain dakota still offers the toggle",
+			info: imageinfo.Info{
+				Name:   "dakota",
+				Tag:    "latest",
+				Ref:    "docker://ghcr.io/projectbluefin/dakota",
+				Flavor: "main",
+			},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stubDetection(t, test.info, nil, nil)
+
+			got, err := Detect()
+			if err != nil {
+				t.Fatalf("Detect() error = %v, want nil", err)
+			}
+			if got.Gaming != test.want {
+				t.Errorf("Detect() Gaming = %v, want %v", got.Gaming, test.want)
+			}
+		})
+	}
+}
+
 // The driver recommendation must only appear where a switch is both possible
 // and useful, so Detect is asserted across the hardware/image matrix rather
 // than only on the machine the tests happen to run on.
