@@ -146,7 +146,7 @@ func TestUnitPathPropagatesAnUnresolvableDirectory(t *testing.T) {
 }
 
 func TestEnabledStateIsFalseWhenTheDirectoryCannotBeResolved(t *testing.T) {
-	stubBrokenUnitDir(t)
+	_ = stubBrokenUnitDir(t)
 
 	if IsEnabled() {
 		t.Error("IsEnabled reported true when the quadlet directory is unresolvable")
