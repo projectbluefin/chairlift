@@ -1,8 +1,8 @@
 ---
 name: collection-regressions
 description: Use when a consistency regression must cover every collection entry.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-09-19
 tags:
   - testing
   - collections
@@ -33,6 +33,12 @@ special-cases index 0 will read as the same bug on the next review pass and
 costs a full extra review round for no progress. When the collection could
 legitimately be empty, also assert `len(...) > 0` (or otherwise fail loudly)
 so the loop can't silently no-op.
+
+When a command inventory distinguishes entries by a dependency — for example,
+commands whose target resolution needs an optional root-owned table — iterate
+the authoritative inventory and assert the expected dependency for every
+command. Testing only the dependent commands misses the regression where an
+unrelated fixed operation inherits the optional load and becomes unavailable.
 
 **Learned from:** issue #59's mill run — `TestGoreleaserNfpmLayoutMatchesUsrPrefix`
 in `internal/installcheck/goreleaser_test.go` checked only `cfg.Nfpms[0]`

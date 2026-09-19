@@ -37,14 +37,14 @@ func main() {
 		fatal(err.Error())
 	}
 
-	// Apply the same channel-table override the GUI applies, from the same
-	// fixed root-owned paths. If the two sides disagreed, the GUI would
-	// offer a switch the helper then refuses. A broken override is fatal
-	// here rather than logged: the helper is about to change which OS image
-	// this machine boots, so it must not fall back to a different table
-	// than the one the user was shown.
-	if _, err := imageinfo.LoadSystemTable(); err != nil {
-		fatal(fmt.Sprintf("channel table: %v", err))
+	// Channel and driver switches derive an image reference from the same
+	// root-owned table as the GUI. A broken override must stop those switches
+	// rather than let the helper resolve a different target, but unrelated
+	// fixed commands do not depend on the optional table.
+	if invocation.UsesChannelTable() {
+		if _, err := imageinfo.LoadSystemTable(); err != nil {
+			fatal(fmt.Sprintf("channel table: %v", err))
+		}
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)

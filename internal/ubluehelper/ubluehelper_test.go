@@ -125,6 +125,26 @@ func TestParseInvocationAcceptsSupportedShapes(t *testing.T) {
 	}
 }
 
+func TestValidatedCommandsNeedChannelTableOnlyForSwitches(t *testing.T) {
+	for _, command := range SupportedCommands() {
+		invocation, err := ParseInvocation([]string{command})
+		switch command {
+		case CommandChannelSwitch:
+			invocation, err = ParseInvocation([]string{command, ChannelTesting})
+		case CommandDriverSwitch:
+			invocation, err = ParseInvocation([]string{command, string(imageinfo.DriverNVIDIA)})
+		}
+		if err != nil {
+			t.Fatalf("ParseInvocation(%q) error = %v, want nil", command, err)
+		}
+
+		want := command == CommandChannelSwitch || command == CommandDriverSwitch
+		if got := invocation.UsesChannelTable(); got != want {
+			t.Errorf("%s UsesChannelTable() = %t, want %t", command, got, want)
+		}
+	}
+}
+
 // pkexec authenticates the action, not the arguments after argv1, so every
 // shape below reaches a root process. The helper is the boundary that must
 // reject them.
