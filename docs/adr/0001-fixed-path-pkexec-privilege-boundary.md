@@ -25,21 +25,26 @@ Every root mutation is invoked through `pkexec` at a hardcoded absolute path
 that is a Go constant, matching the policy's `exec.path` annotation exactly:
 
 - updex writes go through `internal/updex.HelperPath =
-  "/usr/bin/chairlift-updex-helper"` (`internal/updex/updex.go:30`); `runHelper`
-  always passes this constant, never a bare name (`internal/updex/updex.go:159`).
+  "/usr/bin/chairlift-updex-helper"` (`internal/updex/updex.go:28`); `runHelper`
+  always passes this constant, never a bare name.
+- Bluefin-family system writes go through `internal/ublue.HelperPath =
+  "/usr/bin/chairlift-ublue-helper"` (`internal/ublue/ublue.go:41`); `runHelper`
+  always passes this constant, never a bare name.
 - bootc staging runs `internal/bootc.StageScriptPath =
   "/usr/libexec/bootc-update-stage"` (`internal/bootc/stage.go:18`).
 - native A/B staging runs `internal/sysupdate.StageScriptPath =
   "/usr/libexec/snosi-sysupdate-stage"` (`internal/sysupdate/stage.go:20`).
 
 The updex policy (`data/io.projectbluefin.chairlift.updex.policy`) declares one
-action per helper subcommand, each selecting its command through
-`exec.argv1` (`enable-feature`, `disable-feature`, `update`). Because
-PolicyKit does not validate the rest of argv, the helper is a second
-boundary: `internal/updexhelper.ParseInvocation`
-(`internal/updexhelper/updexhelper.go:51`) accepts only the three argv shapes
-ChairLift emits and rejects extra, misplaced, and unknown arguments before
-any updex call.
+action per helper subcommand, each selecting its command through `exec.argv1`
+(`enable-feature`, `disable-feature`, `update`). The ublue policy
+(`data/io.projectbluefin.chairlift.ublue.policy`) does the same for its nine
+subcommands: `channel-switch`, `dx-enable`, `dx-disable`, `restart`,
+`rollback`, `auto-updates-enable`, `auto-updates-disable`, `driver-switch`, and
+`factory-reset`. Because PolicyKit does not validate the rest of argv, the
+helpers are a second boundary: `internal/updexhelper.ParseInvocation` and
+`internal/ubluehelper.ParseInvocation` reject extra, misplaced, and unknown
+arguments before any privileged call.
 
 No passwordless `.rules` files are ever shipped. All actions default to
 `auth_admin` / `auth_admin` / `auth_admin_keep`, and the source install
@@ -47,11 +52,12 @@ removes the legacy ChairLift `.rules` files so an old passwordless grant
 cannot survive an upgrade.
 
 The whole boundary is pinned by tests: `internal/installcheck/polkit_test.go`
-cross-references the policy XML against the Go constants and
-`updexhelper.SupportedCommands()` (`TestPolkitPoliciesMatchPrivilegedHelpers`),
+cross-references the policy XML against the Go constants and both helpers'
+`SupportedCommands()` lists (`TestPolkitPoliciesMatchPrivilegedHelpers`),
 asserts the `.rules` files stay absent (`TestPolkitPasswordlessRulesAreAbsent`),
 and requires exactly one action per helper command
-(`TestEveryUpdexCommandHasOnePolicyAction`). The staged-install E2E test
+(`TestEveryUpdexCommandHasOnePolicyAction`,
+`TestEveryUblueCommandHasOnePolicyAction`). The staged-install E2E test
 (`test/e2e/e2e_test.go`, `TestInstalledBundleAndHelperBoundary`) executes the
 installed helper's argv-rejection paths.
 

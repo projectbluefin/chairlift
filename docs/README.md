@@ -70,7 +70,7 @@ are listed in [org-adrs.md](org-adrs.md).
   purpose, dependency flow, key patterns, configuration, build and release
   (formerly `yeti/OVERVIEW.md`)
 - [design/package-managers.md](design/package-managers.md) — the Homebrew,
-  Flatpak, bootc, sysupdate, and updex wrappers and their view-layer leaf
+  Flatpak, bootc, sysupdate, updex, and ublue wrappers and their view-layer leaf
   packages (formerly `yeti/package-managers.md`)
 
 ### Specs

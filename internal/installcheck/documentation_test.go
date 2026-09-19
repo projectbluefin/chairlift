@@ -101,6 +101,53 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 		}
 	})
 
+	t.Run("privileged integration inventory is complete", func(t *testing.T) {
+		ubluePolicy := readRepoFile(t, filepath.Join("data", "io.projectbluefin.chairlift.ublue.policy"))
+		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 9 {
+			t.Fatalf("ublue policy actions = %d, want 9", got)
+		}
+
+		current := strings.Join([]string{
+			readRepoFile(t, "README.md"),
+			readRepoFile(t, "AGENTS.md"),
+			readRepoFile(t, filepath.Join("docs", "index.md")),
+			readRepoFile(t, filepath.Join("docs", "adr", "0006-split-system-integration-package-with-mutual-conflicts.md")),
+			readRepoFile(t, filepath.Join("docs", "design", "overview.md")),
+			readRepoFile(t, filepath.Join("docs", "design", "package-managers.md")),
+		}, "\n")
+
+		for _, required := range []string{
+			"/usr/bin/chairlift-updex-helper",
+			"/usr/bin/chairlift-ublue-helper",
+			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
+			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy",
+			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy",
+			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
+			"/usr/share/chairlift/config.yml",
+			"/usr/share/doc/chairlift/channels.example.yml",
+			"nine actions",
+			"factory-reset",
+		} {
+			if !strings.Contains(current, required) {
+				t.Errorf("current documentation does not contain %q", required)
+			}
+		}
+
+		for _, stale := range []string{
+			"all three PolicyKit policies",
+			"all three policies",
+			"the three PolicyKit policies",
+			"eight subcommands",
+			"declaring the three actions",
+			"builds two binaries",
+			"chairlift-updex-helper` only",
+		} {
+			if strings.Contains(current, stale) {
+				t.Errorf("current documentation still contains stale privileged-inventory claim %q", stale)
+			}
+		}
+	})
+
 	t.Run("public metrics catalog stays auditable", func(t *testing.T) {
 		catalog := strings.Join(strings.Fields(readRepoFile(t, filepath.Join("docs", "metrics", "README.md"))), " ")
 		for _, required := range []string{

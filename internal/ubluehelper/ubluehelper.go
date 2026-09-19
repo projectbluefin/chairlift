@@ -99,7 +99,7 @@ func SupportedCommands() []string {
 	}
 }
 
-// ParseInvocation accepts only the three argv shapes ChairLift emits:
+// ParseInvocation accepts only the nine argv shapes ChairLift emits:
 //
 //	channel-switch <stable|testing> [--dry-run]
 //	dx-enable [--dry-run]

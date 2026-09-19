@@ -2,7 +2,7 @@
 name: documentation-reconciliation
 description: Use when documentation changes may leave contradictory claims.
 version: 1.0.0
-last_updated: 2026-09-08
+last_updated: 2026-09-19
 tags:
   - documentation
   - consistency
@@ -30,6 +30,14 @@ chunk is checkable rather than relying on a reviewer's careful re-read.
 Writing accurate new prose next to stale old prose still leaves the doc
 self-contradictory and will be rejected on plan review even though the
 acceptance criterion asked only for the new behavior to be "documented."
+
+When the stale claim is an exhaustive inventory — package contents, fixed
+privileged paths, policy files, command surfaces, or another closed set — do
+not stop at a prose rewrite. Add or update a source-backed consistency check
+that derives the collection from the authoritative file (`.goreleaser.yaml`,
+`Makefile`, policy XML, helper command list, schema, etc.) and fails on the old
+count or omitted member. That turns "complete inventory" from reviewer memory
+into an executable contract.
 
 **Learned from:** issue #60's mill run, plan round 1 — the plan added overlay
 prose to `CONFIG.md`'s Notes section but left three pre-existing sentences

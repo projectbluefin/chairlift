@@ -856,26 +856,33 @@ blocks — with no shared code path, so nothing stops them (or
 `internal/updex.HelperPath`, the fixed absolute path `pkexec` matches against
 the policy's `exec.path` annotation) from silently drifting apart.
 
-ChairLift packages the bootc, sysupdate, and updex `.policy` files. It no longer
-ships its old `.rules` files, which returned `YES` for every active local
-member of the `sudo` group and bypassed authentication. Source installation
-explicitly removes those legacy rule paths; package upgrades remove them as
-obsolete tracked files. All three policies use normal administrator
-authentication, while the updex policy selects one action for each supported
-first argument and the helper validates the complete argv shape.
+ChairLift packages the bootc, sysupdate, updex, and ublue `.policy` files. It
+no longer ships its old `.rules` files, which returned `YES` for every active
+local member of the `sudo` group and bypassed authentication. Source
+installation explicitly removes those legacy rule paths; package upgrades
+remove them as obsolete tracked files. All four policies use normal
+administrator authentication. The updex and ublue policies select one action for
+each supported first argument, and the helpers validate the complete argv shape.
 
-All three layouts install the repository's `config.yml` as package-owned
+Every install layout installs the repository's `config.yml` as package-owned
 maintainer defaults at `/usr/share/chairlift/config.yml`. None installs
 `/etc/chairlift/config.yml`: that higher-precedence path belongs to the
 administrator and must survive package installation and upgrades unchanged.
 
 GoReleaser has two nFPM entries. `projectbluefin-chairlift` is self-contained and
-selects both `chairlift` and `chairlift-updex-helper` builds.
-`projectbluefin-chairlift-system-integration` selects only the helper and packages
-only maintainer config plus the bootc/sysupdate/updex policies, for pairing with a
-user-scoped app installation. The two package names conflict to prevent
-simultaneous ownership of the same fixed system files. The companion does not
-provide either OS stager; a distro must provide trusted implementations at
+selects the `chairlift`, `chairlift-updex-helper`, and
+`chairlift-ublue-helper` builds. `projectbluefin-chairlift-system-integration`
+selects both helper builds and packages only `/usr/bin/chairlift-updex-helper`,
+`/usr/bin/chairlift-ublue-helper`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`,
+`/usr/share/chairlift/config.yml`, and the channel-table example at
+`/usr/share/doc/chairlift/channels.example.yml`, for pairing with a user-scoped
+app installation. The two package names conflict to
+prevent simultaneous ownership of the same fixed system files. The companion
+does not provide either OS stager; a distro must provide trusted implementations at
 `/usr/libexec/bootc-update-stage` and, on native A/B hosts,
 `/usr/libexec/snosi-sysupdate-stage`. This split is decision
 record [ADR-0006](../adr/0006-split-system-integration-package-with-mutual-conflicts.md).
@@ -887,10 +894,9 @@ installed layout itself:
 - **`TestMakefileInstallUsesUsrPrefix`** runs `make -n install
   DESTDIR=<t.TempDir()>` — a dry run, so no compilation, no writes outside
   the temp dir, and no root — once with no `PREFIX` override and once with
-  `PREFIX=/usr`, and asserts the printed `install -Dm...` lines place the
-  updex helper at `DESTDIR` + `internal/updex.HelperPath` and all three
-  policies under the fixed `/usr/share/polkit-1/actions` directory PolicyKit
-  reads,
+  `PREFIX=/usr`, and asserts the printed `install -Dm...` lines place both
+  helper binaries under `DESTDIR/usr/bin` and all four policies under the
+  fixed `/usr/share/polkit-1/actions` directory PolicyKit reads,
   removes both legacy rules from `DESTDIR/usr/share/polkit-1/rules.d`,
   installs maintainer defaults at
   `DESTDIR/usr/share/chairlift/config.yml`, and never targets the
@@ -911,17 +917,16 @@ installed layout itself:
   `nfpms[0]`, so adding or reordering a second package with the wrong layout
   still fails — per
   `docs/skills/collection-regressions/SKILL.md`),
-  asserts each entry's `bindir` matches the directory of
-  `internal/updex.HelperPath`, its updex/bootc/sysupdate policy
-  `contents[].dst` entries
-  equal the fixed polkit-1 actions paths, their policy/config modes remain
-  `0644`, and no `.rules` content remains. It also requires every package to
+  asserts each entry's `bindir` matches the fixed helper directory, its
+  updex/ublue/bootc/sysupdate policy `contents[].dst` entries equal the fixed
+  polkit-1 actions paths, their policy/config modes remain `0644`, and no
+  `.rules` content remains. It also requires every package to
   map the repository `config.yml` to
   `/usr/share/chairlift/config.yml` and rejects any content entry targeting
   `/etc/chairlift/config.yml`.
 - **`TestGoreleaserPublishesTheSystemCompanionPackage`** requires exactly one
   full package and one integration package, verifies their build filters,
-  mutual conflicts, unique IDs, and the integration package's exact four
+  mutual conflicts, unique IDs, and the integration package's exact six
   content mappings. This prevents the companion from accidentally acquiring
   the GUI binary or losing one of the root-owned integration files.
   It was named `TestGoreleaserPublishesSystemIntegrationPackage` until

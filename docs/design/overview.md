@@ -12,6 +12,7 @@ ChairLift is a GTK4/Libadwaita system management GUI for [Snow Linux](https://gi
 ```
 cmd/chairlift/main.go                 Entry point: version injection, app creation
 cmd/chairlift-updex-helper/main.go    Privileged helper for updex write operations
+cmd/chairlift-ublue-helper/main.go    Privileged helper for Bluefin-family system writes
         │
 internal/app/app.go             GObject-registered Application (adw.Application subtype)
         │
@@ -39,7 +40,9 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/stageexec/ Pure-Go shared OS staging stream/event executor
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
-        └── internal/version/   Displayed application version
+        ├── internal/ublue/     Bluefin-family system mutations through the ublue helper
+        ├── internal/ubluehelper/ Puregotk-free argv parsing for cmd/chairlift-ublue-helper
+        └── internal/version/   Build metadata (ldflags injection)
 ```
 
 ### Dependency flow
@@ -1077,34 +1080,42 @@ Decision records: [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md
 [ADR-0006](../adr/0006-split-system-integration-package-with-mutual-conflicts.md)
 (the system-integration package split).
 
-bootc staging, native A/B staging, and updex require root for state-changing operations. They invoke commands through `pkexec` (PolicyKit). bootc runs `pkexec /usr/libexec/bootc-update-stage` directly (polkit action id `io.projectbluefin.chairlift.bootc.stage`), native A/B staging runs `pkexec /usr/libexec/snosi-sysupdate-stage` directly (`internal/sysupdate.StageScriptPath`, action id `io.projectbluefin.chairlift.sysupdate.stage`), and updex delegates to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`) via `pkexec`. Polkit policy files are installed for all three: `data/io.projectbluefin.chairlift.bootc.policy`, `data/io.projectbluefin.chairlift.sysupdate.policy`, and `data/io.projectbluefin.chairlift.updex.policy`. ChairLift deliberately ships no `.rules` files: the policies require normal administrator authentication (`auth_admin`, with `auth_admin_keep` for an active local session) rather than granting blanket passwordless access to a login group. Source installation removes the two legacy ChairLift `.rules` files so an older passwordless rule cannot survive an upgrade. Homebrew tap trust (`brew trust`) is explicitly per-user and does _not_ go through pkexec — see [package-managers.md](./package-managers.md).
+bootc staging, native A/B staging, updex, and Bluefin-family system operations
+require root for state-changing operations. They invoke commands through
+`pkexec` (PolicyKit). bootc runs `pkexec /usr/libexec/bootc-update-stage`
+directly (polkit action id `io.projectbluefin.chairlift.bootc.stage`), native
+A/B staging runs `pkexec /usr/libexec/snosi-sysupdate-stage` directly
+(`internal/sysupdate.StageScriptPath`, action id
+`io.projectbluefin.chairlift.sysupdate.stage`), updex delegates to the fixed
+absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`),
+and Bluefin-family writes delegate to `internal/ublue.HelperPath`
+(`/usr/bin/chairlift-ublue-helper`). Policy files are installed for all four
+fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
+`data/io.projectbluefin.chairlift.sysupdate.policy`,
+`data/io.projectbluefin.chairlift.updex.policy`, and
+`data/io.projectbluefin.chairlift.ublue.policy`.
 
-**Why the helper path must be absolute, and why `PREFIX=/usr`:** `pkexec`
+**Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it
-textually against the `org.freedesktop.policykit.exec.path` annotation on
-each action in `data/io.projectbluefin.chairlift.updex.policy` (all three actions
-annotate `/usr/bin/chairlift-updex-helper`). The policy also uses
-`org.freedesktop.policykit.exec.argv1` to select the corresponding
-`enable-feature`, `disable-feature`, or `update` action from the first helper
-argument. PolicyKit does not validate the remainder of argv: the privileged
-helper's pure `internal/updexhelper.ParseInvocation` boundary accepts only
-`enable-feature <name> [--dry-run]`, `disable-feature <name> [--dry-run]`, and
-`update [--dry-run]`, rejecting extra, misplaced, or unknown arguments before
-calling updex. A bare, `$PATH`-resolved command name can resolve to a different
+textually against the `org.freedesktop.policykit.exec.path` annotation on each
+action. The updex policy's three actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's nine actions annotate
+`/usr/bin/chairlift-ublue-helper`. Both helper policies use
+`org.freedesktop.policykit.exec.argv1` to select exactly one action for the
+first helper argument. PolicyKit does not validate the remainder of argv, so
+the privileged helpers are a second boundary: `internal/updexhelper.ParseInvocation`
+accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
+[--dry-run]`, and `update [--dry-run]`, while
+`internal/ubluehelper.ParseInvocation` accepts only `channel-switch
+<stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
+[--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
+`auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
+[--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
-action. `internal/updex/updex.go`'s `runHelper` therefore always invokes
-`HelperPath` (never a bare name).
-
-**The Bluefin-family helper.** The release-channel switch and developer-mode
-toggle use a second fixed-path helper, `internal/ublue.HelperPath`
-(`/usr/bin/chairlift-ublue-helper`), with its own policy file
-`data/io.projectbluefin.chairlift.ublue.policy` declaring the three actions
-`io.projectbluefin.chairlift.ublue.{channel-switch,dx-enable,dx-disable}`. It
-follows the updex helper's contract exactly — fixed absolute `exec.path`, one
-`exec.argv1` per action, and a pure `internal/ubluehelper.ParseInvocation`
-boundary that accepts only `channel-switch <stable|testing> [--dry-run]`,
-`dx-enable [--dry-run]`, and `dx-disable [--dry-run]`.
+action. The wrapper packages therefore always invoke their fixed `HelperPath`
+constants, never a bare name.
 
 Two inputs deliberately never cross the pkexec boundary as arguments:
 
@@ -1419,11 +1430,19 @@ system facts, not values ChairLift decides; the Makefile and
 
 **System-integration delivery:** GoReleaser publishes two mutually exclusive
 package shapes. `projectbluefin-chairlift` is the existing self-contained package
-with both application binaries, desktop assets, maintainer config, and
-policies. `projectbluefin-chairlift-system-integration` is the root-owned companion
+with the GUI binary, both privileged helper binaries, desktop assets,
+maintainer config, the channel-table example, and policies. The
+`projectbluefin-chairlift-system-integration` package is the root-owned companion
 for a user-scoped GUI delivery such as the Homebrew cask: its build filter
-contains only `chairlift-updex-helper`, and its contents contain all three
-policies plus `/usr/share/chairlift/config.yml`. The packages declare conflicts
+contains only `chairlift-updex-helper` and `chairlift-ublue-helper`, and its
+contents contain these installed paths: `/usr/bin/chairlift-updex-helper`,
+`/usr/bin/chairlift-ublue-helper`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`,
+`/usr/share/chairlift/config.yml`, and
+`/usr/share/doc/chairlift/channels.example.yml`. The packages declare conflicts
 because they intentionally own the same privileged files.
 
 The integration package does **not** ship `bootc-update-stage` or
@@ -1576,14 +1595,14 @@ page_name:
 
 ## Build and Release
 
-- **Build**: `make build` builds two binaries: `build/chairlift` (main app) and `build/chairlift-updex-helper` (privileged helper), both with `CGO_ENABLED=0`
-- **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. Codecov's remote project status additionally rejects coverage regressions greater than one percentage point, with no fixed project or patch target; it cannot be mirrored locally. The runtime-dependent E2E job is deliberately separate: `make e2e` builds both binaries, executes the application's `--help` path, boots the dry-run GTK window under a private D-Bus/Xvfb session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then terminates its private process group, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged `chairlift-updex-helper` rejection paths. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md).
+- **Build**: `make build` builds three binaries: `build/chairlift` (main app), `build/chairlift-updex-helper` (privileged updex helper), and `build/chairlift-ublue-helper` (privileged Bluefin-family helper), all with `CGO_ENABLED=0`
+- **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. Codecov's remote project status additionally rejects coverage regressions greater than one percentage point, with no fixed project or patch target; it cannot be mirrored locally. The runtime-dependent E2E job is deliberately separate: `make e2e` builds all three binaries, executes the application's `--help` path, boots the dry-run GTK window under a private D-Bus/Xvfb session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then terminates its private process group, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged helper binaries' rejection paths. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md).
 - **Dev build**: `make dev` builds with `CGO_ENABLED=1` and `-race` flag for race detection
 - **Version**: Set via ldflags by goreleaser (`buildVersion`)
 - **Semantic versioning**: Uses [svu](https://github.com/caarlos0/svu) via `make bump`
 - **CI**: GitHub Actions workflows for test, snapshot, and release (`.github/workflows/`); per [ADR-0034](../org-adrs.md), snapshot publishers use the repository-scoped `goreleaser-nightly` concurrency group with in-progress cancellation so only the newest tested `main` commit publishes to the rolling `dev` release and concurrent GoReleaser uploads cannot collide. Every external `uses:` reference in every workflow is pinned to a full 40-character commit SHA (with its version or source ref retained as a comment); `internal/installcheck.TestWorkflowActionsUseImmutableCommitSHAs` inventories both `.yml` and `.yaml` workflow files and rejects mutable tags, branches, short SHAs, and expressions while allowing repository-local `./` actions.
 - **Release**: GoReleaser config at `.goreleaser.yaml`. Its `metadata.homepage` is the single source of truth for the repository URL and is consumed by `release.footer`, whose "Full Changelog" link is templated from `{{ .Metadata.Homepage }}` rather than a hardcoded owner; two static tests guard that pairing — see the "Install-path consistency (`internal/installcheck`)" section of [package-managers.md](./package-managers.md#install-path-consistency-internalinstallcheck)
-- **Other targets**: `make fmt` (gofmt), `make lint` (golangci-lint), `make install`/`make uninstall` (system install including polkit policies, icons, and wrapper script; default `PREFIX=/usr`, the only prefix that matches where polkit reads policy files and the updex helper's fixed pkexec exec-path annotation — see "Privileged operations" above), `make build-linux-amd64`/`make build-linux-arm64` (cross-compilation)
+- **Other targets**: `make fmt` (gofmt), `make lint` (golangci-lint), `make install`/`make uninstall` (system install including polkit policies, icons, and wrapper script; default `PREFIX=/usr`, the only prefix that matches where polkit reads policy files and the fixed pkexec exec-path annotations for both helper binaries — see "Privileged operations" above), `make build-linux-amd64`/`make build-linux-arm64` (cross-compilation)
 
 ### Runtime dependencies
 

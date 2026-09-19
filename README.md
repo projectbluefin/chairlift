@@ -95,15 +95,16 @@ Choose the package format for your distribution:
 | Alpine | `projectbluefin-chairlift_<version>_<arch>.apk` (`x86_64` or `aarch64`) | `sudo apk add --allow-untrusted ./<downloaded-filename>` |
 
 For a normal system installation, download the full `projectbluefin-chairlift`
-package. It includes the GUI, privileged helper, desktop assets, PolicyKit
-policies, and package-maintainer configuration.
+package. It includes the GUI, both privileged helpers
+(`/usr/bin/chairlift-updex-helper` and `/usr/bin/chairlift-ublue-helper`),
+desktop assets, four PolicyKit policies, and package-maintainer configuration.
 
 Use the similarly named `projectbluefin-chairlift-system-integration` package
 **only** when the ChairLift GUI is already delivered through a user-scoped
 mechanism such as the Homebrew cask. That package supplies only the root-owned
-helper, policies, and configuration needed by such an installation; it does
-not include the GUI. Never install both packages: they intentionally conflict
-because they own the same system-integration files.
+helpers, policies, configuration, and channel-table example needed by such an
+installation; it does not include the GUI. Never install both packages: they
+intentionally conflict because they own the same system-integration files.
 
 Download `checksums.txt` from the same release and verify the selected package
 before installing it:
@@ -128,6 +129,7 @@ make build
 # Binaries are written to build/:
 #   build/chairlift                 the main application
 #   build/chairlift-updex-helper    privileged helper for updex feature writes
+#   build/chairlift-ublue-helper    privileged helper for Bluefin-family system writes
 
 # Install (binaries, polkit policies, icons, desktop file)
 sudo make install
@@ -137,25 +139,32 @@ sudo make install
 participates in PolicyKit authentication (`sudo make install` uses it by
 default — no need to pass `PREFIX` explicitly). PolicyKit's `polkitd` reads
 `.policy` files from the fixed system directory
-`/usr/share/polkit-1/actions`, and `pkexec` matches the updex helper it's
-asked to run against the absolute path
-`/usr/bin/chairlift-updex-helper` recorded in
-`data/io.projectbluefin.chairlift.updex.policy`'s
-`org.freedesktop.policykit.exec.path` annotation and its first argument
-against an `org.freedesktop.policykit.exec.argv1` annotation. Installing under
-any other prefix places those files where polkit never looks, so the privileged
-updex, bootc-staging, and sysupdate-staging features silently stop working (or fall back to a
-more restrictive, always-reprompting authentication rule). This also matches
-the layout used by ChairLift's full `projectbluefin-chairlift` nFPM package, so a
-source install and a full packaged install end up identical.
+`/usr/share/polkit-1/actions`, and `pkexec` matches each privileged executable
+against the absolute path recorded in that action's
+`org.freedesktop.policykit.exec.path` annotation: `/usr/bin/chairlift-updex-helper`,
+`/usr/bin/chairlift-ublue-helper`, `/usr/libexec/bootc-update-stage`, or
+`/usr/libexec/snosi-sysupdate-stage`. The helper policies also select the
+authorized subcommand through `org.freedesktop.policykit.exec.argv1`.
+Installing under any other prefix places those files where polkit never looks
+or where the helper paths no longer match, so the privileged updex,
+Bluefin-family, bootc-staging, and sysupdate-staging features silently stop
+working (or fall back to a more restrictive, always-reprompting authentication
+rule). This also matches the layout used by ChairLift's full
+`projectbluefin-chairlift` nFPM package, so a source install and a full
+packaged install end up identical.
 
 ChairLift does not install passwordless PolicyKit rules. Bootc staging,
-sysupdate staging, and updex writes use the policies' normal
-administrator-authentication defaults;
-an active session may retain a successful authorization briefly. The updex
-helper accepts only `enable-feature <name> [--dry-run]`, `disable-feature
-<name> [--dry-run]`, and `update [--dry-run]`, rejecting every other argument
-shape inside the privileged process.
+sysupdate staging, updex writes, and Bluefin-family system operations use the
+policies' normal administrator-authentication defaults; an active session may
+retain a successful authorization briefly. The updex helper accepts only
+`enable-feature <name> [--dry-run]`, `disable-feature <name> [--dry-run]`, and
+`update [--dry-run]`. The ublue helper accepts only `channel-switch
+<stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
+[--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
+`auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
+[--dry-run]`. Both helpers reject every other argument shape inside the
+privileged process.
 
 Both paths install package-maintainer configuration defaults at
 `/usr/share/chairlift/config.yml`. They never create or overwrite the
@@ -164,8 +173,14 @@ administrator-owned `/etc/chairlift/config.yml` override.
 Releases also publish a small
 `projectbluefin-chairlift-system-integration` deb/rpm/apk for distributions that
 deliver the GUI through a user-scoped mechanism such as the Homebrew cask. It
-installs only the fixed `/usr/bin/chairlift-updex-helper`, all three PolicyKit
-policies, and `/usr/share/chairlift/config.yml`; it does not install the GUI.
+installs the fixed helper binaries at `/usr/bin/chairlift-updex-helper` and
+`/usr/bin/chairlift-ublue-helper`; the four policies
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`, and
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`;
+`/usr/share/chairlift/config.yml`; and the documented channel-table example at
+`/usr/share/doc/chairlift/channels.example.yml`. It does not install the GUI.
 The integration and full packages conflict intentionally because they own the
 same privileged files.
 
@@ -179,9 +194,9 @@ likewise retains the fixed `/usr/libexec/snosi-sysupdate-stage` path used by
 `/usr/lib/snosi/native-ab` marker gating the group) ship with the OS image.
 
 `PREFIX` can still be overridden (e.g. `make install PREFIX=$HOME/.local`)
-for a non-privileged, non-PolicyKit-integrated install — but the updex helper,
-bootc staging, and sysupdate staging will not resolve to their fixed exec-path annotations
-in that case.
+for a non-privileged, non-PolicyKit-integrated install — but the helper
+binaries, bootc staging, and sysupdate staging will not resolve to their fixed
+exec-path annotations in that case.
 
 `DESTDIR` layers underneath `PREFIX` as usual, unchanged by any of the
 above, for staged/packaged installs (`make install DESTDIR=/path/to/stage
@@ -319,7 +334,8 @@ the built-in defaults apply.
 chairlift/
 ├── cmd/
 │   ├── chairlift/               # Main application entry point
-│   └── chairlift-updex-helper/  # Privileged helper for updex writes (invoked via pkexec)
+│   ├── chairlift-updex-helper/  # Privileged helper for updex writes (invoked via pkexec)
+│   └── chairlift-ublue-helper/  # Privileged helper for Bluefin-family system writes
 ├── internal/
 │   ├── app/       # GObject-registered Application (adw.Application subtype)
 │   ├── window/    # Main window: NavigationSplitView, sidebar, content stack

@@ -148,14 +148,15 @@ An agent must not break these:
   idempotent and exits 0 on an already-current system, so a successful OS
   phase is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-ublue-helper` now carries eight subcommands
+  binary.** `chairlift-ublue-helper` now carries nine subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
-  `auto-updates-enable`, `auto-updates-disable`, `driver-switch`), each
-  selected by exactly one PolicyKit action. Every one takes a fixed argv or a
-  word validated against a closed set: no image reference, no username, no
-  systemd unit, no delay, and no rollback target crosses the boundary, because each would be a value an authenticated caller controls.
-  `internal/ubluehelper`'s tests assert this per command, and the e2e boundary
-  test asserts the installed binary rejects each shape.
+  `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
+  `factory-reset`), each selected by exactly one PolicyKit action. Every one
+  takes a fixed argv or a word validated against a closed set: no image
+  reference, no username, no systemd unit, no delay, and no rollback or reset
+  target crosses the boundary, because each would be a value an authenticated
+  caller controls. `internal/ubluehelper`'s tests assert this per command, and
+  the e2e boundary test asserts the installed binary rejects each shape.
 - **Every navigable page has a committed screenshot and a walkthrough entry.**
   `make screenshots` regenerates `docs/screenshots/` from the real
   application; `docs/walkthrough.md` is the user-facing tour built from them.
@@ -205,14 +206,15 @@ An agent must not break these:
   and `cmd/` and fails on any other occurrence; it takes no exemptions.
 - **System-integration split.** The
   `projectbluefin-chairlift-system-integration` nFPM package contains the fixed-path
-  updex helper, all three PolicyKit policies, and package-maintainer config,
-  but not the GUI or an OS staging implementation. Distributions pairing it
-  with a user-scoped ChairLift install must provide their trusted stage helper
-  at `/usr/libexec/bootc-update-stage` before enabling `bootc_updates_group`;
-  native A/B hosts ship `/usr/libexec/snosi-sysupdate-stage` (and the
-  `/usr/lib/snosi/native-ab` marker) with the OS image, which
-  `sysupdate_updates_group` requires. Do not make the privileged path
-  configurable from ChairLift's user-writable configuration.
+  updex and ublue helpers, all four PolicyKit policies, package-maintainer
+  config, and the channel-table example, but not the GUI or an OS staging
+  implementation. Distributions pairing it with a user-scoped ChairLift install
+  must provide their trusted stage helper at `/usr/libexec/bootc-update-stage`
+  before enabling `bootc_updates_group`; native A/B hosts ship
+  `/usr/libexec/snosi-sysupdate-stage` (and the `/usr/lib/snosi/native-ab`
+  marker) with the OS image, which `sysupdate_updates_group` requires. Do not
+  make the privileged path configurable from ChairLift's user-writable
+  configuration.
 - **GTK main-thread safety.** All external tool calls run in goroutines; every
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a

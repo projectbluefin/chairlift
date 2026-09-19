@@ -71,12 +71,13 @@ groups configuration enables, not on runtime tool availability.
 make build
 ```
 
-This produces two binaries in `build/`:
+This produces three binaries in `build/`:
 
 - `chairlift` — the main application
 - `chairlift-updex-helper` — privileged helper for updex write operations
+- `chairlift-ublue-helper` — privileged helper for Bluefin-family system writes
 
-Both are built with `CGO_ENABLED=0`.
+All are built with `CGO_ENABLED=0`.
 
 ### Installation
 
@@ -84,22 +85,28 @@ Both are built with `CGO_ENABLED=0`.
 sudo make install
 ```
 
-Installs binaries, desktop file, icons, PolicyKit policies, the updex helper,
-and maintainer configuration defaults to `PREFIX` (default `/usr`). The
-maintainer configuration is installed at `/usr/share/chairlift/config.yml`;
+Installs binaries, desktop file, icons, PolicyKit policies, both privileged
+helpers, and maintainer configuration defaults to `PREFIX` (default `/usr`).
+The maintainer configuration is installed at `/usr/share/chairlift/config.yml`;
 `/etc/chairlift/config.yml` is reserved for administrator overrides and is
 never created or overwritten by ChairLift's source or nFPM packages. PolicyKit
 integration requires the default prefix.
 
 For distributions that install the GUI through a user-scoped Homebrew cask,
 releases also provide a `projectbluefin-chairlift-system-integration` deb/rpm/apk.
-It installs the fixed-path updex helper, PolicyKit policies, and maintainer
-configuration without installing the GUI. It intentionally conflicts with the
-self-contained `projectbluefin-chairlift` package. Bootc staging additionally
-requires the distribution to provide its trusted implementation at
-`/usr/libexec/bootc-update-stage`; the integration package does not supply
-one. Native A/B staging uses `/usr/libexec/snosi-sysupdate-stage`, which
-ships with the OS image itself.
+It installs the fixed helper binaries at `/usr/bin/chairlift-updex-helper` and
+`/usr/bin/chairlift-ublue-helper`; the four policies
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`, and
+`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`;
+`/usr/share/chairlift/config.yml`; and the documented channel-table example at
+`/usr/share/doc/chairlift/channels.example.yml`, without installing the GUI. It
+intentionally conflicts with the self-contained `projectbluefin-chairlift`
+package. Bootc staging additionally requires the distribution to provide its
+trusted implementation at `/usr/libexec/bootc-update-stage`; the integration
+package does not supply one. Native A/B staging uses
+`/usr/libexec/snosi-sysupdate-stage`, which ships with the OS image itself.
 
 ### Development
 

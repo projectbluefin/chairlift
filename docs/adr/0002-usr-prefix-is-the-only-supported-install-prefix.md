@@ -9,11 +9,12 @@ Two system facts, not ChairLift choices, constrain where a source install
 can land. First, `polkitd` reads application policies from the compiled-in
 directory `/usr/share/polkit-1/actions` — it consults neither `PREFIX` nor
 `$XDG_DATA_DIRS` — so policies installed anywhere else are never loaded.
-Second, `pkexec` matches the privileged helper against the absolute
+Second, `pkexec` matches each privileged helper against the absolute
 `exec.path` annotation ([ADR-0001](0001-fixed-path-pkexec-privilege-boundary.md)),
-which names `/usr/bin/chairlift-updex-helper`. The Makefile's `PREFIX` used
-to default to `/usr/local`, which put the polkit assets somewhere polkit
-never looks and the helper somewhere the policy never matches.
+which names `/usr/bin/chairlift-updex-helper` for updex and
+`/usr/bin/chairlift-ublue-helper` for Bluefin-family writes. The Makefile's
+`PREFIX` used to default to `/usr/local`, which put the polkit assets somewhere
+polkit never looks and the helpers somewhere the policies never match.
 
 ## Decision
 
@@ -25,8 +26,8 @@ supported. `.goreleaser.yaml`'s nFPM packages use the same layout.
 
 The invariant is test-enforced: `TestMakefileInstallUsesUsrPrefix`
 (`internal/installcheck/makefile_test.go:120`) runs `make -n install` dry
-runs for the default and explicit `PREFIX=/usr` and asserts the helper lands
-at `DESTDIR` + `internal/updex.HelperPath` and all three policies land under
+runs for the default and explicit `PREFIX=/usr` and asserts both helper
+binaries land under `DESTDIR/usr/bin` and all four policies land under
 `DESTDIR` + `/usr/share/polkit-1/actions`;
 `TestGoreleaserNfpmLayoutMatchesUsrPrefix`
 (`internal/installcheck/goreleaser_test.go:100`) holds every nFPM entry's
