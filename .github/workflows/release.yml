@@ -11,7 +11,9 @@ permissions:
   contents: write
   # packages: write
   # issues: write
-  # id-token: write
+  # Keyless cosign signing (Fulcio/Rekor) exchanges an OIDC token for a
+  # code-signing certificate, so the goreleaser job needs it.
+  id-token: write
 
 jobs:
   goreleaser:
@@ -28,6 +30,10 @@ jobs:
       # GoReleaser OSS (free): publishes binaries, archives, and the rpm/deb/apk
       # nFPM packages straight to the GitHub Release for this tag. No Pro
       # license or external package-repo credentials needed.
+      # Install cosign for keyless (Fulcio/Rekor) signing of the archives and
+      # checksums file below. Needs the id-token: write permission above.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
