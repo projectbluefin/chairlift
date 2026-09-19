@@ -9,8 +9,10 @@ ChairLift searches for the configuration file in the following locations (in ord
 1. `/etc/chairlift/config.yml` (system-wide configuration - highest priority)
 2. `/usr/share/chairlift/config.yml` (package maintainer defaults installed by
    source and nFPM packages)
-3. `config.yml` beside the ChairLift executable, or in the current working
-   directory when no executable-relative file exists (development fallback)
+3. `config.dev.yml` beside the ChairLift executable, or in the current working
+   directory when no executable-relative file exists (source-checkout fallback)
+4. `config.yml` beside the ChairLift executable, or in the current working
+   directory when no executable-relative file exists (legacy development fallback)
 
 If no configuration file is found, all features default to enabled, except
 `maintenance_cleanup_group` and `reset_group`, which default to disabled.
@@ -20,6 +22,8 @@ Administrators should put local changes in `/etc/chairlift/config.yml`;
 ChairLift's install and packaging paths never create or overwrite that file.
 The `projectbluefin-chairlift-system-integration` package also provides the
 `/usr/share` defaults for a user-scoped GUI installation.
+The repository root includes `config.dev.yml` so `go run .` from a checkout can
+load unprivileged development defaults before the package default `config.yml`.
 
 The first file that exists in this order is authoritative. ChairLift does not
 fall through to a lower-priority file when that file is unreadable, malformed,
@@ -93,8 +97,8 @@ valid page.
 - `maintenance_cleanup_group`: System cleanup utilities (disabled by default)
   - `actions`: Array of maintenance scripts that can be executed
     - `title`: Display name for the action
-    - `script`: Absolute path to the script to execute
-    - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec)
+    - `script`: Absolute path to the script to execute. Required when `sudo: true`.
+    - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec). `sudo: true` is accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations.
 - `maintenance_brew_group`: Homebrew cleanup (runs `brew cleanup` to remove old versions and cache)
 - `maintenance_flatpak_group`: Flatpak cleanup (runs `flatpak uninstall --unused` to remove unused runtimes)
 - `maintenance_optimization_group`: System optimization tools

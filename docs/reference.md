@@ -8,8 +8,10 @@ Configuration files are searched in order (first found wins):
 
 1. `/etc/chairlift/config.yml` — system-wide (highest priority)
 2. `/usr/share/chairlift/config.yml` — package maintainer defaults
-3. `config.yml` — beside the executable when present, otherwise relative to
-   the current working directory (development fallback)
+3. `config.dev.yml` — source-checkout fallback, beside the executable when
+   present, otherwise relative to the current working directory
+4. `config.yml` — legacy development fallback, beside the executable when
+   present, otherwise relative to the current working directory
 
 Only a missing candidate advances the search. The first existing candidate is
 authoritative. If it cannot be read or fails YAML/schema validation, ChairLift
@@ -23,6 +25,8 @@ Source and nFPM installs provide the repository's maintainer defaults at
 Administrators should put local changes in `/etc/chairlift/config.yml`, which
 has higher precedence and is never created or overwritten by ChairLift's
 packages.
+The repository root includes `config.dev.yml` so source checkouts load
+unprivileged development defaults before the package default `config.yml`.
 
 ## Format
 
@@ -122,8 +126,8 @@ Each action has:
 | Field | Description |
 |-------|-------------|
 | `title` | Display name |
-| `script` | Absolute path to the script |
-| `sudo` | If `true`, runs via `pkexec` for elevated privileges |
+| `script` | Absolute path to the script. Required when `sudo` is `true`. |
+| `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. |
 
 ### Features Page (`features_page`)
 

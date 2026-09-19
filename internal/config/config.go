@@ -82,10 +82,14 @@ type rawGroupConfig struct {
 	AIModel      *string            `yaml:"ai_model"`
 }
 
-// configPaths are the locations to search for the config file
+// configPaths are the locations to search for the config file.
+// config.dev.yml is a repository-only development override that keeps source
+// checkouts usable while package/install paths ship the privileged default at
+// /usr/share/chairlift/config.yml.
 var configPaths = []string{
 	"/etc/chairlift/config.yml",
 	"/usr/share/chairlift/config.yml",
+	"config.dev.yml",
 	"config.yml",
 }
 

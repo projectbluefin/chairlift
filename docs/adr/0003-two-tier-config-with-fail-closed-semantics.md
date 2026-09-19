@@ -17,15 +17,17 @@ feature groups the broken file may have been written to disable.
 
 ## Decision
 
-Configuration is searched in a fixed order of ownership tiers
-(`internal/config/config.go:75-79`):
+Configuration is searched in a fixed order of ownership tiers and development
+fallbacks (`internal/config/config.go`'s `configPaths`):
 
 1. `/etc/chairlift/config.yml` — administrator-owned; never created,
    overwritten, or packaged by ChairLift's install paths.
 2. `/usr/share/chairlift/config.yml` — package-owned maintainer defaults,
    replaceable on upgrade.
-3. `config.yml` beside the executable, else under the current working
-   directory — development fallback (`internal/config/paths.go:20`).
+3. `config.dev.yml` beside the executable, else under the current working
+   directory — source-checkout fallback that shadows repository `config.yml`.
+4. `config.yml` beside the executable, else under the current working
+   directory — legacy development fallback (`internal/config/paths.go`).
 
 Only genuine absence advances the search: `Load`
 (`internal/config/config.go:100-117`) continues past a candidate only when
@@ -58,8 +60,9 @@ only the `/usr/share` copy and are test-forbidden from touching
   and cause.
 - Lower-priority files can never mask a broken higher-priority file, so
   "why is my /etc change ignored" cannot happen silently.
-- Development checkouts work with zero installation via the relative
-  fallback.
+- Development checkouts work with zero installation via `config.dev.yml`,
+  which can differ from package maintainer defaults only where the source tree
+  needs an unprivileged fallback.
 
 ## Alternatives considered
 

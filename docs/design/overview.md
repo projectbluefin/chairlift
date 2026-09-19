@@ -1476,7 +1476,7 @@ Help page links are opened via `xdg-open` using `exec.Command`. The process is s
 ## Configuration
 
 Decision records: [ADR-0003](../adr/0003-two-tier-config-with-fail-closed-semantics.md)
-(two-tier search order and fail-closed semantics),
+(config search order and fail-closed semantics),
 [ADR-0004](../adr/0004-configuration-error-diagnostic-vocabulary.md)
 (the `CONFIGURATION ERROR` diagnostic vocabulary), and
 [ADR-0005](../adr/0005-config-schema-reflected-from-canonical-struct.md)
@@ -1487,8 +1487,10 @@ Decision records: [ADR-0003](../adr/0003-two-tier-config-with-fail-closed-semant
 1. `/etc/chairlift/config.yml` — system-wide (highest priority)
 2. `/usr/share/chairlift/config.yml` — package-maintainer defaults installed
    by both source `make install` and nFPM packages
-3. `config.yml` — beside the executable when present, otherwise relative to
-   the current working directory (development fallback)
+3. `config.dev.yml` — source-checkout fallback, beside the executable when
+   present, otherwise relative to the current working directory
+4. `config.yml` — legacy development fallback, beside the executable when
+   present, otherwise relative to the current working directory
 
 Only a missing candidate advances the search. The first existing candidate is
 authoritative; a read, parse, type, or schema error disables every feature
@@ -1501,6 +1503,9 @@ Both packaging paths own only the `/usr/share` candidate and may replace it on
 upgrade. Neither writes `/etc/chairlift/config.yml`; that higher-precedence
 path remains administrator-owned, so local policy is never overwritten by a
 ChairLift install or package update.
+The repository root's `config.dev.yml` shadows `config.yml` only in development
+fallback loading; packages still install `config.yml` as the trusted
+`/usr/share/chairlift/config.yml` maintainer default.
 
 ### Config structure
 

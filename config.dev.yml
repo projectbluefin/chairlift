@@ -1,0 +1,10 @@
+# ChairLift development configuration
+# Loaded from a source checkout before config.yml. It keeps `go run .` usable
+# from an untrusted working tree while packages still install config.yml as the
+# trusted /usr/share/chairlift/config.yml maintainer default.
+
+maintenance_page:
+  maintenance_cleanup_group:
+    actions:
+      - title: Clean Up Boot Old Entries
+        script: /usr/libexec/bls-gc

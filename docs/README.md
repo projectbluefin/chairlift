@@ -37,8 +37,9 @@ are listed in [org-adrs.md](org-adrs.md).
   — `PREFIX=/usr` is the only supported install prefix (polkitd's fixed
   actions directory, pkexec's absolute path match); `DESTDIR` layers under it
 - [adr/0003-two-tier-config-with-fail-closed-semantics.md](adr/0003-two-tier-config-with-fail-closed-semantics.md)
-  — `/etc/chairlift` → `/usr/share/chairlift` → dev fallback; only absence
-  advances the search; a present-but-broken file disables every feature group
+  — `/etc/chairlift` → `/usr/share/chairlift` → `config.dev.yml` →
+  `config.yml`; only absence advances the search; a present-but-broken file
+  disables every feature group
 - [adr/0004-configuration-error-diagnostic-vocabulary.md](adr/0004-configuration-error-diagnostic-vocabulary.md)
   — fixed greppable `CONFIGURATION ERROR` log prefix, persistent toast, and
   the stable `ErrorKind` classification vocabulary
