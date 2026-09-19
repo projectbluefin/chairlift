@@ -82,16 +82,28 @@ type rawGroupConfig struct {
 	AIModel      *string            `yaml:"ai_model"`
 }
 
-// configPaths are the locations to search for the config file.
-// config.dev.yml is a repository-only development override that keeps source
-// checkouts usable while package/install paths ship the privileged default at
-// /usr/share/chairlift/config.yml.
-var configPaths = []string{
+// trustedConfigPaths are the fixed administrator- and package-owned candidates
+// permitted to define sudo actions. Membership in this list — not a filesystem
+// lookup performed after the file has been read — decides a search candidate's
+// provenance.
+var trustedConfigPaths = []string{
 	"/etc/chairlift/config.yml",
 	"/usr/share/chairlift/config.yml",
+}
+
+// untrustedConfigPaths are the relative candidates resolved against the
+// executable directory or the working directory. config.dev.yml is a
+// repository-only development override that keeps source checkouts usable
+// while package/install paths ship the privileged default at
+// /usr/share/chairlift/config.yml. Neither may define sudo actions.
+var untrustedConfigPaths = []string{
 	"config.dev.yml",
 	"config.yml",
 }
+
+// configPaths are the locations to search for the config file, trusted
+// candidates first.
+var configPaths = append(append([]string{}, trustedConfigPaths...), untrustedConfigPaths...)
 
 // readFile is an injection seam for deterministic read-failure tests. Its
 // production value is always os.ReadFile.
@@ -103,13 +115,19 @@ var readFile = os.ReadFile
 // together with the actionable error.
 func Load() (*Config, *LoadError) {
 	for _, candidate := range configPaths {
-		path := resolveCandidatePath(candidate)
-		cfg, err := loadResolvedPath(path)
+		// Provenance comes from which fixed candidate matched, decided
+		// before the file is read, so nothing on disk can change the answer
+		// afterwards.
+		src := configSource{
+			path:    resolveCandidatePath(candidate),
+			trusted: isTrustedCandidate(candidate),
+		}
+		cfg, err := loadResolvedPath(src)
 		if err == nil {
-			log.Printf("Loaded config from %s", path)
+			log.Printf("Loaded config from %s", src.path)
 			return cfg, nil
 		}
-		if err.Kind == KindRead && errors.Is(err, fs.ErrNotExist) && !danglingAuthoritativeSymlink(path) {
+		if err.Kind == KindRead && errors.Is(err, fs.ErrNotExist) && !danglingAuthoritativeSymlink(src.path) {
 			continue
 		}
 
@@ -122,31 +140,39 @@ func Load() (*Config, *LoadError) {
 	return defaultConfig(), nil
 }
 
-// loadFromPath attempts to load config from a specific path
+// loadFromPath attempts to load config from a specific path. The path is not
+// one of Load()'s fixed candidates, so provenance is decided by inspecting it —
+// but still before the read, so the decision cannot be swapped out underneath
+// the bytes that were loaded.
 func loadFromPath(path string) (*Config, *LoadError) {
-	return loadResolvedPath(resolveCandidatePath(path))
+	resolved := resolveCandidatePath(path)
+	return loadResolvedPath(configSource{
+		path:    resolved,
+		trusted: isTrustedConfigPath(resolved),
+	})
 }
 
 // loadResolvedPath reads and strictly validates one already-resolved
-// candidate, then overlays it onto the built-in defaults.
-func loadResolvedPath(path string) (*Config, *LoadError) {
-	data, err := readFile(path)
+// candidate, then overlays it onto the built-in defaults. src carries the
+// provenance decision made before the read; nothing here re-derives it.
+func loadResolvedPath(src configSource) (*Config, *LoadError) {
+	data, err := readFile(src.path)
 	if err != nil {
 		return nil, &LoadError{
-			Path:   path,
+			Path:   src.path,
 			Kind:   KindRead,
 			Detail: "reading configuration file",
 			Err:    err,
 		}
 	}
 
-	raw, loadErr := parseAndValidate(path, data)
+	raw, loadErr := parseAndValidate(src, data)
 	if loadErr != nil {
 		return nil, loadErr
 	}
 
 	merged := mergeConfig(defaultConfig(), raw)
-	if loadErr := validateEffectiveSudoProvenance(path, merged); loadErr != nil {
+	if loadErr := validateEffectiveSudoProvenance(src, merged); loadErr != nil {
 		return nil, loadErr
 	}
 

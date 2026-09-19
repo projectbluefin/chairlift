@@ -292,8 +292,15 @@ Configuration files are searched in the following locations (in order):
 
 1. `/etc/chairlift/config.yml` (system-wide - highest priority)
 2. `/usr/share/chairlift/config.yml` (package maintainer defaults)
-3. `config.yml` beside the ChairLift executable, or in the current working
-   directory when no executable-relative file exists (development fallback)
+3. `config.dev.yml` beside the ChairLift executable, or in the current working
+   directory when no executable-relative file exists (source-checkout fallback)
+4. `config.yml` beside the ChairLift executable, or in the current working
+   directory when no executable-relative file exists (legacy development fallback)
+
+Only the first two locations are trusted: `sudo: true` actions are accepted
+only from them, and an untrusted file may not enable a group whose effective
+actions include a privileged one, even when it inherits that action from the
+built-in defaults. See [CONFIG.md](CONFIG.md) for the full rule.
 
 The first file that exists is authoritative. If it is unreadable, malformed,
 or contains unknown pages, groups, fields, or invalid field types, ChairLift

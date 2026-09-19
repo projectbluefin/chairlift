@@ -47,6 +47,12 @@ func trustConfigDirectory(t *testing.T, dir string) {
 	trustedConfigDirectories = append(append([]string{}, original...), dir)
 }
 
+// configSourceForPath builds the configSource a test wants for path, deciding
+// provenance the same way loadFromPath does.
+func configSourceForPath(path string) configSource {
+	return configSource{path: path, trusted: isTrustedConfigPath(path)}
+}
+
 func TestResolveCandidatePathBranches(t *testing.T) {
 	root := t.TempDir()
 	exeDir := filepath.Join(root, "bin")

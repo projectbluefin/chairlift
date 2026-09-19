@@ -80,13 +80,13 @@ import (
 // reports an error (e.g. a genuine type mismatch decoding into rawConfig's
 // field types), it is classified KindParseType with the yaml error
 // preserved in Err (validatorDecodeError) rather than left unhandled.
-func parseAndValidate(path string, data []byte) (*rawConfig, *LoadError) {
-	doc, err := parseYAMLDocument(path, data)
+func parseAndValidate(src configSource, data []byte) (*rawConfig, *LoadError) {
+	doc, err := parseYAMLDocument(src.path, data)
 	if err != nil {
 		return nil, err
 	}
 
-	effective, err := resolveEffective(path, doc)
+	effective, err := resolveEffective(src.path, doc)
 	if err != nil {
 		return nil, err
 	}
@@ -103,16 +103,16 @@ func parseAndValidate(path string, data []byte) (*rawConfig, *LoadError) {
 		// value) is a no-op overlay too, just like the nil-document case.
 		return &rawConfig{}, nil
 	case top.Kind == yaml.MappingNode:
-		if err := validatePageEntries(path, top); err != nil {
+		if err := validatePageEntries(src, top); err != nil {
 			return nil, err
 		}
 		var raw rawConfig
 		if err := effective.Decode(&raw); err != nil {
-			return nil, validatorDecodeError(path, err)
+			return nil, validatorDecodeError(src.path, err)
 		}
 		return &raw, nil
 	default:
-		return nil, validatorShapeError(path, top)
+		return nil, validatorShapeError(src.path, top)
 	}
 }
 
@@ -132,10 +132,10 @@ func parseAndValidate(path string, data []byte) (*rawConfig, *LoadError) {
 // happen for that canonical struct; that branch is still surfaced
 // defensively as a KindSchema *LoadError wrapping the reflect error
 // (validatorSchemaPagesError) rather than ignored or panicked on.
-func validatePageEntries(path string, top *yaml.Node) *LoadError {
+func validatePageEntries(src configSource, top *yaml.Node) *LoadError {
 	pages, err := SchemaPages()
 	if err != nil {
-		return validatorSchemaPagesError(path, err)
+		return validatorSchemaPagesError(src.path, err)
 	}
 	known := make(map[string]bool, len(pages))
 	for _, page := range pages {
@@ -148,10 +148,10 @@ func validatePageEntries(path string, top *yaml.Node) *LoadError {
 
 		name, ok := schemaKeyName(key)
 		if !ok {
-			return validatorKeyShapeError(path, key)
+			return validatorKeyShapeError(src.path, key)
 		}
 		if !known[name] {
-			return validatorSchemaError(path, key, name)
+			return validatorSchemaError(src.path, key, name)
 		}
 
 		switch value.Kind {
@@ -159,15 +159,15 @@ func validatePageEntries(path string, top *yaml.Node) *LoadError {
 			if value.Tag == "!!null" {
 				continue // known page with a null value: a no-op for that page
 			}
-			return validatorPageValueShapeError(path, name, value)
+			return validatorPageValueShapeError(src.path, name, value)
 		case yaml.SequenceNode:
-			return validatorPageValueShapeError(path, name, value)
+			return validatorPageValueShapeError(src.path, name, value)
 		case yaml.MappingNode:
-			if err := validateGroupEntries(path, name, value); err != nil {
+			if err := validateGroupEntries(src, name, value); err != nil {
 				return err
 			}
 		default:
-			return validatorPageValueShapeError(path, name, value)
+			return validatorPageValueShapeError(src.path, name, value)
 		}
 	}
 
@@ -185,10 +185,10 @@ func validatePageEntries(path string, top *yaml.Node) *LoadError {
 // a page name unknown to it, which cannot happen here since page was
 // already validated against SchemaPages(); that branch is still surfaced
 // defensively as KindSchema (validatorSchemaGroupsError).
-func validateGroupEntries(path, page string, groupsNode *yaml.Node) *LoadError {
+func validateGroupEntries(src configSource, page string, groupsNode *yaml.Node) *LoadError {
 	groups, err := SchemaGroups(page)
 	if err != nil {
-		return validatorSchemaGroupsError(path, err)
+		return validatorSchemaGroupsError(src.path, err)
 	}
 	known := make(map[string]bool, len(groups))
 	for _, group := range groups {
@@ -201,10 +201,10 @@ func validateGroupEntries(path, page string, groupsNode *yaml.Node) *LoadError {
 
 		name, ok := schemaKeyName(key)
 		if !ok {
-			return validatorKeyShapeError(path, key)
+			return validatorKeyShapeError(src.path, key)
 		}
 		if !known[name] {
-			return validatorSchemaError(path, key, name)
+			return validatorSchemaError(src.path, key, name)
 		}
 
 		switch value.Kind {
@@ -212,15 +212,15 @@ func validateGroupEntries(path, page string, groupsNode *yaml.Node) *LoadError {
 			if value.Tag == "!!null" {
 				continue // known group with a null value: a no-op for that group
 			}
-			return validatorGroupValueShapeError(path, name, value)
+			return validatorGroupValueShapeError(src.path, name, value)
 		case yaml.SequenceNode:
-			return validatorGroupValueShapeError(path, name, value)
+			return validatorGroupValueShapeError(src.path, name, value)
 		case yaml.MappingNode:
-			if err := validateGroupFieldEntries(path, name, value); err != nil {
+			if err := validateGroupFieldEntries(src, name, value); err != nil {
 				return err
 			}
 		default:
-			return validatorGroupValueShapeError(path, name, value)
+			return validatorGroupValueShapeError(src.path, name, value)
 		}
 	}
 
@@ -240,10 +240,10 @@ func validateGroupEntries(path, page string, groupsNode *yaml.Node) *LoadError {
 // (validatorDecodeError, matching stage 4's own decode-failure handling).
 // The first failing entry's error is returned; nil means every entry
 // passed.
-func validateGroupFieldEntries(path, group string, fieldsNode *yaml.Node) *LoadError {
+func validateGroupFieldEntries(src configSource, group string, fieldsNode *yaml.Node) *LoadError {
 	fieldTypes, err := groupFieldTypes()
 	if err != nil {
-		return validatorGroupFieldTypesError(path, err)
+		return validatorGroupFieldTypesError(src.path, err)
 	}
 
 	for i := 0; i+1 < len(fieldsNode.Content); i += 2 {
@@ -252,14 +252,14 @@ func validateGroupFieldEntries(path, group string, fieldsNode *yaml.Node) *LoadE
 
 		name, ok := schemaKeyName(key)
 		if !ok {
-			return validatorKeyShapeError(path, key)
+			return validatorKeyShapeError(src.path, key)
 		}
 		fieldType, known := fieldTypes[name]
 		if !known {
-			return validatorSchemaError(path, key, name)
+			return validatorSchemaError(src.path, key, name)
 		}
 		if name == "actions" {
-			if err := validateActionsEntries(path, value); err != nil {
+			if err := validateActionsEntries(src, value); err != nil {
 				return err
 			}
 			continue
@@ -267,7 +267,7 @@ func validateGroupFieldEntries(path, group string, fieldsNode *yaml.Node) *LoadE
 
 		target := reflect.New(fieldType)
 		if err := value.Decode(target.Interface()); err != nil {
-			return validatorDecodeError(path, err)
+			return validatorDecodeError(src.path, err)
 		}
 	}
 
@@ -280,27 +280,27 @@ func validateGroupFieldEntries(path, group string, fieldsNode *yaml.Node) *LoadE
 // scalar or mapping) is KindParseType. This is deliberately not a generic
 // decode into []ActionConfig — yaml.v3 would silently accept a null entry
 // as a zero ActionConfig and silently ignore an unknown action field.
-func validateActionsEntries(path string, actionsNode *yaml.Node) *LoadError {
+func validateActionsEntries(src configSource, actionsNode *yaml.Node) *LoadError {
 	switch actionsNode.Kind {
 	case yaml.ScalarNode:
 		if actionsNode.Tag == "!!null" {
 			return nil // no actions configured: a no-op
 		}
-		return validatorActionsValueShapeError(path, actionsNode)
+		return validatorActionsValueShapeError(src.path, actionsNode)
 	case yaml.SequenceNode:
 		for _, entry := range actionsNode.Content {
 			if entry.Kind != yaml.MappingNode {
 				// A null entry is explicitly not a zero action: it must
 				// be a mapping, like every other non-mapping shape.
-				return validatorActionEntryShapeError(path, entry)
+				return validatorActionEntryShapeError(src.path, entry)
 			}
-			if err := validateActionFieldEntries(path, entry); err != nil {
+			if err := validateActionFieldEntries(src, entry); err != nil {
 				return err
 			}
 		}
 		return nil
 	default:
-		return validatorActionsValueShapeError(path, actionsNode)
+		return validatorActionsValueShapeError(src.path, actionsNode)
 	}
 }
 
@@ -312,10 +312,10 @@ func validateActionsEntries(path string, actionsNode *yaml.Node) *LoadError {
 // real yaml.v3 error preserved (I4) — matching validateGroupFieldEntries'
 // non-"actions" handling one level down. The first failing entry's error is
 // returned; nil means every entry passed.
-func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
+func validateActionFieldEntries(src configSource, entryNode *yaml.Node) *LoadError {
 	fieldTypes, err := actionFieldTypes()
 	if err != nil {
-		return validatorActionFieldTypesError(path, err)
+		return validatorActionFieldTypesError(src.path, err)
 	}
 
 	var hasSudo bool
@@ -329,16 +329,16 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 
 		name, ok := schemaKeyName(key)
 		if !ok {
-			return validatorKeyShapeError(path, key)
+			return validatorKeyShapeError(src.path, key)
 		}
 		fieldType, known := fieldTypes[name]
 		if !known {
-			return validatorSchemaError(path, key, name)
+			return validatorSchemaError(src.path, key, name)
 		}
 
 		target := reflect.New(fieldType)
 		if err := value.Decode(target.Interface()); err != nil {
-			return validatorDecodeError(path, err)
+			return validatorDecodeError(src.path, err)
 		}
 
 		if name == "sudo" {
@@ -356,11 +356,11 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 	}
 
 	if hasSudo {
-		if !isTrustedConfigPath(path) {
-			return validatorSudoProvenanceError(path, sudoNode)
+		if !src.trusted {
+			return validatorSudoProvenanceError(src.path, sudoNode)
 		}
 		if scriptNode == nil || !filepath.IsAbs(scriptVal) {
-			return validatorSudoScriptAbsError(path, scriptNode, scriptVal)
+			return validatorSudoScriptAbsError(src.path, scriptNode, scriptVal)
 		}
 	}
 
@@ -377,8 +377,8 @@ func validateActionFieldEntries(path string, entryNode *yaml.Node) *LoadError {
 // action, however that action got there. Disabled groups are left alone: the
 // built-in privileged default ships disabled, so every untrusted config that
 // does not opt into it keeps loading.
-func validateEffectiveSudoProvenance(path string, cfg *Config) *LoadError {
-	if isTrustedConfigPath(path) {
+func validateEffectiveSudoProvenance(src configSource, cfg *Config) *LoadError {
+	if src.trusted {
 		return nil
 	}
 
@@ -396,7 +396,7 @@ func validateEffectiveSudoProvenance(path string, cfg *Config) *LoadError {
 			}
 			for _, action := range group.Actions {
 				if action.Sudo {
-					return validatorEffectiveSudoProvenanceError(path, name, action.Title)
+					return validatorEffectiveSudoProvenanceError(src.path, name, action.Title)
 				}
 			}
 		}
@@ -405,7 +405,8 @@ func validateEffectiveSudoProvenance(path string, cfg *Config) *LoadError {
 	return nil
 }
 
-// actionFieldTypes reflects over ActionConfig's exported fields, returning// a freshly allocated map from each field's yaml tag name to its declared
+// actionFieldTypes reflects over ActionConfig's exported fields, returning
+// a freshly allocated map from each field's yaml tag name to its declared
 // Go type — the type-carrying counterpart to SchemaActionFields (schema.go),
 // matching groupFieldTypes one schema level down.
 func actionFieldTypes() (map[string]reflect.Type, error) {

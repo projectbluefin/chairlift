@@ -72,6 +72,15 @@ func withConfigPaths(t *testing.T, paths []string) {
 	configPaths = paths
 }
 
+// withTrustedConfigPaths overrides the fixed candidates Load() treats as
+// trusted for the duration of the calling test.
+func withTrustedConfigPaths(t *testing.T, paths []string) {
+	t.Helper()
+	orig := trustedConfigPaths
+	t.Cleanup(func() { trustedConfigPaths = orig })
+	trustedConfigPaths = paths
+}
+
 // TestLoadFromPathUnreadablePathReturnsError confirms loadFromPath surfaces
 // an error for a nonexistent/unreadable path, which is what drives Load()'s
 // defaultConfig() fallback exercised by TestLoadAbsentFileFallsBackToDefaultConfig.

@@ -34,7 +34,7 @@ func wantSchema(t *testing.T, err *LoadError, path string) {
 // a nil error, as required for a document-level no-op overlay.
 func wantNoopRawConfig(t *testing.T, path string, data []byte) {
 	t.Helper()
-	raw, err := parseAndValidate(path, data)
+	raw, err := parseAndValidate(configSourceForPath(path), data)
 	if err != nil {
 		t.Fatalf("parseAndValidate(%q, %q) error = %v, want nil", path, data, err)
 	}
@@ -83,7 +83,7 @@ func TestParseAndValidateNoopOverlay(t *testing.T) {
 func TestParseAndValidateTopLevelScalarRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("just a scalar\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("just a scalar\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -99,7 +99,7 @@ func TestParseAndValidateTopLevelScalarRejected(t *testing.T) {
 func TestParseAndValidateTopLevelSequenceRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("- a\n- b\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("- a\n- b\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -115,7 +115,7 @@ func TestParseAndValidateTopLevelSequenceRejected(t *testing.T) {
 func TestParseAndValidateMalformedYAML(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("a: [\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("a: [\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -131,7 +131,7 @@ func TestParseAndValidateMalformedYAML(t *testing.T) {
 func TestParseAndValidateExtraDocumentRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("a: 1\n---\nb: 2\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("a: 1\n---\nb: 2\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -147,7 +147,7 @@ func TestParseAndValidateExtraDocumentRejected(t *testing.T) {
 func TestParseAndValidateMalformedSourceGraphRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("a:\n  <<: 5\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("a:\n  <<: 5\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -160,7 +160,7 @@ func TestParseAndValidateMalformedSourceGraphRejected(t *testing.T) {
 func TestParseAndValidateMinimalMapping(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("system_page:\n  system_info_group:\n    enabled: false\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("system_page:\n  system_info_group:\n    enabled: false\n"))
 	if err != nil {
 		t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 	}
@@ -218,7 +218,7 @@ func TestRuntimeLoadUsesStrictValidator(t *testing.T) {
 func TestParseAndValidateUnknownPageRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("not_a_page: 1\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("not_a_page: 1\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -237,7 +237,7 @@ func TestParseAndValidateUnknownPageRejected(t *testing.T) {
 func TestParseAndValidateKnownPageNull(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("system_page:\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("system_page:\n"))
 	if err != nil {
 		t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 	}
@@ -261,7 +261,7 @@ func TestParseAndValidateKnownPageWrongShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -292,7 +292,7 @@ func TestParseAndValidateEveryCanonicalPageAccepted(t *testing.T) {
 	for _, page := range pages {
 		t.Run(page, func(t *testing.T) {
 			data := page + ":\n"
-			raw, loadErr := parseAndValidate(path, []byte(data))
+			raw, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 			if loadErr != nil {
 				t.Fatalf("parseAndValidate(%q) error = %v, want nil", data, loadErr)
 			}
@@ -324,7 +324,7 @@ func TestParseAndValidateNonStringPageKeyRejected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -349,7 +349,7 @@ func TestParseAndValidateAliasToNonStringPageKeyRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    enabled: &n true\n*n: x\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -367,7 +367,7 @@ func TestParseAndValidateAliasToNonStringPageKeyRejected(t *testing.T) {
 func TestParseAndValidateQuotedMergeKeyIsSchemaError(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
-	raw, err := parseAndValidate(path, []byte("\"<<\": x\n"))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte("\"<<\": x\n"))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -391,7 +391,7 @@ func TestParseAndValidateBareMergeKeyNotSchemaError(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group: &g\n    enabled: true\n  health_group:\n    <<: *g\n"
 
-	_, err := parseAndValidate(path, []byte(data))
+	_, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if err != nil {
 		t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 	}
@@ -415,7 +415,7 @@ func TestParseAndValidateUnknownPagePrecedesValueInspection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -435,11 +435,11 @@ func TestParseAndValidateEntryOrderConsequence(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 
 	t.Run("unknown page first", func(t *testing.T) {
-		_, err := parseAndValidate(path, []byte("nope: x\nsystem_page: 3\n"))
+		_, err := parseAndValidate(configSourceForPath(path), []byte("nope: x\nsystem_page: 3\n"))
 		wantSchema(t, err, path)
 	})
 	t.Run("known page with wrong shape first", func(t *testing.T) {
-		_, err := parseAndValidate(path, []byte("system_page: 3\nnope: x\n"))
+		_, err := parseAndValidate(configSourceForPath(path), []byte("system_page: 3\nnope: x\n"))
 		wantParseType(t, err, path)
 	})
 }
@@ -450,7 +450,7 @@ func TestParseAndValidateUnknownGroupRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  nope_group:\n    enabled: true\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -469,7 +469,7 @@ func TestParseAndValidateKnownGroupNull(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if err != nil {
 		t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 	}
@@ -492,7 +492,7 @@ func TestParseAndValidateKnownGroupWrongShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -510,7 +510,7 @@ func TestParseAndValidateUnknownGroupFieldRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    nope_field: 1\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -539,7 +539,7 @@ func TestParseAndValidateGroupFieldTypeMismatchRejected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -571,7 +571,7 @@ func TestParseAndValidateUnknownGroupPrecedesValueInspection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -596,7 +596,7 @@ func TestParseAndValidateUnknownGroupFieldPrecedesValueInspection(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -624,7 +624,7 @@ func TestParseAndValidateNonStringGroupKeyRejected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -651,7 +651,7 @@ func TestParseAndValidateNonStringGroupFieldKeyRejected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -667,7 +667,7 @@ func TestParseAndValidateAliasToNonStringGroupKeyRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    enabled: &n true\n  *n: x\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -684,7 +684,7 @@ func TestParseAndValidateAliasToNonStringGroupFieldKeyRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    enabled: &n true\n    *n: x\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -714,7 +714,7 @@ func TestParseAndValidateEveryCanonicalGroupAccepted(t *testing.T) {
 		for _, group := range groups {
 			t.Run(page+"/"+group, func(t *testing.T) {
 				data := page + ":\n  " + group + ":\n"
-				raw, loadErr := parseAndValidate(path, []byte(data))
+				raw, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 				if loadErr != nil {
 					t.Fatalf("parseAndValidate(%q) error = %v, want nil", data, loadErr)
 				}
@@ -785,7 +785,7 @@ func TestParseAndValidateEveryGroupFieldAccepted(t *testing.T) {
 		}
 		t.Run(field, func(t *testing.T) {
 			data := "system_page:\n  system_info_group:\n    " + field + ": " + sampleYAMLValueForType(fieldType) + "\n"
-			raw, loadErr := parseAndValidate(path, []byte(data))
+			raw, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 			if loadErr != nil {
 				t.Fatalf("parseAndValidate(%q) error = %v, want nil", data, loadErr)
 			}
@@ -812,7 +812,7 @@ func TestParseAndValidateActionsValueWrongShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -825,7 +825,7 @@ func TestParseAndValidateActionsValueWrongShape(t *testing.T) {
 
 	t.Run("null value", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    actions:\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if err != nil {
 			t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 		}
@@ -846,7 +846,7 @@ func TestParseAndValidateActionEntryWrongShape(t *testing.T) {
 
 	t.Run("null entry", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    actions:\n      - ~\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil (a null action entry is not a zero action)", raw)
 		}
@@ -854,7 +854,7 @@ func TestParseAndValidateActionEntryWrongShape(t *testing.T) {
 	})
 	t.Run("scalar entry", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    actions:\n      - 5\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 		}
@@ -862,7 +862,7 @@ func TestParseAndValidateActionEntryWrongShape(t *testing.T) {
 	})
 	t.Run("sequence entry", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    actions:\n      - [a]\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 		}
@@ -878,7 +878,7 @@ func TestParseAndValidateUnknownActionFieldRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    actions:\n      - bogus: 1\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -909,7 +909,7 @@ func TestParseAndValidateUnknownActionFieldPrecedesValueInspection(t *testing.T)
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -925,7 +925,7 @@ func TestParseAndValidateActionFieldTypeMismatchRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    actions:\n      - sudo: {a: 1}\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -954,7 +954,7 @@ func TestParseAndValidateNonStringActionFieldKeyRejected(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			raw, err := parseAndValidate(path, []byte(tt.data))
+			raw, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if raw != nil {
 				t.Fatalf("parseAndValidate(%q) rawConfig = %+v, want nil", tt.data, raw)
 			}
@@ -974,7 +974,7 @@ func TestParseAndValidateAliasToNonStringActionFieldKeyRejected(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    actions:\n      - sudo: &n true\n        *n: x\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if raw != nil {
 		t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 	}
@@ -1024,7 +1024,7 @@ func TestParseAndValidateEveryActionFieldAccepted(t *testing.T) {
 				extra = "        script: /usr/bin/clean\n"
 			}
 			data := "system_page:\n  system_info_group:\n    actions:\n      - " + field + ": " + val + "\n" + extra
-			raw, loadErr := parseAndValidate(path, []byte(data))
+			raw, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 			if loadErr != nil {
 				t.Fatalf("parseAndValidate(%q) error = %v, want nil", data, loadErr)
 			}
@@ -1044,7 +1044,7 @@ func TestParseAndValidateTypeErrorRegression(t *testing.T) {
 
 	t.Run("group field", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    enabled: [1, 2]\n"
-		_, loadErr := parseAndValidate(path, []byte(data))
+		_, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 		wantParseType(t, loadErr, path)
 
 		var typeErr *yaml.TypeError
@@ -1055,7 +1055,7 @@ func TestParseAndValidateTypeErrorRegression(t *testing.T) {
 
 	t.Run("action field", func(t *testing.T) {
 		const data = "system_page:\n  system_info_group:\n    actions:\n      - sudo: [1, 2]\n"
-		_, loadErr := parseAndValidate(path, []byte(data))
+		_, loadErr := parseAndValidate(configSourceForPath(path), []byte(data))
 		wantParseType(t, loadErr, path)
 
 		var typeErr *yaml.TypeError
@@ -1075,7 +1075,7 @@ func TestParseAndValidateExplicitZeroPreserved(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	const data = "system_page:\n  system_info_group:\n    enabled: false\n    app_id: \"\"\n    bundles_paths: []\n"
 
-	raw, err := parseAndValidate(path, []byte(data))
+	raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if err != nil {
 		t.Fatalf("parseAndValidate(...) error = %v, want nil", err)
 	}
@@ -1132,7 +1132,7 @@ func TestParseAndValidatePathSchemaName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseAndValidate(path, []byte(tt.data))
+			_, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if err == nil {
 				t.Fatalf("parseAndValidate(%q) error = nil, want non-nil", tt.data)
 			}
@@ -1163,7 +1163,7 @@ func TestParseAndValidatePathValidatorShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseAndValidate(path, []byte(tt.data))
+			_, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if err == nil {
 				t.Fatalf("parseAndValidate(%q) error = nil, want non-nil", tt.data)
 			}
@@ -1196,7 +1196,7 @@ func TestParseAndValidatePathDeclaredType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseAndValidate(path, []byte(tt.data))
+			_, err := parseAndValidate(configSourceForPath(path), []byte(tt.data))
 			if err == nil {
 				t.Fatalf("parseAndValidate(%q) error = nil, want non-nil", tt.data)
 			}
@@ -1211,7 +1211,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("untrusted config with sudo true rejected", func(t *testing.T) {
 		const path = "/home/user/.config/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
 		}
@@ -1224,7 +1224,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("untrusted config with non-sudo action accepted", func(t *testing.T) {
 		const path = "/home/user/.config/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: false\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if err != nil {
 			t.Fatalf("parseAndValidate(...) err = %v, want nil", err)
 		}
@@ -1236,7 +1236,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("path traversal out of trusted dir rejected", func(t *testing.T) {
 		const path = "/etc/chairlift/../tmp/evil/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
 		}
@@ -1249,7 +1249,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("trusted config with sudo true and relative script rejected", func(t *testing.T) {
 		const path = "/etc/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: ./clean.sh\n        sudo: true\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
 		}
@@ -1262,7 +1262,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("trusted config with sudo true and missing script rejected", func(t *testing.T) {
 		const path = "/etc/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        sudo: true\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
 		}
@@ -1296,7 +1296,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 
 		withTrustedConfigDirectories(t, []string{trustedFake})
 
-		raw, err := parseAndValidate(linkPath, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(linkPath), []byte(data))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) raw = %+v, want nil", raw)
 		}
@@ -1309,7 +1309,7 @@ func TestParseAndValidateSudoActionProvenanceAndPath(t *testing.T) {
 	t.Run("trusted config with sudo true and absolute script accepted", func(t *testing.T) {
 		const path = "/etc/chairlift/config.yml"
 		const data = "maintenance_page:\n  maintenance_cleanup_group:\n    actions:\n      - title: Run\n        script: /usr/bin/clean\n        sudo: true\n"
-		raw, err := parseAndValidate(path, []byte(data))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(data))
 		if err != nil {
 			t.Fatalf("parseAndValidate(...) err = %v, want nil", err)
 		}

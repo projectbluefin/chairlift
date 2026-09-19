@@ -61,7 +61,7 @@ func TestParseAndValidateSourcePathVisitBoundary(t *testing.T) {
 	const path = "/etc/chairlift/source-path-boundary.yml"
 
 	t.Run("d=125 clears the bounds pass", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte(buildSourcePathDepthDocument(125)))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(buildSourcePathDepthDocument(125)))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(d=125) rawConfig = %+v, want nil", raw)
 		}
@@ -75,7 +75,7 @@ func TestParseAndValidateSourcePathVisitBoundary(t *testing.T) {
 	})
 
 	t.Run("d=126 fails the bounds pass", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte(buildSourcePathDepthDocument(126)))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(buildSourcePathDepthDocument(126)))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(d=126) rawConfig = %+v, want nil", raw)
 		}
@@ -106,7 +106,7 @@ func TestParseAndValidateEffectiveOutputNodeBoundary(t *testing.T) {
 	const path = "/etc/chairlift/effective-output-boundary.yml"
 
 	t.Run("n=14 clears the bounds pass", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte(buildDoublingAliasChainDocument(14)))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(buildDoublingAliasChainDocument(14)))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(n=14) rawConfig = %+v, want nil", raw)
 		}
@@ -117,7 +117,7 @@ func TestParseAndValidateEffectiveOutputNodeBoundary(t *testing.T) {
 	})
 
 	t.Run("n=15 fails the bounds pass", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte(buildDoublingAliasChainDocument(15)))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(buildDoublingAliasChainDocument(15)))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(n=15) rawConfig = %+v, want nil", raw)
 		}
@@ -144,7 +144,7 @@ func TestParseAndValidatePrecedenceOverKindSchema(t *testing.T) {
 	const path = "/etc/chairlift/precedence.yml"
 
 	t.Run("unknown page plus a second YAML document", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte("nope: 1\n---\nb: 2\n"))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte("nope: 1\n---\nb: 2\n"))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 		}
@@ -160,7 +160,7 @@ func TestParseAndValidatePrecedenceOverKindSchema(t *testing.T) {
 		// the same document buildSourcePathDepthDocument(126) builds:
 		// both conditions (unknown page, over-budget path) hold at once,
 		// and only KindParseType is observed.
-		raw, err := parseAndValidate(path, []byte(buildSourcePathDepthDocument(126)))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte(buildSourcePathDepthDocument(126)))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 		}
@@ -171,7 +171,7 @@ func TestParseAndValidatePrecedenceOverKindSchema(t *testing.T) {
 	})
 
 	t.Run("unknown page plus a source-duplicate key", func(t *testing.T) {
-		raw, err := parseAndValidate(path, []byte("nope:\n  a: 1\n  a: 2\n"))
+		raw, err := parseAndValidate(configSourceForPath(path), []byte("nope:\n  a: 1\n  a: 2\n"))
 		if raw != nil {
 			t.Fatalf("parseAndValidate(...) rawConfig = %+v, want nil", raw)
 		}

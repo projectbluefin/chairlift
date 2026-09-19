@@ -20,24 +20,69 @@ var trustedConfigDirectories = []string{
 	"/usr/share/chairlift",
 }
 
+// configSource pairs a candidate's resolved path with the provenance decision
+// made for it. Trust is decided once, before the file is read, and then travels
+// with the bytes through parsing and validation: no later stage re-inspects the
+// filesystem, so a candidate cannot be re-pointed between read and validation to
+// launder untrusted content as trusted.
+type configSource struct {
+	path    string
+	trusted bool
+}
+
+// isTrustedCandidate reports whether candidate is one of the fixed trusted
+// entries in configPaths. The comparison is on the candidate literal, not on
+// anything the filesystem says about it, so a candidate cannot be promoted to
+// trusted by pointing it somewhere else.
+func isTrustedCandidate(candidate string) bool {
+	for _, trusted := range trustedConfigPaths {
+		if candidate == trusted {
+			return true
+		}
+	}
+	return false
+}
+
 // isTrustedConfigPath reports whether path resides in an administrator- or package-owned
 // location permitted to define sudo actions. Symlinks are resolved to prevent
-// untrusted paths from escaping through trusted symlinks.
+// untrusted paths from escaping through trusted symlinks. It is the provenance
+// rule for an explicitly supplied path; Load() never uses it, deriving trust from
+// which fixed configPaths candidate matched instead.
+//
+// Resolution failures other than a missing entry (permission denied, symlink
+// loops) fail closed: an unresolvable path that exists cannot be proven trusted.
+// A missing entry keeps the lexical path, which cannot be read anyway.
 func isTrustedConfigPath(path string) bool {
-	clean := filepath.Clean(path)
-	if resolved, err := filepath.EvalSymlinks(clean); err == nil {
-		clean = resolved
+	clean, ok := resolveForTrust(filepath.Clean(path))
+	if !ok {
+		return false
 	}
 	for _, dir := range trustedConfigDirectories {
-		cleanDir := filepath.Clean(dir)
-		if resolvedDir, err := filepath.EvalSymlinks(cleanDir); err == nil {
-			cleanDir = resolvedDir
+		cleanDir, ok := resolveForTrust(filepath.Clean(dir))
+		if !ok {
+			continue
 		}
 		if clean == cleanDir || filepath.Dir(clean) == cleanDir {
 			return true
 		}
 	}
 	return false
+}
+
+// resolveForTrust resolves clean's symlinks for a provenance comparison. It
+// reports false when resolution fails for any reason other than the entry not
+// existing, so callers fail closed rather than falling back to a lexical path an
+// attacker may have made meaningless.
+func resolveForTrust(clean string) (string, bool) {
+	resolved, err := filepath.EvalSymlinks(clean)
+	switch {
+	case err == nil:
+		return resolved, true
+	case errors.Is(err, fs.ErrNotExist):
+		return clean, true
+	default:
+		return "", false
+	}
 }
 
 // resolveCandidatePath returns the exact path loadFromPath will read and a

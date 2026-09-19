@@ -49,6 +49,12 @@ import (
 //     authorization. Path resolution is observable security/diagnostic
 //     behavior and its executable/cwd branches are tested directly; all other
 //     runtime-loading helpers remain exercised through Load/loadFromPath.
+//   - isTrustedConfigPath is the sudo-provenance slice's one direct-test
+//     authorization. Load() derives provenance from a candidate's fixed
+//     index, so this predicate is only the rule for an explicitly supplied
+//     path; tests name it to build the configSource that path would get,
+//     keeping the provenance decision in one place instead of restating the
+//     trusted-directory policy in test code.
 var directCallAllowlist = map[string]bool{
 	"parseYAMLDocument": true,
 
@@ -75,6 +81,8 @@ var directCallAllowlist = map[string]bool{
 	"parseAndValidate": true,
 
 	"resolveCandidatePath": true,
+
+	"isTrustedConfigPath": true,
 }
 
 // packageGoFiles lists the *.go files directly in this package's directory
