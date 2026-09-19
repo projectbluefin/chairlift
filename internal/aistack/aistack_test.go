@@ -155,10 +155,12 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	tmp := t.TempDir()
 	previousDir := unitDir
 	previousSystemctl := runSystemctl
+	previousSystemctlOutput := runSystemctlOutput
 	previousWriteQuadlet := writeQuadletFile
 	t.Cleanup(func() {
 		unitDir = previousDir
 		runSystemctl = previousSystemctl
+		runSystemctlOutput = previousSystemctlOutput
 		writeQuadletFile = previousWriteQuadlet
 		dryrun.Set(false)
 	})
@@ -169,6 +171,10 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	runSystemctl = func(_ context.Context, args ...string) error {
 		recorded = append(recorded, strings.Join(args, " "))
 		return nil
+	}
+	runSystemctlOutput = func(_ context.Context, args ...string) (string, error) {
+		recorded = append(recorded, strings.Join(args, " "))
+		return "", nil
 	}
 
 	return tmp, &recorded
@@ -248,24 +254,111 @@ func TestDisableRemovesTheUnit(t *testing.T) {
 }
 
 func TestDisableSucceedsWhenTheServiceIsAlreadyDown(t *testing.T) {
-	dir, _ := stubUnitDir(t)
+	for _, state := range []string{"inactive", "failed", "unknown"} {
+		t.Run(state, func(t *testing.T) {
+			dir, calls := stubUnitDir(t)
+
+			if err := Enable(context.Background(), Select(gpu.Set{})); err != nil {
+				t.Fatalf("Enable: %v", err)
+			}
+			*calls = nil
+
+			stopErr := errors.New("unit is not loaded")
+			runSystemctl = func(_ context.Context, args ...string) error {
+				*calls = append(*calls, strings.Join(args, " "))
+				if args[0] == "stop" {
+					return stopErr
+				}
+				return nil
+			}
+			runSystemctlOutput = func(_ context.Context, args ...string) (string, error) {
+				*calls = append(*calls, strings.Join(args, " "))
+				return state, errors.New("exit status 3")
+			}
+
+			if err := Disable(context.Background()); err != nil {
+				t.Fatalf("Disable: %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(dir, UnitName)); !os.IsNotExist(err) {
+				t.Errorf("Disable left the quadlet on disk after a failed stop of a %s service", state)
+			}
+			want := []string{"stop " + ServiceName, "is-active " + ServiceName, "daemon-reload"}
+			if strings.Join(*calls, "|") != strings.Join(want, "|") {
+				t.Errorf("systemctl calls = %v, want %v", *calls, want)
+			}
+		})
+	}
+}
+
+func TestDisablePreservesTheUnitWhenStopFailsAndServiceRemainsActive(t *testing.T) {
+	dir, calls := stubUnitDir(t)
 
 	if err := Enable(context.Background(), Select(gpu.Set{})); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
+	*calls = nil
 
+	stopErr := errors.New("refused to stop")
 	runSystemctl = func(_ context.Context, args ...string) error {
+		*calls = append(*calls, strings.Join(args, " "))
 		if args[0] == "stop" {
-			return errors.New("unit is not loaded")
+			return stopErr
 		}
 		return nil
 	}
-
-	if err := Disable(context.Background()); err != nil {
-		t.Fatalf("Disable: %v", err)
+	runSystemctlOutput = func(_ context.Context, args ...string) (string, error) {
+		*calls = append(*calls, strings.Join(args, " "))
+		return "active", nil
 	}
-	if _, err := os.Stat(filepath.Join(dir, UnitName)); !os.IsNotExist(err) {
-		t.Error("Disable left the quadlet on disk after a failed stop")
+
+	err := Disable(context.Background())
+	if !errors.Is(err, stopErr) {
+		t.Fatalf("Disable error = %v, want it to wrap %v", err, stopErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, UnitName)); statErr != nil {
+		t.Fatalf("Disable removed or lost the unit after a failed stop: %v", statErr)
+	}
+	want := []string{"stop " + ServiceName, "is-active " + ServiceName}
+	if strings.Join(*calls, "|") != strings.Join(want, "|") {
+		t.Errorf("systemctl calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestDisablePreservesTheUnitWhenStopFailureCannotBeVerified(t *testing.T) {
+	dir, calls := stubUnitDir(t)
+
+	if err := Enable(context.Background(), Select(gpu.Set{})); err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+	*calls = nil
+
+	stopErr := errors.New("stop failed")
+	statusErr := errors.New("dbus unavailable")
+	runSystemctl = func(_ context.Context, args ...string) error {
+		*calls = append(*calls, strings.Join(args, " "))
+		if args[0] == "stop" {
+			return stopErr
+		}
+		return nil
+	}
+	runSystemctlOutput = func(_ context.Context, args ...string) (string, error) {
+		*calls = append(*calls, strings.Join(args, " "))
+		return "", statusErr
+	}
+
+	err := Disable(context.Background())
+	if !errors.Is(err, stopErr) {
+		t.Fatalf("Disable error = %v, want it to wrap %v", err, stopErr)
+	}
+	if !strings.Contains(err.Error(), statusErr.Error()) {
+		t.Errorf("Disable error = %q, want it to mention verification failure %q", err, statusErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, UnitName)); statErr != nil {
+		t.Fatalf("Disable removed or lost the unit without verified stop: %v", statErr)
+	}
+	want := []string{"stop " + ServiceName, "is-active " + ServiceName}
+	if strings.Join(*calls, "|") != strings.Join(want, "|") {
+		t.Errorf("systemctl calls = %v, want %v", *calls, want)
 	}
 }
 

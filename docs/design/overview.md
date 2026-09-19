@@ -1281,6 +1281,10 @@ no helper subcommand and no PolicyKit action, the same shape as gaming mode.
 `IsEnabled` reads the unit file's presence rather than the service's runtime
 state, because the first start pulls several gigabytes and a status-derived
 switch would flicker for the whole pull.
+Disabling stops `chairlift-ai.service` before removing the unit. A failed stop
+is accepted only when a follow-up `systemctl --user is-active` reports the
+service is no longer active or is not loaded; if the service remains active or
+cannot be verified, the unit stays on disk and the UI surfaces the stop error.
 
 ### Powerwash and Factory Reset
 

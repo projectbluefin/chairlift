@@ -268,20 +268,31 @@ func writeQuadletAtomically(dest string, content []byte) error {
 	return nil
 }
 
-// runSystemctl is an injection seam for the `systemctl --user` calls.
+// runSystemctl is an injection seam for `systemctl --user` calls where only
+// the exit status matters.
 var runSystemctl = execSystemctl
 
+// runSystemctlOutput is an injection seam for `systemctl --user` calls whose
+// output decides follow-up behavior.
+var runSystemctlOutput = execSystemctlOutput
+
 func execSystemctl(ctx context.Context, args ...string) error {
+	_, err := execSystemctlOutput(ctx, args...)
+	return err
+}
+
+func execSystemctlOutput(ctx context.Context, args ...string) (string, error) {
 	runCtx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 
 	full := append([]string{"--user"}, args...)
 	cmd := exec.CommandContext(runCtx, "systemctl", full...)
 	output, err := cmd.CombinedOutput()
+	trimmed := strings.TrimSpace(string(output))
 	if err != nil {
-		return fmt.Errorf("systemctl %s: %s", strings.Join(full, " "), strings.TrimSpace(string(output)))
+		return trimmed, fmt.Errorf("systemctl %s: %s", strings.Join(full, " "), trimmed)
 	}
-	return nil
+	return trimmed, nil
 }
 
 // IsAvailable reports whether this host can run the stack at all. Quadlet is
@@ -351,7 +362,9 @@ func Enable(ctx context.Context, stack Stack) error {
 // Disable stops the stack and removes its quadlet. The pulled image and the
 // model cache under ~/ai-workspaces are left alone: they are large, they are
 // expensive to re-fetch, and removing them is a disk-space decision the user
-// did not make by turning a switch off.
+// did not make by turning a switch off. If stopping fails, the unit is removed
+// only after systemd reports the service is no longer active; otherwise the
+// unit remains on disk so the switch keeps reflecting the still-running stack.
 func Disable(ctx context.Context) error {
 	path, err := UnitPath()
 	if err != nil {
@@ -363,15 +376,36 @@ func Disable(ctx context.Context) error {
 		return nil
 	}
 
-	// A stop failure is not fatal: the service may already be down, and the
-	// unit still has to come off disk for the switch to mean anything.
 	if err := runSystemctl(ctx, "stop", ServiceName); err != nil {
-		log.Printf("aistack: stopping %s: %v", ServiceName, err)
+		if verifyErr := verifyStoppedAfterStopError(ctx, err); verifyErr != nil {
+			return verifyErr
+		}
 	}
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return runSystemctl(ctx, "daemon-reload")
+}
+
+func verifyStoppedAfterStopError(ctx context.Context, stopErr error) error {
+	state, err := runSystemctlOutput(ctx, "is-active", ServiceName)
+	state = strings.TrimSpace(state)
+	switch state {
+	case "inactive", "failed", "unknown":
+		return nil
+	case "active", "activating", "reloading", "deactivating":
+		return fmt.Errorf("%w; %s is still %s", stopErr, ServiceName, state)
+	case "":
+		if err != nil {
+			return fmt.Errorf("%w; could not verify %s stopped: %v", stopErr, ServiceName, err)
+		}
+		return fmt.Errorf("%w; could not verify %s stopped: systemctl --user is-active returned no state", stopErr, ServiceName)
+	default:
+		if err != nil {
+			return fmt.Errorf("%w; could not verify %s stopped, state is %q: %v", stopErr, ServiceName, state, err)
+		}
+		return fmt.Errorf("%w; could not verify %s stopped, state is %q", stopErr, ServiceName, state)
+	}
 }
 
 // DefaultContext returns a context with the package's standard timeout.

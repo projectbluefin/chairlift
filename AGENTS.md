@@ -314,6 +314,11 @@ An agent must not break these:
   container at another image grants nothing running podman directly would
   not. Do not give it a pkexec route, and do not reintroduce a vendor/stack
   matrix in the UI.
+  Disabling must preserve the quadlet when `systemctl --user stop` fails and a
+  follow-up `is-active` check cannot prove the service stopped; removing the
+  unit while the service is still active makes the switch lie and removes the
+  user's management handle.
+
   The four images in `internal/aistack`'s `stacks` map are pinned by digest,
   and the digest must be the multi-arch **manifest index**, never one of its
   per-architecture children. `.github/workflows/test.yml` ships a
