@@ -24,6 +24,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/helperexec"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
@@ -39,8 +40,6 @@ const (
 	// instead. The Makefile installs the binary here whenever PREFIX is /usr
 	// (the default).
 	HelperPath = "/usr/bin/chairlift-ublue-helper"
-
-	pkexecCommand = "pkexec"
 
 	// DefaultTimeout bounds a helper invocation. Channel switching only
 	// stages a bootc transaction, but that transaction contacts a registry,
@@ -259,7 +258,7 @@ func SwitchChannel(ctx context.Context, channel imageinfo.Channel) error {
 	if channel != imageinfo.ChannelStable && channel != imageinfo.ChannelTesting {
 		return &Error{Message: fmt.Sprintf("unsupported channel %q", channel)}
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandChannelSwitch, string(channel))
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandChannelSwitch, string(channel))
 	return err
 }
 
@@ -271,14 +270,14 @@ func SetDeveloperMode(ctx context.Context, enabled bool) error {
 	if enabled {
 		command = ubluehelper.CommandDXEnable
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, command)
+	_, _, err := runHelper(ctx, pkexec.Command, command)
 	return err
 }
 
 // Restart restarts the machine. It is the only ChairLift action that ends the
 // user's session, so callers must confirm before reaching it.
 func Restart(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandRestart)
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandRestart)
 	return err
 }
 
@@ -286,7 +285,7 @@ func Restart(ctx context.Context) error {
 // does not restart the machine; Restart is a separate, separately confirmed
 // action.
 func Rollback(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandRollback)
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandRollback)
 	return err
 }
 
@@ -296,7 +295,7 @@ func Rollback(ctx context.Context) error {
 // pageview.FactoryResetConfirmation — because there is nothing this function
 // or the privileged helper behind it can undo once bootc applies the reset.
 func FactoryReset(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandFactoryReset)
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandFactoryReset)
 	return err
 }
 
@@ -306,7 +305,7 @@ func SetAutomaticUpdates(ctx context.Context, enabled bool) error {
 	if enabled {
 		command = ubluehelper.CommandAutoEnable
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, command)
+	_, _, err := runHelper(ctx, pkexec.Command, command)
 	return err
 }
 
@@ -319,7 +318,7 @@ func SwitchDriver(ctx context.Context, driver imageinfo.Driver) error {
 	default:
 		return &Error{Message: fmt.Sprintf("unsupported graphics driver %q", driver)}
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandDriverSwitch, string(driver))
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandDriverSwitch, string(driver))
 	return err
 }
 

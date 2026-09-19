@@ -26,7 +26,6 @@ const (
 	// the host-type gate.
 	MarkerPath = "/usr/lib/snosi/native-ab"
 
-	pkexecCommand  = "pkexec"
 	DefaultTimeout = 30 * time.Minute
 )
 

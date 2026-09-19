@@ -17,9 +17,10 @@
 // which helper failed. A caller that needs that attribution must carry the
 // invocation context itself rather than discriminate on the error type.
 //
-// pkexecPath is a parameter, always "pkexec" in production, so tests can
-// substitute a fake pkexec stand-in without invoking the real pkexec/polkit
-// stack or requiring root.
+// pkexecPath is a parameter so tests can substitute a fake pkexec stand-in
+// without invoking the real pkexec/polkit stack or requiring root. In
+// production every caller passes internal/pkexec.Command, which owns that
+// name for the whole application.
 package helperexec
 
 import (

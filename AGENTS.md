@@ -194,6 +194,15 @@ An agent must not break these:
   and channel closure for both `internal/bootc` and `internal/sysupdate`.
   Provider packages retain their fixed paths, host detection, dry-run logging,
   and public error adapters; do not copy the process loop back into either one.
+- **The escalation program name has one owner.** `internal/pkexec.Command` is
+  the only place the literal `pkexec` is spelled in Go code; every provider
+  (`internal/bootc`, `internal/sysupdate`, `internal/ublue`, `internal/updex`)
+  and `internal/views/pageview` names it instead of declaring a private copy.
+  `internal/helperexec` and `internal/stageexec` keep taking the program name
+  as an injected parameter — that is their test seam — but production callers
+  always pass `pkexec.Command`. `internal/installcheck`'s
+  `TestPkexecCommandHasOneOwner` parses every non-test file under `internal/`
+  and `cmd/` and fails on any other occurrence; it takes no exemptions.
 - **System-integration split.** The
   `projectbluefin-chairlift-system-integration` nFPM package contains the fixed-path
   updex helper, all three PolicyKit policies, and package-maintainer config,

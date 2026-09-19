@@ -12,6 +12,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/journal"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
@@ -19,7 +20,7 @@ import (
 // returns the argv ChairLift assembled for the pkexec boundary.
 //
 // Dry-run is the right seam for the exported mutation functions: unlike
-// runHelper they bind pkexecCommand ("pkexec") themselves, so there is no
+// runHelper they bind pkexec.Command themselves, so there is no
 // path parameter to point at a stand-in. Under dry-run nothing is spawned at
 // all, yet the journal still records the exact argv a live run would have
 // executed — which is the contract these functions own. Every one of them is
@@ -123,7 +124,7 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			entry := journalledArgv(t, test.call)
 
-			want := append([]string{pkexecCommand, HelperPath}, test.wantArgs...)
+			want := append([]string{pkexec.Command, HelperPath}, test.wantArgs...)
 			want = append(want, "--dry-run")
 			if !reflect.DeepEqual(entry.WouldRun, want) {
 				t.Fatalf("assembled argv = %v, want %v", entry.WouldRun, want)
