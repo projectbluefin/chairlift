@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -46,124 +47,236 @@ func invocations(t *testing.T, log string) []string {
 }
 
 // listRow renders one row of `flatpak list --columns=name,application,version,branch,origin,ref`.
-func listRow(id string) string {
-	return strings.Join([]string{id, id, "1.0", "stable", "flathub", "app/" + id + "/x86_64/stable"}, "\t")
+func listRow(id, kindFlag string) string {
+	prefix := "app"
+	if kindFlag == "--runtime" {
+		prefix = "runtime"
+	}
+	return strings.Join([]string{id, id, "1.0", "stable", "flathub", prefix + "/" + id + "/x86_64/stable"}, "\t")
 }
 
-// listingScript answers `list --user` with userIDs and `list --system` with
-// systemIDs; a scope named in failScopes exits non-zero instead.
-func listingScript(userIDs, systemIDs []string, failScopes ...string) string {
+// listing is what the fake `flatpak list` answers for each of the four
+// (scope, kind) queries the inventory runs. It has four fields rather than
+// two because `--app` and `--runtime` are mutually exclusive filters: an ID
+// placed in the application listing is genuinely invisible to the runtime
+// query and the other way round, exactly as on a real host.
+type listing struct {
+	userApps       []string
+	systemApps     []string
+	userRuntimes   []string
+	systemRuntimes []string
+	// fail names queries that exit non-zero instead of answering. An entry
+	// is a scope ("--user"), a kind ("--runtime"), or an exact pair
+	// ("--user --runtime").
+	fail []string
+}
+
+// listingScript renders listing as a `flatpak` stand-in that dispatches on
+// the scope and kind flags the inventory passes.
+func listingScript(l listing) string {
 	// PATH holds only the fake binary's directory, so the script may use
 	// nothing but shell builtins.
-	rows := func(ids []string) string {
+	rows := func(ids []string, kindFlag string) string {
 		quoted := make([]string, 0, len(ids))
 		for _, id := range ids {
-			quoted = append(quoted, "'"+listRow(id)+"'")
+			quoted = append(quoted, "'"+listRow(id, kindFlag)+"'")
 		}
 		return strings.Join(quoted, " ")
 	}
 
-	fails := map[string]bool{}
-	for _, scope := range failScopes {
-		fails[scope] = true
+	fails := func(scope, kindFlag string) bool {
+		for _, entry := range l.fail {
+			if entry == scope || entry == kindFlag || entry == scope+" "+kindFlag {
+				return true
+			}
+		}
+		return false
 	}
 
-	emit := func(scope string, ids []string) string {
-		if fails[scope] {
+	emit := func(scope, kindFlag string, ids []string) string {
+		if fails(scope, kindFlag) {
 			return "  echo 'error: no remote configured' >&2\n  exit 1\n"
 		}
 		if len(ids) == 0 {
 			return "  exit 0\n"
 		}
-		return "  printf '%s\\n' " + rows(ids) + "\n  exit 0\n"
+		return "  printf '%s\\n' " + rows(ids, kindFlag) + "\n  exit 0\n"
 	}
 
-	return "case \"$2\" in\n" +
-		"--user)\n" + emit("--user", userIDs) +
-		"  ;;\n" +
-		"--system)\n" + emit("--system", systemIDs) +
-		"  ;;\n" +
-		"esac\nexit 0\n"
+	queries := []struct {
+		scope    string
+		kindFlag string
+		ids      []string
+	}{
+		{"--user", "--app", l.userApps},
+		{"--user", "--runtime", l.userRuntimes},
+		{"--system", "--app", l.systemApps},
+		{"--system", "--runtime", l.systemRuntimes},
+	}
+
+	// `flatpak list <scope> <kind> --columns=…` puts the scope in $2 and
+	// the kind in $3; a mutation ("install -y --user …") matches no case
+	// and falls through to the trailing success.
+	script := "case \"$2 $3\" in\n"
+	for _, query := range queries {
+		script += "'" + query.scope + " " + query.kindFlag + "')\n" +
+			emit(query.scope, query.kindFlag, query.ids) +
+			"  ;;\n"
+	}
+	return script + "esac\nexit 0\n"
 }
 
-// installedApplications is the production value of the listInstalled seam and
-// the only place the two Flatpak scopes are merged. Nothing else exercises it,
+// installedComponents is the production value of the listInstalled seam and
+// the only place the Flatpak queries are merged. Nothing else exercises it,
 // so the user/system split the whole Enable/Disable contract rests on is
 // established here.
-func TestGamingInstalledAppsMergeUserAndSystemScopes(t *testing.T) {
-	fakeFlatpak(t, listingScript([]string{protonUp}, []string{steam, mangohud}))
+func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{
+		userApps:       []string{protonUp},
+		systemApps:     []string{steam},
+		systemRuntimes: []string{mangohud},
+	}))
 
-	scope, err := installedApplications()
+	scope, err := installedComponents()
 	if err != nil {
-		t.Fatalf("installedApplications() error = %v, want nil", err)
+		t.Fatalf("installedComponents() error = %v, want nil", err)
 	}
 
 	for _, id := range []string{steam, protonUp, mangohud} {
-		if !scope.Installed[id] {
+		if !scope.Installed[refOf(id)] {
 			t.Errorf("scope.Installed[%q] = false, want true — present in either scope counts as installed", id)
 		}
 	}
-	if !scope.User[protonUp] {
+	if !scope.User[refOf(protonUp)] {
 		t.Errorf("scope.User[%q] = false, want true", protonUp)
 	}
 	for _, id := range []string{steam, mangohud} {
-		if scope.User[id] {
+		if scope.User[refOf(id)] {
 			t.Errorf("scope.User[%q] = true, want false — a system-wide component is not ChairLift's to remove", id)
 		}
 	}
 }
 
-func TestGamingInstalledAppsSurviveOneUnavailableScope(t *testing.T) {
+// The bug this guards: MangoHud is a runtime extension, so an inventory built
+// only from `flatpak list --app` never sees it however it was installed. It
+// was therefore reported missing on every refresh — Enable reinstalled it
+// each time it ran, and Disable never removed the ref ChairLift had put there.
+func TestGamingInventorySeesAUserInstalledRuntimeExtension(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{
+		userApps:     []string{steam, protonUp},
+		userRuntimes: []string{mangohud},
+	}))
+
+	state, err := Status()
+	if err != nil {
+		t.Fatalf("Status() error = %v, want nil", err)
+	}
+	if slices.Contains(state.Missing, mangohud) {
+		t.Errorf("Status().Missing = %v, want it not to contain the installed runtime extension %q", state.Missing, mangohud)
+	}
+	if !slices.Contains(state.Installed, mangohud) {
+		t.Errorf("Status().Installed = %v, want it to contain %q", state.Installed, mangohud)
+	}
+	if !slices.Contains(state.UserInstalled, mangohud) {
+		t.Errorf("Status().UserInstalled = %v, want %q — ChairLift installed it user-scoped and can remove it",
+			state.UserInstalled, mangohud)
+	}
+}
+
+// The other half of the same bug: an application listing must not be read as
+// the runtime inventory. A runtime extension present only system-wide counts
+// as installed but is not ChairLift's to remove.
+func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{
+		userApps:       []string{steam, protonUp},
+		systemRuntimes: []string{mangohud},
+	}))
+
+	state, err := Status()
+	if err != nil {
+		t.Fatalf("Status() error = %v, want nil", err)
+	}
+	if !slices.Contains(state.SystemOnly, mangohud) {
+		t.Errorf("Status().SystemOnly = %v, want %q", state.SystemOnly, mangohud)
+	}
+	if slices.Contains(state.UserInstalled, mangohud) {
+		t.Errorf("Status().UserInstalled = %v, want it not to contain the system-scope %q", state.UserInstalled, mangohud)
+	}
+}
+
+func TestGamingInventorySurvivesOneUnavailableScope(t *testing.T) {
 	tests := []struct {
 		name     string
-		script   string
+		listing  listing
 		wantUser bool
 	}{
 		{
 			name:     "system scope unavailable",
-			script:   listingScript([]string{steam}, nil, "--system"),
+			listing:  listing{userApps: []string{steam}, fail: []string{"--system"}},
 			wantUser: true,
 		},
 		{
-			name:   "user scope unavailable",
-			script: listingScript(nil, []string{steam}, "--user"),
+			name:    "user scope unavailable",
+			listing: listing{systemApps: []string{steam}, fail: []string{"--user"}},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fakeFlatpak(t, test.script)
+			fakeFlatpak(t, listingScript(test.listing))
 
-			scope, err := installedApplications()
+			scope, err := installedComponents()
 			if err != nil {
-				t.Fatalf("installedApplications() error = %v, want nil — one usable scope still yields an answer", err)
+				t.Fatalf("installedComponents() error = %v, want nil — one usable scope still yields an answer", err)
 			}
-			if !scope.Installed[steam] {
+			if !scope.Installed[refOf(steam)] {
 				t.Errorf("scope.Installed[%q] = false, want the component from the scope that answered", steam)
 			}
-			if scope.User[steam] != test.wantUser {
-				t.Errorf("scope.User[%q] = %v, want %v", steam, scope.User[steam], test.wantUser)
+			if scope.User[refOf(steam)] != test.wantUser {
+				t.Errorf("scope.User[%q] = %v, want %v", steam, scope.User[refOf(steam)], test.wantUser)
 			}
 		})
 	}
 }
 
-func TestGamingInstalledAppsFailWhenBothScopesFail(t *testing.T) {
-	fakeFlatpak(t, listingScript(nil, nil, "--user", "--system"))
+// A kind that answered in neither scope cannot be classified at all, and
+// reporting its components "missing" is precisely the reinstall loop this
+// change removes. Surface the failure instead.
+func TestGamingInventoryFailsWhenARequiredKindAnswersInNeitherScope(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{
+		userApps:   []string{steam, protonUp},
+		systemApps: []string{flatseal},
+		fail:       []string{"--runtime"},
+	}))
 
-	scope, err := installedApplications()
+	scope, err := installedComponents()
 	if err == nil {
-		t.Fatal("installedApplications() error = nil, want the failure surfaced rather than reported as 'nothing installed'")
+		t.Fatal("installedComponents() error = nil, want the runtime query's failure surfaced rather than MangoHud reported missing")
+	}
+	if !strings.Contains(err.Error(), "runtime") {
+		t.Errorf("installedComponents() error = %q, want it to name the kind that could not be listed", err)
 	}
 	if len(scope.Installed) != 0 || len(scope.User) != 0 {
-		t.Errorf("installedApplications() scope = %+v, want the zero Scope on error", scope)
+		t.Errorf("installedComponents() scope = %+v, want the zero Scope on error", scope)
+	}
+}
+
+func TestGamingInventoryFailsWhenBothScopesFail(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{fail: []string{"--user", "--system"}}))
+
+	scope, err := installedComponents()
+	if err == nil {
+		t.Fatal("installedComponents() error = nil, want the failure surfaced rather than reported as 'nothing installed'")
+	}
+	if len(scope.Installed) != 0 || len(scope.User) != 0 {
+		t.Errorf("installedComponents() scope = %+v, want the zero Scope on error", scope)
 	}
 }
 
 // Status runs the real seam end to end: a host with only one core component
 // present must report gaming mode off.
 func TestStatusDerivesFromTheRealFlatpakQuery(t *testing.T) {
-	fakeFlatpak(t, listingScript([]string{steam}, nil))
+	fakeFlatpak(t, listingScript(listing{userApps: []string{steam}}))
 
 	state, err := Status()
 	if err != nil {
@@ -177,10 +290,35 @@ func TestStatusDerivesFromTheRealFlatpakQuery(t *testing.T) {
 	}
 }
 
+// Disable runs against the real inventory seam so the reported symptom is
+// covered end to end: the user-scope MangoHud ref ChairLift installed is the
+// one it removes.
+func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
+	log := fakeFlatpak(t, listingScript(listing{
+		userApps:     []string{steam},
+		userRuntimes: []string{mangohud},
+	}))
+
+	removed, skipped, failures := Disable()
+	if len(failures) != 0 {
+		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if len(skipped) != 0 {
+		t.Errorf("Disable() skipped = %v, want none — both refs are user-scope", skipped)
+	}
+	if !reflect.DeepEqual(removed, []string{steam, mangohud}) {
+		t.Fatalf("Disable() removed = %v, want both user-scope refs including the runtime extension", removed)
+	}
+	if !slices.Contains(invocations(t, log), "uninstall -y --user "+mangohud) {
+		t.Errorf("Disable() invocations = %v, want an unprivileged user-scope uninstall of %q",
+			invocations(t, log), mangohud)
+	}
+}
+
 func TestEnableInstallsOnlyTheMissingComponentsIntoTheUserScope(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: map[string]bool{steam: true},
-		User:      map[string]bool{steam: true},
+		Installed: refsOf(steam),
+		User:      refsOf(steam),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
@@ -211,8 +349,8 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheUserScope(t *testing.T) {
 // One unavailable Flathub app must not abort the rest of the stack.
 func TestEnableIsolatesAPerComponentInstallFailure(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: map[string]bool{steam: true, protontrick: true, goverlay: true, mangohud: true, flatseal: true},
-		User:      map[string]bool{steam: true, protontrick: true, goverlay: true, mangohud: true, flatseal: true},
+		Installed: refsOf(steam, protontrick, goverlay, mangohud, flatseal),
+		User:      refsOf(steam, protontrick, goverlay, mangohud, flatseal),
 	}, nil)
 	fakeFlatpak(t, "echo 'error: app not found' >&2\nexit 1\n")
 
@@ -243,8 +381,8 @@ func TestEnableReportsNothingWhenEveryComponentIsPresent(t *testing.T) {
 
 func TestDisableRemovesUserScopeComponentsUnprivileged(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: map[string]bool{steam: true, protonUp: true, flatseal: true},
-		User:      map[string]bool{steam: true, protonUp: true},
+		Installed: refsOf(steam, protonUp, flatseal),
+		User:      refsOf(steam, protonUp),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
@@ -272,8 +410,8 @@ func TestDisableRemovesUserScopeComponentsUnprivileged(t *testing.T) {
 
 func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: map[string]bool{steam: true, protonUp: true},
-		User:      map[string]bool{steam: true, protonUp: true},
+		Installed: refsOf(steam, protonUp),
+		User:      refsOf(steam, protonUp),
 	}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")
 

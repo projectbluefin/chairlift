@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/flatpak"
 )
 
 const (
@@ -19,9 +21,24 @@ const (
 func allComponentIDs() []string {
 	ids := make([]string, 0, len(components))
 	for _, component := range components {
-		ids = append(ids, component.ApplicationID)
+		ids = append(ids, component.ID)
 	}
 	return ids
+}
+
+// refOf is the inventory key production code builds for an ID: its declared
+// kind plus the ID. Looking a component up under the other kind is the
+// mistake the Ref key exists to make visible.
+func refOf(id string) Ref {
+	return Ref{Kind: kindOf(id), ID: id}
+}
+
+func refsOf(ids ...string) map[Ref]bool {
+	refs := make(map[Ref]bool, len(ids))
+	for _, id := range ids {
+		refs[refOf(id)] = true
+	}
+	return refs
 }
 
 func TestComponentsAreStableAndNotAliased(t *testing.T) {
@@ -32,21 +49,59 @@ func TestComponentsAreStableAndNotAliased(t *testing.T) {
 
 	seen := make(map[string]bool, len(got))
 	for _, component := range got {
-		if component.ApplicationID == "" {
-			t.Errorf("component %q has no application ID", component.Name)
+		if component.ID == "" {
+			t.Errorf("component %q has no ref ID", component.Name)
 		}
 		if component.Name == "" || component.Description == "" {
-			t.Errorf("component %q is missing display text", component.ApplicationID)
+			t.Errorf("component %q is missing display text", component.ID)
 		}
-		if seen[component.ApplicationID] {
-			t.Errorf("component %q appears twice", component.ApplicationID)
+		if seen[component.ID] {
+			t.Errorf("component %q appears twice", component.ID)
 		}
-		seen[component.ApplicationID] = true
+		seen[component.ID] = true
 	}
 
-	got[0].ApplicationID = "mutated"
-	if Components()[0].ApplicationID == "mutated" {
+	got[0].ID = "mutated"
+	if Components()[0].ID == "mutated" {
 		t.Error("Components() returned an aliased slice")
+	}
+}
+
+// Kind is not a decoration: it selects the `flatpak list` filter a component
+// is looked for under, and the zero value would silently be neither of the
+// two valid kinds.
+func TestEveryComponentDeclaresARefKind(t *testing.T) {
+	for _, component := range Components() {
+		switch component.Kind {
+		case flatpak.KindApplication, flatpak.KindRuntime:
+		default:
+			t.Errorf("component %q has kind %q, want %q or %q",
+				component.ID, component.Kind, flatpak.KindApplication, flatpak.KindRuntime)
+		}
+	}
+}
+
+// MangoHud ships as a Vulkan-layer extension of org.freedesktop.Platform, so
+// classifying it as an application is what made it read as permanently
+// missing: `flatpak list --app` cannot see it no matter how it was installed.
+func TestMangoHudIsModelledAsARuntimeExtension(t *testing.T) {
+	for _, component := range Components() {
+		if component.ID != mangohud {
+			continue
+		}
+		if component.Kind != flatpak.KindRuntime {
+			t.Fatalf("MangoHud kind = %q, want %q", component.Kind, flatpak.KindRuntime)
+		}
+		return
+	}
+	t.Fatalf("MangoHud (%q) is not in the gaming stack", mangohud)
+}
+
+// The stack contains both kinds, which is why the inventory cannot collapse
+// back into a single listing.
+func TestStackKindsCoverApplicationsAndRuntimes(t *testing.T) {
+	if got, want := kinds(), []flatpak.Kind{flatpak.KindApplication, flatpak.KindRuntime}; !reflect.DeepEqual(got, want) {
+		t.Errorf("kinds() = %v, want %v", got, want)
 	}
 }
 
@@ -57,9 +112,9 @@ func TestCoreComponentsDefineTheOnOffThreshold(t *testing.T) {
 	got := make([]string, 0, len(core))
 	for _, component := range core {
 		if !component.Core {
-			t.Errorf("CoreComponents() returned non-core component %q", component.ApplicationID)
+			t.Errorf("CoreComponents() returned non-core component %q", component.ID)
 		}
-		got = append(got, component.ApplicationID)
+		got = append(got, component.ID)
 	}
 	if !reflect.DeepEqual(got, wantCore) {
 		t.Fatalf("CoreComponents() = %v, want %v", got, wantCore)
@@ -214,8 +269,8 @@ func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 // remove it without privilege gaming mode deliberately does not take.
 func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 	scope := Scope{
-		Installed: map[string]bool{steam: true, protonUp: true, mangohud: true},
-		User:      map[string]bool{protonUp: true},
+		Installed: refsOf(steam, protonUp, mangohud),
+		User:      refsOf(protonUp),
 	}
 
 	state := Derive(scope)
@@ -239,8 +294,8 @@ func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 // was never ChairLift's to remove.
 func TestDisableSkipsSystemScopeComponentsInsteadOfFailingOnThem(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: map[string]bool{steam: true, protonUp: true},
-		User:      map[string]bool{},
+		Installed: refsOf(steam, protonUp),
+		User:      refsOf(),
 	}, nil)
 
 	removed, skipped, failures := Disable()

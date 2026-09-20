@@ -52,7 +52,10 @@ so they cost nothing on Snow Linux or any other host.
   This is group membership, not a rebase to a `-dx` image
 - **Gaming Mode**: Install Steam, ProtonUp-Qt, Protontricks, MangoHud,
   GOverlay, and Flatseal as user Flatpaks — nothing is layered onto the system
-  image, so a system update never has to reconcile it
+  image, so a system update never has to reconcile it. MangoHud is a Vulkan
+  layer extending the freedesktop runtime rather than an application, and is
+  inventoried as such, so it is installed once and removed again with the
+  rest of the stack
 
 ### 🔄 Update All
 

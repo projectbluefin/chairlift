@@ -1123,6 +1123,22 @@ at all: every component is a user-scope Flatpak installed with
 `flatpak install --user`, the same reasoning that keeps Homebrew tap trust
 unprivileged.
 
+Its components are not all applications, and `internal/gaming` models the
+difference rather than assuming it away. Each entry in the stack carries a
+`flatpak.Kind` — five are `KindApplication`, and MangoHud
+(`org.freedesktop.Platform.VulkanLayer.MangoHud`) is `KindRuntime`, because
+it ships as a Vulkan-layer extension of `org.freedesktop.Platform` rather
+than as an app. `flatpak list --app` and `flatpak list --runtime` are
+mutually exclusive filters, so the inventory runs one query per
+(scope, kind) pair — four in total — and keys its result on a
+`gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
+inventory reported MangoHud missing however it had been installed, which
+made Enable reinstall it on every run and left Disable unable to remove the
+user-scope ref ChairLift had put there (issue #75). Failure handling follows
+the same shape one level up: a scope that cannot be listed is tolerated, but
+a *kind* that answered in neither scope is fatal, because reporting its
+components missing is exactly the loop that bug was.
+
 ### Update All
 
 `internal/updateall` sequences the one-action update that both bluefinctl

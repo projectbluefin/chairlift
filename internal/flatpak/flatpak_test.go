@@ -37,48 +37,66 @@ func capturedFlatpakArgs(t *testing.T, path string) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func TestParseApplicationList(t *testing.T) {
+func TestParseRefList(t *testing.T) {
 	tests := []struct {
 		name        string
 		output      string
 		installFlag string
+		kind        Kind
 		want        []Application
 	}{
 		{
 			name:        "tab-separated system applications",
 			output:      "Firefox\torg.mozilla.firefox\t120.0\n",
 			installFlag: "--system",
+			kind:        KindApplication,
 			want: []Application{{
 				Name: "Firefox", ApplicationID: "org.mozilla.firefox", Version: "120.0",
-				Installation: "system",
+				Installation: "system", Kind: KindApplication,
 			}},
 		},
 		{
 			name:        "space-separated user application",
 			output:      "GIMP org.gimp.GIMP 2.10",
 			installFlag: "--user",
+			kind:        KindApplication,
 			want: []Application{{
 				Name: "GIMP", ApplicationID: "org.gimp.GIMP", Version: "2.10",
-				Installation: "user",
+				Installation: "user", Kind: KindApplication,
+			}},
+		},
+		{
+			// A runtime extension is the shape `--app` never reports. The
+			// kind comes from the requested filter, not from the ref
+			// column, so the classification survives a row that has to
+			// fall back to whitespace splitting.
+			name:        "user runtime extension",
+			output:      "MangoHud\torg.freedesktop.Platform.VulkanLayer.MangoHud\t0.8.1\n",
+			installFlag: "--user",
+			kind:        KindRuntime,
+			want: []Application{{
+				Name: "MangoHud", ApplicationID: "org.freedesktop.Platform.VulkanLayer.MangoHud",
+				Version: "0.8.1", Installation: "user", Kind: KindRuntime,
 			}},
 		},
 		{
 			name:        "malformed and blank rows are skipped",
 			output:      "\nnot-enough-fields\n",
 			installFlag: "--user",
+			kind:        KindApplication,
 			want:        nil,
 		},
-		{name: "empty output", output: "", installFlag: "--system", want: nil},
+		{name: "empty output", output: "", installFlag: "--system", kind: KindApplication, want: nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseApplicationList(tt.output, tt.installFlag)
+			got, err := parseRefList(tt.output, tt.installFlag, tt.kind)
 			if err != nil {
-				t.Fatalf("parseApplicationList() error = %v", err)
+				t.Fatalf("parseRefList() error = %v", err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("parseApplicationList() = %#v, want %#v", got, tt.want)
+				t.Fatalf("parseRefList() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}
@@ -120,6 +138,31 @@ esac`
 				return err
 			},
 			want: []string{"list", "--system", "--app", "--columns=name,application,version"},
+		},
+		{
+			// The regression this guards: a runtime extension is invisible
+			// to `list --app`, so the runtime listings must ask for
+			// `--runtime` rather than reusing the application filter.
+			name: "list user runtimes",
+			run: func() error {
+				runtimes, err := ListUserRuntimes()
+				if err == nil && (len(runtimes) != 1 || runtimes[0].Kind != KindRuntime || runtimes[0].Installation != "user") {
+					return errors.New("user runtime result was not parsed")
+				}
+				return err
+			},
+			want: []string{"list", "--user", "--runtime", "--columns=name,application,version"},
+		},
+		{
+			name: "list system runtimes",
+			run: func() error {
+				runtimes, err := ListSystemRuntimes()
+				if err == nil && (len(runtimes) != 1 || runtimes[0].Kind != KindRuntime || runtimes[0].Installation != "system") {
+					return errors.New("system runtime result was not parsed")
+				}
+				return err
+			},
+			want: []string{"list", "--system", "--runtime", "--columns=name,application,version"},
 		},
 		{name: "install user", run: func() error { return Install("org.example.App", true) }, want: []string{"install", "-y", "--user", "org.example.App"}},
 		{name: "install system", run: func() error { return Install("org.example.App", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},

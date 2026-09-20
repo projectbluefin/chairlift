@@ -72,12 +72,39 @@ func (e *NotFoundError) Error() string {
 	return e.Message
 }
 
-// Application represents an installed Flatpak application.
+// Kind distinguishes the two shapes of installed Flatpak ref. It exists
+// because `flatpak list` reports them through mutually exclusive filters:
+// `--app` never returns a runtime, and `--runtime` never returns an
+// application. Anything shipped as a runtime extension — the MangoHud Vulkan
+// layer, for one — is therefore invisible to an inventory that only ever
+// passes `--app`.
+type Kind string
+
+const (
+	// KindApplication is an installed application (`app/…` ref).
+	KindApplication Kind = "app"
+	// KindRuntime is an installed runtime, SDK, or runtime extension
+	// (`runtime/…` ref).
+	KindRuntime Kind = "runtime"
+)
+
+// listFlag returns the `flatpak list` filter that reports this kind.
+func (k Kind) listFlag() string {
+	if k == KindRuntime {
+		return "--runtime"
+	}
+	return "--app"
+}
+
+// Application represents an installed Flatpak ref. Kind records whether that
+// ref is an application or a runtime; the field is named for the struct's
+// original application-only use, which every existing caller still has.
 type Application struct {
 	Name          string `json:"name"`
 	ApplicationID string `json:"application"`
 	Version       string `json:"version"`
 	Installation  string `json:"installation"` // "user" or "system"
+	Kind          Kind   `json:"kind"`         // "app" or "runtime"
 }
 
 // stateChangingCommands are commands that modify system state
@@ -212,27 +239,44 @@ func IsInstalledCached() bool {
 
 // ListUserApplications returns all user-installed Flatpak applications
 func ListUserApplications() ([]Application, error) {
-	return listApplications("--user")
+	return listRefs("--user", KindApplication)
 }
 
 // ListSystemApplications returns all system-installed Flatpak applications
 func ListSystemApplications() ([]Application, error) {
-	return listApplications("--system")
+	return listRefs("--system", KindApplication)
 }
 
-// listApplications lists installed applications for a given installation type
-func listApplications(installFlag string) ([]Application, error) {
+// ListUserRuntimes returns every user-installed runtime, SDK, and runtime
+// extension. It is a separate query rather than a widened application listing
+// because `flatpak list --app` excludes them entirely.
+func ListUserRuntimes() ([]Application, error) {
+	return listRefs("--user", KindRuntime)
+}
+
+// ListSystemRuntimes returns every system-installed runtime, SDK, and runtime
+// extension.
+func ListSystemRuntimes() ([]Application, error) {
+	return listRefs("--system", KindRuntime)
+}
+
+// listRefs lists installed refs of one kind for a given installation type
+func listRefs(installFlag string, kind Kind) ([]Application, error) {
 	// Use columns format for structured output
-	output, err := runFlatpakCommand("list", installFlag, "--app", "--columns=name,application,version")
+	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version")
 	if err != nil {
 		return nil, err
 	}
 
-	return parseApplicationList(output, installFlag)
+	return parseRefList(output, installFlag, kind)
 }
 
-// parseApplicationList parses the tabular output from flatpak list
-func parseApplicationList(output string, installFlag string) ([]Application, error) {
+// parseRefList parses the tabular output from flatpak list. The kind is
+// stamped from the filter the listing was requested with rather than read back
+// out of the ref column, so a row that falls through to the whitespace
+// fallback below — where the ref may not have been captured at all — is still
+// classified correctly.
+func parseRefList(output string, installFlag string, kind Kind) ([]Application, error) {
 	var apps []Application
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 
@@ -259,6 +303,7 @@ func parseApplicationList(output string, installFlag string) ([]Application, err
 
 		app := Application{
 			Installation: installation,
+			Kind:         kind,
 		}
 
 		if len(fields) >= 1 {
@@ -270,7 +315,6 @@ func parseApplicationList(output string, installFlag string) ([]Application, err
 		if len(fields) >= 3 {
 			app.Version = strings.TrimSpace(fields[2])
 		}
-
 		apps = append(apps, app)
 	}
 

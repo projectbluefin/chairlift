@@ -391,15 +391,29 @@ Wraps the `flatpak` CLI. Parses tabular (tab-delimited, falling back to whitespa
 
 ### Key types
 
-- **`Application`** — name, applicationID, version, installation (user/system)
+- **`Kind`** — `KindApplication` (`"app"`) or `KindRuntime` (`"runtime"`); the ref shape an entry is, and therefore which `flatpak list` filter reports it
+- **`Application`** — name, applicationID, version, installation (user/system), kind
 - **`UpdateInfo`** — name, applicationID, newVersion, installation
+
+`--app` and `--runtime` are mutually exclusive `flatpak list` filters: an
+application listing never reports a runtime or a runtime extension, and the
+reverse holds too. Anything shipped as a runtime extension — the MangoHud
+Vulkan layer that `internal/gaming` installs, for one — is therefore
+invisible to an application-only inventory no matter how it was installed.
+That is why the listing functions come in both shapes and why `Kind` is
+stamped from the filter the query was made with rather than read back out of
+the `ref` column: a row that falls through to the whitespace-splitting
+fallback may not have captured the ref at all, and it still has to be
+classified.
 
 ### Operations
 
 | Function | CLI command | Timeout | Notes |
 |----------|------------|---------|-------|
-| `ListUserApplications()` | `flatpak list --user --app --columns=name,application,version` | 30s | Tabular parsed |
-| `ListSystemApplications()` | `flatpak list --system --app --columns=name,application,version` | 30s | Tabular parsed |
+| `ListUserApplications()` | `flatpak list --user --app --columns=name,application,version` | 30s | Tabular parsed; `--app` excludes runtimes and runtime extensions |
+| `ListSystemApplications()` | `flatpak list --system --app --columns=name,application,version` | 30s | Tabular parsed; `--app` excludes runtimes and runtime extensions |
+| `ListUserRuntimes()` | `flatpak list --user --runtime --columns=name,application,version` | 30s | Runtimes, SDKs, and runtime extensions only |
+| `ListSystemRuntimes()` | `flatpak list --system --runtime --columns=name,application,version` | 30s | Runtimes, SDKs, and runtime extensions only |
 | `ListUpdates(user)` | `flatpak remote-ls --updates --app --columns=name,application,version [--user\|--system]` | 30s | Separate calls for user/system; `--app` excludes runtimes |
 | `Install(appID, user)` | `flatpak install -y [--user\|--system] <appID>` | 30m | State-changing |
 | `Uninstall(appID, user)` | `flatpak uninstall -y [--user\|--system] <appID>` | 30m | State-changing |
