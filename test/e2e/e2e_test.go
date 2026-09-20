@@ -332,7 +332,7 @@ func stopProcessGroup(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 		}
 	}
 
-	if err := awaitProcessGroupExit(group, shutdownTimeout, drainTimeout); err != nil {
+	if err := awaitProcessGroupExit(hostDrain(), group, shutdownTimeout, drainTimeout); err != nil {
 		t.Errorf("ChairLift smoke process group %d: %v", group, err)
 	}
 }
@@ -346,16 +346,37 @@ func hasExited(done <-chan error) bool {
 	}
 }
 
+// procGroupDrain is what awaitProcessGroupExit needs from the host: the process
+// table to scan and the signal to send. The smoke test hands it the kernel's,
+// so that the drain acts on the processes actually holding the temporary HOME
+// open; the unit tests hand it a fixture, so the escalation can be observed
+// without racing real processes.
+type procGroupDrain struct {
+	procTable string
+	kill      func(pid int) error
+}
+
+func hostDrain() procGroupDrain {
+	return procGroupDrain{
+		procTable: defaultProcTable,
+		kill:      func(pid int) error { return syscall.Kill(pid, syscall.SIGKILL) },
+	}
+}
+
 // awaitProcessGroupExit blocks until no live process is left in group, killing
-// whatever ignored the earlier signal once escalateAfter has passed. The
-// group's leader must already have been reaped: its PID is the group id, and
-// once the kernel is free to reuse that PID an unrelated process would look
+// whatever ignored the earlier signal once escalateAfter has passed. It kills
+// on every scan from then on rather than sweeping once: a member that forks
+// during or after a single sweep leaves a child that was never signalled, and
+// the drain would then only poll to its own timeout while that child keeps
+// writing into the temporary HOME.
+//
+// The group's leader must already have been reaped: its PID is the group id,
+// and once the kernel is free to reuse that PID an unrelated process would look
 // like a member, so the id itself is never counted or signalled here.
-func awaitProcessGroupExit(group int, escalateAfter, timeout time.Duration) error {
+func awaitProcessGroupExit(drain procGroupDrain, group int, escalateAfter, timeout time.Duration) error {
 	start := time.Now()
-	escalated := false
 	for {
-		members, err := liveProcessGroupMembers(defaultProcTable, group)
+		members, err := liveProcessGroupMembers(drain.procTable, group)
 		if err != nil {
 			return err
 		}
@@ -364,12 +385,15 @@ func awaitProcessGroupExit(group int, escalateAfter, timeout time.Duration) erro
 		}
 
 		elapsed := time.Since(start)
-		if !escalated && elapsed >= escalateAfter {
-			escalated = true
+		if elapsed >= escalateAfter {
 			for _, member := range members {
-				// By PID, not by group: a running PID cannot be reused, so
-				// each signal reaches exactly the process that was scanned.
-				if err := syscall.Kill(member.pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+				// By PID, not by group: the group id may have been recycled
+				// since the leader was reaped, and signalling it would reach a
+				// stranger. A member can still exit between this scan and the
+				// signal, so this is subject to the ordinary kill-by-PID race
+				// on a recycled PID; ESRCH is the expected outcome there, and
+				// repeating SIGKILL on a PID already killed is harmless.
+				if err := drain.kill(member.pid); err != nil && !errors.Is(err, syscall.ESRCH) {
 					return fmt.Errorf("kill %s: %w", member, err)
 				}
 			}

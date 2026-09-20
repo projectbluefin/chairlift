@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,10 +161,93 @@ func TestAwaitProcessGroupExitReturnsOnceTheGroupIsDrained(t *testing.T) {
 	}
 
 	start := time.Now()
-	if err := awaitProcessGroupExit(group, shutdownTimeout, drainTimeout); err != nil {
+	if err := awaitProcessGroupExit(hostDrain(), group, shutdownTimeout, drainTimeout); err != nil {
 		t.Errorf("awaitProcessGroupExit on a drained group: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed >= shutdownTimeout {
 		t.Errorf("awaitProcessGroupExit took %s on an already drained group", elapsed)
+	}
+}
+
+// Homebrew's readers spawn their own children, so a member can fork while the
+// drain is escalating and that child is only visible to a later scan. Sweeping
+// once would leave it unsignalled, and the drain would poll to its own timeout
+// while the child kept writing into the temporary HOME — the same "directory
+// not empty" the removal hits.
+func TestAwaitProcessGroupExitKillsMembersThatAppearAfterTheFirstSweep(t *testing.T) {
+	procTable := t.TempDir()
+	writeProcessEntry(t, procTable, 4242, "4242 (brew) R 4200 4200 4200 0 -1 4194304 0 0")
+
+	var killed []int
+	drain := procGroupDrain{
+		procTable: procTable,
+		kill: func(pid int) error {
+			killed = append(killed, pid)
+			if err := os.RemoveAll(filepath.Join(procTable, strconv.Itoa(pid))); err != nil {
+				t.Fatalf("remove fixture process %d: %v", pid, err)
+			}
+			// The parent had already forked; the child joins the group only
+			// after the sweep that killed it.
+			if pid == 4242 {
+				writeProcessEntry(t, procTable, 4243, "4243 (ruby) R 4242 4200 4200 0 -1 4194304 0 0")
+			}
+			return nil
+		},
+	}
+
+	if err := awaitProcessGroupExit(drain, 4200, 0, drainTimeout); err != nil {
+		t.Fatalf("awaitProcessGroupExit: %v", err)
+	}
+
+	want := []int{4242, 4243}
+	if len(killed) != len(want) {
+		t.Fatalf("killed = %v, want %v", killed, want)
+	}
+	for index, pid := range killed {
+		if pid != want[index] {
+			t.Errorf("kill %d = %d, want %d", index, pid, want[index])
+		}
+	}
+}
+
+// Killing on every scan makes signalling a process that has already gone the
+// ordinary case rather than the exceptional one, so ESRCH must not fail the
+// drain.
+func TestAwaitProcessGroupExitToleratesAMemberThatExitsBeforeTheSignal(t *testing.T) {
+	procTable := t.TempDir()
+	writeProcessEntry(t, procTable, 4242, "4242 (brew) R 4200 4200 4200 0 -1 4194304 0 0")
+
+	drain := procGroupDrain{
+		procTable: procTable,
+		kill: func(pid int) error {
+			if err := os.RemoveAll(filepath.Join(procTable, strconv.Itoa(pid))); err != nil {
+				t.Fatalf("remove fixture process %d: %v", pid, err)
+			}
+			return syscall.ESRCH
+		},
+	}
+
+	if err := awaitProcessGroupExit(drain, 4200, 0, drainTimeout); err != nil {
+		t.Errorf("awaitProcessGroupExit on a member that exited before the signal: %v", err)
+	}
+}
+
+// A signal failure that is not ESRCH means the drain cannot establish that the
+// group is gone, so it has to report rather than poll to its timeout.
+func TestAwaitProcessGroupExitReportsASignalFailure(t *testing.T) {
+	procTable := t.TempDir()
+	writeProcessEntry(t, procTable, 4242, "4242 (brew) R 4200 4200 4200 0 -1 4194304 0 0")
+
+	drain := procGroupDrain{
+		procTable: procTable,
+		kill:      func(int) error { return syscall.EPERM },
+	}
+
+	err := awaitProcessGroupExit(drain, 4200, 0, drainTimeout)
+	if err == nil {
+		t.Fatal("awaitProcessGroupExit accepted a signal it could not send")
+	}
+	if !errors.Is(err, syscall.EPERM) {
+		t.Errorf("awaitProcessGroupExit error = %v, want one wrapping EPERM", err)
 	}
 }
