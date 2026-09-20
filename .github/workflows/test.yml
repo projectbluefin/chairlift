@@ -5,6 +5,17 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The merge queue is a separate event: it builds each candidate on its own
+  # temporary ref (refs/heads/gh-readonly-queue/main/pr-<n>-<sha>), and
+  # neither `push` nor `pull_request` fires for it. Without this trigger the
+  # queue has nothing to wait for and merges unvalidated heads.
+  #
+  # Deliberately unfiltered. `github.ref` here is the queue ref, never `main`,
+  # so a `branches: [main]` filter would match nothing and silently restore
+  # the ungated queue this trigger exists to fix. The queue runs only on the
+  # default branch anyway, so there is nothing to filter out.
+  merge_group:
+    types: [checks_requested]
 
 permissions: {}
 
@@ -191,3 +202,31 @@ jobs:
           name: chairlift-${{ matrix.goos }}-${{ matrix.goarch }}
           path: build/chairlift
           retention-days: 7
+
+  # The one check context the default-branch ruleset requires, for both pull
+  # requests and merge groups. Requiring the individual jobs instead would
+  # pin branch protection to names this file can rename or re-matrix — the
+  # build job alone expands to "Build (linux, amd64)" and "Build (linux,
+  # arm64)" — so the ruleset would drift out of step with CI silently. One
+  # name that fans out here cannot.
+  tests-passed:
+    name: Tests Passed
+    needs: [lint, unit-test, race-test, e2e, verify, build]
+    # Required. Without it a failed dependency *skips* this job, and GitHub
+    # counts a skipped required check as passing — which is the ungated merge
+    # this whole workflow exists to prevent, only harder to see.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every gate job to have succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Gate job results: ${RESULTS}"
+          for result in ${RESULTS}; do
+            if [ "${result}" != "success" ]; then
+              echo "::error::A gate job concluded '${result}'; refusing to report success."
+              exit 1
+            fi
+          done
