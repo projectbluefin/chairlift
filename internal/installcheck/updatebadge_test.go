@@ -1,0 +1,136 @@
+package installcheck
+
+import (
+	"bytes"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"testing"
+)
+
+// TestUpdateBadgeStaysNoninteractive pins the "accessibility: render the
+// update count as a noninteractive badge" fix (chairlift#67): the sidebar
+// Updates row's count suffix must be built as a plain *gtk.Label — never a
+// clickable control — and must never gain SetActivatable(true) or a signal
+// handler, so it cannot expose a focusable "N button" with no behavior or
+// steal pointer activation from the Updates row itself
+// (row.SetActivatable(true) in createNavRow is the row's own, sole,
+// actionable target).
+//
+// It lives in internal/installcheck (pure, gate-enforced) rather than
+// internal/window, which imports puregotk and cannot host a test binary on a
+// headless host — see docs/skills/gtk-headless-testing.md.
+func TestUpdateBadgeStaysNoninteractive(t *testing.T) {
+	path := filepath.Join(RepoRoot(), "internal", "window", "window.go")
+
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, path, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+
+	fieldType, found := updateBadgeFieldType(fset, file)
+	if !found {
+		t.Fatalf("Window struct in %s no longer declares an updateBadge field", path)
+	}
+	if fieldType != "*gtk.Label" {
+		t.Errorf("Window.updateBadge field type = %q, want \"*gtk.Label\" — a different widget type can be focusable or activatable", fieldType)
+	}
+
+	sawLabelConstruction := false
+	ast.Inspect(file, func(n ast.Node) bool {
+		assign, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for i, lhs := range assign.Lhs {
+			if !isSelectorOn(lhs, "w", "updateBadge") || i >= len(assign.Rhs) {
+				continue
+			}
+			call, ok := assign.Rhs[i].(*ast.CallExpr)
+			if !ok {
+				t.Errorf("w.updateBadge is assigned from a non-call expression; expected gtk.NewLabel(...)")
+				continue
+			}
+			if !callExprIs(call, "gtk", "NewLabel") {
+				t.Errorf("w.updateBadge is constructed via %s, want gtk.NewLabel(...) — another constructor may produce a focusable or activatable widget", exprString(fset, call.Fun))
+				continue
+			}
+			sawLabelConstruction = true
+		}
+		return true
+	})
+	if !sawLabelConstruction {
+		t.Fatalf("found no w.updateBadge = gtk.NewLabel(...) assignment in %s", path)
+	}
+
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || !isSelectorOn(sel.X, "w", "updateBadge") {
+			return true
+		}
+		switch sel.Sel.Name {
+		case "SetActivatable":
+			t.Errorf("w.updateBadge.SetActivatable(...) is called — the badge must stay noninteractive; only the Updates row may be activatable")
+		case "Connect":
+			t.Errorf("w.updateBadge.Connect(...) is called — the badge must not carry a signal handler")
+		}
+		return true
+	})
+}
+
+// updateBadgeFieldType returns the source text of the Window struct's
+// updateBadge field type, and whether the field was found at all.
+func updateBadgeFieldType(fset *token.FileSet, file *ast.File) (string, bool) {
+	for _, decl := range file.Decls {
+		genDecl, ok := decl.(*ast.GenDecl)
+		if !ok || genDecl.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range genDecl.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || typeSpec.Name.Name != "Window" {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				continue
+			}
+			for _, field := range structType.Fields.List {
+				for _, name := range field.Names {
+					if name.Name == "updateBadge" {
+						return exprString(fset, field.Type), true
+					}
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// isSelectorOn reports whether expr is a selector of the form recv.field,
+// where recv is a plain identifier.
+func isSelectorOn(expr ast.Expr, recv, field string) bool {
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == recv && sel.Sel.Name == field
+}
+
+// exprString renders an AST expression back to source text, e.g. "*gtk.Label"
+// or "gtk.NewButton".
+func exprString(fset *token.FileSet, expr ast.Expr) string {
+	var buf bytes.Buffer
+	if err := format.Node(&buf, fset, expr); err != nil {
+		return "<unprintable>"
+	}
+	return buf.String()
+}
