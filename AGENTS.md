@@ -372,6 +372,40 @@ An agent must not break these:
   gaming mode); Factory Reset is the new `factory-reset` action on
   `chairlift-ublue-helper` and takes no argument, since it has exactly one
   target — the image already booted.
+- **The product name and the code name are different strings, and only one of
+  them has an owner.** The application ships in Bluefin as **Control Center**;
+  ChairLift remains the code name for the repository, the Go module, the
+  binaries, the wrapper, the package names, and the `io.projectbluefin.chairlift`
+  application ID. That ID is fixed by the polkit `exec.path` annotations and the
+  install prefix, so it never moves (ADR-0012). Every user-visible spelling of
+  the product name resolves through `internal/branding.AppName` — window title,
+  navigation page, About dialog, the About menu item, the Help description, the
+  Update All notification, and `config.LoadError.ToastMessage`, the fail-closed
+  configuration toast. `branding` imports nothing on purpose: `internal/config`
+  and `internal/notify` both need the constant, and the constant's first home,
+  `internal/views/pageview`, transitively pulls in `internal/sbom`,
+  `internal/homebrew`, and `internal/troubleshoot`.
+  `internal/installcheck`'s `TestDisplayNameHasOneOwner` parses every non-test
+  file under `internal/` and `cmd/` and requires **every** string literal
+  containing the code name to justify itself — structurally (a `/` makes it a
+  path or URL; the application ID; a `CHAIRLIFT_` variable; a `chairlift-`
+  binary or unit; a `usage: chairlift` line) or by an explicit
+  `codeNameExemptions` entry stating why no user reads it, which
+  `TestCodeNameExemptionsAreAllLive` then rejects once stale. The gate is an
+  allowlist rather than a match on display APIs because the shape-matching
+  version missed two live user-visible strings in a row: a struct field literal
+  (`notify.Notification{Body: …}`) and a `fmt.Sprintf` format string (the
+  configuration toast). Do not narrow it back to call sites.
+  `TestDesktopEntryMatchesTheDisplayName` holds the other half:
+  `data/io.projectbluefin.chairlift.desktop`'s `Name=` must equal the constant,
+  `Type`/`Icon` must be correct, no key may repeat, exactly one registered main
+  category may appear (two makes the app show twice in the menu), and
+  `GenericName`/`Comment`/`Keywords` must be present, because GNOME Shell and
+  KRunner search those keys — AppStream metainfo does not feed shell search, and
+  this repository ships none. Screenshots are the unguarded edge: the
+  walkthrough check is referential, not pixel-based, so a title-bar change means
+  regenerating `docs/screenshots/` deliberately, from the E2E job's
+  `walkthrough-screenshots` artifact with the capture byproducts stripped.
 
 ## Documentation
 

@@ -3,6 +3,8 @@ package config
 import (
 	"errors"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/branding"
 )
 
 func TestLoadErrorDiagnosticMessages(t *testing.T) {
@@ -18,7 +20,9 @@ func TestLoadErrorDiagnosticMessages(t *testing.T) {
 		t.Fatalf("LogMessage() = %q, want %q", got, wantLog)
 	}
 
-	const wantToast = "Configuration error: config read error: /etc/chairlift/config.yml: reading configuration file: permission denied. All feature groups are disabled. Fix the configuration file and restart ChairLift."
+	// The toast is user-facing, so it names the product; the log line above
+	// keeps the code name. That asymmetry is the point of the assertion.
+	wantToast := "Configuration error: config read error: /etc/chairlift/config.yml: reading configuration file: permission denied. All feature groups are disabled. Fix the configuration file and restart " + branding.AppName + "."
 	if got := loadErr.ToastMessage(); got != wantToast {
 		t.Fatalf("ToastMessage() = %q, want %q", got, wantToast)
 	}

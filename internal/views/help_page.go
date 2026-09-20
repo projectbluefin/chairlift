@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/launcher"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -26,7 +27,7 @@ func (uh *UserHome) buildHelpPage() {
 	if uh.config.IsGroupEnabled("help_page", "help_resources_group") {
 		group := adw.NewPreferencesGroup()
 		group.SetTitle("Help &amp; Resources")
-		group.SetDescription("Get help and learn more about ChairLift")
+		group.SetDescription("Get help and learn more about " + branding.AppName)
 
 		groupCfg := uh.config.GetGroupConfig("help_page", "help_resources_group")
 		if groupCfg != nil {

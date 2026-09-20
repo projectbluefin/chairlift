@@ -7,6 +7,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/version"
@@ -81,7 +82,7 @@ func init() {
 				reg.Pin(o, unsafe.Pointer(w))
 
 				w.SetDefaultSize(900, 700)
-				w.SetTitle("ChairLift")
+				w.SetTitle(branding.AppName)
 				w.buildUI()
 				if w.configError != nil {
 					// OverrideConstructed and buildUI both run on GTK's main
@@ -178,7 +179,7 @@ func (w *Window) buildSidebar() *adw.NavigationPage {
 	toolbarView.SetContent(&scrolled.Widget)
 
 	// Create navigation page
-	navPage := adw.NewNavigationPage(&toolbarView.Widget, "ChairLift")
+	navPage := adw.NewNavigationPage(&toolbarView.Widget, branding.AppName)
 
 	return navPage
 }
@@ -270,7 +271,7 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 
 	// Add menu items
 	menu.Append("Keyboard Shortcuts", "win.show-shortcuts")
-	menu.Append("About ChairLift", "win.show-about")
+	menu.Append("About "+branding.AppName, "win.show-about")
 
 	// Create menu button
 	menuButton := gtk.NewMenuButton()
@@ -420,7 +421,7 @@ func (w *Window) NavigationItems() []navigation.Item {
 func (w *Window) onShowAbout() {
 	about := adw.NewAboutWindow()
 	about.SetTransientFor(&w.Window)
-	about.SetApplicationName("ChairLift")
+	about.SetApplicationName(branding.AppName)
 	about.SetApplicationIcon("io.projectbluefin.chairlift")
 	about.SetVersion(version.Version)
 	about.SetDeveloperName("Project Bluefin")

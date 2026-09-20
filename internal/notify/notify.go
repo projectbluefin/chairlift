@@ -17,7 +17,11 @@
 // here instead, where it is a plain table test.
 package notify
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/projectbluefin/chairlift/internal/branding"
+)
 
 // Urgency maps to GLib's NotificationPriority.
 type Urgency int
@@ -54,7 +58,7 @@ func UpdateAllComplete(succeeded, failed, skipped int, restartRequired bool) Not
 	case failed == total:
 		return Notification{
 			Title:   "Update failed",
-			Body:    "ChairLift could not update this system. Open the app for details.",
+			Body:    branding.AppName + " could not update this system. Open the app for details.",
 			Urgency: UrgencyHigh,
 		}
 	case failed > 0:
