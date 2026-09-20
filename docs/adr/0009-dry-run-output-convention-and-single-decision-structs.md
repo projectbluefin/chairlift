@@ -2,6 +2,10 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
+- **Revised:** 2026-09-20 — rule 1 corrected to describe `internal/dryrun`,
+  the single-authority design that replaced the per-wrapper
+  `SetDryRun`/`IsDryRun` fan-out this rule originally documented (the
+  decision itself, and rules 2-3, are unchanged; see Alternatives below).
 
 ## Context
 
@@ -18,15 +22,18 @@ page builder itself is untestable, so the drift would be invisible to CI.
 
 Three rules, applied uniformly:
 
-1. **Every wrapper carries the flag.** `SetDryRun`/`IsDryRun` exist on each
-   wrapper package — `internal/homebrew/homebrew.go:35`,
-   `internal/flatpak/flatpak.go:34`, `internal/bootc/bootc.go:29`,
-   `internal/sysupdate/sysupdate.go:35`, `internal/updex/updex.go:39` — and
-   on `internal/views/dryrun.go:16` for configured custom maintenance
-   scripts, which have no wrapper package of their own. `app.New()` sets all
-   six once at startup. Wrappers skip their state-changing commands entirely
-   under dry-run (e.g. `updex.runHelper` returns before ever invoking
-   pkexec, `internal/updex/updex.go:160-164`).
+1. **One authority carries the flag.** `internal/dryrun` holds the single
+   process-wide preview flag (`dryrun.Set`, `dryrun.Enabled`,
+   `internal/dryrun/dryrun.go`). `app.New()` calls `dryrun.Set` once at
+   startup and every integration — including `internal/views`, for
+   configured custom maintenance scripts — reads `dryrun.Enabled()` rather
+   than keeping a flag of its own. The earlier design gave each wrapper its
+   own `SetDryRun`/`IsDryRun` and made `app.New()` fan out one setter call
+   per package; that was fail-open, because an integration whose setter was
+   never registered executed real mutations while the user believed
+   `--dry-run` was active. Integrations still skip their state-changing
+   commands entirely under preview (e.g. `helperexec.Run` returns before
+   ever invoking pkexec, `internal/helperexec/helperexec.go:131-139`).
 2. **Dry-run output is prefix-fixed.** Skipped executions log
    `[DRY-RUN] would execute: ...`-style lines, and preview toasts begin with
    `[DRY-RUN] Preview:` and end with `— no changes made`
@@ -38,7 +45,7 @@ Three rules, applied uniformly:
    `internal/views/actionmsg`: `ScriptDecision.Execute` (whether a custom
    maintenance script runs at all), `BundleInstallDecision.Complete`,
    `TapTrustDecision.MutateUI`, and `FeatureToggleDecision.Confirm`. The
-   view computes `IsDryRun()` exactly once, builds the decision, and
+   view computes `dryrun.Enabled()` exactly once, builds the decision, and
    branches solely on it for both the mutation and the toast; the caller
    must not independently recompute the condition. Actions with no second
    mutation to gate (upgrade, cleanup, Brewfile dump, bootc/sysupdate stage
@@ -62,10 +69,15 @@ Three rules, applied uniformly:
 
 ## Alternatives considered
 
-- **A single global dry-run flag:** rejected — wrappers are independently
-  usable and independently tested; each package owning its flag keeps its
-  tests hermetic. The cost (six `SetDryRun` calls at startup) is one line
-  each in `app.New()`.
+- **A single global dry-run flag:** originally rejected — wrappers are
+  independently usable and independently tested; each package owning its
+  flag kept its tests hermetic, at the cost of one `SetDryRun` call per
+  wrapper in `app.New()`. Superseded by rule 1 above (2026-09-20):
+  `internal/dryrun` centralizes the flag, and wrapper tests call
+  `dryrun.Set`/`dryrun.Enabled()` directly, so hermeticity is unaffected —
+  the per-wrapper design's fail-open failure mode (a package whose setter
+  was never registered ran for real under `--dry-run`) is what changed the
+  calculus.
 - **Two conditionals per handler (one for toast, one for mutation):**
   rejected — this is the drift bug the decision structs exist to prevent;
   it shipped real inconsistencies (e.g. dry-run tap trust removing rows)
