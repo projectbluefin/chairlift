@@ -35,7 +35,14 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   session, stages `make install`, and executes the installed privileged
   helper's rejection paths. Startup polls the three readiness log markers for
   up to 30 seconds, requires one additional second of process stability, and
-  terminates the private process group as soon as the smoke check passes. It
+  terminates the private process group as soon as the smoke check passes.
+  Terminating it is not the end of the story: startup's Homebrew readers are
+  grandchildren, so `cmd.Wait` never observes them and they keep writing into
+  the temporary `HOME` after the leader is reaped. The smoke test therefore
+  scans `/proc` for the group's surviving members, kills whatever ignored the
+  signal, and only returns once none are left — a cleanup registered *after*
+  `t.TempDir()` so it runs before the directory is removed (issue #91). A test
+  that launches a process group owes the same drain. It
   requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
