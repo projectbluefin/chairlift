@@ -157,6 +157,15 @@ An agent must not break these:
   target crosses the boundary, because each would be a value an authenticated
   caller controls. `internal/ubluehelper`'s tests assert this per command, and
   the e2e boundary test asserts the installed binary rejects each shape.
+  The accepted half is asserted separately, because `main`'s dispatch
+  `switch` has no `default`: a command with no arm parses, matches nothing
+  and exits 0 having done nothing, and `cmd/` is outside the
+  `./internal/...` unit gate. `test/e2e/helper_commands_test.go` runs every
+  command in `ubluehelper.SupportedCommands` and
+  `updexhelper.SupportedCommands` through the staged binary with
+  `--dry-run` and asserts the arm's own output, and derives its own
+  completeness from those two sets — a new subcommand fails that gate until
+  it has an accepted-command case, not only a rejection case.
 - **Every navigable page has a committed screenshot and a walkthrough entry.**
   `make screenshots` regenerates `docs/screenshots/` from the real
   application; `docs/walkthrough.md` is the user-facing tour built from them.
