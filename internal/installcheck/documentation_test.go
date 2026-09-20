@@ -327,7 +327,6 @@ func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
 		"pull_request_review:",
 		"types: [submitted]",
 		"contents: read",
-		"issues: write",
 		"pull-requests: write",
 		"github.event.pull_request.state == 'open'",
 		"!github.event.pull_request.draft",
@@ -345,6 +344,7 @@ func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
 		"github.event.review.body",
 		"context.payload.review.body",
 		"contents: write",
+		"issues: write",
 		"\n        run:",
 	} {
 		if strings.Contains(workflow, unsafe) {
@@ -356,7 +356,10 @@ func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
 	if !strings.Contains(quality, "`.github/workflows/copilot-review-apply.yml`") {
 		t.Error("docs/quality.md does not document the Copilot review apply workflow")
 	}
-	if !strings.Contains(quality, "The review workflow receives read-only contents, issues write, and pull-requests") {
-		t.Error("docs/quality.md does not document issues write permission for the review workflow")
+	if !strings.Contains(quality, "The review workflow receives read-only contents and pull-requests") {
+		t.Error("docs/quality.md does not document the review workflow's pull-requests write permission")
+	}
+	if strings.Contains(quality, "issues write, and pull-requests") {
+		t.Error("docs/quality.md still claims the review workflow holds issues write permission")
 	}
 }
