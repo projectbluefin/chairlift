@@ -133,9 +133,9 @@ requests on issues. When the `ai-fix-requested` label is applied to an open
 issue, it posts one deduplicated `@copilot` request linked to that issue.
 Reapplying the label does not start a duplicate fix cycle.
 
-The review workflow receives read-only contents and pull-requests write
-permissions; the issue workflow receives only issues write permission. Each
-uses its write permission only to create the request comment. Neither workflow
+The review workflow receives read-only contents, issues write, and pull-requests
+write permissions; the issue workflow receives only issues write permission. Each
+uses its write permissions only to create the request comment. Neither workflow
 checks out or executes repository code, interpolates review or issue text into
 a shell, approves, merges, or bypasses required checks. Copilot's resulting
 changes must still pass the ordinary quality gates and human review; review
