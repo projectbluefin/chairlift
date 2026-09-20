@@ -80,6 +80,8 @@ func TestUpdateBadgeStaysNoninteractive(t *testing.T) {
 			t.Errorf("w.updateBadge.SetActivatable(...) is called — the badge must stay noninteractive; only the Updates row may be activatable")
 		case "Connect":
 			t.Errorf("w.updateBadge.Connect(...) is called — the badge must not carry a signal handler")
+		case "AddController":
+			t.Errorf("w.updateBadge.AddController(...) is called — a gesture/event controller makes the badge interactive just like a signal handler would")
 		}
 		return true
 	})
