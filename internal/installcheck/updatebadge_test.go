@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ import (
 //
 // It lives in internal/installcheck (pure, gate-enforced) rather than
 // internal/window, which imports puregotk and cannot host a test binary on a
-// headless host — see docs/skills/gtk-headless-testing.md.
+// headless host — see docs/skills/gtk-headless-testing/SKILL.md.
 func TestUpdateBadgeStaysNoninteractive(t *testing.T) {
 	path := filepath.Join(RepoRoot(), "internal", "window", "window.go")
 
@@ -72,19 +73,39 @@ func TestUpdateBadgeStaysNoninteractive(t *testing.T) {
 			return true
 		}
 		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || !isSelectorOn(sel.X, "w", "updateBadge") {
+		if !ok || !rootedAtUpdateBadge(sel.X) {
 			return true
 		}
-		switch sel.Sel.Name {
-		case "SetActivatable":
-			t.Errorf("w.updateBadge.SetActivatable(...) is called — the badge must stay noninteractive; only the Updates row may be activatable")
-		case "Connect":
-			t.Errorf("w.updateBadge.Connect(...) is called — the badge must not carry a signal handler")
-		case "AddController":
-			t.Errorf("w.updateBadge.AddController(...) is called — a gesture/event controller makes the badge interactive just like a signal handler would")
+		switch {
+		case sel.Sel.Name == "SetActivatable":
+			t.Errorf("w.updateBadge...SetActivatable(...) is called — the badge must stay noninteractive; only the Updates row may be activatable")
+		case strings.HasPrefix(sel.Sel.Name, "Connect"):
+			t.Errorf("w.updateBadge...%s(...) is called — the badge must not carry a signal handler", sel.Sel.Name)
+		case sel.Sel.Name == "AddController":
+			t.Errorf("w.updateBadge...AddController(...) is called — a gesture/event controller makes the badge interactive just like a signal handler would")
+		case sel.Sel.Name == "SetFocusable":
+			t.Errorf("w.updateBadge...SetFocusable(...) is called — a focusable badge can receive keyboard focus like a real control")
+		case sel.Sel.Name == "SetCanTarget":
+			t.Errorf("w.updateBadge...SetCanTarget(...) is called — a badge that can be a pointer target can receive clicks/gestures")
 		}
 		return true
 	})
+}
+
+// rootedAtUpdateBadge reports whether expr is w.updateBadge, or a selector
+// chain built on top of it (e.g. w.updateBadge.Widget), so a call routed
+// through an embedded field — w.updateBadge.Widget.AddController(...) is the
+// idiom this package's own construction code uses at window.go:202 — is not
+// missed just because it isn't the bare w.updateBadge receiver.
+func rootedAtUpdateBadge(expr ast.Expr) bool {
+	if isSelectorOn(expr, "w", "updateBadge") {
+		return true
+	}
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	return rootedAtUpdateBadge(sel.X)
 }
 
 // updateBadgeFieldType returns the source text of the Window struct's
