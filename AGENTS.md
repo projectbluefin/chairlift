@@ -234,6 +234,19 @@ An agent must not break these:
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
   worker goroutine.
+- **Streamed command output renders bounded.** A stage helper prints an
+  unbounded number of lines, so a view may not answer one line with one
+  `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
+  callback per line and leaks a heavyweight widget per line, which is the
+  frozen window of issue #81. Both OS staging handlers render through
+  `stageProgressSink`, which coalesces a burst into one callback with
+  `internal/views/progresslog` and caps the expander at
+  `progresslog.DefaultLimit` rows with `rowset.Tracker.TrimTo`; the Details
+  subtitle comes from `pageview.StagingLogSubtitle`, so a window that hid
+  older lines says so instead of reading like a complete log.
+  `internal/views/progresslog`'s wiring test reads `updates_page.go` and
+  rejects a return to the per-line shape. Any future view that renders a
+  stream of external output owes the same two caps.
 - **Headless view coverage stays puregotk-free.** `internal/views` cannot host
   a test binary on ordinary CI hosts. Shared row text, page status, os-release
   parsing, help-link ordering, and maintenance-command selection live in the

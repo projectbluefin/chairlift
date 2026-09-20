@@ -168,7 +168,7 @@ The upgrade-failure toast text adapts to whether that UI is actually available: 
 
 ### View-layer page presentation (`internal/views/pageview`)
 
-`internal/views/pageview` is one of the nine puregotk-free leaf packages under
+`internal/views/pageview` is one of the ten puregotk-free leaf packages under
 `internal/views/`. It owns the widget-independent presentation decisions shared
 by all six page builders. The GTK files create and mutate widgets, but no longer
 reimplement the variable row text, status text, Help-link inventory, os-release
@@ -237,7 +237,7 @@ Two of the nine small, puregotk-free packages under `internal/views/` (the other
 
 ### View-layer update action state (`internal/views/actionstate`)
 
-`internal/views/actionstate` is one of the nine puregotk-free leaf packages
+`internal/views/actionstate` is one of the ten puregotk-free leaf packages
 under `internal/views`. It owns the state machines and complete outcome tables
 for the Applications and Updates pages' Homebrew mutation controls:
 
@@ -277,7 +277,7 @@ clear/add bookkeeping; no `_test.go` is added to `internal/views`.
 
 ### View-layer update badge state (`internal/views/badgestate`)
 
-`internal/views/badgestate` is one of the nine puregotk-free leaf packages
+`internal/views/badgestate` is one of the ten puregotk-free leaf packages
 under `internal/views`. `Counts` replaces the three independent integer fields
 that previously lived on `UserHome` with one mutex-protected owner for Bootc,
 Sysupdate, Flatpak, and Homebrew update counts. `Set(source, count)` models a completed
@@ -297,7 +297,7 @@ independent count fields.
 
 ### View-layer Brew bundle state (`internal/views/bundleview`)
 
-`internal/views/bundleview` is one of the nine puregotk-free leaf packages
+`internal/views/bundleview` is one of the ten puregotk-free leaf packages
 under `internal/views`. It owns the bundle group's load presentation and its
 per-row concurrency state, leaving `applications_page.go` to construct and
 update widgets only.
@@ -321,7 +321,7 @@ button mutation on the main thread.
 
 ### View-layer row bookkeeping (`internal/views/rowset`)
 
-`internal/views/rowset` is one of the nine puregotk-free leaf packages under `internal/views/` (its siblings are `internal/views/actionmsg`, `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/trustmsg`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`). It holds single-row removal and clear-then-repopulate bookkeeping for rows a view adds to an expander, so a successful action can remove exactly its row and a later list reload does not accumulate stale rows. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview` and `trustmsg`, it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); unlike them it imports nothing at all outside the standard library.
+`internal/views/rowset` is one of the ten puregotk-free leaf packages under `internal/views/` (its siblings are `internal/views/actionmsg`, `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/trustmsg`, `internal/views/flatpakstatus`, `internal/views/featurestatus`, `internal/views/progresslog` and `internal/views/pageview`). It holds single-row removal, clear-then-repopulate bookkeeping, and rolling-window eviction for rows a view adds to an expander, so a successful action can remove exactly its row, a later list reload does not accumulate stale rows, and a streamed log does not grow without bound. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview` and `trustmsg`, it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); unlike them it imports nothing at all outside the standard library.
 
 Exported surface:
 
@@ -332,12 +332,31 @@ Exported surface:
   row, invokes the callback once, preserves the order of all other rows, and
   reports whether it found the row.
 - `Clear(remove func(T))` — invokes the caller-supplied removal callback once per tracked row, in insertion order, then resets the slice to nil. A no-op on an empty or zero-value tracker.
+- `TrimTo(limit int, remove func(T)) int` — evicts the oldest tracked rows until at most `limit` remain, invoking the callback once per evicted row in insertion order, and reports how many it evicted. A negative limit is treated as zero. This is the rolling-log counterpart to `Clear`: `stageProgressSink` calls it after every batch of staging output so the Details expander holds a bounded window of the most recent rows.
 
-`Tracker` has no mutex, generation counter, or in-flight flag by design: GTK main-thread safety is a property of the call site, which keeps the clear-and-repopulate sequence inside a single `sgtk.RunOnMainThread` closure, so the tracker is only ever touched from the main thread. `rowset_test.go` drives several successive simulated loads (including an empty load after a non-empty one) against a fake, non-GTK container and asserts after every load that the container holds exactly that load's rows.
+`Tracker` has no mutex, generation counter, or in-flight flag by design: GTK main-thread safety is a property of the call site, which keeps the clear-and-repopulate sequence inside a single `sgtk.RunOnMainThread` closure, so the tracker is only ever touched from the main thread. `rowset_test.go` drives several successive simulated loads (including an empty load after a non-empty one) against a fake, non-GTK container and asserts after every load that the container holds exactly that load's rows; a separate case appends rows one at a time with a `TrimTo` after each and asserts the container never exceeds the cap and always holds the newest rows in order.
+
+### View-layer bounded staging output (`internal/views/progresslog`)
+
+`internal/views/progresslog` is one of the ten puregotk-free leaf packages under `internal/views/`. It bounds what the two OS staging handlers render from a streamed run. Like `rowset` it imports nothing outside the standard library (`sync`, `time`) and names no widget type.
+
+It exists because of what the obvious rendering costs. `stageexec` emits one `EventMessage` per non-empty output line, and the handlers used to answer each one with its own `sgtk.RunOnMainThread` callback that created a permanent `AdwActionRow`. A stage helper that prints thousands of progress lines therefore queued thousands of main-thread callbacks and left thousands of heavyweight widgets behind for the life of the run — an unresponsive window and unbounded memory (issue #81). Neither half is fixable in isolation: capping rows alone still floods the main thread, and coalescing callbacks alone still accumulates widgets.
+
+Exported surface:
+
+- `DefaultLimit` — 200 retained lines. The stage helpers print tens of lines in the ordinary case, and a run verbose enough to exceed this is one whose earliest lines have already scrolled out of any usable reading position; the full output remains in the journal.
+- `Line{Text string; At time.Time}` — one retained line and the moment it arrived. The timestamp is stamped on `Append`, not on render, so a batch that reaches the main thread late still reports when the helper actually printed.
+- `Batch{Lines []Line; Total int}` — one hand-off: the lines accumulated since the previous `Drain` (never more than the limit), plus every line appended since the `Coalescer` was created, including the ones discarded to stay within the limit.
+- `New(limit int) *Coalescer` — a coalescer retaining at most `limit` lines per batch; a limit below one is raised to one, since a progress view that retains no line cannot show even the most recent one.
+- `(*Coalescer) Limit() int` — the retention cap, which is also the maximum number of rows a caller ever holds for one run.
+- `(*Coalescer) Append(line string) bool` — records a line from the worker goroutine and reports whether the caller must schedule a `Drain`. It returns `true` only for the line that opens a batch, so a burst costs one main-thread callback rather than one per line; past the limit each new line evicts the oldest pending one.
+- `(*Coalescer) Drain() Batch` — returns the pending batch on the main thread and clears the outstanding-callback marker so the next `Append` opens a new batch. Draining without a preceding `Append` reports an empty batch, which is why the completion event can drain unconditionally and lose no trailing line.
+
+`Coalescer` is the one leaf package that *does* take a mutex, because unlike the others it is touched from both sides of the main-thread boundary by design: `Append` runs on the worker goroutine and `Drain` on the GTK main thread. The view half is `stageProgressSink` in `internal/views/updates_page.go`, which both staging handlers share (`bootc.ProgressEvent` and `sysupdate.ProgressEvent` are both `stageexec.ProgressEvent`): `consume` runs on the worker goroutine and touches no widget, `flush` runs on the main thread, renders one batch, calls `rowset.Tracker.TrimTo` to evict older rows from the expander, and sets the Details subtitle from `pageview.StagingLogSubtitle(shown, total)` so a window that hid older lines says so rather than reading like a complete log. `progresslog`'s own tests cover the batching, retention, arrival stamping, and concurrent append/drain; `wiring_test.go` reads `updates_page.go`'s source and fails if either handler goes back to the unbounded per-event shape.
 
 ### View-layer Flatpak update status (`internal/views/flatpakstatus`)
 
-`internal/views/flatpakstatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It turns the outcome of the two Flatpak update queries — how many updates are known, and which of the user/system installations could not be checked — into the Flatpak updates expander's subtitle text plus whether the expander should be expandable. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); like `rowset` it imports nothing at all outside the standard library (`fmt`).
+`internal/views/flatpakstatus` is one of the ten puregotk-free leaf packages under `internal/views/`. It turns the outcome of the two Flatpak update queries — how many updates are known, and which of the user/system installations could not be checked — into the Flatpak updates expander's subtitle text plus whether the expander should be expandable. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); like `rowset` it imports nothing at all outside the standard library (`fmt`).
 
 Exported surface:
 
@@ -354,7 +373,7 @@ The practical consequence is that a total failure — both installations unquery
 
 ### View-layer feature update status (`internal/views/featurestatus`)
 
-`internal/views/featurestatus` is one of the nine puregotk-free leaf packages under `internal/views/`. It owns every string and every decision the Features page's updex update check needs: a feature row's subtitle, whether that feature has an update, and the features group's description. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset`, `flatpakstatus` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`). Unlike them it imports one non-standard-library package, `internal/updex`, for the `CheckResult` type; that is safe because `internal/updex` is itself puregotk-free (`go list -deps ./internal/updex | grep -c puregotk` prints `0`), and `go list -deps ./internal/views/featurestatus | grep -c puregotk` prints `0` too.
+`internal/views/featurestatus` is one of the ten puregotk-free leaf packages under `internal/views/`. It owns every string and every decision the Features page's updex update check needs: a feature row's subtitle, whether that feature has an update, and the features group's description. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset`, `flatpakstatus` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`). Unlike them it imports one non-standard-library package, `internal/updex`, for the `CheckResult` type; that is safe because `internal/updex` is itself puregotk-free (`go list -deps ./internal/updex | grep -c puregotk` prints `0`), and `go list -deps ./internal/views/featurestatus | grep -c puregotk` prints `0` too.
 
 Exported surface:
 
@@ -586,7 +605,7 @@ for event := range progressCh {
 
 ### Progress UI (`internal/views/updates_page.go`)
 
-`onBootcStageClicked()` drives the updates page's "System Update" expander directly (there is a single staging operation, so no shared cross-operation helper is needed) — it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes events on a second goroutine, restoring button state and showing a toast on completion. The system page's `loadBootcStatus()` is a separate, read-only path: it calls `bootc.GetStatus` to display the booted/staged/rollback deployment images, versions, and digests, with no staging controls — staging only happens from the Updates page.
+`onBootcStageClicked()` drives the updates page's "System Update" expander directly (there is a single staging operation, so no shared cross-operation helper is needed) — it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes events on a second goroutine through the shared `stageProgressSink` (see [`internal/views/progresslog`](#view-layer-bounded-staging-output-internalviewsprogresslog)), restoring button state and showing a toast on completion. The system page's `loadBootcStatus()` is a separate, read-only path: it calls `bootc.GetStatus` to display the booted/staged/rollback deployment images, versions, and digests, with no staging controls — staging only happens from the Updates page.
 
 ## snosi sysupdate (`internal/sysupdate/`)
 
@@ -716,7 +735,9 @@ split: only the toast (`actionmsg.SysupdateStage`) is dry-run-aware.
 
 `onSysupdateStageClicked()` is a structural clone of `onBootcStageClicked()`:
 disable button, stream events into a spinner activity row and Details log
-expander, then re-read `GetStatus()` and `RollbackVersion()` from real state
+expander through the same `stageProgressSink` (the two providers'
+`ProgressEvent` types are both `stageexec.ProgressEvent`, so one sink serves
+both), then re-read `GetStatus()` and `RollbackVersion()` from real state
 (not stream output) to set the subtitle
 (`pageview.SysupdateStageResultSubtitle`), rollback row, badge
 (`badgestate.Sysupdate`, 1 iff `IsStaged()`), and toast
