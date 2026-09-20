@@ -57,6 +57,10 @@ type acceptedCommand struct {
 	// wantStderr are substrings a refusing run must print. A refusal is only
 	// accepted when the case declares one.
 	wantStderr []string
+	// allowRefusal permits the command to exit 1 if its stderr contains one
+	// of the allowed substrings (used when dry-running on a host whose
+	// running image or configuration refuses the switch).
+	allowRefusal []string
 	// wantJSONStdout requires stdout to decode as JSON, for the helper that
 	// reports its result as a JSON document rather than a dry-run line.
 	wantJSONStdout bool
@@ -78,7 +82,7 @@ func acceptedHelperCommands() []acceptedCommand {
 	// Bluefin-family host has one. Both are exact expectations.
 	descriptorPresent := descriptorExists()
 
-	switchCases := func(name, command, argument string) acceptedCommand {
+	switchCases := func(name, command, argument string, refusalPrefixes ...string) acceptedCommand {
 		this := acceptedCommand{
 			name:    name,
 			helper:  ublue,
@@ -87,6 +91,7 @@ func acceptedHelperCommands() []acceptedCommand {
 		}
 		if descriptorPresent {
 			this.wantStdout = []string{"[DRY-RUN] would execute: bootc [switch"}
+			this.allowRefusal = refusalPrefixes
 			return this
 		}
 		this.wantStderr = []string{"reading " + imageinfo.DescriptorPath}
@@ -94,8 +99,8 @@ func acceptedHelperCommands() []acceptedCommand {
 	}
 
 	return []acceptedCommand{
-		switchCases("channel switch to stable", ubluehelper.CommandChannelSwitch, ubluehelper.ChannelStable),
-		switchCases("driver switch to standard", ubluehelper.CommandDriverSwitch, string(imageinfo.DriverStandard)),
+		switchCases("channel switch to stable", ubluehelper.CommandChannelSwitch, ubluehelper.ChannelStable, "no stable image is defined for the running tag"),
+		switchCases("driver switch to standard", ubluehelper.CommandDriverSwitch, string(imageinfo.DriverStandard), "no standard image is published for"),
 		{
 			name:              "developer mode enable",
 			helper:            ublue,
@@ -244,6 +249,14 @@ func TestAcceptedHelperCommandsReachTheirDispatchArm(t *testing.T) {
 			}
 
 			if exitCode != 0 {
+				if len(test.allowRefusal) > 0 && exitCode == 1 {
+					for _, refusal := range test.allowRefusal {
+						if strings.Contains(stderr.String(), refusal) {
+							// The arm was reached and refused deterministically.
+							return
+						}
+					}
+				}
 				t.Fatalf("%s exit status = %d, want 0\nstdout:\n%s\nstderr:\n%s",
 					invocation, exitCode, stdout.String(), stderr.String())
 			}
