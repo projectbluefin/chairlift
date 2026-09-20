@@ -1,15 +1,16 @@
 <div align="center">
-    <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg">
-    <h1>ChairLift</h1>
-    <p>A modern system management tool for <a href="https://github.com/frostyard/snosi">Snow Linux</a></p>
+    <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg" width="128">
+    <h1>Control Center</h1>
+    <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a> and <a href="https://github.com/frostyard/snosi">Snow Linux</a></p>
     <p>Manage your Homebrew packages, monitor system health, and maintain your system with ease.</p>
+    <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b> — see <a href="docs/adr/0012-ship-as-control-center-keep-chairlift-code-name.md">ADR-0012</a>.</sub></p>
 </div>
 
 ---
 
 ## Screenshots
 
-![ChairLift Applications page](docs/screenshots/1-applications.png)
+![Control Center Applications page](docs/screenshots/1-applications.png)
 
 **[See every screen in the walkthrough →](docs/walkthrough.md)** — each feature
 shown in the real application, captured by `make screenshots`.
@@ -26,7 +27,7 @@ shown in the real application, captured by `make screenshots`.
   type, and install with loading, error, refresh, and dry-run states
 - **Update & Upgrade**: Keep Homebrew up-to-date and upgrade outdated packages individually
 - **Curated Bundles**: Install pre-configured package bundles for common use cases
-- **Tap Trust Management**: Homebrew 6's per-tap trust model hides packages installed from untrusted taps; ChairLift detects them and lets you trust a tap (and resume its updates) with one click, without requiring root
+- **Tap Trust Management**: Homebrew 6's per-tap trust model hides packages installed from untrusted taps; Control Center detects them and lets you trust a tap (and resume its updates) with one click, without requiring root
 
 ### 🏥 System Health Monitoring
 
@@ -35,13 +36,13 @@ shown in the real application, captured by `make screenshots`.
 
 ### 🖥️ Bluefin, Bluefin LTS & Dakota
 
-On [Bluefin](https://projectbluefin.io), Bluefin LTS, and Dakota, ChairLift adds
+On [Bluefin](https://projectbluefin.io), Bluefin LTS, and Dakota, Control Center adds
 three switches ported from [bluefinctl](https://github.com/projectbluefin/bluefinctl).
 Each hides itself on a system without `/usr/share/ublue-os/image-info.json`,
 so they cost nothing on Snow Linux or any other host.
 
 - **Testing Channel**: Stage a `bootc switch` between the stable and testing
-  release streams, then restart to apply. ChairLift resolves the target
+  release streams, then restart to apply. Control Center resolves the target
   reference from a per-image table rather than a tag suffix, so it never
   targets a tag the image does not publish — which also means the switch is
   correctly unavailable on Bluefin Stable's `latest`/`stable`/`gts`/`beta`
@@ -87,7 +88,7 @@ fails does not stop the others.
 
 ### Installing a Release
 
-Each [ChairLift release](https://github.com/projectbluefin/chairlift/releases)
+Each [Control Center release](https://github.com/projectbluefin/chairlift/releases)
 provides ready-to-install packages for 64-bit Intel/AMD and Arm systems.
 Choose the package format for your distribution:
 
@@ -103,7 +104,7 @@ package. It includes the GUI, both privileged helpers
 desktop assets, four PolicyKit policies, and package-maintainer configuration.
 
 Use the similarly named `projectbluefin-chairlift-system-integration` package
-**only** when the ChairLift GUI is already delivered through a user-scoped
+**only** when the Control Center GUI is already delivered through a user-scoped
 mechanism such as the Homebrew cask. That package supplies only the root-owned
 helpers, policies, configuration, and channel-table example needed by such an
 installation; it does not include the GUI. Never install both packages: they
@@ -156,7 +157,7 @@ rule). This also matches the layout used by ChairLift's full
 `projectbluefin-chairlift` nFPM package, so a source install and a full
 packaged install end up identical.
 
-ChairLift does not install passwordless PolicyKit rules. Bootc staging,
+Control Center does not install passwordless PolicyKit rules. Bootc staging,
 sysupdate staging, updex writes, and Bluefin-family system operations use the
 policies' normal administrator-authentication defaults; an active session may
 retain a successful authorization briefly. The updex helper accepts only
@@ -198,7 +199,7 @@ The bootc policy deliberately retains the fixed
 `/usr/libexec/bootc-update-stage` path. A distribution must provide a trusted
 stage helper at exactly that path before enabling `bootc_updates_group`; the
 integration package does not provide a distro-specific staging implementation.
-ChairLift hides the group when the helper is absent. The sysupdate policy
+Control Center hides the group when the helper is absent. The sysupdate policy
 likewise retains the fixed `/usr/libexec/snosi-sysupdate-stage` path used by
 `sysupdate_updates_group` on native A/B installs; that helper (and the
 `/usr/lib/snosi/native-ab` marker gating the group) ship with the OS image.
@@ -234,7 +235,7 @@ Other useful targets: `make dev` (CGO-enabled build with `-race` for development
 
 ## Usage
 
-Launch ChairLift from your application menu or run:
+Launch Control Center from your application menu or run:
 
 ```bash
 chairlift
@@ -274,7 +275,7 @@ sidebar row and page title.
   confirm the removal
 - **Upgrade**: Click upgrade button next to outdated packages
 
-ChairLift lists and uninstalls installed user and system Flatpak applications,
+Control Center lists and uninstalls installed user and system Flatpak applications,
 but delegates discovery and installation of new Flatpaks to the external
 manager configured by
 `applications_page.applications_installed_group.app_id` (Bazaar by default).
@@ -294,11 +295,11 @@ leaving the row marked as installed.
 
 ## Configuration
 
-ChairLift is highly configurable and can be adapted for different Linux distributions. The application uses a YAML configuration file to control which features are displayed and which applications are launched for various system management tasks.
+Control Center is highly configurable and can be adapted for different Linux distributions. The application uses a YAML configuration file to control which features are displayed and which applications are launched for various system management tasks.
 
-### Making ChairLift Portable
+### Making Control Center Portable
 
-While ChairLift was designed for Snow Linux, it can be easily customized for other distributions by:
+While Control Center was designed for Snow Linux, it can be easily customized for other distributions by:
 
 - **Disabling Snow-specific features**: Hide Homebrew package management if your distribution doesn't use it
 - **Customizing system tools**: Configure which applications to launch for system monitoring, Flatpak management, etc.
@@ -329,10 +330,10 @@ actions include a privileged one, even when it inherits that action from the
 built-in defaults. See [CONFIG.md](CONFIG.md) for the full rule.
 
 The first file that exists is authoritative. If it is unreadable, malformed,
-or contains unknown pages, groups, fields, or invalid field types, ChairLift
+or contains unknown pages, groups, fields, or invalid field types, Control Center
 does not use a lower-priority file: it hides every configurable feature group,
 logs a `CONFIGURATION ERROR`, and shows a persistent error toast with the path
-and cause. Fix the file and restart ChairLift. If every candidate is absent,
+and cause. Fix the file and restart Control Center. If every candidate is absent,
 the built-in defaults apply.
 
 ---

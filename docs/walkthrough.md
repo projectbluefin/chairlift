@@ -1,7 +1,7 @@
-# ChairLift walkthrough
+# Control Center walkthrough
 
-Every screen in ChairLift, captured from the real app by `make screenshots`
-(see [below](#how-these-are-made)) — not mockups.
+Every screen in Control Center, captured from the real app by `make
+screenshots` (see [below](#how-these-are-made)) — not mockups.
 
 One app for Snow Linux and the Bluefin family (Bluefin, Bluefin LTS, Dakota).
 Everything here is one control per decision — no strategy pickers, no

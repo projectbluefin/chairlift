@@ -12,8 +12,8 @@ import (
 // rather than by a build, a service, or the application. The name is the
 // classifier because that is the convention already in use
 // (channels.example.yml), and it keeps tool configuration consumed by external
-// services (codecov.yml, mkdocs.yml) out of scope without an allowlist that
-// would itself need maintaining.
+// services (codecov.yml) out of scope without an allowlist that would itself
+// need maintaining.
 func isExampleConfig(name string) bool {
 	if !strings.HasSuffix(name, ".yml") && !strings.HasSuffix(name, ".yaml") {
 		return false
