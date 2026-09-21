@@ -101,6 +101,22 @@ func TestSummarizeDiagnosticKeepsOnlyTheFinalStateOfARewrittenLine(t *testing.T)
 	}
 }
 
+// A CRLF line ending is not a progress rewrite: the trailing CR must not
+// make the line collapse to nothing, or CRLF-only output would summarize as
+// an empty string and the toast would read "Brew command failed: ".
+func TestSummarizeDiagnosticKeepsCRLFTerminatedLines(t *testing.T) {
+	output := "Warning: tap is shallow\r\nError: donor bottle is corrupt\r\n"
+
+	if got := summarizeDiagnostic(output); got != "Error: donor bottle is corrupt" {
+		t.Errorf("summarizeDiagnostic = %q, want the CRLF-terminated error line", got)
+	}
+
+	rewritesThenCRLF := "####  10.0%\r#####  99.9%\r\n"
+	if got := summarizeDiagnostic(rewritesThenCRLF); got != "#####  99.9%" {
+		t.Errorf("summarizeDiagnostic = %q, want the final rewrite state of a CRLF line", got)
+	}
+}
+
 // An over-long line is cut in the middle so both what failed and what it
 // failed on survive: a bare head-truncation drops the reference at the end.
 func TestSummarizeDiagnosticKeepsBothEndsOfAnOverlongLine(t *testing.T) {

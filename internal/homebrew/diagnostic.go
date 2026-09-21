@@ -67,10 +67,13 @@ func summarizeDiagnostic(output string) string {
 
 // diagnosticLines splits captured output into trimmed, non-empty lines.
 // Carriage returns are progress rewrites of a single terminal line, so only
-// the final state of such a line is kept.
+// the final state of such a line is kept. A trailing CR is a line ending
+// (CRLF), not a rewrite, so it is trimmed before the last rewrite is chosen;
+// otherwise a CRLF line would collapse to nothing.
 func diagnosticLines(output string) []string {
 	var lines []string
 	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimRight(line, "\r")
 		if idx := strings.LastIndex(line, "\r"); idx >= 0 {
 			line = line[idx+1:]
 		}

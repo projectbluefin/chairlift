@@ -215,8 +215,14 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 			// The message below is distilled to one line for the UI, so the
 			// full retained output is logged here: it is the evidence a bug
 			// report needs, and nothing else preserves it.
-			if trimmed := strings.TrimSpace(diagnosticText); trimmed != "" {
-				log.Printf("Command '%s' failed:\n%s", display, trimmed)
+			// Only for state-changing commands: a read-only `brew search`
+			// exits 1 with "No formulae or casks found" when one namespace
+			// has no matches, and searchKind treats that as an empty result,
+			// not a failure worth a log line.
+			if boundedOutput {
+				if trimmed := strings.TrimSpace(diagnosticText); trimmed != "" {
+					log.Printf("Command '%s' failed:\n%s", display, trimmed)
+				}
 			}
 			if isUntrustedTapMessage(stderrText) {
 				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", summarizeDiagnostic(stderrText))}
