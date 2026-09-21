@@ -100,6 +100,14 @@ Those operations belong to the configured external manager.
   their absolute paths. The first-line `#` comment, when present, is displayed
   as the bundle description.
 
+A failed bundle install reports the cause rather than the progress that
+preceded it: ChairLift reads both of brew's output streams, because
+`brew bundle` replays a failing entry's own installer output on stdout while
+printing its summary on stderr, and shows the first error line it finds in a
+persistent toast. Error toasts wrap, so a long message stays readable. The
+complete captured output — bounded to the last 64 KiB per stream — is written
+to ChairLift's log, which is where to look when filing a bug report.
+
 ### Maintenance Page (`maintenance_page`)
 
 | Group | Key | Description |

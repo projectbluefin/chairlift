@@ -446,11 +446,32 @@ func (w *Window) ShowToast(message string) {
 	w.AddToast(toast)
 }
 
-// ShowErrorToast shows an error toast
+// errorToastWidthChars caps how wide the error toast's wrapping label asks to
+// be. AdwToast's own title is a single ellipsized line, which is fine for the
+// short confirmations ShowToast carries but not for a failure message that
+// quotes a command's own error text: issue #140 reported a bundle install
+// failure whose toast read "Brew command failed: Installing io.podman_des…",
+// hiding the actual cause. A wrapping custom title shows the whole message,
+// and the message itself is length-bounded at the source.
+const errorToastWidthChars = 48
+
+// ShowErrorToast shows an error toast. It persists until dismissed and, unlike
+// ShowToast, wraps: an error message carries the failing command's own
+// diagnosis and routinely exceeds one line.
+//
+// The toast is still constructed with the message as its plain title.
+// adw_toast_set_custom_title clears that title itself, so this costs nothing,
+// and it keeps the message visible rather than blank should the custom title
+// ever fail to apply.
 func (w *Window) ShowErrorToast(message string) {
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(0) // Persist until dismissed
+	title := gtk.NewLabel(message)
+	title.SetWrap(true)
+	title.SetMaxWidthChars(errorToastWidthChars)
+	title.SetXalign(0)
+	toast.SetCustomTitle(&title.Widget)
 	w.AddToast(toast)
 }
 

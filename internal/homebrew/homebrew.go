@@ -202,15 +202,26 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 		}
 		stderrText := stderr.String()
 		diagnosticText := stderrText
-		if boundedOutput && diagnosticText == "" {
-			diagnosticText = stdout.String()
+		if boundedOutput {
+			// A state-changing command splits its diagnosis across both
+			// streams — `brew bundle install` replays a failing entry's own
+			// installer output on stdout and prints its summary on stderr —
+			// so keeping only the non-empty one dropped the root cause
+			// whenever the other stream also had content.
+			diagnosticText = joinCommandStreams(stdout.String(), stderrText)
 		}
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			if isUntrustedTapMessage(stderrText) {
-				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", stderrText)}
+			// The message below is distilled to one line for the UI, so the
+			// full retained output is logged here: it is the evidence a bug
+			// report needs, and nothing else preserves it.
+			if trimmed := strings.TrimSpace(diagnosticText); trimmed != "" {
+				log.Printf("Command '%s' failed:\n%s", display, trimmed)
 			}
-			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", diagnosticText), Err: err}
+			if isUntrustedTapMessage(stderrText) {
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", summarizeDiagnostic(stderrText))}
+			}
+			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", summarizeDiagnostic(diagnosticText)), Err: err}
 		}
 		// exec.ErrNotFound covers a bare name missing from $PATH;
 		// fs.ErrNotExist covers an explicit path that does not exist.

@@ -297,6 +297,31 @@ func TestRunBrewCommandAtBoundsMutationOutput(t *testing.T) {
 		}
 	})
 
+	// Issue #140: `brew bundle install` replays a failing entry's own
+	// installer output on stdout and prints its summary on stderr. Keeping
+	// stderr alone — the old behaviour whenever stderr was non-empty — threw
+	// away the only line that said why the entry failed.
+	t.Run("failed mutation reports the cause from either stream", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Installing io.podman_desktop.PodmanDesktop"
+echo 'error: Remote "flathub" not found'
+echo "Error: Homebrew Bundle failed! 1 Brewfile dependency failed to install." >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		if !strings.Contains(err.Error(), `Remote "flathub" not found`) {
+			t.Errorf("error = %q, want the installer's own cause from stdout", err.Error())
+		}
+		if strings.Contains(err.Error(), "Installing io.podman_desktop") {
+			t.Errorf("error = %q, want the progress line left out of the summary", err.Error())
+		}
+	})
+
 	t.Run("failed mutation reports stderr tail", func(t *testing.T) {
 		stderr := "prefix-marker" + strings.Repeat("x", commandOutputTailLimit) + "tail-marker"
 		script := fakeBrew(t, "printf '%s' '"+stderr+"' >&2\nexit 3")
