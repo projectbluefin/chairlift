@@ -64,7 +64,7 @@ are listed in [org-adrs.md](org-adrs.md).
   string-matching unit tests; prose is testable
 - [adr/0012-ship-as-control-center-keep-chairlift-code-name.md](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)
   — the application ships as "Control Center" and keeps ChairLift as the code
-  name; `pageview.AppName` owns every user-visible spelling, and two
+  name; `branding.AppName` owns every user-visible spelling, and three
   `internal/installcheck` gates hold the split
 
 ### Design
