@@ -119,19 +119,20 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		return
 	}
 
+	current, key := uh.liveryToggleState(surface)
+	if enabled == current {
+		return
+	}
+
 	if surface == livery.Panel {
 		if !uh.liveryPanelGate.TryStart() {
 			return
 		}
+		if uh.liveryPanelSwitch != nil {
+			uh.liveryPanelSwitch.SetSensitive(false)
+		}
 	}
 
-	current, key := uh.liveryToggleState(surface)
-	if enabled == current {
-		if surface == livery.Panel {
-			uh.liveryPanelGate.Reset()
-		}
-		return
-	}
 	uh.setLiveryToggleState(surface, enabled)
 	uh.setLiverySectionSensitive(surface, enabled)
 
@@ -141,7 +142,12 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 	go func() {
 		if surface == livery.Panel {
 			defer func() {
-				sgtk.RunOnMainThread(uh.liveryPanelGate.Reset)
+				sgtk.RunOnMainThread(func() {
+					uh.liveryPanelGate.Reset()
+					if uh.liveryPanelSwitch != nil {
+						uh.liveryPanelSwitch.SetSensitive(true)
+					}
+				})
 			}()
 		}
 		ctx, cancel := livery.DefaultContext()
