@@ -1,9 +1,12 @@
 [Desktop Entry]
-Name=ChairLift
+Name=Control Center
+GenericName=System Management
+Comment=Update, configure, and maintain your Bluefin system
 Exec=chairlift-wrapper
 Icon=io.projectbluefin.chairlift
 Terminal=false
 Type=Application
-Categories=System;GTK;
+Categories=Settings;GTK;
+Keywords=Settings;Control Panel;System Settings;Preferences;Configuration;Control Center;Update;Upgrade;Flatpak;Homebrew;Driver;Developer;Bluefin;ChairLift;
 StartupNotify=true
 NoDisplay=false

@@ -122,6 +122,27 @@ func BootcStageResultSubtitle(staged bool, version, lastMessage string) string {
 	return "System is up to date"
 }
 
+// StagingLogSubtitle returns the "Details" expander subtitle for a staging
+// run whose output is rendered through a bounded rolling window: shown is how
+// many lines the expander currently holds and total is how many the stage
+// helper has printed.
+//
+// It names the cap whenever one applied, because a truncated log that reads
+// like a complete one is worse than no log at all: someone diagnosing a failed
+// stage would otherwise keep looking for a line the view had silently dropped.
+func StagingLogSubtitle(shown, total int) string {
+	switch {
+	case total <= 0:
+		return "View output"
+	case shown < total:
+		return fmt.Sprintf("Showing the last %d of %d lines", shown, total)
+	case total == 1:
+		return "View output (1 line)"
+	default:
+		return fmt.Sprintf("View output (%d lines)", total)
+	}
+}
+
 // SysupdateUpdateSubtitle returns the native A/B system-update expander
 // subtitle from the /run/snosi state-file presentation (the outcome grammar
 // is internal/sysupdate.Status.Presentation's): "staged" shows the pending

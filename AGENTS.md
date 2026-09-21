@@ -234,6 +234,19 @@ An agent must not break these:
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
   worker goroutine.
+- **Streamed command output renders bounded.** A stage helper prints an
+  unbounded number of lines, so a view may not answer one line with one
+  `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
+  callback per line and leaks a heavyweight widget per line, which is the
+  frozen window of issue #81. Both OS staging handlers render through
+  `stageProgressSink`, which coalesces a burst into one callback with
+  `internal/views/progresslog` and caps the expander at
+  `progresslog.DefaultLimit` rows with `rowset.Tracker.TrimTo`; the Details
+  subtitle comes from `pageview.StagingLogSubtitle`, so a window that hid
+  older lines says so instead of reading like a complete log.
+  `internal/views/progresslog`'s wiring test reads `updates_page.go` and
+  rejects a return to the per-line shape. Any future view that renders a
+  stream of external output owes the same two caps.
 - **Headless view coverage stays puregotk-free.** `internal/views` cannot host
   a test binary on ordinary CI hosts. Shared row text, page status, os-release
   parsing, help-link ordering, and maintenance-command selection live in the
@@ -287,6 +300,20 @@ An agent must not break these:
   human-readable version or source ref in a trailing comment and update both
   intentionally. Local actions referenced with `./` are exempt. The
   `internal/installcheck` workflow scan enforces this across every workflow.
+- **The merge queue gates on one context, and that context waits for every
+  other job.** `main` merges through a merge queue, which validates a
+  candidate on a `gh-readonly-queue/main/pr-<n>-<sha>` ref — a `merge_group`
+  event that neither `push` nor `pull_request` fires for. `test.yml` declares
+  it, deliberately unfiltered, because `github.ref` there is the queue ref and
+  a `branches: [main]` filter would match nothing and silently return the
+  queue to merging unvalidated heads. The ruleset requires the aggregating
+  `Tests Passed` job rather than the individual jobs, whose names change with
+  the matrix; it carries `if: always()` because GitHub counts a skipped
+  required check as a passing one. Adding a job to `test.yml` means adding it
+  to that job's `needs` —
+  `internal/installcheck`'s `TestMergeQueueGateWaitsForEveryTestJob` fails
+  otherwise — and renaming the job means editing the ruleset in the same
+  change.
 - **Every privileged dispatch point journals, unconditionally.** `internal/ublue.runHelper`
   and `internal/updex.runHelper` call `journal.Record` on every invocation, dry-run
   or live, before doing anything else. This is not a `chairlift_e2e` stub: with
@@ -372,6 +399,40 @@ An agent must not break these:
   gaming mode); Factory Reset is the new `factory-reset` action on
   `chairlift-ublue-helper` and takes no argument, since it has exactly one
   target — the image already booted.
+- **The product name and the code name are different strings, and only one of
+  them has an owner.** The application ships in Bluefin as **Control Center**;
+  ChairLift remains the code name for the repository, the Go module, the
+  binaries, the wrapper, the package names, and the `io.projectbluefin.chairlift`
+  application ID. That ID is fixed by the polkit `exec.path` annotations and the
+  install prefix, so it never moves (ADR-0012). Every user-visible spelling of
+  the product name resolves through `internal/branding.AppName` — window title,
+  navigation page, About dialog, the About menu item, the Help description, the
+  Update All notification, and `config.LoadError.ToastMessage`, the fail-closed
+  configuration toast. `branding` imports nothing on purpose: `internal/config`
+  and `internal/notify` both need the constant, and the constant's first home,
+  `internal/views/pageview`, transitively pulls in `internal/sbom`,
+  `internal/homebrew`, and `internal/troubleshoot`.
+  `internal/installcheck`'s `TestDisplayNameHasOneOwner` parses every non-test
+  file under `internal/` and `cmd/` and requires **every** string literal
+  containing the code name to justify itself — structurally (a `/` makes it a
+  path or URL; the application ID; a `CHAIRLIFT_` variable; a `chairlift-`
+  binary or unit; a `usage: chairlift` line) or by an explicit
+  `codeNameExemptions` entry stating why no user reads it, which
+  `TestCodeNameExemptionsAreAllLive` then rejects once stale. The gate is an
+  allowlist rather than a match on display APIs because the shape-matching
+  version missed two live user-visible strings in a row: a struct field literal
+  (`notify.Notification{Body: …}`) and a `fmt.Sprintf` format string (the
+  configuration toast). Do not narrow it back to call sites.
+  `TestDesktopEntryMatchesTheDisplayName` holds the other half:
+  `data/io.projectbluefin.chairlift.desktop`'s `Name=` must equal the constant,
+  `Type`/`Icon` must be correct, no key may repeat, exactly one registered main
+  category may appear (two makes the app show twice in the menu), and
+  `GenericName`/`Comment`/`Keywords` must be present, because GNOME Shell and
+  KRunner search those keys — AppStream metainfo does not feed shell search, and
+  this repository ships none. Screenshots are the unguarded edge: the
+  walkthrough check is referential, not pixel-based, so a title-bar change means
+  regenerating `docs/screenshots/` deliberately, from the E2E job's
+  `walkthrough-screenshots` artifact with the capture byproducts stripped.
 
 ## Documentation
 

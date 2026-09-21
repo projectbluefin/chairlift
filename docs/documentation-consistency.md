@@ -22,6 +22,9 @@ installation layout changes:
 - Treat `README-go-port.md` and files under `docs/plans/` (except category
   `TEMPLATE.md` files) and `docs/superpowers/` as historical. Current-state
   claims belong in `README.md`, `CONFIG.md`, `docs/index.md`,
-  `docs/reference.md`, `docs/design/` (formerly `yeti/`), and `docs/specs/`.
+  `docs/reference.md`, `docs/design/` (formerly `yeti/`), `docs/specs/`, and
+  `docs/adr/` — an Accepted decision record's file-and-line citations must
+  resolve against the tree exactly like a design doc's, even though the
+  decision it records does not change.
 - Run `make ci`, then grep current-state documentation for the obsolete term,
   key, version, or path that prompted the change.

@@ -17,9 +17,8 @@ the question they answer:
 The `factory/` entry is a process and navigation surface; the four core
 documentation categories remain `adr/`, `design/`, `specs/`, and `plans/`.
 
-The user-facing docs-site home is [index.md](index.md) (rendered by
-`mkdocs.yml`); this file is the contributor-facing index of everything under
-`docs/`.
+The user-facing overview is [index.md](index.md); this file is the
+contributor-facing index of everything under `docs/`.
 
 ## Index
 
@@ -58,11 +57,16 @@ are listed in [org-adrs.md](org-adrs.md).
   — E2E startup readiness is three exact stdout markers polled under
   dbus-run-session + xvfb-run; the log lines are a public API
 - [adr/0009-dry-run-output-convention-and-single-decision-structs.md](adr/0009-dry-run-output-convention-and-single-decision-structs.md)
-  — per-wrapper `SetDryRun`/`IsDryRun`, fixed `[DRY-RUN]` message prefixes,
-  and single tested decision structs gating toast + UI mutation together
+  — `internal/dryrun` as the single process-wide dry-run authority, fixed
+  `[DRY-RUN]` message prefixes, and single tested decision structs gating
+  toast + UI mutation together
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
   — documentation splits into current-state vs historical and is enforced by
   string-matching unit tests; prose is testable
+- [adr/0012-ship-as-control-center-keep-chairlift-code-name.md](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)
+  — the application ships as "Control Center" and keeps ChairLift as the code
+  name; `branding.AppName` owns every user-visible spelling, and three
+  `internal/installcheck` gates hold the split
 
 ### Design
 
@@ -106,7 +110,7 @@ current behavior):
 ### Process and policy docs (uncategorized, indexed in place)
 
 - [index.md](index.md) — user-facing overview: pages, shortcuts, optional
-  dependencies, building and installing (docs-site home)
+  dependencies, building and installing
 - [reference.md](reference.md) — user-facing configuration/behavior reference
 - [quality.md](quality.md) — quality dashboard: CI, coverage, release signals
 - [metrics.md](metrics.md) and [metrics/README.md](metrics/README.md) —

@@ -137,7 +137,7 @@ nfpms:
     bindir: /usr/bin
     maintainer: "Brian Ketelsen <bketelsen@gmail.com>"
     description: |-
-      System management tool for bootc-based installations.
+      Control Center, the system management app for bootc-based installations (code name ChairLift).
       Manage flatpaks, homebrew and system updates with a modern GTK4/Libadwaita interface.
     license: GPL-3.0-or-later
     conflicts:
@@ -188,8 +188,6 @@ nfpms:
       # Icons
       - src: ./data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
         dst: /usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
-      - src: ./data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
-        dst: /usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift-flower.svg
       - src: ./data/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
         dst: /usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
       # PolicyKit policy for bootc
@@ -239,7 +237,7 @@ nfpms:
     bindir: /usr/bin
     maintainer: "Brian Ketelsen <bketelsen@gmail.com>"
     description: |-
-      System integration for a user-scoped ChairLift installation.
+      System integration for a user-scoped Control Center (ChairLift) installation.
       Installs the privileged updex and ublue helpers, PolicyKit policies, and maintainer configuration defaults.
     license: GPL-3.0-or-later
     # Deliberately no dependencies (see TestGoreleaserDeclaresMandatoryRuntimeDependencies):

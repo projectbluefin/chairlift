@@ -1,10 +1,15 @@
-# ChairLift
+# Control Center
 
-ChairLift is a GTK4/Libadwaita system management GUI for [Snow Linux](https://github.com/frostyard/snosi), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew and Flatpak applications, bootc system updates, system features (via updex), and maintenance tasks.
+Control Center is a GTK4/Libadwaita system management GUI for [Snow Linux](https://github.com/frostyard/snosi), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew and Flatpak applications, bootc system updates, system features (via updex), and maintenance tasks.
+
+The project, its repository, and its binaries are named ChairLift; Control
+Center is the name the product ships under, so the paths, package names, and
+application ID on this page keep the code name deliberately (see
+[ADR-0012](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)).
 
 The UI is YAML-configuration-driven, making it portable to other Linux distributions by toggling feature groups on or off.
 
-This page is the user-facing docs-site home. Contributor- and agent-facing
+This page is the user-facing overview. Contributor- and agent-facing
 documentation — architecture, ADRs, specs, and plans — is indexed in
 [docs/README.md](README.md), with
 [docs/design/overview.md](design/overview.md) as the architecture entry
@@ -12,7 +17,7 @@ point.
 
 ## Pages
 
-ChairLift provides six configurable pages:
+Control Center provides six configurable pages:
 
 | Page | Description |
 |------|-------------|

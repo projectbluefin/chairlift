@@ -16,7 +16,7 @@ Configuration files are searched in order (first found wins):
 Only a missing candidate advances the search. The first existing candidate is
 authoritative. If it cannot be read or fails YAML/schema validation, ChairLift
 hides every feature group, logs a `CONFIGURATION ERROR`, and displays a
-persistent toast with the path and cause. Fix the file and restart ChairLift.
+persistent toast with the path and cause. Fix the file and restart Control Center.
 If no file is found, built-in defaults apply: all groups are enabled except
 `maintenance_cleanup_group` and `reset_group`.
 

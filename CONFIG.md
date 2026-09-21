@@ -29,7 +29,7 @@ The first file that exists in this order is authoritative. ChairLift does not
 fall through to a lower-priority file when that file is unreadable, malformed,
 or fails schema validation. Instead, it disables every feature group, logs a
 high-signal `CONFIGURATION ERROR`, and displays a persistent error toast naming
-the file and cause. Fix the authoritative file and restart ChairLift.
+the file and cause. Fix the authoritative file and restart Control Center.
 
 These semantics are decision records
 [ADR-0003](docs/adr/0003-two-tier-config-with-fail-closed-semantics.md)
