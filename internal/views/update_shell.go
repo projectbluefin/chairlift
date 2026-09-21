@@ -8,7 +8,6 @@ import (
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/branding"
-	"github.com/projectbluefin/chairlift/internal/commands"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
@@ -223,15 +222,15 @@ func (s *UpdateShell) build() {
 	header := adw.NewHeaderBar()
 	header.SetTitleWidget(&gtk.NewLabel(branding.AppName).Widget)
 	s.refresh = newIconButton("view-refresh-symbolic", "Refresh")
-	s.refresh.SetActionName(commands.CheckAction)
+	s.refresh.SetActionName("win.check")
 	header.PackStart(&s.refresh.Widget)
 
 	menu := gio.NewMenu()
-	menu.Append("Preferences", commands.PreferencesAction)
-	menu.Append("Keyboard Shortcuts", commands.ShowShortcutsAction)
-	menu.Append("Help", commands.HelpAction)
-	menu.Append("About "+branding.AppName, commands.ShowAboutAction)
-	menu.Append("Quit", commands.QuitAction)
+	menu.Append("Preferences", "win.preferences")
+	menu.Append("Keyboard Shortcuts", "win.show-shortcuts")
+	menu.Append("Help", "win.help")
+	menu.Append("About "+branding.AppName, "win.show-about")
+	menu.Append("Quit", "app.quit")
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetTooltipText("Main Menu")

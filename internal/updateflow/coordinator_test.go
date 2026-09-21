@@ -919,6 +919,120 @@ type testMaintenance struct {
 func (m *testMaintenance) Run(ctx context.Context, progress func(Progress)) error {
 	return m.run(ctx, progress)
 }
+func TestCoordinatorCancelsCleanlyWithoutSubsequentApplyCalls(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	secondCalled := atomic.Bool{}
+
+	providers := []*testProvider{
+		{
+			id:        Applications,
+			available: true,
+			apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+				cancel()
+				return ApplyResult{}, ctx.Err()
+			},
+		},
+		{
+			id:        DeveloperTools,
+			available: true,
+			apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+				secondCalled.Store(true)
+				return ApplyResult{}, nil
+			},
+		},
+	}
+
+	c := New(providerInterfaces(providers), nil)
+	initial := Snapshot{
+		Sources: []SourceState{
+			{ID: Applications, Available: true, Enabled: true, Configured: true, Items: []Item{{Name: "app1"}}},
+			{ID: DeveloperTools, Available: true, Enabled: true, Configured: true, Items: []Item{{Name: "tool1"}}},
+		},
+	}
+
+	snapshot := c.UpdateAll(ctx, initial, allPreferences(), nil)
+	if secondCalled.Load() {
+		t.Fatal("second provider Apply was called after first provider cancelled")
+	}
+	if snapshot.Phase == PhasePartialFailure {
+		t.Fatalf("phase = %v, want not PhasePartialFailure on cancellation", snapshot.Phase)
+	}
+	for _, s := range snapshot.Sources {
+		if s.Updating {
+			t.Errorf("source %s still Updating after cancellation", s.ID)
+		}
+		if s.ApplyErr != nil {
+			t.Errorf("source %s has ApplyErr: %v, want nil on cancellation", s.ID, s.ApplyErr)
+		}
+	}
+}
+
+func TestCoordinatorMaintenanceShowsUpdatingPhase(t *testing.T) {
+	inMaintenance := make(chan struct{})
+	releaseMaintenance := make(chan struct{})
+	var published []Snapshot
+	var mu sync.Mutex
+
+	m := &testMaintenance{
+		run: func(ctx context.Context, progress func(Progress)) error {
+			close(inMaintenance)
+			<-releaseMaintenance
+			return nil
+		},
+	}
+	provider := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	c := New([]Provider{provider}, m)
+	initial := Snapshot{
+		Sources: []SourceState{
+			{ID: Applications, Available: true, Enabled: true, Configured: true, Items: []Item{{Name: "app1"}}},
+		},
+	}
+
+	done := make(chan Snapshot, 1)
+	prefs := allPreferences()
+	prefs.MaintenanceAfterUpdates = true
+	go func() {
+		done <- c.UpdateAll(context.Background(), initial, prefs, func(s Snapshot) {
+			mu.Lock()
+			published = append(published, s)
+			mu.Unlock()
+		})
+	}()
+
+	select {
+	case <-inMaintenance:
+	case <-time.After(2 * time.Second):
+		t.Fatal("maintenance did not start within timeout")
+	}
+
+	snap := c.snapshot()
+	if !snap.MaintenanceRunning {
+		t.Error("MaintenanceRunning is false while maintenance is running")
+	}
+	if snap.Phase != PhaseUpdating {
+		t.Errorf("Phase during maintenance = %v, want PhaseUpdating", snap.Phase)
+	}
+	close(releaseMaintenance)
+
+	select {
+	case final := <-done:
+		if final.MaintenanceRunning {
+			t.Error("MaintenanceRunning is true after maintenance finished")
+		}
+		if !final.MaintenanceRan {
+			t.Error("MaintenanceRan is false after maintenance finished")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("UpdateAll did not finish after maintenance released")
+	}
+}
+
 
 func providerInterfaces(providers []*testProvider) []Provider {
 	result := make([]Provider, len(providers))
