@@ -22,6 +22,7 @@ var pageNames = []string{
 	"applications_page",
 	"maintenance_page",
 	"features_page",
+	"livery_page",
 	"help_page",
 }
 
@@ -34,6 +35,7 @@ func pagesOf(cfg *Config) map[string]PageConfig {
 		"applications_page": cfg.ApplicationsPage,
 		"maintenance_page":  cfg.MaintenancePage,
 		"features_page":     cfg.FeaturesPage,
+		"livery_page":       cfg.LiveryPage,
 		"help_page":         cfg.HelpPage,
 	}
 }

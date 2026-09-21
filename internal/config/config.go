@@ -15,6 +15,7 @@ type Config struct {
 	ApplicationsPage PageConfig `yaml:"applications_page"`
 	MaintenancePage  PageConfig `yaml:"maintenance_page"`
 	FeaturesPage     PageConfig `yaml:"features_page"`
+	LiveryPage       PageConfig `yaml:"livery_page"`
 	HelpPage         PageConfig `yaml:"help_page"`
 }
 
@@ -59,6 +60,7 @@ type rawConfig struct {
 	ApplicationsPage rawPageConfig `yaml:"applications_page"`
 	MaintenancePage  rawPageConfig `yaml:"maintenance_page"`
 	FeaturesPage     rawPageConfig `yaml:"features_page"`
+	LiveryPage       rawPageConfig `yaml:"livery_page"`
 	HelpPage         rawPageConfig `yaml:"help_page"`
 }
 
@@ -188,6 +190,7 @@ func configPages(cfg *Config) []PageConfig {
 		cfg.ApplicationsPage,
 		cfg.MaintenancePage,
 		cfg.FeaturesPage,
+		cfg.LiveryPage,
 		cfg.HelpPage,
 	}
 }
@@ -235,6 +238,7 @@ func mergeConfig(def *Config, raw *rawConfig) *Config {
 		ApplicationsPage: mergePage(def.ApplicationsPage, raw.ApplicationsPage),
 		MaintenancePage:  mergePage(def.MaintenancePage, raw.MaintenancePage),
 		FeaturesPage:     mergePage(def.FeaturesPage, raw.FeaturesPage),
+		LiveryPage:       mergePage(def.LiveryPage, raw.LiveryPage),
 		HelpPage:         mergePage(def.HelpPage, raw.HelpPage),
 	}
 }
@@ -371,6 +375,15 @@ func defaultConfig() *Config {
 			"ai_group":              GroupConfig{Enabled: true},
 			"troubleshooting_group": GroupConfig{Enabled: true},
 		},
+		// The panel mark and the Files application mark. Both write only
+		// into the user's own icon theme and dconf, so neither needs a
+		// privileged route; both ship enabled because neither changes
+		// anything until a selection is made.
+		LiveryPage: PageConfig{
+			"livery_app_grid_group":   GroupConfig{Enabled: true},
+			"livery_foundation_group": GroupConfig{Enabled: true},
+			"livery_dock_group":       GroupConfig{Enabled: true},
+		},
 		HelpPage: PageConfig{
 			"help_resources_group": GroupConfig{
 				Enabled: true,
@@ -396,6 +409,8 @@ func (c *Config) IsGroupEnabled(pageName, groupName string) bool {
 		page = c.MaintenancePage
 	case "features_page":
 		page = c.FeaturesPage
+	case "livery_page":
+		page = c.LiveryPage
 	case "help_page":
 		page = c.HelpPage
 	default:
@@ -423,6 +438,8 @@ func (c *Config) GetGroupConfig(pageName, groupName string) *GroupConfig {
 		page = c.MaintenancePage
 	case "features_page":
 		page = c.FeaturesPage
+	case "livery_page":
+		page = c.LiveryPage
 	case "help_page":
 		page = c.HelpPage
 	default:

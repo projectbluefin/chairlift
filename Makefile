@@ -9,6 +9,7 @@
 # nothing, silently, for as long as AGENTS.md documented it as `go test ./...`.
 # The others worked only because no directory happens to share their names.
 .PHONY: all deps tidy
+.PHONY: schemas
 .PHONY: build build-app build-helper build-ublue-helper
 .PHONY: build-linux-amd64 build-linux-arm64
 .PHONY: run dev clean
@@ -45,6 +46,7 @@ DATADIR = $(PREFIX)/share
 ICONSDIR = $(DATADIR)/icons
 APPLICATIONSDIR = $(DATADIR)/applications
 CONFIGDIR = $(DATADIR)/chairlift
+SCHEMASDIR = $(DATADIR)/glib-2.0/schemas
 POLKITACTIONSDIR = $(DATADIR)/polkit-1/actions
 POLKITRULESDIR = $(DATADIR)/polkit-1/rules.d
 
@@ -68,7 +70,10 @@ deps:
 tidy:
 	$(GOMOD) tidy
 
-build: build-app build-helper build-ublue-helper
+# `schemas` is a prerequisite because a binary that writes a key the compiled
+# schema does not carry fails at runtime with "No such key" — a confusing way
+# to discover build/schemas went stale after the gschema gained one.
+build: schemas build-app build-helper build-ublue-helper
 
 build-app:
 	@mkdir -p $(BUILD_DIR)
@@ -123,10 +128,11 @@ build-e2e: build
 # is referenced by docs/walkthrough.md is a pure-Go test in
 # internal/installcheck, so that half does run in `make ci`.
 .PHONY: screenshots
-screenshots: build-e2e
+screenshots: build-e2e schemas
 	@mkdir -p $(SCREENSHOT_DIR)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_WALKTHROUGH_DIR=$(abspath $(SCREENSHOT_DIR)) \
+		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		$(GOTEST) -count=1 -run TestWalkthroughScreenshots ./test/e2e
 	@test -n "$(SCREENSHOT_DIR)" || { echo "SCREENSHOT_DIR is empty; refusing to clean" >&2; exit 1; }
 	@rm -rf "$(SCREENSHOT_DIR)/home" $(SCREENSHOT_DIR)/*.xwd \
@@ -177,6 +183,16 @@ install: build
 	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	# Install wrapper script
 	install -Dm755 data/chairlift-wrapper.sh $(DESTDIR)$(BINDIR)/chairlift-wrapper
+	# Install the Livery GSettings schema, then recompile the system schema
+	# cache so `gsettings` can see it. ChairLift ships exactly one schema.
+	install -Dm644 data/io.projectbluefin.chairlift.livery.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
+	# Only for a direct install. Under DESTDIR the tree is a staging area
+	# holding this schema alone, so compiling there would produce a
+	# gschemas.compiled containing only ChairLift's schema — and a package
+	# shipping that file would overwrite the system cache and break GSettings
+	# for every other application. Packages run glib-compile-schemas from
+	# their postinstall scriptlet instead; see packaging/postinstall.sh.
+	@if [ -z "$(DESTDIR)" ]; then glib-compile-schemas $(SCHEMASDIR); fi
 	# Install desktop file
 	install -Dm644 data/io.projectbluefin.chairlift.desktop $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	# Install package-maintainer defaults; /etc/chairlift/config.yml remains the administrator-owned override
@@ -205,12 +221,30 @@ install: build
 	# Install PolicyKit policy for the Bluefin-family channel/developer helper
 	install -Dm644 data/io.projectbluefin.chairlift.ublue.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.ublue.policy
 
+# Compile the Livery GSettings schema for a source build.
+#
+# `gsettings` reads schemas from $(DATADIR)/glib-2.0/schemas and from
+# $$GSETTINGS_SCHEMA_DIR. A developer running build/chairlift has not run
+# `make install`, so without this the Livery page correctly reports its schema
+# missing. Run `make schemas` once, then export
+# GSETTINGS_SCHEMA_DIR=$(CURDIR)/$(BUILD_DIR)/schemas.
+# Skipped where glib-compile-schemas is absent, so a build host that only has
+# a Go toolchain still builds; the application reports its schema missing and
+# the Livery page degrades, which is the same path an uninstalled build takes.
+schemas:
+	@command -v glib-compile-schemas >/dev/null 2>&1 || { echo "==> skipping schemas: glib-compile-schemas not installed"; exit 0; }
+	@mkdir -p $(BUILD_DIR)/schemas
+	@cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/
+	@glib-compile-schemas $(BUILD_DIR)/schemas
+	@echo "==> schemas compiled to $(BUILD_DIR)/schemas"
+
 # Uninstall the application
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	rm -f $(DESTDIR)$(BINDIR)/chairlift-wrapper
 	rm -f $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	rm -f $(DESTDIR)$(CONFIGDIR)/config.yml
+	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	rm -f $(DESTDIR)$(BINDIR)/$(HELPER_NAME)

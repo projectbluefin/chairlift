@@ -65,6 +65,14 @@ xdpyinfo >/dev/null 2>&1 || { echo "Xvfb on $DISPLAY_NUM never became ready" >&2
 # The same environment the dry-run startup smoke test uses, so the two agree
 # on what a clean headless launch looks like.
 export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory
+# The Livery page reads its selections through `gsettings`, which needs
+# ChairLift's schema on the search path. A source build has not run
+# `make install`, so without this the page would capture its
+# "settings unavailable" state instead of its controls. The memory backend
+# above keeps every read on defaults, so the shot is deterministic.
+if [ -n "${CHAIRLIFT_SCHEMA_DIR:-}" ]; then
+  export GSETTINGS_SCHEMA_DIR="$CHAIRLIFT_SCHEMA_DIR"
+fi
 export HOME="$OUTDIR/home"
 mkdir -p "$HOME"
 

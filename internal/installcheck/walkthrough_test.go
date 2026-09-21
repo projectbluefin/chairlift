@@ -177,6 +177,10 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"gaming_group":          "Gaming Mode",
 		"ai_group":              "Local AI",
 		"troubleshooting_group": "Enhanced Troubleshooting",
+		// livery_page
+		"livery_app_grid_group":   "App Grid Livery",
+		"livery_foundation_group": "Foundational Livery",
+		"livery_dock_group":       "Dock Livery",
 		// help_page
 		"help_resources_group": "issues",
 	}
