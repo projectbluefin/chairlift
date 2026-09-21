@@ -2,10 +2,14 @@ package livery
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // rotateState installs a fake gsettings layer holding the given key/value
@@ -146,5 +150,69 @@ func TestRotateRunsOncePerSession(t *testing.T) {
 	}
 	if f.sawPrefix("gsettings set") {
 		t.Errorf("a second pass in the same session advanced the selection: %v", f.calls)
+	}
+}
+
+// TestRotateRetriesDockFetchWhileNetworkIsDown covers a login on a host whose
+// connectivity arrives after the graphical session does. The unit cannot
+// order against network-online.target from the user manager, and the token is
+// recorded even for a failed pass, so without the retry the dock would simply
+// not rotate that session and say so only in the journal.
+func TestRotateRetriesDockFetchWhileNetworkIsDown(t *testing.T) {
+	original := Fetch
+	t.Cleanup(func() { Fetch = original })
+	var attempts int
+	Fetch = func(_ context.Context, _ string) ([]byte, error) {
+		attempts++
+		if attempts < 3 {
+			return nil, fmt.Errorf("livery: reaching cncf/artwork: %w",
+				&net.OpError{Op: "dial", Err: errors.New("network is unreachable")})
+		}
+		return []byte(`<svg viewBox="0 0 24 24"><path d="M1 1h2v2H1z"/></svg>`), nil
+	}
+
+	originalDelays := rotateRetryDelays
+	rotateRetryDelays = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	t.Cleanup(func() { rotateRetryDelays = originalDelays })
+
+	f := rotateState(t, map[string]string{
+		KeyDockEnabled: "true", KeyDockRotate: "true", KeyDockID: "'" + DefaultCNCFID + "'",
+	})
+
+	if err := Rotate(context.Background()); err != nil {
+		t.Fatalf("Rotate: %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("expected the fetch to be retried until it succeeded, got %d attempts", attempts)
+	}
+	if want := setCall(KeyDockID, NextCNCFID(DefaultCNCFID)); !f.sawPrefix(want) {
+		t.Errorf("dock selection was not advanced after the network came up; wanted %q in %v", want, f.calls)
+	}
+}
+
+// TestRotateDoesNotRetryAPermanentFailure keeps the retry from turning a
+// withdrawn mark into minutes of pointless waiting at every login.
+func TestRotateDoesNotRetryAPermanentFailure(t *testing.T) {
+	original := Fetch
+	t.Cleanup(func() { Fetch = original })
+	var attempts int
+	Fetch = func(_ context.Context, _ string) ([]byte, error) {
+		attempts++
+		return nil, ErrIconNotFound
+	}
+
+	originalDelays := rotateRetryDelays
+	rotateRetryDelays = []time.Duration{time.Minute}
+	t.Cleanup(func() { rotateRetryDelays = originalDelays })
+
+	rotateState(t, map[string]string{
+		KeyDockEnabled: "true", KeyDockRotate: "true", KeyDockID: "'" + DefaultCNCFID + "'",
+	})
+
+	if err := Rotate(context.Background()); err == nil {
+		t.Fatal("Rotate reported success for a mark the artwork repository does not publish")
+	}
+	if attempts != 1 {
+		t.Errorf("a permanent failure was retried %d times", attempts)
 	}
 }

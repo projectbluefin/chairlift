@@ -176,3 +176,36 @@ func TestCustomPanelReplacementUpdatesIconNameAndPrunesOldFile(t *testing.T) {
 		t.Errorf("expected new icon filename for markB, got same %q", filesA[0])
 	}
 }
+
+// TestCustomPathWithAnApostropheRoundTrips pins the read side of the
+// free-form *-custom-path keys. GVariant prints a string containing an
+// apostrophe double-quoted, so /home/o'brien/mark.svg comes back from
+// `gsettings list-recursively` as "/home/o'brien/mark.svg" — and a reader
+// that only strips single quotes hands Apply a path that does not exist.
+func TestCustomPathWithAnApostropheRoundTrips(t *testing.T) {
+	const path = `/home/o'brien/mark.svg`
+
+	f := newFakeCommands(t)
+	detectGamingOriginal := detectGaming
+	detectGaming = func() bool { return false }
+	t.Cleanup(func() { detectGaming = detectGamingOriginal })
+	f.reply["gsettings list-recursively "+SchemaID] = strings.Join([]string{
+		SchemaID + " " + KeyPanelCustom + ` "` + path + `"`,
+		SchemaID + " " + KeyDockCustom + ` "/home/o\'brien/dock.svg"`,
+		SchemaID + " " + KeyAppGridCustom + ` '/home/plain/app.svg'`,
+	}, "\n")
+
+	state, err := Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if state.PanelCustom != path {
+		t.Errorf("panel custom path = %q, want %q", state.PanelCustom, path)
+	}
+	if want := `/home/o'brien/dock.svg`; state.DockCustom != want {
+		t.Errorf("dock custom path = %q, want %q", state.DockCustom, want)
+	}
+	if want := "/home/plain/app.svg"; state.AppGridCustom != want {
+		t.Errorf("app-grid custom path = %q, want %q", state.AppGridCustom, want)
+	}
+}
