@@ -455,8 +455,9 @@ An agent must not break these:
   therefore left the previous mark on screen until the shell restarted — the
   write succeeded, the file changed, and nothing happened. `gsettings monitor`
   reported two change events for three writes when one repeated a value.
-  Writing a different name per selection makes the value genuinely change;
-  `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
+  Writing a different name per selection makes the value genuinely change
+  (custom SVGs append a short SHA-256 fingerprint so swapping custom files also varies the key);
+  `TestPanelIconNameVariesWithSelection` and `TestCustomPanelReplacementUpdatesIconNameAndPrunesOldFile` pin it, and `removePanelIcons`
   sweeps the marks earlier selections left behind. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon

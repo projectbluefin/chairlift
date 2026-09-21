@@ -2,6 +2,8 @@ package livery
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -376,9 +378,13 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 	if src.Kind != FromCatalog {
 		// A custom file or a fetched brand has no catalog id, but the panel
 		// still needs a stable name that differs from the previous
-		// selection's. The source value supplies the variation.
-		selectionID = CustomID
+		// selection's. Custom files append a short content hash so replacing
+		// one custom file with another triggers the extension's changed signal;
+		// brands and CNCF marks use their unique slug/value.
 		switch src.Kind {
+		case FromFile:
+			sum := sha256.Sum256(data)
+			selectionID = CustomID + "-" + hex.EncodeToString(sum[:4])
 		case FromSimpleIcons:
 			selectionID = "brand-" + src.Value
 		case FromCNCF:
