@@ -2,6 +2,8 @@ package sbom
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -48,6 +50,10 @@ type fakeRegistry struct {
 	referrersStatus int
 	requested       []string
 	sbom            []byte
+	// served substitutes different bytes at the blob endpoint while the
+	// manifest keeps advertising sbom's digest, modeling a registry that
+	// answers a content-addressed request with other content.
+	served []byte
 }
 
 func (f *fakeRegistry) handler(t *testing.T) http.Handler {
@@ -55,7 +61,11 @@ func (f *fakeRegistry) handler(t *testing.T) http.Handler {
 
 	const imageDigest = "sha256:aaaa"
 	const sbomManifest = "sha256:bbbb"
-	const sbomBlob = "sha256:cccc"
+	// The blob is fetched by content address and Fetch verifies what
+	// arrives, so the fake must advertise the real digest of the bytes the
+	// test expects back.
+	sum := sha256.Sum256(f.sbom)
+	sbomBlob := "sha256:" + hex.EncodeToString(sum[:])
 
 	writeJSON := func(w http.ResponseWriter, value any) {
 		w.Header().Set("Content-Type", "application/json")
@@ -101,7 +111,11 @@ func (f *fakeRegistry) handler(t *testing.T) http.Handler {
 			}})
 
 		case "/v2/org/image/blobs/" + sbomBlob:
-			if _, err := w.Write(f.sbom); err != nil {
+			payload := f.sbom
+			if f.served != nil {
+				payload = f.served
+			}
+			if _, err := w.Write(payload); err != nil {
 				t.Errorf("writing fake blob: %v", err)
 			}
 
@@ -205,5 +219,19 @@ func TestFetchReportsAnImageWithNoSBOM(t *testing.T) {
 	host := strings.TrimPrefix(server.URL, "https://")
 	if _, err := client.Fetch(context.Background(), host+"/org/image:stable"); err == nil {
 		t.Fatal("Fetch reported success for an image with no attached SBOM")
+	}
+}
+
+func TestFetchRejectsABlobThatDoesNotMatchItsDigest(t *testing.T) {
+	fake := &fakeRegistry{
+		referrersStatus: http.StatusOK,
+		served:          []byte(`{"spdxVersion":"SPDX-2.3","name":"tampered"}`),
+	}
+	_, err := fetchFromFake(t, fake)
+	if err == nil {
+		t.Fatal("Fetch accepted a blob that does not hash to the digest it was fetched by")
+	}
+	if !strings.Contains(err.Error(), "does not match its digest") {
+		t.Fatalf("Fetch failed for the wrong reason: %v", err)
 	}
 }
