@@ -86,7 +86,9 @@ sign in — so you stand somewhere slightly different every day without ever
 picking again.
 
 Any section will also take an SVG of your own, which is the way in for
-anything not on the list.
+anything not on the list. A section pointed at your own file stops rotating —
+rotation walks a catalogue, and your file is not in one — so the **Rotate at
+Login** switch greys out and nothing overwrites your mark at the next sign-in.
 
 Three things worth knowing. The top-bar section needs the Custom Command Menu
 GNOME extension; without it the section says so and stays switched off rather
