@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
 description: Use when starting or resuming a Project Bluefin factory-assigned change in ChairLift.
-version: 1.0.0
-last_updated: 2026-09-18
+version: 1.1.0
+last_updated: 2026-09-20
 tags:
   - factory
   - onboarding
@@ -69,9 +69,13 @@ request here, is that this repository merges through a **merge queue**:
   pull request is enqueued. The window is short and is not visible in the
   pull request's own fields, so treat it as small but real rather than
   absent.
-- Nothing under `.github/workflows/` declares a `merge_group` trigger, so the
-  queue is invisible in the workflow files; it is branch-protection
-  configuration. Do not conclude from the workflows that there is no queue.
+- `.github/workflows/test.yml` declares a `merge_group` trigger, so the queue
+  revalidates each candidate on its own `gh-readonly-queue/main/pr-<n>-<sha>`
+  ref and the single required check is **Tests Passed**. The queue's
+  *existence* is still branch-protection configuration rather than something
+  the workflow files state; do not conclude from a workflow that there is no
+  queue, and do not conclude from a green pull-request check that the queue
+  will not re-run everything against a newer `main`.
 
 The practical rule: resolve every gate question — merge and security alike,
 per pull request, not once per batch instruction — **before** the

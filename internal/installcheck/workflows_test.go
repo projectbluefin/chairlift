@@ -114,12 +114,13 @@ func TestWorkflowUsesLeastPrivilege(t *testing.T) {
 	}
 
 	expected := map[string]map[string]string{
-		"lint":      {"contents": "read"},
-		"unit-test": {"contents": "read", "id-token": "write"},
-		"race-test": {"contents": "read"},
-		"e2e":       {"contents": "read"},
-		"verify":    {"contents": "read"},
-		"build":     {"contents": "read"},
+		"lint":         {"contents": "read"},
+		"unit-test":    {"contents": "read", "id-token": "write"},
+		"race-test":    {"contents": "read"},
+		"e2e":          {"contents": "read"},
+		"verify":       {"contents": "read"},
+		"build":        {"contents": "read"},
+		"tests-passed": {},
 	}
 	if len(config.Jobs) != len(expected) {
 		t.Errorf("workflow has %d jobs, want %d", len(config.Jobs), len(expected))
@@ -232,5 +233,112 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	}
 	if !hasGate || !hasE2E {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
+	}
+}
+
+// mergeQueueGateJob is the aggregating job in test.yml, and
+// mergeQueueGateContext is the check-run name it publishes. That name is the
+// single required status check on the default-branch ruleset, so renaming
+// either one means editing the ruleset in the same change.
+const (
+	mergeQueueGateJob     = "tests-passed"
+	mergeQueueGateContext = "Tests Passed"
+)
+
+// testWorkflowTrigger is the subset of one `on:` entry these tests read. A
+// bare `merge_group:` parses as null and leaves every field zero, so trigger
+// presence is decided by the map key rather than by a non-nil value.
+type testWorkflowTrigger struct {
+	Types          []string `yaml:"types"`
+	Branches       []string `yaml:"branches"`
+	BranchesIgnore []string `yaml:"branches-ignore"`
+}
+
+// testWorkflowDocument names `on` directly: yaml.v3 resolves the YAML 1.2 core
+// schema, in which `on` is an ordinary string rather than a spelling of true,
+// so the key survives unmarshaling unchanged.
+type testWorkflowDocument struct {
+	On   map[string]testWorkflowTrigger `yaml:"on"`
+	Jobs map[string]struct {
+		Name  string   `yaml:"name"`
+		If    string   `yaml:"if"`
+		Needs []string `yaml:"needs"`
+	} `yaml:"jobs"`
+}
+
+func readTestWorkflow(t *testing.T) testWorkflowDocument {
+	t.Helper()
+	path := filepath.Join(".github", "workflows", "test.yml")
+	var document testWorkflowDocument
+	if err := yaml.Unmarshal([]byte(readRepoFile(t, path)), &document); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	return document
+}
+
+func TestTestsWorkflowRunsForTheMergeQueue(t *testing.T) {
+	document := readTestWorkflow(t)
+
+	mergeGroup, ok := document.On["merge_group"]
+	if !ok {
+		t.Fatal("test.yml declares no merge_group trigger; a queued pull request would merge with no validation of its merge-group head")
+	}
+	// github.ref for merge_group is refs/heads/gh-readonly-queue/main/pr-<n>-<sha>
+	// and never refs/heads/main, so a branch filter naming main matches
+	// nothing — it does not narrow this trigger, it removes it.
+	if len(mergeGroup.Branches) != 0 || len(mergeGroup.BranchesIgnore) != 0 {
+		t.Errorf("merge_group declares branches=%v branches-ignore=%v; filters run against the gh-readonly-queue ref, so this trigger must stay unfiltered",
+			mergeGroup.Branches, mergeGroup.BranchesIgnore)
+	}
+
+	// Adding the queue must not cost the existing signals.
+	for _, trigger := range []string{"push", "pull_request"} {
+		existing, ok := document.On[trigger]
+		if !ok {
+			t.Errorf("test.yml no longer declares the %s trigger", trigger)
+			continue
+		}
+		if len(existing.Branches) != 1 || existing.Branches[0] != "main" {
+			t.Errorf("%s branches = %v, want [main]", trigger, existing.Branches)
+		}
+	}
+}
+
+func TestMergeQueueGateWaitsForEveryTestJob(t *testing.T) {
+	document := readTestWorkflow(t)
+
+	gate, ok := document.Jobs[mergeQueueGateJob]
+	if !ok {
+		t.Fatalf("test.yml defines no %s job", mergeQueueGateJob)
+	}
+	if gate.Name != mergeQueueGateContext {
+		t.Errorf("%s name = %q, want %q: the ruleset requires that exact context", mergeQueueGateJob, gate.Name, mergeQueueGateContext)
+	}
+	// GitHub counts a skipped required check as a passing one, so a gate that
+	// runs only when its dependencies succeed reports success for a run whose
+	// tests failed.
+	if strings.ReplaceAll(gate.If, " ", "") != "always()" {
+		t.Errorf("%s if = %q, want always()", mergeQueueGateJob, gate.If)
+	}
+
+	needed := make(map[string]bool, len(gate.Needs))
+	for _, need := range gate.Needs {
+		needed[need] = true
+		if _, ok := document.Jobs[need]; !ok {
+			t.Errorf("%s needs %q, which test.yml does not define", mergeQueueGateJob, need)
+		}
+	}
+	for name := range document.Jobs {
+		if name == mergeQueueGateJob {
+			continue
+		}
+		if !needed[name] {
+			t.Errorf("%s does not need job %q, so the queue would merge while %q is failing", mergeQueueGateJob, name, name)
+		}
+	}
+
+	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
+	if !strings.Contains(quality, mergeQueueGateContext) {
+		t.Errorf("docs/quality.md does not name the required %q check", mergeQueueGateContext)
 	}
 }

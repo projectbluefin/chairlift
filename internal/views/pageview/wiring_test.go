@@ -44,6 +44,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.SysupdateUpdateSubtitle(",
 				"pageview.SysupdateStageResultSubtitle(",
 				"pageview.SysupdateRollbackSubtitle(",
+				"pageview.StagingLogSubtitle(",
 			},
 			retired: []string{
 				"strings.LastIndex(",

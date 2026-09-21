@@ -19,6 +19,8 @@ documents remain authoritative for cross-repository policy.
   plan acceptance criteria aligned.
 - [automated-acceptance](automated-acceptance/SKILL.md) — require executable
   checks instead of inspection-only acceptance.
+- [bounded-stream-rendering](bounded-stream-rendering/SKILL.md) — cap both the
+  callbacks and the widgets when rendering streamed output.
 - [canonical-schema](canonical-schema/SKILL.md) — derive validation from the
   authoritative schema or struct.
 - [change-decomposition](change-decomposition/SKILL.md) — split oversized

@@ -109,6 +109,10 @@ canonical description of every signal.
 - Keep the commit history and changed-files list focused on the issue.
 - Ensure every required GitHub check passes, and inspect a failed job's logs
   rather than relying on the aggregate status.
+- Merging happens through a merge queue. The queue re-runs the `Tests`
+  workflow against your change combined with the current `main` and waits for
+  the aggregating **Tests Passed** check, so a branch that only passed against
+  a stale base is caught there rather than on `main`.
 - Review proposed changes against the
   [pull request review rubric](docs/review-rubric.md).
 
