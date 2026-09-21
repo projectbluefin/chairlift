@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.projectbluefin.chairlift.updates" path="/io/projectbluefin/chairlift/updates/">
+    <key name="operating-system-enabled" type="b">
+      <default>true</default>
+      <summary>Operating system updates</summary>
+      <description>Include available operating system updates in Update All.</description>
+    </key>
+    <key name="applications-enabled" type="b">
+      <default>true</default>
+      <summary>Application updates</summary>
+      <description>Include available application updates in Update All.</description>
+    </key>
+    <key name="developer-tools-enabled" type="b">
+      <default>true</default>
+      <summary>Developer tool updates</summary>
+      <description>Include available developer tool updates in Update All.</description>
+    </key>
+    <key name="system-components-enabled" type="b">
+      <default>true</default>
+      <summary>System component updates</summary>
+      <description>Include available system component updates in Update All.</description>
+    </key>
+    <key name="maintenance-after-updates" type="b">
+      <default>false</default>
+      <summary>Maintain after updates</summary>
+      <description>Run enabled maintenance actions after successful updates.</description>
+    </key>
+  </schema>
+</schemalist>

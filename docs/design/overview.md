@@ -47,6 +47,11 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
         ├── internal/ublue/     Bluefin-family system mutations through the ublue helper
         ├── internal/ubluehelper/ Puregotk-free argv parsing for cmd/chairlift-ublue-helper
+        ├── internal/updateflow/ Pure unified update coordinator and state machine
+        ├── internal/updateproviders/ Provider adapters for the unified update coordinator
+        ├── internal/userprefs/ Pure user update preferences model
+        ├── internal/settings/  GSettings adapter for user update preferences
+        ├── internal/commands/  Canonical command and keyboard shortcut inventory
         └── internal/version/   Build metadata (ldflags injection)
 ```
 

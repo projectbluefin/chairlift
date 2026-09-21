@@ -89,12 +89,14 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                   // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},      // systemctl (query)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                  // bootc status (read-only)
+	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                // bootc upgrade --check (read-only)
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},              // distrobox
 	{File: "internal/flatpak/flatpak.go", Func: "runFlatpakCommandAt"},        // flatpak
 	{File: "internal/flatpak/flatpak.go", Func: "IsInstalled"},                // flatpak --version
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},         // brew
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},              // brew --version
 	{File: "internal/livery/apply.go", Func: "execCommand"},                   // gsettings / dconf / gtk-update-icon-cache / systemctl --user
+	{File: "internal/sysupdate/check.go", Func: "checkUpdateFrom"},            // systemd-sysupdate check-new (read-only)
 	{File: "internal/sysupdate/rollback.go", Func: "runLsblk"},                // lsblk (read-only)
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "defaultRunSetup"},  // user-scope setup
 	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"}, // gtk-launch

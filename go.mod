@@ -8,6 +8,7 @@ require (
 	github.com/frostyard/std v0.2.0
 	github.com/frostyard/updex v1.5.0
 	golang.org/x/image v0.45.0
+	github.com/leonelquinteros/gotext v1.7.2
 	golang.org/x/text v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
 )

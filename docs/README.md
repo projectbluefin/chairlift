@@ -72,6 +72,10 @@ are listed in [org-adrs.md](org-adrs.md).
   read-only `internal/registrytags` leaf package, behind the `Client.HTTP`
   seam so no gated test reaches the network; pinning to a dated tag stays a
   separate decision because no image reference crosses the pkexec boundary
+- [adr/0014-capability-driven-visibility-as-a-floor.md](adr/0014-capability-driven-visibility-as-a-floor.md)
+  — page and group visibility is bounded by host capability (`Configured && Available`);
+  page-level availability is synchronous and non-blocking, while group-level probes
+  can run asynchronously without creating inert placeholders
 
 ### Design
 

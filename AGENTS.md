@@ -593,8 +593,7 @@ An agent must not break these:
   reset; `org.gnome.Shell.Eval` and `ReloadExtension` are gated to unsafe-mode
   since GNOME 41 and refuse the call. The panel needs none of this: its
   extension redraws on `changed::menuicon-setting`.
-- **Livery rotation runs at login, and ChairLift ships exactly one GSettings
-  schema.** The rotation unit is a `Type=oneshot`
+- **Livery rotation runs at login, and GSettings preferences stay unprivileged.** The rotation unit is a `Type=oneshot`
   `WantedBy=graphical-session.target` user unit written to the user's
   `~/.config/systemd/user`, the same unprivileged posture as the AI stack's
   quadlet; it invokes `chairlift --rotate-livery`, which short-circuits before
@@ -616,11 +615,12 @@ An agent must not break these:
   failure still looks like a network that is not up yet: a user manager cannot
   order against `network-online.target`, so a login that beats connectivity
   would otherwise rotate nothing and say so only in the journal. Only the two foundation sections rotate; the app-grid mark
-  is the user's own brand and is set once. `io.projectbluefin.chairlift.livery`
-  is ChairLift's only schema and holds only preferences with no file on disk
-  to infer them from; `make install` recompiles the schema cache and
-  `make schemas` builds it for a source tree. Do not add keys for state that
-  can be observed.
+  is the user's own brand and is set once. ChairLift ships two GSettings schemas:
+  `io.projectbluefin.chairlift.livery` (appearance preferences) and
+  `io.projectbluefin.chairlift.updates` (user source toggles for updates). Both
+  hold only preferences with no file on disk to infer them from; `make install`
+  recompiles the schema cache and `make schemas` builds it for a source tree. Do
+  not add keys for state that can be observed.
 - **The Livery page must not write on load, and its network call stays behind
   a seam.** These bindings expose only the generic `notify` signal, which
   fires for sensitivity and subtitle changes too, so restoring saved state
