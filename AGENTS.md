@@ -360,6 +360,7 @@ An agent must not break these:
   cannot check architecture coverage or freshness, so both belong to whoever
   rolls the digests. See
   [`docs/skills/multi-arch-digest-pinning/SKILL.md`](docs/skills/multi-arch-digest-pinning/SKILL.md).
+
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are

@@ -33,7 +33,6 @@ func (uh *UserHome) buildUpdatesPage() {
 	if page == nil {
 		return
 	}
-
 	// Update All leads the page: one action covering every provider this
 	// host can update. The per-provider groups below it stay available for
 	// anything it does not cover.
