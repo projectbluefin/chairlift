@@ -38,6 +38,7 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	}
 
 	slug := uh.liveryState.AppGridSlug
+	source := uh.liverySource(livery.AppGrid)
 	go func() {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
@@ -57,7 +58,7 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 		if slug == "" {
 			return
 		}
-		if err := livery.Apply(ctx, livery.AppGrid, uh.liveryState.AppGridSource()); err != nil {
+		if err := livery.Apply(ctx, livery.AppGrid, source); err != nil {
 			uh.reportLiveryFailure("setting the app grid mark", err)
 			return
 		}
