@@ -224,10 +224,21 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 					log.Printf("Command '%s' failed:\n%s", display, trimmed)
 				}
 			}
-			if isUntrustedTapMessage(stderrText) {
-				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", summarizeDiagnostic(stderrText))}
+			// Only a state-changing command is distilled to one line: its
+			// full output is in the log above and its stdout replay is what
+			// made the message unreadable. A read-only command keeps its
+			// whole stderr in the error, as before, since nothing else
+			// preserves it and callers such as searchKind match on it.
+			message := diagnosticText
+			tapMessage := stderrText
+			if boundedOutput {
+				message = summarizeDiagnostic(diagnosticText)
+				tapMessage = summarizeDiagnostic(stderrText)
 			}
-			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", summarizeDiagnostic(diagnosticText)), Err: err}
+			if isUntrustedTapMessage(stderrText) {
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", tapMessage)}
+			}
+			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
 		}
 		// exec.ErrNotFound covers a bare name missing from $PATH;
 		// fs.ErrNotExist covers an explicit path that does not exist.

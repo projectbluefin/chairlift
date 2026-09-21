@@ -400,3 +400,39 @@ func TestUpdatePropagatesContextCancellation(t *testing.T) {
 		t.Error("Update error must not classify as a deadline")
 	}
 }
+
+// A read-only command that fails keeps its whole stderr in the error: nothing
+// else preserves it (the failure log line is reserved for state-changing
+// commands), and callers such as searchKind match on the full text.
+func TestReadOnlyFailureKeepsFullStderr(t *testing.T) {
+	exe := fakeBrew(t, `echo "Warning: tap is shallow" >&2
+echo "Error: No formulae or casks found for \"demo\"." >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "search", "--formula", "demo")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"Warning: tap is shallow", `Error: No formulae or casks found for "demo".`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("read-only failure lost %q: %q", want, err.Error())
+		}
+	}
+}
+
+// A state-changing command is distilled to the installer's own error line so
+// the toast stays readable; the full output goes to the log instead.
+func TestStateChangingFailureIsSummarized(t *testing.T) {
+	exe := fakeBrew(t, `echo "==> Installing demo"
+echo "==> Pouring demo.bottle.tar.gz"
+echo "Error: donor bottle is corrupt" >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "install", "demo")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got, want := err.Error(), "Brew command failed: Error: donor bottle is corrupt"; got != want {
+		t.Errorf("state-changing failure = %q, want %q", got, want)
+	}
+}
