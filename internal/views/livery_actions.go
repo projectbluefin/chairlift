@@ -1,0 +1,471 @@
+package views
+
+import (
+	"errors"
+	"log"
+
+	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
+
+	sgtk "github.com/frostyard/snowkit/gtk"
+)
+
+// The Livery handlers all follow one shape: compare the widget's value
+// against the last state the page loaded, do nothing when they agree, and
+// otherwise persist and apply off the main thread.
+//
+// The comparison is not an optimization, it is what makes the handlers
+// correct. AdwSwitchRow and AdwComboRow have no change-specific signal in
+// these bindings, so the page listens to `notify`, which fires for every
+// property — sensitivity, subtitle, title — not only the one that matters.
+// Acting on each notify would write settings when refreshLiveryState merely
+// made a row sensitive, and would loop when applyLiveryState set a switch to
+// the value it just read. Comparing against known state makes both harmless.
+
+// onLiveryAppGridToggled turns the personal mark on or off.
+func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
+	if uh.liverySuppress || !uh.liveryLoaded {
+		return
+	}
+
+	if enabled == uh.liveryState.AppGridEnabled {
+		return
+	}
+	uh.liveryState.AppGridEnabled = enabled
+
+	if uh.liveryAppGridRow != nil {
+		uh.liveryAppGridRow.SetSensitive(enabled)
+	}
+
+	slug := uh.liveryState.AppGridSlug
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if err := livery.SetBool(ctx, livery.KeyAppGridEnabled, enabled); err != nil {
+			uh.reportLiveryFailure("saving the app grid setting", err)
+			return
+		}
+		if !enabled {
+			if err := livery.Clear(ctx, livery.AppGrid); err != nil {
+				uh.reportLiveryFailure("removing the app grid mark", err)
+			}
+			return
+		}
+		// Turning the section on with nothing chosen is not a failure; the
+		// entry row is now sensitive and says what to type.
+		if slug == "" {
+			return
+		}
+		if err := livery.Apply(ctx, livery.AppGrid, uh.liveryState.AppGridSource()); err != nil {
+			uh.reportLiveryFailure("setting the app grid mark", err)
+			return
+		}
+		if err := livery.RefreshShellIcons(); err != nil {
+			uh.reportLiveryFailure("refreshing the shell's icons", err)
+		}
+	}()
+}
+
+// onLiveryBrandChosen applies a brand mark picked from the chooser.
+//
+// This is an explicit activation from a result row, so it needs no
+// notify-storm guard beyond the load gate. The fetch is the one part of this
+// page that needs a network, so its failures — an unreachable service, a
+// brand whose artwork has been withdrawn — surface as toasts naming what went
+// wrong rather than leaving the row looking applied.
+func (uh *UserHome) onLiveryBrandChosen(slug string) {
+	if !uh.liveryLoaded || slug == uh.liveryState.AppGridSlug {
+		return
+	}
+	uh.liveryState.AppGridSlug = slug
+
+	if uh.liveryAppGridRow != nil {
+		uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug).Subtitle)
+	}
+
+	enabled := uh.liveryState.AppGridEnabled
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		// The choice is saved whether or not the section is on, so switching
+		// it on later applies what the user already picked.
+		if err := livery.SetString(ctx, livery.KeyAppGridSlug, slug); err != nil {
+			uh.reportLiveryFailure("saving the brand", err)
+			return
+		}
+		if !enabled {
+			return
+		}
+		if err := livery.Apply(ctx, livery.AppGrid, livery.Source{Kind: livery.FromSimpleIcons, Value: slug}); err != nil {
+			uh.reportLiveryFailure("fetching that brand mark", err)
+			return
+		}
+		if err := livery.RefreshShellIcons(); err != nil {
+			uh.reportLiveryFailure("refreshing the shell's icons", err)
+		}
+	}()
+}
+
+// onLiverySurfaceToggled turns the panel or dock mark on or off.
+//
+// The panel additionally captures the extension's user-layer values the
+// first time it is enabled, so turning it off later restores exactly what
+// was there — a distro default included.
+func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool) {
+	if uh.liverySuppress || !uh.liveryLoaded {
+		return
+	}
+
+	current, key := uh.liveryToggleState(surface)
+	if enabled == current {
+		return
+	}
+	uh.setLiveryToggleState(surface, enabled)
+	uh.setLiverySectionSensitive(surface, enabled)
+
+	source := uh.liverySource(surface)
+	savedIcon, savedMode := uh.liveryState.SavedPanelIcon, uh.liveryState.SavedPanelMode
+
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if enabled && surface == livery.Panel && savedIcon == "" && savedMode == "" {
+			icon, mode, ok := livery.CapturePanelOverrides(ctx)
+			if !ok {
+				// The user layer could not be read, so there is nothing
+				// trustworthy to restore later. Refuse rather than record an
+				// empty value, which revert would read as "reset the key".
+				uh.reportLiveryFailure("reading the current panel icon", errors.New("dconf is unavailable"))
+				return
+			}
+			if err := livery.SetString(ctx, livery.KeySavedPanelIcon, icon); err != nil {
+				uh.reportLiveryFailure("recording the previous panel icon", err)
+				return
+			}
+			if err := livery.SetString(ctx, livery.KeySavedPanelMode, mode); err != nil {
+				uh.reportLiveryFailure("recording the previous panel mode", err)
+				return
+			}
+			sgtk.RunOnMainThread(func() {
+				uh.liveryState.SavedPanelIcon = icon
+				uh.liveryState.SavedPanelMode = mode
+			})
+		}
+
+		if err := livery.SetBool(ctx, key, enabled); err != nil {
+			uh.reportLiveryFailure("saving that setting", err)
+			return
+		}
+
+		if enabled {
+			if err := livery.Apply(ctx, surface, source); err != nil {
+				uh.reportLiveryFailure("setting the mark", err)
+				return
+			}
+			if surface != livery.Panel {
+				// The panel is the exception: its extension redraws on
+				// `changed::menuicon-setting` by itself.
+				if err := livery.RefreshShellIcons(); err != nil {
+					uh.reportLiveryFailure("refreshing the shell's icons", err)
+				}
+			}
+			return
+		}
+
+		if err := livery.Clear(ctx, surface); err != nil {
+			uh.reportLiveryFailure("removing the mark", err)
+			return
+		}
+		if surface != livery.Panel {
+			// The panel is the exception: its extension redraws on
+			// `changed::menuicon-setting` by itself.
+			if err := livery.RefreshShellIcons(); err != nil {
+				uh.reportLiveryFailure("refreshing the shell's icons", err)
+			}
+		}
+		if surface == livery.Panel {
+			if err := livery.ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {
+				uh.reportLiveryFailure("restoring the previous panel icon", err)
+			}
+		}
+	}()
+}
+
+// onLiveryProjectChosen applies a CNCF project's artwork to the Files icon.
+//
+// This is an explicit activation — the user clicked a result row — so unlike
+// the combo paths it needs no notify-storm guard beyond the load gate.
+func (uh *UserHome) onLiveryProjectChosen(id string) {
+	if !uh.liveryLoaded || id == uh.liveryState.DockID {
+		return
+	}
+	uh.liveryState.DockID = id
+
+	if uh.liveryDockSelectedRow != nil {
+		selected := pageview.LiverySelectedProjectRow(id)
+		uh.liveryDockSelectedRow.SetTitle(selected.Title)
+		uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
+	}
+
+	enabled := uh.liveryState.DockEnabled
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if err := livery.SetString(ctx, livery.KeyDockID, id); err != nil {
+			uh.reportLiveryFailure("saving the project", err)
+			return
+		}
+		if !enabled {
+			return
+		}
+		if err := livery.Apply(ctx, livery.Dock, livery.Source{Kind: livery.FromCNCF, Value: id}); err != nil {
+			uh.reportLiveryFailure("fetching that project's icon", err)
+			return
+		}
+		// GNOME applies a choice when you make it, and the shell caches icon
+		// textures by name — so without nudging it the new mark would not
+		// appear until the next login, which is not "applied".
+		if err := livery.RefreshShellIcons(); err != nil {
+			uh.reportLiveryFailure("refreshing the shell's icons", err)
+		}
+	}()
+}
+
+// onLiverySelectionChangedByID applies a foundation mark chosen by id.
+func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id string) {
+	if !uh.liveryLoaded {
+		return
+	}
+	current, key := uh.liverySelectionState(surface)
+	if id == current {
+		return
+	}
+	uh.setLiverySelectionState(surface, id)
+
+	if surface == livery.Panel && uh.liveryPanelMarkRow != nil {
+		uh.liveryPanelMarkRow.SetSubtitle(
+			pageview.LiverySelectedFoundationRow(id, uh.liveryState.PanelCustom).Subtitle)
+	}
+
+	enabled, _ := uh.liveryToggleState(surface)
+	source := uh.liverySource(surface)
+
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if err := livery.SetString(ctx, key, id); err != nil {
+			uh.reportLiveryFailure("saving the selection", err)
+			return
+		}
+		if !enabled {
+			return
+		}
+		if err := livery.Apply(ctx, surface, source); err != nil {
+			uh.reportLiveryFailure("setting the mark", err)
+			return
+		}
+		if surface != livery.Panel {
+			if err := livery.RefreshShellIcons(); err != nil {
+				uh.reportLiveryFailure("refreshing the shell's icons", err)
+			}
+		}
+	}()
+}
+
+// onLiveryRotateToggled turns login rotation on or off for one section and
+// syncs the systemd user unit, which exists only while some section rotates.
+func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) {
+	if uh.liverySuppress || !uh.liveryLoaded {
+		return
+	}
+
+	current, key := uh.liveryRotateState(surface)
+	if enabled == current {
+		return
+	}
+	uh.setLiveryRotateState(surface, enabled)
+	state := uh.liveryState
+
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if err := livery.SetBool(ctx, key, enabled); err != nil {
+			uh.reportLiveryFailure("saving the rotation setting", err)
+			return
+		}
+		if err := livery.SyncRotationUnit(ctx, state); err != nil {
+			uh.reportLiveryFailure("scheduling rotation", err)
+		}
+	}()
+}
+
+// onLiveryCustomFileChosen points a surface at the user's own SVG.
+//
+// The file is not copied into the icon theme until it is applied, and Apply
+// validates it — an unreadable file or a PNG chosen by mistake is reported
+// naming the path, rather than installing bytes that resolve to a blank icon.
+func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string) {
+	if !uh.liveryLoaded {
+		return
+	}
+
+	var pathKey, idKey string
+	var enabled bool
+	switch surface {
+	case livery.AppGrid:
+		pathKey, idKey = livery.KeyAppGridCustom, livery.KeyAppGridSlug
+		enabled = uh.liveryState.AppGridEnabled
+		uh.liveryState.AppGridCustom, uh.liveryState.AppGridSlug = path, livery.CustomID
+	case livery.Panel:
+		pathKey, idKey = livery.KeyPanelCustom, livery.KeyPanelID
+		enabled = uh.liveryState.PanelEnabled
+		uh.liveryState.PanelCustom, uh.liveryState.PanelID = path, livery.CustomID
+	default:
+		pathKey, idKey = livery.KeyDockCustom, livery.KeyDockID
+		enabled = uh.liveryState.DockEnabled
+		uh.liveryState.DockCustom, uh.liveryState.DockID = path, livery.CustomID
+	}
+	uh.showLiveryCustomPath(surface, path)
+
+	source := uh.liverySource(surface)
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+
+		if err := livery.SetString(ctx, pathKey, path); err != nil {
+			uh.reportLiveryFailure("saving the file", err)
+			return
+		}
+		if err := livery.SetString(ctx, idKey, livery.CustomID); err != nil {
+			uh.reportLiveryFailure("saving the selection", err)
+			return
+		}
+		if !enabled {
+			return
+		}
+		if err := livery.Apply(ctx, surface, source); err != nil {
+			uh.reportLiveryFailure("using that file", err)
+			return
+		}
+		if surface != livery.Panel {
+			if err := livery.RefreshShellIcons(); err != nil {
+				uh.reportLiveryFailure("refreshing the shell's icons", err)
+			}
+		}
+	}()
+}
+
+// showLiveryCustomPath updates the section's summary row to name the file.
+func (uh *UserHome) showLiveryCustomPath(surface livery.Surface, path string) {
+	summary := pageview.LiveryCustomRow(path).Subtitle
+	switch surface {
+	case livery.AppGrid:
+		if uh.liveryAppGridRow != nil {
+			uh.liveryAppGridRow.SetSubtitle(summary)
+		}
+	case livery.Panel:
+		if uh.liveryPanelMarkRow != nil {
+			uh.liveryPanelMarkRow.SetSubtitle(summary)
+		}
+	default:
+		if uh.liveryDockSelectedRow != nil {
+			uh.liveryDockSelectedRow.SetSubtitle(summary)
+		}
+	}
+}
+
+// reportLiveryFailure logs and toasts, on the main thread.
+func (uh *UserHome) reportLiveryFailure(what string, err error) {
+	log.Printf("livery: %s: %v", what, err)
+	sgtk.RunOnMainThread(func() {
+		uh.toastAdder.ShowErrorToast("Livery: " + what + " failed — " + err.Error())
+	})
+}
+
+// ── per-surface state accessors ──────────────────────────────────────────
+//
+// The panel and dock sections are identical in behavior and differ only in
+// which State fields and settings keys they read and write, so the handlers
+// above are written once against these.
+
+func (uh *UserHome) liveryToggleState(s livery.Surface) (bool, string) {
+	if s == livery.Panel {
+		return uh.liveryState.PanelEnabled, livery.KeyPanelEnabled
+	}
+	return uh.liveryState.DockEnabled, livery.KeyDockEnabled
+}
+
+func (uh *UserHome) setLiveryToggleState(s livery.Surface, v bool) {
+	if s == livery.Panel {
+		uh.liveryState.PanelEnabled = v
+		return
+	}
+	uh.liveryState.DockEnabled = v
+}
+
+func (uh *UserHome) liverySelectionState(s livery.Surface) (string, string) {
+	if s == livery.Panel {
+		return uh.liveryState.PanelID, livery.KeyPanelID
+	}
+	return uh.liveryState.DockID, livery.KeyDockID
+}
+
+func (uh *UserHome) setLiverySelectionState(s livery.Surface, id string) {
+	if s == livery.Panel {
+		uh.liveryState.PanelID = id
+		return
+	}
+	uh.liveryState.DockID = id
+}
+
+func (uh *UserHome) liveryRotateState(s livery.Surface) (bool, string) {
+	if s == livery.Panel {
+		return uh.liveryState.PanelRotate, livery.KeyPanelRotate
+	}
+	return uh.liveryState.DockRotate, livery.KeyDockRotate
+}
+
+func (uh *UserHome) setLiveryRotateState(s livery.Surface, v bool) {
+	if s == livery.Panel {
+		uh.liveryState.PanelRotate = v
+		return
+	}
+	uh.liveryState.DockRotate = v
+}
+
+func (uh *UserHome) liverySource(s livery.Surface) livery.Source {
+	switch s {
+	case livery.AppGrid:
+		return uh.liveryState.AppGridSource()
+	case livery.Panel:
+		return uh.liveryState.PanelSource()
+	default:
+		return uh.liveryState.DockSource()
+	}
+}
+
+// setLiverySectionSensitive follows the section's master switch, so a
+// selection cannot be changed for a mark that is not being set.
+func (uh *UserHome) setLiverySectionSensitive(s livery.Surface, enabled bool) {
+	if s == livery.Panel {
+		if uh.liveryPanelMarkRow != nil {
+			uh.liveryPanelMarkRow.SetSensitive(enabled)
+		}
+		if uh.liveryPanelRotate != nil {
+			uh.liveryPanelRotate.SetSensitive(enabled)
+		}
+		return
+	}
+	if uh.liveryDockSelectedRow != nil {
+		uh.liveryDockSelectedRow.SetSensitive(enabled)
+	}
+	if uh.liveryDockRotate != nil {
+		uh.liveryDockRotate.SetSensitive(enabled)
+	}
+}

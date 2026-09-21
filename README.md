@@ -73,6 +73,19 @@ fails does not stop the others.
 - **Roll Back**: return to the previous system image at the next restart,
   shown only when a previous image exists
 
+### 🎨 Livery
+
+- **App Grid Livery**: your own mark on the Show Applications button —
+  searchable across all 3,461 brands [Simple Icons](https://simpleicons.org/)
+  publishes, fetched on demand
+- **Foundational Livery**: a mark in the top bar — CNCF, Linux Foundation,
+  GNOME, freedesktop.org, Apache, Rust, Universal Blue, Bazzite, Aurora, or
+  the Open Gaming Collective, which is the default on a gaming image
+- **Dock Livery**: your CNCF project's own colour icon on the Files icon —
+  search all 214 projects that publish artwork, from Kubernetes to bootc
+- **Rotate at Login**: the two foundation sections can advance one step each
+  time you sign in. Any section also accepts an SVG of your own
+
 ### 🔧 Updates & Maintenance
 
 - **System Updates**: On bootc-based systems, download and stage the next OS image update (applied on restart) and view booted/staged/rollback deployment status; on native A/B (systemd-sysupdate) installs, stage the next image the same way and see the previous version available for boot-menu rollback
@@ -250,7 +263,10 @@ chairlift
 3. **Updates**: Stage bootc or native A/B system updates, manage Homebrew updates and outdated packages, apply Flatpak updates, and trust Homebrew taps
 4. **System**: Monitor deployment, health, and performance information
 5. **Features**: Enable, disable, and update configured system features
-6. **Help**: Documentation and support resources
+6. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
+   and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
+   project's artwork, optionally advancing at each login
+7. **Help**: Documentation and support resources
 
 ### Keyboard Shortcuts
 

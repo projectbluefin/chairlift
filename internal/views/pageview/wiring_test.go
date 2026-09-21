@@ -21,6 +21,24 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		retired  []string
 	}{
 		{
+			file: "livery_page.go",
+			required: []string{
+				"pageview.LiveryPageDescription",
+				"pageview.LiveryChoices(",
+				"pageview.LiveryAppGridRow(",
+				"pageview.LiveryPanelRow(",
+				"pageview.LiveryDockRow(",
+				"pageview.LiveryRotationRow(",
+			},
+			retired: []string{
+				// The mantra and its fragments are owned by pageview; an
+				// inline copy here would drift from the sentence it came from.
+				`"Who you are"`,
+				`"Who you stand with"`,
+				`"What you roll with"`,
+			},
+		},
+		{
 			file: "applications_page.go",
 			required: []string{
 				"pageview.BrewBundle(",

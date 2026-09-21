@@ -170,7 +170,7 @@ The upgrade-failure toast text adapts to whether that UI is actually available: 
 
 `internal/views/pageview` is one of the nine puregotk-free leaf packages under
 `internal/views/`. It owns the widget-independent presentation decisions shared
-by all six page builders. The GTK files create and mutate widgets, but no longer
+by all seven page builders. The GTK files create and mutate widgets, but no longer
 reimplement the variable row text, status text, Help-link inventory, os-release
 parsing, or maintenance invocation that this package returns. The leaf-package
 layout itself is decision record

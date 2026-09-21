@@ -57,6 +57,51 @@ Linux's feature manager, and is empty elsewhere.
 
 ---
 
+## Livery
+
+![Livery](screenshots/6-livery.png)
+
+Who you are, who you stand with, and what you roll with.
+
+**App Grid Livery** is your own mark on the Show Applications button. Search
+all 3,461 brands [Simple Icons](https://simpleicons.org/) publishes — your
+project, your employer, whatever you answer to — and Control Center fetches it
+and rebuilds the dock so it appears straight away. You set it once; it never changes on its own, because a personal mark that
+rotated would stop being personal.
+
+**Foundational Livery** puts a foundation's mark in the top bar: CNCF, the
+Linux Foundation, GNOME, freedesktop.org, Apache, Rust, Universal Blue,
+Bazzite, Aurora, or the Open Gaming Collective. On a gaming image the
+collective's mark is the one you start with, since that is whose work the
+image ships — pick any other and it stays picked.
+
+**Dock Livery** is the project you actually work on. Every CNCF project that
+publishes artwork is in the list — 214 of them, Kubernetes through bootc — so
+the picker searches rather than scrolls, and each one arrives as the project's
+own colour icon straight from
+[cncf/artwork](https://github.com/cncf/artwork).
+
+Both can **Rotate at Login**, which moves one step down the list each time you
+sign in — so you stand somewhere slightly different every day without ever
+picking again.
+
+Any section will also take an SVG of your own, which is the way in for
+anything not on the list.
+
+Three things worth knowing. The top-bar section needs the Custom Command Menu
+GNOME extension; without it the section says so and stays switched off rather
+than offering a control that does nothing. The Files mark is the Files mark
+everywhere — the dock, the app grid, the window switcher — because GNOME keeps
+one icon per app, not one per place, and the app-grid glyph is shared the same
+way. And only the Files icon is in colour: the top bar and the app grid draw
+single-colour silhouettes, recoloured to match your theme, which is how every
+other icon up there behaves.
+
+Turning a section off puts back exactly what was there before, including a
+mark your distribution set rather than one you chose.
+
+---
+
 ## Applications
 
 ![Applications](screenshots/1-applications.png)
@@ -81,7 +126,7 @@ see it.
 
 ## Help
 
-![Help](screenshots/6-help.png)
+![Help](screenshots/7-help.png)
 
 Links to the distribution's website, issues, and discussions.
 

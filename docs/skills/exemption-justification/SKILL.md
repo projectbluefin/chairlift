@@ -22,9 +22,9 @@ site."
 documentation. Open the test it names and confirm it really scans the exempted
 file and really asserts the property. `internal/views/pageview/wiring_test.go`
 is the exact trap: it computes `viewsDir` as the *parent* of its own directory
-and table-drives over six page builders only —
-`applications_page.go`, `updates_page.go`, `maintenance_page.go`,
-`features_page.go`, `help_page.go`, `system_page.go`. It never reads
+and table-drives over seven page builders only —
+`livery_page.go`, `applications_page.go`, `updates_page.go`,
+`maintenance_page.go`, `features_page.go`, `help_page.go`, `system_page.go`. It never reads
 `internal/views/pageview/pageview.go`, and its one `"pkexec"` fragment sits in
 the `retired` list for `maintenance_page.go`, where it asserts the pattern is
 *absent* from a different file. A grep hit for the right string in a plausible

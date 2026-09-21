@@ -1,0 +1,214 @@
+aerakimesh	Aeraki Mesh	projects/aerakimesh/icon/color/aerakimesh-icon-color.svg
+agones	Agones	projects/agones/icon/color/agones-icon-color.svg
+akri	Akri	projects/akri/icon/color/akri-icon-color.svg
+antrea	Antrea	projects/antrea/icon/color/antrea-icon-color.svg
+apicurio-registry	Apicurio Registry	projects/apicurio-registry/icon/color/apicurio-registry-icon-color.svg
+argo	Argo	projects/argo/icon/color/argo-icon-color.svg
+armada	Armada	projects/armada/icon/color/armada-icon-color.svg
+artifacthub	Artifact Hub	projects/artifacthub/icon/color/artifacthub-icon-color.svg
+athenz	Athenz	projects/athenz/icon/color/athenz-icon-color.svg
+atlantis	Atlantis	projects/atlantis/icon/color/atlantis-icon-color.svg
+backstage	Backstage	projects/backstage/icon/color/backstage-icon-color.svg
+bank-vaults	Bank-Vaults	projects/bank-vaults/icon/color/bank-vaults-icon-color.svg
+bfe	BFE	projects/bfe/icon/color/bfe-icon-color.svg
+bootc	bootc	projects/bootc/icon/color/bootc-icon-color.svg
+bpfman	bpfman	projects/bpfman/icon/color/bpfman-icon-color.svg
+buildpacks	Buildpacks	projects/buildpacks/icon/color/buildpacks-icon-color.svg
+cadence	Cadence	projects/cadence/icon/color/cadence-icon-color.svg
+capsule	Capsule	projects/capsule/icon/color/capsule-icon-color.svg
+carina	Carina	projects/carina/icon/color/carina-icon-color.svg
+carvel	Carvel	projects/carvel/icon/color/carvel-icon-color.svg
+cdk8s	CDK8s	projects/cdk8s/icon/color/cdk8s-icon-color.svg
+cedar	Cedar	projects/cedar/icon/color/cedar-icon-color.svg
+cert-manager	Cert-Manager	projects/cert-manager/icon/color/cert-manager-icon-color.svg
+chaosblade	ChaosBlade	projects/chaosblade/icon/color/chaosblade-icon-color.svg
+chaosmesh	Chaos Mesh	projects/chaosmesh/icon/color/chaosmesh-icon-color.svg
+chubaofs	Chubaofs	projects/chubaofs/icon/color/chubaofs-icon-color.svg
+cilium	Cilium	projects/cilium/icon/color/cilium_icon-color.svg
+cloudcustodian	Cloud Custodian	projects/cloudcustodian/icon/color/cloudcustodian-icon-color.svg
+cloudevents	CloudEvents	projects/cloudevents/icon/color/cloudevents-icon-color.svg
+cloudnativepg	CloudNativePG	projects/cloudnativepg/icon/color/cloudnativepg-icon-color.svg
+clusternet	Clusternet	projects/clusternet/icon/color/clusternet-icon-color.svg
+clusterpedia	Clusterpedia	projects/clusterpedia/icon/color/clusterpedia-icon-color.svg
+cni	CNI	projects/cni/icon/color/cni-icon-color.svg
+cohdi	CoHDI	projects/cohdi/icon/color/cohdi-icon-color.svg
+confidential-containers	Confidential Containers	projects/confidential-containers/icon/color/confidential-containers-icon-color.svg
+connect-rpc	Connect RPC	projects/connect-rpc/icon/color/connect-rpc-color.svg
+container2wasm	container2wasm	projects/container2wasm/icon/color/container2wasm-icon-color.svg
+containerd	containerd	projects/containerd/icon/color/containerd-icon-color.svg
+contour	Contour	projects/contour/icon/color/contour-icon-color.svg
+coredns	CoreDNS	projects/coredns/icon/color/coredns-icon-color.svg
+cortex	Cortex	projects/cortex/icon/color/cortex-icon-color.svg
+cozystack	Cozystack	projects/cozystack/icon/color/cozystack-icon-color.svg
+crio	CRI-O	projects/crio/icon/color/crio-icon-color.svg
+crossplane	Crossplane	projects/crossplane/icon/color/crossplane-icon-color.svg
+cubefs	CubeFS	projects/cubefs/icon/color/cubefs-icon-color.svg
+dalec	Dalec	projects/dalec/icon/color/dalec-icon-color.svg
+dapr	Dapr	projects/dapr/icon/color/dapr-icon-color.svg
+devfile	Devfile	projects/devfile/icon/color/devfile-icon-color.svg
+devspace	devspace	projects/devspace/icon/color/devspace-icon-color.svg
+dex	Dex	projects/dex/icon/color/dex-icon-color.svg
+distribution	Distribution	projects/distribution/icon/color/cncf-distribution-icon-color.svg
+dragonfly	Dragonfly	projects/dragonfly/icon/color/dragonfly-icon-color.svg
+drasi	Drasi	projects/drasi/icon/color/drasi-icon-color.svg
+easegress	Easegress	projects/easegress/icon/color/easegress-icon-color.svg
+emissary-ingress	Emissary-Ingress	projects/emissary-ingress/icon/color/emissary-ingress-icon-color.svg
+envoy	Envoy	projects/envoy/icon/color/envoy-icon-color.svg
+eraser	Eraser	projects/eraser/icon/color/eraser-icon-color.svg
+etcd	etcd	projects/etcd/icon/color/etcd-icon-color.svg
+external-secrets-operator	External Secrets Operator	projects/external-secrets-operator/icon/color/eso-icon-color.svg
+falco	Falco	projects/falco/icon/color/falco-icon-color.svg
+flatcar	Flatcar	projects/flatcar/icon/color/flatcar-icon-color.svg
+fluentd	Fluentd	projects/fluentd/icon/color/fluentd-icon-color.svg
+fluid	Fluid	projects/fluid/icon/color/fluid-icon-color.svg
+flux	Flagger	projects/flux/icon/color/flux-icon-color.svg
+grpc	gRPC	projects/grpc/icon/color/grpc-icon-color.svg
+hami	HAMi	projects/hami/icon/color/hami-icon-color.svg
+harbor	Harbor	projects/harbor/icon/color/harbor-icon-color.svg
+headlamp	Headlamp	projects/headlamp/icon/color/headlamp-icon-color.svg
+helm	Helm	projects/helm/icon/color/helm-icon-color.svg
+higress	Higress	projects/higress/icon/color/higress-icon-color.svg
+holmesgpt	HolmesGPT	projects/holmesgpt/icon/color/holmesgpt-icon-color.svg
+hwameistor	Hwameistor	projects/hwameistor/icon/color/hwameistor-icon-color.svg
+hyperlight	Hyperlight	projects/hyperlight/icon/color/hyperlight-icon-color.svg
+in-toto	in-toto	projects/in-toto/icon/color/in-toto-icon-color.svg
+inclavare	Inclavare Containers	projects/inclavare/icon/color/inclavare-icon-color.svg
+inspektor-gadget	Inspektor Gadget	projects/inspektor-gadget/icon/color/inspektor-gadget-icon-color.svg
+interlink	interlink	projects/interlink/icon/color/interlink-icon-color.svg
+istio	Istio	projects/istio/icon/color/istio-icon-color.svg
+jaeger	Jaeger	projects/jaeger/icon/color/jaeger-icon-color.svg
+k0s	k0s	projects/k0s/icon/color/k0s-logo-2025-icon.svg
+k3s	k3s	projects/k3s/icon/color/k3s-icon-color.svg
+k8gb	K8gb	projects/k8gb/icon/color/k8gb-icon-color.svg
+k8sgpt	K8sGPT	projects/k8sgpt/icon/color/k8sgpt-icon-color.svg
+kagent	kagent	projects/kagent/icon/color/kagent-icon-color.svg
+kai-scheduler	KAI Scheduler	projects/kai-scheduler/icon/color/kai-scheduler-icon-spaceblue.svg
+kairos	Kairos	projects/kairos/icon/color/kairos-icon-color.svg
+kaito	KAITO	projects/kaito/icon/color/kaito-icon.svg
+karmada	Karmada	projects/karmada/icon/color/karmada-icon-color.svg
+kbind	kbind	projects/kbind/icon/color/kbind-icon-color.svg
+kcl	KCL	projects/kcl/icon/color/kcl-icon-color.svg
+kcp	KCP	projects/kcp/icon/color/kcp-icon-color.svg
+keda	KEDA	projects/keda/icon/color/keda-icon-color.svg
+kepler	Kepler	projects/kepler/icon/color/kepler-icon-color.svg
+keycloak	Keycloak	projects/keycloak/icon/color/keycloak-icon-color.svg
+keylime	Keylime	projects/keylime/icon/color/keylime-icon-color.svg
+kgateway	kgateway	projects/kgateway/icon/color/kgateway-icon-color.svg
+kitops	KitOps	projects/kitops/icon/color/kitops-icon-color.svg
+kmesh	Kmesh	projects/kmesh/icon/color/KMESH-icon-color.svg
+knative	Knative	projects/knative/icon/color/knative-icon-color.svg
+ko	Ko	projects/ko/icon/color/ko-icon-color.svg
+konveyor	Konveyor	projects/konveyor/icon/color/konveyor-icon-color.svg
+koordinator	Koordinator	projects/koordinator/icon/color/koordinator-icon-color.svg
+kpt	kpt	projects/kpt/icon/color/kpt_icon_color.svg
+krkn	Krkn	projects/krkn/icon/color/krkn-icon-color.svg
+kserve	KServe	projects/kserve/icon/color/k-serve-icon-color.svg
+kuadrant	Kuadrant	projects/kuadrant/icon/color/kuadrant-icon-color.svg
+kuasar	Kuasar	projects/kuasar/icon/color/kuasar-icon-color.svg
+kube-burner	kube-burner	projects/kube-burner/icon/color/kube-burner-icon-color.svg
+kube-ovn	Kube-OVN	projects/kube-ovn/icon/color/kube-ovn-icon-color.svg
+kubean	Kubean	projects/kubean/icon/color/kubean-icon-colorlight.svg
+kubearmor	kubearmor	projects/kubearmor/icon/color/kubearmor-icon-color.svg
+kubeedge	KubeEdge	projects/kubeedge/icon/color/kubeedge-icon-color.svg
+kubeelasti	KubeElasti	projects/kubeelasti/icon/color/kubeelasti-icon-color.svg
+kubefleet	KubeFleet	projects/kubefleet/icon/color/kubefleet-icon-color.svg
+kubeflow	Kubeflow	projects/kubeflow/icon/color/kubeflow-icon.svg
+kubeflow-notebooks	Kubeflow Notebook	projects/kubeflow-notebooks/icon/color/icon-color.svg
+kubeflow-pipelines	Kubeflow Pipelines	projects/kubeflow-pipelines/icon/color/kubeflow-pipelines-icon-color.svg
+kubeflow-trainer	Kubeflow Trainer	projects/kubeflow-trainer/icon/color/Kubeflow-Trainer-Logo_icon-color.svg
+kuberhealthy	Kuberhealthy	projects/kuberhealthy/icon/color/kuberhealthy-icon-color.svg
+kubernetes	Certified Kubernetes	projects/kubernetes/icon/color/kubernetes-icon-color.svg
+kubescape	Kubescape	projects/kubescape/icon/color/kubescape-icon-color.svg
+kubeslice	Kubeslice	projects/kubeslice/icon/color/kubeslice-icon-color.svg
+kubestellar	KubeStellar	projects/kubestellar/icon/color/kubestellar-icon-color.svg
+kubevela	KubeVela	projects/kubevela/icon/color/kubevela-icon-color.svg
+kubevirt	KubeVirt	projects/kubevirt/icon/color/kubevirt-icon-color.svg
+kubewarden	Kubewarden	projects/kubewarden/icon/color/kubewarden.icon.svg
+kudo	Kudo	projects/kudo/icon/color/kudo-icon-color.svg
+kuma	Kuma	projects/kuma/icon/color/kuma-icon-color.svg
+kured	Kured	projects/kured/icon/color/kured-icon-color.svg
+kusionstack	KusionStack	projects/kusionstack/icon/color/kusionstack-icon-color.svg
+kyverno	Kyverno	projects/kyverno/icon/color/kyverno-icon-color.svg
+linkerd	Linkerd	projects/linkerd/icon/color/linkerd-icon-color.svg
+litmus	LitmusChaos	projects/litmus/icon/color/litmus-icon-color.svg
+llm-d	llm-d	projects/llm-d/icon/color/llm-d-icon-color.svg
+logging-operator	Logging-Operator	projects/logging-operator/icon/color/logging-operator-icon-color.svg
+longhorn	Longhorn	projects/longhorn/icon/color/longhorn-icon-color.svg
+loxilb	LoxiLB	projects/loxilb/icon/color/loxilb-icon-color.svg
+metal3-io	metal3-io	projects/metal3-io/icon/color/metal3-icon-color.svg
+metallb	MetalLB	projects/metallb/icon/color/metallb-icon-color.svg
+microcks	Microcks	projects/microcks/icon/color/microcks-icon-color.svg
+modelpack	ModelPack	projects/modelpack/icon/color/ModelPack_Logo_Icon_Color.svg
+nats	NATS	projects/nats/icon/color/nats-icon-color.svg
+networkservicemesh	Network Service Mesh	projects/networkservicemesh/icon/color/networkservicemesh-icon-color.svg
+nmstate	NMstate	projects/nmstate/icon/color/nmstate-icon-color.svg
+notary	Notary Project	projects/notary/icon/color/notary-project-icon-color.svg
+oauth2-proxy	OAuth2 Proxy	projects/oauth2-proxy/icon/color/oauth2-proxy-icon-color.svg
+opcr	Open Policy Containers	projects/opcr/icon/color/opcr-icon-color.svg
+open-cluster-management	Open Cluster Management	projects/open-cluster-management/icon/color/ocm-icon-color.svg
+open-policy-agent	Open Policy Agent	projects/open-policy-agent/icon/color/opa-icon-color.svg
+open-workflow-specification	Open Workflow Specification	projects/open-workflow-specification/icon/color/open-workflow-specification-icon-color.svg
+openGemini	openGemini	projects/openGemini/icon/color/openGemini_icon_color.svg
+openchoreo	OpenChoreo	projects/openchoreo/icon/color/openchoreo-icon-color.svg
+opencost	OpenCost	projects/opencost/icon/color/Opencost_Icon_Color.svg
+openebs	OpenEBS	projects/openebs/icon/color/openebs-icon-color.svg
+openfga	OpenFGA	projects/openfga/icon/color/openfga-icon-color.svg
+openfunction	OpenFunction	projects/openfunction/icon/color/openfunction-icon-color.svg
+opengitops	OpenGitOps	projects/opengitops/icon/color/opengitops-icon-color.svg
+openkruise	OpenKruise	projects/openkruise/icon/color/openkruise-icon-color.svg
+opentelemetry	OpenTelemetry	projects/opentelemetry/icon/color/opentelemetry-icon-color.svg
+opentofu	OpenTofu	projects/opentofu/icon/color/opentofu-icon-color.svg
+openyurt	OpenYurt	projects/openyurt/icon/color/openyurt-icon-color.svg
+operatorframework	Operator Framework	projects/operatorframework/icon/color/operatorframework-icon-color.svg
+oscal-compass	OSCAL Compass	projects/oscal-compass/icon/color/oscal-compass-color.svg
+ovn-kubernetes	ovn-kubernetes	projects/ovn-kubernetes/icon/color/ovn-kubernetes-icon-color.svg
+paralus	Paralus	projects/paralus/icon/color/paralus-icon-color.svg
+parsec	Parsec	projects/parsec/icon/color/parsec-icon-color.svg
+perses	Perses	projects/perses/icon/color/perses-icon-color.svg
+pipecd	PipeCD	projects/pipecd/icon/color/pipecd-icon-color.svg
+piraeus-datastore	Piraeus-Datastore	projects/piraeus-datastore/icon/color/piraeus-icon-color.svg
+pixie	Pixie	projects/pixie/icon/color/pixie-icon-color.svg
+podman-container-tools	Podman Container Tools	projects/podman-container-tools/icon/color/podman-icon-color.svg
+podman-desktop	Podman Desktop	projects/podman-desktop/icon/color/podman-desktop-icon-color.svg
+porter	Porter	projects/porter/icon/color/porter-icon-color.svg
+prometheus	Prometheus	projects/prometheus/icon/color/prometheus-icon-color.svg
+radius	Radius	projects/radius/icon/color/radius-icon-color.svg
+ratify	Ratify	projects/ratify/icon/color/ratify-icon-color.svg
+rook	Rook	projects/rook/icon/color/rook-icon-color.svg
+runme-notebooks	Runme Notebooks	projects/runme-notebooks/icon/color/runme-icon-color.svg
+schemahero	Schemahero	projects/schemahero/icon/color/schemahero-icon-color.svg
+score	Score	projects/score/icon/color/score-icon-color.svg
+sermant	Sermant	projects/sermant/icon/color/sermant-icon-color.svg
+serverless-devs	Serverless Devs	projects/serverless-devs/icon/color/serverless-devs-icon-color.svg
+shipwright	Shipwright	projects/shipwright/icon/color/shipwright-icon-color.svg
+slimfaas	SlimFaas	projects/slimfaas/icon/color/slimfaas-icon-color.svg
+slimtoolkit	SlimToolkit	projects/slimtoolkit/icon/color/slimtoolkit-icon-color.svg
+sops	SOPS	projects/sops/icon/color/sops-icon-color.svg
+spiderpool	Spiderpool	projects/spiderpool/icon/color/spiderpool-icon-colorlight.svg
+spiffe	SPIFFE	projects/spiffe/icon/color/spiffe-icon-color.svg
+spin	Spin	projects/spin/icon/color/spin-icon-color.svg
+spinkube	SpinKube	projects/spinkube/icon/color/spinkube-icon-color.svg
+spire	SPIRE	projects/spire/icon/color/spire-icon-color.svg
+stacker	Stacker	projects/stacker/icon/color/stacker-icon-color.svg
+strimzi	Strimzi	projects/strimzi/icon/color/strimzi-icon-color.svg
+submariner	Submariner	projects/submariner/icon/color/submariner-icon-color.svg
+tekton	Tekton	projects/tekton/icon/color/tekton-icon-color.svg
+telepresence	Telepresence	projects/telepresence/icon/color/telepresence-icon-color.svg
+thanos	Thanos	projects/thanos/icon/color/thanos-icon-color.svg
+tikv	TiKV	projects/tikv/icon/color/tikv-icon-color.svg
+tokenetes	Tokenetes	projects/tokenetes/icon/color/tokenetes-icon-color.svg
+tremor	tremor	projects/tremor/icon/color/tremor-icon-color.svg
+trickster	Trickster	projects/trickster/icon/color/trickster-icon-color.svg
+tuf	TUF	projects/tuf/icon/color/tuf-icon-color.svg
+urunc	urunc	projects/urunc/icon/color/urunc-icon-color.svg
+velero	Velero	projects/velero/icon/color/velero-icon-color.svg
+virtualkubelet	Virtual Kubelet	projects/virtualkubelet/icon/color/virtualkubelet-icon-color.svg
+vitess	Vitess	projects/vitess/icon/color/vitess-icon-color.svg
+volcano	Volcano	projects/volcano/icon/color/volcano-icon-color.svg
+vs-code-kubernetes-tools	VS Code Kubernetes Tools	projects/vs-code-kubernetes-tools/icon/color/kefvsc-icon-color.svg
+wasm-edge-runtime	WasmEdgeRuntime	projects/wasm-edge-runtime/icon/color/wasm-edge-runtime-icon-color.svg
+wasmcloud	wasmCloud	projects/wasmcloud/icon/color/wasmcloud.icon_green.svg
+werf	werf	projects/werf/icon/color/werf-icon-color.svg
+xregistry	xRegistry	projects/xregistry/icon/color/xregistry-icon-color.svg
+youki	Youki	projects/youki/icon/color/youki-icon-color.svg
+zot	zot	projects/zot/icon/color/zot-color-icon.svg
