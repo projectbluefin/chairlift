@@ -97,11 +97,12 @@ type UserHome struct {
 	liveryDockRotate      *gtk.Switch
 	// liveryDockVisible is the result set currently drawn, so the list's one
 	// row-activated handler can map a row index back to a project without
-	// allocating a callback per row. See refreshLiveryProjectResults.
+	// allocating a callback per row. See refreshLiveryPickerRows.
 	liveryDockVisible []pageview.LiveryProjectResult
 	liveryState       livery.State
 	liverySuppress    bool
 	liveryLoaded      bool
+	liveryPanelGate   actionstate.Gate
 
 	// Update All references
 	updateAllGroup   *adw.PreferencesGroup
