@@ -60,3 +60,32 @@ func (t *Tracker[T]) Clear(remove func(T)) {
 	}
 	t.rows = nil
 }
+
+// TrimTo removes the oldest tracked rows until at most limit remain, invoking
+// remove once per evicted row in insertion order, and reports how many it
+// evicted. A negative limit is treated as zero.
+//
+// It is the rolling-log counterpart to Clear: a view that appends a row per
+// line of streamed command output calls it after every append, so the
+// container holds a bounded window of the most recent rows instead of growing
+// for as long as the command keeps printing.
+func (t *Tracker[T]) TrimTo(limit int, remove func(T)) int {
+	if limit < 0 {
+		limit = 0
+	}
+	excess := len(t.rows) - limit
+	if excess <= 0 {
+		return 0
+	}
+
+	for _, row := range t.rows[:excess] {
+		remove(row)
+	}
+	remaining := copy(t.rows, t.rows[excess:])
+	var zero T
+	for index := remaining; index < len(t.rows); index++ {
+		t.rows[index] = zero
+	}
+	t.rows = t.rows[:remaining]
+	return excess
+}

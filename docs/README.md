@@ -57,8 +57,9 @@ are listed in [org-adrs.md](org-adrs.md).
   — E2E startup readiness is three exact stdout markers polled under
   dbus-run-session + xvfb-run; the log lines are a public API
 - [adr/0009-dry-run-output-convention-and-single-decision-structs.md](adr/0009-dry-run-output-convention-and-single-decision-structs.md)
-  — per-wrapper `SetDryRun`/`IsDryRun`, fixed `[DRY-RUN]` message prefixes,
-  and single tested decision structs gating toast + UI mutation together
+  — `internal/dryrun` as the single process-wide dry-run authority, fixed
+  `[DRY-RUN]` message prefixes, and single tested decision structs gating
+  toast + UI mutation together
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
   — documentation splits into current-state vs historical and is enforced by
   string-matching unit tests; prose is testable

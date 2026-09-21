@@ -424,3 +424,44 @@ func TestSystemDigestShortening(t *testing.T) {
 		})
 	}
 }
+
+func TestStagingLogSubtitleNamesTheCapWhenOneApplied(t *testing.T) {
+	tests := []struct {
+		name  string
+		shown int
+		total int
+		want  string
+	}{
+		{
+			name: "before any output",
+			want: "View output",
+		},
+		{
+			name:  "single line",
+			shown: 1, total: 1,
+			want: "View output (1 line)",
+		},
+		{
+			name:  "every line retained",
+			shown: 37, total: 37,
+			want: "View output (37 lines)",
+		},
+		{
+			name:  "window over a verbose run",
+			shown: 200, total: 4321,
+			want: "Showing the last 200 of 4321 lines",
+		},
+		{
+			name:  "first dropped line",
+			shown: 200, total: 201,
+			want: "Showing the last 200 of 201 lines",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := StagingLogSubtitle(tt.shown, tt.total); got != tt.want {
+				t.Fatalf("StagingLogSubtitle(%d, %d) = %q, want %q", tt.shown, tt.total, got, tt.want)
+			}
+		})
+	}
+}

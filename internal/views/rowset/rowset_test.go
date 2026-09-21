@@ -172,3 +172,73 @@ func TestTrackerRemoveOneRowAndPreserveTheRest(t *testing.T) {
 		t.Fatalf("removed log after Clear = %v, want %v", got, want)
 	}
 }
+
+// TestTrackerTrimToKeepsTheMostRecentRows drives the rolling-log shape: rows
+// are appended one at a time and trimmed to a cap after every append, the way
+// a streamed-output view renders. The container must never hold more than the
+// cap, and what it holds must always be the newest rows in order — an older
+// row is evicted from the container, not merely forgotten by the Tracker.
+func TestTrackerTrimToKeepsTheMostRecentRows(t *testing.T) {
+	const limit = 3
+
+	container := &fakeContainer{}
+	var tracker Tracker[fakeRow]
+
+	appended := []string{"a", "b", "c", "d", "e", "f", "g"}
+	for i, title := range appended {
+		row := fakeRow{title: title}
+		container.add(row)
+		tracker.Add(row)
+		tracker.TrimTo(limit, container.remove)
+
+		if got := tracker.Len(); got > limit {
+			t.Fatalf("after %d appends Len() = %d, want at most %d", i+1, got, limit)
+		}
+		want := appended[:i+1]
+		if len(want) > limit {
+			want = want[len(want)-limit:]
+		}
+		if got := container.titles(); !reflect.DeepEqual(got, want) {
+			t.Fatalf("after %d appends container = %v, want %v", i+1, got, want)
+		}
+	}
+
+	if got, want := container.removed, []string{"a", "b", "c", "d"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("removed log = %v, want the oldest rows in insertion order %v", got, want)
+	}
+}
+
+func TestTrackerTrimToReportsEvictionsAndHandlesEdgeLimits(t *testing.T) {
+	container := &fakeContainer{}
+	var tracker Tracker[fakeRow]
+	for _, title := range []string{"alpha", "beta", "gamma"} {
+		row := fakeRow{title: title}
+		container.add(row)
+		tracker.Add(row)
+	}
+
+	if got := tracker.TrimTo(5, container.remove); got != 0 {
+		t.Fatalf("TrimTo(5) evicted %d rows, want 0 when the limit is not reached", got)
+	}
+	if got := tracker.TrimTo(3, container.remove); got != 0 {
+		t.Fatalf("TrimTo(3) evicted %d rows, want 0 when the count equals the limit", got)
+	}
+	if got, want := container.titles(), []string{"alpha", "beta", "gamma"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("container after no-op trims = %v, want %v", got, want)
+	}
+
+	if got := tracker.TrimTo(-1, container.remove); got != 3 {
+		t.Fatalf("TrimTo(-1) evicted %d rows, want 3 (a negative limit is zero)", got)
+	}
+	if got := tracker.Len(); got != 0 {
+		t.Fatalf("Len() after TrimTo(-1) = %d, want 0", got)
+	}
+	if got := container.titles(); len(got) != 0 {
+		t.Fatalf("container after TrimTo(-1) = %v, want empty", got)
+	}
+
+	calls := 0
+	if got := tracker.TrimTo(2, func(fakeRow) { calls++ }); got != 0 || calls != 0 {
+		t.Fatalf("TrimTo on an empty Tracker evicted %d rows with %d callbacks, want 0 and 0", got, calls)
+	}
+}

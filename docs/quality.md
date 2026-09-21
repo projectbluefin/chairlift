@@ -31,14 +31,47 @@ workflow's **Unit Tests** log to distinguish those outcomes.
 
 ## Enforced checks
 
-The repository's `Tests` workflow runs on pushes and pull requests targeting
-`main`. Its jobs provide these independent signals:
+The repository's `Tests` workflow runs on pushes to `main`, on pull requests
+targeting `main`, and on every merge group the merge queue builds. Its jobs
+provide these independent signals:
 
 - **Lint** — `golangci-lint` over the Go source.
 - **Unit Tests** — headless tests under `internal/...`, with atomic coverage.
 - **Race Detection** — the same internal test scope under the race detector.
+- **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
+  screenshots uploaded as an artifact.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.
+- **Tests Passed** — an aggregating job that succeeds only when every job
+  above succeeded.
+
+## The merge queue's gate
+
+`main` merges through a merge queue, which validates a candidate on a
+temporary `gh-readonly-queue/main/pr-<n>-<sha>` ref rather than on the pull
+request's own head. That is a distinct `merge_group` event: neither `push` nor
+`pull_request` fires for it, so a workflow that does not declare
+`merge_group` produces no checks for the merge group at all, and the queue has
+nothing to wait for.
+
+Two pieces have to agree for the queue to gate:
+
+1. `.github/workflows/test.yml` declares `merge_group`, deliberately with no
+   branch filter — `github.ref` there is the queue ref, never `main`, so a
+   `branches: [main]` filter would match nothing and silently disable queue
+   validation.
+2. The default-branch ruleset requires the **Tests Passed** check from the
+   GitHub Actions app. It is the only required context by design: the
+   individual job names are free to change (`Build` alone expands per matrix
+   entry), while this one fans out to all of them through `needs`, so branch
+   protection cannot drift out of step with CI.
+
+`Tests Passed` runs with `if: always()` because GitHub counts a *skipped*
+required check as a passing one; a gate that ran only when its dependencies
+succeeded would report success for a run whose tests failed.
+`internal/installcheck`'s `TestMergeQueueGateWaitsForEveryTestJob` holds both
+properties and fails when a job is added to the workflow without being wired
+into the gate.
 
 `make ci` mirrors those credential-free checks locally in fail-fast order and
 also rebuilds the native binaries at the end. It is the pre-submission quality

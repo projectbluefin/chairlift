@@ -41,8 +41,8 @@ var expectedLegacySkillAliases = map[string]string{
 // stray directory under docs/skills cannot quietly become a skill. The
 // 2026-09-18 triage session added five: exemption-justification,
 // fixture-path-fidelity, multi-arch-digest-pinning, phony-target-shadowing,
-// and self-referential-assertions.
-const factoryCanonicalSkillPackageCount = 31
+// and self-referential-assertions. Issue #81 added bounded-stream-rendering.
+const factoryCanonicalSkillPackageCount = 32
 
 type factorySkillFrontMatter struct {
 	name         string

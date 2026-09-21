@@ -26,16 +26,16 @@ import (
 // currentStateDocRoots is the set of documents whose source-path citations
 // must resolve.
 //
-// The first six entries are the current-state class defined by
+// The first seven entries are the current-state class defined by
 // docs/documentation-consistency.md (enforced against that file by
 // TestCurrentStateScopeMatchesDocumentationConsistency, so the two cannot
-// drift apart). AGENTS.md, CONTRIBUTING.md and docs/adr are added here
-// because that classification has no residual class and leaves them out
-// entirely: AGENTS.md is the contributor entry point and names the design
-// documents to read first, and docs/adr holds Accepted decision records
-// that AGENTS.md routes contributors to as binding. A decision record
-// citing a path that no longer resolves misleads exactly the reader who
-// was told to trust it.
+// drift apart). AGENTS.md and CONTRIBUTING.md are added here because that
+// classification has no residual class and leaves them out entirely:
+// AGENTS.md is the contributor entry point and names the design documents
+// to read first. docs/adr holds Accepted decision records that AGENTS.md
+// routes contributors to as binding, and is one of the seven published
+// entries — a decision record citing a path that no longer resolves
+// misleads exactly the reader who was told to trust it.
 //
 // Deliberately excluded: the historical class named by the same checklist
 // (README-go-port.md, docs/plans/, docs/superpowers/) and docs/skills/.
@@ -50,9 +50,9 @@ var currentStateDocRoots = []string{
 	filepath.Join("docs", "reference.md"),
 	filepath.Join("docs", "design"),
 	filepath.Join("docs", "specs"),
+	filepath.Join("docs", "adr"),
 	"AGENTS.md",
 	"CONTRIBUTING.md",
-	filepath.Join("docs", "adr"),
 }
 
 // knownMissingDocPaths records source paths that current-state
@@ -64,15 +64,7 @@ var currentStateDocRoots = []string{
 // and must be deleted in the same change that fixes the document. Adding
 // an entry here is not a way to land a broken citation — it is a record
 // that a fix is already tracked and blocked elsewhere.
-var knownMissingDocPaths = map[string]string{
-	// docs/design/overview.md, docs/design/package-managers.md and
-	// docs/adr/0009 describe the per-package SetDryRun/IsDryRun fan-out
-	// that internal/dryrun replaced with one process-wide flag. The
-	// prose fix is #160; docs/design/overview.md is concurrently
-	// modified by open PRs #50 and #153, so correcting only part of it
-	// here would leave the documentation self-contradictory.
-	filepath.Join("internal", "views", "dryrun.go"): "#160",
-}
+var knownMissingDocPaths = map[string]string{}
 
 // minCitedSourcePaths guards this gate against becoming vacuous. If a
 // future edit to docSourcePathPattern, or a reorganisation of docs/,
@@ -267,10 +259,9 @@ func TestCurrentDocsCiteManySourcePaths(t *testing.T) {
 // TestCurrentStateScopeMatchesDocumentationConsistency holds
 // currentStateDocRoots to the classification docs/documentation-consistency.md
 // publishes, so the gate's scope cannot quietly diverge from the checklist
-// contributors are told to follow. Only the six roots that file actually
-// classifies are checked; AGENTS.md, CONTRIBUTING.md and docs/adr are this
-// gate's own additions precisely because the checklist does not classify
-// them.
+// contributors are told to follow. Only the seven roots that file actually
+// classifies are checked; AGENTS.md and CONTRIBUTING.md are this gate's own
+// additions precisely because the checklist does not classify them.
 func TestCurrentStateScopeMatchesDocumentationConsistency(t *testing.T) {
 	checklist := readRepoFile(t, filepath.Join("docs", "documentation-consistency.md"))
 
@@ -281,6 +272,7 @@ func TestCurrentStateScopeMatchesDocumentationConsistency(t *testing.T) {
 		"`docs/reference.md`",
 		"`docs/design/`",
 		"`docs/specs/`",
+		"`docs/adr/`",
 	} {
 		if !strings.Contains(checklist, classified) {
 			t.Errorf("docs/documentation-consistency.md no longer classifies %s as current-state; "+
