@@ -142,9 +142,6 @@ type Source struct {
 	// Value is a catalog id, an absolute file path, or a Simple Icons slug,
 	// according to Kind.
 	Value string
-	// Tint is the fill applied to a Simple Icons mark. Empty keeps the
-	// brand color the service serves.
-	Tint string
 }
 
 // runCommand is an injection seam for external calls, so the install and
@@ -340,7 +337,7 @@ func resolve(ctx context.Context, src Source) ([]byte, error) {
 		}
 		return data, nil
 	case FromSimpleIcons:
-		return FetchSimpleIcon(ctx, src.Value, src.Tint)
+		return FetchSimpleIcon(ctx, src.Value)
 	case FromCNCF:
 		return FetchCNCFIcon(ctx, src.Value)
 	default:
@@ -544,12 +541,63 @@ func isMissingSchema(out string) bool {
 	return strings.Contains(out, "No such schema") || strings.Contains(out, "not installed")
 }
 
-// unquote strips the surrounding single quotes GVariant string output carries.
+// unquote converts the GVariant string literal `gsettings` prints back into
+// its value.
+//
+// GVariant does not always quote with apostrophes. A value that itself
+// contains one is printed double-quoted instead — `gsettings` reports
+// /home/o'brien/mark.svg as "/home/o'brien/mark.svg" — and either form
+// carries backslash escapes for control characters and for the delimiter.
+// Stripping only surrounding single quotes therefore handed the free-form
+// *-custom-path keys back with their quotes and escapes still attached, and
+// Apply then failed on a path that does not exist with a misleading error.
+// Values that are not quoted at all — booleans, numbers — pass through.
 func unquote(s string) string {
-	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
-		return s[1 : len(s)-1]
+	if len(s) < 2 {
+		return s
 	}
-	return s
+	quote := s[0]
+	if quote != '\'' && quote != '"' {
+		return s
+	}
+	if s[len(s)-1] != quote {
+		return s
+	}
+	body := s[1 : len(s)-1]
+	if !strings.ContainsRune(body, '\\') {
+		return body
+	}
+	var b strings.Builder
+	b.Grow(len(body))
+	for i := 0; i < len(body); i++ {
+		c := body[i]
+		if c != '\\' || i+1 >= len(body) {
+			b.WriteByte(c)
+			continue
+		}
+		i++
+		switch body[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 't':
+			b.WriteByte('\t')
+		case 'r':
+			b.WriteByte('\r')
+		case 'a':
+			b.WriteByte('\a')
+		case 'b':
+			b.WriteByte('\b')
+		case 'f':
+			b.WriteByte('\f')
+		case 'v':
+			b.WriteByte('\v')
+		default:
+			// Covers \\, \' and \" — and anything else is passed through as
+			// the literal character, which is what GVariant's own parser does.
+			b.WriteByte(body[i])
+		}
+	}
+	return b.String()
 }
 
 // dconfUserValue returns the key's value in the *user* layer only, empty when

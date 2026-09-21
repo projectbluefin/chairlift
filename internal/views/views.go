@@ -102,7 +102,13 @@ type UserHome struct {
 	liveryState       livery.State
 	liverySuppress    bool
 	liveryLoaded      bool
+	// One gate per section serializes that section's toggle work. Every
+	// section's Apply and Clear touch the same mark file, so an off-then-on
+	// flip without a gate can land Clear after Apply and leave the switch
+	// showing enabled with no mark installed. See liveryToggleGate.
+	liveryAppGridGate actionstate.Gate
 	liveryPanelGate   actionstate.Gate
+	liveryDockGate    actionstate.Gate
 
 	// Update All references
 	updateAllGroup   *adw.PreferencesGroup

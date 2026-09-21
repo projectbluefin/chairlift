@@ -464,9 +464,12 @@ An agent must not break these:
   without persisting a flag to say so. When an icon carries that prefix,
   accompanying display mode `2` is also cleared as ChairLift's paired value
   so it is not pinned as a permanent user override, while a user mode `2`
-  without a ChairLift icon prefix is preserved. The panel master switch is
-  serialized with `liveryPanelGate` and set insensitive during worker execution
-  to prevent rapid off-on toggles racing dconf capture and restore.
+  without a ChairLift icon prefix is preserved. Every section's master
+  switch — app grid, panel, and dock — is serialized with its own
+  `actionstate.Gate` (`liveryToggleGate`) and set insensitive during worker
+  execution, so rapid off-on toggles cannot land `Apply` before the earlier
+  `Clear` and leave a switch showing enabled with the mark file removed; the
+  panel's gate additionally protects dconf capture and restore.
 - **Connect GTK signals once, at page-build time — never inside a refresh
   path.** puregotk routes every `Connect*` through `purego.NewCallbackFnPtr`,
   which caches by the *address* of the func variable and draws from a fixed
@@ -541,7 +544,11 @@ An agent must not break these:
   fall back to leaving the previous mark — exactly the outcome the feature
   exists to avoid. Idempotence comes from `last-rotation-token`, the graphical
   session's `ActiveEnterTimestampMonotonic`, so re-running the unit cannot
-  double-advance. Only the two foundation sections rotate; the app-grid mark
+  double-advance — and because that token is recorded even for a failed pass,
+  the dock's fetch is retried in-process (`rotateRetryDelays`) while the
+  failure still looks like a network that is not up yet: a user manager cannot
+  order against `network-online.target`, so a login that beats connectivity
+  would otherwise rotate nothing and say so only in the journal. Only the two foundation sections rotate; the app-grid mark
   is the user's own brand and is set once. `io.projectbluefin.chairlift.livery`
   is ChairLift's only schema and holds only preferences with no file on disk
   to infer them from; `make install` recompiles the schema cache and

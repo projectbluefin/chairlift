@@ -231,12 +231,20 @@ install: build
 # Skipped where glib-compile-schemas is absent, so a build host that only has
 # a Go toolchain still builds; the application reports its schema missing and
 # the Livery page degrades, which is the same path an uninstalled build takes.
+#
+# The whole recipe is one shell invocation because each recipe line otherwise
+# gets its own shell: an `exit 0` guard on the first line would end that line
+# alone and let the later glib-compile-schemas line run and fail with 127,
+# which would break `make build` on the Go-only host this skip exists for.
 schemas:
-	@command -v glib-compile-schemas >/dev/null 2>&1 || { echo "==> skipping schemas: glib-compile-schemas not installed"; exit 0; }
-	@mkdir -p $(BUILD_DIR)/schemas
-	@cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/
-	@glib-compile-schemas $(BUILD_DIR)/schemas
-	@echo "==> schemas compiled to $(BUILD_DIR)/schemas"
+	@if ! command -v glib-compile-schemas >/dev/null 2>&1; then \
+		echo "==> skipping schemas: glib-compile-schemas not installed"; \
+	else \
+		mkdir -p $(BUILD_DIR)/schemas && \
+		cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/ && \
+		glib-compile-schemas $(BUILD_DIR)/schemas && \
+		echo "==> schemas compiled to $(BUILD_DIR)/schemas"; \
+	fi
 
 # Uninstall the application
 uninstall:

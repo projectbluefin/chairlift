@@ -26,7 +26,7 @@ func main() {
 	// installs. It must short-circuit before app.New(), which brings up GTK
 	// and would otherwise try to open a display from a oneshot service.
 	if len(os.Args) == 2 && os.Args[1] == livery.RotateFlag {
-		ctx, cancel := livery.DefaultContext()
+		ctx, cancel := livery.RotationContext()
 		defer cancel()
 		if err := livery.Rotate(ctx); err != nil {
 			log.Printf("livery: rotation: %v", err)

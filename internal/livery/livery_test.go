@@ -354,7 +354,7 @@ func TestSimpleIconFetchRecolorsForSymbolicUse(t *testing.T) {
 	defer server.Close()
 	useLoopbackFetch(t, server.URL)
 
-	data, err := FetchSimpleIcon(context.Background(), "mastodon", "")
+	data, err := FetchSimpleIcon(context.Background(), "mastodon")
 	if err != nil {
 		t.Fatalf("FetchSimpleIcon: %v", err)
 	}
@@ -377,7 +377,7 @@ func TestSimpleIconFetchRejectsOversizedPayload(t *testing.T) {
 	defer server.Close()
 	useLoopbackFetch(t, server.URL)
 
-	_, err := FetchSimpleIcon(context.Background(), "oversized", "")
+	_, err := FetchSimpleIcon(context.Background(), "oversized")
 	if err == nil {
 		t.Fatal("FetchSimpleIcon accepted an SVG exceeding the 256KB limit")
 	}
@@ -395,7 +395,7 @@ func TestSimpleIconFetchReportsAnUnknownName(t *testing.T) {
 	defer server.Close()
 	useLoopbackFetch(t, server.URL)
 
-	_, err := FetchSimpleIcon(context.Background(), "nosuchbrand", "")
+	_, err := FetchSimpleIcon(context.Background(), "nosuchbrand")
 	if !errors.Is(err, ErrIconNotFound) {
 		t.Fatalf("err = %v, want ErrIconNotFound", err)
 	}
@@ -410,7 +410,7 @@ func TestSimpleIconFetchRejectsANonSVGBody(t *testing.T) {
 	defer server.Close()
 	useLoopbackFetch(t, server.URL)
 
-	_, err := FetchSimpleIcon(context.Background(), "mastodon", "")
+	_, err := FetchSimpleIcon(context.Background(), "mastodon")
 	if err == nil || !strings.Contains(err.Error(), "did not return an SVG") {
 		t.Fatalf("err = %v, want a not-an-SVG error", err)
 	}
@@ -428,7 +428,7 @@ func TestSlugValidationHappensBeforeAnyRequest(t *testing.T) {
 	t.Cleanup(func() { Fetch = original })
 
 	for _, entry := range []string{"../../etc/passwd", "hello/world", "", "a b?c"} {
-		if _, err := FetchSimpleIcon(context.Background(), entry, ""); err == nil {
+		if _, err := FetchSimpleIcon(context.Background(), entry); err == nil {
 			t.Errorf("FetchSimpleIcon(%q) was accepted", entry)
 		}
 	}

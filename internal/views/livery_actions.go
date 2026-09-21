@@ -5,8 +5,10 @@ import (
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
+	"codeberg.org/puregotk/puregotk/v4/gtk"
 	sgtk "github.com/frostyard/snowkit/gtk"
 )
 
@@ -31,6 +33,12 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	if enabled == uh.liveryState.AppGridEnabled {
 		return
 	}
+	if !uh.liveryAppGridGate.TryStart() {
+		return
+	}
+	if uh.liveryAppGridSwitch != nil {
+		uh.liveryAppGridSwitch.SetSensitive(false)
+	}
 	uh.liveryState.AppGridEnabled = enabled
 
 	if uh.liveryAppGridRow != nil {
@@ -40,6 +48,8 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	slug := uh.liveryState.AppGridSlug
 	source := uh.liverySource(livery.AppGrid)
 	go func() {
+		defer uh.releaseLiveryToggle(livery.AppGrid)
+
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -124,13 +134,12 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		return
 	}
 
-	if surface == livery.Panel {
-		if !uh.liveryPanelGate.TryStart() {
-			return
-		}
-		if uh.liveryPanelSwitch != nil {
-			uh.liveryPanelSwitch.SetSensitive(false)
-		}
+	gate, toggle := uh.liveryToggleGate(surface)
+	if !gate.TryStart() {
+		return
+	}
+	if toggle != nil {
+		toggle.SetSensitive(false)
 	}
 
 	uh.setLiveryToggleState(surface, enabled)
@@ -140,16 +149,8 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 	savedIcon, savedMode := uh.liveryState.SavedPanelIcon, uh.liveryState.SavedPanelMode
 
 	go func() {
-		if surface == livery.Panel {
-			defer func() {
-				sgtk.RunOnMainThread(func() {
-					uh.liveryPanelGate.Reset()
-					if uh.liveryPanelSwitch != nil {
-						uh.liveryPanelSwitch.SetSensitive(true)
-					}
-				})
-			}()
-		}
+		defer uh.releaseLiveryToggle(surface)
+
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -419,6 +420,38 @@ func (uh *UserHome) reportLiveryFailure(what string, err error) {
 // The panel and dock sections are identical in behavior and differ only in
 // which State fields and settings keys they read and write, so the handlers
 // above are written once against these.
+
+// liveryToggleGate returns the gate that serializes one section's toggle work
+// and the switch that must go insensitive while it runs.
+//
+// Every section needs this, not only the panel. Apply and Clear for a surface
+// write and delete the same mark file, and an unordered goroutine per click
+// lets a fast off-then-on flip run Apply before the earlier Clear finishes —
+// leaving the switch showing enabled with the mark gone. The gate makes the
+// second click a no-op until the first one lands, and the insensitive switch
+// says so.
+func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.Switch) {
+	switch s {
+	case livery.AppGrid:
+		return &uh.liveryAppGridGate, uh.liveryAppGridSwitch
+	case livery.Panel:
+		return &uh.liveryPanelGate, uh.liveryPanelSwitch
+	default:
+		return &uh.liveryDockGate, uh.liveryDockSwitch
+	}
+}
+
+// releaseLiveryToggle reopens a section's gate and its switch on the main
+// thread, so the widget touch happens where GTK requires it.
+func (uh *UserHome) releaseLiveryToggle(s livery.Surface) {
+	sgtk.RunOnMainThread(func() {
+		gate, toggle := uh.liveryToggleGate(s)
+		gate.Reset()
+		if toggle != nil {
+			toggle.SetSensitive(true)
+		}
+	})
+}
 
 func (uh *UserHome) liveryToggleState(s livery.Surface) (bool, string) {
 	if s == livery.Panel {

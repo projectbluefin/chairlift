@@ -2,11 +2,14 @@ package livery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -35,6 +38,11 @@ const RotateFlag = "--rotate-livery"
 //
 // The Description is built from branding.AppName rather than spelled here:
 // `systemctl --user status` prints it, so a user reads it.
+//
+// The unit carries no network dependency. A user manager cannot order
+// against `network-online.target`, which lives in the system manager, so the
+// wait has to happen in the pass itself: Rotate retries the dock's fetch
+// while the failure still looks like a network that is not up yet.
 const unitTemplate = `[Unit]
 Description=%s Livery rotation
 PartOf=graphical-session.target
@@ -245,7 +253,7 @@ func Rotate(ctx context.Context) error {
 	}
 	if rotatedDock {
 		next := NextCNCFID(state.DockID)
-		if err := Apply(ctx, Dock, Source{Kind: FromCNCF, Value: next}); err != nil {
+		if err := applyRotation(ctx, Dock, Source{Kind: FromCNCF, Value: next}); err != nil {
 			failures = append(failures, err.Error())
 		} else if err := SetString(ctx, KeyDockID, next); err != nil {
 			failures = append(failures, err.Error())
@@ -276,3 +284,55 @@ func Rotate(ctx context.Context) error {
 	}
 	return nil
 }
+
+// rotateRetryDelays spaces the retries of a rotation step that needs the
+// network. The unit runs at login, and on a host whose connectivity arrives
+// after the graphical session does — Wi-Fi associating, a VPN coming up — the
+// first fetch fails against a stack that is seconds away from working.
+//
+// The session token is recorded even for a failed pass, deliberately, so
+// nothing retries the dock later in that session: without this the user would
+// see no rotation at all until the next login, and the only trace would be a
+// journal line. The delays are a variable so a test does not wait them out.
+var rotateRetryDelays = []time.Duration{2 * time.Second, 5 * time.Second, 15 * time.Second, 30 * time.Second}
+
+// applyRotation applies one rotated mark, retrying while the failure still
+// looks like a network that has not come up.
+func applyRotation(ctx context.Context, surface Surface, src Source) error {
+	err := Apply(ctx, surface, src)
+	for _, delay := range rotateRetryDelays {
+		if err == nil || !retryableRotationError(err) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return err
+		case <-time.After(delay):
+		}
+		err = Apply(ctx, surface, src)
+	}
+	return err
+}
+
+// retryableRotationError reports whether waiting could plausibly change the
+// answer. A mark the artwork repository does not publish, an expired context,
+// or anything else non-network is a permanent answer and is not retried.
+func retryableRotationError(err error) bool {
+	if errors.Is(err, ErrIconNotFound) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var netErr net.Error
+	return errors.As(err, &netErr)
+}
+
+// RotationContext bounds one headless rotation pass.
+//
+// It is longer than the package's ordinary command timeout because the pass
+// may spend most of it waiting for the network; every individual command and
+// fetch inside it keeps its own, shorter bound.
+func RotationContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), rotationTimeout)
+}
+
+// rotationTimeout covers the fetch plus every retry in rotateRetryDelays.
+const rotationTimeout = 3 * time.Minute
