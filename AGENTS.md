@@ -461,7 +461,12 @@ An agent must not break these:
   sweeps the marks earlier selections left behind. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon
-  without persisting a flag to say so.
+  without persisting a flag to say so. When an icon carries that prefix,
+  accompanying display mode `2` is also cleared as ChairLift's paired value
+  so it is not pinned as a permanent user override, while a user mode `2`
+  without a ChairLift icon prefix is preserved. The panel master switch is
+  serialized with `liveryPanelGate` and set insensitive during worker execution
+  to prevent rapid off-on toggles racing dconf capture and restore.
 - **Connect GTK signals once, at page-build time — never inside a refresh
   path.** puregotk routes every `Connect*` through `purego.NewCallbackFnPtr`,
   which caches by the *address* of the func variable and draws from a fixed
