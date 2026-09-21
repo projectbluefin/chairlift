@@ -624,6 +624,9 @@ func CapturePanelOverrides(ctx context.Context) (icon, mode string, ok bool) {
 	}
 	if strings.HasPrefix(icon, PanelIconPrefix) {
 		icon = ""
+		if mode == extensionIconMode {
+			mode = ""
+		}
 	}
 	return icon, mode, true
 }

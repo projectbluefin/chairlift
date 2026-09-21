@@ -201,7 +201,7 @@ func newSwitchRow(presentation pageview.Row, onToggle func(bool)) (*adw.ActionRo
 	sw := toggle
 	stateSet := func(_ gtk.Switch, state bool) bool {
 		onToggle(state)
-		return true
+		return false
 	}
 	toggle.ConnectStateSet(&stateSet)
 

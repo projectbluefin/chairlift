@@ -78,10 +78,15 @@ func httpFetch(ctx context.Context, url string) ([]byte, error) {
 	}
 	// The marks are single-path SVGs of a few kilobytes. The cap keeps a
 	// misrouted response — a captive-portal login page, say — from being
-	// read into memory in full.
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	// read into memory in full. Reading maxMarkBytes+1 ensures truncated
+	// payloads are caught and rejected rather than silently accepted.
+	const maxMarkBytes = 256 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMarkBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("livery: reading mark: %w", err)
+	}
+	if len(data) > maxMarkBytes {
+		return nil, fmt.Errorf("livery: mark exceeds %d byte limit", maxMarkBytes)
 	}
 	return data, nil
 }

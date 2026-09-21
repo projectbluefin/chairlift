@@ -1,6 +1,7 @@
 package livery
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -28,6 +29,12 @@ type fakeCommands struct {
 func newFakeCommands(t *testing.T) *fakeCommands {
 	t.Helper()
 	f := &fakeCommands{reply: map[string]string{}, fail: map[string]error{}}
+	fakeBinDir := t.TempDir()
+	dconfPath := filepath.Join(fakeBinDir, "dconf")
+	if err := os.WriteFile(dconfPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", fakeBinDir+":"+os.Getenv("PATH"))
 	original := runCommand
 	runCommand = func(_ context.Context, name string, args ...string) (string, error) {
 		line := strings.TrimSpace(name + " " + strings.Join(args, " "))
@@ -359,6 +366,26 @@ func TestSimpleIconFetchRecolorsForSymbolicUse(t *testing.T) {
 	}
 }
 
+func TestSimpleIconFetchRejectsOversizedPayload(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "image/svg+xml")
+		// Prefix with valid <svg so looksLikeSVG would pass if read, followed by bytes exceeding 256KB
+		_, _ = w.Write([]byte(`<svg>`))
+		extra := bytes.Repeat([]byte("a"), 256*1024)
+		_, _ = w.Write(extra)
+	}))
+	defer server.Close()
+	useLoopbackFetch(t, server.URL)
+
+	_, err := FetchSimpleIcon(context.Background(), "oversized", "")
+	if err == nil {
+		t.Fatal("FetchSimpleIcon accepted an SVG exceeding the 256KB limit")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected error mentioning size limit exceeded, got: %v", err)
+	}
+}
+
 // TestSimpleIconFetchReportsAnUnknownName asserts a typo produces the
 // dedicated not-found error rather than a generic HTTP failure.
 func TestSimpleIconFetchReportsAnUnknownName(t *testing.T) {
@@ -557,16 +584,49 @@ func TestSwitchingPanelSelectionsLeavesOneIcon(t *testing.T) {
 // TestCaptureNeverRecordsOurOwnIconName asserts a second enable cannot record
 // ChairLift's own mark as "the user's previous icon", which revert would then
 // restore as a file that no longer exists.
-func TestCaptureNeverRecordsOurOwnIconName(t *testing.T) {
+func TestCaptureNeverRecordsOurOwnIconNameOrMode(t *testing.T) {
 	fake := newFakeCommands(t)
-	fake.reply["dconf read"] = "'" + PanelIconName("rust") + "'"
+	iconPath := "/" + strings.ReplaceAll(extensionSchema, ".", "/") + "/" + extensionIconKey
+	modePath := "/" + strings.ReplaceAll(extensionSchema, ".", "/") + "/" + extensionModeKey
 
-	icon, _, ok := CapturePanelOverrides(context.Background())
+	// Icon has ChairLift's own prefix; mode is set to "2".
+	fake.reply["dconf read -d "+iconPath] = "'ublue-logo-symbolic'"
+	fake.reply["dconf read "+iconPath] = "'" + PanelIconName("rust") + "'"
+	fake.reply["dconf read -d "+modePath] = "'1'"
+	fake.reply["dconf read "+modePath] = "'2'"
+
+	icon, mode, ok := CapturePanelOverrides(context.Background())
 	if !ok {
-		t.Skip("dconf is not installed on this host")
+		t.Fatal("CapturePanelOverrides failed to read user layer")
 	}
 	if icon != "" {
-		t.Errorf("captured %q, want empty: it is one of our own names", icon)
+		t.Errorf("captured icon %q, want empty: it is one of our own names", icon)
+	}
+	if mode != "" {
+		t.Errorf("captured mode %q, want empty when icon is ChairLift's", mode)
+	}
+}
+
+func TestCapturePreservesUserModeWhenIconIsNotOurs(t *testing.T) {
+	fake := newFakeCommands(t)
+	iconPath := "/" + strings.ReplaceAll(extensionSchema, ".", "/") + "/" + extensionIconKey
+	modePath := "/" + strings.ReplaceAll(extensionSchema, ".", "/") + "/" + extensionModeKey
+
+	// Icon has no user override (current == default); user explicitly overrode mode to "2".
+	fake.reply["dconf read -d "+iconPath] = "'ublue-logo-symbolic'"
+	fake.reply["dconf read "+iconPath] = "'ublue-logo-symbolic'"
+	fake.reply["dconf read -d "+modePath] = "'1'"
+	fake.reply["dconf read "+modePath] = "'2'"
+
+	icon, mode, ok := CapturePanelOverrides(context.Background())
+	if !ok {
+		t.Fatal("CapturePanelOverrides failed to read user layer")
+	}
+	if icon != "" {
+		t.Errorf("captured icon %q, want empty", icon)
+	}
+	if mode != "2" {
+		t.Errorf("captured mode %q, want '2' preserved when icon has no ChairLift prefix", mode)
 	}
 }
 
