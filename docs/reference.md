@@ -157,6 +157,19 @@ authentication through PolicyKit and are performed by the fixed
 `/usr/bin/chairlift-updex-helper` binary. ChairLift installs no passwordless
 authorization rule.
 
+### Livery Page (`livery_page`)
+
+| Group | Key | Description |
+|-------|-----|-------------|
+| App Grid Livery | `livery_app_grid_group` | The Show Applications mark, fetched from simpleicons.org by brand name; set once, never rotated |
+| Foundational Livery | `livery_foundation_group` | The top-bar menu mark, optionally advancing at each login; needs the Custom Command Menu GNOME extension |
+| Dock Livery | `livery_dock_group` | The Files application icon, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; changes Files everywhere GNOME draws it |
+
+Selections persist in ChairLift's only GSettings schema,
+`io.projectbluefin.chairlift.livery`. A source build has no installed schema —
+run `make schemas` and export the `GSETTINGS_SCHEMA_DIR` it prints, or the page
+reports its settings unavailable.
+
 ### Help Page (`help_page`)
 
 | Group | Key | Description |

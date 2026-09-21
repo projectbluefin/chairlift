@@ -114,6 +114,16 @@ valid page.
   - `ai_model`: Model reference to serve (default: `ollama://qwen2.5:7b`)
 - `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (shown only when Homebrew is present)
 
+### Livery Page (`livery_page`)
+
+Who you are, who you stand with, and what you roll with. Each section shadows
+one icon-theme name inside the user's own theme, so nothing here is privileged
+and nothing is written outside `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME`.
+
+- `livery_app_grid_group`: App Grid Livery; the Show Applications mark, fetched from simpleicons.org by brand name. Set once — there is no rotation
+- `livery_foundation_group`: Foundational Livery; the top-bar menu mark, optionally advancing at each login (requires the Custom Command Menu GNOME extension)
+- `livery_dock_group`: Dock Livery; the Files application icon, set to a CNCF project's own color mark from cncf/artwork and chosen with a searchable picker, optionally advancing at each login. GNOME stores one icon per application, so this changes Files everywhere it is drawn, not only on the dock
+
 ### Help Page (`help_page`)
 
 - `help_resources_group`: Help and support resources

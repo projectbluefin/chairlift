@@ -258,7 +258,7 @@ An agent must not break these:
   a test binary on ordinary CI hosts. Shared row text, page status, os-release
   parsing, help-link ordering, and maintenance-command selection live in the
   pure `internal/views/pageview` package; its wiring test must continue to
-  cover all six page builders.
+  cover all seven page builders.
 - **Navigation behavior has one authority.** Page order, titles, icons, and
   advertised/registered accelerators live in the pure
   `internal/navigation` package. It also decides page visibility from static
@@ -394,6 +394,170 @@ An agent must not break these:
   cannot check architecture coverage or freshness, so both belong to whoever
   rolls the digests. See
   [`docs/skills/multi-arch-digest-pinning/SKILL.md`](docs/skills/multi-arch-digest-pinning/SKILL.md).
+- **Livery shadows icon-theme names, and the theme it writes into is not
+  always hicolor.** `internal/livery` sets three marks — the app-grid button
+  (`view-app-grid-symbolic`), the panel menu button
+  (`PanelIconName(id)`, i.e. `chairlift-livery-<id>-symbolic`, via the Custom
+  Command Menu extension's `menuicon-setting`), and the Files application
+  (`org.gnome.Nautilus`) — by
+  installing an SVG into the user's icon theme and referencing it by bare
+  name. A GNOME panel icon is a themed *name*, never a path: the extension
+  builds `new St.Icon({icon_name: …})`, so an absolute path there renders
+  nothing. Which theme directory receives the override is per surface and is
+  load-bearing, because XDG resolves the current theme and its parents before
+  falling back to hicolor: a name Adwaita already ships can only be shadowed
+  inside `~/.local/share/icons/Adwaita`, while a name it does not ship
+  (`org.gnome.Nautilus`) works from hicolor. Getting this backwards produces a
+  write that succeeds and an icon that never changes;
+  `TestAppGridOverrideTargetsTheAdwaitaTheme` holds both cases.
+  Every write ends in `gtk-update-icon-cache -f -t`, without which GTK trusts an existing
+  `icon-theme.cache` and never sees the new file; `-t` is
+  `--ignore-theme-index`, which is what lets a user theme directory with no
+  `index.theme` of its own work. The app-grid button is reached through
+  dash-to-dock's fallback: `appIcons.js` requests
+  `view-app-grid-${sessionMode}-symbolic`, which exists nowhere, after saving
+  the base `view-app-grid-symbolic` as `fallbackIconName`. Nothing here edits
+  a `.desktop` file: desktop entries replace rather than merge, and
+  Nautilus's carries ~240 localized names, a MimeType list, and a
+  `[Desktop Action]` group a generated override would silently drop. The
+  Files mark is one icon per *application*, so it changes Files in the dash,
+  app grid, window switcher, and notifications — the UI says so rather than
+  claiming "dock". The dock's catalog is **not** the foundation catalog: it is
+  every CNCF project publishing a color icon, from an embedded
+  `assets/cncf-projects.txt` manifest that stores each artwork's real path.
+  Thirty of the 214 do not follow `<id>-icon-color.svg` — cilium ships
+  `cilium_icon-color.svg`, kubeflow-notebooks a bare `icon-color.svg` — so
+  deriving the filename 404s on exactly those;
+  `TestCNCFPathsAreNotDerivedFromIDs` pins it. Artwork is fetched on demand
+  through the same `Fetch` seam, never vendored: 214 color SVGs is megabytes
+  nobody needs until they pick one. The app grid's catalog works the same way
+  over simpleicons.org's 3,461 brands, and its slugs come from that project's
+  generated `slugs.md` rather than a reimplementation of its title-to-slug
+  rules — those rules turn ".NET" into `dotnet` and "Write.as" into
+  `writedotas`, and a hand-written transform scored 24 of 25 on a random
+  sample, which across the catalog is a hundred brands that would 404 for
+  whoever picked them. Both catalogs are searched through one chooser dialog
+  built once and re-presented, for the callback-table reason above. The foundation marks therefore ship in one
+  rendition only, symbolic; the color plates they once carried for the dock
+  went with the catalog change. The panel catalog's *default* depends on the
+  booted image: `DefaultFoundationID` returns the Open Gaming Collective's
+  mark when `imageinfo.Info.IsGaming()` is true, because that is whose work
+  the gaming images ship. It is applied in `resolveID` at load, so switching
+  images adopts the new default without overwriting a selection the user made
+  — `TestADeliberateSelectionSurvivesOnAGamingImage` holds that distinction.
+  Whether this branding should be an org-wide convention rather than one
+  application's default is projectbluefin/common#1156; if that lands "no",
+  the gaming default goes and the entry becomes an ordinary choice.
+  **The panel's icon name varies per selection, and that is not cosmetic.**
+  GSettings emits no `changed::` when a key is written with the value it
+  already holds, and the extension refreshes its indicator only on that
+  signal (`extension.js:314`). A single fixed name with swapped file contents
+  therefore left the previous mark on screen until the shell restarted — the
+  write succeeded, the file changed, and nothing happened. `gsettings monitor`
+  reported two change events for three writes when one repeated a value.
+  Writing a different name per selection makes the value genuinely change;
+  `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
+  sweeps the marks earlier selections left behind. The `chairlift-livery-`
+  prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
+  refuse to record one of ChairLift's own names as the user's previous icon
+  without persisting a flag to say so.
+- **Connect GTK signals once, at page-build time — never inside a refresh
+  path.** puregotk routes every `Connect*` through `purego.NewCallbackFnPtr`,
+  which caches by the *address* of the func variable and draws from a fixed
+  table: `maxCB = 2000`, with a hard `panic` when it fills and nothing ever
+  releasing a slot. A closure created per row inside a function that reruns
+  therefore burns slots until the application dies. The Livery page's project
+  search hit this directly — six result rows rebuilt on every keystroke — and
+  is why it connects one `GtkListBox::row-activated` for the page's lifetime
+  and maps the activated row's index into the result set it last drew, instead
+  of giving each row its own handler. Note this rule is not yet met
+  everywhere: `applications_page.go` and `updates_page.go` connect per-row
+  callbacks inside refresh paths that rerun on every search, which is the same
+  latent panic under heavy use. Do not add new instances, and prefer fixing
+  one when you are already editing that code.
+- **Switch rows use `gtk.Switch` with `ConnectStateSet`, not a generic
+  `notify`.** `AdwSwitchRow` exposes no change-specific signal in these
+  bindings, and the generic `notify` fires for every property — sensitivity,
+  title, subtitle. A page that drives mutations from it writes settings while
+  restoring its own saved state, which is how the Livery page came to write to
+  dconf on load, twice, before it was moved to the pattern
+  `features_page.go` already used. `GtkSwitch::state-set` fires only when the
+  active state changes, and `gtk_switch_set_active` is a no-op when the value
+  is unchanged, so a programmatic restore is silent.
+- **Reverting a Livery mark resets the key; it does not write the old value
+  back.** dconf is layered, and on Bluefin the panel icon comes from a distro
+  default in `/etc/dconf/db/distro.d`, not from the user and not from the
+  extension's schema (whose default is `utilities-terminal-symbolic`). So
+  `gsettings get` answers `ublue-logo-symbolic` while the user layer is empty.
+  Detecting whether the user set anything is harder than it looks, and two
+  obvious primitives are wrong: **neither `dconf read` nor `dconf dump` is
+  user-layer-only** — both resolve through `/etc/dconf/db/distro`, so on a
+  Bluefin host they happily report `ublue-logo-symbolic` when the user layer
+  is empty. A live experiment established the discriminator: compare
+  `dconf read KEY` against `dconf read -d KEY`, which is the value the key
+  resolves to with the user layer removed. Equal means no user value, so
+  revert resets; different means a genuine override, so revert restores that
+  exact string. `CapturePanelOverrides` uses that comparison and
+  `ClearPanelSettings` acts on it; `TestUserValueIgnoresADistroDefault` pins
+  the case that was broken. Capturing the merged value instead — which an
+  earlier version did — made revert write the distro default back as a user
+  value, pinning the mark forever and overriding any later change to the
+  distro layer. A user who has deliberately set the same string as the default
+  is indistinguishable and harmless, since resetting leaves them the value
+  they chose. Reads go through the `gsettings` tool rather than an
+  in-process binding on purpose: `g_settings_new()` on an unknown schema id
+  aborts the process, so an in-process read would turn "extension not
+  installed" into a crash at startup.
+- **A newly installed mark is made visible by touching the applications
+  directory, not by reloading anything.** GNOME Shell caches icon textures by
+  name in `StTextureCache`, so writing the SVG and refreshing the theme cache
+  leaves the dash drawing the mark it already had. `RefreshShellIcons` bumps
+  the mtime of `$XDG_DATA_HOME/applications`, which fires `GAppInfoMonitor`
+  and makes the shell re-resolve application icons; verified live on Wayland,
+  that covers the app-grid glyph as well as the Files mark. Three heavier
+  levers were tried and rejected: disabling and re-enabling dash-to-dock does
+  not work at all (the rebuilt widgets are handed the same cached texture) and
+  is dangerous besides, because the disable persists to GSettings and a crash
+  mid-reload leaves a Bluefin user with no dock across reboots; toggling
+  `org.gnome.desktop.interface icon-theme` does work but mutates global
+  appearance state with its own failure window, and restoring it naively pins
+  a user-layer override — which happened once during testing and had to be
+  reset; `org.gnome.Shell.Eval` and `ReloadExtension` are gated to unsafe-mode
+  since GNOME 41 and refuse the call. The panel needs none of this: its
+  extension redraws on `changed::menuicon-setting`.
+- **Livery rotation runs at login, and ChairLift ships exactly one GSettings
+  schema.** The rotation unit is a `Type=oneshot`
+  `WantedBy=graphical-session.target` user unit written to the user's
+  `~/.config/systemd/user`, the same unprivileged posture as the AI stack's
+  quadlet; it invokes `chairlift --rotate-livery`, which short-circuits before
+  `app.New()` so a headless service never opens a display. Login, not logout:
+  an abrupt logout does not fire a hook, so a logout-triggered rotation would
+  fall back to leaving the previous mark — exactly the outcome the feature
+  exists to avoid. Idempotence comes from `last-rotation-token`, the graphical
+  session's `ActiveEnterTimestampMonotonic`, so re-running the unit cannot
+  double-advance. Only the two foundation sections rotate; the app-grid mark
+  is the user's own brand and is set once. `io.projectbluefin.chairlift.livery`
+  is ChairLift's only schema and holds only preferences with no file on disk
+  to infer them from; `make install` recompiles the schema cache and
+  `make schemas` builds it for a source tree. Do not add keys for state that
+  can be observed.
+- **The Livery page must not write on load, and its network call stays behind
+  a seam.** These bindings expose only the generic `notify` signal, which
+  fires for sensitivity and subtitle changes too, so restoring saved state
+  would otherwise look like a user edit. `applyLiveryState` assigns
+  `liveryState` — seeded with the *resolved* combo ids, since an empty stored
+  value resolves to index 0 and maps back to `cncf` — before touching a
+  widget, holds `liverySuppress` across the restore, and arms `liveryLoaded`
+  only at the end, including on the failure path. `internal/livery.Fetch` is
+  the page's single network round trip, following `internal/sbom`'s shape so
+  the package's tests point it at a loopback `httptest` server and no gated
+  test makes an outbound request; slugs are validated against a closed
+  character set before the request, so user text never reaches the URL path.
+  Every mutating path — icon writes, cache refresh, `gsettings set`, and the
+  rotation unit — is gated behind `dryrun.Enabled()`, because
+  `make screenshots` runs the real application with `--dry-run`; artwork is
+  still resolved under dry-run so a missing custom file or unknown brand is
+  still reported.
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are

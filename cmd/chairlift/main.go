@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/app"
+	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/version"
 )
 
@@ -20,6 +21,19 @@ func main() {
 	log.Println("main: process start")
 
 	version.Version = buildVersion
+
+	// Rotation runs headless, from the systemd user unit the Livery page
+	// installs. It must short-circuit before app.New(), which brings up GTK
+	// and would otherwise try to open a display from a oneshot service.
+	if len(os.Args) == 2 && os.Args[1] == livery.RotateFlag {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+		if err := livery.Rotate(ctx); err != nil {
+			log.Printf("livery: rotation: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	application := app.New()
 	defer application.Unref()

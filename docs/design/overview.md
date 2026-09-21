@@ -79,6 +79,7 @@ disabled; Help is always retained:
 | Updates      | `updates_page.go`      | bootc or native A/B (systemd-sysupdate) staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts |
 | System       | `system_page.go`       | OS info (`/etc/os-release`), bootc deployment status, health monitor launch                                                             |
 | Features     | `features_page.go`     | Toggle system features via `updex` tool                                                                                                 |
+| Livery       | `livery_page.go`       | App-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`)                              |
 | Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`)                                                                     |
 
 ## Key Patterns

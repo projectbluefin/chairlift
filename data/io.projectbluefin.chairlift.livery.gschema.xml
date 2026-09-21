@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ChairLift's only GSettings schema.
+
+  The Livery page's selections and switches are user preferences with no file
+  on disk to infer them from, so they live in dconf where GNOME desktop
+  preferences belong. Everything else ChairLift knows is read back from the
+  system it manages: the AI stack's quadlet, the installed Flatpaks, the
+  staged image. Do not add keys here for state that can be observed.
+
+  Key order matches internal/livery's Keys slice, which
+  TestSchemaDeclaresEveryKey holds to this file in both directions.
+
+  The saved-panel-* keys hold the extension's *user-layer* values from before
+  ChairLift first wrote one. Empty means the user had none, and revert resets
+  the key rather than writing a string — on Bluefin the panel icon comes from
+  a distro default in /etc/dconf/db/distro.d, which only a reset lets answer
+  again.
+-->
+<schemalist>
+  <schema id="io.projectbluefin.chairlift.livery" path="/io/projectbluefin/chairlift/livery/">
+
+    <!-- App Grid: who you are. Set once; there is deliberately no rotation
+         key, because a personal mark that changed on its own would stop
+         being personal. -->
+
+    <key name="app-grid-enabled" type="b">
+      <default>false</default>
+      <summary>Whether ChairLift sets the Show Applications mark</summary>
+    </key>
+
+    <key name="app-grid-slug" type="s">
+      <default>''</default>
+      <summary>Simple Icons brand name for the app grid</summary>
+      <description>A simpleicons.org slug, or 'custom' to use app-grid-custom-path. Empty means no mark has been chosen.</description>
+    </key>
+
+    <key name="app-grid-custom-path" type="s">
+      <default>''</default>
+      <summary>Path to the user's own SVG for the app grid</summary>
+    </key>
+
+    <!-- Panel: who you stand with. -->
+
+    <key name="panel-enabled" type="b">
+      <default>false</default>
+      <summary>Whether ChairLift sets the panel mark</summary>
+    </key>
+
+    <key name="panel-foundation" type="s">
+      <default>'cncf'</default>
+      <summary>Selected foundation for the GNOME panel</summary>
+      <description>A foundation id from internal/livery's catalog, or 'custom' to use panel-custom-path. An unset or unknown value resolves to this machine's default, which is the Open Gaming Collective on a gaming image and CNCF elsewhere.</description>
+    </key>
+
+    <key name="panel-custom-path" type="s">
+      <default>''</default>
+      <summary>Path to the user's own SVG for the panel</summary>
+    </key>
+
+    <key name="panel-rotate" type="b">
+      <default>false</default>
+      <summary>Advance the panel mark at each login</summary>
+    </key>
+
+    <key name="saved-panel-icon" type="s">
+      <default>''</default>
+      <summary>Extension icon value to restore on revert</summary>
+    </key>
+
+    <key name="saved-panel-mode" type="s">
+      <default>''</default>
+      <summary>Extension display-mode value to restore on revert</summary>
+    </key>
+
+    <!-- Dock: what you roll with. -->
+
+    <key name="dock-enabled" type="b">
+      <default>false</default>
+      <summary>Whether ChairLift sets the Files application mark</summary>
+    </key>
+
+    <key name="dock-foundation" type="s">
+      <default>'kubernetes'</default>
+      <summary>Selected CNCF project for the Files application</summary>
+      <description>A project directory name from cncf/artwork, or 'custom' to use dock-custom-path. The project's own color icon is fetched on demand.</description>
+    </key>
+
+    <key name="dock-custom-path" type="s">
+      <default>''</default>
+      <summary>Path to the user's own SVG for the dock</summary>
+    </key>
+
+    <key name="dock-rotate" type="b">
+      <default>false</default>
+      <summary>Advance the Files mark at each login</summary>
+    </key>
+
+    <key name="last-rotation-token" type="s">
+      <default>''</default>
+      <summary>Graphical session already rotated for</summary>
+      <description>Idempotence key: a rotation pass whose token matches this value does nothing, so re-running it cannot double-advance the selection.</description>
+    </key>
+
+  </schema>
+</schemalist>
