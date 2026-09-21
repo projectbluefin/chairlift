@@ -183,12 +183,12 @@ install: build
 	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	# Install wrapper script
 	install -Dm755 data/chairlift-wrapper.sh $(DESTDIR)$(BINDIR)/chairlift-wrapper
-	# Install the Livery GSettings schema, then recompile the system schema
-	# cache so `gsettings` can see it. ChairLift ships exactly one schema.
+	# Install the Livery and Updates GSettings schemas, then recompile the system schema
+	# cache so `gsettings` can see them.
 	install -Dm644 data/io.projectbluefin.chairlift.livery.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
+	install -Dm644 data/io.projectbluefin.chairlift.updates.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
 	# Only for a direct install. Under DESTDIR the tree is a staging area
 	# holding this schema alone, so compiling there would produce a
-	# gschemas.compiled containing only ChairLift's schema — and a package
 	# shipping that file would overwrite the system cache and break GSettings
 	# for every other application. Packages run glib-compile-schemas from
 	# their postinstall scriptlet instead; see packaging/postinstall.sh.
@@ -235,6 +235,7 @@ schemas:
 	@command -v glib-compile-schemas >/dev/null 2>&1 || { echo "==> skipping schemas: glib-compile-schemas not installed"; exit 0; }
 	@mkdir -p $(BUILD_DIR)/schemas
 	@cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/
+	@cp data/io.projectbluefin.chairlift.updates.gschema.xml $(BUILD_DIR)/schemas/
 	@glib-compile-schemas $(BUILD_DIR)/schemas
 	@echo "==> schemas compiled to $(BUILD_DIR)/schemas"
 
@@ -245,6 +246,7 @@ uninstall:
 	rm -f $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	rm -f $(DESTDIR)$(CONFIGDIR)/config.yml
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
+	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	rm -f $(DESTDIR)$(BINDIR)/$(HELPER_NAME)

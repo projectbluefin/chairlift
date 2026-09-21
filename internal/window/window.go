@@ -10,6 +10,9 @@ import (
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/settings"
+	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/version"
 	"github.com/projectbluefin/chairlift/internal/views"
 
@@ -48,6 +51,7 @@ type Window struct {
 	config      *config.Config
 	configError *config.LoadError
 	views       *views.UserHome
+	updateShell *views.UpdateShell
 	updateBadge *gtk.Label // Noninteractive badge for the updates count
 	navItems    []navigation.Item
 }
@@ -116,6 +120,29 @@ func (w *Window) buildUI() {
 	// Create views manager
 	w.views = views.New(w.config, w)
 	log.Printf("window: views built in %s", time.Since(start))
+
+	// Initialize unified updates engine
+	providers := []updateflow.Provider{
+		updateproviders.NewFlatpak(),
+		updateproviders.NewHomebrew(),
+		updateproviders.NewSystemComponents(),
+		updateproviders.NewOperatingSystem(),
+	}
+	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
+	store := settings.New()
+	w.updateShell = views.NewUpdateShell(
+		coordinator,
+		store.Values,
+		func() map[updateflow.SourceID]bool {
+			return map[updateflow.SourceID]bool{
+				updateflow.OperatingSystem:  w.config.IsGroupEnabled("updates_page", "bootc_updates_group") || w.config.IsGroupEnabled("updates_page", "sysupdate_updates_group"),
+				updateflow.Applications:     w.config.IsGroupEnabled("updates_page", "flatpak_updates_group"),
+				updateflow.DeveloperTools:   w.config.IsGroupEnabled("updates_page", "brew_updates_group"),
+				updateflow.SystemComponents: w.config.IsGroupEnabled("features_page", "features_group"),
+			}
+		},
+		w,
+	)
 
 	// Create the navigation split view
 	w.splitView = adw.NewNavigationSplitView()
@@ -224,6 +251,12 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 		page := w.views.GetPage(item.Name)
 		if page != nil {
 			w.pages[item.Name] = page
+		}
+		if item.Name == "updates" && w.updateShell != nil && w.updateShell.Widget() != nil {
+			w.contentStack.AddNamed(w.updateShell.Widget(), item.Name)
+			continue
+		}
+		if page != nil {
 			w.contentStack.AddNamed(&page.Widget, item.Name)
 		}
 	}
@@ -270,9 +303,9 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 	menu := gio.NewMenu()
 
 	// Add menu items
+	menu.Append("Preferences", "win.show-preferences")
 	menu.Append("Keyboard Shortcuts", "win.show-shortcuts")
 	menu.Append("About "+branding.AppName, "win.show-about")
-
 	// Create menu button
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
@@ -284,6 +317,42 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 
 // setupActions sets up window actions
 func (w *Window) setupActions() {
+	// Preferences action (win.preferences and win.show-preferences)
+	prefsAction := gio.NewSimpleAction("show-preferences", nil)
+	prefsActivateCb := func(action gio.SimpleAction, param uintptr) {
+		w.onShowPreferences()
+	}
+	prefsAction.ConnectActivate(&prefsActivateCb)
+	w.AddAction(prefsAction)
+
+	winPrefsAction := gio.NewSimpleAction("preferences", nil)
+	winPrefsAction.ConnectActivate(&prefsActivateCb)
+	w.AddAction(winPrefsAction)
+
+	// Check action (win.check)
+	checkAction := gio.NewSimpleAction("check", nil)
+	checkActivateCb := func(action gio.SimpleAction, param uintptr) {
+		if w.updateShell != nil {
+			w.updateShell.StartCheck()
+		}
+	}
+	checkAction.ConnectActivate(&checkActivateCb)
+	w.AddAction(checkAction)
+
+	// Help action (win.help)
+	helpAction := gio.NewSimpleAction("help", nil)
+	helpActivateCb := func(action gio.SimpleAction, param uintptr) {
+		group := w.config.GetGroupConfig("help_page", "help_resources_group")
+		if group != nil && group.Website != "" {
+			website := group.Website
+			callback := gio.AsyncReadyCallback(func(_, resultPtr, _ uintptr) {
+				_, _ = gio.AppInfoLaunchDefaultForUriFinish(&gio.AsyncResultBase{Ptr: resultPtr})
+			})
+			gio.AppInfoLaunchDefaultForUriAsync(website, nil, nil, &callback, 0)
+		}
+	}
+	helpAction.ConnectActivate(&helpActivateCb)
+	w.AddAction(helpAction)
 	// Show shortcuts action
 	shortcutsAction := gio.NewSimpleAction("show-shortcuts", nil)
 	shortcutsActivateCb := func(action gio.SimpleAction, param uintptr) {
@@ -299,6 +368,15 @@ func (w *Window) setupActions() {
 	}
 	aboutAction.ConnectActivate(&aboutActivateCb)
 	w.AddAction(aboutAction)
+
+	closeRequestCb := func(_ gtk.Window) bool {
+		if w.updateShell == nil || !w.updateShell.Busy() {
+			return false
+		}
+		w.updateShell.RevealBusyBanner()
+		return true
+	}
+	w.ConnectCloseRequest(&closeRequestCb)
 
 	// Navigation actions
 	for _, item := range w.navItems {

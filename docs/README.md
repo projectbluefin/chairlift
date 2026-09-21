@@ -66,6 +66,10 @@ are listed in [org-adrs.md](org-adrs.md).
   — the application ships as "Control Center" and keeps ChairLift as the code
   name; `pageview.AppName` owns every user-visible spelling, and two
   `internal/installcheck` gates hold the split
+- [adr/0013-capability-driven-visibility-as-a-floor.md](adr/0013-capability-driven-visibility-as-a-floor.md)
+  — page and group visibility is bounded by host capability (`Configured && Available`);
+  page-level availability is synchronous and non-blocking, while group-level probes
+  can run asynchronously without creating inert placeholders
 
 ### Design
 
