@@ -207,6 +207,14 @@ func sessionToken(ctx context.Context) string {
 // file or, in the app grid's case, to a personal brand is left alone: those
 // are choices, not a cycle. The app grid has no rotation switch at all.
 //
+// That guard lives here rather than in NextID, which stays total so any other
+// caller advancing a stale selection still lands on a real entry: NextID maps
+// CustomID onto the first catalog entry, so without the check a user's own
+// SVG would be silently replaced at the next login. The page desensitizes the
+// rotation switch for a custom selection (pageview.LiveryRotationAvailable),
+// but the stored flag outlives a selection change, so the headless pass has
+// to refuse it too.
+//
 // It is deterministic — NextID walks the catalog in order — and idempotent
 // within a session via the rotation token. A section that is rotating but not
 // enabled is skipped rather than turned on: rotation changes which mark is
@@ -226,7 +234,8 @@ func Rotate(ctx context.Context) error {
 	}
 
 	var failures []string
-	if state.PanelRotate && state.PanelEnabled {
+	rotatedDock := state.DockRotate && state.DockEnabled && state.DockID != CustomID
+	if state.PanelRotate && state.PanelEnabled && state.PanelID != CustomID {
 		next := NextID(state.PanelID)
 		if err := Apply(ctx, Panel, Source{Kind: FromCatalog, Value: next}); err != nil {
 			failures = append(failures, err.Error())
@@ -234,7 +243,7 @@ func Rotate(ctx context.Context) error {
 			failures = append(failures, err.Error())
 		}
 	}
-	if state.DockRotate && state.DockEnabled {
+	if rotatedDock {
 		next := NextCNCFID(state.DockID)
 		if err := Apply(ctx, Dock, Source{Kind: FromCNCF, Value: next}); err != nil {
 			failures = append(failures, err.Error())
@@ -247,7 +256,7 @@ func Rotate(ctx context.Context) error {
 	// after graphical-session.target — by which point the dash may already
 	// have cached the previous mark. Without this the rotated dock icon would
 	// not appear until something else happened to nudge it.
-	if state.DockRotate && state.DockEnabled {
+	if rotatedDock {
 		if err := RefreshShellIcons(); err != nil {
 			failures = append(failures, err.Error())
 		}

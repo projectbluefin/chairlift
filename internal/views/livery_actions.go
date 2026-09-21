@@ -209,6 +209,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 		uh.liveryDockSelectedRow.SetTitle(selected.Title)
 		uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
 	}
+	uh.syncLiveryRotateSensitive(livery.Dock, uh.liveryState.DockEnabled)
 
 	enabled := uh.liveryState.DockEnabled
 	go func() {
@@ -252,6 +253,7 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 	}
 
 	enabled, _ := uh.liveryToggleState(surface)
+	uh.syncLiveryRotateSensitive(surface, enabled)
 	source := uh.liverySource(surface)
 
 	go func() {
@@ -332,6 +334,9 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 		uh.liveryState.DockCustom, uh.liveryState.DockID = path, livery.CustomID
 	}
 	uh.showLiveryCustomPath(surface, path)
+	if surface != livery.AppGrid {
+		uh.syncLiveryRotateSensitive(surface, enabled)
+	}
 
 	source := uh.liverySource(surface)
 	go func() {
@@ -457,15 +462,31 @@ func (uh *UserHome) setLiverySectionSensitive(s livery.Surface, enabled bool) {
 		if uh.liveryPanelMarkRow != nil {
 			uh.liveryPanelMarkRow.SetSensitive(enabled)
 		}
-		if uh.liveryPanelRotate != nil {
-			uh.liveryPanelRotate.SetSensitive(enabled)
-		}
+		uh.syncLiveryRotateSensitive(s, enabled)
 		return
 	}
 	if uh.liveryDockSelectedRow != nil {
 		uh.liveryDockSelectedRow.SetSensitive(enabled)
 	}
+	uh.syncLiveryRotateSensitive(s, enabled)
+}
+
+// syncLiveryRotateSensitive follows the section switch *and* the selection.
+//
+// livery.Rotate refuses to advance a section pinned to the user's own SVG —
+// rotation cycles a catalog, and a custom file is not in one — so a switch
+// left sensitive for that selection would promise a login-time change that
+// never happens.
+func (uh *UserHome) syncLiveryRotateSensitive(s livery.Surface, sectionAvailable bool) {
+	if s == livery.Panel {
+		if uh.liveryPanelRotate != nil {
+			uh.liveryPanelRotate.SetSensitive(
+				pageview.LiveryRotationAvailable(sectionAvailable, uh.liveryState.PanelID))
+		}
+		return
+	}
 	if uh.liveryDockRotate != nil {
-		uh.liveryDockRotate.SetSensitive(enabled)
+		uh.liveryDockRotate.SetSensitive(
+			pageview.LiveryRotationAvailable(sectionAvailable, uh.liveryState.DockID))
 	}
 }
