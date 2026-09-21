@@ -87,6 +87,10 @@ func TestUpdateBadgeStaysNoninteractive(t *testing.T) {
 			t.Errorf("w.updateBadge...SetFocusable(...) is called — a focusable badge can receive keyboard focus like a real control")
 		case sel.Sel.Name == "SetCanTarget":
 			t.Errorf("w.updateBadge...SetCanTarget(...) is called — a badge that can be a pointer target can receive clicks/gestures")
+		case sel.Sel.Name == "SetSelectable":
+			t.Errorf("w.updateBadge...SetSelectable(...) is called — a selectable badge can take keyboard focus")
+		case sel.Sel.Name == "SetCanFocus":
+			t.Errorf("w.updateBadge...SetCanFocus(...) is called — a focusable badge can receive keyboard focus")
 		}
 		return true
 	})
