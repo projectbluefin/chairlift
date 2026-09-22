@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/maintenanceexec"
+	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/cleanupview"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -24,6 +25,20 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
+// The Maintenance page holds three things, in descending order of how often
+// a person needs them and ascending order of how much they cost:
+//
+//  1. One routine cleanup action, composing internal/updateproviders' typed
+//     cleanup inventory. It used to be three separate buttons plus a "Coming
+//     soon" placeholder, which asked the user to know which package manager
+//     owned their wasted disk space.
+//  2. Whatever maintenance the administrator configured, labelled as
+//     theirs. ChairLift knows nothing about these scripts, so they are never
+//     folded into the cleanup above.
+//  3. Recovery. Powerwash and Factory Reset are not maintenance, they are
+//     what you reach for when something has already gone wrong, and they are
+//     separated visually and by an opt-in default (see reset.go).
+
 // buildMaintenancePage builds the Maintenance page content
 func (uh *UserHome) buildMaintenancePage() {
 	page := uh.maintenancePrefsPage
@@ -31,140 +46,12 @@ func (uh *UserHome) buildMaintenancePage() {
 		return
 	}
 
-	// Cleanup group
+	if uh.config.IsGroupEnabled("maintenance_page", "maintenance_freespace_group") {
+		uh.buildFreeSpaceGroup(page)
+	}
+
 	if uh.config.IsGroupEnabled("maintenance_page", "maintenance_cleanup_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("System Cleanup")
-		group.SetDescription("Clean up system files and free disk space")
-
-		groupCfg := uh.config.GetGroupConfig("maintenance_page", "maintenance_cleanup_group")
-		if groupCfg != nil {
-			for _, action := range groupCfg.Actions {
-				row := adw.NewActionRow()
-				row.SetTitle(action.Title)
-				row.SetSubtitle(action.Script)
-
-				if action.Sudo {
-					sudoIcon := gtk.NewImageFromIconName("dialog-password-symbolic")
-					row.AddPrefix(&sudoIcon.Widget)
-				}
-
-				button := gtk.NewButtonWithLabel("Run")
-				button.SetValign(gtk.AlignCenterValue)
-				button.AddCssClass("suggested-action")
-
-				script := action.Script
-				sudo := action.Sudo
-				title := action.Title
-				btn := button
-				clickedCb := func(_ gtk.Button) {
-					uh.runMaintenanceAction(title, script, sudo, btn)
-				}
-				button.ConnectClicked(&clickedCb)
-
-				row.AddSuffix(&button.Widget)
-				group.Add(&row.Widget)
-			}
-		}
-
-		page.Add(group)
-	}
-
-	// Homebrew Cleanup group
-	if uh.config.IsGroupEnabled("maintenance_page", "maintenance_brew_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Homebrew Cleanup")
-		group.SetDescription("Checking Homebrew availability...")
-		uh.maintenanceBrewGroup = group
-
-		row := adw.NewActionRow()
-		row.SetTitle("Clean Up Homebrew")
-		row.SetSubtitle("Remove outdated downloads and old package versions")
-
-		icon := gtk.NewImageFromIconName("user-trash-symbolic")
-		row.AddPrefix(&icon.Widget)
-
-		button := gtk.NewButtonWithLabel("Clean Up")
-		button.SetValign(gtk.AlignCenterValue)
-		button.AddCssClass("suggested-action")
-
-		clickedCb := func(btn gtk.Button) {
-			uh.onBrewCleanupClicked(button)
-		}
-		button.ConnectClicked(&clickedCb)
-
-		row.AddSuffix(&button.Widget)
-		group.Add(&row.Widget)
-
-		page.Add(group)
-
-		go func() {
-			if !homebrew.IsInstalledCached() {
-				sgtk.RunOnMainThread(func() {
-					uh.maintenanceBrewGroup.SetVisible(false)
-				})
-			} else {
-				sgtk.RunOnMainThread(func() {
-					uh.maintenanceBrewGroup.SetDescription("Remove old versions and clear Homebrew cache")
-				})
-			}
-		}()
-	}
-
-	// Flatpak Cleanup group
-	if uh.config.IsGroupEnabled("maintenance_page", "maintenance_flatpak_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Flatpak Cleanup")
-		group.SetDescription("Checking Flatpak availability...")
-		uh.maintenanceFlatpakGroup = group
-
-		row := adw.NewActionRow()
-		row.SetTitle("Remove Unused Runtimes")
-		row.SetSubtitle("Uninstall unused Flatpak runtimes and extensions")
-
-		icon := gtk.NewImageFromIconName("user-trash-symbolic")
-		row.AddPrefix(&icon.Widget)
-
-		button := gtk.NewButtonWithLabel("Clean Up")
-		button.SetValign(gtk.AlignCenterValue)
-		button.AddCssClass("suggested-action")
-
-		clickedCb := func(btn gtk.Button) {
-			uh.onFlatpakCleanupClicked(button)
-		}
-		button.ConnectClicked(&clickedCb)
-
-		row.AddSuffix(&button.Widget)
-		group.Add(&row.Widget)
-
-		page.Add(group)
-
-		go func() {
-			if !flatpak.IsInstalledCached() {
-				sgtk.RunOnMainThread(func() {
-					uh.maintenanceFlatpakGroup.SetVisible(false)
-				})
-			} else {
-				sgtk.RunOnMainThread(func() {
-					uh.maintenanceFlatpakGroup.SetDescription("Remove unused Flatpak runtimes and extensions")
-				})
-			}
-		}()
-	}
-
-	// Optimization group
-	if uh.config.IsGroupEnabled("maintenance_page", "maintenance_optimization_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("System Optimization")
-		group.SetDescription("Optimize system performance")
-
-		// Placeholder for optimization features
-		row := adw.NewActionRow()
-		row.SetTitle("Optimization tools")
-		row.SetSubtitle("Coming soon")
-		group.Add(&row.Widget)
-
-		page.Add(group)
+		uh.buildConfiguredTasksGroup(page)
 	}
 
 	// Reset group: irreversible actions, disabled by default in config.yml —
@@ -174,63 +61,146 @@ func (uh *UserHome) buildMaintenancePage() {
 	}
 }
 
-// onBrewCleanupClicked handles the Homebrew cleanup button click
-func (uh *UserHome) onBrewCleanupClicked(button *gtk.Button) {
+// buildFreeSpaceGroup builds the page's single routine cleanup action.
+func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
+	group := adw.NewPreferencesGroup()
+	group.SetTitle(cleanupview.GroupTitle)
+	group.SetDescription(cleanupview.GroupDescription)
+
+	row := adw.NewActionRow()
+	row.SetTitle(cleanupview.RowTitle)
+	row.SetSubtitle(cleanupview.RowSubtitle)
+
+	icon := gtk.NewImageFromIconName("user-trash-symbolic")
+	row.AddPrefix(&icon.Widget)
+
+	button := gtk.NewButtonWithLabel(cleanupview.ButtonLabel)
+	button.SetValign(gtk.AlignCenterValue)
+	button.AddCssClass("suggested-action")
+
+	// Connected once, at build time: this row is never rebuilt, so the
+	// callback table keeps exactly one slot for it.
+	clickedCb := func(gtk.Button) {
+		uh.onFreeUpSpaceClicked(button, row)
+	}
+	button.ConnectClicked(&clickedCb)
+
+	row.AddSuffix(&button.Widget)
+	group.Add(&row.Widget)
+	page.Add(group)
+}
+
+// onFreeUpSpaceClicked runs every cleanup provider off the main thread and
+// reports what each one actually did.
+//
+// Free space is read before and after the run. That reading is the only
+// source of a reclaimed-bytes figure: neither provider reports its own
+// total in a form worth trusting, so when either read fails, or the
+// difference is small enough to be ordinary system noise, the result says
+// the cleanup finished and names no number at all.
+func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow) {
 	button.SetSensitive(false)
-	button.SetLabel("Cleaning...")
+	button.SetLabel(cleanupview.BusyLabel)
+
+	cleanup := updateproviders.NewCleanup(uh.config)
+	previewOnly := dryrun.Enabled()
 
 	go func() {
-		output, err := homebrew.Cleanup()
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+
+		paths := cleanupview.CachePaths()
+		before, beforeOK := cleanupview.FreeBytes(paths)
+		results := cleanup.RunSteps(ctx)
+		after, afterOK := cleanupview.FreeBytes(paths)
+
+		for _, result := range results {
+			log.Printf("views: free up space step=%s outcome=%s detail=%q",
+				result.ID, result.Outcome, result.Detail)
+		}
+
+		outcome := cleanupview.Summarize(previewOnly, results, cleanupview.Space{
+			Before:   before,
+			After:    after,
+			Measured: beforeOK && afterOK && !previewOnly,
+		})
 
 		sgtk.RunOnMainThread(func() {
 			button.SetSensitive(true)
-			button.SetLabel("Clean Up")
+			button.SetLabel(cleanupview.ButtonLabel)
 
-			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Homebrew cleanup failed: %v", err))
+			if outcome.Headline != "" {
+				row.SetSubtitle(outcome.Headline)
+			}
+			if outcome.IsError {
+				uh.toastAdder.ShowErrorToast(outcome.Toast)
 				return
 			}
-
-			uh.toastAdder.ShowToast(actionmsg.Cleanup(dryrun.Enabled(), "Homebrew", output))
+			uh.toastAdder.ShowToast(outcome.Toast)
 		})
 	}()
 }
 
-// onFlatpakCleanupClicked handles the Flatpak cleanup button click
-func (uh *UserHome) onFlatpakCleanupClicked(button *gtk.Button) {
-	button.SetSensitive(false)
-	button.SetLabel("Cleaning...")
+// buildConfiguredTasksGroup builds the administrator-configured actions.
+// ChairLift has no idea what these do, so the group says where they came
+// from and each row says only whether it will ask for a password — never
+// the command it runs.
+func (uh *UserHome) buildConfiguredTasksGroup(page *adw.PreferencesPage) {
+	groupCfg := uh.config.GetGroupConfig("maintenance_page", "maintenance_cleanup_group")
+	if groupCfg == nil || len(groupCfg.Actions) == 0 {
+		// An enabled group with no actions has nothing to say; showing its
+		// heading would promise tasks that do not exist.
+		return
+	}
 
-	go func() {
-		output, err := flatpak.UninstallUnused()
+	group := adw.NewPreferencesGroup()
+	group.SetTitle(cleanupview.ScriptsGroupTitle)
+	group.SetDescription(cleanupview.ScriptsGroupDescription)
 
-		sgtk.RunOnMainThread(func() {
-			button.SetSensitive(true)
-			button.SetLabel("Clean Up")
+	for _, action := range groupCfg.Actions {
+		row := adw.NewActionRow()
+		row.SetTitle(action.Title)
+		if action.Sudo {
+			row.SetSubtitle(cleanupview.ScriptsAdminSubtitle)
+			sudoIcon := gtk.NewImageFromIconName("dialog-password-symbolic")
+			row.AddPrefix(&sudoIcon.Widget)
+		}
 
-			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Flatpak cleanup failed: %v", err))
-				return
-			}
+		button := gtk.NewButtonWithLabel(cleanupview.ScriptsButtonLabel)
+		button.SetValign(gtk.AlignCenterValue)
+		button.AddCssClass("suggested-action")
 
-			uh.toastAdder.ShowToast(actionmsg.Cleanup(dryrun.Enabled(), "Flatpak", output))
-		})
-	}()
+		script := action.Script
+		sudo := action.Sudo
+		title := action.Title
+		btn := button
+		clickedCb := func(_ gtk.Button) {
+			uh.runMaintenanceAction(title, script, sudo, btn)
+		}
+		button.ConnectClicked(&clickedCb)
+
+		row.AddSuffix(&button.Widget)
+		group.Add(&row.Widget)
+	}
+
+	page.Add(group)
 }
 
-// onBrewBundleDumpClicked handles the Homebrew bundle dump button click
+// onBrewBundleDumpClicked exports the user's package list. The row that
+// triggers it lives on the Applications page; only the handler sits here.
 func (uh *UserHome) onBrewBundleDumpClicked() {
 	go func() {
 		homeDir, _ := os.UserHomeDir()
 		path := homeDir + "/Brewfile"
 		if err := homebrew.BundleDump(path, true); err != nil {
+			log.Printf("Package list export failed: %v", err)
 			sgtk.RunOnMainThread(func() {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Bundle dump failed: %v", err))
+				uh.toastAdder.ShowErrorToast("Could not export your package list")
 			})
 			return
 		}
 		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled(), path))
+			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled()))
 		})
 	}()
 }
@@ -242,7 +212,7 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 	decision := actionmsg.MaintenanceScript(dryrun.Enabled(), title)
 
 	button.SetSensitive(false)
-	button.SetLabel("Running...")
+	button.SetLabel(cleanupview.ScriptsBusyLabel)
 
 	go func() {
 		var err error
@@ -274,7 +244,7 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 
 		sgtk.RunOnMainThread(func() {
 			button.SetSensitive(true)
-			button.SetLabel("Run")
+			button.SetLabel(cleanupview.ScriptsButtonLabel)
 
 			if err != nil {
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s failed: %v", title, err))

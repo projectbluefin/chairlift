@@ -156,9 +156,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 		},
 		"maintenance": {
 			"maintenance_cleanup_group",
-			"maintenance_brew_group",
-			"maintenance_flatpak_group",
-			"maintenance_optimization_group",
+			"maintenance_freespace_group",
 			"reset_group",
 		},
 		"updates": {
@@ -168,18 +166,14 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"flatpak_updates_group",
 			"brew_updates_group",
 			"brew_trust_group",
-		},
-		"system": {
-			"system_info_group",
-			"bootc_status_group",
 			"channel_group",
-			"health_group",
+			"bootc_status_group",
 		},
+		"agents": {"agents_group"},
 		"features": {
 			"features_group",
 			"dx_group",
 			"gaming_group",
-			"ai_group",
 			"troubleshooting_group",
 		},
 		"livery": {

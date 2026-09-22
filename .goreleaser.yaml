@@ -40,7 +40,11 @@ builds:
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.buildVersion={{ .Version }}
+      # {{ .Tag }}, not {{ .Version }}: the calendar scheme is vYY.MM.N and
+      # GoReleaser's semver parser normalises 26.09.0 to 26.9.0, which would
+      # drop the zero that makes the version read as a date. Trim only the
+      # leading "v" so the About dialog shows 26.09.0-alpha.1.
+      - -s -w -X main.buildVersion={{ trimprefix .Tag "v" }}
     main: ./cmd/chairlift/main.go
 
   - id: chairlift-updex-helper

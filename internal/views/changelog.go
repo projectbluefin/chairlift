@@ -83,8 +83,8 @@ func (uh *UserHome) onChangelogClicked() {
 	booted, staged := uh.changelogBooted, uh.changelogStaged
 
 	button.SetSensitive(false)
-	button.SetLabel("Comparing...")
-	row.SetSubtitle("Downloading both package lists...")
+	button.SetLabel("Comparing…")
+	row.SetSubtitle("Downloading both versions' program lists…")
 
 	go func() {
 		defer uh.changelogGate.Reset()
@@ -101,7 +101,7 @@ func (uh *UserHome) onChangelogClicked() {
 			if err != nil {
 				log.Printf("changelog: %v", err)
 				row.SetSubtitle(pageview.ChangelogRow(true).Subtitle)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not compare images: %v", err))
+				uh.toastAdder.ShowErrorToast("Could not compare the two versions")
 				return
 			}
 
@@ -128,7 +128,7 @@ func (uh *UserHome) renderChangelogSections(result sbom.Result) {
 	for _, section := range pageview.ChangelogSections(result) {
 		expander := adw.NewExpanderRow()
 		expander.SetTitle(section.Title)
-		expander.SetSubtitle(fmt.Sprintf("%d package(s)", len(section.Entries)))
+		expander.SetSubtitle(programCount(len(section.Entries)))
 
 		for _, entry := range section.Entries {
 			row := adw.NewActionRow()
@@ -140,4 +140,13 @@ func (uh *UserHome) renderChangelogSections(result sbom.Result) {
 		parent.AddRow(&expander.Widget)
 		uh.changelogSections = append(uh.changelogSections, expander)
 	}
+}
+
+// programCount names what a section holds in words a person reads, rather
+// than the "N package(s)" shape a report generator would produce.
+func programCount(count int) string {
+	if count == 1 {
+		return "1 program"
+	}
+	return fmt.Sprintf("%d programs", count)
 }

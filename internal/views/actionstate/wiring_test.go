@@ -21,12 +21,13 @@ func TestUpdatesPageUsesGuardedRefreshDecisions(t *testing.T) {
 	}
 	text := string(source)
 
+	// The guard here is the gate/generation/row bookkeeping, not the button
+	// copy: label text and its typography belong to the HIG pass, so the
+	// control-state assertions below are deliberately copy-agnostic.
 	for _, required := range []string{
 		`if !updateGate.TryStart()`,
-		`btn.SetLabel("Updating...")`,
 		`go uh.updateHomebrew(btn, updateGate)`,
 		`if !upgradeGate.TryStart()`,
-		`btn.SetLabel("Upgrading...")`,
 		`dryRun := dryrun.Enabled()`,
 		`actionstate.PackageUpgrade(err == nil, dryRun)`,
 		`actionstate.OutdatedRefresh(err == nil, currentCount, len(packages))`,
@@ -40,10 +41,8 @@ func TestUpdatesPageUsesGuardedRefreshDecisions(t *testing.T) {
 		`generation := uh.brewRefresh.Begin()`,
 		`go uh.loadOutdatedPackagesGeneration(generation, done)`,
 		`!uh.brewRefresh.IsCurrent(generation)`,
-		`button.SetLabel("Update")`,
 		`uh.outdatedRows.Clear(func(row *adw.ActionRow)`,
 		`uh.outdatedRows.Add(row)`,
-		`Error refreshing updates:`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("updates-page wiring does not contain %q", required)

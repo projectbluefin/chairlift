@@ -65,14 +65,14 @@ func assertAllKnownGroupsDisabled(t *testing.T, got *Config) {
 func TestLoadMissingHigherPriorityContinuesToValidCandidate(t *testing.T) {
 	dir := t.TempDir()
 	high := filepath.Join(dir, "missing.yml")
-	low := writeConfigFile(t, "system_page:\n  health_group:\n    enabled: false\n")
+	low := writeConfigFile(t, "agents_page:\n  agents_group:\n    enabled: false\n")
 	withConfigPaths(t, []string{high, low})
 
 	cfg, loadErr := Load()
 	if loadErr != nil {
 		t.Fatalf("Load() error = %v, want nil", loadErr)
 	}
-	if cfg.SystemPage["health_group"].Enabled {
+	if cfg.AgentsPage["agents_group"].Enabled {
 		t.Fatal("lower-priority valid overlay was not loaded after absent candidate")
 	}
 }
@@ -90,7 +90,7 @@ func TestLoadReadFailureStopsPrecedenceAndFailsClosed(t *testing.T) {
 		case high:
 			return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrPermission}
 		case low:
-			return []byte("system_page:\n  health_group:\n    enabled: true\n"), nil
+			return []byte("agents_page:\n  agents_group:\n    enabled: true\n"), nil
 		default:
 			return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
 		}
@@ -128,7 +128,7 @@ func TestLoadInvalidAuthoritativeStopsPrecedenceAndFailsClosed(t *testing.T) {
 		},
 		{
 			name:     "parse-type",
-			contents: "system_page: [\n",
+			contents: "agents_page: [\n",
 			wantKind: KindParseType,
 		},
 	}
@@ -147,7 +147,7 @@ func TestLoadInvalidAuthoritativeStopsPrecedenceAndFailsClosed(t *testing.T) {
 				case high:
 					return []byte(tt.contents), nil
 				case low:
-					return []byte("system_page:\n  health_group:\n    enabled: true\n"), nil
+					return []byte("agents_page:\n  agents_group:\n    enabled: true\n"), nil
 				default:
 					return nil, &fs.PathError{Op: "open", Path: path, Err: fs.ErrNotExist}
 				}
@@ -259,7 +259,7 @@ func TestLoadDanglingHigherPriorityDoesNotFallThroughToValidCandidate(t *testing
 	dir := t.TempDir()
 	target := filepath.Join(dir, "missing-target.yml")
 	high := filepath.Join(dir, "high.yml")
-	low := writeConfigFile(t, "system_page:\n  health_group:\n    enabled: true\n")
+	low := writeConfigFile(t, "agents_page:\n  agents_group:\n    enabled: true\n")
 	if err := os.Symlink(target, high); err != nil {
 		t.Fatalf("creating dangling symlink: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestLoadDanglingHigherPriorityDoesNotFallThroughToValidCandidate(t *testing
 	if loadErr.Path != high {
 		t.Fatalf("Load() error path = %q, want the dangling %q", loadErr.Path, high)
 	}
-	if cfg.SystemPage["health_group"].Enabled {
+	if cfg.AgentsPage["agents_group"].Enabled {
 		t.Fatal("dangling authoritative symlink fell through to a valid lower-priority candidate")
 	}
 	assertAllKnownGroupsDisabled(t, cfg)
@@ -368,7 +368,7 @@ func TestConfigurationGuideExamplePassesStrictValidation(t *testing.T) {
 				{"applications_page", "brew_group"},
 				{"applications_page", "brew_search_group"},
 				{"applications_page", "brew_bundles_group"},
-				{"maintenance_page", "maintenance_brew_group"},
+				{"maintenance_page", "maintenance_freespace_group"},
 				{"features_page", "troubleshooting_group"},
 			} {
 				if merged.IsGroupEnabled(check.page, check.group) {

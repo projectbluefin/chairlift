@@ -5,18 +5,45 @@ import (
 	"testing"
 )
 
-func TestPowerwashRowReflectsRunState(t *testing.T) {
-	fresh := PowerwashRow("")
-	if fresh.Title != "Remove Everything I Installed" {
-		t.Errorf("PowerwashRow(\"\").Title = %q, want %q", fresh.Title, "Remove Everything I Installed")
+// The row is the text a person reads before deciding. Overstating the scope
+// ("everything") is the failure mode this pins: Powerwash leaves files,
+// settings, and the system image alone, and the row has to say so.
+func TestPowerwashRowStatesItsRealScope(t *testing.T) {
+	row := PowerwashRow()
+	if strings.Contains(strings.ToLower(row.Title), "everything") {
+		t.Errorf("PowerwashRow().Title = %q, want it not to claim it removes everything", row.Title)
 	}
-	if !strings.Contains(fresh.Subtitle, "Distrobox") {
-		t.Errorf("PowerwashRow(\"\").Subtitle = %q, want it to describe what gets removed", fresh.Subtitle)
+	for _, want := range []string{"apps you installed", "containers"} {
+		if !strings.Contains(row.Subtitle, want) {
+			t.Errorf("PowerwashRow().Subtitle = %q, want it to name %q", row.Subtitle, want)
+		}
 	}
+	if !strings.Contains(row.Subtitle, "stay as they are") {
+		t.Errorf("PowerwashRow().Subtitle = %q, want it to say what survives", row.Subtitle)
+	}
+}
 
-	done := PowerwashRow("Powerwash complete")
-	if done.Subtitle != "Powerwash complete" {
-		t.Errorf("PowerwashRow(summary).Subtitle = %q, want the summary verbatim", done.Subtitle)
+// A run that removed nothing must never read as a run that cleared the
+// machine, and a partial failure must not read as a success.
+func TestPowerwashResultSubtitleNeverOverstatesTheRun(t *testing.T) {
+	tests := []struct {
+		name      string
+		succeeded int
+		failed    int
+		want      string
+	}{
+		{"all removed", 2, 0, "Removed the apps you installed"},
+		{"partial failure", 1, 1, "Some apps could not be removed — see the system logs for details"},
+		{"total failure", 0, 2, "Nothing could be removed — see the system logs for details"},
+		{"nothing installed", 0, 0, "There was nothing installed to remove"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PowerwashResultSubtitle(tt.succeeded, tt.failed); got != tt.want {
+				t.Errorf("PowerwashResultSubtitle(%d, %d) = %q, want %q",
+					tt.succeeded, tt.failed, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -36,11 +63,13 @@ func TestPowerwashConfirmationStatesWhatItDoesAndDoesNot(t *testing.T) {
 
 func TestFactoryResetRowNamesWhatItReplaces(t *testing.T) {
 	row := FactoryResetRow()
-	if row.Title != "Factory Reset" {
-		t.Errorf("FactoryResetRow().Title = %q, want %q", row.Title, "Factory Reset")
+	if row.Title != "Reset the system" {
+		t.Errorf("FactoryResetRow().Title = %q, want %q", row.Title, "Reset the system")
 	}
-	if !strings.Contains(row.Subtitle, "fresh install") {
-		t.Errorf("FactoryResetRow().Subtitle = %q, want it to describe the reset", row.Subtitle)
+	for _, want := range []string{"Reinstalls the system", "Your files and apps stay", "restart"} {
+		if !strings.Contains(row.Subtitle, want) {
+			t.Errorf("FactoryResetRow().Subtitle = %q, want it to state %q", row.Subtitle, want)
+		}
 	}
 }
 

@@ -17,7 +17,7 @@ import (
 // sampling a single page/group, per the repo's
 // regression-tests-must-cover-every-collection-entry skill.
 var pageNames = []string{
-	"system_page",
+	"agents_page",
 	"updates_page",
 	"applications_page",
 	"maintenance_page",
@@ -30,7 +30,7 @@ var pageNames = []string{
 // IsGroupEnabled/GetGroupConfig switch on, so tests can loop generically.
 func pagesOf(cfg *Config) map[string]PageConfig {
 	return map[string]PageConfig{
-		"system_page":       cfg.SystemPage,
+		"agents_page":       cfg.AgentsPage,
 		"updates_page":      cfg.UpdatesPage,
 		"applications_page": cfg.ApplicationsPage,
 		"maintenance_page":  cfg.MaintenancePage,
@@ -220,7 +220,7 @@ func TestMaintenanceCleanupGroupDefaultConsistentAcrossAbsentAndOmitted(t *testi
 
 	// Partial-file case: mentions maintenance_page and a sibling group, but
 	// omits maintenance_cleanup_group entirely.
-	path := writeConfigFile(t, "maintenance_page:\n  maintenance_brew_group:\n    enabled: false\n")
+	path := writeConfigFile(t, "maintenance_page:\n  maintenance_freespace_group:\n    enabled: false\n")
 	partialCfg, err := loadFromPath(path)
 	if err != nil {
 		t.Fatalf("loadFromPath(%q): %v", path, err)
@@ -238,7 +238,6 @@ var defaultBearingGroups = []struct {
 	page  string
 	group string
 }{
-	{"system_page", "health_group"},
 	{"applications_page", "applications_installed_group"},
 	{"help_page", "help_resources_group"},
 	{"maintenance_page", "maintenance_cleanup_group"},
@@ -282,22 +281,22 @@ func TestOmittedEnabledInheritsDocumentedDefault(t *testing.T) {
 	def := defaultConfig()
 
 	t.Run("ordinary group inherits default enabled=true", func(t *testing.T) {
-		if !def.SystemPage["health_group"].Enabled {
-			t.Fatal("test setup assumption violated: health_group default is not enabled")
+		if !def.AgentsPage["agents_group"].Enabled {
+			t.Fatal("test setup assumption violated: agents_group default is not enabled")
 		}
 
-		path := writeConfigFile(t, "system_page:\n  health_group:\n    app_id: com.example.Other\n")
+		path := writeConfigFile(t, "agents_page:\n  agents_group:\n    app_id: com.example.Other\n")
 		cfg, err := loadFromPath(path)
 		if err != nil {
 			t.Fatalf("loadFromPath(%q): %v", path, err)
 		}
 
-		got := cfg.SystemPage["health_group"]
+		got := cfg.AgentsPage["agents_group"]
 		if !got.Enabled {
-			t.Errorf("health_group: omitted `enabled` got %v, want true (default)", got.Enabled)
+			t.Errorf("agents_group: omitted `enabled` got %v, want true (default)", got.Enabled)
 		}
 		if got.AppID != "com.example.Other" {
-			t.Errorf("health_group: AppID override not applied, got %q", got.AppID)
+			t.Errorf("agents_group: AppID override not applied, got %q", got.AppID)
 		}
 	})
 
@@ -437,8 +436,8 @@ func TestGroupEnabledMatchesExpectedForEveryGroup(t *testing.T) {
 	})
 
 	t.Run("partial file overrides several groups", func(t *testing.T) {
-		content := "system_page:\n" +
-			"  health_group:\n" +
+		content := "agents_page:\n" +
+			"  agents_group:\n" +
 			"    enabled: false\n" +
 			"updates_page:\n" +
 			"  brew_trust_group:\n" +
@@ -457,7 +456,7 @@ func TestGroupEnabledMatchesExpectedForEveryGroup(t *testing.T) {
 
 		type pageGroup struct{ page, group string }
 		overrides := map[pageGroup]bool{
-			{"system_page", "health_group"}:                   false,
+			{"agents_page", "agents_group"}:                   false,
 			{"updates_page", "brew_trust_group"}:              false,
 			{"maintenance_page", "maintenance_cleanup_group"}: true,
 			{"help_page", "help_resources_group"}:             false,
@@ -491,7 +490,7 @@ func repoRoot() string {
 }
 
 // TestUpdatesPageDefaultGroupSetIsExact asserts that defaultConfig()'s
-// updates_page group set is exactly the six groups the Updates page view
+// updates_page group set is exactly the eight groups the Updates page view
 // still builds. This is an exact-set equality check (length plus every
 // expected key present), not a single named-key absence lookup, so it fails
 // loudly whether a formerly-shipped, now-removed group is silently
@@ -504,6 +503,8 @@ func TestUpdatesPageDefaultGroupSetIsExact(t *testing.T) {
 		"flatpak_updates_group":   true,
 		"brew_updates_group":      true,
 		"brew_trust_group":        true,
+		"channel_group":           true,
+		"bootc_status_group":      true,
 	}
 
 	got := defaultConfig().UpdatesPage
@@ -565,8 +566,8 @@ func TestUpdatesPageDefaultGroupsHaveBuilders(t *testing.T) {
 // TestAIOverridesMergeLikeEveryOtherGroupField covers the two settings the
 // local-AI group adds: a per-vendor image map and the served model.
 func TestAIOverridesMergeLikeEveryOtherGroupField(t *testing.T) {
-	path := writeConfigFile(t, "features_page:\n"+
-		"  ai_group:\n"+
+	path := writeConfigFile(t, "agents_page:\n"+
+		"  agents_group:\n"+
 		"    ai_images:\n"+
 		"      nvidia: registry.example.internal/ramalama/cuda:pinned\n"+
 		"    ai_model: ollama://qwen2.5:7b\n")
@@ -576,9 +577,9 @@ func TestAIOverridesMergeLikeEveryOtherGroupField(t *testing.T) {
 		t.Fatalf("loadFromPath: %v", err)
 	}
 
-	group := cfg.GetGroupConfig("features_page", "ai_group")
+	group := cfg.GetGroupConfig("agents_page", "agents_group")
 	if group == nil {
-		t.Fatal("ai_group is missing from the merged config")
+		t.Fatal("agents_group is missing from the merged config")
 	}
 	if got := group.AIImages["nvidia"]; got != "registry.example.internal/ramalama/cuda:pinned" {
 		t.Errorf("AIImages[nvidia] = %q", got)
@@ -588,7 +589,7 @@ func TestAIOverridesMergeLikeEveryOtherGroupField(t *testing.T) {
 	}
 	// Overriding one vendor must not disturb the group's own default state.
 	if !group.Enabled {
-		t.Error("ai_group was disabled by an unrelated override")
+		t.Error("agents_group was disabled by an unrelated override")
 	}
 }
 
@@ -620,7 +621,7 @@ func TestUntrustedConfigCannotEnableInheritedSudoAction(t *testing.T) {
 // config that leaves it alone still loads.
 func TestUntrustedConfigKeepingSudoGroupDisabledLoads(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
-	if err := os.WriteFile(path, []byte("maintenance_page:\n  maintenance_brew_group:\n    enabled: true\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("maintenance_page:\n  maintenance_freespace_group:\n    enabled: true\n"), 0o600); err != nil {
 		t.Fatalf("writing config: %v", err)
 	}
 

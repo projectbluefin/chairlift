@@ -32,17 +32,30 @@ import (
 // reasoning as gaming mode. Factory Reset replaces the OS image itself and
 // goes through chairlift-ublue-helper's factory-reset action.
 
-// buildResetGroup builds the Powerwash and Factory Reset rows.
+// Button labels for the two recovery actions. Both open a confirmation
+// dialog rather than acting immediately, which is what the ellipsis says.
+const (
+	powerwashButtonLabel    = "Remove…"
+	powerwashBusyLabel      = "Removing…"
+	factoryResetButtonLabel = "Reset…"
+	factoryResetBusyLabel   = "Resetting…"
+)
+
+// buildResetGroup builds the Powerwash and Factory Reset rows. It is the
+// last group on the Maintenance page and reads as its own section: these
+// are recovery actions, not routine maintenance, and grouping them beside
+// "Free up space" would invite a person looking for disk space to press one
+// of them.
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Reset")
-	group.SetDescription("Irreversible actions — each asks for confirmation before it runs")
+	group.SetTitle("Recovery")
+	group.SetDescription("For when something has gone wrong. Each one asks you to confirm, and cannot be undone.")
 
 	powerwashRow := adw.NewActionRow()
-	presentation := pageview.PowerwashRow("")
+	presentation := pageview.PowerwashRow()
 	powerwashRow.SetTitle(presentation.Title)
 	powerwashRow.SetSubtitle(presentation.Subtitle)
-	powerwashBtn := gtk.NewButtonWithLabel("Remove Everything")
+	powerwashBtn := gtk.NewButtonWithLabel(powerwashButtonLabel)
 	powerwashBtn.SetValign(gtk.AlignCenterValue)
 	powerwashBtn.AddCssClass("destructive-action")
 	powerwashClickedCb := func(gtk.Button) { uh.onPowerwashClicked(powerwashBtn, powerwashRow) }
@@ -54,7 +67,7 @@ func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	resetPresentation := pageview.FactoryResetRow()
 	resetRow.SetTitle(resetPresentation.Title)
 	resetRow.SetSubtitle(resetPresentation.Subtitle)
-	resetBtn := gtk.NewButtonWithLabel("Factory Reset")
+	resetBtn := gtk.NewButtonWithLabel(factoryResetButtonLabel)
 	resetBtn.SetValign(gtk.AlignCenterValue)
 	resetBtn.AddCssClass("destructive-action")
 	resetClickedCb := func(gtk.Button) { uh.onFactoryResetClicked(resetBtn, resetRow) }
@@ -63,7 +76,7 @@ func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group.Add(&resetRow.Widget)
 
 	page.Add(group)
-	log.Printf("views: reset group built")
+	log.Printf("views: recovery group built")
 }
 
 // onPowerwashClicked shows the confirmation dialog, then runs Powerwash on
@@ -93,7 +106,7 @@ func (uh *UserHome) onPowerwashClicked(button *gtk.Button, row *adw.ActionRow) {
 
 func (uh *UserHome) runPowerwash(button *gtk.Button, row *adw.ActionRow) {
 	button.SetSensitive(false)
-	button.SetLabel("Removing…")
+	button.SetLabel(powerwashBusyLabel)
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -114,11 +127,11 @@ func (uh *UserHome) runPowerwash(button *gtk.Button, row *adw.ActionRow) {
 		sgtk.RunOnMainThread(func() {
 			uh.powerwashGate.Complete()
 			button.SetSensitive(true)
-			button.SetLabel("Remove Everything")
+			button.SetLabel(powerwashButtonLabel)
 
 			decision := actionmsg.Powerwash(dryrun.Enabled(), summary.Succeeded, summary.Failed)
 			if decision.Confirm {
-				row.SetSubtitle(pageview.PowerwashRow(summary.Headline).Subtitle)
+				row.SetSubtitle(pageview.PowerwashResultSubtitle(summary.Succeeded, summary.Failed))
 			}
 			if summary.Failed > 0 {
 				uh.toastAdder.ShowErrorToast(decision.Toast)
@@ -155,7 +168,7 @@ func (uh *UserHome) onFactoryResetClicked(button *gtk.Button, row *adw.ActionRow
 
 func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 	button.SetSensitive(false)
-	button.SetLabel("Resetting…")
+	button.SetLabel(factoryResetBusyLabel)
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -166,7 +179,7 @@ func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 		sgtk.RunOnMainThread(func() {
 			uh.factoryResetGate.Complete()
 			button.SetSensitive(true)
-			button.SetLabel("Factory Reset")
+			button.SetLabel(factoryResetButtonLabel)
 
 			if err != nil {
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Factory reset failed: %v", err))

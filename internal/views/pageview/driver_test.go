@@ -16,34 +16,40 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 		{
 			name:    "nothing to offer",
 			current: "Standard", hardware: "AMD",
-			wantHas: "AMD · running the Standard image",
+			wantHas: "Using the Standard driver for your AMD graphics",
 		},
 		{
 			name:    "a switch is offered",
 			current: "Standard", hardware: "NVIDIA + Intel", recommended: "NVIDIA (proprietary)",
-			wantHas: "switch to the NVIDIA (proprietary) image",
+			wantHas: "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics",
 		},
 		{
-			name:    "already on the driver image",
+			name:        "a switch is offered without detected hardware",
+			current:     "Standard",
+			recommended: "NVIDIA (proprietary)",
+			wantHas:     "Switch to the NVIDIA (proprietary) driver.",
+		},
+		{
+			name:    "already on the driver",
 			current: "NVIDIA (proprietary)", hardware: "NVIDIA",
-			wantHas: "running the NVIDIA (proprietary) image",
+			wantHas: "Using the NVIDIA (proprietary) driver",
 		},
 		{
-			name:     "hardware known but image unrecognized",
+			name:     "hardware known but driver unrecognized",
 			hardware: "Intel",
 			wantHas:  "Intel",
 		},
 		{
 			name:    "nothing detected",
-			wantHas: "No graphics hardware detected",
+			wantHas: "No graphics hardware was detected",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			row := GraphicsDriverRow(test.current, test.hardware, test.recommended)
-			if row.Title != "Graphics Driver" {
-				t.Errorf("GraphicsDriverRow().Title = %q, want %q", row.Title, "Graphics Driver")
+			if row.Title != "Graphics driver" {
+				t.Errorf("GraphicsDriverRow().Title = %q, want %q", row.Title, "Graphics driver")
 			}
 			if !strings.Contains(row.Subtitle, test.wantHas) {
 				t.Errorf("GraphicsDriverRow(%q, %q, %q).Subtitle = %q, want it to contain %q",
@@ -54,11 +60,20 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 }
 
 // Only the offering state may mention a restart; the informational states
-// describe the machine and must not imply an action is pending.
-func TestGraphicsDriverRowMentionsRestartOnlyWhenOffering(t *testing.T) {
+// describe the machine and must not imply an action is pending. The offer
+// also has to disclose that it replaces the operating system, and must not
+// promise a result it cannot know.
+func TestGraphicsDriverRowDisclosesTheCostOnlyWhenOffering(t *testing.T) {
 	offering := GraphicsDriverRow("Standard", "NVIDIA", "NVIDIA (proprietary)")
-	if !strings.Contains(offering.Subtitle, "restart") {
-		t.Errorf("the offering subtitle %q does not mention the restart", offering.Subtitle)
+	for _, want := range []string{"restart", "Replaces the operating system"} {
+		if !strings.Contains(offering.Subtitle, want) {
+			t.Errorf("the offering subtitle %q does not mention %q", offering.Subtitle, want)
+		}
+	}
+	for _, promise := range []string{"faster", "better", "performance"} {
+		if strings.Contains(strings.ToLower(offering.Subtitle), promise) {
+			t.Errorf("the offering subtitle %q promises %q, which it cannot know", offering.Subtitle, promise)
+		}
 	}
 	for _, row := range []Row{
 		GraphicsDriverRow("Standard", "AMD", ""),

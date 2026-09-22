@@ -18,11 +18,19 @@ func sampleResult() sbom.Result {
 }
 
 func TestChangelogRowSaysWhenThereIsNothingToCompare(t *testing.T) {
-	if got := ChangelogRow(false).Subtitle; !strings.Contains(got, "once an update is staged") {
+	if got := ChangelogRow(false).Subtitle; !strings.Contains(got, "once an update is ready to install") {
 		t.Errorf("subtitle = %q", got)
 	}
-	if got := ChangelogRow(true).Subtitle; strings.Contains(got, "once an update is staged") {
-		t.Errorf("staged subtitle still says there is nothing to compare: %q", got)
+	if got := ChangelogRow(true).Subtitle; strings.Contains(got, "once an update is ready to install") {
+		t.Errorf("ready subtitle still says there is nothing to compare: %q", got)
+	}
+}
+
+// The comparison downloads tens of megabytes per side, so the row must say
+// so before a person presses the button.
+func TestChangelogRowWarnsAboutTheDownload(t *testing.T) {
+	if got := ChangelogRow(true).Subtitle; !strings.Contains(got, "large download") {
+		t.Errorf("subtitle = %q, want it to warn about the download size", got)
 	}
 }
 
@@ -37,7 +45,7 @@ func TestChangelogSummaryCountsEveryCategory(t *testing.T) {
 }
 
 func TestChangelogSummaryOfAnIdenticalPairSaysSo(t *testing.T) {
-	if got := ChangelogSummary(sbom.Result{}); !strings.Contains(got, "No package differences") {
+	if got := ChangelogSummary(sbom.Result{}); !strings.Contains(got, "No programs change") {
 		t.Errorf("summary = %q", got)
 	}
 }

@@ -147,10 +147,10 @@ func TestLoadFromPathReadsResolvedCandidate(t *testing.T) {
 
 	exeConfig := filepath.Join(exeDir, "config.yml")
 	cwdConfig := filepath.Join(cwd, "config.yml")
-	if err := os.WriteFile(exeConfig, []byte("system_page:\n  health_group:\n    app_id: exe\n"), 0o600); err != nil {
+	if err := os.WriteFile(exeConfig, []byte("agents_page:\n  agents_group:\n    app_id: exe\n"), 0o600); err != nil {
 		t.Fatalf("writing executable-relative config: %v", err)
 	}
-	if err := os.WriteFile(cwdConfig, []byte("system_page:\n  health_group:\n    app_id: cwd\n"), 0o600); err != nil {
+	if err := os.WriteFile(cwdConfig, []byte("agents_page:\n  agents_group:\n    app_id: cwd\n"), 0o600); err != nil {
 		t.Fatalf("writing cwd config: %v", err)
 	}
 
@@ -158,7 +158,7 @@ func TestLoadFromPathReadsResolvedCandidate(t *testing.T) {
 	if loadErr != nil {
 		t.Fatalf("loadFromPath executable-relative candidate: %v", loadErr)
 	}
-	if got := cfg.SystemPage["health_group"].AppID; got != "exe" {
+	if got := cfg.AgentsPage["agents_group"].AppID; got != "exe" {
 		t.Fatalf("executable-relative AppID = %q, want %q", got, "exe")
 	}
 
@@ -169,7 +169,7 @@ func TestLoadFromPathReadsResolvedCandidate(t *testing.T) {
 	if loadErr != nil {
 		t.Fatalf("loadFromPath cwd candidate: %v", loadErr)
 	}
-	if got := cfg.SystemPage["health_group"].AppID; got != "cwd" {
+	if got := cfg.AgentsPage["agents_group"].AppID; got != "cwd" {
 		t.Fatalf("cwd AppID = %q, want %q", got, "cwd")
 	}
 }

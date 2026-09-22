@@ -47,8 +47,24 @@ type Transition struct {
 
 var items = []Item{
 	{
+		Name:       "updates",
+		Title:      "Updates",
+		Icon:       "software-update-available-symbolic",
+		ConfigPage: "updates_page",
+		Groups: []string{
+			"update_all_group",
+			"bootc_updates_group",
+			"sysupdate_updates_group",
+			"flatpak_updates_group",
+			"brew_updates_group",
+			"brew_trust_group",
+			"channel_group",
+			"bootc_status_group",
+		},
+	},
+	{
 		Name:       "applications",
-		Title:      "Applications",
+		Title:      "Apps",
 		Icon:       "application-x-executable-symbolic",
 		ConfigPage: "applications_page",
 		Groups: []string{
@@ -61,43 +77,11 @@ var items = []Item{
 		},
 	},
 	{
-		Name:       "maintenance",
-		Title:      "Maintenance",
-		Icon:       "emblem-system-symbolic",
-		ConfigPage: "maintenance_page",
-		Groups: []string{
-			"maintenance_cleanup_group",
-			"maintenance_brew_group",
-			"maintenance_flatpak_group",
-			"maintenance_optimization_group",
-			"reset_group",
-		},
-	},
-	{
-		Name:       "updates",
-		Title:      "Updates",
-		Icon:       "software-update-available-symbolic",
-		ConfigPage: "updates_page",
-		Groups: []string{
-			"update_all_group",
-			"bootc_updates_group",
-			"sysupdate_updates_group",
-			"flatpak_updates_group",
-			"brew_updates_group",
-			"brew_trust_group",
-		},
-	},
-	{
-		Name:       "system",
-		Title:      "System",
-		Icon:       "computer-symbolic",
-		ConfigPage: "system_page",
-		Groups: []string{
-			"system_info_group",
-			"bootc_status_group",
-			"channel_group",
-			"health_group",
-		},
+		Name:       "agents",
+		Title:      "Agents",
+		Icon:       "starred-symbolic",
+		ConfigPage: "agents_page",
+		Groups:     []string{"agents_group"},
 	},
 	{
 		Name:       "features",
@@ -108,7 +92,6 @@ var items = []Item{
 			"features_group",
 			"dx_group",
 			"gaming_group",
-			"ai_group",
 			"troubleshooting_group",
 		},
 	},
@@ -121,6 +104,17 @@ var items = []Item{
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
+		},
+	},
+	{
+		Name:       "maintenance",
+		Title:      "Maintenance",
+		Icon:       "emblem-system-symbolic",
+		ConfigPage: "maintenance_page",
+		Groups: []string{
+			"maintenance_cleanup_group",
+			"maintenance_freespace_group",
+			"reset_group",
 		},
 	},
 	{

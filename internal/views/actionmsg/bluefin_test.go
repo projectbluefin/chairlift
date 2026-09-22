@@ -220,19 +220,24 @@ func TestPowerwashConfirmsOnlyWhenSomethingWasRemoved(t *testing.T) {
 	}
 }
 
-func TestAIStackNamesTheAccelerator(t *testing.T) {
-	decision := AIStack(false, true, "CUDA")
+// The accelerator's name used to be interpolated into every one of these
+// toasts. It is gone on purpose: "started on the ROCm stack" told a person
+// nothing they could act on, and the guard here is that it stays gone.
+func TestAIStackEnableConfirmsWithoutNamingTheComputeStack(t *testing.T) {
+	decision := AIStack(false, true)
 
 	if !decision.Confirm {
 		t.Error("a live enable did not confirm the switch")
 	}
-	if !strings.Contains(decision.Toast, "CUDA") {
-		t.Errorf("toast does not name the accelerator: %q", decision.Toast)
+	for _, jargon := range []string{"CUDA", "ROCm", "oneAPI", "stack"} {
+		if strings.Contains(decision.Toast, jargon) {
+			t.Errorf("toast leaks %q: %q", jargon, decision.Toast)
+		}
 	}
 }
 
 func TestAIStackDryRunDoesNotConfirm(t *testing.T) {
-	decision := AIStack(true, true, "ROCm")
+	decision := AIStack(true, true)
 
 	if decision.Confirm {
 		t.Error("a dry-run enable confirmed the switch")
@@ -243,12 +248,38 @@ func TestAIStackDryRunDoesNotConfirm(t *testing.T) {
 }
 
 func TestAIStackDisableConfirms(t *testing.T) {
-	decision := AIStack(false, false, "CPU")
+	decision := AIStack(false, false)
 
 	if !decision.Confirm {
 		t.Error("a live disable did not confirm the switch")
 	}
 	if !strings.Contains(decision.Toast, "stopped") {
-		t.Errorf("toast does not say the server stopped: %q", decision.Toast)
+		t.Errorf("toast does not say the model stopped: %q", decision.Toast)
+	}
+}
+
+// Under dry-run ublue.runHelper short-circuits before pkexec, so nothing was
+// downloaded or installed and the row must not adopt its finished subtitle.
+func TestUpdateNowNeverConfirmsUnderDryRun(t *testing.T) {
+	decision := UpdateNow(true)
+
+	if decision.Confirm {
+		t.Error("UpdateNow(true).Confirm = true, want false")
+	}
+	if !strings.Contains(decision.Toast, "DRY-RUN") {
+		t.Errorf("toast is not marked as a preview: %q", decision.Toast)
+	}
+}
+
+// The live run updates apps and packages immediately but only stages a new
+// system version, so the toast offers a restart instead of demanding one.
+func TestUpdateNowLiveToastMakesTheRestartConditional(t *testing.T) {
+	decision := UpdateNow(false)
+
+	if !decision.Confirm {
+		t.Error("UpdateNow(false).Confirm = false, want true")
+	}
+	if !strings.Contains(decision.Toast, "Restart if") {
+		t.Errorf("toast does not make the restart conditional: %q", decision.Toast)
 	}
 }

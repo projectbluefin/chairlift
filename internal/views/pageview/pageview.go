@@ -2,14 +2,8 @@
 package pageview
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"strings"
 	"time"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 )
@@ -32,13 +26,6 @@ type Command struct {
 	Args []string
 }
 
-// OSReleaseEntry is one parsed field from an os-release file.
-type OSReleaseEntry struct {
-	Title string
-	Value string
-	IsURL bool
-}
-
 // FlatpakApplication returns the row text for an installed Flatpak application.
 func FlatpakApplication(name, applicationID, version string) Row {
 	subtitle := applicationID
@@ -57,69 +44,68 @@ func HomebrewPackage(name, version string, pinned bool) Row {
 	return Row{Title: name, Subtitle: subtitle}
 }
 
-// BrewBundle returns the row text for a configured Homebrew bundle.
-func BrewBundle(name, description, path string) Row {
-	subtitle := path
-	if description != "" {
-		subtitle = fmt.Sprintf("%s — %s", description, path)
-	}
-	return Row{Title: name, Subtitle: subtitle}
-}
-
 // SearchResult returns the row text for a Homebrew search result.
 func SearchResult(name, kind string) Row {
 	return Row{Title: name, Subtitle: kind}
 }
 
-// UntrustedTap returns the row text for an untrusted Homebrew tap.
+// UntrustedTap returns the row text for a software source whose updates
+// Homebrew has paused. The source is named, because a person cannot decide
+// to trust something they cannot identify, and the count stands in for the
+// package list: what matters is how much is stuck, not its taxonomy.
 func UntrustedTap(name string, formulae, casks []string) Row {
-	packages := make([]string, 0, len(formulae)+len(casks))
-	for _, names := range [][]string{formulae, casks} {
-		for _, packageName := range names {
-			if i := strings.LastIndex(packageName, "/"); i >= 0 {
-				packageName = packageName[i+1:]
-			}
-			packages = append(packages, packageName)
-		}
+	count := len(formulae) + len(casks)
+	row := Row{Title: name, Subtitle: "Updates are paused for software from this source"}
+	switch {
+	case count == 1:
+		row.Subtitle = "Updates are paused for 1 program you installed from this source"
+	case count > 1:
+		row.Subtitle = fmt.Sprintf("Updates are paused for %d programs you installed from this source", count)
 	}
-	return Row{
-		Title:    name,
-		Subtitle: fmt.Sprintf("%d installed: %s", len(packages), strings.Join(packages, ", ")),
-	}
+	return row
 }
 
-// FlatpakUpdate returns the row text for an available Flatpak update.
+// FlatpakUpdate returns the row text for an app with an update waiting. The
+// title is the app's name, never its identifier: the identifier is how the
+// system files the app, not how a person recognizes it, so it appears only
+// when there is no name to show.
 func FlatpakUpdate(name, applicationID, newVersion, installation string) Row {
-	subtitle := applicationID
+	title := name
+	if title == "" {
+		title = applicationID
+	}
+	subtitle := "An update is available"
 	if newVersion != "" {
-		subtitle = fmt.Sprintf("%s → %s", applicationID, newVersion)
+		subtitle = fmt.Sprintf("Updates to version %s", newVersion)
 	}
 	if installation == "user" {
-		subtitle += " (user)"
+		return Row{Title: title, Subtitle: subtitle + ", for you only"}
 	}
-	return Row{Title: name, Subtitle: subtitle}
+	return Row{Title: title, Subtitle: subtitle + ", for everyone who uses this computer"}
 }
 
-// BootcUpdateSubtitle returns the system-update expander subtitle.
+// BootcUpdateSubtitle returns the system-update expander subtitle. A
+// downloaded update changes nothing until the machine restarts, so the
+// waiting state says when it takes effect rather than that it is "staged".
 func BootcUpdateSubtitle(staged bool, version string) string {
 	if !staged {
-		return "Check for and download the latest system image"
+		return "Check whether a newer version of the operating system is available"
 	}
 	if version == "" {
-		return "Update staged — restart to apply"
+		return "A new version is ready and installs when you restart"
 	}
-	return fmt.Sprintf("Update %s staged — restart to apply", version)
+	return fmt.Sprintf("Version %s is ready and installs when you restart", version)
 }
 
-// BootcStageResultSubtitle returns the subtitle after a staging action completes.
-func BootcStageResultSubtitle(staged bool, version, lastMessage string) string {
+// BootcStageResultSubtitle returns the subtitle after a staging action
+// completes. Nothing waiting after a run that reported no error means the
+// system is current. The script's own last line is deliberately not shown:
+// it is written for a terminal and can name paths a person has no use for.
+func BootcStageResultSubtitle(staged bool, version string) string {
 	if staged {
 		return BootcUpdateSubtitle(true, version)
 	}
-	if lastMessage != "" {
-		return lastMessage
-	}
-	return "System is up to date"
+	return "Your system is up to date"
 }
 
 // StagingLogSubtitle returns the "Details" expander subtitle for a staging
@@ -145,26 +131,26 @@ func StagingLogSubtitle(shown, total int) string {
 
 // SysupdateUpdateSubtitle returns the native A/B system-update expander
 // subtitle from the /run/snosi state-file presentation (the outcome grammar
-// is internal/sysupdate.Status.Presentation's): "staged" shows the pending
-// version, "current" shows the last check time, "failed" prompts a retry,
-// and anything else — including the fresh-boot no-files state — is the
-// neutral idle prompt.
+// is internal/sysupdate.Status.Presentation's): "staged" names the version
+// that is waiting, "current" shows the last check time, "failed" prompts a
+// retry, and anything else — including the fresh-boot no-files state — is
+// the neutral idle prompt.
 func SysupdateUpdateSubtitle(outcome, version, checkedAt string) string {
 	switch outcome {
 	case "staged":
 		if version == "" {
-			return "Update staged — restart to apply"
+			return "A new version is ready and installs when you restart"
 		}
-		return fmt.Sprintf("Update %s staged — restart to apply", version)
+		return fmt.Sprintf("Version %s is ready and installs when you restart", version)
 	case "current":
 		if formatted := formatCheckedAt(checkedAt); formatted != "" {
-			return fmt.Sprintf("System is up to date (checked %s)", formatted)
+			return fmt.Sprintf("Your system is up to date, last checked at %s", formatted)
 		}
-		return "System is up to date"
+		return "Your system is up to date"
 	case "failed":
-		return "Last update check failed — use Check for Updates to retry"
+		return "The last check did not finish. Try checking again."
 	default:
-		return "Check for and download the latest system image"
+		return "Check whether a newer version of the operating system is available"
 	}
 }
 
@@ -179,26 +165,26 @@ func formatCheckedAt(checkedAt string) string {
 }
 
 // SysupdateStageResultSubtitle returns the subtitle after a native A/B
-// staging action completes.
-func SysupdateStageResultSubtitle(staged bool, version, lastMessage string) string {
+// staging action completes. It follows BootcStageResultSubtitle: the
+// stager's own last line is terminal output, not user-facing copy.
+func SysupdateStageResultSubtitle(staged bool, version string) string {
 	if staged {
 		return SysupdateUpdateSubtitle("staged", version, "")
 	}
-	if lastMessage != "" {
-		return lastMessage
-	}
-	return "System is up to date"
+	return "Your system is up to date"
 }
 
-// SysupdateRollbackSubtitle returns the read-only rollback row subtitle.
-// version is the inactive slot's version only when it is older than the
-// running one (internal/sysupdate.RollbackCandidate); a staged-but-newer
-// slot or an empty slot both present as no rollback.
+// SysupdateRollbackSubtitle returns the read-only previous-version row
+// subtitle. version is the inactive slot's version only when it is older
+// than the running one (internal/sysupdate.RollbackCandidate); a
+// staged-but-newer slot or an empty slot both present as no previous
+// version. Returning to it is a boot-menu choice rather than something this
+// application can do, so the row says that instead of naming the slot.
 func SysupdateRollbackSubtitle(version string) string {
 	if version == "" {
-		return "No previous version on disk"
+		return "No previous version is kept on this computer"
 	}
-	return fmt.Sprintf("Version %s is on the inactive slot — choose it in the boot menu at restart to roll back", version)
+	return fmt.Sprintf("Version %s is still installed. To go back to it, choose it in the menu when you restart.", version)
 }
 
 // Feature returns the initial row text for an updex feature.
@@ -215,8 +201,11 @@ func FeatureGroupDescription(count int) string {
 func HelpResources(website, issues, chat string) []HelpResource {
 	candidates := []HelpResource{
 		{Title: "Website", URL: website},
-		{Title: "Report Issues", URL: issues},
-		{Title: "Community Discussions", URL: chat},
+		{Title: "Report a problem", URL: issues},
+		// The third slot's config key is "chat" for backward compatibility,
+		// but it points at documentation — title it for where it goes, not
+		// for the key's name.
+		{Title: "Documentation", URL: chat},
 	}
 	resources := make([]HelpResource, 0, len(candidates))
 	for _, resource := range candidates {
@@ -235,29 +224,58 @@ func MaintenanceCommand(script string, sudo bool) Command {
 	return Command{Name: script}
 }
 
-// ParseOSRelease parses displayable fields from an os-release stream.
-func ParseOSRelease(reader io.Reader) ([]OSReleaseEntry, error) {
-	var entries []OSReleaseEntry
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") || !strings.Contains(line, "=") {
-			continue
-		}
-
-		parts := strings.SplitN(line, "=", 2)
-		key := parts[0]
-		value := strings.Trim(parts[1], "\"'")
-		readableKey := strings.ReplaceAll(key, "_", " ")
-		readableKey = cases.Title(language.English).String(strings.ToLower(readableKey))
-
-		entries = append(entries, OSReleaseEntry{
-			Title: readableKey,
-			Value: value,
-			IsURL: strings.HasSuffix(key, "URL"),
-		})
+// SystemVersionRow returns the compact system-version row: the version a
+// person can quote in a support request or compare against release notes,
+// and whether a newer one is already waiting. The exact identifiers stay
+// behind SystemVersionDetails, because nobody needs a digest to read their
+// own version.
+func SystemVersionRow(version, released, staged string) Row {
+	row := Row{Title: "System version"}
+	date := formatReleaseDate(released)
+	switch {
+	case version != "" && date != "":
+		row.Subtitle = fmt.Sprintf("You are running version %s, released %s", version, date)
+	case version != "":
+		row.Subtitle = fmt.Sprintf("You are running version %s", version)
+	case date != "":
+		row.Subtitle = fmt.Sprintf("You are running the version released %s", date)
+	default:
+		row.Subtitle = "This system's version could not be read"
 	}
-	return entries, scanner.Err()
+	if staged != "" {
+		row.Subtitle = fmt.Sprintf("%s. Version %s is ready and installs when you restart", row.Subtitle, staged)
+	}
+	return row
+}
+
+// SystemVersionDetails returns the rows behind the System version "Details"
+// expander: the identifiers a support request asks for, and the only place
+// they appear. A row is omitted when its value is unknown, so the expander
+// never shows an empty field.
+func SystemVersionDetails(version, released, source, digest string) []Row {
+	candidates := []Row{
+		{Title: "Version", Subtitle: version},
+		{Title: "Released", Subtitle: formatReleaseDate(released)},
+		{Title: "Source", Subtitle: source},
+		{Title: "Build ID", Subtitle: ShortDigest(digest)},
+	}
+	rows := make([]Row, 0, len(candidates))
+	for _, row := range candidates {
+		if row.Subtitle != "" {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+// formatReleaseDate renders an image timestamp as a plain date, or "" when
+// it is absent or unparseable.
+func formatReleaseDate(timestamp string) string {
+	parsed, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return ""
+	}
+	return parsed.Local().Format("2 January 2006")
 }
 
 // ShortDigest returns a compact bootc digest for display.
@@ -268,91 +286,132 @@ func ShortDigest(digest string) string {
 	return digest
 }
 
-// BluefinGroupDescription returns the Bluefin-family group description for a
-// detected variant and running tag — e.g. "Bluefin LTS · lts". An empty tag
-// falls back to the product name alone.
-func BluefinGroupDescription(variantName, tag string) string {
-	if variantName == "" {
-		return "Bluefin-family features"
-	}
-	if tag == "" {
-		return variantName
-	}
-	return fmt.Sprintf("%s · %s", variantName, tag)
-}
-
-// ChannelRow returns the release-channel switch row text. onTesting is the
-// running channel; switchable is false when the running tag has no
-// counterpart to switch to, in which case the subtitle explains the row is
-// inert rather than leaving the user to guess.
-func ChannelRow(onTesting, switchable bool, tag string) Row {
-	row := Row{Title: "Testing Channel"}
+// ChannelRow returns the early-updates switch row text. onTesting is the
+// running channel; switchable is false when this system publishes no
+// counterpart to switch to, in which case the subtitle says the row is inert
+// rather than leaving the user to guess.
+//
+// The subtitle names the two consequences a person cannot discover
+// afterwards: the versions are less tested, and taking one replaces the
+// operating system and needs a restart.
+func ChannelRow(onTesting, switchable bool) Row {
+	row := Row{Title: "Get updates early"}
 	switch {
-	case !switchable && tag != "":
-		row.Subtitle = fmt.Sprintf("This image publishes no testing channel for the %s tag", tag)
 	case !switchable:
-		row.Subtitle = "This image does not publish a testing channel"
+		row.Subtitle = "This system does not offer early updates"
 	case onTesting:
-		row.Subtitle = "Tracking testing — turn off to return to stable, then restart"
+		row.Subtitle = "You get new versions before they are fully tested. Turning this off replaces the operating system with the tested version and needs a restart."
 	default:
-		row.Subtitle = "Track pre-release images — unstable, restart to apply"
+		row.Subtitle = "Get new versions before they are fully tested. They can be unreliable. Replaces the operating system and needs a restart."
 	}
 	return row
 }
 
 // ChannelSwitchResultSubtitle returns the subtitle after a channel switch
-// completes. It never claims the running system changed: bootc stages the
-// new image, so the restart is the part the user still has to do.
+// completes. It never claims the running system changed: the new version is
+// only downloaded, so the restart is the part the user still has to do.
 func ChannelSwitchResultSubtitle(toTesting bool) string {
 	if toTesting {
-		return "Switched to testing — restart to apply"
+		return "You will get updates early — restart to apply"
 	}
-	return "Switched to stable — restart to apply"
+	return "You will get tested updates only — restart to apply"
 }
 
-// DeveloperRow returns the developer-mode switch row text. groups are the
-// developer groups the user currently belongs to.
-func DeveloperRow(active bool, groups []string) Row {
-	row := Row{Title: "Developer Mode"}
+// DeveloperRow returns the developer-tools switch row text. It names the
+// capability, never the supplementary groups that carry it: which groups an
+// account is added to is an implementation detail of how access is granted,
+// where what a person deciding needs is the consequence — an administrator
+// password now, and a new login before anything works.
+func DeveloperRow(active bool) Row {
+	row := Row{Title: "Developer tools"}
 	if active {
-		row.Subtitle = fmt.Sprintf("Active — member of %s", strings.Join(groups, ", "))
+		row.Subtitle = "On. You can run containers and virtual machines, and use USB and serial hardware."
 		return row
 	}
-	row.Subtitle = "Join the container, VM, and serial-device groups"
+	row.Subtitle = "Lets you run containers and virtual machines, and use USB and serial hardware, without asking for permission each time. Needs your administrator password."
 	return row
 }
 
-// DeveloperResultSubtitle returns the subtitle after a developer-mode toggle
-// completes. Group membership is only applied to new sessions, so both
-// outcomes say so rather than implying an immediate effect.
+// DeveloperResultSubtitle returns the subtitle after a developer-tools toggle
+// completes. The change only reaches new login sessions, so both outcomes say
+// so rather than implying an immediate effect.
 func DeveloperResultSubtitle(enabled bool) string {
 	if enabled {
-		return "Developer mode enabled — log out and back in to take effect"
+		return "Turned on — log out and back in for it to take effect."
 	}
-	return "Developer mode disabled — log out and back in to take effect"
+	return "Turned off — log out and back in for it to take effect."
 }
 
-// GamingRow returns the gaming-mode switch row text. summary comes from
-// internal/gaming.State.Summary.
-func GamingRow(summary string) Row {
-	return Row{Title: "Gaming Mode", Subtitle: summary}
+// GamingCheckingSubtitle is the gaming row's subtitle while ChairLift is still
+// finding out what is installed. The switch cannot be used until that answer
+// arrives, so the row has to say why.
+const GamingCheckingSubtitle = "Checking what is installed…"
+
+// GamingUnavailableSubtitle is shown when that check fails. The underlying
+// error names commands and application ids, so it is logged rather than shown.
+const GamingUnavailableSubtitle = "Could not check which gaming apps are installed."
+
+// GamingRow returns the gaming switch row text. ready reports whether the
+// apps gaming needs are all present (internal/gaming.State.Enabled), and
+// installed of total counts the whole set.
+func GamingRow(ready bool, installed, total int) Row {
+	row := Row{Title: "Gaming apps"}
+	switch {
+	case ready && installed >= total:
+		row.Subtitle = "Installed. Steam and everything that goes with it are ready to use."
+	case ready:
+		row.Subtitle = fmt.Sprintf("Installed. %d of %d gaming apps are set up.", installed, total)
+	case installed > 0:
+		row.Subtitle = fmt.Sprintf("Partly set up — %d of %d gaming apps are installed. Turn this on to finish.", installed, total)
+	default:
+		row.Subtitle = "Installs Steam and the tools that make Windows games run. This is a large download."
+	}
+	return row
 }
 
-// GamingResultSubtitle returns the subtitle after a gaming-mode toggle
-// completes. changed is the number of Flatpaks installed or removed, and
-// failed the number that could not be.
-func GamingResultSubtitle(enabled bool, changed, failed int) string {
-	verb := "removed"
+// GamingWorkingSubtitle returns the subtitle shown while the gaming apps are
+// being installed or removed.
+func GamingWorkingSubtitle(enabled bool) string {
 	if enabled {
-		verb = "installed"
+		return "Installing…"
 	}
+	return "Removing…"
+}
+
+// GamingIncludedRow returns the readonly row shown in place of the switch on
+// systems that already ship the gaming apps.
+func GamingIncludedRow() Row {
+	return Row{
+		Title:    "Already set up",
+		Subtitle: "Steam and the tools that go with it came with this system, so there is nothing to turn on here.",
+	}
+}
+
+// GamingResultSubtitle returns the subtitle after a gaming toggle completes.
+// changed is the number of apps installed or removed, and failed the number
+// that could not be.
+func GamingResultSubtitle(enabled bool, changed, failed int) string {
 	if failed > 0 {
-		return fmt.Sprintf("%d component(s) %s, %d failed", changed, verb, failed)
+		if enabled {
+			return fmt.Sprintf("Installed %s, but %d could not be installed.", gamingApps(changed), failed)
+		}
+		return fmt.Sprintf("Removed %s, but %d could not be removed.", gamingApps(changed), failed)
 	}
 	if changed == 0 {
-		return "No components needed changing"
+		return "Nothing needed changing."
 	}
-	return fmt.Sprintf("%d component(s) %s", changed, verb)
+	if enabled {
+		return fmt.Sprintf("Installed %s.", gamingApps(changed))
+	}
+	return fmt.Sprintf("Removed %s.", gamingApps(changed))
+}
+
+// gamingApps counts apps in words a person reads, rather than "component(s)".
+func gamingApps(count int) string {
+	if count == 1 {
+		return "1 gaming app"
+	}
+	return fmt.Sprintf("%d gaming apps", count)
 }
 
 // UpdateAllRow returns the Update All hero row text before a run has started.
@@ -400,33 +459,38 @@ func RestartRow(version string) Row {
 	}
 }
 
-// BootcRollbackRow returns the bootc rollback row text. version and timestamp
-// describe the deployment the host would return to; either may be empty.
+// BootcRollbackRow returns the previous-version row text. version and
+// timestamp describe what the host would return to; either may be empty.
 //
 // It is deliberately a single row naming one destination, not a history
-// browser: `bootc rollback` has exactly one target — the deployment the host
-// already records — so offering a choice would imply a capability the
-// operation does not have.
+// browser: going back has exactly one target — the version the host still
+// keeps — so offering a choice would imply a capability the operation does
+// not have.
 func BootcRollbackRow(version, timestamp string) Row {
-	row := Row{Title: "Roll Back"}
+	row := Row{Title: "Go back to the previous version"}
+	date := formatReleaseDate(timestamp)
 	switch {
 	case version == "" && timestamp == "":
-		row.Subtitle = "No previous system image is available"
+		row.Subtitle = "No previous version is kept on this computer"
+	case version == "" && date == "":
+		// A destination exists; only its date is unreadable. Saying
+		// nothing is kept would be the one wrong answer here.
+		row.Subtitle = "Return to the previous version the next time you restart"
 	case version == "":
-		row.Subtitle = fmt.Sprintf("Return to the image from %s at the next restart", timestamp)
-	case timestamp == "":
-		row.Subtitle = fmt.Sprintf("Return to version %s at the next restart", version)
+		row.Subtitle = fmt.Sprintf("Return to the version from %s the next time you restart", date)
+	case date == "":
+		row.Subtitle = fmt.Sprintf("Return to version %s the next time you restart", version)
 	default:
-		row.Subtitle = fmt.Sprintf("Return to version %s (%s) at the next restart", version, timestamp)
+		row.Subtitle = fmt.Sprintf("Return to version %s, released %s, the next time you restart", version, date)
 	}
 	return row
 }
 
-// BootcRollbackResultSubtitle returns the subtitle after a rollback is
-// staged. Rolling back only changes which deployment boots next, so it never
-// claims the running system changed.
+// BootcRollbackResultSubtitle returns the subtitle after going back is
+// requested. It only changes which version starts next, so it never claims
+// the running system changed.
 func BootcRollbackResultSubtitle() string {
-	return "Rolled back — restart to boot the previous image"
+	return "The previous version starts the next time you restart"
 }
 
 // AutomaticUpdatesRow returns the automatic-background-updates switch row
@@ -453,47 +517,98 @@ func AutomaticUpdatesResultSubtitle(enabled bool) string {
 	return "Automatic updates are off — use Update All when you want to update"
 }
 
+// UpdateNowRow returns the on-demand full-update row text. This is the
+// host's own integrated updater rather than ChairLift's per-source
+// sequencer, so the row never names the tool: what a person needs to know is
+// what it touches, that it asks for a password, and that it may pull a lot
+// of data before it finishes.
+func UpdateNowRow() Row {
+	return Row{
+		Title:    "Update everything now",
+		Subtitle: "Update the system, apps and packages in one run — asks for an administrator password and can be a large download",
+	}
+}
+
+// UpdateNowRunningSubtitle is shown while the update is in flight. It
+// promises no duration, because the same run can take a minute or an hour
+// depending on what is out of date and how fast the connection is.
+func UpdateNowRunningSubtitle() string {
+	return "Updating — this can take a while, and you can keep using this computer"
+}
+
+// UpdateNowResultSubtitle is shown after a live run. It offers a restart
+// rather than demanding one: a new system version only takes effect at the
+// next start, but apps and packages are already updated.
+func UpdateNowResultSubtitle() string {
+	return "Update finished — restart to start using a new system version, if one was installed"
+}
+
 // GraphicsDriverRow returns the graphics-driver row text. current is the
-// driver flavour of the running image, hardware describes the detected GPU,
-// and recommended is non-empty only when a switch is both possible and
-// worthwhile.
+// driver the running system carries, hardware describes the detected
+// graphics chip, and recommended is non-empty only when a switch is both
+// possible and worthwhile.
 //
 // The row is informational whenever there is nothing to offer, which is the
-// common case: an AMD or Intel machine is already correct, and an LTS host
-// has no driver image published at all.
+// common case. When there is something to offer it names the hardware the
+// driver is for and the restart it costs, and promises nothing about speed:
+// what a driver switch buys varies per machine, and this row cannot know.
 func GraphicsDriverRow(current, hardware, recommended string) Row {
-	row := Row{Title: "Graphics Driver"}
+	row := Row{Title: "Graphics driver"}
 	switch {
+	case recommended != "" && hardware != "":
+		row.Subtitle = fmt.Sprintf("Switch to the %s driver for your %s graphics. Replaces the operating system and needs a restart.", recommended, hardware)
 	case recommended != "":
-		row.Subtitle = fmt.Sprintf("%s detected — switch to the %s image, then restart", hardware, recommended)
+		row.Subtitle = fmt.Sprintf("Switch to the %s driver. Replaces the operating system and needs a restart.", recommended)
 	case current != "" && hardware != "":
-		row.Subtitle = fmt.Sprintf("%s · running the %s image", hardware, current)
+		row.Subtitle = fmt.Sprintf("Using the %s driver for your %s graphics", current, hardware)
 	case hardware != "":
-		row.Subtitle = hardware
+		row.Subtitle = fmt.Sprintf("Your graphics hardware: %s", hardware)
 	default:
-		row.Subtitle = "No graphics hardware detected"
+		row.Subtitle = "No graphics hardware was detected"
 	}
 	return row
 }
 
 // GraphicsDriverResultSubtitle returns the subtitle after a driver switch is
-// staged. Like a channel switch it only stages the image, so it never claims
-// the running system changed.
+// requested. Like a channel switch it only downloads the new version, so it
+// never claims the running system changed.
 func GraphicsDriverResultSubtitle(driver string) string {
-	return fmt.Sprintf("Switched to the %s image — restart to apply", driver)
+	return fmt.Sprintf("Switched to the %s driver — restart to apply", driver)
 }
 
-// PowerwashRow returns the Powerwash row text. summary comes from
-// internal/powerwash.Summarize's Headline once a run has completed, or "" if
-// no run has happened yet.
-func PowerwashRow(summary string) Row {
-	if summary == "" {
-		return Row{
-			Title:    "Remove Everything I Installed",
-			Subtitle: "Removes every user Flatpak and Distrobox container. Does not touch the system image.",
-		}
+// Recovery rows. These two are not maintenance — they are what a person
+// reaches for when something has already gone wrong — so their text has one
+// job: state the real scope. Neither removes "everything", and a row that
+// implied it would be talking someone out of the action that would have
+// helped them, or into one that does more than they wanted.
+//
+// The confirmation dialogs below are the authority on irreversibility and
+// stay as they are; these rows are the resting text of the page.
+
+// PowerwashRow returns the Powerwash row text.
+func PowerwashRow() Row {
+	return Row{
+		Title:    "Remove apps you installed",
+		Subtitle: "Removes the apps you installed and your development containers. Your files, settings, and the system itself stay as they are.",
 	}
-	return Row{Title: "Remove Everything I Installed", Subtitle: summary}
+}
+
+// PowerwashResultSubtitle returns the subtitle after a Powerwash run,
+// counted from internal/powerwash.Summarize. A step whose tool is not
+// installed had nothing to remove, which is neither success nor failure, so
+// a run that skipped everything must not read as though it cleared the
+// machine.
+func PowerwashResultSubtitle(succeeded, failed int) string {
+	switch {
+	case failed > 0 && succeeded > 0:
+		return "Some apps could not be removed — see the system logs for details"
+	case failed > 0:
+		return "Nothing could be removed — see the system logs for details"
+	case succeeded > 0:
+		return "Removed the apps you installed"
+	default:
+		return "There was nothing installed to remove"
+	}
 }
 
 // PowerwashConfirmation returns the title and body of the confirmation
@@ -509,8 +624,8 @@ func PowerwashConfirmation() (title, body string) {
 // FactoryResetRow returns the Factory Reset row text.
 func FactoryResetRow() Row {
 	return Row{
-		Title:    "Factory Reset",
-		Subtitle: "Replaces the system with a fresh install of the current image, discarding local changes",
+		Title:    "Reset the system",
+		Subtitle: "Reinstalls the system from scratch and discards changes made to it. Your files and apps stay where they are. Takes effect after a restart.",
 	}
 }
 

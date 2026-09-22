@@ -186,11 +186,11 @@ func TestParseSearchOutputFiltersHeadersAndBlankLines(t *testing.T) {
 }
 
 func TestPackageKindDisplayName(t *testing.T) {
-	if got := Formula.DisplayName(); got != "Formula" {
-		t.Errorf("Formula.DisplayName() = %q, want Formula", got)
+	if got := Formula.DisplayName(); got != "Command line tool" {
+		t.Errorf("Formula.DisplayName() = %q, want %q", got, "Command line tool")
 	}
-	if got := Cask.DisplayName(); got != "Cask" {
-		t.Errorf("Cask.DisplayName() = %q, want Cask", got)
+	if got := Cask.DisplayName(); got != "Application" {
+		t.Errorf("Cask.DisplayName() = %q, want %q", got, "Application")
 	}
 }
 

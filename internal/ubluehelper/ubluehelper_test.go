@@ -1,6 +1,7 @@
 package ubluehelper
 
 import (
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -79,6 +80,16 @@ func TestParseInvocationAcceptsSupportedShapes(t *testing.T) {
 			name: "factory reset dry run",
 			args: []string{"factory-reset", "--dry-run"},
 			want: Invocation{Command: CommandFactoryReset, DryRun: true},
+		},
+		{
+			name: "update now",
+			args: []string{"update-now"},
+			want: Invocation{Command: CommandUpdateNow},
+		},
+		{
+			name: "update now dry run",
+			args: []string{"update-now", "--dry-run"},
+			want: Invocation{Command: CommandUpdateNow, DryRun: true},
 		},
 		{
 			name: "automatic updates on",
@@ -179,6 +190,12 @@ func TestParseInvocationRejectsEveryUnsupportedShape(t *testing.T) {
 		{name: "rollback with extra argument", args: []string{"rollback", "--dry-run", "1"}},
 		{name: "factory reset with a flag", args: []string{"factory-reset", "--force"}},
 		{name: "factory reset with extra argument", args: []string{"factory-reset", "--dry-run", "now"}},
+		// The update takes no argument at all: the updater's path and its
+		// entire argv are fixed in the helper.
+		{name: "update now with a flag", args: []string{"update-now", "--force"}},
+		{name: "update now with a module", args: []string{"update-now", "flatpak"}},
+		{name: "update now with a config path", args: []string{"update-now", "/tmp/evil.json"}},
+		{name: "update now with extra argument", args: []string{"update-now", "--dry-run", "now"}},
 		// A caller-supplied unit would let an authenticated user enable or
 		// mask any systemd unit on the machine.
 		{name: "auto updates with a unit name", args: []string{"auto-updates-enable", "sshd.service"}},
@@ -219,6 +236,7 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 		CommandAutoDisable,
 		CommandDriverSwitch,
 		CommandFactoryReset,
+		CommandUpdateNow,
 	}
 	if !reflect.DeepEqual(commands, want) {
 		t.Fatalf("SupportedCommands() = %v, want %v", commands, want)
@@ -357,6 +375,56 @@ func TestFactoryResetArgsAreFixedAndCarryNoTarget(t *testing.T) {
 	}
 	if !found {
 		t.Error("FactoryResetArgs() does not carry --experimental")
+	}
+}
+
+// The on-demand update is the one command that runs a program other than
+// bootc or systemctl, so both halves of what it executes — the program and
+// its arguments — must be fixed here. A single caller-supplied component
+// would turn one authenticated action into arbitrary root execution, which
+// is exactly what PolicyKit's argv1 selection cannot catch.
+func TestUpdateNowExecutesAFixedProgramWithNoArguments(t *testing.T) {
+	args := UpdateNowArgs()
+	if len(args) != 0 {
+		t.Fatalf("UpdateNowArgs() = %v, want no arguments at all", args)
+	}
+
+	if !filepath.IsAbs(UpdaterPath) {
+		t.Errorf("UpdaterPath = %q, want an absolute path", UpdaterPath)
+	}
+	// --apply would restart the machine at the end of a run the user did not
+	// ask to end their session; restarting is its own confirmed action.
+	if strings.Contains(strings.Join(args, " "), "--apply") {
+		t.Error("UpdateNowArgs() carries --apply; restarting is a separate action")
+	}
+}
+
+// A command that parses but reaches no dispatch arm exits 0 having done
+// nothing, which is indistinguishable from a privileged action that worked.
+// The advertised set is what cmd/chairlift-ublue-helper switches on, so the
+// update must be in it rather than parseable alone.
+func TestUpdateNowIsAnAdvertisedCommand(t *testing.T) {
+	found := false
+	for _, command := range SupportedCommands() {
+		if command == CommandUpdateNow {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("SupportedCommands() = %v, missing %q", SupportedCommands(), CommandUpdateNow)
+	}
+
+	invocation, err := ParseInvocation([]string{CommandUpdateNow})
+	if err != nil {
+		t.Fatalf("ParseInvocation(%q) error = %v, want nil", CommandUpdateNow, err)
+	}
+	if invocation.Command != CommandUpdateNow {
+		t.Errorf("parsed command = %q, want %q", invocation.Command, CommandUpdateNow)
+	}
+	// The optional channel table decides an image reference; this command
+	// resolves no reference, so a malformed table must not block it.
+	if invocation.UsesChannelTable() {
+		t.Error("update-now claims to need the channel table; its argv names no image")
 	}
 }
 
