@@ -6,6 +6,7 @@ package actionstate
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 )
 
@@ -35,6 +36,41 @@ func (g *RefreshGate) Begin() uint64 {
 // IsCurrent reports whether generation still belongs to the newest request.
 func (g *RefreshGate) IsCurrent(generation uint64) bool {
 	return generation != 0 && generation == g.generation.Load()
+}
+
+// Serializer runs one resource's asynchronous work strictly one attempt at a
+// time and lets a superseded attempt drop out.
+//
+// A Gate is the wrong tool where every request carries a distinct value the
+// user picked: refusing the second click would silently discard the newer
+// choice. A Serializer instead queues each request behind the one in flight
+// and, once it reaches the front, skips it when a newer request has already
+// been claimed — so the last value the user chose is the one that is both
+// persisted and applied, and no two attempts for the same resource overlap.
+//
+// Its zero value is ready for use.
+type Serializer struct {
+	mu         sync.Mutex
+	generation atomic.Uint64
+}
+
+// Claim records a new request and returns its generation. Call it on the
+// thread that read the user's choice, before starting the worker.
+func (s *Serializer) Claim() uint64 {
+	return s.generation.Add(1)
+}
+
+// Run waits for any earlier work on this resource to finish, then runs fn
+// unless a newer generation has been claimed in the meantime. It reports
+// whether fn ran.
+func (s *Serializer) Run(generation uint64, fn func()) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if generation == 0 || generation != s.generation.Load() {
+		return false
+	}
+	fn()
+	return true
 }
 
 // TryStart moves an idle action to running. It reports false while the action

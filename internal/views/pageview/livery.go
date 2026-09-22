@@ -244,6 +244,18 @@ func LiveryRotationRow(systemInstall bool) Row {
 	}
 }
 
+// LiveryRotationAvailable reports whether a section's rotation switch may be
+// operated.
+//
+// A custom mark is not part of a cycle: livery.Rotate refuses to advance a
+// section pinned to the user's own SVG, so leaving the switch sensitive for
+// that selection would offer a setting that does nothing. sectionAvailable
+// carries the section's own conditions — the master switch, and for the panel
+// whether the extension is installed.
+func LiveryRotationAvailable(sectionAvailable bool, selectionID string) bool {
+	return sectionAvailable && selectionID != livery.CustomID
+}
+
 // LiveryCustomRow shows which file a custom selection points at.
 func LiveryCustomRow(path string) Row {
 	if path == "" {

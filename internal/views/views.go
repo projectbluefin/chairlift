@@ -97,11 +97,33 @@ type UserHome struct {
 	liveryDockRotate      *gtk.Switch
 	// liveryDockVisible is the result set currently drawn, so the list's one
 	// row-activated handler can map a row index back to a project without
-	// allocating a callback per row. See refreshLiveryProjectResults.
+	// allocating a callback per row. See refreshLiveryPickerRows.
 	liveryDockVisible []pageview.LiveryProjectResult
 	liveryState       livery.State
 	liverySuppress    bool
 	liveryLoaded      bool
+	// One gate per section serializes that section's toggle work. Every
+	// section's Apply and Clear touch the same mark file, so an off-then-on
+	// flip without a gate can land Clear after Apply and leave the switch
+	// showing enabled with no mark installed. See liveryToggleGate.
+	liveryAppGridGate actionstate.Gate
+	liveryPanelGate   actionstate.Gate
+	liveryDockGate    actionstate.Gate
+	// One serializer per section orders that section's selection work. A
+	// selection carries a value, so refusing the second pick would discard
+	// it; these queue instead, and a pick that a newer one has already
+	// overtaken drops out. Without them two rapid picks can interleave and
+	// leave the persisted id naming one mark while the installed icon is
+	// another. See liverySelectionWork.
+	liveryAppGridWork actionstate.Serializer
+	liveryPanelWork   actionstate.Serializer
+	liveryDockWork    actionstate.Serializer
+	// One serializer covers rotation for both sections, because both rotate
+	// switches write the same systemd user unit. Without it a rapid on/off
+	// flip can land RemoveRotation before the earlier InstallRotation and
+	// leave the unit's presence disagreeing with the persisted keys. See
+	// onLiveryRotateToggled.
+	liveryRotateWork actionstate.Serializer
 
 	// Automatic background updates
 	autoUpdatesRow    *adw.ActionRow

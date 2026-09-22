@@ -78,10 +78,15 @@ func httpFetch(ctx context.Context, url string) ([]byte, error) {
 	}
 	// The marks are single-path SVGs of a few kilobytes. The cap keeps a
 	// misrouted response — a captive-portal login page, say — from being
-	// read into memory in full.
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	// read into memory in full. Reading maxMarkBytes+1 ensures truncated
+	// payloads are caught and rejected rather than silently accepted.
+	const maxMarkBytes = 256 * 1024
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxMarkBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("livery: reading mark: %w", err)
+	}
+	if len(data) > maxMarkBytes {
+		return nil, fmt.Errorf("livery: mark exceeds %d byte limit", maxMarkBytes)
 	}
 	return data, nil
 }
@@ -114,12 +119,12 @@ var fillPattern = regexp.MustCompile(`fill="[^"]*"`)
 
 // FetchSimpleIcon retrieves a brand mark and prepares it for installation.
 //
-// tint empty means the mark is recolored to currentColor, which is what a
-// symbolic surface needs: the app-grid button is drawn by the shell at the
-// theme's foreground color, so a brand-colored fill would be overridden
-// anyway on some themes and clash on others. A hex tint is applied verbatim
-// for a surface that draws in color.
-func FetchSimpleIcon(ctx context.Context, slug, tint string) ([]byte, error) {
+// The mark is recolored to currentColor, which is what a symbolic surface
+// needs: the app-grid button is drawn by the shell at the theme's foreground
+// color, so a brand-colored fill would be overridden anyway on some themes
+// and clash on others. No caller wants a fixed color, so none can ask for
+// one; a surface that draws in color can add the parameter back then.
+func FetchSimpleIcon(ctx context.Context, slug string) ([]byte, error) {
 	slug = NormalizeSlug(slug)
 	if !ValidSlug(slug) {
 		return nil, fmt.Errorf("livery: %q is not a valid Simple Icons name", slug)
@@ -132,7 +137,7 @@ func FetchSimpleIcon(ctx context.Context, slug, tint string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return prepareSimpleIcon(data, tint)
+	return prepareSimpleIcon(data)
 }
 
 // prepareSimpleIcon validates and recolors a fetched mark.
@@ -141,14 +146,11 @@ func FetchSimpleIcon(ctx context.Context, slug, tint string) ([]byte, error) {
 // server, and so a body that is not an SVG — the CDN answering with an error
 // page, a proxy interposing — is reported as such rather than installed as
 // an icon that renders blank.
-func prepareSimpleIcon(data []byte, tint string) ([]byte, error) {
+func prepareSimpleIcon(data []byte) ([]byte, error) {
 	if !looksLikeSVG(data) {
 		return nil, errors.New("livery: simpleicons.org did not return an SVG")
 	}
-	fill := "currentColor"
-	if tint != "" {
-		fill = tint
-	}
+	const fill = "currentColor"
 	svg := string(data)
 	if fillPattern.MatchString(svg) {
 		svg = fillPattern.ReplaceAllString(svg, `fill="`+fill+`"`)

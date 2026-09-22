@@ -2,6 +2,8 @@ package livery
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -140,9 +142,6 @@ type Source struct {
 	// Value is a catalog id, an absolute file path, or a Simple Icons slug,
 	// according to Kind.
 	Value string
-	// Tint is the fill applied to a Simple Icons mark. Empty keeps the
-	// brand color the service serves.
-	Tint string
 }
 
 // runCommand is an injection seam for external calls, so the install and
@@ -338,7 +337,7 @@ func resolve(ctx context.Context, src Source) ([]byte, error) {
 		}
 		return data, nil
 	case FromSimpleIcons:
-		return FetchSimpleIcon(ctx, src.Value, src.Tint)
+		return FetchSimpleIcon(ctx, src.Value)
 	case FromCNCF:
 		return FetchCNCFIcon(ctx, src.Value)
 	default:
@@ -376,9 +375,13 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 	if src.Kind != FromCatalog {
 		// A custom file or a fetched brand has no catalog id, but the panel
 		// still needs a stable name that differs from the previous
-		// selection's. The source value supplies the variation.
-		selectionID = CustomID
+		// selection's. Custom files append a short content hash so replacing
+		// one custom file with another triggers the extension's changed signal;
+		// brands and CNCF marks use their unique slug/value.
 		switch src.Kind {
+		case FromFile:
+			sum := sha256.Sum256(data)
+			selectionID = CustomID + "-" + hex.EncodeToString(sum[:4])
 		case FromSimpleIcons:
 			selectionID = "brand-" + src.Value
 		case FromCNCF:
@@ -479,7 +482,25 @@ func ClearPanelSettings(ctx context.Context, savedIcon, savedMode string) error 
 	if err := restoreKey(ctx, extensionIconKey, savedIcon); err != nil {
 		return err
 	}
-	return restoreKey(ctx, extensionModeKey, savedMode)
+	if err := restoreKey(ctx, extensionModeKey, savedMode); err != nil {
+		return err
+	}
+	return ForgetPanelOverrides(ctx)
+}
+
+// ForgetPanelOverrides drops the recorded capture once it has been restored.
+//
+// The capture is only taken when both saved keys are empty, so leaving the
+// restored values behind would make every later enable reuse the very first
+// capture: enable, disable, set a panel icon by hand, enable, disable would
+// restore the pre-first-enable value and silently discard the newer manual
+// choice. Clearing the keys after a successful restore makes each enable
+// capture the user layer as it stands at that moment.
+func ForgetPanelOverrides(ctx context.Context) error {
+	if err := SetString(ctx, KeySavedPanelIcon, ""); err != nil {
+		return err
+	}
+	return SetString(ctx, KeySavedPanelMode, "")
 }
 
 func restoreKey(ctx context.Context, key, saved string) error {
@@ -538,12 +559,63 @@ func isMissingSchema(out string) bool {
 	return strings.Contains(out, "No such schema") || strings.Contains(out, "not installed")
 }
 
-// unquote strips the surrounding single quotes GVariant string output carries.
+// unquote converts the GVariant string literal `gsettings` prints back into
+// its value.
+//
+// GVariant does not always quote with apostrophes. A value that itself
+// contains one is printed double-quoted instead — `gsettings` reports
+// /home/o'brien/mark.svg as "/home/o'brien/mark.svg" — and either form
+// carries backslash escapes for control characters and for the delimiter.
+// Stripping only surrounding single quotes therefore handed the free-form
+// *-custom-path keys back with their quotes and escapes still attached, and
+// Apply then failed on a path that does not exist with a misleading error.
+// Values that are not quoted at all — booleans, numbers — pass through.
 func unquote(s string) string {
-	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
-		return s[1 : len(s)-1]
+	if len(s) < 2 {
+		return s
 	}
-	return s
+	quote := s[0]
+	if quote != '\'' && quote != '"' {
+		return s
+	}
+	if s[len(s)-1] != quote {
+		return s
+	}
+	body := s[1 : len(s)-1]
+	if !strings.ContainsRune(body, '\\') {
+		return body
+	}
+	var b strings.Builder
+	b.Grow(len(body))
+	for i := 0; i < len(body); i++ {
+		c := body[i]
+		if c != '\\' || i+1 >= len(body) {
+			b.WriteByte(c)
+			continue
+		}
+		i++
+		switch body[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 't':
+			b.WriteByte('\t')
+		case 'r':
+			b.WriteByte('\r')
+		case 'a':
+			b.WriteByte('\a')
+		case 'b':
+			b.WriteByte('\b')
+		case 'f':
+			b.WriteByte('\f')
+		case 'v':
+			b.WriteByte('\v')
+		default:
+			// Covers \\, \' and \" — and anything else is passed through as
+			// the literal character, which is what GVariant's own parser does.
+			b.WriteByte(body[i])
+		}
+	}
+	return b.String()
 }
 
 // dconfUserValue returns the key's value in the *user* layer only, empty when
@@ -618,6 +690,9 @@ func CapturePanelOverrides(ctx context.Context) (icon, mode string, ok bool) {
 	}
 	if strings.HasPrefix(icon, PanelIconPrefix) {
 		icon = ""
+		if mode == extensionIconMode {
+			mode = ""
+		}
 	}
 	return icon, mode, true
 }

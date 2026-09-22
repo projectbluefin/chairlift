@@ -201,7 +201,7 @@ func newSwitchRow(presentation pageview.Row, onToggle func(bool)) (*adw.ActionRo
 	sw := toggle
 	stateSet := func(_ gtk.Switch, state bool) bool {
 		onToggle(state)
-		return true
+		return false
 	}
 	toggle.ConnectStateSet(&stateSet)
 
@@ -297,7 +297,8 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable bool) {
 		uh.liveryPanelMarkRow.SetSensitive(panelAvailable && state.PanelEnabled)
 	}
 	if uh.liveryPanelRotate != nil {
-		uh.liveryPanelRotate.SetSensitive(panelAvailable && state.PanelEnabled)
+		uh.liveryPanelRotate.SetSensitive(
+			pageview.LiveryRotationAvailable(panelAvailable && state.PanelEnabled, uh.liveryState.PanelID))
 		uh.liveryPanelRotate.SetActive(state.PanelRotate)
 	}
 
@@ -314,7 +315,8 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable bool) {
 		uh.liveryDockSelectedRow.SetSensitive(state.DockEnabled)
 	}
 	if uh.liveryDockRotate != nil {
-		uh.liveryDockRotate.SetSensitive(state.DockEnabled)
+		uh.liveryDockRotate.SetSensitive(
+			pageview.LiveryRotationAvailable(state.DockEnabled, uh.liveryState.DockID))
 		uh.liveryDockRotate.SetActive(state.DockRotate)
 	}
 }
@@ -464,11 +466,14 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 		selected = uh.liveryState.DockID
 		results = pageview.LiveryProjectResults(query, selected)
 	}
-	// The escape hatch rides along with the catalog rather than sitting as a
-	// fourth row in every section.
-	results = append(results, pageview.LiveryCustomResult(selected == livery.CustomID))
-	uh.liveryDockVisible = results
+	// A query that matches nothing says so. The custom escape hatch is
+	// appended below, after this check, because appending it first would make
+	// the result set never empty — the no-results row could not be reached,
+	// and a search for nonsense would answer with "Custom SVG…" alone. The
+	// visible slice is cleared with it, since row-activated maps a row index
+	// into that slice and this branch draws a row that is not in it.
 	if len(results) == 0 {
+		uh.liveryDockVisible = nil
 		empty := adw.NewActionRow()
 		empty.SetUseMarkup(false)
 		row := pageview.LiveryNoResultsRow(query)
@@ -477,6 +482,11 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 		list.Append(&empty.Widget)
 		return
 	}
+
+	// The escape hatch rides along with the catalog rather than sitting as a
+	// fourth row in every section.
+	results = append(results, pageview.LiveryCustomResult(selected == livery.CustomID))
+	uh.liveryDockVisible = results
 
 	for _, result := range results {
 		row := adw.NewActionRow()

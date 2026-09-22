@@ -239,12 +239,15 @@ install: build
 # a Go toolchain still builds; the application reports its schema missing and
 # the Livery page degrades, which is the same path an uninstalled build takes.
 schemas:
-	@command -v glib-compile-schemas >/dev/null 2>&1 || { echo "==> skipping schemas: glib-compile-schemas not installed"; exit 0; }
-	@mkdir -p $(BUILD_DIR)/schemas
-	@cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/
-	@cp data/io.projectbluefin.chairlift.updates.gschema.xml $(BUILD_DIR)/schemas/
-	@glib-compile-schemas $(BUILD_DIR)/schemas
-	@echo "==> schemas compiled to $(BUILD_DIR)/schemas"
+	@if ! command -v glib-compile-schemas >/dev/null 2>&1; then \
+		echo "==> skipping schemas: glib-compile-schemas not installed"; \
+	else \
+		mkdir -p $(BUILD_DIR)/schemas && \
+		cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/ && \
+		cp data/io.projectbluefin.chairlift.updates.gschema.xml $(BUILD_DIR)/schemas/ && \
+		glib-compile-schemas $(BUILD_DIR)/schemas && \
+		echo "==> schemas compiled to $(BUILD_DIR)/schemas"; \
+	fi
 
 # Uninstall the application
 uninstall:

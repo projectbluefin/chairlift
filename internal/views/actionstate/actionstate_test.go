@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestPackageUpgradeEnumeratesEveryOutcome(t *testing.T) {
@@ -332,5 +333,71 @@ func TestRefreshGateConcurrentRequestsHaveOneCurrentGeneration(t *testing.T) {
 	}
 	if current != 1 {
 		t.Fatalf("current generation count = %d, want exactly 1", current)
+	}
+}
+
+// TestSerializerRunsOneAttemptAtATime pins the property the Livery selection
+// handlers need: two picks cannot have their persist-and-apply interleave.
+func TestSerializerRunsOneAttemptAtATime(t *testing.T) {
+	var s Serializer
+	var mu sync.Mutex
+	var inFlight, overlaps int
+
+	var wg sync.WaitGroup
+	for range 8 {
+		generation := s.Claim()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.Run(generation, func() {
+				mu.Lock()
+				inFlight++
+				if inFlight > 1 {
+					overlaps++
+				}
+				mu.Unlock()
+				time.Sleep(time.Millisecond)
+				mu.Lock()
+				inFlight--
+				mu.Unlock()
+			})
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if overlaps != 0 {
+		t.Errorf("serialized work overlapped %d times", overlaps)
+	}
+}
+
+// TestSerializerSkipsASupersededAttempt is what keeps the persisted selection
+// and the installed mark naming the same thing: an overtaken pick does no
+// work, because the newer pick writes both halves itself.
+func TestSerializerSkipsASupersededAttempt(t *testing.T) {
+	var s Serializer
+
+	stale := s.Claim()
+	newest := s.Claim()
+
+	if s.Run(stale, func() { t.Error("a superseded attempt ran") }) {
+		t.Error("Run reported that a superseded attempt ran")
+	}
+	var latestRan bool
+	if !s.Run(newest, func() { latestRan = true }) {
+		t.Error("Run refused the newest attempt")
+	}
+	if !latestRan {
+		t.Error("the newest attempt did not run")
+	}
+}
+
+// TestSerializerRefusesAnUnclaimedGeneration keeps a zero value — the shape a
+// caller that forgot to Claim would pass — from running work out of order.
+func TestSerializerRefusesAnUnclaimedGeneration(t *testing.T) {
+	var s Serializer
+	if s.Run(0, func() { t.Error("unclaimed work ran") }) {
+		t.Error("Run accepted generation 0")
 	}
 }

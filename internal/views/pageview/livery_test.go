@@ -95,3 +95,18 @@ func TestRotationRowWarnsForASourceBuild(t *testing.T) {
 		t.Errorf("source-build subtitle %q does not explain the dependency", source)
 	}
 }
+
+// TestRotationIsUnavailableForACustomMark holds the UI half of the rotation
+// guard: livery.Rotate refuses to advance a section pinned to the user's own
+// SVG, so the switch that arms it must not stay operable for that selection.
+func TestRotationIsUnavailableForACustomMark(t *testing.T) {
+	if LiveryRotationAvailable(true, livery.CustomID) {
+		t.Error("rotation offered for a custom mark, which livery.Rotate will not advance")
+	}
+	if !LiveryRotationAvailable(true, livery.DefaultID) {
+		t.Error("rotation refused for a catalog mark in an available section")
+	}
+	if LiveryRotationAvailable(false, livery.DefaultID) {
+		t.Error("rotation offered for a section that is not available")
+	}
+}
