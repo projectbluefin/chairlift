@@ -34,22 +34,24 @@ package actionmsg
 
 import "fmt"
 
-// BundleDump returns the toast text for a Homebrew Brewfile dump. When dryRun
-// is true, homebrew.BundleDump itself never runs `brew bundle dump` (bundle
-// is one of homebrew's stateChangingCommands, skipped entirely under dry-run)
-// so path is never actually written, and the toast must say so rather than
-// unconditionally claiming the file was saved.
-func BundleDump(dryRun bool, path string) string {
+// BundleDump returns the toast text for exporting the installed package list.
+// When dryRun is true, homebrew.BundleDump itself never runs `brew bundle
+// dump` (bundle is one of homebrew's stateChangingCommands, skipped entirely
+// under dry-run) so nothing is written, and the toast must say so rather than
+// unconditionally claiming the list was saved. The destination is not named:
+// it is a fixed file in the person's home folder, and a path in a toast is
+// something they can neither act on nor change.
+func BundleDump(dryRun bool) string {
 	if dryRun {
-		return fmt.Sprintf("[DRY-RUN] Preview: Brewfile would be saved to %s — no changes made", path)
+		return "[DRY-RUN] Preview: your package list would be exported to your home folder — no changes made"
 	}
-	return fmt.Sprintf("Brewfile saved to %s", path)
+	return "Package list exported to your home folder"
 }
 
-// BundleInstallDecision is the result of installing one configured Brew
-// bundle. Complete is false under dry-run because homebrew.BundleInstall
-// skipped the command; the row must become clickable again instead of
-// claiming the bundle is installed.
+// BundleInstallDecision is the result of installing one app collection.
+// Complete is false under dry-run because homebrew.BundleInstall skipped the
+// command; the row must become clickable again instead of claiming the
+// collection is installed.
 type BundleInstallDecision struct {
 	Complete bool
 	Toast    string
@@ -57,31 +59,19 @@ type BundleInstallDecision struct {
 
 // BundleInstall decides whether a successful wrapper return represents a real
 // completed install and supplies the corresponding toast. The caller must use
-// Complete for both its InstallGate transition and button state.
+// Complete for both its InstallGate transition and button state. name is the
+// collection's display title, never its identifier on disk.
 func BundleInstall(dryRun bool, name string) BundleInstallDecision {
 	if dryRun {
 		return BundleInstallDecision{
 			Complete: false,
-			Toast:    fmt.Sprintf("[DRY-RUN] Preview: Brew bundle %s would be installed — no changes made", name),
+			Toast:    fmt.Sprintf("[DRY-RUN] Preview: %s would be installed — no changes made", name),
 		}
 	}
 	return BundleInstallDecision{
 		Complete: true,
-		Toast:    fmt.Sprintf("Brew bundle %s installed", name),
+		Toast:    fmt.Sprintf("%s installed", name),
 	}
-}
-
-// Cleanup returns the toast text for a Homebrew or Flatpak cleanup action.
-// The wrapper package (internal/homebrew or internal/flatpak) already skips
-// the state-changing cleanup command under dry-run and returns a mock
-// message as output — this function only selects which string to show: the
-// wrapper's mock output when dryRun is true, or a fixed completion message
-// when the cleanup actually ran.
-func Cleanup(dryRun bool, tool string, output string) string {
-	if dryRun {
-		return output
-	}
-	return fmt.Sprintf("%s cleanup completed", tool)
 }
 
 // Install returns the toast text for a Homebrew package install. The
@@ -475,6 +465,28 @@ func FactoryReset(dryRun bool) FeatureToggleDecision {
 	}
 }
 
+// UpdateNow decides whether the on-demand full-update row should adopt its
+// finished subtitle, and what toast to show. Confirm is exactly !dryRun, for
+// the same reason as Rollback: under dry-run ublue.runHelper short-circuits
+// before pkexec, so nothing was downloaded or installed.
+//
+// The live toast names a restart as conditional rather than required. This
+// run updates apps and packages immediately but only stages a new system
+// version, and telling every user to restart after an update that changed
+// two Flatpaks would train them to ignore the one time it matters.
+func UpdateNow(dryRun bool) FeatureToggleDecision {
+	if dryRun {
+		return FeatureToggleDecision{
+			Confirm: false,
+			Toast:   "[DRY-RUN] Preview: would update the system, apps and packages — no changes made",
+		}
+	}
+	return FeatureToggleDecision{
+		Confirm: true,
+		Toast:   "Update finished. Restart if a new system version was installed.",
+	}
+}
+
 // Powerwash decides whether the Powerwash row should show its outcome, and
 // what toast to display. Unlike Rollback and FactoryReset, Powerwash runs
 // two independent, unprivileged steps that can each succeed, fail, or be
@@ -539,29 +551,30 @@ func DriverSwitch(dryRun bool, driver string) FeatureToggleDecision {
 	}
 }
 
-// AIStack returns the toast for the local-AI switch. accelerator names the
-// compute stack the hardware selected, so the toast confirms which image was
-// installed rather than just that something was.
-func AIStack(dryRun bool, enable bool, accelerator string) FeatureToggleDecision {
+// AIStack returns the toast for the local-AI switch. It no longer names the
+// compute stack the hardware selected: "CUDA" confirmed nothing a person
+// could act on, and the selected stack is on the Agents page's Details row
+// for anyone it does mean something to.
+func AIStack(dryRun bool, enable bool) FeatureToggleDecision {
 	if dryRun {
-		verb := "removed"
+		verb := "stopped"
 		if enable {
-			verb = "installed"
+			verb = "started"
 		}
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   fmt.Sprintf("[DRY-RUN] Preview: the %s AI stack would be %s — no changes made", accelerator, verb),
+			Toast:   fmt.Sprintf("[DRY-RUN] Preview: local AI would be %s — no changes made", verb),
 		}
 	}
 
 	if enable {
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("Local AI server started on the %s stack — the first model download runs in the background", accelerator),
+			Toast:   "Local AI is starting. The first model download runs in the background.",
 		}
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   "Local AI server stopped and removed",
+		Toast:   "Local AI stopped. The model it downloaded was kept.",
 	}
 }

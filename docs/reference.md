@@ -48,19 +48,6 @@ order below. Help is always retained.
 
 ## Pages and Groups
 
-### System Page (`system_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| OS Info | `system_info_group` | Displays fields from `/etc/os-release` |
-| bootc Status | `bootc_status_group` | bootc deployment status (booted/staged/rollback image, version, digest); shown only when `bootc.IsBootcBootedCached()` reports a booted deployment |
-| Release Channel | `channel_group` | Release channel and graphics-driver switching; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Health | `health_group` | Launches a system monitor application |
-
-`health_group` supports:
-
-- `app_id` — Flatpak application ID to launch (default: `io.missioncenter.MissionCenter`)
-
 ### Updates Page (`updates_page`)
 
 | Group | Key | Description |
@@ -71,8 +58,12 @@ order below. Help is always retained.
 | Flatpak Updates | `flatpak_updates_group` | Pending Flatpak application updates |
 | Homebrew Updates | `brew_updates_group` | Outdated Homebrew packages with upgrade buttons |
 | Untrusted Taps | `brew_trust_group` | Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); trust a tap to resume its updates. Shown only when there is something to trust |
+| Release Channel | `channel_group` | Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present |
+| System Version | `bootc_status_group` | Compact booted/staged version readout, with image reference and build identifiers behind a details row; shown only when `bootc.IsBootcBootedCached()` reports a booted deployment |
 
-### Applications Page (`applications_page`)
+### Apps Page (`applications_page`)
+
+Its sidebar title is "Apps"; `applications_page` is the configuration key.
 
 | Group | Key | Description |
 |-------|-----|-------------|
@@ -81,7 +72,7 @@ order below. Help is always retained.
 | System Flatpak | `flatpak_system_group` | System-wide Flatpak applications with uninstall actions |
 | Homebrew | `brew_group` | Installed Homebrew formulae/casks with uninstall actions and formula pin/unpin actions |
 | Brew Search | `brew_search_group` | Search and install Homebrew formulae and casks with an explicit package-type confirmation |
-| Brew Bundles | `brew_bundles_group` | Install packages from Brewfile bundles |
+| App Collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions |
 
 `applications_installed_group` supports:
 
@@ -93,22 +84,68 @@ Those operations belong to the configured external manager.
 `brew_bundles_group` supports:
 
 - `bundles_paths` — directories searched, without recursion, for
-  `*.Brewfile` bundles (default: `["/usr/share/snow/bundles"]`). Missing
-  directories are ignored; other path errors are shown while readable
-  directories still contribute rows. Exact duplicate paths are collapsed,
-  but same-named Brewfiles in different directories remain separate and show
-  their absolute paths. The first-line `#` comment, when present, is displayed
-  as the bundle description.
+  `*.Brewfile` collections (default: `["/usr/share/ublue-os/homebrew"]`).
+  Missing directories are ignored; other path errors are reported to the log
+  while readable directories still contribute rows. Exact duplicate paths are
+  collapsed, but same-named files in different directories remain separate.
+
+Row text is resolved by `internal/views/bundleview`'s `Describe`, not taken
+from the file: the collections Bluefin ships have tooling identifiers (`cli`,
+`cncf`, `system-flatpaks`) and headings or provenance notes for comments, so
+both the displayed name and the description come from a curated table. An
+identifier that table does not know is humanized (`k8s-tools` → "K8s tools"),
+and its leading `#` comment is used as the description only when it reads as
+a human sentence rather than a heading or packaging jargon. Each row also
+states how many apps and tools the definition installs, counting entry lines
+other than `tap`.
+
+### Agents Page (`agents_page`)
+
+| Group | Key | Description |
+|-------|-----|-------------|
+| Local AI | `agents_group` | A language model served from a rootless container in the invoking user's own account. Crosses no privilege boundary, so it has no `pkexec` route. Where Podman is absent the row stays visible with its switch disabled, because the missing piece is named in the row's Details |
+
+`agents_group` supports:
+
+- `ai_images` — map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
+- `ai_model` — model reference to serve (default: `ollama://qwen2.5:7b`)
+
+### Features Page (`features_page`)
+
+| Group | Key | Description |
+|-------|-----|-------------|
+| Features | `features_group` | Toggle system features managed by updex |
+| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; shown only when Homebrew is present |
+
+Feature operations (enable, disable, update) require administrator
+authentication through PolicyKit and are performed by the fixed
+`/usr/bin/chairlift-updex-helper` binary. ChairLift installs no passwordless
+authorization rule.
+
+### Livery Page (`livery_page`)
+
+| Group | Key | Description |
+|-------|-----|-------------|
+| App Grid Livery | `livery_app_grid_group` | The Show Applications mark, fetched from simpleicons.org by brand name; set once, never rotated |
+| Foundational Livery | `livery_foundation_group` | The top-bar menu mark, optionally advancing at each login; needs the Custom Command Menu GNOME extension |
+| Dock Livery | `livery_dock_group` | The Files application icon, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; changes Files everywhere GNOME draws it |
+
+Selections persist in the `io.projectbluefin.chairlift.livery` GSettings
+schema, one of the two ChairLift ships (the other,
+`io.projectbluefin.chairlift.updates`, holds the user update preferences). A
+source build has no installed schema — run `make schemas` and export the
+`GSETTINGS_SCHEMA_DIR` it prints, or the page reports its settings
+unavailable.
 
 ### Maintenance Page (`maintenance_page`)
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Cleanup | `maintenance_cleanup_group` | Custom cleanup scripts (disabled by default) |
-| Homebrew Cleanup | `maintenance_brew_group` | `brew cleanup` (remove old versions and cache) |
-| Flatpak Cleanup | `maintenance_flatpak_group` | `flatpak uninstall --unused` (remove unused runtimes) |
-| Optimization | `maintenance_optimization_group` | System optimization (placeholder) |
-| Reset | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`); irreversible actions disabled by default |
+| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the cleanup phase of an Update All run, so cleanup cannot be on in one place and off in the other |
+| Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
+| Recovery | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`); irreversible actions disabled by default |
 
 `maintenance_cleanup_group` supports:
 
@@ -129,39 +166,6 @@ Each action has:
 | `script` | Absolute path to the script. Required when `sudo` is `true`. |
 | `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The check covers the effective configuration: an untrusted file may not enable a group whose actions include a privileged one, including a privileged action inherited from the built-in defaults. |
 
-### Features Page (`features_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Local AI | `ai_group` | Runs a language model in a rootless container on detected hardware; shown when Podman is present |
-| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; shown only when Homebrew is present |
-
-`ai_group` supports:
-
-- `ai_images` — map pinning container images per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
-- `ai_model` — model reference to serve (default: `ollama://qwen2.5:7b`)
-
-Feature operations (enable, disable, update) require administrator
-authentication through PolicyKit and are performed by the fixed
-`/usr/bin/chairlift-updex-helper` binary. ChairLift installs no passwordless
-authorization rule.
-
-### Livery Page (`livery_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| App Grid Livery | `livery_app_grid_group` | The Show Applications mark, fetched from simpleicons.org by brand name; set once, never rotated |
-| Foundational Livery | `livery_foundation_group` | The top-bar menu mark, optionally advancing at each login; needs the Custom Command Menu GNOME extension |
-| Dock Livery | `livery_dock_group` | The Files application icon, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; changes Files everywhere GNOME draws it |
-
-Selections persist in ChairLift's only GSettings schema,
-`io.projectbluefin.chairlift.livery`. A source build has no installed schema —
-run `make schemas` and export the `GSETTINGS_SCHEMA_DIR` it prints, or the page
-reports its settings unavailable.
-
 ### Help Page (`help_page`)
 
 | Group | Key | Description |
@@ -172,9 +176,9 @@ reports its settings unavailable.
 
 | Field | Description |
 |-------|-------------|
-| `website` | Project website URL |
-| `issues` | Issue tracker URL |
-| `chat` | Community chat or discussions URL |
+| `website` | Project website URL (default: `https://projectbluefin.io`) |
+| `issues` | Issue tracker URL (default: `https://github.com/projectbluefin/dakota/issues`) |
+| `chat` | Community documentation or chat URL (default: `https://docs.projectbluefin.io/`) |
 
 ## Example
 
@@ -198,7 +202,7 @@ updates_page:
     enabled: false
 
 maintenance_page:
-  maintenance_brew_group:
+  maintenance_freespace_group:
     enabled: false
 
 features_page:

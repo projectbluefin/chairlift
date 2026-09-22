@@ -2,7 +2,7 @@
     <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg" width="128">
     <h1>Control Center</h1>
     <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a> and <a href="https://github.com/frostyard/snosi">Snow Linux</a></p>
-    <p>Manage your Homebrew packages, monitor system health, and maintain your system with ease.</p>
+    <p>Manage your Homebrew packages, keep the whole system up to date, and maintain your computer with ease.</p>
     <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b> — see <a href="docs/adr/0012-ship-as-control-center-keep-chairlift-code-name.md">ADR-0012</a>.</sub></p>
 </div>
 
@@ -10,7 +10,7 @@
 
 ## Screenshots
 
-![Control Center Applications page](docs/screenshots/1-applications.png)
+![Control Center Updates page](docs/screenshots/1-updates.png)
 
 **[See every screen in the walkthrough →](docs/walkthrough.md)** — each feature
 shown in the real application, captured by `make screenshots`.
@@ -26,13 +26,16 @@ shown in the real application, captured by `make screenshots`.
 - **Search & Install**: Search formulae and casks, confirm the selected package
   type, and install with loading, error, refresh, and dry-run states
 - **Update & Upgrade**: Keep Homebrew up-to-date and upgrade outdated packages individually
-- **Curated Bundles**: Install pre-configured package bundles for common use cases
+- **App Collections**: Install a curated set of apps and tools in one step
 - **Tap Trust Management**: Homebrew 6's per-tap trust model hides packages installed from untrusted taps; Control Center detects them and lets you trust a tap (and resume its updates) with one click, without requiring root
 
-### 🏥 System Health Monitoring
+### 🤖 Agents
 
-- **System Performance**: Quick access to Mission Center for detailed system monitoring
-- **Health Overview**: Check system diagnostics and health status
+- **Local AI**: one switch runs a language model on this computer, served
+  from a rootless container in your own account. The image is chosen from the
+  graphics hardware that is actually present — NVIDIA, AMD, Intel, or none —
+  so every host gets a working answer. Nothing is layered onto the system
+  image and nothing needs administrator authentication
 
 ### 🖥️ Bluefin, Bluefin LTS & Dakota
 
@@ -89,11 +92,18 @@ fails does not stop the others.
 ### 🔧 Updates & Maintenance
 
 - **System Updates**: On bootc-based systems, download and stage the next OS image update (applied on restart) and view booted/staged/rollback deployment status; on native A/B (systemd-sysupdate) installs, stage the next image the same way and see the previous version available for boot-menu rollback
+- **Update Now**: on hosts carrying the integrated updater, one row runs a
+  full system update immediately instead of waiting for the background timer
 - **Homebrew Updates**: Check for and install package updates; actions show
   progress, reject repeated clicks, and refresh the outdated rows and sidebar
   badge after successful live operations
 - **Outdated Packages**: View and upgrade packages that have newer versions available
-- **System Maintenance**: Keep your system running smoothly
+- **Free Up Space**: one button removes cached downloads and supporting
+  software nothing uses any more, leaving your apps, files, and containers
+  alone. It reports what each step actually did, and shows a reclaimed figure
+  only when the measurement is trustworthy
+- **Recovery**: Powerwash and Factory Reset, both irreversible, both
+  confirmed, and both disabled until an administrator opts in
 
 ---
 
@@ -110,6 +120,13 @@ Choose the package format for your distribution:
 | Debian/Ubuntu | `projectbluefin-chairlift_<version>_<arch>.deb` (`amd64` or `arm64`) | `sudo apt install ./<downloaded-filename>` |
 | Fedora/RHEL | `projectbluefin-chairlift-<version>-1.<arch>.rpm` (`x86_64` or `aarch64`) | `sudo dnf install ./<downloaded-filename>` |
 | Alpine | `projectbluefin-chairlift_<version>_<arch>.apk` (`x86_64` or `aarch64`) | `sudo apk add --allow-untrusted ./<downloaded-filename>` |
+
+`<version>` in those filenames is **not** spelled the way the About dialog
+spells it. Releases are tagged on a calendar scheme, `vYY.MM.N`, and the
+leading zero in the month is deliberate — but deb/rpm/apk versions must be
+semver, which normalises `26.09.0` to `26.9.0`. So the About dialog reads
+`26.09.0-alpha.1` while the package file is named `26.9.0-alpha.1`. They are
+the same release.
 
 For a normal system installation, download the full `projectbluefin-chairlift`
 package. It includes the GUI, both privileged helpers
@@ -179,9 +196,9 @@ retain a successful authorization briefly. The updex helper accepts only
 <stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
 [--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
-`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
-[--dry-run]`. Both helpers reject every other argument shape inside the
-privileged process.
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
+[--dry-run]`, and `update-now [--dry-run]`. Both helpers reject every other
+argument shape inside the privileged process.
 
 Both paths install package-maintainer configuration defaults at
 `/usr/share/chairlift/config.yml`. They never create or overwrite the
@@ -242,7 +259,8 @@ Other useful targets: `make dev` (CGO-enabled build with `-race` for development
 - `bootc` and the snow `/usr/libexec/bootc-update-stage` script (optional; enables staged system updates on bootc installs)
 - The snow `/usr/libexec/snosi-sysupdate-stage` script and `/usr/lib/snosi/native-ab` marker (optional; enables staged system updates on native A/B installs)
 - `updex` features configured on the system (optional; toggled via the Features page)
-- Mission Center (optional, for system performance monitoring)
+- Podman (optional; runs the Agents page's local model container)
+- `/usr/bin/uupd` (optional; the on-demand full-system update and the automatic-updates switch)
 
 ---
 
@@ -256,16 +274,22 @@ chairlift
 
 ### Main Sections
 
-1. **Applications**: Manage installed Homebrew packages, search for formulae
-   and casks, install curated bundles, and launch the configured external
-   Flatpak manager
-2. **Maintenance**: System cleanup and maintenance tools (Homebrew, Flatpak, custom scripts)
-3. **Updates**: Stage bootc or native A/B system updates, manage Homebrew updates and outdated packages, apply Flatpak updates, and trust Homebrew taps
-4. **System**: Monitor deployment, health, and performance information
-5. **Features**: Enable, disable, and update configured system features
-6. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
+1. **Updates**: Update everything in one action or per provider — stage bootc
+   or native A/B system updates, apply Flatpak updates, manage Homebrew
+   updates and outdated packages, trust Homebrew taps, read the system
+   version, and switch release channel or graphics-driver variant
+2. **Apps**: Manage installed Homebrew packages, search for formulae and
+   casks, install app collections, and launch the configured external Flatpak
+   manager
+3. **Agents**: Run a language model on this computer
+4. **Features**: Enable, disable, and update configured system features, plus
+   Developer Mode, Gaming Mode, and Enhanced Troubleshooting
+5. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
    and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
    project's artwork, optionally advancing at each login
+6. **Maintenance**: Free up space, run administrator-configured maintenance
+   scripts, and — where an administrator has opted in — Powerwash or Factory
+   Reset
 7. **Help**: Documentation and support resources
 
 ### Keyboard Shortcuts
@@ -283,9 +307,9 @@ sidebar row and page title.
 
 ### Managing Packages
 
-- **Browse Installed**: Navigate to Applications → Brew Packages to see all installed formulae and casks
+- **Browse Installed**: Navigate to Apps → Brew Packages to see all installed formulae and casks
 - **Search**: Use the search box to find packages by name or keyword
-- **Install**: Click the install button next to search results or bundle items
+- **Install**: Click the install button next to search results or collection rows
 - **Pin/Unpin**: Use the formula row's Pin or Unpin action and confirm the change
 - **Remove**: Use an installed formula or cask row's Uninstall action and
   confirm the removal
@@ -296,16 +320,20 @@ but delegates discovery and installation of new Flatpaks to the external
 manager configured by
 `applications_page.applications_installed_group.app_id` (Bazaar by default).
 
-### Bundle Installation
+### App Collections
 
-The Applications page discovers curated `*.Brewfile` bundles from every
-directory configured in `applications_page.brew_bundles_group.bundles_paths`
-(`/usr/share/snow/bundles` by default). Each bundle row shows its source path
-and an Install action; a leading comment in the Brewfile becomes its
-description. Missing directories are harmless, while unreadable configured
-paths are reported without hiding bundles found elsewhere. Repeated clicks
-cannot start overlapping installs, and `--dry-run` shows a preview without
-leaving the row marked as installed.
+The Apps page discovers curated `*.Brewfile` collections from every directory
+configured in `applications_page.brew_bundles_group.bundles_paths`
+(`/usr/share/ublue-os/homebrew` by default). Each row is named and described
+from a curated table rather than from the file, because the shipped
+collections are identified on disk by tooling names such as `cli` and
+`system-flatpaks`; a collection that table does not know gets a readable form
+of its identifier, and its leading `#` comment only when that comment reads
+as a human sentence. Every row states how many apps and tools it installs.
+Missing directories are harmless, while unreadable configured paths are
+logged without hiding collections found elsewhere. Repeated clicks cannot
+start overlapping installs, and `--dry-run` shows a preview without leaving
+the row marked as installed.
 
 ---
 
@@ -318,7 +346,7 @@ Control Center is highly configurable and can be adapted for different Linux dis
 While Control Center was designed for Snow Linux, it can be easily customized for other distributions by:
 
 - **Disabling Snow-specific features**: Hide Homebrew package management if your distribution doesn't use it
-- **Customizing system tools**: Configure which applications to launch for system monitoring, Flatpak management, etc.
+- **Customizing system tools**: Configure which application to launch for Flatpak discovery and installation
 - **Setting help resources**: Point users to your distribution's documentation, issue tracker, and community chat
 
 ### Configuration File
@@ -388,12 +416,12 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 - **`internal/bootc`**: bootc status reads and pkexec-driven update staging via the snow `bootc-update-stage` script
 - **`internal/sysupdate`**: native A/B (systemd-sysupdate) status reads from the `/run/snosi` state files, rollback-candidate discovery from partition labels, and pkexec-driven update staging via the snow `snosi-sysupdate-stage` script
 - **`internal/views`**: GTK4/Adwaita UI — async operations dispatched via `sgtk.RunOnMainThread`, toast notifications for user feedback
-- **`internal/views/pageview`**: pure-Go row text, page status, os-release parsing, help-link ordering, and maintenance-command selection shared by all six page builders
+- **`internal/views/pageview`**: pure-Go row text, page status, os-release parsing, help-link ordering, and maintenance-command selection shared by all seven page builders
 
 ### Development Environment
 
 - **Build**: `make build` (see [Building from Source](#building-from-source) above)
-- **Containerized dev environment**: `distrobox.ini` describes a Debian Trixie container with the runtime and build dependencies; use `distrobox assemble create --file distrobox.ini` (or your preferred distrobox workflow) to create it, then `distrobox enter chairlift` and run `make build`/`make dev` inside. It mounts `/home/linuxbrew` (for Homebrew integration testing) and `/usr/share/snow/bundles` (for bundle management testing) from the host.
+- **Containerized dev environment**: `distrobox.ini` describes a Debian Trixie container with the runtime and build dependencies; use `distrobox assemble create --file distrobox.ini` (or your preferred distrobox workflow) to create it, then `distrobox enter chairlift` and run `make build`/`make dev` inside. It mounts `/home/linuxbrew` (for Homebrew integration testing) and `/usr/share/ublue-os/homebrew` (for app-collection testing) from the host.
 
 ### Testing
 

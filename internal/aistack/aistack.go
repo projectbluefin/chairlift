@@ -55,6 +55,15 @@ const Port = 8080
 // host including those with no GPU at all; ApplyOverrides replaces it.
 var servedModel = "ollama://llama3.2:3b"
 
+// Model returns the model reference the unit is configured to serve, after
+// any configured override. It exists so the Agents page can show what is
+// actually being served rather than restating the default and being wrong on
+// a site that overrode it. Read-only: nothing about the package's
+// unprivileged posture changes.
+func Model() string {
+	return servedModel
+}
+
 // Stack is the accelerator-specific container definition selected for this
 // machine's hardware.
 type Stack struct {

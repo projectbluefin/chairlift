@@ -30,6 +30,19 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   the mill's deep gate calls this exact target. Codecov's remote project status
   additionally rejects coverage regressions greater than one percentage point;
   it has no fixed coverage target and cannot be mirrored locally.
+- `make bump` — tags the next calendar version and pushes the tag. Releases
+  are `vYY.MM.N[-prerelease]` (`v26.09.0`, and `make bump PRE=alpha.1` for
+  `v26.09.0-alpha.1`), computed by `scripts/next-version.sh` from the tags
+  already in the calendar slot. This replaced svu, which cannot express the
+  scheme. **The version a user reads and the version in a package filename
+  differ, deliberately.** The leading zero in `MM` is what makes the tag read
+  as a date, and GoReleaser's semver parser normalises `26.09.0` to `26.9.0`,
+  so `.goreleaser.yaml` injects `{{ trimprefix .Tag "v" }}` into
+  `main.buildVersion` rather than `{{ .Version }}`: the About dialog shows
+  `26.09.0-alpha.1` while the deb/rpm/apk are named `26.9.0-alpha.1`, because
+  nFPM versions must be semver. Reconciling the two means either losing the
+  date reading from the tag or handing the packagers a version they reject.
+  Do not "fix" either side.
 - `make e2e` — builds both executables, checks the application's real
   `--help` surface, starts the dry-run GTK window under a private D-Bus/Xvfb
   session, stages `make install`, and executes the installed privileged
@@ -154,15 +167,23 @@ An agent must not break these:
   idempotent and exits 0 on an already-current system, so a successful OS
   phase is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-ublue-helper` now carries nine subcommands
+  binary.** `chairlift-ublue-helper` now carries ten subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`), each selected by exactly one PolicyKit action. Every one
-  takes a fixed argv or a word validated against a closed set: no image
-  reference, no username, no systemd unit, no delay, and no rollback or reset
-  target crosses the boundary, because each would be a value an authenticated
-  caller controls. `internal/ubluehelper`'s tests assert this per command, and
-  the e2e boundary test asserts the installed binary rejects each shape.
+  `factory-reset`, `update-now`), each selected by exactly one PolicyKit
+  action. Every one takes a fixed argv or a word validated against a closed
+  set: no image reference, no username, no systemd unit, no delay, no updater
+  path, and no rollback or reset target crosses the boundary, because each
+  would be a value an authenticated caller controls. `update-now` is the
+  extreme case and the shape to copy: it runs the host's integrated updater,
+  so both the program (`ubluehelper.UpdaterPath`) and its argv
+  (`UpdateNowArgs`, deliberately empty) are fixed in the helper, and the GUI
+  sends nothing but the command word. `internal/ubluehelper`'s tests assert
+  this per command, and the e2e boundary test asserts the installed binary
+  rejects each shape. `cmd/chairlift-ublue-helper`'s dispatch carries a
+  `default` arm that exits non-zero: a command the parser accepts and the
+  switch does not handle would otherwise exit 0 having done nothing, which
+  the GUI cannot tell apart from a privileged action that worked.
 - **Every navigable page has a committed screenshot and a walkthrough entry.**
   `make screenshots` regenerates `docs/screenshots/` from the real
   application; `docs/walkthrough.md` is the user-facing tour built from them.
@@ -240,7 +261,15 @@ An agent must not break these:
   transition (visible-row index, visible child, title, and collapsed-layout
   content reveal). The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
-  `internal/window` or `internal/app`.
+  `internal/window` or `internal/app`. The inventory is seven pages, in this
+  order: Updates, Apps, Agents, Features, Livery, Maintenance, Help. Two
+  details in it are easy to get wrong. The sidebar title for
+  `applications_page` is "Apps", not "Applications" — the page name and the
+  title are separate fields and only `internal/navigation` reconciles them.
+  And there is no System page: "about this computer" belongs to GNOME
+  Settings, which every host running this application already ships, so the
+  system-version readout and the release-channel switch live on Updates,
+  beside the thing that changes them.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
@@ -319,7 +348,13 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
-- **The local-AI stack is one switch, and it is unprivileged.** ChairLift
+- **The local-AI stack is one switch on its own page, and it is
+  unprivileged.** It lives on `agents_page`, built by
+  `internal/views/agents_page.go`, as that page's single group
+  (`agents_group`). It used to be a group on the Features page, between
+  developer mode and gaming mode, where it read as one more system
+  preference; what it turns on is a service a person then points other
+  applications at. ChairLift
   ships one runtime (RamaLama) whose per-accelerator image is chosen by
   `internal/gpu`, not bluefinctl's twelve-quadlet vendor catalog — that
   catalog has no answer for an Intel or a GPU-less host. `internal/aistack`
@@ -515,10 +550,26 @@ An agent must not break these:
   `make screenshots` runs the real application with `--dry-run`; artwork is
   still resolved under dry-run so a missing custom file or unknown brand is
   still reported.
+- **Routine cleanup has one key and one owner.** The Maintenance page offers
+  a single "Free up space" action, gated by `maintenance_freespace_group`.
+  That key is `internal/updateproviders.CleanupGroup`, the same constant
+  gating Update All's post-update cleanup phase, so one configuration switch
+  governs both surfaces — a second key would let one surface clean while the
+  other claimed the feature was disabled. The action composes
+  `internal/updateproviders`' typed step inventory; do not reintroduce
+  per-package-manager cleanup buttons, which asked the user to know which
+  package manager owned their wasted disk space. The wording and the
+  result-summarisation rules live in `internal/views/cleanupview`, which
+  exists to enforce one thing: never claim more than happened. An absent
+  provider was skipped, a dismissed authentication cleaned nothing, and a
+  reclaimed-bytes figure appears only when both free-space readings succeeded
+  and the difference clears `MinReportableBytes`.
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are
-  irreversible. Neither may run without the `AdwAlertDialog` confirmation in
+  irreversible. Its group is titled "Recovery" rather than anything
+  resembling cleanup, so a person hunting for disk space does not press it.
+  Neither may run without the `AdwAlertDialog` confirmation in
   `internal/views/reset.go` first — that dialog's title and body come from
   `pageview.PowerwashConfirmation`/`FactoryResetConfirmation`, which is where
   the `--experimental` disclosure for Factory Reset's `bootc install reset`

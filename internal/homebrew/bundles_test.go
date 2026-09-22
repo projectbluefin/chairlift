@@ -48,9 +48,9 @@ func TestAvailableBundlesDiscoversEveryConfiguredDirectory(t *testing.T) {
 	}
 
 	want := []Bundle{
-		{Name: "cli", Description: "Command-line tools", Path: firstCLI},
-		{Name: "cli", Description: "Alternate CLI set", Path: secondCLI},
-		{Name: "fonts", Description: "", Path: fonts},
+		{Name: "cli", Description: "Command-line tools", Path: firstCLI, ItemCount: 1},
+		{Name: "cli", Description: "Alternate CLI set", Path: secondCLI, ItemCount: 1},
+		{Name: "fonts", Description: "", Path: fonts, ItemCount: 1},
 	}
 	if !reflect.DeepEqual(bundles, want) {
 		t.Fatalf("AvailableBundles() = %#v, want %#v", bundles, want)
@@ -59,6 +59,39 @@ func TestAvailableBundlesDiscoversEveryConfiguredDirectory(t *testing.T) {
 		if !filepath.IsAbs(bundle.Path) {
 			t.Errorf("bundle path %q is not absolute", bundle.Path)
 		}
+	}
+}
+
+// TestAvailableBundlesCountsInstallableEntries holds what the collection row's
+// "Includes N apps and tools" is counting: the entries a person ends up with,
+// not taps (which add a source) or comments and blank lines.
+func TestAvailableBundlesCountsInstallableEntries(t *testing.T) {
+	dir := t.TempDir()
+	writeBundleFile(t, dir, "mixed.Brewfile", strings.Join([]string{
+		"# Everything a workstation needs",
+		"tap \"ublue-os/tap\", trusted: true",
+		"",
+		"brew \"bat\"",
+		"brew \"ripgrep\"",
+		"cask \"ublue-os/tap/visual-studio-code-linux\"",
+		"flatpak \"org.gnome.Loupe\"",
+		"# tap \"commented/out\"",
+		"tap \"second/tap\"",
+		"",
+	}, "\n"))
+
+	bundles, err := AvailableBundles([]string{dir})
+	if err != nil {
+		t.Fatalf("AvailableBundles() error = %v, want nil", err)
+	}
+	if len(bundles) != 1 {
+		t.Fatalf("AvailableBundles() = %#v, want exactly one bundle", bundles)
+	}
+	if bundles[0].ItemCount != 4 {
+		t.Errorf("ItemCount = %d, want 4", bundles[0].ItemCount)
+	}
+	if bundles[0].Description != "Everything a workstation needs" {
+		t.Errorf("Description = %q, want the leading comment", bundles[0].Description)
 	}
 }
 

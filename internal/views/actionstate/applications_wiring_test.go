@@ -22,7 +22,6 @@ func TestApplicationsPageWiresTypedSearchInstallState(t *testing.T) {
 	text := string(source)
 
 	for _, required := range []string{
-		`Search for and install Homebrew formulae and casks`,
 		`generation := uh.brewPackagesRefresh.Begin()`,
 		`if !uh.brewPackagesRefresh.IsCurrent(generation)`,
 		`generation := uh.flatpakPackagesRefresh.Begin()`,
@@ -34,7 +33,7 @@ func TestApplicationsPageWiresTypedSearchInstallState(t *testing.T) {
 		`if !gate.TryStart()`,
 		`uh.confirmHomebrewInstall(result, button, gate)`,
 		`dialog.AddResponse("install", "Install")`,
-		`button.SetLabel("Installing...")`,
+		`button.SetLabel("Installing…")`,
 		`homebrew.Install(result.Name, result.Kind == homebrew.Cask)`,
 		`actionstate.PackageInstall(err == nil, dryRun)`,
 		`if decision.RestoreControl`,
@@ -46,7 +45,7 @@ func TestApplicationsPageWiresTypedSearchInstallState(t *testing.T) {
 		`uh.confirmHomebrewUninstall(pkg.Name, homebrew.Formula, uninstallBtn, controls, gate)`,
 		`uh.confirmHomebrewUninstall(pkg.Name, homebrew.Cask, uninstallBtn, controls, gate)`,
 		`dialog.SetResponseAppearance("uninstall", adw.ResponseDestructiveValue)`,
-		`primary.SetLabel("Uninstalling...")`,
+		`primary.SetLabel("Uninstalling…")`,
 		`homebrew.Uninstall(name, kind == homebrew.Cask)`,
 		`actionstate.PackageUninstall(err == nil, dryRun)`,
 		`homebrew.Pin(name)`,

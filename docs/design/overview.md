@@ -21,12 +21,14 @@ internal/window/window.go       Main window: NavigationSplitView, sidebar, conte
 internal/views/                 Page builders and event handlers (one file per page)
         │                       ├── internal/views/actionmsg/     ┐ puregotk-free leaf packages:
         │                       ├── internal/views/actionstate/   │ toast/decision text, async gates,
-        │                       ├── internal/views/badgestate/    │ badge counts, bundle action state,
-        │                       ├── internal/views/bundleview/    │ row bookkeeping, expander status,
+        │                       ├── internal/views/badgestate/    │ badge counts, collection naming and
+        │                       ├── internal/views/bundleview/    │ action state, cleanup wording,
+        │                       ├── internal/views/cleanupview/   │ row bookkeeping, expander status,
         │                       ├── internal/views/trustmsg/      │ Flatpak and feature update-status
-        │                       ├── internal/views/rowset/        │ text and decisions, all unit-tested
-        │                       ├── internal/views/flatpakstatus/ │ headlessly
-        │                       ├── internal/views/featurestatus/ │
+        │                       ├── internal/views/rowset/        │ text and decisions, update-presence
+        │                       ├── internal/views/flatpakstatus/ │ classification, all unit-tested
+        │                       ├── internal/views/featurestatus/ │ headlessly
+        │                       ├── internal/views/updatepresent/ │
         │                       └── internal/views/pageview/      ┘
         │
         ├── internal/config/    YAML config loading, feature group enablement
@@ -67,24 +69,28 @@ The `views.go` file defines the central `UserHome` struct that holds references 
 - `New(cfg, toastAdder)` — constructor that initializes `UserHome`
 - `ToastAdder` interface — `ShowToast(msg)`, `ShowErrorToast(msg)`, `SetUpdateBadge(count)` — implemented by Window
 
-`internal/views` imports puregotk, so it can never hold a `_test.go` (see `docs/skills/gtk-headless-testing/SKILL.md`). Decidable logic is therefore pushed down into nine puregotk-free leaf packages beneath it — `internal/views/actionmsg` and `internal/views/trustmsg` (toast text and UI decisions, see [package-managers.md](./package-managers.md#view-layer-toast-and-decision-helpers-internalviewsactionmsg-internalviewstrustmsg)), `internal/views/actionstate` (Homebrew update command/refresh outcomes and repeated-click gates, see [package-managers.md](./package-managers.md#view-layer-update-action-state-internalviewsactionstate)), `internal/views/badgestate` (thread-safe per-provider update counts and totals, see [package-managers.md](./package-managers.md#view-layer-update-badge-state-internalviewsbadgestate)), `internal/views/bundleview` (Brew bundle empty/error/unavailable presentation and per-row install gating, see [package-managers.md](./package-managers.md#view-layer-brew-bundle-state-internalviewsbundleview)), `internal/views/rowset` (single-row removal plus clear-then-repopulate bookkeeping, see [package-managers.md](./package-managers.md#view-layer-row-bookkeeping-internalviewsrowset)), `internal/views/flatpakstatus` (the Flatpak updates expander's subtitle text and expandable decision, applied by `loadFlatpakUpdates` from both retained `ListUpdates` errors, see [package-managers.md](./package-managers.md#view-layer-flatpak-update-status-internalviewsflatpakstatus)), `internal/views/featurestatus` (the Features page's per-feature update-status subtitle, the any-component update decision and the features group description for check outcomes — `GroupDescriptionCheckFailed` when the check itself failed, `GroupDescriptionIncomplete` when the check was incomplete or returned warnings, and `GroupDescription` when it completed with zero features updatable or with updates found — applied by `checkFeatureUpdates`, which composes no subtitle or description text of its own, see [package-managers.md](./package-managers.md#view-layer-feature-update-status-internalviewsfeaturestatus)), and `internal/views/pageview` (the row text, page status, os-release parsing, Help resource ordering, and maintenance-command selection shared by all six page builders, see [package-managers.md](./package-managers.md#view-layer-page-presentation-internalviewspageview)) — each table- or scenario-tested headlessly. This layout is decision record
+`internal/views` imports puregotk, so it can never hold a `_test.go` (see `docs/skills/gtk-headless-testing/SKILL.md`). Decidable logic is therefore pushed down into eleven puregotk-free leaf packages beneath it — `internal/views/actionmsg` and `internal/views/trustmsg` (toast text and UI decisions, see [package-managers.md](./package-managers.md#view-layer-toast-and-decision-helpers-internalviewsactionmsg-internalviewstrustmsg)), `internal/views/actionstate` (Homebrew update command/refresh outcomes and repeated-click gates, see [package-managers.md](./package-managers.md#view-layer-update-action-state-internalviewsactionstate)), `internal/views/badgestate` (thread-safe per-provider update counts and totals, see [package-managers.md](./package-managers.md#view-layer-update-badge-state-internalviewsbadgestate)), `internal/views/bundleview` (the app-collection naming catalog plus empty/error/unavailable presentation and per-row install gating, see [package-managers.md](./package-managers.md#view-layer-brew-bundle-state-internalviewsbundleview)), `internal/views/cleanupview` (the Maintenance page's free-space wording, per-step result summarisation, and the free-space measurement it will and will not report), `internal/views/rowset` (single-row removal plus clear-then-repopulate bookkeeping, see [package-managers.md](./package-managers.md#view-layer-row-bookkeeping-internalviewsrowset)), `internal/views/flatpakstatus` (the Flatpak updates expander's subtitle text and expandable decision, applied by `loadFlatpakUpdates` from both retained `ListUpdates` errors, see [package-managers.md](./package-managers.md#view-layer-flatpak-update-status-internalviewsflatpakstatus)), `internal/views/featurestatus` (the Features page's per-feature update-status subtitle, the any-component update decision and the features group description for check outcomes — `GroupDescriptionCheckFailed` when the check itself failed, `GroupDescriptionIncomplete` when the check was incomplete or returned warnings, and `GroupDescription` when it completed with zero features updatable or with updates found — applied by `checkFeatureUpdates`, which composes no subtitle or description text of its own, see [package-managers.md](./package-managers.md#view-layer-feature-update-status-internalviewsfeaturestatus)), `internal/views/updatepresent` (the unified update shell's aggregate icon, title, description, and action metadata, derived from one `updateflow.Snapshot`), and `internal/views/pageview` (the row text, page status, os-release parsing, Help resource ordering, and maintenance-command selection shared by all seven page builders, see [package-managers.md](./package-managers.md#view-layer-page-presentation-internalviewspageview)) — each table- or scenario-tested headlessly. This layout is decision record
 [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md).
 
 ### Pages
 
-The UI defines six pages, each in its own file under `internal/views/`. Static
-configuration may omit any functional page whose builder-backed groups are all
-disabled; Help is always retained:
+The UI defines seven pages, each in its own file under `internal/views/`.
+`internal/navigation` holds the canonical order below and the sidebar titles;
+static configuration may omit any functional page whose builder-backed groups
+are all disabled, and Help is always retained:
 
-| Page         | File                   | Purpose                                                                                                                                 |
-| ------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Applications | `applications_page.go` | Manage Homebrew formulae/casks and installed Flatpaks; launch an external manager for new Flatpak installs                              |
-| Maintenance  | `maintenance_page.go`  | Homebrew/Flatpak cleanup, configurable maintenance scripts (executed via `exec.Command`/`pkexec`)                                       |
-| Updates      | `updates_page.go`      | bootc or native A/B (systemd-sysupdate) staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts |
-| System       | `system_page.go`       | OS info (`/etc/os-release`), bootc deployment status, health monitor launch                                                             |
-| Features     | `features_page.go`     | Toggle system features via `updex` tool                                                                                                 |
-| Livery       | `livery_page.go`       | App-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`)                              |
-| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`)                                                                     |
+| Page         | File                   | Purpose                                                                                                                                                                              |
+| ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Updates      | `updates_page.go`      | The whole update story: Update All, bootc or native A/B (systemd-sysupdate) staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts, the system-version readout, and release-channel/graphics-driver switching |
+| Apps         | `applications_page.go` | Manage Homebrew formulae/casks and installed Flatpaks; install app collections; launch an external manager for new Flatpak installs                                                   |
+| Agents       | `agents_page.go`       | One unprivileged switch running a language model in a rootless container in the invoking account (`internal/aistack`)                                                                 |
+| Features     | `features_page.go`     | Updex feature toggles plus Developer Mode, Gaming Mode, and Enhanced Troubleshooting                                                                                                  |
+| Livery       | `livery_page.go`       | App-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`)                                                                           |
+| Maintenance  | `maintenance_page.go`  | One "Free up space" action, administrator-configured maintenance scripts (executed via `exec.Command`/`pkexec`), and the opt-in Recovery group                                        |
+| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`)                                                                                                                  |
+
+The sidebar title for `applications_page` is "Apps", not "Applications";
+`internal/navigation` owns that distinction and `internal/window` reads it.
 
 ## Key Patterns
 
@@ -116,17 +122,17 @@ go func() {
 To avoid blocking startup on slow tool-availability checks, groups that depend on optional tools (Homebrew, Flatpak, Updex) are built immediately with placeholder descriptions and then shown or hidden asynchronously. The pattern:
 
 1. Build the UI group unconditionally (if config-enabled), with a placeholder description
-2. Store a reference to the group on `UserHome` (e.g., `maintenanceBrewGroup`)
+2. Store a reference to the group on `UserHome` (e.g., `featuresGroup`)
 3. Spawn a goroutine that calls `IsInstalledCached()` (see below)
 4. On the main thread, either hide the group (`SetVisible(false)`) or update its description
 
-This applies to: `maintenanceBrewGroup`, `maintenanceFlatpakGroup`, `featuresGroup`/`featuresUnavailableGroup`, and `updateAllGroup` (the Update All hero row on the Updates page). The Features page uses a dual-group approach — one for available features, one for "not available" — toggling visibility between them.
+This applies to: `featuresGroup`/`featuresUnavailableGroup` and `updateAllGroup` (the Update All hero row on the Updates page). The Features page uses a dual-group approach — one for available features, one for "not available" — toggling visibility between them. The Maintenance page no longer uses it: its one cleanup action is always shown, because which package managers are installed is the cleanup runner's business and not something a user should have to learn from a group appearing or disappearing.
 
 The Update All group is the one place the *startup* path must not probe providers at all. Its rows are determined by which of bootc, Flatpak, and Homebrew exist on this host, and whether the unattended-update timer is installed — four separate subprocess checks that can each approach a multi-second timeout on a slow or wedged host. `buildUpdateAllGroup` therefore builds only a hidden shell with a "Checking…" description; `loadUpdateAllGroup` runs the availability probes (`hostAvailability()` and `autoupdate.Detect`) in a worker, and `populateUpdateAllGroup` marshals the resulting rows back onto the GTK main thread once every probe has answered. When no provider can update anything, the group simply stays hidden, matching the previous behavior of omitting it entirely.
 
 ### bootc boot gate
 
-bootc-related UI groups (system page's `bootc_status_group` and updates page's `bootc_updates_group`) are gated on `bootc.IsBootcBootedCached()`, which runs `bootc status --format json` once (via `sync.Once`) and reports true only when the parsed `status.booted` field is non-null. This is deliberately not a sentinel-file check: `/run/ostree-booted` is absent on snow's composefs-based deployments, so relying on it would hide the groups on every snow bootc host. `bootc status` itself exits 0 with a null `booted` entry on non-bootc hosts, so the gate must inspect the JSON body rather than the exit code.
+bootc-related UI groups (the Updates page's `bootc_status_group` and `bootc_updates_group`) are gated on `bootc.IsBootcBootedCached()`, which runs `bootc status --format json` once (via `sync.Once`) and reports true only when the parsed `status.booted` field is non-null. This is deliberately not a sentinel-file check: `/run/ostree-booted` is absent on snow's composefs-based deployments, so relying on it would hide the groups on every snow bootc host. `bootc status` itself exits 0 with a null `booted` entry on non-bootc hosts, so the gate must inspect the JSON body rather than the exit code.
 
 ### Native A/B gate
 
@@ -1131,7 +1137,7 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on each
 action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's nine actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's ten actions annotate
 `/usr/bin/chairlift-ublue-helper`. Both helper policies use
 `org.freedesktop.policykit.exec.argv1` to select exactly one action for the
 first helper argument. PolicyKit does not validate the remainder of argv, so
@@ -1142,8 +1148,9 @@ accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
 <stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
 [--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
-`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
-[--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
+[--dry-run]`, and `update-now [--dry-run]`. A bare, `$PATH`-resolved command
+name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
 action. The wrapper packages therefore always invoke their fixed `HelperPath`
@@ -1325,7 +1332,14 @@ diff only means anything relative to a specific staged update, and a page
 would have to invent an answer for a system with nothing staged. The fetch is
 never automatic.
 
-### Local AI
+### Local AI (the Agents page)
+
+Local AI is its own destination, `agents_page`, built by
+`internal/views/agents_page.go`. It was a group on the Features page, where it
+sat between developer mode and gaming mode and read as one more system
+preference; what it turns on is a service a person then points other
+applications at, so it is a page with one group (`agents_group`) rather than
+a switch among unrelated ones.
 
 `internal/aistack` is ChairLift's answer to bluefinctl's `stacks/` directory.
 bluefinctl ships twelve quadlet definitions under `nvidia/` and `amd/` and
@@ -1505,7 +1519,36 @@ on its script-availability check (`bootc.StageScriptAvailable`,
 `sysupdate.StageScriptAvailable`), so an absent distro helper hides the
 operation.
 
-### Maintenance action execution
+### Maintenance page structure and action execution
+
+The Maintenance page holds three things, ordered by how often a person needs
+them and inversely by what they cost.
+
+First, one routine cleanup action. `maintenance_freespace_group` is a single
+"Free up space" button that composes the typed cleanup runner already used by
+Update All's post-update phase (`internal/updateproviders.Cleanup`, whose
+`CleanupGroup` constant *is* `maintenance_freespace_group`). One key gates
+both surfaces deliberately: a user who turned cleanup off has turned cleanup
+off, and two keys would let one surface clean while the other claimed the
+feature was disabled. It replaces a row of per-package-manager buttons, which
+asked the user to know which package manager owned their wasted disk space.
+
+`internal/views/cleanupview` owns the decidable half: the row and group text,
+the per-step `Label`, and `Summarize`, which turns the run's `StepResult`
+slice into one sentence that never claims more than happened — an absent
+provider was skipped, a dismissed authentication cleaned nothing, and a
+reclaimed-bytes figure is shown only when both free-space readings succeeded
+and the difference exceeds `MinReportableBytes` (1 MB), because free space
+moves on a live system for reasons that have nothing to do with the action.
+
+Second, whatever maintenance the administrator configured
+(`maintenance_cleanup_group`), labelled as theirs and never folded into the
+button above, because ChairLift knows only a title and a command.
+
+Third, Recovery (`reset_group`) — Powerwash and Factory Reset. The group is
+titled "Recovery" rather than anything resembling cleanup, precisely so a
+person looking for disk space does not press it. Its opt-in default and
+mandatory confirmations are unchanged; see "Powerwash and Factory Reset".
 
 Configurable maintenance scripts (from `config.yml` `actions` entries) are executed via `runMaintenanceAction()` in `internal/views/maintenance_page.go`. The pattern:
 
@@ -1596,11 +1639,11 @@ page_name:
     enabled: true/false
     # Optional per-group fields:
     app_id: "..." # External app to launch
-    actions: # Custom scripts (updates/maintenance)
+    actions: # Administrator-configured maintenance scripts
       - title: "..."
         script: "/path/to/script"
         sudo: true/false
-    bundles_paths: [...] # Homebrew bundle directories
+    bundles_paths: [...] # App-collection directories
     website: "..." # Help page URLs
     issues: "..."
     chat: "..."
@@ -1613,10 +1656,8 @@ page_name:
 
 | Page                | Group                            | Controls                                                                                                                                                                                                |
 | ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `system_page`       | `system_info_group`              | OS info from `/etc/os-release`                                                                                                                                                                          |
-| `system_page`       | `bootc_status_group`             | bootc deployment status display (gated on `bootc.IsBootcBootedCached()`)                                                                                                                                |
-| `system_page`       | `channel_group`                  | Release channel and graphics-driver switching (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                          |
-| `system_page`       | `health_group`                   | System monitor launcher (configurable `app_id`, default: Mission Center)                                                                                                                                |
+| `updates_page`      | `bootc_status_group`             | Compact booted/staged system-version readout, technical identity behind a details row (gated on `bootc.IsBootcBootedCached()`)                                                                           |
+| `updates_page`      | `channel_group`                  | Release channel and graphics-driver switching (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                          |
 | `updates_page`      | `update_all_group`               | Multi-phase update sequencing (OS image, Flatpaks, Homebrew) and automatic background updates switch                                                                                                    |
 | `updates_page`      | `bootc_updates_group`            | bootc system updates — stage via `bootc-update-stage`, apply on restart (gated on `bootc.IsBootcBootedCached()` and stage script availability)                                                          |
 | `updates_page`      | `sysupdate_updates_group`        | native A/B system updates — stage via `snosi-sysupdate-stage`, apply on restart, with a read-only previous-version rollback row (gated on `sysupdate.IsNativeABCached()` and stage script availability) |
@@ -1627,18 +1668,19 @@ page_name:
 | `applications_page` | `flatpak_system_group`           | System Flatpak applications with uninstall actions                                                                                                                                                      |
 | `applications_page` | `brew_group`                     | Installed Homebrew formulae/casks with uninstall and formula pin/unpin actions                                                                                                                          |
 | `applications_page` | `brew_search_group`              | Typed Homebrew formula/cask search and confirmed install                                                                                                                                                |
-| `applications_page` | `brew_bundles_group`             | Curated `*.Brewfile` bundles discovered from every configured `bundles_paths` directory, with guarded install actions                                                                                   |
+| `applications_page` | `brew_bundles_group`             | App collections discovered as `*.Brewfile` definitions in every configured `bundles_paths` directory (default `/usr/share/ublue-os/homebrew`), named by `internal/views/bundleview`, with guarded install actions |
 | `applications_page` | `applications_installed_group`   | External Flatpak-manager launcher for discovery/install (configurable `app_id`, default: Bazaar); ChairLift has no direct Flatpak-install UI                                                            |
-| `maintenance_page`  | `maintenance_cleanup_group`      | Custom cleanup scripts (5min timeout, pkexec for sudo); **disabled by default**                                                                                                                         |
-| `maintenance_page`  | `maintenance_brew_group`         | Homebrew cleanup (deferred visibility)                                                                                                                                                                  |
-| `maintenance_page`  | `maintenance_flatpak_group`      | Flatpak unused cleanup (deferred visibility)                                                                                                                                                            |
-| `maintenance_page`  | `maintenance_optimization_group` | System optimization (placeholder)                                                                                                                                                                       |
-| `maintenance_page`  | `reset_group`                    | Powerwash and Factory Reset irreversible actions; **disabled by default**                                                                                                                              |
+| `agents_page`       | `agents_group`                   | Local AI language model served in a rootless Quadlet/Podman container in the invoking account (configurable `ai_images`, `ai_model`); no privileged route                                               |
+| `maintenance_page`  | `maintenance_freespace_group`    | The single "Free up space" action, composing `internal/updateproviders`' typed cleanup inventory; the same key gates the Update All cleanup phase                                                        |
+| `maintenance_page`  | `maintenance_cleanup_group`      | Administrator-configured scripts (5min timeout, pkexec for sudo), listed apart from routine cleanup; **disabled by default**                                                                             |
+| `maintenance_page`  | `reset_group`                    | Powerwash and Factory Reset recovery actions; **disabled by default**                                                                                                                                   |
 | `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
 | `features_page`     | `dx_group`                       | Developer Mode (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                                          |
 | `features_page`     | `gaming_group`                   | Gaming Mode optimizations (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                              |
-| `features_page`     | `ai_group`                       | Local AI language model served in rootless Quadlet/Podman container (configurable `ai_images`, `ai_model`)                                                                                             |
 | `features_page`     | `troubleshooting_group`          | Enhanced Troubleshooting AI assistant (gated on Homebrew)                                                                                                                                               |
+| `livery_page`       | `livery_app_grid_group`          | The Show Applications mark, from a Simple Icons brand                                                                                                                                                   |
+| `livery_page`       | `livery_foundation_group`        | The top-bar menu mark, optionally advancing at each login                                                                                                                                               |
+| `livery_page`       | `livery_dock_group`              | The Files application icon, from a CNCF project's colour artwork                                                                                                                                        |
 | `help_page`         | `help_resources_group`           | Configurable links (website, issues, chat)                                                                                                                                                              |
 
 ## Build and Release
@@ -1646,8 +1688,18 @@ page_name:
 - **Build**: `make build` builds three binaries: `build/chairlift` (main app), `build/chairlift-updex-helper` (privileged updex helper), and `build/chairlift-ublue-helper` (privileged Bluefin-family helper), all with `CGO_ENABLED=0`
 - **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. Codecov's remote project status additionally rejects coverage regressions greater than one percentage point, with no fixed project or patch target; it cannot be mirrored locally. The runtime-dependent E2E job is deliberately separate: `make e2e` builds all three binaries, executes the application's `--help` path, boots the dry-run GTK window under a private D-Bus/Xvfb session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then terminates its private process group, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged helper binaries' rejection paths. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md).
 - **Dev build**: `make dev` builds with `CGO_ENABLED=1` and `-race` flag for race detection
-- **Version**: Set via ldflags by goreleaser (`buildVersion`)
-- **Semantic versioning**: Uses [svu](https://github.com/caarlos0/svu) via `make bump`
+- **Version**: injected at build time into `main.buildVersion` via ldflags. The release build uses `{{ trimprefix .Tag "v" }}`, not `{{ .Version }}` — see the calendar-versioning note below
+- **Calendar versioning**: tags are `vYY.MM.N[-prerelease]` (`v26.09.0`, `v26.09.0-alpha.1`), produced by `scripts/next-version.sh` and tagged by `make bump` (`make bump PRE=alpha.1` for a prerelease). `YY.MM` is the release's calendar slot, matching how the Bluefin images are dated; `N` is the sequence within that month, starting at 0 and shared between releases and prereleases so an alpha cannot reuse a released number. This replaced svu, which cannot express the scheme.
+
+  The leading zero in `MM` is the whole point and is also where the scheme
+  collides with semver. GoReleaser's parser normalises `26.09.0` to `26.9.0`,
+  so `{{ .Version }}` renders without the zero. The binary therefore injects
+  `{{ trimprefix .Tag "v" }}` and the About dialog shows `26.09.0-alpha.1`,
+  while the published deb/rpm/apk filenames show `26.9.0-alpha.1`, because
+  nFPM versions must be semver. **That asymmetry is deliberate.** Making the
+  two agree means either dropping the zero from the tag, which loses the date
+  reading, or feeding nFPM a non-semver version, which the packagers reject.
+  Do not "fix" one side.
 - **CI**: GitHub Actions workflows for test, snapshot, and release (`.github/workflows/`); per [ADR-0034](../org-adrs.md), snapshot publishers use the repository-scoped `goreleaser-nightly` concurrency group with in-progress cancellation so only the newest tested `main` commit publishes to the rolling `dev` release and concurrent GoReleaser uploads cannot collide. Every external `uses:` reference in every workflow is pinned to a full 40-character commit SHA (with its version or source ref retained as a comment); `internal/installcheck.TestWorkflowActionsUseImmutableCommitSHAs` inventories both `.yml` and `.yaml` workflow files and rejects mutable tags, branches, short SHAs, and expressions while allowing repository-local `./` actions.
 - **Release**: GoReleaser config at `.goreleaser.yaml`. Its `metadata.homepage` is the single source of truth for the repository URL and is consumed by `release.footer`, whose "Full Changelog" link is templated from `{{ .Metadata.Homepage }}` rather than a hardcoded owner; two static tests guard that pairing — see the "Install-path consistency (`internal/installcheck`)" section of [package-managers.md](./package-managers.md#install-path-consistency-internalinstallcheck)
 - **Other targets**: `make fmt` (gofmt), `make lint` (golangci-lint), `make install`/`make uninstall` (system install including polkit policies, icons, and wrapper script; default `PREFIX=/usr`, the only prefix that matches where polkit reads policy files and the fixed pkexec exec-path annotations for both helper binaries — see "Privileged operations" above), `make build-linux-amd64`/`make build-linux-arm64` (cross-compilation)

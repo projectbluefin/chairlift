@@ -5,39 +5,42 @@ import (
 	"testing"
 )
 
-// TestBundleDump covers both dry-run states for the Brewfile-dump toast text.
+// TestBundleDump covers both dry-run states for the package-list export
+// toast, and that neither names the file it writes.
 func TestBundleDump(t *testing.T) {
 	tests := []struct {
 		name         string
 		dryRun       bool
-		path         string
 		wantContains []string
 		wantExact    string
 	}{
 		{
-			name:      "live run reports the saved path",
+			name:      "live run confirms the export in plain words",
 			dryRun:    false,
-			path:      "/home/user/Brewfile",
-			wantExact: "Brewfile saved to /home/user/Brewfile",
+			wantExact: "Package list exported to your home folder",
 		},
 		{
 			name:         "dry-run previews without claiming a save happened",
 			dryRun:       true,
-			path:         "/home/user/Brewfile",
-			wantContains: []string{"[DRY-RUN]", "/home/user/Brewfile", "no changes made"},
+			wantContains: []string{"[DRY-RUN]", "no changes made"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BundleDump(tt.dryRun, tt.path)
+			got := BundleDump(tt.dryRun)
 
 			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("BundleDump(%v, %q) = %q, want %q", tt.dryRun, tt.path, got, tt.wantExact)
+				t.Errorf("BundleDump(%v) = %q, want %q", tt.dryRun, got, tt.wantExact)
 			}
 			for _, want := range tt.wantContains {
 				if !strings.Contains(got, want) {
-					t.Errorf("BundleDump(%v, %q) = %q, want it to contain %q", tt.dryRun, tt.path, got, want)
+					t.Errorf("BundleDump(%v) = %q, want it to contain %q", tt.dryRun, got, want)
+				}
+			}
+			for _, banned := range []string{"Brewfile", "/", "~"} {
+				if strings.Contains(got, banned) {
+					t.Errorf("BundleDump(%v) = %q, must not contain %q", tt.dryRun, got, banned)
 				}
 			}
 		})
@@ -55,81 +58,29 @@ func TestBundleInstallDecision(t *testing.T) {
 		{
 			name:         "live install completes the row",
 			wantComplete: true,
-			wantExact:    "Brew bundle cli installed",
+			wantExact:    "Command line tools installed",
 		},
 		{
 			name:         "dry-run resets the row after a preview",
 			dryRun:       true,
 			wantComplete: false,
-			wantContains: []string{"[DRY-RUN]", "cli", "no changes made"},
+			wantContains: []string{"[DRY-RUN]", "Command line tools", "no changes made"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BundleInstall(tt.dryRun, "cli")
+			got := BundleInstall(tt.dryRun, "Command line tools")
 			if got.Complete != tt.wantComplete {
-				t.Errorf("BundleInstall(%v, cli).Complete = %v, want %v", tt.dryRun, got.Complete, tt.wantComplete)
+				t.Errorf("BundleInstall(%v, …).Complete = %v, want %v", tt.dryRun, got.Complete, tt.wantComplete)
 			}
 			if tt.wantExact != "" && got.Toast != tt.wantExact {
-				t.Errorf("BundleInstall(%v, cli).Toast = %q, want %q", tt.dryRun, got.Toast, tt.wantExact)
+				t.Errorf("BundleInstall(%v, …).Toast = %q, want %q", tt.dryRun, got.Toast, tt.wantExact)
 			}
 			for _, want := range tt.wantContains {
 				if !strings.Contains(got.Toast, want) {
-					t.Errorf("BundleInstall(%v, cli).Toast = %q, want it to contain %q", tt.dryRun, got.Toast, want)
+					t.Errorf("BundleInstall(%v, …).Toast = %q, want it to contain %q", tt.dryRun, got.Toast, want)
 				}
-			}
-		})
-	}
-}
-
-// TestCleanup covers both dry-run states for the Homebrew/Flatpak cleanup
-// toast text. This is the extraction of onBrewCleanupClicked's and
-// onFlatpakCleanupClicked's already-correct message selection into a tested,
-// pure function — behavior is unchanged, only now exercised headlessly.
-func TestCleanup(t *testing.T) {
-	tests := []struct {
-		name   string
-		dryRun bool
-		tool   string
-		output string
-		want   string
-	}{
-		{
-			name:   "live run reports fixed completion message",
-			dryRun: false,
-			tool:   "Homebrew",
-			output: "some brew cleanup output",
-			want:   "Homebrew cleanup completed",
-		},
-		{
-			name:   "dry-run passes through the wrapper's mock output",
-			dryRun: true,
-			tool:   "Homebrew",
-			output: "[DRY-RUN] Would execute: brew cleanup",
-			want:   "[DRY-RUN] Would execute: brew cleanup",
-		},
-		{
-			name:   "flatpak live run reports fixed completion message",
-			dryRun: false,
-			tool:   "Flatpak",
-			output: "some flatpak output",
-			want:   "Flatpak cleanup completed",
-		},
-		{
-			name:   "flatpak dry-run passes through the wrapper's mock output",
-			dryRun: true,
-			tool:   "Flatpak",
-			output: "[DRY-RUN] Would execute: flatpak uninstall --unused -y",
-			want:   "[DRY-RUN] Would execute: flatpak uninstall --unused -y",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Cleanup(tt.dryRun, tt.tool, tt.output)
-			if got != tt.want {
-				t.Errorf("Cleanup(%v, %q, %q) = %q, want %q", tt.dryRun, tt.tool, tt.output, got, tt.want)
 			}
 		})
 	}

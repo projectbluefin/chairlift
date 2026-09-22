@@ -14,11 +14,14 @@ import (
 const maxBundleDescriptionBytes = 64 * 1024
 
 // Bundle describes one installable Brewfile discovered from configured
-// bundle directories.
+// bundle directories. ItemCount is how many apps and tools the file installs:
+// its entry lines excluding taps, which are package sources rather than
+// something a person ends up with.
 type Bundle struct {
 	Name        string
 	Description string
 	Path        string
+	ItemCount   int
 }
 
 // AvailableBundles discovers regular *.Brewfile entries immediately inside
@@ -77,7 +80,7 @@ func AvailableBundles(paths []string) ([]Bundle, error) {
 				continue
 			}
 
-			description, err := readBundleDescription(path)
+			description, itemCount, err := readBundleMetadata(path)
 			if err != nil {
 				problems = append(problems, fmt.Errorf("read Brewfile %q: %w", path, err))
 				continue
@@ -91,6 +94,7 @@ func AvailableBundles(paths []string) ([]Bundle, error) {
 				Name:        name,
 				Description: description,
 				Path:        path,
+				ItemCount:   itemCount,
 			})
 		}
 	}
@@ -105,10 +109,16 @@ func AvailableBundles(paths []string) ([]Bundle, error) {
 	return bundles, errors.Join(problems...)
 }
 
-func readBundleDescription(path string) (description string, resultErr error) {
+// bundleEntryPrefixes are the Brewfile verbs that install something a person
+// ends up with. `tap` is deliberately absent: it adds a source, not an app.
+var bundleEntryPrefixes = []string{"brew ", "cask ", "flatpak ", "mas ", "vscode "}
+
+// readBundleMetadata returns the file's leading comment, if it has one, and
+// the number of entries it installs.
+func readBundleMetadata(path string) (description string, itemCount int, resultErr error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	defer func() {
 		resultErr = errors.Join(resultErr, file.Close())
@@ -116,13 +126,20 @@ func readBundleDescription(path string) (description string, resultErr error) {
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), maxBundleDescriptionBytes)
-	if !scanner.Scan() {
-		return "", scanner.Err()
+	for first := true; scanner.Scan(); first = false {
+		line := strings.TrimSpace(scanner.Text())
+		if first && strings.HasPrefix(line, "#") {
+			description = strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		}
+		for _, prefix := range bundleEntryPrefixes {
+			if strings.HasPrefix(line, prefix) {
+				itemCount++
+				break
+			}
+		}
 	}
-
-	line := strings.TrimSpace(scanner.Text())
-	if !strings.HasPrefix(line, "#") {
-		return "", nil
+	if err := scanner.Err(); err != nil {
+		return "", 0, err
 	}
-	return strings.TrimSpace(strings.TrimPrefix(line, "#")), nil
+	return description, itemCount, nil
 }

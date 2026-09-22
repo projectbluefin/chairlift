@@ -27,7 +27,10 @@ func TestViewsReportAsyncLauncherFailuresOnMainThread(t *testing.T) {
 				`cmd := exec.Command("gtk-launch", appID)`,
 				`if err := launcher.Start(cmd, func(err error) {`,
 				`sgtk.RunOnMainThread(func() {`,
-				`uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to launch %s", appID))`,
+				// Copy-agnostic on purpose: the guard is that an async
+				// failure surfaces a toast from the main thread, not the
+				// exact sentence, which the HIG rewrite owns.
+				`uh.toastAdder.ShowErrorToast(`,
 			},
 		},
 		{

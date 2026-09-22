@@ -6,25 +6,25 @@ import (
 	"github.com/projectbluefin/chairlift/internal/sbom"
 )
 
-// ChangelogRow returns the drill-down row inside the staged-update expander,
+// ChangelogRow returns the drill-down row inside the system-update expander,
 // before anything has been fetched. staged is false when there is no update
 // to compare against.
 func ChangelogRow(staged bool) Row {
-	row := Row{Title: "What's Changing"}
+	row := Row{Title: "What's changing"}
 	if !staged {
-		row.Subtitle = "Available once an update is staged"
+		row.Subtitle = "Available once an update is ready to install"
 		return row
 	}
 	// The fetch is tens of megabytes per side, so it is never automatic —
 	// the subtitle has to say that pressing the button costs a download.
-	row.Subtitle = "Compare the package lists of the running and staged images"
+	row.Subtitle = "See which programs change, by comparing your version with the new one. This is a large download."
 	return row
 }
 
-// ChangelogSummary returns the subtitle describing a completed diff.
+// ChangelogSummary returns the subtitle describing a completed comparison.
 func ChangelogSummary(result sbom.Result) string {
 	if result.Empty() {
-		return "No package differences between the two images"
+		return "No programs change between the two versions"
 	}
 
 	parts := make([]string, 0, 5)

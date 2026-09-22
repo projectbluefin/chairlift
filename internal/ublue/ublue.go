@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"os/user"
 	"sync"
 	"time"
@@ -296,6 +297,52 @@ func Rollback(ctx context.Context) error {
 // or the privileged helper behind it can undo once bootc applies the reset.
 func FactoryReset(ctx context.Context) error {
 	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandFactoryReset)
+	return err
+}
+
+// UpdateNowTimeout bounds an on-demand full update from the GUI side. It is
+// derived from the helper's own deadline rather than chosen independently so
+// it is always the longer of the two: the side that gives up first decides
+// what the user is told, and the helper's message ("update failed: …", with
+// the updater's stderr behind it) says more than a generic client timeout.
+const UpdateNowTimeout = ubluehelper.UpdateNowTimeout + 5*time.Minute
+
+// UpdateNowContext returns a context bounded by UpdateNowTimeout.
+func UpdateNowContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), UpdateNowTimeout)
+}
+
+// UpdateNowAvailable reports whether this host has the integrated updater at
+// all. A host without it must not be offered the row: the PolicyKit action
+// would authenticate and the helper would then fail on a missing binary,
+// which spends the user's password to tell them nothing.
+//
+// The check runs at most once. The updater is part of the booted image, so
+// it cannot appear or disappear without a restart.
+func UpdateNowAvailable() bool {
+	updaterOnce.Do(func() {
+		info, err := statUpdater(ubluehelper.UpdaterPath)
+		updaterFound = err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+	})
+	return updaterFound
+}
+
+// statUpdater is an injection seam for the updater probe, so the
+// availability rule is testable on a host that does not have it (and on one
+// that does).
+var statUpdater = os.Stat
+
+var (
+	updaterOnce  sync.Once
+	updaterFound bool
+)
+
+// UpdateNow runs the host's integrated updater once, bringing the booted
+// image, Flatpaks, Homebrew packages, and containers up to date in a single
+// privileged run. Nothing crosses the pkexec boundary but the command word:
+// the helper owns the updater's path and its entire argv.
+func UpdateNow(ctx context.Context) error {
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandUpdateNow)
 	return err
 }
 

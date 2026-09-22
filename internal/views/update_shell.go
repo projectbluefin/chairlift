@@ -45,6 +45,13 @@ type UpdateShell struct {
 	banner        *adw.Banner
 	sourceGroup   *adw.PreferencesGroup
 	breakpointBin *adw.BreakpointBin
+	// content is the vertical box inside the shell's clamp and scroller.
+	// SetSecondaryContent appends to it rather than building a second
+	// scroller, so the whole page scrolls as one.
+	content *gtk.Box
+	// secondary is whatever SetSecondaryContent last parented, kept so a
+	// repeat call replaces it instead of adding a second copy.
+	secondary *gtk.Widget
 }
 
 // NewUpdateShell builds a status-first update surface and starts its initial
@@ -85,6 +92,42 @@ func (s *UpdateShell) ToolbarView() *adw.ToolbarView {
 		return nil
 	}
 	return s.toolbarView
+}
+
+// SetSecondaryContent mounts a preferences page below the update sources,
+// inside the shell's own clamp and scroller. It exists because the Updates
+// destination is this shell: everything the Updates page still owns — the
+// system-version readout, and the controls that replace the operating
+// system — is built by buildUpdatesPage and would otherwise never be
+// mounted (issue #250).
+//
+// A nil page is a no-op, and mounting the same page twice does nothing the
+// second time: an AdwPreferencesPage that is already parented misbehaves
+// when it is added again. Nothing is connected here; the page's own handlers
+// were connected once, at build time.
+func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
+	if s == nil || s.content == nil || page == nil {
+		return
+	}
+	widget := &page.Widget
+	if s.secondary == widget {
+		return
+	}
+	if s.secondary != nil {
+		s.content.Remove(s.secondary)
+		s.secondary = nil
+	}
+	// views.createPage builds every preferences page inside a scroller of
+	// its own, and GtkScrolledWindow wraps a child that is not GtkScrollable
+	// — an AdwPreferencesPage is not — in a GtkViewport. So the page's
+	// parent here is that viewport, and clearing the viewport's child is the
+	// detach that also clears the viewport's own child pointer; unparenting
+	// the page directly would leave that pointer dangling.
+	if parent := widget.GetParent(); parent != nil {
+		gtk.ViewportNewFromInternalPtr(parent.GoPointer()).SetChild(nil)
+	}
+	s.content.Append(widget)
+	s.secondary = widget
 }
 
 // StartCheck starts a generation-guarded check away from the GTK thread.
@@ -247,6 +290,7 @@ func (s *UpdateShell) build() {
 	content.SetMarginBottom(24)
 	content.SetMarginStart(12)
 	content.SetMarginEnd(12)
+	s.content = content
 
 	s.statusPage = adw.NewStatusPage()
 	s.statusPage.SetVexpand(false)
@@ -285,6 +329,11 @@ func (s *UpdateShell) build() {
 	content.Append(&s.sourceGroup.Widget)
 
 	s.breakpointBin = adw.NewBreakpointBin()
+	// AdwBreakpointBin requires a minimum size: without one libadwaita warns
+	// on every allocation and the max-width condition below cannot resolve,
+	// so the compact layout never applies reliably. Both values sit under
+	// the 600px condition so the breakpoint can actually be reached.
+	s.breakpointBin.Widget.SetSizeRequest(360, 200)
 	s.breakpointBin.SetChild(&content.Widget)
 	compactBreakpoint := adw.NewBreakpoint(adw.BreakpointConditionParse("max-width: 600px"))
 	applyCompact := func(_ adw.Breakpoint) {

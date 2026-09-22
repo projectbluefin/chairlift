@@ -34,10 +34,10 @@ func TestBrewBundleGroupConfigControlsRuntimeWiring(t *testing.T) {
 		`go uh.loadBrewBundles(bundlePaths)`,
 		`homebrew.AvailableBundles(paths)`,
 		`bundleview.Present(len(bundles), warning, homebrewAvailable)`,
-		`pageview.BrewBundle(bundle.Name, bundle.Description, bundle.Path)`,
+		`bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)`,
 		`if !gate.TryStart()`,
 		`homebrew.BundleInstall(bundle.Path)`,
-		`actionmsg.BundleInstall(dryrun.Enabled(), bundle.Name)`,
+		`actionmsg.BundleInstall(dryrun.Enabled(), collection.Title)`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("Applications-page bundle wiring does not contain %q", required)

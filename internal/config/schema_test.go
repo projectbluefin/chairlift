@@ -156,14 +156,14 @@ func TestSchemaPagesReturnsFreshSlice(t *testing.T) {
 // TestSchemaGroupsReturnsFreshSlice mutates the slice returned by
 // SchemaGroups(page) and asserts a subsequent call is unaffected.
 func TestSchemaGroupsReturnsFreshSlice(t *testing.T) {
-	const page = "system_page"
+	const page = "updates_page"
 
 	first, err := SchemaGroups(page)
 	if err != nil {
 		t.Fatalf("SchemaGroups(%q): %v", page, err)
 	}
 	if len(first) == 0 {
-		t.Fatal("SchemaGroups(system_page) returned no groups")
+		t.Fatal("SchemaGroups(updates_page) returned no groups")
 	}
 
 	original := make([]string, len(first))
@@ -228,7 +228,7 @@ func TestYamlTagName(t *testing.T) {
 		tag  string
 		want string
 	}{
-		{"plain name", "system_page", "system_page"},
+		{"plain name", "agents_page", "agents_page"},
 		{"name with omitempty", "app_id,omitempty", "app_id"},
 		{"only options, no name", ",omitempty", ""},
 		{"empty tag", "", ""},

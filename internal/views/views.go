@@ -37,7 +37,7 @@ type UserHome struct {
 	toastAdder ToastAdder
 
 	// Pages (ToolbarViews)
-	systemPage       *adw.ToolbarView
+	agentsPage       *adw.ToolbarView
 	updatesPage      *adw.ToolbarView
 	applicationsPage *adw.ToolbarView
 	maintenancePage  *adw.ToolbarView
@@ -46,7 +46,7 @@ type UserHome struct {
 	helpPage         *adw.ToolbarView
 
 	// PreferencesPages inside each ToolbarView - keep references to prevent GC
-	systemPrefsPage       *adw.PreferencesPage
+	agentsPrefsPage       *adw.PreferencesPage
 	updatesPrefsPage      *adw.PreferencesPage
 	applicationsPrefsPage *adw.PreferencesPage
 	maintenancePrefsPage  *adw.PreferencesPage
@@ -177,8 +177,6 @@ type UserHome struct {
 	featureRows              map[string]*adw.ActionRow
 
 	// Groups with deferred visibility
-	maintenanceBrewGroup    *adw.PreferencesGroup
-	maintenanceFlatpakGroup *adw.PreferencesGroup
 
 	// Update badge tracking
 	updateCounts badgestate.Counts
@@ -210,7 +208,7 @@ func New(cfg *config.Config, toastAdder ToastAdder) *UserHome {
 	}
 
 	// Create pages - createPage returns both ToolbarView and PreferencesPage
-	uh.systemPage, uh.systemPrefsPage = uh.createPage()
+	uh.agentsPage, uh.agentsPrefsPage = uh.createPage()
 	uh.updatesPage, uh.updatesPrefsPage = uh.createPage()
 	uh.applicationsPage, uh.applicationsPrefsPage = uh.createPage()
 	uh.maintenancePage, uh.maintenancePrefsPage = uh.createPage()
@@ -219,7 +217,7 @@ func New(cfg *config.Config, toastAdder ToastAdder) *UserHome {
 	uh.helpPage, uh.helpPrefsPage = uh.createPage()
 
 	// Build page content
-	uh.buildSystemPage()
+	uh.buildAgentsPage()
 	uh.buildUpdatesPage()
 	uh.buildApplicationsPage()
 	uh.buildMaintenancePage()
@@ -244,8 +242,8 @@ func (uh *UserHome) updateBadgeCount() {
 // GetPage returns a page by name
 func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 	switch name {
-	case "system":
-		return uh.systemPage
+	case "agents":
+		return uh.agentsPage
 	case "updates":
 		return uh.updatesPage
 	case "applications":

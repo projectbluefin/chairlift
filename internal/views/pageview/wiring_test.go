@@ -41,7 +41,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		{
 			file: "applications_page.go",
 			required: []string{
-				"pageview.BrewBundle(",
+				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
 				"pageview.FlatpakApplication(",
 				"pageview.SearchResult(",
@@ -50,6 +50,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
 				`fmt.Sprintf("%s (%s)", app.ApplicationID, app.Version)`,
 				`row.SetSubtitle(result.Kind.DisplayName())`,
+				"pageview.BrewBundle(",
+				`"Brew Bundle Dump"`,
+				"~/Brewfile",
+				`fmt.Sprintf("Error: %v", err)`,
 			},
 		},
 		{
@@ -62,19 +66,40 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.SysupdateUpdateSubtitle(",
 				"pageview.SysupdateStageResultSubtitle(",
 				"pageview.SysupdateRollbackSubtitle(",
+				// Moved here with the release channel and the graphics
+				// driver when the System page was deleted.
+				"pageview.ChannelRow(",
+				"pageview.GraphicsDriverRow(",
+				// The system-version readout came with them. Digest
+				// formatting now lives entirely inside
+				// SystemVersionDetails, which calls ShortDigest itself —
+				// stricter than the deleted system_page.go entry, which
+				// only required the view to call ShortDigest. The banned
+				// hand-slice below is carried across from that entry.
+				"pageview.SystemVersionRow(",
+				"pageview.SystemVersionDetails(",
 			},
 			retired: []string{
 				"strings.LastIndex(",
 				`fmt.Sprintf("%s → %s", update.ApplicationID, update.NewVersion)`,
 				`fmt.Sprintf("Update %s staged — restart to apply", version)`,
+				"digest[:19]",
+				"row.SetSubtitle(pkg.Version)",
+				`"Roll Back"`,
 			},
 		},
 		{
-			file:     "maintenance_page.go",
-			required: []string{"pageview.MaintenanceCommand("},
+			file: "maintenance_page.go",
+			required: []string{
+				"pageview.MaintenanceCommand(",
+				"cleanupview.Summarize(",
+				"updateproviders.NewCleanup(",
+			},
 			retired: []string{
 				`exec.CommandContext(ctx, "pkexec", script)`,
 				"exec.CommandContext(ctx, script)",
+				"row.SetSubtitle(action.Script)",
+				`"Coming soon"`,
 			},
 		},
 		{
@@ -82,10 +107,15 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"pageview.Feature(",
 				"pageview.FeatureGroupDescription(",
+				"pageview.DeveloperRow(",
+				"pageview.GamingRow(",
 			},
 			retired: []string{
 				"row.SetTitle(feat.Description)",
 				`fmt.Sprintf("%d features available", len(features))`,
+				`"Developer Mode"`,
+				`"Gaming Mode"`,
+				"status.DevGroups",
 			},
 		},
 		{
@@ -94,12 +124,22 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			retired:  []string{`row.SetTitle("Website")`, `row.SetTitle("Report Issues")`},
 		},
 		{
-			file: "system_page.go",
+			file: "agents_page.go",
 			required: []string{
-				"pageview.ParseOSRelease(",
-				"pageview.ShortDigest(",
+				"pageview.AIStackRow(",
+				"pageview.AIStackDetails(",
+				"pageview.AIStackGroupDescription(",
+				"actionmsg.AIStack(",
 			},
-			retired: []string{"bufio.NewScanner(", "cases.Title(", "digest[:19]"},
+			// A bare switch re-enters ::state-set on a programmatic revert,
+			// which would restart the model after a failed stop; the error
+			// text names the unit file and belongs in the log, not a toast.
+			retired: []string{
+				`row.SetTitle("Local AI Model Server")`,
+				`"Working..."`,
+				"gtk.NewSwitch()",
+				"Local AI failed: %v",
+			},
 		},
 	}
 

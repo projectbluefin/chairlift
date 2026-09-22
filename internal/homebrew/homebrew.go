@@ -99,11 +99,15 @@ const (
 	Cask    PackageKind = "cask"
 )
 
+// DisplayName returns what the kind is, in words a person recognizes.
+// "Formula" and "Cask" are Homebrew's own vocabulary and say nothing about
+// what the package turns out to be, which is the only thing a row or a
+// confirmation dialog needs to convey.
 func (k PackageKind) DisplayName() string {
 	if k == Cask {
-		return "Cask"
+		return "Application"
 	}
-	return "Formula"
+	return "Command line tool"
 }
 
 // stateChangingCommands are commands that modify system state

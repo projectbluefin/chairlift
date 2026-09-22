@@ -17,16 +17,17 @@ point.
 
 ## Pages
 
-Control Center provides six configurable pages:
+Control Center provides seven configurable pages, in sidebar order:
 
 | Page | Description |
 |------|-------------|
-| **Applications** | Search/install Homebrew formulae and casks; uninstall installed formulae/casks; pin/unpin formulae; install curated Brewfile bundles. List/uninstall Flatpaks and launch the configured external manager for Flatpak discovery and installation. |
-| **Maintenance** | Run cleanup tasks for Homebrew and Flatpak, and execute custom maintenance scripts. |
-| **Updates** | Stage bootc or native A/B (systemd-sysupdate) system updates, apply Flatpak updates, upgrade Homebrew packages, and trust Homebrew taps. |
-| **System** | View OS information, bootc deployment status, and launch a system health monitor. |
-| **Features** | Toggle system features managed by updex. |
-| **Help** | Links to the project website, issue tracker, and community chat. |
+| **Updates** | Update everything in one action or per provider: stage bootc or native A/B (systemd-sysupdate) system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
+| **Apps** | Search/install Homebrew formulae and casks; uninstall installed formulae/casks; pin/unpin formulae; install curated app collections. List/uninstall Flatpaks and launch the configured external manager for Flatpak discovery and installation. |
+| **Agents** | Run a language model on this computer, served from a rootless container in your own account. |
+| **Features** | Toggle system features managed by updex, plus Developer Mode, Gaming Mode, and Enhanced Troubleshooting. |
+| **Livery** | Choose the marks shown on the app-grid button, the top-bar menu, and Files. |
+| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and — when an administrator opts in — Powerwash or Factory Reset. |
+| **Help** | Links to the project website, issue tracker, and community documentation. |
 
 A functional page is omitted when all of its groups are disabled. Help is
 always retained so the window always has a valid destination.
@@ -50,14 +51,18 @@ always retained so the window always has a valid destination.
 
 Runtime visibility depends on the group:
 
-- bootc status/staging groups, the native A/B staging group, and unavailable
-  Homebrew/Flatpak maintenance groups are hidden when their tool-specific
-  runtime gates fail;
+- bootc status/staging groups and the native A/B staging group are hidden
+  when their tool-specific runtime gates fail;
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
+- Agents keeps its group visible where Podman is absent but disables the
+  switch and says the software it needs is not installed;
 - Features replaces its main group with an explicit unavailable message when
   Updex is not configured;
 - Applications and Updates groups for Homebrew and Flatpak remain visible and
-  report that the tool is unavailable.
+  report that the tool is unavailable;
+- Maintenance's "Free up space" action is always shown. Which package
+  managers are installed is the cleanup runner's business, not something a
+  user should have to learn from a group appearing or disappearing.
 
 Page omission is separate and static: it depends only on which builder-backed
 groups configuration enables, not on runtime tool availability.
@@ -69,6 +74,8 @@ groups configuration enables, not on runtime tool availability.
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | `/usr/lib/snosi/native-ab` marker + `/usr/libexec/snosi-sysupdate-stage` | Staged native A/B (systemd-sysupdate) system updates |
 | Updex | System feature toggles |
+| Podman | The Agents page's local model container |
+| `/usr/bin/uupd` | The on-demand full-system update and the automatic-updates switch |
 
 ## Building
 

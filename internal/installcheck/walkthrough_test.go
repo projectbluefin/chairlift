@@ -146,11 +146,8 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 	// genuinely not user-visible maps to an empty phrase, which documents
 	// the omission rather than hiding it.
 	documented := map[string]string{
-		// system_page
-		"system_info_group":  "Your system details",
-		"bootc_status_group": "queued for the next",
-		"health_group":       "Mission Center",
-		"channel_group":      "Release Channel",
+		// agents_page
+		"agents_group": "Agents",
 		// updates_page
 		"update_all_group":        "Update All",
 		"bootc_updates_group":     "System Updates",
@@ -158,24 +155,25 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"flatpak_updates_group":   "Flatpak",
 		"brew_updates_group":      "Homebrew",
 		"brew_trust_group":        "unofficial",
+		// Moved off the deleted System page: both replace the operating
+		// system and need a restart, so they belong with updates.
+		"channel_group":      "Release Channel",
+		"bootc_status_group": "queued for the next",
 		// applications_page
-		"applications_installed_group": "Your installed apps",
+		"applications_installed_group": "already installed",
 		"flatpak_user_group":           "Flatpak",
 		"flatpak_system_group":         "Flatpak",
-		"brew_group":                   "Homebrew packages",
+		"brew_group":                   "packages Homebrew manages",
 		"brew_search_group":            "search across both",
-		"brew_bundles_group":           "Bundles",
+		"brew_bundles_group":           "App collections",
 		// maintenance_page
-		"maintenance_cleanup_group":      "your distribution added",
-		"maintenance_brew_group":         "Clean up files",
-		"maintenance_flatpak_group":      "Clean up files",
-		"maintenance_optimization_group": "Clean up files",
-		"reset_group":                    "Powerwash",
+		"maintenance_cleanup_group":   "Maintenance tasks",
+		"maintenance_freespace_group": "Free up space",
+		"reset_group":                 "Recovery",
 		// features_page
 		"features_group":        "feature manager",
-		"dx_group":              "Developer Mode",
-		"gaming_group":          "Gaming Mode",
-		"ai_group":              "Local AI",
+		"dx_group":              "Developer tools",
+		"gaming_group":          "**Gaming**",
 		"troubleshooting_group": "Enhanced Troubleshooting",
 		// livery_page
 		"livery_app_grid_group":   "App Grid Livery",

@@ -3,18 +3,20 @@
 # Set "enabled: false" to hide a preference group on any page. A functional
 # page is omitted when all of its groups are disabled; Help is always retained.
 
-system_page:
-  system_info_group:
+# A language model served from a rootless container, on whichever accelerator
+# this machine has. Shown everywhere Podman exists; the model is only
+# downloaded once the switch is turned on.
+#
+# ai_images pins the container image per GPU vendor (nvidia, amd, intel,
+# none) — for a site that mirrors registries — and ai_model changes what is
+# served. Both are ordinary settings rather than root-only ones because the
+# container runs unprivileged in the user's own account.
+agents_page:
+  agents_group:
     enabled: true
-  bootc_status_group:
-    enabled: true
-  # Which image this machine runs, and the graphics driver it carries. Hidden
-  # on a host with no /usr/share/ublue-os/image-info.json.
-  channel_group:
-    enabled: true
-  health_group:
-    enabled: true
-    app_id: io.missioncenter.MissionCenter
+    # ai_images:
+    #   nvidia: registry.example.internal/ramalama/cuda:latest
+    # ai_model: ollama://qwen2.5:7b
 
 updates_page:
   # Update All leads the page; the per-provider groups below it remain
@@ -39,23 +41,31 @@ updates_page:
     enabled: true
   brew_trust_group:
     enabled: true
+  # Which release stream this machine follows, and the graphics driver the
+  # image carries. Both replace the operating system and need a restart, so
+  # they sit with updates. Hidden on a host with no image information.
+  channel_group:
+    enabled: true
+  # Compact system-version readout; technical identity stays behind details.
+  bootc_status_group:
+    enabled: true
 
 applications_page:
   applications_installed_group:
-    enabled: true
+    enabled: false
     app_id: io.github.kolunmi.Bazaar
   flatpak_user_group:
-    enabled: true
+    enabled: false
   flatpak_system_group:
-    enabled: true
+    enabled: false
   brew_group:
-    enabled: true
+    enabled: false
   brew_search_group:
-    enabled: true
+    enabled: false
   brew_bundles_group:
     enabled: true
     bundles_paths:
-      - /usr/share/snow/bundles
+      - /usr/share/ublue-os/homebrew
 
 maintenance_page:
   maintenance_cleanup_group:
@@ -64,11 +74,9 @@ maintenance_page:
       - title: Clean Up Boot Old Entries
         script: /usr/libexec/bls-gc
         sudo: true
-  maintenance_brew_group:
-    enabled: true
-  maintenance_flatpak_group:
-    enabled: true
-  maintenance_optimization_group:
+  # One routine cleanup action. It removes cached downloads and unused
+  # supporting software — never installed apps, documents, or containers.
+  maintenance_freespace_group:
     enabled: true
   # Powerwash (remove every user Flatpak and Distrobox container) and Factory
   # Reset (bootc install reset --experimental). Both are irreversible, so
@@ -86,19 +94,8 @@ features_page:
     enabled: true
   gaming_group:
     enabled: true
-  # A language model served from a rootless container, on whichever
-  # accelerator this machine has. Shown everywhere Podman exists; the model
-  # is only downloaded once the switch is turned on.
-  #
-  # ai_images pins the container image per GPU vendor (nvidia, amd, intel,
-  # none) — for a site that mirrors registries — and ai_model changes what is
-  # served. Both are ordinary settings rather than root-only ones because the
-  # container runs unprivileged in the user's own account.
-  ai_group:
-    enabled: true
-    # ai_images:
-    #   nvidia: registry.example.internal/ramalama/cuda:latest
-    # ai_model: ollama://qwen2.5:7b
+  # A language model served from a rootless container now lives on its own
+  # Agents page; see agents_page above.
   # An AI assistant that can read this system's logs, services, and network
   # to help diagnose problems. Everything it installs comes from Homebrew, so
   # the group hides itself where Homebrew is absent. Nothing is downloaded
@@ -127,6 +124,6 @@ livery_page:
 help_page:
   help_resources_group:
     enabled: true
-    website: https://github.com/frostyard/snosi
-    issues: https://github.com/frostyard/snosi/issues
-    chat: https://github.com/frostyard/snosi/discussions
+    website: https://projectbluefin.io
+    issues: https://github.com/projectbluefin/dakota/issues
+    chat: https://docs.projectbluefin.io/

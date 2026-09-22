@@ -16,6 +16,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/updateall"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -129,6 +130,12 @@ func (uh *UserHome) populateUpdateAllGroup(group *adw.PreferencesGroup, plan []u
 	restart.SetVisible(false)
 	group.Add(&restart.Widget)
 
+	// The host's own integrated updater, when it has one. It sits after the
+	// per-source sequencer rather than in front of it because it is the
+	// heavier of the two: it updates containers as well, and it always asks
+	// for a password.
+	uh.buildUpdateNowRow(group)
+
 	// Automatic updates sit with Update All rather than in a group of their
 	// own: they answer the same question — how does this system get updated
 	// — and separating them would imply they are unrelated settings. They
@@ -179,6 +186,81 @@ func (uh *UserHome) buildAutomaticUpdatesRow(group *adw.PreferencesGroup, state 
 	uh.autoUpdatesRow = row
 	uh.autoUpdatesSwitch = toggle
 	log.Printf("views: automatic updates row built state=%s", state)
+}
+
+// buildUpdateNowRow adds the on-demand full-update row. The row is omitted
+// entirely on a host with no integrated updater: the PolicyKit action would
+// authenticate and the helper would then fail on a missing binary, which
+// spends the user's password to tell them nothing.
+//
+// Both the button's handler and its gate are created once, here, and live as
+// long as the row: puregotk caches every connected callback by the address
+// of its func variable and never releases the slot, so connecting inside a
+// path that reruns is a slow leak toward its fixed table limit.
+func (uh *UserHome) buildUpdateNowRow(group *adw.PreferencesGroup) {
+	if !ublue.UpdateNowAvailable() {
+		log.Print("views: on-demand full update unavailable (no integrated updater installed)")
+		return
+	}
+
+	row := adw.NewActionRow()
+	presentation := pageview.UpdateNowRow()
+	row.SetTitle(presentation.Title)
+	row.SetSubtitle(presentation.Subtitle)
+
+	button := gtk.NewButtonWithLabel("Update Now")
+	button.SetValign(gtk.AlignCenterValue)
+	row.AddSuffix(&button.Widget)
+	group.Add(&row.Widget)
+
+	gate := &actionstate.Gate{}
+	clickedCb := func(gtk.Button) { uh.onUpdateNowClicked(gate, button, row) }
+	button.ConnectClicked(&clickedCb)
+
+	log.Print("views: on-demand full update row built")
+}
+
+// onUpdateNowClicked runs the host's integrated updater once. The gate makes
+// a second click a no-op rather than starting a concurrent run that would
+// contend for the same package databases.
+func (uh *UserHome) onUpdateNowClicked(gate *actionstate.Gate, button *gtk.Button, row *adw.ActionRow) {
+	if !gate.TryStart() {
+		return
+	}
+
+	button.SetSensitive(false)
+	button.SetLabel("Updating…")
+	row.SetSubtitle(pageview.UpdateNowRunningSubtitle())
+
+	go func() {
+		ctx, cancel := ublue.UpdateNowContext()
+		defer cancel()
+
+		err := ublue.UpdateNow(ctx)
+
+		sgtk.RunOnMainThread(func() {
+			// Reset, never Complete: updating is repeatable, and a row the
+			// user can never press again after one run would be a worse lie
+			// than a redundant update.
+			gate.Reset()
+			button.SetSensitive(true)
+			button.SetLabel("Update Now")
+
+			if err != nil {
+				row.SetSubtitle(pageview.UpdateNowRow().Subtitle)
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Update failed: %v", err))
+				return
+			}
+
+			decision := actionmsg.UpdateNow(dryrun.Enabled())
+			if decision.Confirm {
+				row.SetSubtitle(pageview.UpdateNowResultSubtitle())
+			} else {
+				row.SetSubtitle(pageview.UpdateNowRow().Subtitle)
+			}
+			uh.toastAdder.ShowToast(decision.Toast)
+		})
+	}()
 }
 
 // onAutomaticUpdatesToggled turns unattended updates on or off.

@@ -19,7 +19,55 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// buildFeaturesPage builds the Features page content
+// guardedSwitch is a gtk.Switch together with the guard every switch on this
+// page needs. GtkSwitch emits ::state-set from gtk_switch_set_active whenever
+// the value actually changes, and a user's click reaches the handler by that
+// same path — so ChairLift's own writes are indistinguishable from a person
+// flipping the switch unless they are marked. Unmarked, showing the machine's
+// real state on load would run the action that produces it (installing the
+// gaming applications on a machine that already has them), and reverting
+// after a failure or a dry run would run the opposite action for real.
+type guardedSwitch struct {
+	widget *gtk.Switch
+	// applying is true only while set() moves the switch.
+	applying bool
+	// handler is retained for the page's lifetime because puregotk keys its
+	// fixed callback table on the address of the func variable.
+	handler func(gtk.Switch, bool) bool
+}
+
+// newGuardedSwitch builds a switch showing active and connects onUserChange
+// once, at page-build time. onUserChange runs only for a change the user made.
+func newGuardedSwitch(active bool, onUserChange func(bool)) *guardedSwitch {
+	guarded := &guardedSwitch{widget: gtk.NewSwitch()}
+	guarded.widget.SetValign(gtk.AlignCenterValue)
+	guarded.widget.SetActive(active)
+	guarded.widget.SetState(active)
+
+	guarded.handler = func(_ gtk.Switch, state bool) bool {
+		if guarded.applying {
+			// ChairLift moved the switch. Let the default handler render
+			// the new position and do nothing else.
+			return false
+		}
+		onUserChange(state)
+		// Hold the rendered state until the work resolves; set() confirms
+		// or reverts it.
+		return true
+	}
+	guarded.widget.ConnectStateSet(&guarded.handler)
+	return guarded
+}
+
+// set moves the switch without treating it as a user action.
+func (g *guardedSwitch) set(active bool) {
+	g.applying = true
+	g.widget.SetActive(active)
+	g.widget.SetState(active)
+	g.applying = false
+}
+
+// buildFeaturesPage builds the Features page content.
 func (uh *UserHome) buildFeaturesPage() {
 	page := uh.featuresPrefsPage
 	if page == nil {
@@ -28,10 +76,6 @@ func (uh *UserHome) buildFeaturesPage() {
 
 	uh.buildBluefinGroups(page)
 
-	if uh.config.IsGroupEnabled("features_page", "ai_group") {
-		uh.buildAIStackGroup(page)
-	}
-
 	if uh.config.IsGroupEnabled("features_page", "troubleshooting_group") {
 		uh.buildTroubleshootGroup(page)
 	}
@@ -39,8 +83,8 @@ func (uh *UserHome) buildFeaturesPage() {
 	if uh.config.IsGroupEnabled("features_page", "features_group") {
 		// Build the features group (shown if updex is available)
 		uh.featuresGroup = adw.NewPreferencesGroup()
-		uh.featuresGroup.SetTitle("System Features")
-		uh.featuresGroup.SetDescription("Checking feature availability...")
+		uh.featuresGroup.SetTitle("Optional features")
+		uh.featuresGroup.SetDescription("Checking what this system offers…")
 
 		// Add Update button as header suffix (disabled until availability confirmed)
 		updateBtn := gtk.NewButtonWithLabel("Update")
@@ -57,13 +101,12 @@ func (uh *UserHome) buildFeaturesPage() {
 
 		// Build the "not available" group (hidden by default)
 		uh.featuresUnavailableGroup = adw.NewPreferencesGroup()
-		uh.featuresUnavailableGroup.SetTitle("System Features")
-		uh.featuresUnavailableGroup.SetDescription("Manage system features")
+		uh.featuresUnavailableGroup.SetTitle("Optional features")
 		uh.featuresUnavailableGroup.SetVisible(false)
 
 		unavailRow := adw.NewActionRow()
-		unavailRow.SetTitle("Feature Manager Not Available")
-		unavailRow.SetSubtitle("System features are not configured on this system")
+		unavailRow.SetTitle("Not available on this system")
+		unavailRow.SetSubtitle("This system has no optional features you can turn on here.")
 		uh.featuresUnavailableGroup.Add(&unavailRow.Widget)
 		page.Add(uh.featuresUnavailableGroup)
 
@@ -106,12 +149,13 @@ func (uh *UserHome) loadFeatures() {
 		}
 
 		if err != nil {
-			uh.featuresGroup.SetDescription(fmt.Sprintf("Error: %v", err))
+			log.Printf("views: listing optional features failed: %v", err)
+			uh.featuresGroup.SetDescription("Could not check which features are available.")
 			return
 		}
 
 		if len(features) == 0 {
-			uh.featuresGroup.SetDescription("No features available")
+			uh.featuresGroup.SetDescription("This system offers no optional features.")
 			return
 		}
 
@@ -124,20 +168,14 @@ func (uh *UserHome) loadFeatures() {
 			row.SetTitle(presentation.Title)
 			row.SetSubtitle(presentation.Subtitle)
 
-			toggle := gtk.NewSwitch()
-			toggle.SetActive(feat.Enabled)
-			toggle.SetValign(gtk.AlignCenterValue)
-
 			featName := feat.Name
-			sw := toggle
-			stateSetCb := func(_ gtk.Switch, state bool) bool {
-				uh.onFeatureToggled(featName, state, sw)
-				return true // block visual change until confirmed
-			}
-			toggle.ConnectStateSet(&stateSetCb)
+			var toggle *guardedSwitch
+			toggle = newGuardedSwitch(feat.Enabled, func(state bool) {
+				uh.onFeatureToggled(featName, state, toggle)
+			})
 
-			row.AddSuffix(&toggle.Widget)
-			row.SetActivatableWidget(&toggle.Widget)
+			row.AddSuffix(&toggle.widget.Widget)
+			row.SetActivatableWidget(&toggle.widget.Widget)
 			uh.featuresGroup.Add(&row.Widget)
 			uh.featureRows[feat.Name] = row
 		}
@@ -202,7 +240,7 @@ func (uh *UserHome) checkFeatureUpdates(totalFeatures int) {
 }
 
 // onFeatureToggled handles enabling/disabling a feature
-func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *gtk.Switch) {
+func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedSwitch) {
 	go func() {
 		ctx, cancel := updex.DefaultContext()
 		defer cancel()
@@ -217,19 +255,19 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *gtk.Swit
 		sgtk.RunOnMainThread(func() {
 			if err != nil {
 				// Revert switch to previous state
-				toggle.SetActive(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to update %s: %v", name, err))
+				toggle.set(!enabled)
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change %s: %v", name, err))
 				return
 			}
 
 			decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)
 			if decision.Confirm {
 				// Confirm the visual state change
-				toggle.SetActive(enabled)
+				toggle.set(enabled)
 			} else {
 				// Nothing actually changed under dry-run; revert to the
 				// pre-click state.
-				toggle.SetActive(!enabled)
+				toggle.set(!enabled)
 			}
 
 			uh.toastAdder.ShowToast(decision.Toast)
@@ -240,7 +278,7 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *gtk.Swit
 // onUpdateFeaturesClicked handles the Update button click
 func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 	button.SetSensitive(false)
-	button.SetLabel("Updating...")
+	button.SetLabel("Updating…")
 
 	go func() {
 		ctx, cancel := updex.DefaultContext()
@@ -253,7 +291,7 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 			button.SetLabel("Update")
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Update failed: %v", err))
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not update the features: %v", err))
 				return
 			}
 
@@ -272,10 +310,9 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 // instead hides itself when internal/ublue reports no ublue-os image
 // descriptor, which is every non-Bluefin host including Snow Linux.
 
-// buildBluefinGroups builds the developer-mode and gaming-mode groups. The
-// release channel and graphics driver live on the System page instead: they
-// describe which image this machine runs, where these two are capabilities
-// you switch on.
+// buildBluefinGroups builds the developer-tools and gaming groups. The
+// release channel and graphics driver live elsewhere: they describe which
+// system this machine runs, where these two are capabilities you switch on.
 func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) {
 	dxEnabled := uh.config.IsGroupEnabled("features_page", "dx_group")
 	gamingEnabled := uh.config.IsGroupEnabled("features_page", "gaming_group")
@@ -284,7 +321,7 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) {
 		return
 	}
 
-	// One detection serves all three groups. It reads only local files, so
+	// One detection serves both groups. It reads only local files, so
 	// it is cheap, but it is still done off the main thread and cached.
 	status := ublue.StatusCached()
 	if !status.Available {
@@ -304,134 +341,121 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) {
 		uh.buildDeveloperGroup(page, status)
 	}
 	if gamingEnabled {
-		// An image that already ships the gaming stack gets a readonly
-		// note instead of the switch. Gaming mode installs the stack as
-		// user Flatpaks, which on these images would shadow the system
-		// packages rather than add anything. See ublue.Status.Gaming.
+		// A system that already ships the gaming apps gets a readonly
+		// note instead of the switch. Gaming installs them for the
+		// current account only, which here would shadow the copies the
+		// system already provides. See ublue.Status.Gaming.
 		if status.Gaming {
 			uh.buildGamingIncludedGroup(page)
-			log.Printf("views: gaming group suppressed, image ships the gaming stack ref=%s", status.Ref)
+			log.Printf("views: gaming group suppressed, this system already ships the gaming apps ref=%s", status.Ref)
 		} else {
 			uh.buildGamingGroup(page)
 		}
 	}
 }
 
-// buildGamingIncludedGroup replaces the gaming-mode switch with a single
-// readonly row on images that ship the gaming stack as system packages. The
-// group is still rendered so the feature does not simply vanish on the images
-// most likely to be looking for it.
+// buildGamingIncludedGroup replaces the gaming switch with a single readonly
+// row on systems that ship the gaming apps themselves. The group is still
+// rendered so the feature does not simply vanish on the systems most likely
+// to be looking for it.
 func (uh *UserHome) buildGamingIncludedGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("This image ships the gaming stack — there is nothing to switch on")
+	group.SetDescription("Steam and the tools that go with it are already part of this system.")
 
+	presentation := pageview.GamingIncludedRow()
 	row := adw.NewActionRow()
-	row.SetTitle("Included in this image")
-	row.SetSubtitle("Steam and the rest of the gaming stack are installed as system packages. Installing them again as Flatpaks would shadow the versions the image provides.")
+	row.SetTitle(presentation.Title)
+	row.SetSubtitle(presentation.Subtitle)
 	group.Add(&row.Widget)
 
 	page.Add(group)
 }
 
-// buildDeveloperGroup builds the developer-mode switch.
+// buildDeveloperGroup builds the developer-tools switch.
 func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.Status) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Developer Mode")
-	// Bluefin also publishes separate -dx images, and a user who has seen
-	// those will expect this switch to rebase them. Say plainly that it does
-	// not: this is group membership, which is the only form of developer
-	// mode available on all three supported images (Dakota publishes no -dx
-	// variant at all).
-	group.SetDescription("Adds this account to the container, VM, and serial-device groups — it does not rebase to a -dx image")
+	group.SetTitle("Developer")
+	group.SetDescription("Tools for building and running software on this computer.")
 
-	presentation := pageview.DeveloperRow(status.Developer, status.DevGroups)
+	presentation := pageview.DeveloperRow(status.Developer)
 
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 
-	toggle := gtk.NewSwitch()
-	toggle.SetActive(status.Developer)
-	toggle.SetValign(gtk.AlignCenterValue)
-
-	sw := toggle
 	dxRow := row
-	stateSetCb := func(_ gtk.Switch, state bool) bool {
-		uh.onDeveloperToggled(state, sw, dxRow)
-		return true
-	}
-	toggle.ConnectStateSet(&stateSetCb)
+	var toggle *guardedSwitch
+	toggle = newGuardedSwitch(status.Developer, func(state bool) {
+		uh.onDeveloperToggled(state, toggle, dxRow)
+	})
 
-	row.AddSuffix(&toggle.Widget)
-	row.SetActivatableWidget(&toggle.Widget)
+	row.AddSuffix(&toggle.widget.Widget)
+	row.SetActivatableWidget(&toggle.widget.Widget)
 	group.Add(&row.Widget)
 
 	page.Add(group)
 	uh.developerGroup = group
 	uh.developerRow = row
-	uh.developerSwitch = toggle
+	uh.developerSwitch = toggle.widget
 }
 
-// buildGamingGroup builds the gaming-mode switch. Its state is unknown until
-// the Flatpak query returns, so the switch starts insensitive and is
-// populated asynchronously.
+// buildGamingGroup builds the gaming switch. What is installed is unknown
+// until the query returns, so the switch starts insensitive and is populated
+// asynchronously — through guardedSwitch, so showing the machine's real state
+// cannot be mistaken for the user asking for it.
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Installs the gaming stack as user Flatpaks — nothing is layered onto the system image")
+	group.SetDescription("Steam and the tools that go with it, installed for your account only.")
 
 	row := adw.NewActionRow()
-	presentation := pageview.GamingRow("Checking installed components...")
-	row.SetTitle(presentation.Title)
-	row.SetSubtitle(presentation.Subtitle)
+	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
+	row.SetSubtitle(pageview.GamingCheckingSubtitle)
 
-	toggle := gtk.NewSwitch()
-	toggle.SetValign(gtk.AlignCenterValue)
-	toggle.SetSensitive(false)
-
-	sw := toggle
 	gamingRow := row
-	stateSetCb := func(_ gtk.Switch, state bool) bool {
-		uh.onGamingToggled(state, sw, gamingRow)
-		return true
-	}
-	toggle.ConnectStateSet(&stateSetCb)
+	var toggle *guardedSwitch
+	toggle = newGuardedSwitch(false, func(state bool) {
+		uh.onGamingToggled(state, toggle, gamingRow)
+	})
+	toggle.widget.SetSensitive(false)
 
-	row.AddSuffix(&toggle.Widget)
-	row.SetActivatableWidget(&toggle.Widget)
+	row.AddSuffix(&toggle.widget.Widget)
+	row.SetActivatableWidget(&toggle.widget.Widget)
 	group.Add(&row.Widget)
 
 	page.Add(group)
 	uh.gamingGroup = group
 	uh.gamingRow = row
-	uh.gamingSwitch = toggle
+	uh.gamingSwitch = toggle.widget
 
-	go uh.refreshGamingState()
+	go uh.refreshGamingState(toggle, row)
 }
 
-// refreshGamingState queries installed Flatpaks off the main thread and
-// applies the result to the gaming row.
-func (uh *UserHome) refreshGamingState() {
+// refreshGamingState queries the installed applications off the main thread
+// and applies the result to the gaming row.
+func (uh *UserHome) refreshGamingState(toggle *guardedSwitch, row *adw.ActionRow) {
 	state, err := gaming.Status()
+	total := len(gaming.Components())
 
 	sgtk.RunOnMainThread(func() {
-		if uh.gamingRow == nil || uh.gamingSwitch == nil {
+		if toggle == nil || row == nil {
 			return
 		}
 		if err != nil {
-			uh.gamingRow.SetSubtitle(fmt.Sprintf("Unavailable: %v", err))
+			log.Printf("views: gaming status unavailable: %v", err)
+			row.SetSubtitle(pageview.GamingUnavailableSubtitle)
 			return
 		}
-		uh.gamingSwitch.SetSensitive(true)
-		uh.gamingSwitch.SetActive(state.Enabled)
-		uh.gamingRow.SetSubtitle(pageview.GamingRow(state.Summary()).Subtitle)
+		toggle.widget.SetSensitive(true)
+		toggle.set(state.Enabled)
+		row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), total).Subtitle)
 	})
 }
 
-// onDeveloperToggled adds or removes this account's developer groups.
-func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *adw.ActionRow) {
-	toggle.SetSensitive(false)
+// onDeveloperToggled grants or withdraws this account's developer access.
+func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	toggle.widget.SetSensitive(false)
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -440,16 +464,16 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *ad
 		err := ublue.SetDeveloperMode(ctx, enabled)
 
 		sgtk.RunOnMainThread(func() {
-			toggle.SetSensitive(true)
+			toggle.widget.SetSensitive(true)
 
 			if err != nil {
-				toggle.SetActive(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Developer mode failed: %v", err))
+				toggle.set(!enabled)
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change developer tools: %v", err))
 				return
 			}
 
 			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled)
-			toggle.SetActive(decision.Confirm == enabled)
+			toggle.set(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
@@ -458,12 +482,13 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *ad
 	}()
 }
 
-// onGamingToggled installs or removes the gaming stack. Unlike the other two
-// toggles this one can partly succeed, so the decision to confirm the switch
-// comes from actionmsg.GamingMode rather than from the absence of an error.
-func (uh *UserHome) onGamingToggled(enabled bool, toggle *gtk.Switch, row *adw.ActionRow) {
-	toggle.SetSensitive(false)
-	row.SetSubtitle("Working...")
+// onGamingToggled installs or removes the gaming applications. Unlike the
+// developer switch this one can partly succeed, so the decision to confirm
+// the switch comes from actionmsg.GamingMode rather than from the absence of
+// an error.
+func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	toggle.widget.SetSensitive(false)
+	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 
 	go func() {
 		var changed, skipped []string
@@ -475,10 +500,10 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *gtk.Switch, row *adw.A
 		}
 
 		sgtk.RunOnMainThread(func() {
-			toggle.SetSensitive(true)
+			toggle.widget.SetSensitive(true)
 
 			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
-			toggle.SetActive(decision.Confirm == enabled)
+			toggle.set(decision.Confirm == enabled)
 			row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)))
 
 			if len(failures) > 0 {
@@ -487,7 +512,7 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *gtk.Switch, row *adw.A
 				uh.toastAdder.ShowToast(decision.Toast)
 			}
 
-			go uh.refreshGamingState()
+			go uh.refreshGamingState(toggle, row)
 		})
 	}()
 }
