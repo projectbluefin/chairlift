@@ -33,7 +33,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/config/    YAML config loading, feature group enablement
         ├── internal/navigation/ Canonical pages, shortcuts, and pure navigation transitions
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
-        ├── internal/avatar/    Pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
+        ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
