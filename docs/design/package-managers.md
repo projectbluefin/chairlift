@@ -794,6 +794,88 @@ both), then re-read `GetStatus()` and `RollbackVersion()` from real state
 (`actionmsg.SysupdateStage`). `loadSysupdateUpdateStatus()` performs the
 initial gate + reveal.
 
+## Dated-build registry catalog (`internal/registrytags`)
+
+`internal/registrytags` reads the tags an OCI registry publishes for one
+repository and turns them into the dated builds a rollback or pin surface
+would render. It is a pure-Go, puregotk-free leaf package with no privileged
+surface: it takes no argument that reaches `pkexec` and returns nothing that
+is handed to it. [ADR-0013](../adr/0013-rollback-catalog-reads-the-registry-live.md)
+records why this reads the registry live rather than extending
+`internal/imageinfo`'s hand-verified tables (ADR-0011), which stay the only
+authority on a `bootc switch` target.
+
+The registry reference is `registry/path` — the same spelling
+`imageinfo.KnownImages()` returns — and it is validated before either half
+reaches a URL: `repositoryPattern` rejects a host carrying a scheme,
+userinfo, or a path separator, and each repository path segment must match
+the distribution specification's component grammar. A reference carrying a
+tag or digest is rejected rather than stripped, because stripping is how
+`ghcr.io/ublue-os/bluefin:stable` would become a listing of a repository the
+caller did not name.
+
+Four exported entry points, each with one job:
+
+- `Client.Tags(ctx, repository)` returns every tag the repository publishes.
+  It follows the response's `Link: rel="next"` header verbatim rather than
+  composing the next URL. Verified 2026-09-22: GHCR answers a 100-tag page
+  with `/v2/<repo>/tags/list?last=…&n=0`, so the page size is the registry's
+  to choose. A client that appends its own `n=` or rebuilds `last` from the
+  tags it has seen either re-reads a page or stops early; the loop is bounded
+  by `maxPages` so a registry that always sends a next link cannot spin it.
+- `Client.Tag(ctx, repository, tag)` resolves one tag to its
+  `Docker-Content-Digest` and its `org.opencontainers.image.created`
+  annotation. It returns `ErrUnknownTag` when the registry answers 404, and a
+  zero `Created` with no error when the tag exists but carries no annotation
+  — signature tags (`sha256-<hex>.sig`) and architecture-suffixed stream tags
+  (`lts-amd64`) are the second case, verified 2026-09-22, and "this tag is
+  not a build" is an answer rather than a failure to answer. The annotation
+  is read from whichever shape the registry returns, index or single-arch
+  manifest: `stable-20260623` is served as an OCI image manifest and
+  `lts-testing.20260621` as an index, and both carry the date, so a client
+  that reads only one shape reports "no date" for half the family. The
+  response's `Content-Type` header is the authority on which arrived, not the
+  document's own `mediaType` field — GHCR omits that field entirely on the
+  manifest it serves for a dated tag.
+- `ParseBuild(tag)` reports whether a tag names a dated build. Both
+  separators are in use and both spell the same build
+  (`lts-testing.20260621` and `lts-testing-20260621`); the eight trailing
+  digits must form a real calendar date, which is what excludes the signature
+  and architecture-suffixed populations. The grammar is exact rather than
+  greedy, so an unrecognized shape resolves to "no date" and the caller shows
+  nothing rather than a day it inferred.
+- `Builds(tags, since)` filters to the builds at or after `since`, newest
+  first and in tag order within a day, so the order is total and a re-render
+  does not shuffle the list. It returns every alias rather than collapsing
+  them: verified 2026-09-22, `stable-20260623`, `44.20260623`,
+  `stable-44.20260623`, `stable-daily-20260623`, `stable-daily-44.20260623`,
+  `gts-20260623` and `gts-44.20260623` all resolve to the same digest and
+  creation time, and which spelling to show depends on the stream the machine
+  is booted into.
+
+`Catalog` is the cache, and it is the only stateful part of the package. It
+holds each repository's tag listing for `DefaultTTL` (15 minutes) and each
+resolved tag for the same, bounded by `DefaultMaxEntries` (256) with the
+oldest answer evicted at capacity, so a long-running window cannot grow
+without bound. `Now` injects the clock for the TTL. A failed read is never
+cached and there is no stale fallback: the catalog exists to show the
+registry's current state, so an error is returned to the caller to render
+rather than replaced with the last answer that worked. `Catalog` is safe for
+concurrent use, because the pages that read it run their registry work off
+the GTK main thread.
+
+Every request goes through `Client.HTTP`, and a nil `HTTP` uses a client with
+a timeout rather than `http.DefaultClient`, which has none. That is the same
+seam `internal/sbom` uses, and it is what keeps the gated tests off the
+network: `registrytags_test.go` drives a loopback `httptest` registry that
+models GHCR's Link-header pagination, its Content-Type-only manifest media
+type, and its 404 `MANIFEST_UNKNOWN` body.
+
+Pinning to a dated tag is not implemented here and is not unblocked by this
+package. `chairlift-ublue-helper` accepts no image reference (ADR-0001), so a
+pin has to be a new privileged operation whose target the helper derives from
+a validated grammar, as `channel-switch` already does for its own target.
+
 ## Updex (`internal/updex/updex.go`)
 
 Manages system features (add-on software/configuration modules). Unlike other wrappers, updex does **not** shell out to a CLI for reads. It uses the `github.com/frostyard/updex/updex` Go library directly for read operations, with a singleton `*updexapi.Client`. Write operations that require root are delegated via pkexec to the fixed absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`, built from `cmd/chairlift-updex-helper/main.go`) — never a bare, `$PATH`-resolved name, since `pkexec` matches the resolved absolute path against `data/io.projectbluefin.chairlift.updex.policy`'s `org.freedesktop.policykit.exec.path` annotation to select the right action; see [overview.md](./overview.md#privileged-operations) for the full rationale and the matching `PREFIX=/usr` Makefile requirement.

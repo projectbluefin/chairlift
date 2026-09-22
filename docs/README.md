@@ -67,6 +67,11 @@ are listed in [org-adrs.md](org-adrs.md).
   — the application ships as "Control Center" and keeps ChairLift as the code
   name; `branding.AppName` owns every user-visible spelling, and three
   `internal/installcheck` gates hold the split
+- [adr/0013-rollback-catalog-reads-the-registry-live.md](adr/0013-rollback-catalog-reads-the-registry-live.md)
+  — the dated-build catalog is read from the registry at runtime by the
+  read-only `internal/registrytags` leaf package, behind the `Client.HTTP`
+  seam so no gated test reaches the network; pinning to a dated tag stays a
+  separate decision because no image reference crosses the pkexec boundary
 
 ### Design
 
@@ -74,8 +79,9 @@ are listed in [org-adrs.md](org-adrs.md).
   purpose, dependency flow, key patterns, configuration, build and release
   (formerly `yeti/OVERVIEW.md`)
 - [design/package-managers.md](design/package-managers.md) — the Homebrew,
-  Flatpak, bootc, sysupdate, updex, and ublue wrappers and their view-layer leaf
-  packages (formerly `yeti/package-managers.md`)
+  Flatpak, bootc, sysupdate, updex, and ublue wrappers, the registry tag
+  catalog, and their view-layer leaf packages (formerly
+  `yeti/package-managers.md`)
 
 ### Specs
 

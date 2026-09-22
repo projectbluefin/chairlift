@@ -388,6 +388,27 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
+- **The dated-build catalog reads the registry, and reads it read-only.**
+  `internal/registrytags` is the leaf package behind the rollback calendar
+  (ADR-0013): `Client.Tags` lists a repository through the registry's
+  `Link: rel="next"` pagination, `ParseBuild` reads the day out of the tag
+  name, and `Client.Tag` resolves one tag to its digest and its
+  `org.opencontainers.image.created` timestamp. Every request goes through the
+  `Client.HTTP` transport, the same seam `internal/sbom` uses, so no gate in
+  `make ci` makes an outbound request — its tests drive a loopback `httptest`
+  registry that models GHCR's pagination, its 404 `MANIFEST_UNKNOWN`, and the
+  fact that the response's `Content-Type` header, not the body's `mediaType`
+  field, is the media-type authority (GHCR omits `mediaType` on some dated-tag
+  manifests — verified 2026-09-22). Two rules keep it safe to grow: nothing it
+  returns may reach a privileged path — a `bootc switch` target is still
+  `internal/imageinfo`'s tables and only those (ADR-0011), and a pin is a
+  separate decision because no image reference crosses the ublue pkexec
+  boundary — and the catalog is never baked, cached to disk, or served stale,
+  because a catalog that is not the registry's is the failure this design
+  exists to avoid. A failed read is returned to the caller, never cached and
+  never replaced by a previous answer. `Catalog` caches in process only,
+  bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
+  GTK main thread, so it must stay safe for concurrent readers.
 - **The local-AI stack is one switch, and it is unprivileged.** ChairLift
   ships one runtime (RamaLama) whose per-accelerator image is chosen by
   `internal/gpu`, not bluefinctl's twelve-quadlet vendor catalog — that

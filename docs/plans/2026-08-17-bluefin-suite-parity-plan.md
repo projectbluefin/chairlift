@@ -46,7 +46,7 @@ covered it before this plan.
 | Rollback to previous deployment | ✅ calendar | ✅ | **Done** — `rollback` helper subcommand |
 | Automatic background updates (uupd timer) | ✅ | ✅ | **Done** — `internal/autoupdate`, one switch |
 | Image variant selection (`-nvidia`) | — | ✅ rebase dialog | **Done** — `internal/imageinfo` driver table, one hardware-driven offer |
-| Pin to dated tag / unpin to stream | — | ✅ | **Later** — needs a live registry tag listing in the GUI; see Later/ideas |
+| Pin to dated tag / unpin to stream | — | ✅ | **Partial** — the live registry tag listing landed as `internal/registrytags` (ADR-0013); no GUI wiring and no pin operation yet, see Later/ideas |
 | GPU detection | ✅ | ✅ | **Done** — `internal/gpu`, PCI vendor IDs from sysfs |
 | Action journal of privileged operations | — | ✅ | **Done** — `internal/journal`, wired into both privileged dispatch points |
 | Desktop notifications | ✅ `notify-send` | ✅ `GNotification` | **Done** — `internal/notify`, Update All completion only |
@@ -260,6 +260,35 @@ rather than a stub, and which is therefore in the frame.) The row's text and eve
   dated tags, which puts a network round-trip behind a GUI control and cannot
   be covered by the gated tests without a fixture server. Worth doing, but as
   its own phase with a recorded decision about where the network call lives.
+
+  **The decision is recorded (2026-09-22, ADR-0013) and the read half has
+  landed.** `internal/registrytags` is the read-only leaf package: it lists a
+  repository's tags through GHCR's Link-header pagination, classifies the
+  dated builds, resolves one tag to its digest and creation time, and caches
+  the answers behind a bounded TTL. Its requests go through an injectable
+  transport, so the fixture-server half of the objection is answered —
+  the package's own tests drive a loopback registry that models GHCR's
+  pagination, its `Content-Type`-only manifest media type, and its
+  `MANIFEST_UNKNOWN` 404, and no gated test reaches the network.
+
+  What remains is not a small step and is deliberately not started:
+  - **No GUI wiring.** Nothing calls the package yet, so there is no calendar
+    and no image choice. The issue's "tab or whatever that has rollback
+    features" is still unbuilt, and closing this row means a page (or a group
+    on an existing one), a walkthrough entry, and a `make screenshots` run.
+  - **No pin operation.** `chairlift-ublue-helper` accepts no image reference
+    (ADR-0001), so a pin cannot reuse `channel-switch`. It needs a new
+    privileged subcommand whose target the helper derives from a validated
+    grammar, its own PolicyKit action, a journal entry, an e2e
+    accepted-command case, and its own ADR. Until that exists, the catalog is
+    display-only.
+  - **One build is reachable by many tags.** Verified on 2026-09-22: seven
+    spellings of 2026-06-23 in `ghcr.io/ublue-os/bluefin` (`stable-20260623`,
+    `44.20260623`, `stable-44.20260623`, `stable-daily-20260623`,
+    `stable-daily-44.20260623`, `gts-20260623`, `gts-44.20260623`) resolve to
+    one digest. A calendar that renders one row per tag shows that day seven
+    times; the caller has to group, and deciding *which* spelling to show
+    depends on the booted stream.
 
 ## Open questions
 
