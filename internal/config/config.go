@@ -392,8 +392,8 @@ func defaultConfig() *Config {
 			"help_resources_group": GroupConfig{
 				Enabled: true,
 				Website: "https://docs.projectbluefin.io/",
-				Issues:  "https://github.com/projectbluefin/chairlift/issues",
-				Chat:    "https://github.com/projectbluefin/chairlift/discussions",
+				Issues:  "https://issues.projectbluefin.io/",
+				Chat:    "https://ask.projectbluefin.io/",
 			},
 		},
 	}

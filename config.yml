@@ -130,5 +130,5 @@ help_page:
   help_resources_group:
     enabled: true
     website: https://docs.projectbluefin.io/
-    issues: https://github.com/projectbluefin/chairlift/issues
-    chat: https://github.com/projectbluefin/chairlift/discussions
+    issues: https://issues.projectbluefin.io/
+    chat: https://ask.projectbluefin.io/
