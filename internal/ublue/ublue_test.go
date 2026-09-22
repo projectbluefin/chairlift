@@ -479,7 +479,7 @@ func TestDetectRecommendsADriverOnlyWhenItHelps(t *testing.T) {
 	}{
 		{
 			name:            "nvidia card on the standard dakota image",
-			info:            imageinfo.Info{Name: "dakota", Tag: "latest", Ref: "docker://ghcr.io/projectbluefin/dakota"},
+			info:            imageinfo.Info{Name: "dakota", Tag: "stable", Ref: "docker://ghcr.io/projectbluefin/dakota"},
 			hardware:        gpu.Set{NVIDIA: true},
 			wantDriver:      imageinfo.DriverStandard,
 			wantRecommended: imageinfo.DriverNVIDIA,

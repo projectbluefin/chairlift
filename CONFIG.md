@@ -65,7 +65,7 @@ valid page.
 
 ### Updates Page (`updates_page`)
 
-- `update_all_group`: Multi-phase update sequencing (OS image, Flatpaks, Homebrew) and automatic background updates switch
+- `automatic_updates_group`: The automatic-background-updates switch, and nothing else — whether this system installs updates on its own schedule. Updating now is the update shell's single primary action and has no configuration key. Hidden entirely on a host with no unattended-update timer
 - `bootc_updates_group`: System-wide bootc updates
 - `sysupdate_updates_group`: System-wide native A/B (systemd-sysupdate) updates; shown only on native A/B installs
 - `flatpak_updates_group`: Available Flatpak application updates (user and system)
@@ -129,7 +129,7 @@ and nothing is written outside `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME`.
 - `help_resources_group`: Help and support resources
   - `website`: URL to the project website
   - `issues`: URL to the issue tracker for bug reports and feature requests
-  - `chat`: URL to community chat or discussions
+  - `chat`: URL to the documentation. The key is named `chat` for backward compatibility; the link is titled "Documentation"
 
 ## Example: Disabling Homebrew Features
 
@@ -137,14 +137,18 @@ To create a distribution-specific configuration that disables all Homebrew featu
 
 ```yaml
 updates_page:
-  update_all_group:
-    enabled: false # Hide Update All so it cannot run Homebrew updates
+  automatic_updates_group:
+    # The unattended-update timer is the host's own; ChairLift can only turn
+    # it on or off, not narrow what it touches, so a Homebrew-free
+    # distribution hides the switch rather than offering an updater it
+    # cannot scope.
+    enabled: false
   bootc_updates_group:
     enabled: true
   flatpak_updates_group:
     enabled: true # Keep Flatpak updates
   brew_updates_group:
-    enabled: false # Hide Homebrew updates
+    enabled: false # Hide Homebrew updates, and drop the "Developer tools" source from the update run
   brew_trust_group:
     enabled: false # Hide Homebrew tap trust
 

@@ -29,11 +29,12 @@ func TestExampleChannelTableParses(t *testing.T) {
 	}
 
 	// It must add images rather than replace the shipped ones, or copying
-	// the example verbatim would break the three supported systems.
+	// the example verbatim would break every supported system.
 	for _, builtin := range []string{
 		"ghcr.io/ublue-os/bluefin",
 		"ghcr.io/projectbluefin/bluefin-lts",
 		"ghcr.io/projectbluefin/dakota",
+		"ghcr.io/projectbluefin/dakota-gaming",
 	} {
 		if _, ok := table[builtin]; !ok {
 			t.Errorf("applying channels.example.yml drops the built-in entry for %s", builtin)

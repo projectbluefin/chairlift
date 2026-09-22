@@ -160,7 +160,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"reset_group",
 		},
 		"updates": {
-			"update_all_group",
+			"automatic_updates_group",
 			"bootc_updates_group",
 			"sysupdate_updates_group",
 			"flatpak_updates_group",

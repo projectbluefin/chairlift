@@ -45,20 +45,20 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	page.SetTitle("Updates")
 
 	sourcesGroup := adw.NewPreferencesGroup()
-	sourcesGroup.SetTitle("Update Sources")
+	sourcesGroup.SetTitle("Update sources")
 	states := w.updateSourceStates()
 	ready := w.updateSourcesReady()
 	for _, preference := range sourcePreferences {
 		row := adw.NewSwitchRow()
 		switch preference.id {
 		case updateflow.OperatingSystem:
-			row.SetTitle("Operating System")
+			row.SetTitle("Operating system")
 		case updateflow.Applications:
 			row.SetTitle("Applications")
 		case updateflow.DeveloperTools:
-			row.SetTitle("Developer Tools")
+			row.SetTitle("Developer tools")
 		case updateflow.SystemComponents:
-			row.SetTitle("System Components")
+			row.SetTitle("System components")
 		}
 		row.SetSubtitle(sourcePreferenceSubtitle(states, ready, preference.id))
 		row.SetSensitive(sourcePreferenceSensitive(states, ready, preference.id))
@@ -70,7 +70,7 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	maintenanceGroup := adw.NewPreferencesGroup()
 	maintenanceGroup.SetTitle("Maintenance")
 	maintenanceRow := adw.NewSwitchRow()
-	maintenanceRow.SetTitle("Run Maintenance After Updates")
+	maintenanceRow.SetTitle("Run maintenance after updates")
 	store.BindBoolean("maintenance-after-updates", &maintenanceRow.Object)
 	maintenanceGroup.Add(&maintenanceRow.Widget)
 	page.Add(maintenanceGroup)

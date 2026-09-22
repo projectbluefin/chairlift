@@ -22,7 +22,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "view-refresh-symbolic",
-				Title:       "Checking for Updates",
+				Title:       "Checking for updates",
 				Description: "Preparing to check for updates…",
 			},
 		},
@@ -35,7 +35,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "view-refresh-symbolic",
-				Title:       "Checking for Updates",
+				Title:       "Checking for updates",
 				Description: "Applications: Loading application updates…",
 			},
 		},
@@ -47,9 +47,9 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "emblem-system-symbolic",
-				Title:       "System Is Up to Date",
+				Title:       "System is up to date",
 				Description: "No updates are available.",
-				ActionLabel: "Check Again",
+				ActionLabel: "Check again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
 			},
@@ -62,7 +62,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "emblem-system-symbolic",
-				Title:       "System Is Up to Date",
+				Title:       "System is up to date",
 				Description: "No update sources are available.",
 			},
 		},
@@ -87,9 +87,9 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "software-update-available-symbolic",
-				Title:       "Updates Available",
+				Title:       "Updates available",
 				Description: "2 updates are available.",
-				ActionLabel: "Update All",
+				ActionLabel: "Update all",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
 			},
@@ -108,12 +108,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "network-error-symbolic",
-				Title:       "Unable to Check for Updates",
-				Description: "Developer Tools: network unavailable",
-				ActionLabel: "Try Again",
+				Title:       "Unable to check for updates",
+				Description: "Developer tools: network unavailable",
+				ActionLabel: "Try again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Unable to Check for Updates",
+				Banner:      "Unable to check for updates",
 			},
 		},
 		{
@@ -125,8 +125,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "content-loading-symbolic",
-				Title:       "Installing Updates",
-				Description: "Developer Tools: Installing packages…",
+				Title:       "Installing updates",
+				Description: "Developer tools: Installing packages…",
 			},
 		},
 		{
@@ -149,12 +149,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "dialog-warning-symbolic",
-				Title:       "Some Updates Could Not Be Installed",
+				Title:       "Some updates could not be installed",
 				Description: "1 source completed; 2 sources failed.",
-				ActionLabel: "Retry Failed",
+				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Some Updates Could Not Be Installed",
+				Banner:      "Some updates could not be installed",
 			},
 		},
 		{
@@ -169,12 +169,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "dialog-warning-symbolic",
-				Title:       "Some Updates Could Not Be Installed",
+				Title:       "Some updates could not be installed",
 				Description: "Updates completed, but maintenance failed: cleanup failed",
-				ActionLabel: "Retry Failed",
+				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Maintenance Failed",
+				Banner:      "Maintenance failed",
 			},
 		},
 		{
@@ -190,9 +190,9 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{
 				Icon:        "system-reboot-symbolic",
-				Title:       "Restart Required",
+				Title:       "Restart required",
 				Description: "Restart to finish installing updates.",
-				Banner:      "Restart Required",
+				Banner:      "Restart required",
 			},
 		},
 	}
@@ -230,7 +230,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				ID:         updateflow.DeveloperTools,
 				Configured: false,
 			},
-			title: "Developer Tools",
+			title: "Developer tools",
 			sub:   "Disabled by administrator",
 		},
 		{
@@ -240,7 +240,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Configured: true,
 				Available:  false,
 			},
-			title: "System Components",
+			title: "System components",
 			sub:   "Not available on this system",
 		},
 		{
@@ -252,7 +252,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    false,
 			},
 			title: "Applications",
-			sub:   "Disabled in Preferences",
+			sub:   "Disabled in preferences",
 		},
 		{
 			name: "checking",
@@ -263,7 +263,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				Checking:   true,
 			},
-			title: "Operating System",
+			title: "Operating system",
 			sub:   "Checking for updates…",
 		},
 		{
@@ -287,7 +287,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:         true,
 				RestartRequired: true,
 			},
-			title: "Operating System",
+			title: "Operating system",
 			sub:   "Restart required",
 		},
 		{
@@ -299,7 +299,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				CheckErr:   errors.New("offline"),
 			},
-			title: "Developer Tools",
+			title: "Developer tools",
 			sub:   "Check failed: offline",
 		},
 		{
@@ -311,7 +311,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Enabled:    true,
 				ApplyErr:   errors.New("staging failed"),
 			},
-			title: "Operating System",
+			title: "Operating system",
 			sub:   "Update failed: staging failed",
 		},
 	}

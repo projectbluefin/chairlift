@@ -38,6 +38,10 @@ const (
 	ActionCheck
 	ActionUpdateAll
 	ActionRetryFailed
+	// ActionRestart is offered when an update is staged and only a restart
+	// can finish it. Without it PhaseRestartRequired renders a status that
+	// tells the user to restart and gives them nothing to press.
+	ActionRestart
 )
 
 // Item is one pending update.
@@ -173,7 +177,7 @@ func derive(s Snapshot) Snapshot {
 		s.Action = ActionRetryFailed
 	case s.RestartRequired() && s.TotalUpdates == 0:
 		s.Phase = PhaseRestartRequired
-		s.Action = ActionNone
+		s.Action = ActionRestart
 	case !hasConfiguredAvailable(s.Sources):
 		s.Phase = PhaseReady
 		s.Action = ActionNone

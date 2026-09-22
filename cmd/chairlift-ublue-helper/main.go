@@ -47,15 +47,7 @@ func main() {
 		}
 	}
 
-	// Every command but the on-demand full update finishes in minutes: they
-	// stage a transaction, edit a unit, or change group membership. The
-	// update runs the whole updater, so it carries the longer deadline
-	// ubluehelper owns.
-	timeout := defaultTimeout
-	if invocation.Command == ubluehelper.CommandUpdateNow {
-		timeout = ubluehelper.UpdateNowTimeout
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
 	switch invocation.Command {
@@ -73,8 +65,6 @@ func main() {
 		runDriverSwitch(ctx, invocation)
 	case ubluehelper.CommandFactoryReset:
 		runFactoryReset(ctx, invocation)
-	case ubluehelper.CommandUpdateNow:
-		runUpdateNow(ctx, invocation)
 	default:
 		// Unreachable: ParseInvocation accepts only the commands above. The
 		// arm exists so a command added to the parser without a dispatch arm
@@ -230,25 +220,6 @@ func runFactoryReset(ctx context.Context, invocation ubluehelper.Invocation) {
 		fatal(fmt.Sprintf("factory reset failed: %v", err))
 	}
 	fmt.Println("factory reset applied — restart to complete it")
-}
-
-// runUpdateNow runs the host's integrated updater once, now: the booted
-// image, then Flatpaks, Homebrew packages, and containers. It does not
-// restart afterwards — applying a staged image is the separately confirmed
-// restart action — and it takes nothing from the invocation but the
-// dry-run flag, because both the program path and its argv are fixed.
-func runUpdateNow(ctx context.Context, invocation ubluehelper.Invocation) {
-	args := ubluehelper.UpdateNowArgs()
-
-	if invocation.DryRun {
-		fmt.Printf("[DRY-RUN] would execute: %s %v\n", ubluehelper.UpdaterPath, args)
-		return
-	}
-
-	if err := run(ctx, ubluehelper.UpdaterPath, args...); err != nil {
-		fatal(fmt.Sprintf("update failed: %v", err))
-	}
-	fmt.Println("update finished")
 }
 
 // runAutoUpdates turns the unattended-update timer on or off. Each step must

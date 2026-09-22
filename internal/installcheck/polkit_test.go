@@ -172,7 +172,6 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
 		ubluehelper.CommandFactoryReset,
-		ubluehelper.CommandUpdateNow,
 	}
 	if !reflect.DeepEqual(ublueCommands, expectedUblueCommands) {
 		t.Fatalf("ubluehelper.SupportedCommands() = %v, want %v", ublueCommands, expectedUblueCommands)
@@ -241,13 +240,6 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Message:     "Authentication is required to factory reset the system",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandFactoryReset,
-		},
-		{
-			ID:          "io.projectbluefin.chairlift.ublue.update-now",
-			Description: "Update the system now",
-			Message:     "Authentication is required to update the system now",
-			Path:        ublue.HelperPath,
-			Argv1:       ubluehelper.CommandUpdateNow,
 		},
 	})
 

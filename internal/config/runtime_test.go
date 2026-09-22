@@ -362,7 +362,7 @@ func TestConfigurationGuideExamplePassesStrictValidation(t *testing.T) {
 				page  string
 				group string
 			}{
-				{"updates_page", "update_all_group"},
+				{"updates_page", "automatic_updates_group"},
 				{"updates_page", "brew_updates_group"},
 				{"updates_page", "brew_trust_group"},
 				{"applications_page", "brew_group"},

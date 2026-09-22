@@ -414,51 +414,6 @@ func gamingApps(count int) string {
 	return fmt.Sprintf("%d gaming apps", count)
 }
 
-// UpdateAllRow returns the Update All hero row text before a run has started.
-// planned is the number of phases that will run on this host.
-func UpdateAllRow(planned int) Row {
-	row := Row{Title: "Update All"}
-	switch planned {
-	case 0:
-		row.Subtitle = "Nothing on this system can be updated from here"
-	case 1:
-		row.Subtitle = "Update the one available source"
-	default:
-		row.Subtitle = "Update the system image, applications, and packages in one step"
-	}
-	return row
-}
-
-// UpdateAllPhaseSubtitle returns the per-phase row subtitle. running is true
-// while the phase is in flight; detail is the phase's Result detail once it
-// has finished, and empty before it starts.
-func UpdateAllPhaseSubtitle(running bool, detail string) string {
-	switch {
-	case running:
-		return "Working…"
-	case detail == "":
-		return "Waiting"
-	default:
-		return detail
-	}
-}
-
-// RestartRow returns the restart prompt row text. It is only shown when an OS
-// image is actually staged, so it always names the restart as the thing that
-// applies it rather than as a generic suggestion.
-func RestartRow(version string) Row {
-	if version == "" {
-		return Row{
-			Title:    "Restart to Apply",
-			Subtitle: "A system update is staged and takes effect after a restart",
-		}
-	}
-	return Row{
-		Title:    "Restart to Apply",
-		Subtitle: fmt.Sprintf("Version %s is staged and takes effect after a restart", version),
-	}
-}
-
 // BootcRollbackRow returns the previous-version row text. version and
 // timestamp describe what the host would return to; either may be empty.
 //
@@ -498,7 +453,7 @@ func BootcRollbackResultSubtitle() string {
 // rows, and per-layer switches, so its subtitle has to carry what the switch
 // actually governs.
 func AutomaticUpdatesRow(enabled bool) Row {
-	row := Row{Title: "Automatic Updates"}
+	row := Row{Title: "Automatic updates"}
 	if enabled {
 		row.Subtitle = "This system installs updates in the background and applies them at restart"
 		return row
@@ -514,33 +469,7 @@ func AutomaticUpdatesResultSubtitle(enabled bool) string {
 	if enabled {
 		return "Automatic updates are on — the next check runs on the system's schedule"
 	}
-	return "Automatic updates are off — use Update All when you want to update"
-}
-
-// UpdateNowRow returns the on-demand full-update row text. This is the
-// host's own integrated updater rather than ChairLift's per-source
-// sequencer, so the row never names the tool: what a person needs to know is
-// what it touches, that it asks for a password, and that it may pull a lot
-// of data before it finishes.
-func UpdateNowRow() Row {
-	return Row{
-		Title:    "Update everything now",
-		Subtitle: "Update the system, apps and packages in one run — asks for an administrator password and can be a large download",
-	}
-}
-
-// UpdateNowRunningSubtitle is shown while the update is in flight. It
-// promises no duration, because the same run can take a minute or an hour
-// depending on what is out of date and how fast the connection is.
-func UpdateNowRunningSubtitle() string {
-	return "Updating — this can take a while, and you can keep using this computer"
-}
-
-// UpdateNowResultSubtitle is shown after a live run. It offers a restart
-// rather than demanding one: a new system version only takes effect at the
-// next start, but apps and packages are already updated.
-func UpdateNowResultSubtitle() string {
-	return "Update finished — restart to start using a new system version, if one was installed"
+	return "Automatic updates are off — use Update all when you want to update"
 }
 
 // GraphicsDriverRow returns the graphics-driver row text. current is the

@@ -12,8 +12,8 @@ func TestAutomaticUpdatesRowDistinguishesOnFromOff(t *testing.T) {
 	off := AutomaticUpdatesRow(false)
 
 	for _, row := range []Row{on, off} {
-		if row.Title != "Automatic Updates" {
-			t.Errorf("AutomaticUpdatesRow().Title = %q, want %q", row.Title, "Automatic Updates")
+		if row.Title != "Automatic updates" {
+			t.Errorf("AutomaticUpdatesRow().Title = %q, want %q", row.Title, "Automatic updates")
 		}
 	}
 	if on.Subtitle == off.Subtitle {
@@ -43,7 +43,7 @@ func TestAutomaticUpdatesResultDoesNotImplyAnImmediateUpdate(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(off, "Update All") {
+	if !strings.Contains(off, "Update all") {
 		t.Errorf("AutomaticUpdatesResultSubtitle(false) = %q, want it to point at the manual action", off)
 	}
 }

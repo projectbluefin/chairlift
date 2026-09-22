@@ -65,7 +65,7 @@ func TestStateDecisionTable(t *testing.T) {
 			snapshot: Snapshot{Sources: []SourceState{
 				{ID: OperatingSystem, Configured: true, Available: true, Enabled: true, RestartRequired: true},
 			}},
-			wantPhase: PhaseRestartRequired, wantAction: ActionNone, wantRestart: true,
+			wantPhase: PhaseRestartRequired, wantAction: ActionRestart, wantRestart: true,
 		},
 		{
 			name: "one failed check retains previous items",
@@ -125,7 +125,7 @@ func TestStateDecisionTable(t *testing.T) {
 			snapshot: Snapshot{Sources: []SourceState{
 				{ID: OperatingSystem, Configured: true, Available: true, Enabled: true, RestartRequired: true, Completed: true},
 			}},
-			wantPhase: PhaseRestartRequired, wantAction: ActionNone, wantRestart: true,
+			wantPhase: PhaseRestartRequired, wantAction: ActionRestart, wantRestart: true,
 		},
 		{
 			name: "dry run success remains actionable",

@@ -2,12 +2,16 @@ package views
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/commands"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/notify"
+	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
@@ -189,8 +193,85 @@ func (s *UpdateShell) StartUpdate() {
 	go func() {
 		defer cancel()
 		defer s.mutation.Store(false)
-		s.coordinator.UpdateAll(ctx, current, preferences, s.publish)
+		// The coordinator publishes synchronously from this goroutine, so
+		// recording the last snapshot here needs no additional lock.
+		var final updateflow.Snapshot
+		s.coordinator.UpdateAll(ctx, current, preferences, func(snapshot updateflow.Snapshot) {
+			final = snapshot
+			s.publish(snapshot)
+		})
+		s.notifyUpdateComplete(final)
 	}()
+}
+
+// StartRestart restarts the machine so a staged update takes effect. It is
+// the only privileged action this shell performs directly; everything else
+// it drives goes through the coordinator's own providers.
+func (s *UpdateShell) StartRestart() {
+	if s == nil {
+		return
+	}
+	// On a live run this process is about to go away, and a second press
+	// would only queue a redundant PolicyKit prompt.
+	if s.primary != nil {
+		s.primary.SetSensitive(false)
+	}
+	go func() {
+		ctx, cancel := ublue.DefaultContext()
+		defer cancel()
+
+		err := ublue.Restart(ctx)
+
+		sgtk.RunOnMainThread(func() {
+			if s.primary != nil {
+				s.primary.SetSensitive(true)
+			}
+			if s.toasts == nil {
+				return
+			}
+			if err != nil {
+				s.toasts.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
+				return
+			}
+			if dryrun.Enabled() {
+				s.toasts.ShowToast("[DRY-RUN] Preview: the system would restart now — no changes made")
+			}
+		})
+	}()
+}
+
+// notifyUpdateComplete sends the single desktop notification ChairLift
+// emits. An update run is the one operation long enough that the user may
+// have stepped away; every other action completes in view and already has a
+// toast. See internal/notify.
+func (s *UpdateShell) notifyUpdateComplete(final updateflow.Snapshot) {
+	if s == nil || s.toasts == nil || !updatepresent.ShouldPublish(s.closed.Load()) {
+		return
+	}
+
+	skipped := 0
+	for _, source := range final.Sources {
+		if !source.Enabled || !source.Configured || !source.Available {
+			skipped++
+		}
+	}
+	notification := notify.UpdateAllComplete(
+		len(final.CompletedSources),
+		len(final.FailedSources),
+		skipped,
+		final.RestartRequired(),
+	)
+
+	sgtk.RunOnMainThread(func() {
+		if !updatepresent.ShouldPublish(s.closed.Load()) {
+			return
+		}
+		s.toasts.NotifyBackground(
+			notification.Title,
+			notification.Body,
+			notification.Urgency == notify.UrgencyHigh,
+		)
+	})
 }
 
 // Busy reports whether the coordinator is currently mutating updates.
@@ -273,14 +354,14 @@ func (s *UpdateShell) build() {
 
 	menu := gio.NewMenu()
 	menu.Append("Preferences", commands.PreferencesAction)
-	menu.Append("Keyboard Shortcuts", commands.ShowShortcutsAction)
+	menu.Append("Keyboard shortcuts", commands.ShowShortcutsAction)
 	menu.Append("Help", commands.HelpAction)
 	menu.Append("About "+branding.AppName, commands.ShowAboutAction)
 	menu.Append("Quit", commands.QuitAction)
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
-	menuButton.SetTooltipText("Main Menu")
-	setAccessibleLabel(menuButton, "Main Menu")
+	menuButton.SetTooltipText("Main menu")
+	setAccessibleLabel(menuButton, "Main menu")
 	menuButton.SetMenuModel(&menu.MenuModel)
 	header.PackEnd(&menuButton.Widget)
 	s.toolbarView.AddTopBar(&header.Widget)
@@ -306,6 +387,8 @@ func (s *UpdateShell) build() {
 			s.StartCheck()
 		case updateflow.ActionUpdateAll, updateflow.ActionRetryFailed:
 			s.StartUpdate()
+		case updateflow.ActionRestart:
+			s.StartRestart()
 		}
 	}
 	s.primary.ConnectClicked(&primaryClicked)
@@ -324,7 +407,7 @@ func (s *UpdateShell) build() {
 	content.Append(&s.banner.Widget)
 
 	s.sourceGroup = adw.NewPreferencesGroup()
-	s.sourceGroup.SetTitle("Update Sources")
+	s.sourceGroup.SetTitle("Update sources")
 	s.sourceGroup.SetVisible(false)
 	content.Append(&s.sourceGroup.Widget)
 
@@ -333,7 +416,7 @@ func (s *UpdateShell) build() {
 	// on every allocation and the max-width condition below cannot resolve,
 	// so the compact layout never applies reliably. Both values sit under
 	// the 600px condition so the breakpoint can actually be reached.
-	s.breakpointBin.Widget.SetSizeRequest(360, 200)
+	s.breakpointBin.SetSizeRequest(360, 200)
 	s.breakpointBin.SetChild(&content.Widget)
 	compactBreakpoint := adw.NewBreakpoint(adw.BreakpointConditionParse("max-width: 600px"))
 	applyCompact := func(_ adw.Breakpoint) {

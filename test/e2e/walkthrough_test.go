@@ -141,7 +141,7 @@ func TestWalkthroughScreenshots(t *testing.T) {
 	}
 
 	assertBluefinGroupsRendered(t, outDir)
-	assertUpdateAllRendered(t, outDir)
+	assertAutomaticUpdatesRendered(t, outDir)
 
 	geometry, cropped := readWindowGeometry(t, outDir)
 
@@ -318,26 +318,27 @@ func frameDigest(t *testing.T, path string) string {
 	return string(data)
 }
 
-// assertUpdateAllRendered confirms the captured session built the Update All
-// group, and that its plan covers every provider available on the runner.
+// assertAutomaticUpdatesRendered confirms the captured session built the
+// automatic-background-updates switch in its on state.
 //
-// Like the Bluefin groups, a hidden Update All group and a rendered one both
-// produce a plausible Updates page, so the pixel checks cannot tell them
-// apart. The group hides itself when no provider is available, which is a
-// legitimate state — so this asserts the marker exists and names a non-zero
-// plan, rather than asserting a fixed phase count the runner may not have.
-func assertUpdateAllRendered(t *testing.T, outDir string) {
+// Like the Bluefin groups, a hidden switch and a rendered one both produce a
+// plausible Updates page, so the pixel checks cannot tell them apart. The
+// group hides itself on a host with no unattended-update timer, which is a
+// legitimate state and what an unstubbed runner produces —
+// capture_walkthrough.sh supplies a stubbed systemd answer so the shown
+// state is the one captured, and internal/autoupdate's classification table
+// covers the hidden one.
+//
+// There is deliberately no assertion here about the page's update action.
+// It used to check a "views: update all group built" marker emitted by the
+// legacy Update All group; that group is gone, and the status-first shell
+// that replaced it renders from an immutable updateflow.Snapshot whose
+// every phase and action is already covered by internal/updateflow and
+// internal/views/updatepresent table tests. Re-deriving that here would pin
+// a log line rather than a behaviour.
+func assertAutomaticUpdatesRendered(t *testing.T, outDir string) {
 	t.Helper()
 
-	line := findLogLine(t, outDir, "views: update all group built")
-	if strings.Contains(line, "phases=0") {
-		t.Errorf("Update All rendered with an empty plan; the group should have been omitted entirely\n  %s", line)
-	}
-
-	// The automatic-updates switch shares the group. capture_walkthrough.sh
-	// supplies a stubbed systemd answer so the shown state is captured; the
-	// hidden state is what an unstubbed runner produces and is covered by
-	// internal/autoupdate's classification table.
 	autoLine := findLogLine(t, outDir, "views: automatic updates row built")
 	if !strings.Contains(autoLine, "state=on") {
 		t.Errorf("automatic updates row did not render in the on state\n  %s", autoLine)

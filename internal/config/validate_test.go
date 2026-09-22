@@ -390,7 +390,7 @@ func TestParseAndValidateQuotedMergeKeyIsSchemaError(t *testing.T) {
 // error, which is not what this test is proving.)
 func TestParseAndValidateBareMergeKeyNotSchemaError(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
-	const data = "updates_page:\n  update_all_group: &g\n    enabled: true\n  brew_updates_group:\n    <<: *g\n"
+	const data = "updates_page:\n  automatic_updates_group: &g\n    enabled: true\n  brew_updates_group:\n    <<: *g\n"
 
 	_, err := parseAndValidate(configSourceForPath(path), []byte(data))
 	if err != nil {
