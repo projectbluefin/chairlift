@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -214,5 +215,68 @@ func TestRotateDoesNotRetryAPermanentFailure(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Errorf("a permanent failure was retried %d times", attempts)
+	}
+}
+
+// TestRotationUnitQuotesAwkwardPaths pins the escaping the unit file needs.
+//
+// A unit file is neither shell nor free text: a space in ExecStart becomes a
+// second argument, a `%` starts a specifier systemd expands, and both values
+// here are runtime paths — os.Executable() and $GSETTINGS_SCHEMA_DIR — that a
+// source build can perfectly well place under a directory containing either.
+func TestRotationUnitQuotesAwkwardPaths(t *testing.T) {
+	newFakeCommands(t)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("GSETTINGS_SCHEMA_DIR", "/home/a b/100% done/schemas")
+
+	original := executablePath
+	executablePath = func() (string, error) { return "/home/a b/100% done/chairlift", nil }
+	t.Cleanup(func() { executablePath = original })
+
+	if err := InstallRotation(context.Background()); err != nil {
+		t.Fatalf("InstallRotation: %v", err)
+	}
+	path, err := UnitPath()
+	if err != nil {
+		t.Fatalf("UnitPath: %v", err)
+	}
+	unit, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the unit: %v", err)
+	}
+	wantExec := `ExecStart="/home/a b/100%% done/chairlift" ` + RotateFlag
+	if !strings.Contains(string(unit), wantExec) {
+		t.Errorf("ExecStart is not quoted and percent-escaped:\n%s", unit)
+	}
+	wantEnv := `Environment="GSETTINGS_SCHEMA_DIR=/home/a b/100%% done/schemas"`
+	if !strings.Contains(string(unit), wantEnv) {
+		t.Errorf("Environment is not quoted and percent-escaped:\n%s", unit)
+	}
+}
+
+// TestRotationUnitRefusesANewlineInAPath covers the one case quoting cannot
+// carry: a unit directive ends at the newline, so a path containing one would
+// write a further directive into the file rather than a path.
+func TestRotationUnitRefusesANewlineInAPath(t *testing.T) {
+	newFakeCommands(t)
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("GSETTINGS_SCHEMA_DIR", "")
+
+	original := executablePath
+	executablePath = func() (string, error) {
+		return "/tmp/chairlift\nExecStartPost=/usr/bin/id", nil
+	}
+	t.Cleanup(func() { executablePath = original })
+
+	if err := InstallRotation(context.Background()); err == nil {
+		t.Fatal("InstallRotation accepted an executable path containing a newline")
+	}
+	path, err := UnitPath()
+	if err != nil {
+		t.Fatalf("UnitPath: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("a rejected path still wrote a unit file")
 	}
 }

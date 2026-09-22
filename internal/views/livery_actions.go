@@ -96,7 +96,7 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 	}
 
 	enabled := uh.liveryState.AppGridEnabled
-	go func() {
+	uh.runLiverySelectionWork(livery.AppGrid, func() {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -116,7 +116,7 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 		if err := livery.RefreshShellIcons(); err != nil {
 			uh.reportLiveryFailure("refreshing the shell's icons", err)
 		}
-	}()
+	})
 }
 
 // onLiverySurfaceToggled turns the panel or dock mark on or off.
@@ -211,7 +211,17 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		if surface == livery.Panel {
 			if err := livery.ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {
 				uh.reportLiveryFailure("restoring the previous panel icon", err)
+				return
 			}
+			// The capture is only taken when both saved values are empty, and
+			// ClearPanelSettings has just emptied the stored keys, so the
+			// in-memory copy has to follow or the next enable would keep
+			// reusing the first capture instead of reading what the user has
+			// now.
+			sgtk.RunOnMainThread(func() {
+				uh.liveryState.SavedPanelIcon = ""
+				uh.liveryState.SavedPanelMode = ""
+			})
 		}
 	}()
 }
@@ -234,7 +244,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 	uh.syncLiveryRotateSensitive(livery.Dock, uh.liveryState.DockEnabled)
 
 	enabled := uh.liveryState.DockEnabled
-	go func() {
+	uh.runLiverySelectionWork(livery.Dock, func() {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -255,7 +265,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 		if err := livery.RefreshShellIcons(); err != nil {
 			uh.reportLiveryFailure("refreshing the shell's icons", err)
 		}
-	}()
+	})
 }
 
 // onLiverySelectionChangedByID applies a foundation mark chosen by id.
@@ -278,7 +288,7 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 	uh.syncLiveryRotateSensitive(surface, enabled)
 	source := uh.liverySource(surface)
 
-	go func() {
+	uh.runLiverySelectionWork(surface, func() {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -298,7 +308,7 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 				uh.reportLiveryFailure("refreshing the shell's icons", err)
 			}
 		}
-	}()
+	})
 }
 
 // onLiveryRotateToggled turns login rotation on or off for one section and
@@ -361,7 +371,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 	}
 
 	source := uh.liverySource(surface)
-	go func() {
+	uh.runLiverySelectionWork(surface, func() {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -385,7 +395,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 				uh.reportLiveryFailure("refreshing the shell's icons", err)
 			}
 		}
-	}()
+	})
 }
 
 // showLiveryCustomPath updates the section's summary row to name the file.
@@ -439,6 +449,37 @@ func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.
 	default:
 		return &uh.liveryDockGate, uh.liveryDockSwitch
 	}
+}
+
+// liverySelectionWork returns the serializer that orders one section's
+// selection work — brand, project, foundation, and custom file all write the
+// same keys and install into the same mark file.
+func (uh *UserHome) liverySelectionWork(s livery.Surface) *actionstate.Serializer {
+	switch s {
+	case livery.AppGrid:
+		return &uh.liveryAppGridWork
+	case livery.Panel:
+		return &uh.liveryPanelWork
+	default:
+		return &uh.liveryDockWork
+	}
+}
+
+// runLiverySelectionWork claims this selection as the newest one and runs its
+// persist-and-apply behind the section's serializer.
+//
+// Each handler previously started a bare goroutine, so two picks made in
+// quick succession ran unordered: the second could persist its id while the
+// first's Apply landed afterwards, leaving the stored selection and the
+// installed icon naming different marks. Claiming on the main thread fixes
+// the order the user made the picks in; a pick already overtaken by a newer
+// one does no work at all, because the newer one writes both halves.
+func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func()) {
+	serializer := uh.liverySelectionWork(s)
+	generation := serializer.Claim()
+	go func() {
+		serializer.Run(generation, work)
+	}()
 }
 
 // releaseLiveryToggle reopens a section's gate and its switch on the main

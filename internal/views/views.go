@@ -109,6 +109,15 @@ type UserHome struct {
 	liveryAppGridGate actionstate.Gate
 	liveryPanelGate   actionstate.Gate
 	liveryDockGate    actionstate.Gate
+	// One serializer per section orders that section's selection work. A
+	// selection carries a value, so refusing the second pick would discard
+	// it; these queue instead, and a pick that a newer one has already
+	// overtaken drops out. Without them two rapid picks can interleave and
+	// leave the persisted id naming one mark while the installed icon is
+	// another. See liverySelectionWork.
+	liveryAppGridWork actionstate.Serializer
+	liveryPanelWork   actionstate.Serializer
+	liveryDockWork    actionstate.Serializer
 
 	// Update All references
 	updateAllGroup   *adw.PreferencesGroup

@@ -66,8 +66,9 @@ Who you are, who you stand with, and what you roll with.
 **App Grid Livery** is your own mark on the Show Applications button. Search
 all 3,461 brands [Simple Icons](https://simpleicons.org/) publishes — your
 project, your employer, whatever you answer to — and Control Center fetches it
-and rebuilds the dock so it appears straight away. You set it once; it never changes on its own, because a personal mark that
-rotated would stop being personal.
+and nudges GNOME Shell to re-read its application icons so it appears straight
+away — nothing is reloaded or rebuilt. You set it once; it never changes on its
+own, because a personal mark that rotated would stop being personal.
 
 **Foundational Livery** puts a foundation's mark in the top bar: CNCF, the
 Linux Foundation, GNOME, freedesktop.org, Apache, Rust, Universal Blue,

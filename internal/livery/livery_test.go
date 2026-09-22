@@ -311,6 +311,26 @@ func TestClearPanelSettingsRestoresAUserValue(t *testing.T) {
 	}
 }
 
+// TestClearPanelSettingsForgetsTheCapture pins the other half of revert: the
+// recorded capture has to go once it has been put back.
+//
+// The capture is only taken when both saved keys are empty, so a restore that
+// left them populated would make every later enable reuse the first one —
+// enable, disable, set an icon by hand, enable, disable would then restore
+// the pre-first-enable value and throw away the newer manual choice.
+func TestClearPanelSettingsForgetsTheCapture(t *testing.T) {
+	fake := newFakeCommands(t)
+
+	if err := ClearPanelSettings(context.Background(), "my-own-symbolic", "1"); err != nil {
+		t.Fatalf("ClearPanelSettings: %v", err)
+	}
+	for _, key := range []string{KeySavedPanelIcon, KeySavedPanelMode} {
+		if !fake.sawPrefix("gsettings set " + SchemaID + " " + key + ` ""`) {
+			t.Errorf("did not clear %s after restoring it; calls: %v", key, fake.calls)
+		}
+	}
+}
+
 // TestMissingCustomFileNamesTheFile asserts an unreadable custom SVG is
 // reported rather than silently substituted, and that the message contains
 // the path so the user can fix it.

@@ -482,7 +482,25 @@ func ClearPanelSettings(ctx context.Context, savedIcon, savedMode string) error 
 	if err := restoreKey(ctx, extensionIconKey, savedIcon); err != nil {
 		return err
 	}
-	return restoreKey(ctx, extensionModeKey, savedMode)
+	if err := restoreKey(ctx, extensionModeKey, savedMode); err != nil {
+		return err
+	}
+	return ForgetPanelOverrides(ctx)
+}
+
+// ForgetPanelOverrides drops the recorded capture once it has been restored.
+//
+// The capture is only taken when both saved keys are empty, so leaving the
+// restored values behind would make every later enable reuse the very first
+// capture: enable, disable, set a panel icon by hand, enable, disable would
+// restore the pre-first-enable value and silently discard the newer manual
+// choice. Clearing the keys after a successful restore makes each enable
+// capture the user layer as it stands at that moment.
+func ForgetPanelOverrides(ctx context.Context) error {
+	if err := SetString(ctx, KeySavedPanelIcon, ""); err != nil {
+		return err
+	}
+	return SetString(ctx, KeySavedPanelMode, "")
 }
 
 func restoreKey(ctx context.Context, key, saved string) error {

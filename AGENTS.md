@@ -469,7 +469,14 @@ An agent must not break these:
   `actionstate.Gate` (`liveryToggleGate`) and set insensitive during worker
   execution, so rapid off-on toggles cannot land `Apply` before the earlier
   `Clear` and leave a switch showing enabled with the mark file removed; the
-  panel's gate additionally protects dconf capture and restore.
+  panel's gate additionally protects dconf capture and restore. Selections
+  need a different primitive: each carries a value the user picked, so
+  refusing the second click would discard it. Brand, project, foundation, and
+  custom-file changes therefore run behind a per-section
+  `actionstate.Serializer` (`liverySelectionWork`), which queues each attempt
+  and drops one a newer pick has overtaken — two rapid picks otherwise
+  interleave and leave the persisted id naming one mark while the installed
+  icon is another.
 - **Connect GTK signals once, at page-build time — never inside a refresh
   path.** puregotk routes every `Connect*` through `purego.NewCallbackFnPtr`,
   which caches by the *address* of the func variable and draws from a fixed
@@ -508,7 +515,12 @@ An agent must not break these:
   revert resets; different means a genuine override, so revert restores that
   exact string. `CapturePanelOverrides` uses that comparison and
   `ClearPanelSettings` acts on it; `TestUserValueIgnoresADistroDefault` pins
-  the case that was broken. Capturing the merged value instead — which an
+  the case that was broken. The capture is taken only when both saved keys are
+  empty, so restoring it must also empty them again
+  (`ForgetPanelOverrides`, and the page's in-memory copy with it): otherwise
+  enable, disable, a manual panel-icon change, enable, disable restores the
+  value captured before the *first* enable and discards the newer manual
+  choice. `TestClearPanelSettingsForgetsTheCapture` holds it. Capturing the merged value instead — which an
   earlier version did — made revert write the distro default back as a user
   value, pinning the mark forever and overriding any later change to the
   distro layer. A user who has deliberately set the same string as the default
@@ -539,7 +551,15 @@ An agent must not break these:
   `WantedBy=graphical-session.target` user unit written to the user's
   `~/.config/systemd/user`, the same unprivileged posture as the AI stack's
   quadlet; it invokes `chairlift --rotate-livery`, which short-circuits before
-  `app.New()` so a headless service never opens a display. Login, not logout:
+  `app.New()` so a headless service never opens a display. The two runtime
+  paths it interpolates — `os.Executable()` and `$GSETTINGS_SCHEMA_DIR` — are
+  written through `systemdQuote`, because a unit file is neither shell nor
+  free text: a space splits `ExecStart` into another argument, `%` starts a
+  specifier systemd expands, `\` starts an escape, and a newline ends the
+  directive and would let a path carry a further one into the file. Quoting
+  and doubling handle the first three; the newline has no representation
+  inside a unit value, so `InstallRotation` refuses it instead of writing.
+  Login, not logout:
   an abrupt logout does not fire a hook, so a logout-triggered rotation would
   fall back to leaving the previous mark — exactly the outcome the feature
   exists to avoid. Idempotence comes from `last-rotation-token`, the graphical

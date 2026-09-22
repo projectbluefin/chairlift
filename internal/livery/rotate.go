@@ -133,9 +133,17 @@ func InstallRotation(ctx context.Context) error {
 	// path a developer is testing from.
 	var env string
 	if dir := os.Getenv("GSETTINGS_SCHEMA_DIR"); dir != "" {
-		env = "Environment=GSETTINGS_SCHEMA_DIR=" + dir + "\n"
+		quoted, err := systemdQuote("GSETTINGS_SCHEMA_DIR=" + dir)
+		if err != nil {
+			return fmt.Errorf("livery: carrying GSETTINGS_SCHEMA_DIR into the rotation unit: %w", err)
+		}
+		env = "Environment=" + quoted + "\n"
 	}
-	unit := fmt.Sprintf(unitTemplate, branding.AppName, env, exe, RotateFlag)
+	quotedExe, err := systemdQuote(exe)
+	if err != nil {
+		return fmt.Errorf("livery: writing the rotation unit's ExecStart: %w", err)
+	}
+	unit := fmt.Sprintf(unitTemplate, branding.AppName, env, quotedExe, RotateFlag)
 	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would write %s and enable it", path)
 		_ = unit
@@ -151,6 +159,25 @@ func InstallRotation(ctx context.Context) error {
 		return fmt.Errorf("livery: enabling rotation: %w: %s", err, strings.TrimSpace(out))
 	}
 	return nil
+}
+
+// systemdQuote renders one value as a double-quoted systemd token.
+//
+// Both values the unit interpolates are paths the process discovers at
+// runtime — os.Executable() and $GSETTINGS_SCHEMA_DIR — and a unit file is
+// neither shell nor plain text. A space splits ExecStart into further
+// arguments, a lone `%` starts a specifier systemd expands to something else
+// (and an unknown one is an error), a backslash starts an escape, and a
+// newline ends the directive, so a path containing one could carry an extra
+// directive into the file. Quoting handles the first, doubling handles the
+// next two, and a newline has no representation at all inside a unit value —
+// that one can only be refused.
+func systemdQuote(value string) (string, error) {
+	if strings.ContainsAny(value, "\n\r") {
+		return "", fmt.Errorf("a newline in %q cannot be written to a systemd unit", value)
+	}
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%")
+	return `"` + replacer.Replace(value) + `"`, nil
 }
 
 // RemoveRotation disables and deletes the rotation unit.
