@@ -38,6 +38,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
         ├── internal/sysupdate/ native A/B detection, status, rollback, fixed stage adapter
         ├── internal/pkexec/    Sole owner of the privilege-escalation program name (`pkexec.Command`)
+        ├── internal/deskenv/   Desktop-environment detection from session variables
         ├── internal/stageexec/ Pure-Go shared OS staging stream/event executor
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
@@ -993,6 +994,61 @@ were disabled, and instructs the user to restart after fixing the file.
 `ShowErrorToast` with `LoadError.ToastMessage`. `ShowErrorToast` sets timeout
 zero, so the startup error remains visible instead of expiring; construction
 and the toast call both occur on the GTK main thread.
+
+### Desktop environment detection (`internal/deskenv`)
+
+`internal/deskenv` is a pure, standard-library-only leaf package that answers
+which desktop environment the current session is running. It exists because
+the livery marks are GNOME surfaces — the app-grid icon is written into the
+Adwaita theme and the panel mark into an `org.gnome.shell.extensions` schema —
+so on a Plasma session every write succeeds and nothing changes, which is
+worse than a visible failure because the UI reports success. Knowing the
+environment is what lets a desktop-specific group be omitted instead of
+silently no-op'ing. This package has no production call site yet: it is the
+detection half of the KDE support work in
+[Epic #211](https://github.com/projectbluefin/chairlift/issues/211), and the
+livery surface table is what will consume it.
+
+`Classify(env)` is the pure decision and owns all three outcomes. It returns
+`GNOME` when `XDG_CURRENT_DESKTOP` or `DESKTOP_SESSION` names GNOME or one of
+the sessions built on it (`GNOME`, `gnome-xorg`, `GNOME-Classic:GNOME`,
+`ubuntu:GNOME`, `pop:GNOME`, `gnome-flashback-metacity`); `KDE` when either
+names Plasma (`KDE`, `plasma`, `plasmax11`, `kde-plasma`, a
+`/usr/share/xsessions/plasma` session path) or, failing both, when
+`KDE_FULL_SESSION` is the literal `true`; and `Unknown` when no variable
+declares a desktop this package has a row for — a compositor with no ChairLift
+surface (Sway, Hyprland, i3, Xfce, Cinnamon, MATE), a container or TTY where
+all three are unset, or a marker set to a value other than `true`. `Detect()`
+is the thin production entry point that reads those three variables from the
+process environment; it composes no decision of its own. `Desktop.String()`
+names all three constants and answers `Unknown` for any value outside the
+enum.
+
+Two properties are load-bearing rather than incidental. `Unknown` is the
+enum's zero value, so a `Desktop` reached through a struct field or a map miss
+fails closed instead of reading as a supported desktop. And detection is an
+environment-variable read, never a process spawn: a detector that shelled out
+to `plasmashell --version` or `gnome-shell --version` would report which
+desktop is *installed* rather than which one is *running*, and would fail on a
+minimal host. `internal/installcheck`'s `TestDesktopDetectionSpawnsNoProcess`
+rejects an `os/exec` or `syscall` import and an `os.StartProcess` selector in
+the package — including in its test files — so the property survives a later
+rewrite that a PATH-based behavioral test would not catch.
+
+The three variables are ranked, and a value the package does not recognize
+does not end the search: each is an independent declaration, so `X-Cinnamon`
+in the standard variable makes no claim about the two others, and one of them
+may still be the specific answer. Rank matters in the other direction too,
+which is why `XDG_CURRENT_DESKTOP` is read first — on Ubuntu it holds
+`ubuntu:GNOME` while `DESKTOP_SESSION` holds only `ubuntu`, so reading the
+session name first would find nothing and blame the search order for the miss.
+`XDG_SESSION_DESKTOP` is deliberately not consulted: it duplicates the
+standard variable wherever it is set, and every variable added to the decision
+is another value that can disagree with the others and has to be ranked.
+`deskenv_test.go`'s decision table covers Aurora, both Bazzite variants, stock
+GNOME and Plasma on Wayland and Xorg, the distribution-prefixed GNOME
+sessions, and the unrecognized desktops, with every `want` written out rather
+than derived.
 
 ### Package manager wrapper pattern
 
