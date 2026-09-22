@@ -70,6 +70,12 @@ are listed in [org-adrs.md](org-adrs.md).
   — page and group visibility is bounded by host capability (`Configured && Available`);
   page-level availability is synchronous and non-blocking, while group-level probes
   can run asynchronously without creating inert placeholders
+- [adr/0014-first-run-is-a-transient-assistant-not-a-navigation-mode.md](adr/0014-first-run-is-a-transient-assistant-not-a-navigation-mode.md)
+  — first-run experience is an AdwDialog assistant presenting existing group builders,
+  leaving the 9-page navigation ceiling and Alt+N accelerators untouched
+- [adr/0015-avatars-convert-to-png-before-accountsservice-seticonfile.md](adr/0015-avatars-convert-to-png-before-accountsservice-seticonfile.md)
+  — dinosaur avatar WebP assets are transcoded to PNG (< 1 MiB, 512x512) in pure Go
+  prior to AccountsService SetIconFile dispatch via busctl, preserving CGO-free design
 
 ### Design
 
@@ -82,7 +88,10 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Specs
 
-*(none yet)*
+- [specs/first-run-assistant.md](specs/first-run-assistant.md) — contract for first-run
+  assistant dialog, step model, and completion state
+- [specs/dinosaur-avatars.md](specs/dinosaur-avatars.md) — contract for dinosaur avatar
+  manifest, transcoding, byte limits, and AccountsService dispatch
 
 ### Plans
 
