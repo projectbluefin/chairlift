@@ -2,6 +2,8 @@ package sbom
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -260,7 +262,8 @@ func (c *RegistryClient) blob(ctx context.Context, registry, repository, manifes
 		return nil, fmt.Errorf("SBOM manifest %s has no layers", manifestDigest)
 	}
 
-	blobURL := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, manifest.Layers[0].Digest)
+	layerDigest := manifest.Layers[0].Digest
+	blobURL := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, layerDigest)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, blobURL, nil)
 	if err != nil {
 		return nil, err
@@ -276,7 +279,32 @@ func (c *RegistryClient) blob(ctx context.Context, registry, repository, manifes
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("downloading the SBOM: registry returned %s", response.Status)
 	}
-	return io.ReadAll(io.LimitReader(response.Body, maxBlobBytes))
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxBlobBytes))
+	if err != nil {
+		return nil, err
+	}
+	if err := verifyDigest(layerDigest, data); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// verifyDigest checks that data hashes to the content-addressed digest it was
+// fetched by. Every earlier step of the referrer chain trusts what the
+// registry sends over TLS; the blob is the payload that is actually parsed
+// and rendered, so a substitution here must be caught rather than displayed.
+// Only sha256 is accepted — an unrecognized algorithm is a refusal, not a
+// pass-through, because an unverifiable digest verifies nothing.
+func verifyDigest(digest string, data []byte) error {
+	encoded, ok := strings.CutPrefix(digest, "sha256:")
+	if !ok {
+		return fmt.Errorf("SBOM layer digest %q is not a sha256 digest", digest)
+	}
+	sum := sha256.Sum256(data)
+	if !strings.EqualFold(hex.EncodeToString(sum[:]), encoded) {
+		return fmt.Errorf("SBOM blob does not match its digest %s", digest)
+	}
+	return nil
 }
 
 func setToken(request *http.Request, token string) {

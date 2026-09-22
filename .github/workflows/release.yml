@@ -7,15 +7,82 @@ on:
     tags:
       - "*"
 
-permissions:
-  contents: write
-  # packages: write
-  # issues: write
-  # id-token: write
+permissions: {}
 
 jobs:
-  goreleaser:
+  # The host-independent quality gate, run against the exact tagged commit
+  # before anything publish-capable starts (closes #87, ADR-0021, ADR-0022).
+  # Separate job with `contents: read` only so the release job's write scopes
+  # are never granted to the test runner.
+  gate:
+    name: Host-independent quality gate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+
+      - name: Install golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: latest
+
+      - name: Run host-independent quality gate
+        run: make ci
+
+  # The end-to-end quality gate, run against the exact tagged commit in a
+  # headless GTK/Libadwaita environment before anything publish-capable starts.
+  e2e:
+    name: End-to-end quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.6"
+
+      - name: Install headless GTK runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            dbus-x11 \
+            flatpak \
+            imagemagick \
+            libadwaita-1-0 \
+            libgtk-4-1 \
+            x11-apps \
+            x11-utils \
+            xauth \
+            xdotool \
+            xvfb
+
+      - name: Run E2E tests
+        run: make e2e
+
+  goreleaser:
+    name: Release with GoReleaser
+    needs: [gate, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

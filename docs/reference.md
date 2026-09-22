@@ -16,7 +16,7 @@ Configuration files are searched in order (first found wins):
 Only a missing candidate advances the search. The first existing candidate is
 authoritative. If it cannot be read or fails YAML/schema validation, ChairLift
 hides every feature group, logs a `CONFIGURATION ERROR`, and displays a
-persistent toast with the path and cause. Fix the file and restart ChairLift.
+persistent toast with the path and cause. Fix the file and restart Control Center.
 If no file is found, built-in defaults apply: all groups are enabled except
 `maintenance_cleanup_group` and `reset_group`.
 
@@ -138,6 +138,14 @@ schema, one of the two ChairLift ships (the other,
 source build has no installed schema — run `make schemas` and export the
 `GSETTINGS_SCHEMA_DIR` it prints, or the page reports its settings
 unavailable.
+
+A failed bundle install reports the cause rather than the progress that
+preceded it: ChairLift reads both of brew's output streams, because
+`brew bundle` replays a failing entry's own installer output on stdout while
+printing its summary on stderr, and shows the first error line it finds in a
+persistent toast. Error toasts wrap, so a long message stays readable. The
+complete captured output — bounded to the last 64 KiB per stream — is written
+to ChairLift's log, which is where to look when filing a bug report.
 
 ### Maintenance Page (`maintenance_page`)
 

@@ -320,3 +320,48 @@ func TestAIFixRequestedWorkflowIsLabelScoped(t *testing.T) {
 		t.Error("docs/quality.md does not document the AI-fix-requested workflow")
 	}
 }
+
+func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
+	path := filepath.Join(".github", "workflows", "copilot-review-apply.yml")
+	workflow := readRepoFile(t, path)
+
+	for _, required := range []string{
+		"pull_request_review:",
+		"types: [submitted]",
+		"contents: read",
+		"pull-requests: write",
+		"github.event.pull_request.state == 'open'",
+		"!github.event.pull_request.draft",
+		"actions/github-script@",
+		"github.rest.issues.createComment",
+	} {
+		if !strings.Contains(workflow, required) {
+			t.Errorf("%s does not contain required contract %q", path, required)
+		}
+	}
+
+	for _, unsafe := range []string{
+		"pull_request_target:",
+		"actions/checkout@",
+		"github.event.review.body",
+		"context.payload.review.body",
+		"contents: write",
+		"issues: write",
+		"\n        run:",
+	} {
+		if strings.Contains(workflow, unsafe) {
+			t.Errorf("%s contains unsafe or unnecessary workflow surface %q", path, unsafe)
+		}
+	}
+
+	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
+	if !strings.Contains(quality, "`.github/workflows/copilot-review-apply.yml`") {
+		t.Error("docs/quality.md does not document the Copilot review apply workflow")
+	}
+	if !strings.Contains(quality, "The review workflow receives read-only contents and pull-requests") {
+		t.Error("docs/quality.md does not document the review workflow's pull-requests write permission")
+	}
+	if strings.Contains(quality, "issues write, and pull-requests") {
+		t.Error("docs/quality.md still claims the review workflow holds issues write permission")
+	}
+}

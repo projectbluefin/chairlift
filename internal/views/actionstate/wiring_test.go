@@ -49,3 +49,45 @@ func TestUpdatesPageUsesGuardedRefreshDecisions(t *testing.T) {
 		}
 	}
 }
+
+func TestFeaturesPageDeveloperModeUsesGate(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
+
+	viewsPath := filepath.Join(repoRoot, "internal", "views", "views.go")
+	viewsSource, err := os.ReadFile(viewsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", viewsPath, err)
+	}
+	viewsText := string(viewsSource)
+	if !strings.Contains(viewsText, "developerGate") || !strings.Contains(viewsText, "actionstate.Gate") {
+		t.Errorf("views.go UserHome does not contain developerGate actionstate.Gate field")
+	}
+
+	featuresPath := filepath.Join(repoRoot, "internal", "views", "features_page.go")
+	featuresSource, err := os.ReadFile(featuresPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", featuresPath, err)
+	}
+	featuresText := string(featuresSource)
+
+	for _, required := range []string{
+		`uh.developerGate.TryStart()`,
+		`uh.developerGate.Reset()`,
+		// The recursion guard used to be a bare `toggle.SetState(` beside
+		// every `SetActive`, which only held while every call site
+		// remembered to pair them. guardedSwitch owns that pairing —
+		// newGuardedSwitch sets both, and set() re-enters behind an
+		// `applying` flag the handler checks — so the property is now
+		// asserted where it is enforced rather than at each call site.
+		`toggle.set(`,
+		`newGuardedSwitch(`,
+	} {
+		if !strings.Contains(featuresText, required) {
+			t.Errorf("features_page wiring does not contain %q", required)
+		}
+	}
+}

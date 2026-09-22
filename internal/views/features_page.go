@@ -455,15 +455,27 @@ func (uh *UserHome) refreshGamingState(toggle *guardedSwitch, row *adw.ActionRow
 
 // onDeveloperToggled grants or withdraws this account's developer access.
 func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if !uh.developerGate.TryStart() {
+		return
+	}
 	toggle.widget.SetSensitive(false)
 
 	go func() {
+		dispatched := false
+		defer func() {
+			if !dispatched {
+				uh.developerGate.Reset()
+			}
+		}()
+
 		ctx, cancel := ublue.DefaultContext()
 		defer cancel()
 
 		err := ublue.SetDeveloperMode(ctx, enabled)
 
+		dispatched = true
 		sgtk.RunOnMainThread(func() {
+			defer uh.developerGate.Reset()
 			toggle.widget.SetSensitive(true)
 
 			if err != nil {

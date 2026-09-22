@@ -297,6 +297,31 @@ func TestRunBrewCommandAtBoundsMutationOutput(t *testing.T) {
 		}
 	})
 
+	// Issue #140: `brew bundle install` replays a failing entry's own
+	// installer output on stdout and prints its summary on stderr. Keeping
+	// stderr alone — the old behaviour whenever stderr was non-empty — threw
+	// away the only line that said why the entry failed.
+	t.Run("failed mutation reports the cause from either stream", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Installing io.podman_desktop.PodmanDesktop"
+echo 'error: Remote "flathub" not found'
+echo "Error: Homebrew Bundle failed! 1 Brewfile dependency failed to install." >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/usr/share/ublue-os/homebrew/system-dx-flatpaks.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		if !strings.Contains(err.Error(), `Remote "flathub" not found`) {
+			t.Errorf("error = %q, want the installer's own cause from stdout", err.Error())
+		}
+		if strings.Contains(err.Error(), "Installing io.podman_desktop") {
+			t.Errorf("error = %q, want the progress line left out of the summary", err.Error())
+		}
+	})
+
 	t.Run("failed mutation reports stderr tail", func(t *testing.T) {
 		stderr := "prefix-marker" + strings.Repeat("x", commandOutputTailLimit) + "tail-marker"
 		script := fakeBrew(t, "printf '%s' '"+stderr+"' >&2\nexit 3")
@@ -373,5 +398,41 @@ func TestUpdatePropagatesContextCancellation(t *testing.T) {
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		t.Error("Update error must not classify as a deadline")
+	}
+}
+
+// A read-only command that fails keeps its whole stderr in the error: nothing
+// else preserves it (the failure log line is reserved for state-changing
+// commands), and callers such as searchKind match on the full text.
+func TestReadOnlyFailureKeepsFullStderr(t *testing.T) {
+	exe := fakeBrew(t, `echo "Warning: tap is shallow" >&2
+echo "Error: No formulae or casks found for \"demo\"." >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "search", "--formula", "demo")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"Warning: tap is shallow", `Error: No formulae or casks found for "demo".`} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("read-only failure lost %q: %q", want, err.Error())
+		}
+	}
+}
+
+// A state-changing command is distilled to the installer's own error line so
+// the toast stays readable; the full output goes to the log instead.
+func TestStateChangingFailureIsSummarized(t *testing.T) {
+	exe := fakeBrew(t, `echo "==> Installing demo"
+echo "==> Pouring demo.bottle.tar.gz"
+echo "Error: donor bottle is corrupt" >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "install", "demo")
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got, want := err.Error(), "Brew command failed: Error: donor bottle is corrupt"; got != want {
+		t.Errorf("state-changing failure = %q, want %q", got, want)
 	}
 }

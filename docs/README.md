@@ -57,14 +57,15 @@ are listed in [org-adrs.md](org-adrs.md).
   — E2E startup readiness is three exact stdout markers polled under
   dbus-run-session + xvfb-run; the log lines are a public API
 - [adr/0009-dry-run-output-convention-and-single-decision-structs.md](adr/0009-dry-run-output-convention-and-single-decision-structs.md)
-  — per-wrapper `SetDryRun`/`IsDryRun`, fixed `[DRY-RUN]` message prefixes,
-  and single tested decision structs gating toast + UI mutation together
+  — `internal/dryrun` as the single process-wide dry-run authority, fixed
+  `[DRY-RUN]` message prefixes, and single tested decision structs gating
+  toast + UI mutation together
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
   — documentation splits into current-state vs historical and is enforced by
   string-matching unit tests; prose is testable
 - [adr/0012-ship-as-control-center-keep-chairlift-code-name.md](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)
   — the application ships as "Control Center" and keeps ChairLift as the code
-  name; `pageview.AppName` owns every user-visible spelling, and two
+  name; `branding.AppName` owns every user-visible spelling, and three
   `internal/installcheck` gates hold the split
 - [adr/0013-capability-driven-visibility-as-a-floor.md](adr/0013-capability-driven-visibility-as-a-floor.md)
   — page and group visibility is bounded by host capability (`Configured && Available`);

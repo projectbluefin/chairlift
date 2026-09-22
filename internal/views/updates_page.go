@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -20,6 +20,8 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
 	"github.com/projectbluefin/chairlift/internal/views/flatpakstatus"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/views/progresslog"
+	"github.com/projectbluefin/chairlift/internal/views/rowset"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -656,6 +658,85 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 	})
 }
 
+// stageProgressSink renders the streamed output of an OS staging run into a
+// bounded rolling log. Both staging providers share it because
+// bootc.ProgressEvent and sysupdate.ProgressEvent are the same
+// stageexec.ProgressEvent.
+//
+// It exists for the cost of the obvious alternative. Rendering each line as it
+// arrives queues one sgtk.RunOnMainThread callback per line and leaves one
+// permanent action row behind, so a verbose stage helper accumulates thousands
+// of heavyweight widgets and callbacks until the run ends — an unresponsive
+// window and unbounded memory. The sink coalesces a burst of lines into a
+// single main-thread callback and keeps only the most recent
+// progresslog.DefaultLimit rows, evicting older ones from the expander.
+//
+// The split of duties is the GTK main-thread rule: consume runs on the worker
+// goroutine and touches no widget, flush runs on the main thread and owns
+// every widget this type names.
+type stageProgressSink struct {
+	activityRow *adw.ActionRow
+	logExpander *adw.ExpanderRow
+	lines       *progresslog.Coalescer
+	rows        rowset.Tracker[*adw.ActionRow]
+}
+
+// newStageProgressSink returns a sink rendering into the run's activity row
+// and "Details" expander.
+func newStageProgressSink(activityRow *adw.ActionRow, logExpander *adw.ExpanderRow) *stageProgressSink {
+	return &stageProgressSink{
+		activityRow: activityRow,
+		logExpander: logExpander,
+		lines:       progresslog.New(progresslog.DefaultLimit),
+	}
+}
+
+// consume reads progressCh to closure and returns the last message the helper
+// printed, which the caller needs for its result subtitle. A line schedules a
+// flush only when no flush is already outstanding; the completion event always
+// flushes, so the final lines of a run are never left pending.
+func (s *stageProgressSink) consume(progressCh <-chan stageexec.ProgressEvent) string {
+	var lastMessage string
+	for event := range progressCh {
+		switch event.Type {
+		case stageexec.EventMessage:
+			lastMessage = event.Message
+			if s.lines.Append(event.Message) {
+				sgtk.RunOnMainThread(s.flush)
+			}
+		case stageexec.EventComplete:
+			sgtk.RunOnMainThread(func() {
+				s.flush()
+				s.activityRow.SetSubtitle("Complete")
+			})
+		}
+	}
+	return lastMessage
+}
+
+// flush renders one coalesced batch on the GTK main thread, then trims the
+// expander back to the retention window so its row count stays bounded.
+func (s *stageProgressSink) flush() {
+	batch := s.lines.Drain()
+	if len(batch.Lines) == 0 {
+		return
+	}
+
+	for _, line := range batch.Lines {
+		msgRow := adw.NewActionRow()
+		msgRow.SetTitle(line.Text)
+		msgRow.SetSubtitle(line.At.Format("15:04:05"))
+		s.logExpander.AddRow(&msgRow.Widget)
+		s.rows.Add(msgRow)
+	}
+	s.rows.TrimTo(s.lines.Limit(), func(row *adw.ActionRow) {
+		s.logExpander.Remove(&row.Widget)
+	})
+
+	s.activityRow.SetSubtitle(batch.Lines[len(batch.Lines)-1].Text)
+	s.logExpander.SetSubtitle(pageview.StagingLogSubtitle(s.rows.Len(), batch.Total))
+}
+
 // onBootcStageClicked runs the stage script with streamed log output.
 // The script checks, downloads, and stages in one idempotent operation.
 func (uh *UserHome) onBootcStageClicked() {
@@ -689,7 +770,7 @@ func (uh *UserHome) onBootcStageClicked() {
 
 	logExpander := adw.NewExpanderRow()
 	logExpander.SetTitle("Details")
-	logExpander.SetSubtitle("Show what is happening")
+	logExpander.SetSubtitle(pageview.StagingLogSubtitle(0, 0))
 	expander.AddRow(&logExpander.Widget)
 	uh.bootcLogExpander = logExpander
 
@@ -707,21 +788,11 @@ func (uh *UserHome) onBootcStageClicked() {
 			stageErr = bootc.StageUpdate(ctx, progressCh)
 		}()
 
-		for event := range progressCh {
-			evt := event
-			sgtk.RunOnMainThread(func() {
-				switch evt.Type {
-				case bootc.EventMessage:
-					msgRow := adw.NewActionRow()
-					msgRow.SetTitle(evt.Message)
-					msgRow.SetSubtitle(time.Now().Format("15:04:05"))
-					logExpander.AddRow(&msgRow.Widget)
-					activityRow.SetSubtitle(evt.Message)
-				case bootc.EventComplete:
-					activityRow.SetSubtitle("Finished")
-				}
-			})
-		}
+		// The sink's return value is the stage helper's own last line.
+		// It is deliberately discarded: it is terminal output that can
+		// name paths a person has no use for, which is why
+		// pageview.BootcStageResultSubtitle takes no such argument.
+		newStageProgressSink(activityRow, logExpander).consume(progressCh)
 
 		wg.Wait()
 
@@ -825,7 +896,7 @@ func (uh *UserHome) onSysupdateStageClicked() {
 
 	logExpander := adw.NewExpanderRow()
 	logExpander.SetTitle("Details")
-	logExpander.SetSubtitle("Show what is happening")
+	logExpander.SetSubtitle(pageview.StagingLogSubtitle(0, 0))
 	expander.AddRow(&logExpander.Widget)
 	uh.sysupdateLogExpander = logExpander
 
@@ -843,21 +914,8 @@ func (uh *UserHome) onSysupdateStageClicked() {
 			stageErr = sysupdate.StageUpdate(ctx, progressCh)
 		}()
 
-		for event := range progressCh {
-			evt := event
-			sgtk.RunOnMainThread(func() {
-				switch evt.Type {
-				case sysupdate.EventMessage:
-					msgRow := adw.NewActionRow()
-					msgRow.SetTitle(evt.Message)
-					msgRow.SetSubtitle(time.Now().Format("15:04:05"))
-					logExpander.AddRow(&msgRow.Widget)
-					activityRow.SetSubtitle(evt.Message)
-				case sysupdate.EventComplete:
-					activityRow.SetSubtitle("Finished")
-				}
-			})
-		}
+		// Discarded for the same reason as the bootc path above.
+		newStageProgressSink(activityRow, logExpander).consume(progressCh)
 
 		wg.Wait()
 

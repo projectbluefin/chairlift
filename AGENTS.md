@@ -48,7 +48,14 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   session, stages `make install`, and executes the installed privileged
   helper's rejection paths. Startup polls the three readiness log markers for
   up to 30 seconds, requires one additional second of process stability, and
-  terminates the private process group as soon as the smoke check passes. It
+  terminates the private process group as soon as the smoke check passes.
+  Terminating it is not the end of the story: startup's Homebrew readers are
+  grandchildren, so `cmd.Wait` never observes them and they keep writing into
+  the temporary `HOME` after the leader is reaped. The smoke test therefore
+  scans `/proc` for the group's surviving members, kills whatever ignored the
+  signal, and only returns once none are left — a cleanup registered *after*
+  `t.TempDir()` so it runs before the directory is removed (issue #91). A test
+  that launches a process group owes the same drain. It
   requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
@@ -202,7 +209,14 @@ An agent must not break these:
   rejects each shape. `cmd/chairlift-ublue-helper`'s dispatch carries a
   `default` arm that exits non-zero: a command the parser accepts and the
   switch does not handle would otherwise exit 0 having done nothing, which
-  the GUI cannot tell apart from a privileged action that worked.
+  the GUI cannot tell apart from a privileged action that worked. The
+  accepted half is asserted separately, because `cmd/` is outside the
+  `./internal/...` unit gate: `test/e2e/helper_commands_test.go` runs every
+  command in `ubluehelper.SupportedCommands` and
+  `updexhelper.SupportedCommands` through the staged binary with
+  `--dry-run` and asserts the arm's own output, and derives its own
+  completeness from those two sets — a new subcommand fails that gate until
+  it has an accepted-command case, not only a rejection case.
 - **Every navigable page has a committed screenshot and a walkthrough entry.**
   `make screenshots` regenerates `docs/screenshots/` from the real
   application; `docs/walkthrough.md` is the user-facing tour built from them.
@@ -265,6 +279,19 @@ An agent must not break these:
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
   worker goroutine.
+- **Streamed command output renders bounded.** A stage helper prints an
+  unbounded number of lines, so a view may not answer one line with one
+  `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
+  callback per line and leaks a heavyweight widget per line, which is the
+  frozen window of issue #81. Both OS staging handlers render through
+  `stageProgressSink`, which coalesces a burst into one callback with
+  `internal/views/progresslog` and caps the expander at
+  `progresslog.DefaultLimit` rows with `rowset.Tracker.TrimTo`; the Details
+  subtitle comes from `pageview.StagingLogSubtitle`, so a window that hid
+  older lines says so instead of reading like a complete log.
+  `internal/views/progresslog`'s wiring test reads `updates_page.go` and
+  rejects a return to the per-line shape. Any future view that renders a
+  stream of external output owes the same two caps.
 - **Headless view coverage stays puregotk-free.** `internal/views` cannot host
   a test binary on ordinary CI hosts. Shared row text, page status, os-release
   parsing, help-link ordering, and maintenance-command selection live in the
@@ -326,6 +353,20 @@ An agent must not break these:
   human-readable version or source ref in a trailing comment and update both
   intentionally. Local actions referenced with `./` are exempt. The
   `internal/installcheck` workflow scan enforces this across every workflow.
+- **The merge queue gates on one context, and that context waits for every
+  other job.** `main` merges through a merge queue, which validates a
+  candidate on a `gh-readonly-queue/main/pr-<n>-<sha>` ref — a `merge_group`
+  event that neither `push` nor `pull_request` fires for. `test.yml` declares
+  it, deliberately unfiltered, because `github.ref` there is the queue ref and
+  a `branches: [main]` filter would match nothing and silently return the
+  queue to merging unvalidated heads. The ruleset requires the aggregating
+  `Tests Passed` job rather than the individual jobs, whose names change with
+  the matrix; it carries `if: always()` because GitHub counts a skipped
+  required check as a passing one. Adding a job to `test.yml` means adding it
+  to that job's `needs` —
+  `internal/installcheck`'s `TestMergeQueueGateWaitsForEveryTestJob` fails
+  otherwise — and renaming the job means editing the ruleset in the same
+  change.
 - **Every privileged dispatch point journals, unconditionally.** `internal/ublue.runHelper`
   and `internal/updex.runHelper` call `journal.Record` on every invocation, dry-run
   or live, before doing anything else. This is not a `chairlift_e2e` stub: with

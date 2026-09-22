@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,6 +21,14 @@ const (
 	startupTimeout  = 30 * time.Second
 	stabilityWindow = time.Second
 	shutdownTimeout = 5 * time.Second
+	// The smoke test's descendants are reparented away from this process
+	// when their leader dies, so they can only be waited for by polling.
+	drainTimeout  = 15 * time.Second
+	drainInterval = 50 * time.Millisecond
+
+	// defaultProcTable is the kernel's process table. The membership scan
+	// below takes it as an argument so a test can point it at a fixture tree.
+	defaultProcTable = "/proc"
 )
 
 func TestApplicationHelp(t *testing.T) {
@@ -52,6 +62,12 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 	dbusRunSession := requireCommand(t, "dbus-run-session")
 	xvfbRun := requireCommand(t, "xvfb-run")
 
+	// Startup reads the user's Homebrew inventory, and `brew` populates
+	// $HOME/.cache/Homebrew while it does. Go removes this directory when the
+	// test ends, so the removal has to happen after every one of those writers
+	// is gone; the cleanup registered below is what orders the two.
+	home := t.TempDir()
+
 	cmd := exec.Command(
 		dbusRunSession,
 		"--",
@@ -68,7 +84,7 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		"NO_AT_BRIDGE=1",
 		"GTK_A11Y=none",
 		"GSETTINGS_BACKEND=memory",
-		"HOME="+t.TempDir(),
+		"HOME="+home,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	output := &lockedBuffer{}
@@ -78,8 +94,21 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		t.Fatalf("start ChairLift dry-run smoke process: %v", err)
 	}
 
+	// Closed as well as sent to: the readiness loop below and the cleanup both
+	// receive from this channel, and a cleanup that blocked waiting for a value
+	// the loop had already taken would hang the E2E run rather than fail it.
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() {
+		done <- cmd.Wait()
+		close(done)
+	}()
+
+	// Cleanups run last-registered-first, so this one stops the workers before
+	// Go removes the temporary HOME registered above — the ordering issue #91
+	// reported as a nondeterministic `directory not empty`. Registering it
+	// rather than calling it on each exit path also covers the paths that end
+	// in t.Fatal.
+	t.Cleanup(func() { stopProcessGroup(t, cmd, done) })
 
 	want := []string{
 		"Running in dry-run mode",
@@ -105,12 +134,10 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 				continue
 			}
 			if time.Since(readyAt) >= stabilityWindow {
-				stopProcessGroup(t, cmd, done)
 				return
 			}
 		case <-timer.C:
 			missing := missingOutput(output.String(), want)
-			stopProcessGroup(t, cmd, done)
 			t.Fatalf("ChairLift did not become ready within %s; missing %s\noutput:\n%s",
 				startupTimeout, missing, output.String())
 		}
@@ -278,21 +305,185 @@ func missingOutput(output string, markers []string) string {
 	return strings.Join(missing, ", ")
 }
 
+// stopProcessGroup ends the smoke run and does not return while any of it is
+// still running. Reaping the leader is not enough: startup's Homebrew readers
+// are grandchildren, so they are reparented to init rather than to this test,
+// `cmd.Wait` never observes them, and they keep creating files under the
+// temporary HOME after the leader is gone.
 func stopProcessGroup(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	t.Helper()
-	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("terminate ChairLift smoke process group: %v", err)
-	}
-	select {
-	case <-done:
-		return
-	case <-time.After(shutdownTimeout):
+
+	group := cmd.Process.Pid
+	// Once the leader has been reaped the group id is a PID the kernel may
+	// hand to an unrelated process, so the whole-group signals below are only
+	// safe while it is still running. The drain that follows signals the
+	// surviving members individually for the same reason.
+	if !hasExited(done) {
+		if err := syscall.Kill(-group, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+			t.Errorf("terminate ChairLift smoke process group: %v", err)
+		}
+		select {
+		case <-done:
+		case <-time.After(shutdownTimeout):
+			if err := syscall.Kill(-group, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+				t.Errorf("kill ChairLift smoke process group: %v", err)
+			}
+			<-done
+		}
 	}
 
-	if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("kill ChairLift smoke process group: %v", err)
+	if err := awaitProcessGroupExit(hostDrain(), group, shutdownTimeout, drainTimeout); err != nil {
+		t.Errorf("ChairLift smoke process group %d: %v", group, err)
 	}
-	<-done
+}
+
+func hasExited(done <-chan error) bool {
+	select {
+	case <-done:
+		return true
+	default:
+		return false
+	}
+}
+
+// procGroupDrain is what awaitProcessGroupExit needs from the host: the process
+// table to scan and the signal to send. The smoke test hands it the kernel's,
+// so that the drain acts on the processes actually holding the temporary HOME
+// open; the unit tests hand it a fixture, so the escalation can be observed
+// without racing real processes.
+type procGroupDrain struct {
+	procTable string
+	kill      func(pid int) error
+}
+
+func hostDrain() procGroupDrain {
+	return procGroupDrain{
+		procTable: defaultProcTable,
+		kill:      func(pid int) error { return syscall.Kill(pid, syscall.SIGKILL) },
+	}
+}
+
+// awaitProcessGroupExit blocks until no live process is left in group, killing
+// whatever ignored the earlier signal once escalateAfter has passed. It kills
+// on every scan from then on rather than sweeping once: a member that forks
+// during or after a single sweep leaves a child that was never signalled, and
+// the drain would then only poll to its own timeout while that child keeps
+// writing into the temporary HOME.
+//
+// The group's leader must already have been reaped: its PID is the group id,
+// and once the kernel is free to reuse that PID an unrelated process would look
+// like a member, so the id itself is never counted or signalled here.
+func awaitProcessGroupExit(drain procGroupDrain, group int, escalateAfter, timeout time.Duration) error {
+	start := time.Now()
+	for {
+		members, err := liveProcessGroupMembers(drain.procTable, group)
+		if err != nil {
+			return err
+		}
+		if len(members) == 0 {
+			return nil
+		}
+
+		elapsed := time.Since(start)
+		if elapsed >= escalateAfter {
+			for _, member := range members {
+				// By PID, not by group: the group id may have been recycled
+				// since the leader was reaped, and signalling it would reach a
+				// stranger. A member can still exit between this scan and the
+				// signal, so this is subject to the ordinary kill-by-PID race
+				// on a recycled PID; ESRCH is the expected outcome there, and
+				// repeating SIGKILL on a PID already killed is harmless.
+				if err := drain.kill(member.pid); err != nil && !errors.Is(err, syscall.ESRCH) {
+					return fmt.Errorf("kill %s: %w", member, err)
+				}
+			}
+		}
+		if elapsed >= timeout {
+			return fmt.Errorf("still running %s after %s: %s", plural(len(members), "process"), timeout, describeMembers(members))
+		}
+		time.Sleep(drainInterval)
+	}
+}
+
+// processGroupMember is one entry of the kernel's process table.
+type processGroupMember struct {
+	pid  int
+	name string
+}
+
+func (member processGroupMember) String() string {
+	return fmt.Sprintf("%s (pid %d)", member.name, member.pid)
+}
+
+func describeMembers(members []processGroupMember) string {
+	described := make([]string, 0, len(members))
+	for _, member := range members {
+		described = append(described, member.String())
+	}
+	return strings.Join(described, ", ")
+}
+
+func plural(count int, noun string) string {
+	if count == 1 {
+		return fmt.Sprintf("%d %s", count, noun)
+	}
+	return fmt.Sprintf("%d %ss", count, noun)
+}
+
+// liveProcessGroupMembers reports the processes under procTable that belong to
+// the given process group and can still execute, in ascending PID order.
+// Zombies are excluded deliberately: an exited-but-unreaped process answers
+// signal 0 and owns a PID, yet it has no address space and cannot write a
+// file, so waiting for one would mean waiting on a reaper that is not this
+// test. The group's own id is excluded for the reason given above
+// awaitProcessGroupExit.
+func liveProcessGroupMembers(procTable string, group int) ([]processGroupMember, error) {
+	entries, err := os.ReadDir(procTable)
+	if err != nil {
+		return nil, fmt.Errorf("read the process table at %s: %w", procTable, err)
+	}
+
+	members := make([]processGroupMember, 0, 4)
+	for _, entry := range entries {
+		pid, err := strconv.Atoi(entry.Name())
+		if err != nil || pid == group {
+			continue
+		}
+		// A process that exits between the listing and the read is exactly
+		// what this function is waiting for, so a missing stat is not an error.
+		stat, err := os.ReadFile(filepath.Join(procTable, entry.Name(), "stat"))
+		if err != nil {
+			continue
+		}
+		name, state, pgrp, ok := parseProcessStat(string(stat))
+		if !ok || pgrp != group || state == "Z" {
+			continue
+		}
+		members = append(members, processGroupMember{pid: pid, name: name})
+	}
+	sort.Slice(members, func(i, j int) bool { return members[i].pid < members[j].pid })
+	return members, nil
+}
+
+// parseProcessStat reads the command name, run state, and process group out of
+// a /proc/<pid>/stat line. The command is parenthesized and may itself contain
+// spaces and parentheses, so the fixed fields are taken after the final ')'
+// rather than by splitting the whole line.
+func parseProcessStat(stat string) (name, state string, group int, ok bool) {
+	open := strings.Index(stat, "(")
+	closed := strings.LastIndex(stat, ")")
+	if open < 0 || closed < open {
+		return "", "", 0, false
+	}
+	fields := strings.Fields(stat[closed+1:])
+	if len(fields) < 3 {
+		return "", "", 0, false
+	}
+	group, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return "", "", 0, false
+	}
+	return stat[open+1 : closed], fields[0], group, true
 }
 
 func repoRoot(t *testing.T) string {

@@ -78,6 +78,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				// hand-slice below is carried across from that entry.
 				"pageview.SystemVersionRow(",
 				"pageview.SystemVersionDetails(",
+				"pageview.StagingLogSubtitle(",
 			},
 			retired: []string{
 				"strings.LastIndex(",

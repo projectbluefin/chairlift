@@ -93,6 +93,14 @@ jobs:
           git checkout -B main origin/main
 
       - name: Commit updated screenshots
+        # RELEASE_TAG is drawn from an attacker-influenceable git ref name
+        # (head_branch) or a free-text workflow_dispatch input. Neither is
+        # shell-safe, so it must not be interpolated into the run script with
+        # ${{ }}. Passing it through env: puts the value in the process
+        # environment, where "${RELEASE_TAG}" expands it as data — a " or ; in
+        # the ref can no longer break out of the commit-message quoting.
+        env:
+          RELEASE_TAG: ${{ github.event.workflow_run.head_branch || inputs.tag || 'workflow_dispatch' }}
         run: |
           rm -rf docs/screenshots
           mkdir -p docs/screenshots
@@ -104,6 +112,5 @@ jobs:
             echo "screenshots unchanged"
             exit 0
           fi
-          RELEASE_TAG="${{ github.event.workflow_run.head_branch || inputs.tag || 'workflow_dispatch' }}"
           git commit -m "docs: refresh walkthrough screenshots for ${RELEASE_TAG} [skip ci]"
           git push origin main
