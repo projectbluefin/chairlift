@@ -45,6 +45,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.HomebrewPackage(",
 				"pageview.FlatpakApplication(",
 				"pageview.SearchResult(",
+				"trustmsg.BundleMessage(",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
