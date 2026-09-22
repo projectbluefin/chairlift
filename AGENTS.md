@@ -259,17 +259,31 @@ An agent must not break these:
   parsing, help-link ordering, and maintenance-command selection live in the
   pure `internal/views/pageview` package; its wiring test must continue to
   cover all seven page builders.
-- **Navigation behavior has one authority.** Page order, titles, icons, and
+- **Navigation behavior has one authority.** Route order, titles, icons, and
   advertised/registered accelerators live in the pure
-  `internal/navigation` package. It also decides page visibility from static
-  group configuration: omit a functional page when all of its builder-backed
-  groups are disabled, always retain Help, and compact Alt+number over visible
-  pages. Mouse activation and window navigation actions must both call
-  `Window.navigateToPage`, which applies the complete `navigation.Resolve`
-  transition (visible-row index, visible child, title, and collapsed-layout
-  content reveal). The app and shortcuts dialog must use the window's same
-  visible inventory. Do not reintroduce a second page or shortcut inventory in
-  `internal/window` or `internal/app`.
+  `internal/navigation` package, as one canonical table of `Primary` sidebar
+  mounts and `Detail` screens reached from them. A route carries a set of
+  `Ref`s — `(config page, group)` pairs — rather than one config page, because
+  a rendered destination may consume several configuration namespaces;
+  configuration identity is never inferred from a route's display name. It
+  also decides visibility from static group configuration: omit a primary when
+  all of its refs are disabled, always retain the `Fallback` route (Help), and
+  compact Alt+number over the visible primaries. Detail routes are not sidebar
+  entries and carry no numeric slot. Mouse activation and window navigation
+  actions must both call `Window.navigateToPage`, which builds a
+  `navigation.Env` from the visible inventory, the constructed pages, and
+  `Config.IsGroupEnabled`, and applies the complete `navigation.Resolve`
+  transition (visible-row index, visible child, title, collapsed-layout
+  content reveal, and the Back target for a detail). `Resolve` is pure and
+  fails closed: a nil `Available` seam makes nothing reachable, an
+  unconstructed or fully disabled detail lands on the primary that draws its
+  content rather than on an empty screen, and an unknown route is rejected
+  without navigating. The app and shortcuts dialog must use the window's same
+  visible inventory. Do not reintroduce a second route or shortcut inventory in
+  `internal/window` or `internal/app`. The destination inventory, the single
+  owner of every mutating action, and the mounts the cutover deletes are the
+  reviewed matrix in `docs/design/navigation-routes.md`, which
+  `internal/installcheck` holds to the code in both directions.
 - **The host capability floor has one owner.** `internal/capability` is the
   puregotk-free authority for what this host can back a page or group with,
   and its probes are non-blocking only (`exec.LookPath`, `os.Stat`, environment
@@ -296,7 +310,8 @@ An agent must not break these:
   command ChairLift issues) both read it, so a host whose Homebrew is reachable
   only at the fallback is reported as installed *and* actually driven. A `brew`
   on `$PATH` wins over the fallback. Do not reintroduce a second resolution: no
-  bare `"brew"` at an exec site, and no private copy of the fallback path.- **Homebrew update actions preserve known state.** Per-package upgrades and
+  bare `"brew"` at an exec site, and no private copy of the fallback path.
+- **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
   changing rows or counts. A live package success removes its row, decrements

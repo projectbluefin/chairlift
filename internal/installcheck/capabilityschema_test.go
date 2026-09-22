@@ -2,8 +2,8 @@ package installcheck
 
 import (
 	"reflect"
+	"sort"
 	"testing"
-
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
 )
@@ -40,6 +40,12 @@ func capabilityPairs() []string {
 		pairs = append(pairs, entry.Page+"/"+entry.Group)
 	}
 	return pairs
+}
+
+func sortedNames(values []string) []string {
+	result := append([]string(nil), values...)
+	sort.Strings(result)
+	return result
 }
 
 // configPairs returns every page/group pair the configuration schema declares,

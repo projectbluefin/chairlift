@@ -49,7 +49,13 @@ type Window struct {
 	configError *config.LoadError
 	views       *views.UserHome
 	updateBadge *gtk.Label // Noninteractive badge for the updates count
-	navItems    []navigation.Item
+	navItems    []navigation.Route
+
+	// backTarget is the primary route the last detail transition returns
+	// to. Back is routed through the window's one navigation transition, so
+	// it can never re-run an action or land on a route the window did not
+	// construct.
+	backTarget string
 }
 
 func init() {
@@ -111,7 +117,7 @@ func New(app adw.Application) *Window {
 func (w *Window) buildUI() {
 	start := time.Now()
 
-	w.navItems = navigation.VisibleItems(w.config.IsGroupEnabled)
+	w.navItems = navigation.VisibleRoutes(w.config.IsGroupEnabled)
 
 	// Create views manager
 	w.views = views.New(w.config, w)
@@ -185,7 +191,7 @@ func (w *Window) buildSidebar() *adw.NavigationPage {
 }
 
 // createNavRow creates a navigation row for the sidebar
-func (w *Window) createNavRow(item navigation.Item) *adw.ActionRow {
+func (w *Window) createNavRow(item navigation.Route) *adw.ActionRow {
 	row := adw.NewActionRow()
 	row.SetTitle(item.Title)
 	row.SetActivatable(true)
@@ -312,11 +318,19 @@ func (w *Window) setupActions() {
 	}
 }
 
-// navigateToPage navigates to a specific page
-func (w *Window) navigateToPage(pageName string) {
-	transition, ok := navigation.Resolve(pageName, w.navItems, func(name string) bool {
-		_, exists := w.pages[name]
-		return exists
+// navigateToPage navigates to a specific route through the window's one
+// transition. Mouse activation, keyboard navigation, Back and deep links all
+// arrive here, so they cannot disagree about which row is selected, which
+// title is shown, or whether a collapsed layout reveals the content. The
+// transition carries state only: entering a route never launches a mutation.
+func (w *Window) navigateToPage(routeName string) {
+	transition, ok := navigation.Resolve(routeName, navigation.Env{
+		Visible: w.navItems,
+		Available: func(name string) bool {
+			_, exists := w.pages[name]
+			return exists
+		},
+		Enabled: w.config.IsGroupEnabled,
 	})
 	if !ok {
 		return
@@ -329,6 +343,21 @@ func (w *Window) navigateToPage(pageName string) {
 	w.contentStack.SetVisibleChildName(transition.VisibleChild)
 	w.contentPage.SetTitle(transition.Title)
 	w.splitView.SetShowContent(transition.ShowContent)
+	w.backTarget = transition.Back
+}
+
+// NavigateBack returns from a detail view to the primary route the detail
+// transition recorded, and restores focus to that route's sidebar row so the
+// keyboard lands where the mouse would. It is a no-op when no detail has been
+// entered, which keeps Back from running an action or stranding the window.
+func (w *Window) NavigateBack() {
+	target := w.backTarget
+	if target == "" {
+		return
+	}
+	w.backTarget = ""
+	w.navigateToPage(target)
+	w.sidebarList.GrabFocus()
 }
 
 // onShowShortcuts shows the keyboard shortcuts window
@@ -413,8 +442,8 @@ func (w *Window) onShowShortcuts() {
 
 // NavigationItems returns the visible, compacted page inventory used by this
 // window. The application uses the same inventory to register accelerators.
-func (w *Window) NavigationItems() []navigation.Item {
-	return append([]navigation.Item(nil), w.navItems...)
+func (w *Window) NavigationItems() []navigation.Route {
+	return append([]navigation.Route(nil), w.navItems...)
 }
 
 // onShowAbout shows the about dialog

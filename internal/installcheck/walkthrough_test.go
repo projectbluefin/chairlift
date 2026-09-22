@@ -22,7 +22,7 @@ const (
 var markdownImage = regexp.MustCompile(`!\[[^\]]*\]\(([^)]+)\)`)
 
 // screenshotName is the file `make screenshots` writes for the page at the
-// given zero-based position in navigation.Items().
+// given zero-based position in navigation.PrimaryRoutes().
 func screenshotName(index int, page string) string {
 	return fmt.Sprintf("%d-%s.png", index+1, page)
 }
@@ -37,9 +37,9 @@ func screenshotName(index int, page string) string {
 func TestWalkthroughDocumentsEveryPage(t *testing.T) {
 	doc := readRepoFile(t, walkthroughDoc)
 
-	items := navigation.Items()
+	items := navigation.PrimaryRoutes()
 	if len(items) == 0 {
-		t.Fatal("navigation.Items() is empty; there are no pages to document")
+		t.Fatal("navigation.PrimaryRoutes() is empty; there are no pages to document")
 	}
 
 	for index, item := range items {
@@ -107,8 +107,8 @@ func TestNoOrphanedScreenshots(t *testing.T) {
 			t.Errorf("%s/%s is not referenced by %s; it is a stale capture", screenshotDir, entry.Name(), walkthroughDoc)
 		}
 	}
-	if found != len(navigation.Items()) {
-		t.Errorf("%s holds %d screenshots, want one per navigable page (%d)", screenshotDir, found, len(navigation.Items()))
+	if found != len(navigation.PrimaryRoutes()) {
+		t.Errorf("%s holds %d screenshots, want one per navigable page (%d)", screenshotDir, found, len(navigation.PrimaryRoutes()))
 	}
 }
 
@@ -136,7 +136,7 @@ func TestScreenshotDirectoryHoldsOnlyImages(t *testing.T) {
 // group names come from config.SchemaGroups, so a group added to any page
 // with no entry here fails this test.
 //
-// That forcing function is the point. Deriving only from navigation.Items()
+// That forcing function is the point. Deriving only from navigation.PrimaryRoutes()
 // would miss every feature added to an existing page — which is how Update
 // All, Automatic Updates, and Roll Back all landed.
 func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {

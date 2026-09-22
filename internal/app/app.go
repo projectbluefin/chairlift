@@ -140,7 +140,7 @@ func (a *Application) registerQuitAction() {
 }
 
 // setupKeyboardShortcuts sets up application-wide keyboard shortcuts
-func (a *Application) setupKeyboardShortcuts(items []navigation.Item) {
+func (a *Application) setupKeyboardShortcuts(items []navigation.Route) {
 	for _, binding := range navigation.Bindings(items) {
 		a.SetAccelsForAction(binding.Action, binding.Accelerators)
 	}

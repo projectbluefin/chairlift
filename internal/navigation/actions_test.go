@@ -72,9 +72,9 @@ func TestEveryAdvertisedActionIsRegistered(t *testing.T) {
 		scopes[prefix] = scope{names: names, prefixes: prefixes}
 	}
 
-	bindings := Bindings(Items())
+	bindings := Bindings(PrimaryRoutes())
 	if len(bindings) == 0 {
-		t.Fatal("Bindings(Items()) is empty; nothing is being checked")
+		t.Fatal("Bindings(PrimaryRoutes()) is empty; nothing is being checked")
 	}
 
 	for _, binding := range bindings {
