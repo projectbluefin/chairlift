@@ -1033,7 +1033,6 @@ func TestCoordinatorMaintenanceShowsUpdatingPhase(t *testing.T) {
 	}
 }
 
-
 func providerInterfaces(providers []*testProvider) []Provider {
 	result := make([]Provider, len(providers))
 	for i, provider := range providers {

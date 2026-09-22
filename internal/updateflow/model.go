@@ -65,17 +65,17 @@ type SourceState struct {
 
 // Snapshot is an immutable value published by Coordinator.
 type Snapshot struct {
-	Generation       uint64
-	Phase            Phase
-	Action           Action
-	Sources          []SourceState
-	Current          SourceID
-	Progress         string
-	TotalUpdates     int
-	CompletedSources []SourceID
-	FailedSources    []SourceID
-	LastChecked      time.Time
-	Preview          bool
+	Generation         uint64
+	Phase              Phase
+	Action             Action
+	Sources            []SourceState
+	Current            SourceID
+	Progress           string
+	TotalUpdates       int
+	CompletedSources   []SourceID
+	FailedSources      []SourceID
+	LastChecked        time.Time
+	Preview            bool
 	MaintenanceRunning bool
 	MaintenanceRan     bool
 	MaintenanceErr     error
