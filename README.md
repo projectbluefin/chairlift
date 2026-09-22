@@ -300,7 +300,8 @@ manager configured by
 
 The Applications page discovers curated `*.Brewfile` bundles from every
 directory configured in `applications_page.brew_bundles_group.bundles_paths`
-(`/usr/share/snow/bundles` by default). Each bundle row shows its source path
+(`/usr/share/ublue-os/homebrew`, `/usr/share/chairlift/bundles`,
+`/etc/chairlift/bundles`, and `/usr/share/snow/bundles` by default). Each bundle row shows its source path
 and an Install action; a leading comment in the Brewfile becomes its
 description. Missing directories are harmless, while unreadable configured
 paths are reported without hiding bundles found elsewhere. Repeated clicks

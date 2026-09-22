@@ -93,12 +93,12 @@ Those operations belong to the configured external manager.
 `brew_bundles_group` supports:
 
 - `bundles_paths` — directories searched, without recursion, for
-  `*.Brewfile` bundles (default: `["/usr/share/snow/bundles"]`). Missing
+  `*.Brewfile` bundles (default: `["/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles", "/usr/share/snow/bundles"]`). Missing
   directories are ignored; other path errors are shown while readable
   directories still contribute rows. Exact duplicate paths are collapsed,
   but same-named Brewfiles in different directories remain separate and show
-  their absolute paths. The first-line `#` comment, when present, is displayed
-  as the bundle description.
+  their absolute paths. Leading comment blocks in the Brewfile are displayed
+  as the bundle description, falling back to a humanized name derived from the filename.
 
 A failed bundle install reports the cause rather than the progress that
 preceded it: ChairLift reads both of brew's output streams, because

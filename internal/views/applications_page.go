@@ -180,9 +180,13 @@ func (uh *UserHome) buildApplicationsPage() {
 	}
 }
 
-// loadBrewBundles discovers configured Brewfiles on a worker goroutine and
-// builds all bundle rows on GTK's main thread.
+// loadBrewBundles discovers configured Brewfiles on a worker goroutine, builds
+// the bundle rows on GTK's main thread as soon as discovery finishes, then
+// fills in each row's action state as its status check completes. Rows are
+// built for one page build only; the refresh generation orders this build's
+// asynchronous callbacks.
 func (uh *UserHome) loadBrewBundles(paths []string) {
+	generation := uh.brewBundlesRefresh.Begin()
 	bundles, discoveryErr := homebrew.AvailableBundles(paths)
 	homebrewAvailable := homebrew.IsInstalledCached()
 	warning := ""
@@ -193,83 +197,158 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 	presentation := bundleview.Present(len(bundles), warning, homebrewAvailable)
 
 	sgtk.RunOnMainThread(func() {
-		if uh.brewBundlesGroup == nil {
+		uh.buildBrewBundleRows(generation, bundles, presentation, homebrewAvailable)
+	})
+
+	if !homebrewAvailable {
+		return
+	}
+
+	// Each check runs brew, which evaluates the Brewfile, so the checks stay
+	// on this worker goroutine and each result is applied to its own row as
+	// soon as it lands rather than after every bundle has been checked.
+	for _, bundle := range bundles {
+		if !uh.brewBundlesRefresh.IsCurrent(generation) {
 			return
 		}
-		uh.brewBundlesGroup.SetDescription(presentation.Description)
+		status, err := homebrew.BundleCheck(bundle.Path)
+		if err != nil {
+			log.Printf("Error checking Brew bundle %s: %v", bundle.Path, err)
+		}
+		path := bundle.Path
+		sgtk.RunOnMainThread(func() {
+			uh.applyBrewBundleStatus(generation, path, status, homebrewAvailable)
+		})
+	}
+}
 
-		if len(bundles) == 0 {
-			row := adw.NewActionRow()
-			row.SetTitle(presentation.PlaceholderTitle)
-			row.SetSubtitle(presentation.PlaceholderSubtitle)
-			uh.brewBundlesGroup.Add(&row.Widget)
-			return
+// buildBrewBundleRows populates the Brew bundles group with one row per
+// discovered bundle. It must run on GTK's main thread.
+func (uh *UserHome) buildBrewBundleRows(
+	generation uint64,
+	bundles []homebrew.Bundle,
+	presentation bundleview.Presentation,
+	homebrewAvailable bool,
+) {
+	if !uh.brewBundlesRefresh.IsCurrent(generation) {
+		return
+	}
+	if uh.brewBundlesGroup == nil {
+		return
+	}
+	uh.brewBundlesGroup.SetDescription(presentation.Description)
+
+	if len(bundles) == 0 {
+		row := adw.NewActionRow()
+		row.SetTitle(presentation.PlaceholderTitle)
+		row.SetSubtitle(presentation.PlaceholderSubtitle)
+		uh.brewBundlesGroup.Add(&row.Widget)
+		return
+	}
+
+	if uh.brewBundleRows == nil {
+		uh.brewBundleRows = make(map[string]*bundleRowWidgets)
+	}
+
+	for _, bundle := range bundles {
+		rowPresentation := pageview.BrewBundle(bundle.Name, bundle.Description, bundle.Path)
+		// Statuses are not known yet; each row's control is finalized by
+		// applyBrewBundleStatus once its check completes.
+		rowAction := bundleview.RowAction(homebrew.BundleIndeterminate, homebrewAvailable)
+
+		row := adw.NewActionRow()
+		row.SetTitle(rowPresentation.Title)
+		row.SetSubtitle(rowPresentation.Subtitle)
+
+		installBtn := gtk.NewButtonWithLabel(rowAction.Label)
+		installBtn.SetValign(gtk.AlignCenterValue)
+		installBtn.AddCssClass("suggested-action")
+		installBtn.SetSensitive(rowAction.Sensitive)
+		if !homebrewAvailable {
+			installBtn.SetTooltipText("Homebrew is not installed")
 		}
 
-		for _, bundle := range bundles {
-			presentation := pageview.BrewBundle(bundle.Name, bundle.Description, bundle.Path)
-			row := adw.NewActionRow()
-			row.SetTitle(presentation.Title)
-			row.SetSubtitle(presentation.Subtitle)
-
-			installBtn := gtk.NewButtonWithLabel("Install")
-			installBtn.SetValign(gtk.AlignCenterValue)
-			installBtn.AddCssClass("suggested-action")
-			installBtn.SetSensitive(homebrewAvailable)
-			if !homebrewAvailable {
-				installBtn.SetTooltipText("Homebrew is not installed")
+		gate := &bundleview.InstallGate{}
+		bundle := bundle
+		clickedCb := func(btn gtk.Button) {
+			if !gate.TryStart() {
+				return
 			}
+			btn.SetSensitive(false)
+			btn.SetLabel("Installing...")
 
-			gate := &bundleview.InstallGate{}
-			bundle := bundle
-			clickedCb := func(btn gtk.Button) {
-				if !gate.TryStart() {
+			go func() {
+				if err := homebrew.BundleInstall(bundle.Path); err != nil {
+					sgtk.RunOnMainThread(func() {
+						gate.Reset()
+						btn.SetLabel("Install")
+						btn.SetSensitive(homebrewAvailable)
+						uh.toastAdder.ShowErrorToast(fmt.Sprintf(
+							"Could not install Brew bundle %s: %v",
+							bundle.Name,
+							err,
+						))
+					})
 					return
 				}
-				btn.SetSensitive(false)
-				btn.SetLabel("Installing...")
 
-				go func() {
-					if err := homebrew.BundleInstall(bundle.Path); err != nil {
-						sgtk.RunOnMainThread(func() {
-							gate.Reset()
-							btn.SetLabel("Install")
-							btn.SetSensitive(homebrewAvailable)
-							uh.toastAdder.ShowErrorToast(fmt.Sprintf(
-								"Could not install Brew bundle %s: %v",
-								bundle.Name,
-								err,
-							))
-						})
-						return
+				decision := actionmsg.BundleInstall(dryrun.Enabled(), bundle.Name)
+				sgtk.RunOnMainThread(func() {
+					if decision.Complete {
+						gate.Complete()
+						btn.SetLabel("Installed")
+						btn.SetSensitive(false)
+						// A live bundle install can add formulae and casks the
+						// current inventory snapshot predates, so refresh the
+						// installed list to match. Under dry-run decision.Complete
+						// is false — nothing was changed — so the inventory stays put.
+						go uh.loadHomebrewPackages()
+					} else {
+						gate.Reset()
+						btn.SetLabel("Install")
+						btn.SetSensitive(homebrewAvailable)
 					}
-
-					decision := actionmsg.BundleInstall(dryrun.Enabled(), bundle.Name)
-					sgtk.RunOnMainThread(func() {
-						if decision.Complete {
-							gate.Complete()
-							btn.SetLabel("Installed")
-							btn.SetSensitive(false)
-							// A live bundle install can add formulae and casks the
-							// current inventory snapshot predates, so refresh the
-							// installed list to match. Under dry-run decision.Complete
-							// is false — nothing was changed — so the inventory stays put.
-							go uh.loadHomebrewPackages()
-						} else {
-							gate.Reset()
-							btn.SetLabel("Install")
-							btn.SetSensitive(homebrewAvailable)
-						}
-						uh.toastAdder.ShowToast(decision.Toast)
-					})
-				}()
-			}
-			installBtn.ConnectClicked(&clickedCb)
-
-			row.AddSuffix(&installBtn.Widget)
-			uh.brewBundlesGroup.Add(&row.Widget)
+					uh.toastAdder.ShowToast(decision.Toast)
+				})
+			}()
 		}
-	})
+		installBtn.ConnectClicked(&clickedCb)
+
+		row.AddSuffix(&installBtn.Widget)
+		uh.brewBundlesGroup.Add(&row.Widget)
+
+		uh.brewBundleRows[bundle.Path] = &bundleRowWidgets{
+			row:  row,
+			btn:  installBtn,
+			gate: gate,
+		}
+	}
+}
+
+// applyBrewBundleStatus finalizes one bundle row's action control from its
+// completed status check. It must run on GTK's main thread and leaves rows
+// whose action is already running or finished untouched, so a check result
+// can never re-enable a button during an install.
+func (uh *UserHome) applyBrewBundleStatus(
+	generation uint64,
+	path string,
+	status homebrew.BundleStatus,
+	homebrewAvailable bool,
+) {
+	if !uh.brewBundlesRefresh.IsCurrent(generation) {
+		return
+	}
+	widgets, exists := uh.brewBundleRows[path]
+	if !exists || !widgets.gate.IsIdle() {
+		return
+	}
+
+	rowAction := bundleview.RowAction(status, homebrewAvailable)
+	widgets.btn.SetLabel(rowAction.Label)
+	widgets.btn.SetSensitive(rowAction.Sensitive)
+	if rowAction.Completed {
+		widgets.gate.Complete()
+	}
 }
 
 // loadHomebrewPackages loads installed Homebrew packages asynchronously

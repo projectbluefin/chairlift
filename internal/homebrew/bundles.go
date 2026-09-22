@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 const maxBundleDescriptionBytes = 64 * 1024
@@ -116,13 +117,68 @@ func readBundleDescription(path string) (description string, resultErr error) {
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), maxBundleDescriptionBytes)
-	if !scanner.Scan() {
-		return "", scanner.Err()
+
+	var commentLines []string
+	inCommentBlock := false
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			inCommentBlock = true
+			content := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+			if content != "" {
+				commentLines = append(commentLines, content)
+			}
+		} else if line == "" && !inCommentBlock {
+			// Skip leading empty lines before any comment block
+			continue
+		} else {
+			// Hit the end of the leading comment block
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
 	}
 
-	line := strings.TrimSpace(scanner.Text())
-	if !strings.HasPrefix(line, "#") {
-		return "", nil
+	if len(commentLines) > 0 {
+		return strings.Join(commentLines, " "), nil
 	}
-	return strings.TrimSpace(strings.TrimPrefix(line, "#")), nil
+
+	base := filepath.Base(path)
+	name := strings.TrimSuffix(base, ".Brewfile")
+	return humanizeBundleName(name), nil
+}
+
+// humanizeBundleName converts a bundle filename or identifier into a human-readable title.
+func humanizeBundleName(name string) string {
+	cleaned := strings.ReplaceAll(name, "-", " ")
+	cleaned = strings.ReplaceAll(cleaned, "_", " ")
+	words := strings.Fields(cleaned)
+	if len(words) == 0 {
+		return name
+	}
+	acronyms := map[string]string{
+		"cli": "CLI",
+		"ai":  "AI",
+		"k8s": "K8s",
+		"ide": "IDE",
+		"dx":  "DX",
+		"gui": "GUI",
+		"vm":  "VM",
+		"os":  "OS",
+	}
+	for i, w := range words {
+		lower := strings.ToLower(w)
+		if acr, ok := acronyms[lower]; ok {
+			words[i] = acr
+		} else {
+			runes := []rune(lower)
+			if len(runes) > 0 {
+				runes[0] = unicode.ToUpper(runes[0])
+			}
+			words[i] = string(runes)
+		}
+	}
+	return strings.Join(words, " ")
 }

@@ -3,6 +3,8 @@ package bundleview
 import (
 	"sync"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 func TestPresentEnumeratesLoadOutcomes(t *testing.T) {
@@ -137,5 +139,108 @@ func TestGateResetAndCompletion(t *testing.T) {
 	gate.Reset()
 	if gate.TryStart() {
 		t.Fatal("reset reopened a completed gate")
+	}
+}
+
+func TestGateCompleteClosesAnIdleGate(t *testing.T) {
+	var gate InstallGate
+	gate.Complete()
+	if gate.TryStart() {
+		t.Fatal("gate completed while idle still started")
+	}
+	if gate.IsIdle() {
+		t.Fatal("completed gate reported idle")
+	}
+}
+
+func TestGateIsIdle(t *testing.T) {
+	var gate InstallGate
+	if !gate.IsIdle() {
+		t.Fatal("zero-value gate did not report idle")
+	}
+	if !gate.TryStart() {
+		t.Fatal("zero-value gate did not start")
+	}
+	if gate.IsIdle() {
+		t.Fatal("running gate reported idle")
+	}
+	gate.Reset()
+	if !gate.IsIdle() {
+		t.Fatal("reset gate did not report idle")
+	}
+}
+
+func TestRowActionReflectsStatusAndHomebrew(t *testing.T) {
+	cases := []struct {
+		name              string
+		status            homebrew.BundleStatus
+		homebrewAvailable bool
+		wantLabel         string
+		wantSensitive     bool
+		wantCompleted     bool
+	}{
+		{
+			name:              "installed with brew available",
+			status:            homebrew.BundleInstalled,
+			homebrewAvailable: true,
+			wantLabel:         "Installed",
+			wantSensitive:     false,
+			wantCompleted:     true,
+		},
+		{
+			name:              "update available with brew available",
+			status:            homebrew.BundleUpdateAvailable,
+			homebrewAvailable: true,
+			wantLabel:         "Update",
+			wantSensitive:     true,
+			wantCompleted:     false,
+		},
+		{
+			name:              "not installed with brew available",
+			status:            homebrew.BundleNotInstalled,
+			homebrewAvailable: true,
+			wantLabel:         "Install",
+			wantSensitive:     true,
+			wantCompleted:     false,
+		},
+		{
+			name:              "indeterminate with brew available",
+			status:            homebrew.BundleIndeterminate,
+			homebrewAvailable: true,
+			wantLabel:         "Install",
+			wantSensitive:     true,
+			wantCompleted:     false,
+		},
+		{
+			name:              "installed without brew available",
+			status:            homebrew.BundleInstalled,
+			homebrewAvailable: false,
+			wantLabel:         "Install",
+			wantSensitive:     false,
+			wantCompleted:     false,
+		},
+		{
+			name:              "not installed without brew available",
+			status:            homebrew.BundleNotInstalled,
+			homebrewAvailable: false,
+			wantLabel:         "Install",
+			wantSensitive:     false,
+			wantCompleted:     false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := RowAction(tc.status, tc.homebrewAvailable)
+			if got.Label != tc.wantLabel {
+				t.Errorf("RowAction() Label = %q, want %q", got.Label, tc.wantLabel)
+			}
+			if got.Sensitive != tc.wantSensitive {
+				t.Errorf("RowAction() Sensitive = %v, want %v", got.Sensitive, tc.wantSensitive)
+			}
+			if got.Completed != tc.wantCompleted {
+				t.Errorf("RowAction() Completed = %v, want %v", got.Completed, tc.wantCompleted)
+			}
+		})
 	}
 }

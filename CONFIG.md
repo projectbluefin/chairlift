@@ -85,7 +85,7 @@ valid page.
 - `brew_search_group`: Search and install Homebrew formulae and casks
 - `brew_bundles_group`: Curated Homebrew package bundles
   - `bundles_paths`: Array of directories searched for immediate
-    `*.Brewfile` entries (default: `['/usr/share/snow/bundles']`). Missing
+    `*.Brewfile` entries (default: `['/usr/share/ublue-os/homebrew', '/usr/share/chairlift/bundles', '/etc/chairlift/bundles', '/usr/share/snow/bundles']`). Missing
     directories are ignored so one configuration can cover multiple
     distribution variants. Other unreadable paths are reported in the group
     while bundles from readable paths remain available. Repeating the same

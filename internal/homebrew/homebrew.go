@@ -41,7 +41,7 @@ type commandOutputWriter interface {
 }
 
 func commandOutputWriters(args []string) (commandOutputWriter, commandOutputWriter, bool) {
-	if len(args) > 0 && stateChangingCommands[args[0]] {
+	if isStateChanging(args) {
 		return outputtail.New(commandOutputTailLimit), outputtail.New(commandOutputTailLimit), true
 	}
 	return &bytes.Buffer{}, &bytes.Buffer{}, false
@@ -124,10 +124,40 @@ var stateChangingCommands = map[string]bool{
 	"tap": true,
 }
 
+// isStateChanging reports whether a brew invocation modifies system state
+// (requiring mutationTimeout, bounded diagnostic output, and dry-run skipping)
+// or is read-only (using readTimeout, full output, and active under dry-run).
+func isStateChanging(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	cmd := args[0]
+	if cmd == "bundle" {
+		// Reclassify brew bundle subcommands: check and list are read-only,
+		// while install and dump remain state-changing.
+		for _, arg := range args[1:] {
+			if strings.HasPrefix(arg, "-") {
+				continue
+			}
+			switch arg {
+			case "check", "list":
+				return false
+			default:
+				// install, dump, and any unrecognized subcommand are
+				// treated as state-changing.
+				return true
+			}
+		}
+		// A bare "brew bundle" or flags without a subcommand defaults to install
+		return true
+	}
+	return stateChangingCommands[cmd]
+}
+
 // commandTimeout returns the timeout class for a brew invocation: the
 // mutation timeout for state-changing commands, the read timeout otherwise.
 func commandTimeout(args []string) time.Duration {
-	if len(args) > 0 && stateChangingCommands[args[0]] {
+	if isStateChanging(args) {
 		return mutationTimeout
 	}
 	return readTimeout
@@ -148,7 +178,7 @@ func runBrewCommand(args ...string) (string, error) {
 // the mutation budget, so cancellation propagates without a second gate that
 // could drift out of sync.
 func runBrewCommandCtx(ctx context.Context, args ...string) (string, error) {
-	if len(args) > 0 && stateChangingCommands[args[0]] && dryrun.Enabled() {
+	if isStateChanging(args) && dryrun.Enabled() {
 		msg := fmt.Sprintf("[DRY-RUN] Would execute: brew %s", strings.Join(args, " "))
 		log.Println(msg)
 		return msg, nil
@@ -537,6 +567,118 @@ func BundleInstall(path string) error {
 
 	_, err := runBrewCommand(args...)
 	return err
+}
+
+// BundleStatus represents the multi-state status of a Brewfile bundle.
+type BundleStatus string
+
+const (
+	BundleInstalled       BundleStatus = "installed"
+	BundleUpdateAvailable BundleStatus = "update_available"
+	BundleNotInstalled    BundleStatus = "not_installed"
+	BundleIndeterminate   BundleStatus = "indeterminate"
+)
+
+// DisplayName returns a human-readable representation of the bundle status.
+func (s BundleStatus) DisplayName() string {
+	switch s {
+	case BundleInstalled:
+		return "Installed"
+	case BundleUpdateAvailable:
+		return "Update Available"
+	case BundleNotInstalled:
+		return "Not Installed"
+	default:
+		return "Indeterminate"
+	}
+}
+
+type exitCoder interface {
+	ExitCode() int
+}
+
+func exitCode(err error) int {
+	var ec exitCoder
+	if errors.As(err, &ec) {
+		return ec.ExitCode()
+	}
+	return -1
+}
+
+func isMalformedManifestError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	for _, term := range []string{
+		"syntax error",
+		"undefined method",
+		"loaderror",
+		"malformed",
+		"failed to parse",
+		"cannot load such file",
+	} {
+		if strings.Contains(msg, term) {
+			return true
+		}
+	}
+	return false
+}
+
+// BundleCheck checks the multi-state status of a Brewfile bundle using a two-pass check:
+// 1. Pass 1: `brew bundle check --file=<path>` -> exit 0: Installed.
+// 2. Pass 2: If exit != 0, re-run with `--no-upgrade` -> exit 0: Update Available; exit 1: Not Installed.
+// 3. Other errors (timeout, malformed manifest) -> Indeterminate/Error.
+func BundleCheck(path string) (BundleStatus, error) {
+	return bundleCheckWith(runBrewCommand, path)
+}
+
+func bundleCheckWith(run func(...string) (string, error), path string) (BundleStatus, error) {
+	pass1Args := []string{"bundle", "check"}
+	if path != "" {
+		pass1Args = append(pass1Args, "--file="+path)
+	}
+
+	_, err1 := run(pass1Args...)
+	if err1 == nil {
+		return BundleInstalled, nil
+	}
+
+	if errors.Is(err1, context.DeadlineExceeded) || errors.Is(err1, context.Canceled) {
+		return BundleIndeterminate, err1
+	}
+	if isMalformedManifestError(err1) {
+		return BundleIndeterminate, err1
+	}
+
+	code1 := exitCode(err1)
+	if code1 != 1 {
+		return BundleIndeterminate, err1
+	}
+
+	pass2Args := []string{"bundle", "check", "--no-upgrade"}
+	if path != "" {
+		pass2Args = append(pass2Args, "--file="+path)
+	}
+
+	_, err2 := run(pass2Args...)
+	if err2 == nil {
+		return BundleUpdateAvailable, nil
+	}
+
+	if errors.Is(err2, context.DeadlineExceeded) || errors.Is(err2, context.Canceled) {
+		return BundleIndeterminate, err2
+	}
+	if isMalformedManifestError(err2) {
+		return BundleIndeterminate, err2
+	}
+
+	code2 := exitCode(err2)
+	if code2 == 1 {
+		return BundleNotInstalled, nil
+	}
+
+	return BundleIndeterminate, err2
 }
 
 // Cleanup removes old versions, outdated downloads, and clears cache

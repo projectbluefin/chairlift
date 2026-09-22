@@ -32,11 +32,12 @@ Wraps the `brew` CLI. Uses JSON output (`--json=v2`) for structured data where a
 | `Cleanup()` | `brew cleanup` | 30m | State-changing; returns output string |
 | `BundleDump(path, force)` | `brew bundle dump [--file=<path>] [--force]` | 30m | State-changing; writes to file path |
 | `BundleInstall(path)` | `brew bundle install [--file=<path>]` | 30m | State-changing, dry-run aware |
+| `BundleCheck(path)` | `brew bundle check [--file=<path>]` (two-pass) | 30s | Read-only, active under dry-run; two-pass status discrimination |
 | `AvailableBundles(paths)` | none | — | Discovers immediate `*.Brewfile` entries from every configured directory |
 
 ### State-changing commands
 
-The `stateChangingCommands` map has exactly ten keys: `install`, `uninstall`, `remove`, `upgrade`, `update`, `pin`, `unpin`, `bundle`, `cleanup`, `trust`. The map now drives two things. First, when dry-run is active these commands are skipped entirely and return a mock message. Second, `commandTimeout(args []string)` — a pure selector reading only `args` and this map — returns `mutationTimeout` (30 minutes) when `args[0]` is one of the ten keys and `readTimeout` (30 seconds) otherwise, including for empty args; `runBrewCommand` passes its result to `context.WithTimeout`. Read commands therefore keep the old 30-second budget while installs, upgrades and bundle operations — which download and build — get 30 minutes. `homebrew_test.go`'s `TestCommandTimeout` iterates the real map and asserts `len(stateChangingCommands) == 10`, so a newly added key cannot go untested.
+The `stateChangingCommands` map has eleven keys: `install`, `uninstall`, `remove`, `upgrade`, `update`, `pin`, `unpin`, `bundle`, `cleanup`, `trust`, `tap`. `isStateChanging(args)` classifies brew invocations: for `bundle`, subcommands `check` and `list` are read-only (30-second budget, active under dry-run), while `install`, `dump`, and bare bundle invocations remain state-changing (30m budget, dry-run skipped). First, when dry-run is active state-changing commands are skipped entirely and return a mock message. Second, `commandTimeout(args []string)` returns `mutationTimeout` (30 minutes) for state-changing commands and `readTimeout` (30 seconds) otherwise, including for empty args; `runBrewCommand` passes its result to `context.WithTimeout`. Read commands therefore keep the 30-second budget while installs, upgrades and bundle mutations — which download and build — get 30 minutes. `homebrew_test.go`'s `TestCommandTimeout` asserts command timeouts across both categories.
 
 ### Configured Brew bundle discovery
 

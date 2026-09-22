@@ -341,8 +341,13 @@ func defaultConfig() *Config {
 			"brew_group":           GroupConfig{Enabled: true},
 			"brew_search_group":    GroupConfig{Enabled: true},
 			"brew_bundles_group": GroupConfig{
-				Enabled:      true,
-				BundlesPaths: []string{"/usr/share/snow/bundles"},
+				Enabled: true,
+				BundlesPaths: []string{
+					"/usr/share/ublue-os/homebrew",
+					"/usr/share/chairlift/bundles",
+					"/etc/chairlift/bundles",
+					"/usr/share/snow/bundles",
+				},
 			},
 		},
 		MaintenancePage: PageConfig{

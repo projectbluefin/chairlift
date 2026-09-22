@@ -400,6 +400,19 @@ func TestNonEmptySliceOverlayReplacesDefaultContents(t *testing.T) {
 	})
 }
 
+func TestDefaultConfigBrewBundlesPaths(t *testing.T) {
+	want := []string{
+		"/usr/share/ublue-os/homebrew",
+		"/usr/share/chairlift/bundles",
+		"/etc/chairlift/bundles",
+		"/usr/share/snow/bundles",
+	}
+	got := defaultConfig().ApplicationsPage["brew_bundles_group"].BundlesPaths
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("defaultConfig().ApplicationsPage[\"brew_bundles_group\"].BundlesPaths = %+v, want %+v", got, want)
+	}
+}
+
 // TestGroupEnabledMatchesExpectedForEveryGroup calls IsGroupEnabled for
 // every (page, group) pair defaultConfig() defines, both for the
 // absent-file fallback config and for a partial-file config that overrides

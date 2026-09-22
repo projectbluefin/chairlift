@@ -10,6 +10,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
+	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/rowset"
 
@@ -70,6 +71,7 @@ type UserHome struct {
 	caskRows               rowset.Tracker[*adw.ActionRow]
 	searchResultRows       rowset.Tracker[*adw.ActionRow]
 	brewBundlesGroup       *adw.PreferencesGroup
+	brewBundleRows         map[string]*bundleRowWidgets
 	brewTrustGroup         *adw.PreferencesGroup
 	brewTrustRows          map[string]*adw.ActionRow
 	outdatedRows           rowset.Tracker[*adw.ActionRow]
@@ -209,6 +211,9 @@ type UserHome struct {
 	brewRefresh         actionstate.RefreshGate
 	searchRefresh       actionstate.RefreshGate
 	brewPackagesRefresh actionstate.RefreshGate
+	// brewBundlesRefresh bounds overlapping Brew bundle reloads so only the
+	// newest reload may publish its results.
+	brewBundlesRefresh actionstate.RefreshGate
 	// flatpakPackagesRefresh bounds overlapping Flatpak inventory reloads so
 	// only the newest reload may publish. Two uninstalls finishing close
 	// together each trigger a reload; without a generation guard an older,
@@ -221,6 +226,12 @@ type UserHome struct {
 	// slower reload publishes last and re-adds a row that was already updated
 	// or overwrites a newer badge count. See chairlift#69.
 	flatpakUpdatesRefresh actionstate.RefreshGate
+}
+
+type bundleRowWidgets struct {
+	row  *adw.ActionRow
+	btn  *gtk.Button
+	gate *bundleview.InstallGate
 }
 
 // New creates a new UserHome views manager

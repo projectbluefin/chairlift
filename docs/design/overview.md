@@ -33,6 +33,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/config/    YAML config loading, feature group enablement
         ├── internal/navigation/ Canonical pages, shortcuts, and pure navigation transitions
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
+        ├── internal/avatar/    Pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
@@ -1687,6 +1688,7 @@ page_name:
 | `github.com/frostyard/snowkit`   | GObject registration, main-thread dispatch                                                  |
 | `github.com/frostyard/updex`     | Updex Go library for feature reads and helper binary (currently pinned to v1.5.0 in go.mod) |
 | `gopkg.in/yaml.v3`               | YAML config parsing                                                                         |
+| `golang.org/x/image`             | WebP decoding and image scaling for avatar transcoding                                      |
 | `golang.org/x/text`              | Title-casing OS release info keys                                                           |
 
 There is no separate Go client library dependency for bootc: status/stage types (`Status`, `Deployment`, `ProgressEvent`, etc.) are defined locally in `internal/bootc`, parsed directly from `bootc status --format json` and the stage script's line output.

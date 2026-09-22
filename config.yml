@@ -55,6 +55,9 @@ applications_page:
   brew_bundles_group:
     enabled: true
     bundles_paths:
+      - /usr/share/ublue-os/homebrew
+      - /usr/share/chairlift/bundles
+      - /etc/chairlift/bundles
       - /usr/share/snow/bundles
 
 maintenance_page:
