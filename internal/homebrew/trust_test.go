@@ -127,6 +127,26 @@ func TestUntrustedTapMessageDetection(t *testing.T) {
 	}
 }
 
+func TestUntrustedTapFromErrorLine(t *testing.T) {
+	cases := []struct {
+		in      string
+		wantTap string
+		wantOk  bool
+	}{
+		{"Error: Refusing to load formula opencode from untrusted tap anomalyco/tap.", "anomalyco/tap", true},
+		{"Error: Refusing to load cask foo from untrusted tap bar/baz.", "bar/baz", true},
+		{"Warning: The following taps are not trusted:\n  multica-ai/tap", "", false},
+		{"Error: No such formula", "", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		gotTap, gotOk := untrustedTapFromErrorLine(c.in)
+		if gotTap != c.wantTap || gotOk != c.wantOk {
+			t.Errorf("untrustedTapFromErrorLine(%q) = (%q, %v), want (%q, %v)", c.in, gotTap, gotOk, c.wantTap, c.wantOk)
+		}
+	}
+}
+
 func TestTrustPackagesDryRun(t *testing.T) {
 	dryrun.Set(true)
 	defer dryrun.Set(false)

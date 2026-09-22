@@ -5,9 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+var untrustedTapErrRe = regexp.MustCompile(`(?m)^Error: .*from untrusted tap ([^\s.]+/[^\s.]+)`)
+
+func untrustedTapFromErrorLine(s string) (string, bool) {
+	m := untrustedTapErrRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
 
 // UntrustedTap describes an untrusted tap and the packages installed from it.
 // Package names are fully qualified (user/tap/name), ready for `brew trust`.
@@ -172,6 +183,7 @@ func ListUntrustedTaps() ([]UntrustedTap, error) {
 // the Untrusted Taps UI instead of dumping raw brew output.
 type UntrustedTapError struct {
 	Message string
+	Tap     string
 }
 
 func (e *UntrustedTapError) Error() string {

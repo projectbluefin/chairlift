@@ -21,3 +21,12 @@ func UpgradeMessage(pkgName string, trustGroupAvailable bool) string {
 	}
 	return fmt.Sprintf("%s comes from an untrusted tap and cannot be upgraded until the tap is trusted", pkgName)
 }
+
+// BundleMessage returns the toast text for a Homebrew bundle install that failed
+// with an untrusted-tap error.
+func BundleMessage(bundleName, tap string) string {
+	if tap != "" {
+		return fmt.Sprintf("Brew bundle %s requires trusting third-party taps — run brew trust %s", bundleName, tap)
+	}
+	return fmt.Sprintf("Brew bundle %s requires trusting third-party taps before packages can be installed", bundleName)
+}

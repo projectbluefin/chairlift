@@ -260,13 +260,14 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 			// whole stderr in the error, as before, since nothing else
 			// preserves it and callers such as searchKind match on it.
 			message := diagnosticText
-			tapMessage := stderrText
 			if boundedOutput {
 				message = summarizeDiagnostic(diagnosticText)
-				tapMessage = summarizeDiagnostic(stderrText)
 			}
 			if isUntrustedTapMessage(stderrText) {
-				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", tapMessage)}
+				tap, _ := untrustedTapFromErrorLine(stderrText)
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
+			} else if tap, ok := untrustedTapFromErrorLine(diagnosticText); ok {
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
 			}
 			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
 		}

@@ -138,6 +138,45 @@ exit 1`)
 		}
 	})
 
+	t.Run("bundle install untrusted tap in stdout yields UntrustedTapError", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Error: Refusing to load formula x from untrusted tap foo/bar."
+echo "Error: Homebrew Bundle failed! 1 Brewfile dependency failed to install." >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/x.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if !errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want *UntrustedTapError", err, err)
+		}
+		if trustErr.Tap != "foo/bar" {
+			t.Fatalf("trustErr.Tap = %q, want \"foo/bar\"", trustErr.Tap)
+		}
+	})
+
+	t.Run("warning on untrusted taps on stdout with No such formula yields Error not UntrustedTapError", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Warning: The following taps are not trusted:
+  some/untrusted-tap"
+echo "Error: No such formula" >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/x.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want regular *Error instead of *UntrustedTapError", err, err)
+		}
+	})
 	t.Run("missing executable path yields NotFoundError", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "definitely-not-here")
 
