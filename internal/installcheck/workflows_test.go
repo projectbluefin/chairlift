@@ -117,7 +117,7 @@ func TestWorkflowUsesLeastPrivilege(t *testing.T) {
 		"lint":         {"contents": "read"},
 		"unit-test":    {"contents": "read", "id-token": "write"},
 		"race-test":    {"contents": "read"},
-		"e2e":          {"contents": "read"},
+		"e2e":          {"contents": "read", "id-token": "write"},
 		"verify":       {"contents": "read"},
 		"build":        {"contents": "read"},
 		"tests-passed": {},

@@ -72,15 +72,15 @@ build: build-app build-helper build-ublue-helper
 
 build-app:
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
+	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
 
 build-helper:
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) -o $(BUILD_DIR)/$(HELPER_NAME) ./cmd/chairlift-updex-helper
+	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(HELPER_NAME) ./cmd/chairlift-updex-helper
 
 build-ublue-helper:
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) -o $(BUILD_DIR)/$(UBLUE_HELPER_NAME) ./cmd/chairlift-ublue-helper
+	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(UBLUE_HELPER_NAME) ./cmd/chairlift-ublue-helper
 
 run: build
 	./$(BUILD_DIR)/$(BINARY_NAME) --dry-run
@@ -106,9 +106,16 @@ E2E_TAGS=chairlift_e2e
 # rows.
 E2E_BUILD_DIR=$(BUILD_DIR)/e2e
 
+# E2E_COVERDIR, when set, makes build and build-e2e produce coverage-instrumented
+# binaries and makes the e2e target collect what they recorded. It is empty
+# by default so a developer running `make e2e` gets the same plain binaries
+# as before.
+E2E_COVERDIR?=
+E2E_COVER_FLAG=$(if $(E2E_COVERDIR),-cover -covermode=atomic,)
+
 build-e2e: build
 	@mkdir -p $(E2E_BUILD_DIR)
-	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) -tags $(E2E_TAGS) -o $(E2E_BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
+	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -tags $(E2E_TAGS) -o $(E2E_BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
 
 # Regenerate the documentation walkthrough screenshots in docs/screenshots/
 # from the real application, then remove the capture byproducts so only the
@@ -145,7 +152,16 @@ SCREENSHOT_DIR=docs/screenshots
 # exactly as they ship, so the boundary assertions in test/e2e exercise the
 # real binaries.
 e2e: build-e2e
+ifeq ($(E2E_COVERDIR),)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) $(GOTEST) -v ./test/e2e
+else
+	@rm -rf "$(E2E_COVERDIR)" && mkdir -p "$(E2E_COVERDIR)"
+	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
+		$(GOTEST) -v ./test/e2e
+	$(GOCMD) tool covdata textfmt -i=$(abspath $(E2E_COVERDIR)) -o=e2e-coverage.out
+	@echo "==> e2e statement coverage written to e2e-coverage.out"
+endif
 
 # Development build with race detector (requires CGO)
 dev:

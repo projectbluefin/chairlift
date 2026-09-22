@@ -94,6 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,7 +137,17 @@ jobs:
       - name: Run E2E tests
         env:
           CHAIRLIFT_WALKTHROUGH_DIR: ${{ github.workspace }}/walkthrough
+          E2E_COVERDIR: ${{ github.workspace }}/covdata-e2e
         run: make e2e
+
+      - name: Upload E2E coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
+        with:
+          files: ./e2e-coverage.out
+          flags: e2e
+          fail_ci_if_error: false
+          verbose: true
+        continue-on-error: true
 
       - name: Upload walkthrough screenshots
         if: always()
