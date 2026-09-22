@@ -313,29 +313,44 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 
 // onLiveryRotateToggled turns login rotation on or off for one section and
 // syncs the systemd user unit, which exists only while some section rotates.
+//
+// Both rotate switches share one serializer, because both drive the same
+// unit. An unordered goroutine per click lets a fast on-then-off flip run
+// RemoveRotation before the earlier InstallRotation finishes, leaving the
+// unit installed while the keys say nothing rotates. Claiming on the main
+// thread fixes the order the user flipped the switches in, and an attempt a
+// newer one has overtaken drops out — which is only safe because the work
+// writes both rotate keys from the snapshot it was claimed with, so the
+// surviving attempt persists every choice made before it.
 func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) {
 	if uh.liverySuppress || !uh.liveryLoaded {
 		return
 	}
 
-	current, key := uh.liveryRotateState(surface)
-	if enabled == current {
+	if enabled == uh.liveryRotateState(surface) {
 		return
 	}
 	uh.setLiveryRotateState(surface, enabled)
 	state := uh.liveryState
 
+	generation := uh.liveryRotateWork.Claim()
 	go func() {
-		ctx, cancel := livery.DefaultContext()
-		defer cancel()
+		uh.liveryRotateWork.Run(generation, func() {
+			ctx, cancel := livery.DefaultContext()
+			defer cancel()
 
-		if err := livery.SetBool(ctx, key, enabled); err != nil {
-			uh.reportLiveryFailure("saving the rotation setting", err)
-			return
-		}
-		if err := livery.SyncRotationUnit(ctx, state); err != nil {
-			uh.reportLiveryFailure("scheduling rotation", err)
-		}
+			if err := livery.SetBool(ctx, livery.KeyPanelRotate, state.PanelRotate); err != nil {
+				uh.reportLiveryFailure("saving the rotation setting", err)
+				return
+			}
+			if err := livery.SetBool(ctx, livery.KeyDockRotate, state.DockRotate); err != nil {
+				uh.reportLiveryFailure("saving the rotation setting", err)
+				return
+			}
+			if err := livery.SyncRotationUnit(ctx, state); err != nil {
+				uh.reportLiveryFailure("scheduling rotation", err)
+			}
+		})
 	}()
 }
 
@@ -524,11 +539,11 @@ func (uh *UserHome) setLiverySelectionState(s livery.Surface, id string) {
 	uh.liveryState.DockID = id
 }
 
-func (uh *UserHome) liveryRotateState(s livery.Surface) (bool, string) {
+func (uh *UserHome) liveryRotateState(s livery.Surface) bool {
 	if s == livery.Panel {
-		return uh.liveryState.PanelRotate, livery.KeyPanelRotate
+		return uh.liveryState.PanelRotate
 	}
-	return uh.liveryState.DockRotate, livery.KeyDockRotate
+	return uh.liveryState.DockRotate
 }
 
 func (uh *UserHome) setLiveryRotateState(s livery.Surface, v bool) {

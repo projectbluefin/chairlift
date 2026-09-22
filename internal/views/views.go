@@ -118,6 +118,12 @@ type UserHome struct {
 	liveryAppGridWork actionstate.Serializer
 	liveryPanelWork   actionstate.Serializer
 	liveryDockWork    actionstate.Serializer
+	// One serializer covers rotation for both sections, because both rotate
+	// switches write the same systemd user unit. Without it a rapid on/off
+	// flip can land RemoveRotation before the earlier InstallRotation and
+	// leave the unit's presence disagreeing with the persisted keys. See
+	// onLiveryRotateToggled.
+	liveryRotateWork actionstate.Serializer
 
 	// Update All references
 	updateAllGroup   *adw.PreferencesGroup
