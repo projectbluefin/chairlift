@@ -1111,3 +1111,19 @@ holds each item's `Groups` to `config.SchemaGroups(item.ConfigPage)` as per-page
 set equality. Both compare sets, not order: `config.SchemaGroups` sorts its
 result, while navigation's slices carry sidebar presentation order, which is
 navigation's own concern.
+
+`capabilityschema_test.go` holds the page/group contract's third copy to the
+same owner. `internal/capability` classifies every configurable group in its
+prerequisites table — the host tool or asset that group needs, and the
+`Supports` predicate
+`internal/navigation.VisibleItems` accepts — and its failure mode is quieter
+than navigation's: `Supports` reports an *unclassified* pair as supported, so
+that a missing entry cannot silently hide a group at runtime. A group added to
+`config.yml` and wired into a view would therefore render on hosts whose
+backing tool is absent, with the application building and every other test
+passing. **`TestCapabilityPrerequisitesMatchConfigSchema`** holds
+`capability.Prerequisites()` and the `config.SchemaPages()`/`config.SchemaGroups(page)`
+pairs to set equality in both directions, and
+**`TestEveryConfigurableGroupIsClassifiedOnce`** reports the two failure shapes
+separately — a group the table does not classify, and a pair it classifies
+twice — because they need different fixes.

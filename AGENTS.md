@@ -270,6 +270,20 @@ An agent must not break these:
   content reveal). The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
   `internal/window` or `internal/app`.
+- **The host capability floor has one owner.** `internal/capability` is the
+  puregotk-free authority for what this host can back a page or group with,
+  and its probes are non-blocking only (`exec.LookPath`, `os.Stat`, environment
+  reads), because page-level resolution runs synchronously on the GTK main
+  thread during `buildUI`. A capability is the presence of a backing tool or
+  asset, never a runtime state: a gate that needs a query (`bootc status`,
+  updex's feature store, `uupd.timer`'s systemd state) stays asynchronous in
+  its view and builds a hidden shell. Capability is a floor — configuration may
+  subtract from it and never add to it — so its composed predicate is the one
+  `navigation.VisibleItems` and the view builders share; do not reintroduce a
+  second availability probe in a view. The prerequisites table is total over
+  `config.SchemaGroups` in both directions, enforced by
+  `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`, so
+  a new config group is classified in the same change that adds it.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without

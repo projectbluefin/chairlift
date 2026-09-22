@@ -32,6 +32,7 @@ internal/views/                 Page builders and event handlers (one file per p
         │
         ├── internal/config/    YAML config loading, feature group enablement
         ├── internal/navigation/ Canonical pages, shortcuts, and pure navigation transitions
+        ├── internal/capability/ What this host can back a page or group with, from non-blocking probes
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
         ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
@@ -1054,6 +1055,86 @@ GNOME and Plasma on Wayland and Xorg, the distribution-prefixed GNOME
 sessions, and the unrecognized desktops, with every `want` written out rather
 than derived.
 
+### Host capability floor (`internal/capability`)
+
+`internal/capability` is the puregotk-free authority for what this host can
+back: it answers, per page and group, whether the tool or asset that group
+exists to drive is present. It exists because ChairLift's documented
+degradation policy — a group whose backing tool is absent is hidden rather
+than rendered inert — needs one read-only classification instead of the four
+mutually inconsistent answers the views layer gives it today.
+
+A capability is the presence of a backing tool or asset, never a runtime
+state. `Flatpak`, `Homebrew`, `Podman`, and `Distrobox` resolve from one
+`exec.LookPath` each. `BootcStage`, `Sysupdate`, and `ImageDescriptor` resolve
+from `os.Stat` against the owning package's own constant —
+`bootc.StageScriptPath`; `sysupdate.MarkerPath` **and**
+`sysupdate.StageScriptPath`, both halves, matching the gate the sysupdate
+group already applies; and `imageinfo.DescriptorPath`. Every probe is
+non-blocking by construction, which is the constraint page-level resolution
+inherits: it runs synchronously on the GTK main thread during `buildUI`. That
+is also the line between this package and the gates that stay asynchronous —
+whether this machine is booted from a bootc deployment, whether updex has
+features configured, and what `uupd.timer`'s systemd state is are all queries
+rather than presence checks, so those groups keep their existing async gates,
+build hidden shells, and are revealed once the query answers.
+
+`Detect` resolves the host through the package's `Probe` seam, whose production
+value is `exec.LookPath` and `os.Stat`; `SetProbe` replaces it, which is the
+seam the `chairlift_e2e` walkthrough capability stub will use. `DetectWith` is
+the pure core `Detect` wraps and what the tests drive directly. Nothing here
+caches: the caller resolves once per session and keeps the result, so sidebar
+accelerators and items cannot shift under the user's cursor. That immutability
+is a contract on the caller rather than a package-level cache, which would also
+make a test's probe substitution order-dependent.
+
+`Set.Supports(page, group)` is the `func(page, group string) bool` predicate
+`navigation.VisibleItems` already accepts. It resolves the prerequisites table,
+where a group is satisfied by **any one** of the listed capabilities:
+`bootc_updates_group` needs the stage script, `ai_group` needs Podman,
+`reset_group` needs Flatpak or Distrobox because powerwash's two steps
+independently skip when their own tool is absent, and `update_all_group` needs
+any one of the four update providers, so a host with none of them constructs
+no empty, inert Update All group. A group with no capabilities requires nothing
+of the host and is listed anyway, so that "no host prerequisite" is a recorded
+decision rather than an omission; three of those are named in the table's own
+comment because they read like omissions. `Compose(configured, set)` composes
+the administrator's `Config.IsGroupEnabled` with a resolved set and pins the
+floor's direction: configuration may subtract from the capability set and never
+add to it, and a nil configuration predicate composes to false everywhere,
+matching `VisibleItems`' treatment of a nil predicate and the repository's
+fail-closed rule.
+
+The table is total over the configuration schema, and both directions are
+enforced. `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`
+holds `capability.Prerequisites()` and the `config.SchemaGroups(page)` pairs to
+set equality, and `TestEveryConfigurableGroupIsClassifiedOnce` names the two
+failure shapes separately — unclassified and duplicated — because they need
+different fixes. The totality gate is what keeps the floor honest, because
+`Supports` reports an *unclassified* pair as supported: that is deliberate, so a
+missing entry cannot silently hide a group at runtime, which means the runtime
+answer alone will not reveal the mistake. Without the gate, a group added to
+`config.yml` and wired into a view would render on hosts whose backing tool is
+absent — the exact degradation policy this package exists to enforce — and no
+other gate would notice.
+
+The package's own tests are table-driven and derive their cases from the tables
+they cover, rather than restating them. `TestDetectWithResolvesEveryCapability`
+walks every capability either probe table provides, across each single-tool
+host, the two asset-capability splits, a fully capable host, and a probe that
+cannot answer at all. `TestEveryRequiredCapabilityHasAProbe` rejects a
+prerequisite naming a capability no probe resolves — a typo in the table still
+compiles, because a `Capability` is a string. `TestSupportsAnyOneCapabilityOfItsGroup`
+covers every prerequisites entry: the empty host, each of a multi-capability
+group's capabilities in isolation, and a host holding only unrelated
+capabilities. Running this file is itself the purity check ADR-0007 describes:
+a puregotk import anywhere in the dependency graph would panic at package init,
+before any test function ran.
+
+Nothing consumes the package yet. Threading the composed predicate through
+`views.New`, the `configured` map, and the update coordinator is #205, and
+retiring the inert subtitle branches for `flatpak`, `brew`, and `podman` is
+#206.
 ### Package manager wrapper pattern
 
 Each wrapper in `internal/` follows a consistent shape:

@@ -41,6 +41,8 @@ documents remain authoritative for cross-repository policy.
   boundaries with an explicit decision table.
 - [exemption-justification](exemption-justification/SKILL.md) — require an
   exemption's stated reason to be verifiable.
+- [fail-open-tables-need-a-totality-gate](fail-open-tables-need-a-totality-gate/SKILL.md) —
+  gate a permissive-default lookup table against the schema it classifies.
 - [fixture-path-fidelity](fixture-path-fidelity/SKILL.md) — justify fixture
   paths against the external tool's own layout.
 - [frozen-allowlists](frozen-allowlists/SKILL.md) — keep allowlist
