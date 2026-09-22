@@ -397,8 +397,10 @@ func assertBluefinGroupsRendered(t *testing.T, outDir string) {
 		}
 	}
 
-	// The release channel and graphics driver moved to the System page, so
-	// their own marker is what proves they rendered.
+	// The release channel and graphics driver live on the Updates page,
+	// beside the thing that changes them, so their own marker is what
+	// proves they rendered. (They were on the System page until it was
+	// deleted — "about this computer" is GNOME Settings' job.)
 	identity := findLogLine(t, outDir, "views: image identity group built")
 	for _, want := range []string{"variant=dakota", "switchable=true", "driver=standard"} {
 		if !strings.Contains(identity, want) {
@@ -406,15 +408,20 @@ func assertBluefinGroupsRendered(t *testing.T, outDir string) {
 		}
 	}
 
-	// The local-AI row selects its image from the stubbed GPU. The script
+	// The local-AI stack selects its image from the stubbed GPU. The script
 	// stubs an Intel + NVIDIA hybrid, so the captured frame must show the
 	// CUDA stack — the case a vendor-directory catalog gets wrong. The
 	// repository part alone is matched: the reference carries a pinned index
 	// digest that is rolled periodically, and this gate is about selection.
-	ai := findLogLine(t, outDir, "views: ai stack group built")
+	//
+	// The marker is the Agents page's, not a group's: local AI moved off
+	// Features onto its own destination, because what it turns on is a
+	// service a person then points other applications at rather than one
+	// more system preference.
+	ai := findLogLine(t, outDir, "views: agents page built")
 	for _, want := range []string{"vendor=nvidia", "accelerator=CUDA", "image=quay.io/ramalama/cuda"} {
 		if !strings.Contains(ai, want) {
-			t.Errorf("ai stack marker missing %q\n  %s", want, ai)
+			t.Errorf("agents page marker missing %q\n  %s", want, ai)
 		}
 	}
 }

@@ -150,8 +150,15 @@ SCREENSHOT_DIR=docs/screenshots
 # Only the GUI is built with E2E_TAGS. Both privileged helpers are built
 # exactly as they ship, so the boundary assertions in test/e2e exercise the
 # real binaries.
-e2e: build-e2e
-	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) $(GOTEST) -v ./test/e2e
+# The compiled schemas come along for the same reason `screenshots` builds
+# them: without CHAIRLIFT_SCHEMA_DIR the Livery page logs "the Livery
+# settings schema is not installed" and renders without its saved state, and
+# the walkthrough captures this target uploads are exactly what ships in
+# docs/screenshots.
+e2e: build-e2e schemas
+	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
+		$(GOTEST) -v ./test/e2e
 
 # Development build with race detector (requires CGO)
 dev:
