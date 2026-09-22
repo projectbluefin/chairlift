@@ -86,6 +86,7 @@ var privilegedExecSites = []privilegedExecSite{
 // The comment on each entry is the command word that makes it unprivileged.
 var unprivilegedExecSites = []execSite{
 	{File: "internal/aistack/aistack.go", Func: "execSystemctlOutput"},        // systemctl --user
+	{File: "internal/avatar/applier.go", Func: "runBusctl"},                   // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},      // systemctl (query)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                  // bootc status (read-only)
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},              // distrobox
