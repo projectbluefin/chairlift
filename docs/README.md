@@ -70,6 +70,10 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Design
 
+- [design/navigation-routes.md](design/navigation-routes.md) — the canonical
+  route table: the five task destinations, the primary and detail routes that
+  serve them, the single owner of every mutating action, and the temporary
+  mounts the cutover deletes
 - [design/overview.md](design/overview.md) — architecture entry point:
   purpose, dependency flow, key patterns, configuration, build and release
   (formerly `yeti/OVERVIEW.md`)
