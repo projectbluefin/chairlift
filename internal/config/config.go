@@ -346,7 +346,6 @@ func defaultConfig() *Config {
 					"/usr/share/ublue-os/homebrew",
 					"/usr/share/chairlift/bundles",
 					"/etc/chairlift/bundles",
-					"/usr/share/snow/bundles",
 				},
 			},
 		},
@@ -392,9 +391,9 @@ func defaultConfig() *Config {
 		HelpPage: PageConfig{
 			"help_resources_group": GroupConfig{
 				Enabled: true,
-				Website: "https://github.com/frostyard/snosi",
-				Issues:  "https://github.com/frostyard/snosi/issues",
-				Chat:    "https://github.com/frostyard/snosi/discussions",
+				Website: "https://docs.projectbluefin.io/",
+				Issues:  "https://github.com/projectbluefin/chairlift/issues",
+				Chat:    "https://github.com/projectbluefin/chairlift/discussions",
 			},
 		},
 	}

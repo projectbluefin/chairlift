@@ -93,7 +93,7 @@ Those operations belong to the configured external manager.
 `brew_bundles_group` supports:
 
 - `bundles_paths` — directories searched, without recursion, for
-  `*.Brewfile` bundles (default: `["/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles", "/usr/share/snow/bundles"]`). Missing
+  `*.Brewfile` bundles (default: `["/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles"]`). Missing
   directories are ignored; other path errors are shown while readable
   directories still contribute rows. Exact duplicate paths are collapsed,
   but same-named Brewfiles in different directories remain separate and show

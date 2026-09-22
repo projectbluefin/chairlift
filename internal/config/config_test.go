@@ -405,7 +405,6 @@ func TestDefaultConfigBrewBundlesPaths(t *testing.T) {
 		"/usr/share/ublue-os/homebrew",
 		"/usr/share/chairlift/bundles",
 		"/etc/chairlift/bundles",
-		"/usr/share/snow/bundles",
 	}
 	got := defaultConfig().ApplicationsPage["brew_bundles_group"].BundlesPaths
 	if !reflect.DeepEqual(got, want) {

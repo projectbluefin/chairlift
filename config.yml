@@ -58,7 +58,6 @@ applications_page:
       - /usr/share/ublue-os/homebrew
       - /usr/share/chairlift/bundles
       - /etc/chairlift/bundles
-      - /usr/share/snow/bundles
 
 maintenance_page:
   maintenance_cleanup_group:
@@ -130,6 +129,6 @@ livery_page:
 help_page:
   help_resources_group:
     enabled: true
-    website: https://github.com/frostyard/snosi
-    issues: https://github.com/frostyard/snosi/issues
-    chat: https://github.com/frostyard/snosi/discussions
+    website: https://docs.projectbluefin.io/
+    issues: https://github.com/projectbluefin/chairlift/issues
+    chat: https://github.com/projectbluefin/chairlift/discussions

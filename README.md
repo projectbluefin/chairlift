@@ -301,7 +301,7 @@ manager configured by
 The Applications page discovers curated `*.Brewfile` bundles from every
 directory configured in `applications_page.brew_bundles_group.bundles_paths`
 (`/usr/share/ublue-os/homebrew`, `/usr/share/chairlift/bundles`,
-`/etc/chairlift/bundles`, and `/usr/share/snow/bundles` by default). Each bundle row shows its source path
+and `/etc/chairlift/bundles` by default). Each bundle row shows its source path
 and an Install action; a leading comment in the Brewfile becomes its
 description. Missing directories are harmless, while unreadable configured
 paths are reported without hiding bundles found elsewhere. Repeated clicks
@@ -394,7 +394,7 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 ### Development Environment
 
 - **Build**: `make build` (see [Building from Source](#building-from-source) above)
-- **Containerized dev environment**: `distrobox.ini` describes a Debian Trixie container with the runtime and build dependencies; use `distrobox assemble create --file distrobox.ini` (or your preferred distrobox workflow) to create it, then `distrobox enter chairlift` and run `make build`/`make dev` inside. It mounts `/home/linuxbrew` (for Homebrew integration testing) and `/usr/share/snow/bundles` (for bundle management testing) from the host.
+- **Containerized dev environment**: `distrobox.ini` describes a Debian Trixie container with the runtime and build dependencies; use `distrobox assemble create --file distrobox.ini` (or your preferred distrobox workflow) to create it, then `distrobox enter chairlift` and run `make build`/`make dev` inside. It mounts `/home/linuxbrew` (for Homebrew integration testing) and `/usr/share/ublue-os/homebrew` (for bundle management testing) from the host.
 
 ### Testing
 
