@@ -83,6 +83,11 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"pageview.Feature(",
 				"pageview.FeatureGroupDescription(",
+				// The onboarding tabs' admission rule lives here rather than
+				// inline in the view, so it can be asserted headlessly. A
+				// view that opened URLs without asking would restore the
+				// untestable shape.
+				"pageview.DeveloperOnboardingTargets(",
 			},
 			retired: []string{
 				"row.SetTitle(feat.Description)",

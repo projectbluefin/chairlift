@@ -45,7 +45,11 @@ monitor.
 ![Features](screenshots/5-features.png)
 
 **Developer Mode** gives your account access to containers, virtual machines,
-and serial devices. **Gaming Mode** installs Steam and the tools that make
+and serial devices. Switching it on also opens three tabs in your browser —
+the Bluefin developer documentation, the Project Bluefin training catalog,
+and the GNOME Developer Center — so the material you need next is already
+open. Switching Developer Mode back off opens nothing.
+**Gaming Mode** installs Steam and the tools that make
 games run well. **Local AI** runs an AI model on your own machine instead of
 in the cloud, using your graphics card if you have one — the first start
 downloads several GB. **Enhanced Troubleshooting** sets up an AI assistant

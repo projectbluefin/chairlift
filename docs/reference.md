@@ -142,7 +142,7 @@ Each action has:
 | Group | Key | Description |
 |-------|-----|-------------|
 | Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Local AI | `ai_group` | Runs a language model in a rootless container on detected hardware; shown when Podman is present |
 | Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; shown only when Homebrew is present |

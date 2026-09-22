@@ -448,13 +448,17 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *ad
 		defer cancel()
 
 		err := ublue.SetDeveloperMode(ctx, enabled)
+		// Named separately from err because the onboarding tabs key on the
+		// outcome, not on the error text: a single `err != nil` guard decides
+		// both the switch state and whether a browser is opened at all.
+		succeeded := err == nil
 
 		dispatched = true
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
 			toggle.SetSensitive(true)
 
-			if err != nil {
+			if !succeeded {
 				toggle.SetActive(!enabled)
 				toggle.SetState(!enabled)
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Developer mode failed: %v", err))
@@ -469,8 +473,35 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *gtk.Switch, row *ad
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
+
+			uh.openDeveloperOnboarding(enabled, succeeded)
 		})
 	}()
+}
+
+// openDeveloperOnboarding opens the developer onboarding tabs for a confirmed
+// live enable, and runs on the GTK main thread from the one branch of
+// onDeveloperToggled that reached a successful promotion.
+//
+// Nothing here decides whether that is the right moment. Every admission rule
+// — not a dry-run preview, not a disable, not a failed promotion — is stated
+// once in pageview.DeveloperOnboardingTargets and asserted there headlessly,
+// because this package imports puregotk and can host no test binary on an
+// ordinary CI host. The arguments are threaded through as the values they
+// are rather than as literals, so this call site cannot claim a live enable
+// the rest of the function did not observe.
+//
+// The gate at the top of onDeveloperToggled is what keeps a repeated click
+// from launching a second set of tabs: the switch is insensitive and the gate
+// is held for the whole run, so a second state-set cannot reach this point.
+// Nor does anything here wait on the browser — openURL hands each command to
+// the existing asynchronous launcher, whose failure callback reports its own
+// failure by toast. A browser that never opens therefore leaves the account's
+// group promotion and the switch state exactly as they were.
+func (uh *UserHome) openDeveloperOnboarding(enabled, succeeded bool) {
+	for _, link := range pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded) {
+		uh.openURL(link.URL)
+	}
 }
 
 // onGamingToggled installs or removes the gaming stack. Unlike the other two

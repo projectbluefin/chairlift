@@ -50,7 +50,9 @@ so they cost nothing on Snow Linux or any other host.
   through `channels.yml`; see [`channels.example.yml`](channels.example.yml)
 - **Developer Mode**: Join the container, VM, and serial-device groups
   (`docker`, `incus-admin`, `libvirt`, `dialout`), effective at next login.
-  This is group membership, not a rebase to a `-dx` image
+  This is group membership, not a rebase to a `-dx` image. Switching it on
+  also opens the Bluefin developer documentation, the training catalog, and
+  the GNOME Developer Center in your browser
 - **Gaming Mode**: Install Steam, ProtonUp-Qt, Protontricks, MangoHud,
   GOverlay, and Flatseal as user Flatpaks — nothing is layered onto the system
   image, so a system update never has to reconcile it. MangoHud is a Vulkan

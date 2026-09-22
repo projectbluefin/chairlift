@@ -197,6 +197,13 @@ Its exported outcomes are:
   `FeatureGroupDescription` formats the loaded feature count.
 - `HelpResources` emits Website, Report Issues, and Community Discussions in
   that fixed order while omitting every unconfigured URL.
+- `DeveloperOnboardingTargets` returns the developer-mode onboarding links in
+  their fixed order — Bluefin developer documentation, Project Bluefin
+  training catalog, GNOME Developer Center — and returns nothing for every
+  input combination other than a confirmed live enable, so a dry-run preview,
+  a disable, and a failed group promotion each open no browser. The URLs live
+  beside it as a package-level table, so the collection and its order are
+  asserted without GTK.
 - `MaintenanceCommand` returns a direct script invocation for an
   unprivileged action and the exact `pkexec <script>` shape for a privileged
   action.
