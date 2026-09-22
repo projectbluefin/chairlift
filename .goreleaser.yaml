@@ -317,17 +317,18 @@ release:
     ```bash
     cosign verify-blob \
       --bundle <archive>.tar.gz.sigstore.json \
-      --certificate-identity-regexp "^https://github.com/projectbluefin/chairlift/" \
+      --certificate-identity-regexp "^https://github\.com/projectbluefin/chairlift/\.github/workflows/release\.yml@refs/tags/" \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
       <archive>.tar.gz
     ```
 
     Verify the checksum file the same way, replacing the paths with
     `checksums.txt.sigstore.json` and `checksums.txt`. Then confirm asset integrity
-    against the signed checksums:
+    against the signed checksums (`--ignore-missing` skips the assets you did not
+    download):
 
     ```bash
-    sha256sum -c checksums.txt
+    sha256sum --ignore-missing -c checksums.txt
     ```
   footer: |
     **Full Changelog**: https://github.com/projectbluefin/chairlift/compare/{{ .PreviousTag }}...{{ .Tag }}
