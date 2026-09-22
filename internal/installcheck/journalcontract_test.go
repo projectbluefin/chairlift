@@ -90,6 +90,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},      // systemctl (query)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                  // bootc status (read-only)
 	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                // bootc upgrade --check (read-only)
+	{File: "internal/devmenu/devmenu.go", Func: "execCommand"},                // dconf
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},              // distrobox
 	{File: "internal/firstrun/settings.go", Func: "execCommand"},              // gsettings
 	{File: "internal/flatpak/flatpak.go", Func: "runFlatpakCommandAt"},        // flatpak

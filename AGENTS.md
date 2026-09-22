@@ -134,6 +134,15 @@ An agent must not break these:
   arbitrary image, or add an arbitrary account to the privileged developer
   groups. `internal/ublue`'s test asserts that no argument crossing the
   boundary contains a `/`.
+- **Custom Command Menu integration is user-scoped and unprivileged.**
+  `internal/devmenu` manages the Custom Command Menu extension
+  (`org.gnome.shell.extensions.custom-command-list`) visibility for Terminal and
+  Containers through out-of-process `dconf` CLI calls in the
+  user session. Neither menu tuple values nor extension commands cross pkexec.
+  Mutations apply only after a confirmed live developer-state transition, never
+  on view construction, state restore, failed authentication, or dry-run.
+  Distro defaults are preserved via reset when matching, while `visible=false`
+  is enforced as an override when the distro default is visible.
 - **The release-channel table is keyed on the image, never on the tag alone.**
   `internal/imageinfo`'s `imageChannelMap` records, per registry path, which
   tags are stable streams, which are testing streams, and how each maps to

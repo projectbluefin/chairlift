@@ -45,6 +45,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/stageexec/ Pure-Go shared OS staging stream/event executor
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
+        ├── internal/devmenu/   Custom Command Menu extension scanner and tuple updater for Terminal and Containers visibility
         ├── internal/ublue/     Bluefin-family system mutations through the ublue helper
         ├── internal/ubluehelper/ Puregotk-free argv parsing for cmd/chairlift-ublue-helper
         ├── internal/updateflow/ Pure unified update coordinator and state machine
@@ -1333,6 +1334,15 @@ user-scope ref ChairLift had put there (issue #75). Failure handling follows
 the same shape one level up: a scope that cannot be listed is tolerated, but
 a *kind* that answered in neither scope is fatal, because reporting its
 components missing is exactly the loop that bug was.
+
+### Custom Command Menu developer visibility (`internal/devmenu`)
+
+`internal/devmenu` manages the Custom Command Menu GNOME Shell extension (`org.gnome.shell.extensions.custom-command-list`) visibility for developer tools (Terminal and Containers):
+
+- **Tuple scanning:** Entries are stored across `command1` through `command99` as `(sssb)` GVariant tuples representing `(label, command, icon, visible)`. `devmenu.Apply` scans entries by label matching `Terminal` or `Containers` rather than hardcoding fixed command indices, since Bluefin ships Terminal at `command8` with Containers absent, while Dakota ships Terminal at `command8` and Containers at `command9`.
+- **Field preservation:** Non-visibility tuple fields (`command`, `icon`) and unrelated commands are preserved intact.
+- **Distro vs. user layer:** Shipped distro defaults come from `/etc/dconf/db/distro.d/`. Toggling visibility distinguishes enforcing policy from resetting to defaults: when the desired state matches the distro default (e.g. `visible=true` on developer enable), `devmenu.Apply` resets the user key (`dconf reset`) so future distro defaults continue to shine through. When turning Developer Mode off and the distro default has `visible=true`, it explicitly writes `visible=false` to the user layer because a reset would reveal the visible default.
+- **Supported environments and preview:** A missing extension or non-GNOME environment (e.g. Plasma) is a supported no-op (`devmenu.Available` returns `false, nil`), whereas operational read/write failures return an error and are not hidden as success. Under preview (`dryrun.Enabled()`), mutations are skipped and logged as `[DRY-RUN] would set Custom Command Menu <key> visible=<bool>`. The call site composes no tuple or visibility text of its own.
 
 ### Update All
 
