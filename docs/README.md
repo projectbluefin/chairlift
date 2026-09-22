@@ -79,7 +79,10 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Specs
 
-*(none yet)*
+- [specs/developer-feeds.md](specs/developer-feeds.md) — the developer feed
+  OPML catalog: structure and attribute contract, the offline validation rules
+  CI enforces, the curation requirement, and the manual liveness
+  re-verification recipe
 
 ### Plans
 

@@ -35,6 +35,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
         ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
+        ├── internal/developerfeeds/ Pure-Go developer feed OPML catalog (go:embed) and offline validator
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
         ├── internal/sysupdate/ native A/B detection, status, rollback, fixed stage adapter
@@ -1378,6 +1379,31 @@ The UI is a drill-down inside the staged-update expander, not a page: the
 diff only means anything relative to a specific staged update, and a page
 would have to invent an answer for a system with nothing staged. The fetch is
 never automatic.
+
+### Developer feeds catalog (`internal/developerfeeds`)
+
+`internal/developerfeeds` owns the curated feed list Developer Mode offers when
+it stages an OPML file for the Pulp reader (epic
+[#235](https://github.com/projectbluefin/chairlift/issues/235)): the asset
+itself, `developer-feeds.opml`, compiled into the binary with `go:embed`, and
+the validator that reports what is wrong with it. The three required groups are
+`Changelogs`, `Blogs & Newsletters`, and `Podcasts`, and every feed carries one
+clean category tag — `changelog`, `blog`, `newsletter`, `podcast` — so a reader
+groups by tag while the OPML hierarchy carries the finer structure.
+
+The package is a puregotk-free leaf package (ADR-0007) for the same reason the
+view helpers are: `Parse`, `Validate`, and `Feeds` decide everything from bytes
+the caller supplies, so they are exercised headlessly under the ordinary
+`go test ./internal/...` gate. `Load` reads only the embedded asset. Nothing in
+the package opens a socket or runs a command — `TestPackageStaysOffline`
+rejects importing an HTTP client, a dialer, or a command runner — which is what
+lets CI check well-formedness, tag balance, category tags, URL shape, and
+uniqueness without an outbound request. Liveness is therefore out of CI's
+reach by construction and stays a manual procedure; the contract, the curation
+requirement, and that re-verification recipe live in
+[specs/developer-feeds.md](../specs/developer-feeds.md). The per-category feed
+counts are pinned in the package's tests, so adding a feed is a reviewable
+curation event rather than a data edit.
 
 ### Local AI
 

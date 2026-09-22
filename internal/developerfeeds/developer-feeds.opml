@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>Control Center developer feeds</title>
+    <ownerName>Project Bluefin community</ownerName>
+    <dateCreated>Tue, 22 Sep 2026 00:00:00 GMT</dateCreated>
+  </head>
+  <body>
+    <!--
+      Community-vetted developer feed catalog, staged by Developer Mode for the
+      Pulp feed reader. Every entry below was verified live on 2026-09-22. The
+      contract, the curation policy, and the manual re-verification recipe are
+      in docs/specs/developer-feeds.md; CI validates this asset offline only.
+    -->
+    <outline text="Changelogs">
+      <outline text="Bluefin OS Releases" title="Bluefin OS Releases" type="rss" category="changelog" xmlUrl="https://github.com/projectbluefin/bluefin/releases.atom" htmlUrl="https://github.com/projectbluefin/bluefin/releases"/>
+      <outline text="Bluefin LTS Releases" title="Bluefin LTS Releases" type="rss" category="changelog" xmlUrl="https://github.com/projectbluefin/bluefin-lts/releases.atom" htmlUrl="https://github.com/projectbluefin/bluefin-lts/releases"/>
+      <outline text="Homebrew Releases" title="Homebrew Releases" type="rss" category="changelog" xmlUrl="https://github.com/Homebrew/brew/releases.atom" htmlUrl="https://github.com/Homebrew/brew/releases"/>
+      <outline text="Bluefin Blog" title="Bluefin Blog" type="rss" category="changelog" xmlUrl="https://docs.projectbluefin.io/blog/rss.xml" htmlUrl="https://docs.projectbluefin.io/blog"/>
+      <outline text="Bluefin Discussions" title="Bluefin Discussions" type="rss" category="changelog" xmlUrl="https://github.com/ublue-os/bluefin/discussions.atom" htmlUrl="https://github.com/ublue-os/bluefin/discussions"/>
+    </outline>
+    <outline text="Blogs &amp; Newsletters">
+      <outline text="CNCF Blog" title="CNCF Blog" type="rss" category="blog" xmlUrl="https://www.cncf.io/blog/feed/" htmlUrl="https://www.cncf.io/blog/"/>
+      <outline text="DevOps'ish" title="DevOps'ish" type="rss" category="newsletter" xmlUrl="https://devopsish.substack.com/feed" htmlUrl="https://devopsish.com/"/>
+      <outline text="Chris Short" title="Chris Short" type="rss" category="blog" xmlUrl="https://chrisshort.net/index.xml" htmlUrl="https://chrisshort.net/"/>
+      <outline text="Cassidy Williams" title="Cassidy Williams" type="rss" category="blog" xmlUrl="https://cassidoo.co/rss.xml" htmlUrl="https://cassidoo.co/"/>
+      <outline text="Kubernetes Blog" title="Kubernetes Blog" type="rss" category="blog" xmlUrl="https://kubernetes.io/feed.xml" htmlUrl="https://kubernetes.io/blog/"/>
+      <outline text="GitHub Engineering" title="GitHub Engineering" type="rss" category="blog" xmlUrl="https://github.blog/feed/" htmlUrl="https://github.blog/"/>
+      <outline text="Lobsters" title="Lobsters" type="rss" category="blog" xmlUrl="https://lobste.rs/rss" htmlUrl="https://lobste.rs/"/>
+      <outline text="LWN.net" title="LWN.net" type="rss" category="blog" xmlUrl="https://lwn.net/headlines/rss" htmlUrl="https://lwn.net/"/>
+    </outline>
+    <outline text="Podcasts">
+      <outline text="CNCF Ambassador &amp; Core Kubernetes Shows">
+        <outline text="Kubernetes Podcast from Google" title="Kubernetes Podcast from Google" type="rss" category="podcast" xmlUrl="https://rss.libsyn.com/shows/419861/destinations/3486674.xml" htmlUrl="https://kubernetespodcast.com/"/>
+        <outline text="OpenObservability Talks" title="OpenObservability Talks" type="rss" category="podcast" xmlUrl="https://anchor.fm/s/26ef538c/podcast/rss"/>
+        <outline text="Geeking Out" title="Geeking Out" type="rss" category="podcast" xmlUrl="https://feeds.transistor.fm/geeking-out"/>
+        <outline text="DevOps Paradox" title="DevOps Paradox" type="rss" category="podcast" xmlUrl="https://rss.libsyn.com/shows/183152/destinations/1254752.xml" htmlUrl="https://devopsparadox.com/"/>
+        <outline text="Agentic DevOps" title="Agentic DevOps" type="rss" category="podcast" xmlUrl="https://feeds.transistor.fm/agentic-devops"/>
+        <outline text="PurePerformance" title="PurePerformance" type="rss" category="podcast" xmlUrl="https://www.spreaker.com/show/1746210/episodes/feed"/>
+      </outline>
+      <outline text="Cloud Architecture, Infrastructure &amp; Observability">
+        <outline text="KubeFM" title="KubeFM" type="rss" category="podcast" xmlUrl="https://kube.fm/podcast.xml" htmlUrl="https://kube.fm/"/>
+        <outline text="The Kubelist Podcast" title="The Kubelist Podcast" type="rss" category="podcast" xmlUrl="https://www.heavybit.com/category/library/podcasts/the-kubelist-podcast/feed/feed.rss"/>
+        <outline text="Argo Unpacked" title="Argo Unpacked" type="rss" category="podcast" xmlUrl="https://rss.libsyn.com/shows/581300/destinations/5041390.xml"/>
+        <outline text="The Cloudcast" title="The Cloudcast" type="rss" category="podcast" xmlUrl="https://anchor.fm/s/1036f0744/podcast/rss" htmlUrl="https://www.thecloudcast.net/"/>
+        <outline text="Ship It!" title="Ship It!" type="rss" category="podcast" xmlUrl="https://changelog.com/shipit/feed" htmlUrl="https://changelog.com/shipit"/>
+        <outline text="Heavy Networking" title="Heavy Networking" type="rss" category="podcast" xmlUrl="https://feeds.packetpushers.net/PacketPushersWeeklyPodcast" htmlUrl="https://packetpushers.net/"/>
+        <outline text="The New Stack Podcast" title="The New Stack Podcast" type="rss" category="podcast" xmlUrl="https://feeds.simplecast.com/IgzWks06" htmlUrl="https://thenewstack.io/podcasts/"/>
+      </outline>
+      <outline text="Software Craft, Systems &amp; Industry Perspectives">
+        <outline text="Software Defined Talk" title="Software Defined Talk" type="rss" category="podcast" xmlUrl="https://feeds.fireside.fm/sdt/rss" htmlUrl="https://www.softwaredefinedtalk.com/"/>
+        <outline text="Screaming in the Cloud" title="Screaming in the Cloud" type="rss" category="podcast" xmlUrl="https://feeds.transistor.fm/screaming-in-the-cloud" htmlUrl="https://www.lastweekinaws.com/podcast/screaming-in-the-cloud/"/>
+        <outline text="The Changelog" title="The Changelog" type="rss" category="podcast" xmlUrl="https://changelog.com/podcast/feed" htmlUrl="https://changelog.com/podcast"/>
+        <outline text="Latent Space" title="Latent Space" type="rss" category="podcast" xmlUrl="https://api.substack.com/feed/podcast/1084089.rss" htmlUrl="https://www.latent.space/"/>
+        <outline text="Software Unscripted" title="Software Unscripted" type="rss" category="podcast" xmlUrl="https://feeds.acast.com/public/shows/664fde3eda02bb0012bad909" htmlUrl="https://shows.acast.com/software-unscripted"/>
+        <outline text="CoRecursive" title="CoRecursive" type="rss" category="podcast" xmlUrl="https://rss.libsyn.com/shows/112428/destinations/628353.xml" htmlUrl="https://corecursive.com/"/>
+      </outline>
+    </outline>
+  </body>
+</opml>
