@@ -123,12 +123,19 @@ helpers, policies, configuration, and channel-table example needed by such an
 installation; it does not include the GUI. Never install both packages: they
 intentionally conflict because they own the same system-integration files.
 
-Download `checksums.txt` from the same release and verify the selected package
-before installing it:
+The archives and `checksums.txt` in each release are signed keyless with
+[cosign](https://docs.sigstore.dev/) (Fulcio/Rekor), with a Sigstore bundle
+(`.sigstore.json`) shipped alongside each asset. Verify `checksums.txt` with
+cosign and then verify the downloaded package against the signed checksums:
 
 ```bash
-package='<downloaded-package-filename>'
-grep -F "  $package" checksums.txt | sha256sum --check -
+cosign verify-blob \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp "^https://github\\.com/projectbluefin/chairlift/\\.github/workflows/release\\.yml@refs/tags/.+$" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+
+sha256sum --ignore-missing -c checksums.txt
 ```
 
 ### Building from Source
@@ -389,7 +396,7 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 - **`internal/bootc`**: bootc status reads and pkexec-driven update staging via the snow `bootc-update-stage` script
 - **`internal/sysupdate`**: native A/B (systemd-sysupdate) status reads from the `/run/snosi` state files, rollback-candidate discovery from partition labels, and pkexec-driven update staging via the snow `snosi-sysupdate-stage` script
 - **`internal/views`**: GTK4/Adwaita UI — async operations dispatched via `sgtk.RunOnMainThread`, toast notifications for user feedback
-- **`internal/views/pageview`**: pure-Go row text, page status, os-release parsing, help-link ordering, and maintenance-command selection shared by all six page builders
+- **`internal/views/pageview`**: pure-Go row text, page status, os-release parsing, help-link ordering, and maintenance-command selection shared by all seven page builders
 
 ### Development Environment
 
@@ -400,13 +407,13 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 
 Run `make ci` before pushing; it mirrors the hosted verify, lint, unit, race,
 and cross-architecture build gates. Run `make e2e` on a host with GTK4,
-Libadwaita, `dbus-run-session`, and Xvfb to execute the built application's
-help path, start its dry-run window in a private headless session, poll bounded
-startup readiness, stage the complete install layout, and exercise the installed
-privileged helper's argument rejection. The hosted E2E job installs those
-runtime dependencies and runs the same target. The unit gate also scans every
-workflow and rejects external GitHub Actions references that are not pinned to
-full commit SHAs.
+Libadwaita, `dbus-run-session`, and Xvfb to build the tagged GUI plus both
+release-shaped helpers, exercise `--help`, start the dry-run window in a
+private headless session, poll bounded startup readiness, stage the complete
+install layout, and exercise the installed privileged helper's argument rejection.
+The hosted E2E job installs those runtime dependencies and runs the same target.
+The unit gate also scans every workflow and rejects external GitHub Actions
+references that are not pinned to full commit SHAs.
 
 Codecov rejects project coverage regressions greater than one percentage point.
 Coverage expectations otherwise remain risk-based, not a repository-wide

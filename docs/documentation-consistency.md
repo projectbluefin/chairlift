@@ -1,9 +1,9 @@
 # Documentation Consistency Checklist
 
-The current-state vs historical classification below, and its enforcement by
+The documentation consistency standards below, and their enforcement by
 string-matching unit tests in `internal/installcheck/documentation_test.go`,
 are decision record
-[ADR-0010](adr/0010-docs-are-a-ci-gated-artifact.md).
+[ADR-0013](adr/0013-purge-historical-plan-and-port-artifacts.md).
 
 Use this checklist whenever behavior, configuration, dependencies, or
 installation layout changes:
@@ -19,12 +19,11 @@ installation layout changes:
 - Check commands and installation destinations against `Makefile`,
   `.goreleaser.yaml`, fixed helper constants, and PolicyKit annotations. Run a
   `make -n install` dry run when installation text changes.
-- Treat `README-go-port.md` and files under `docs/plans/` (except category
-  `TEMPLATE.md` files) and `docs/superpowers/` as historical. Current-state
-  claims belong in `README.md`, `CONFIG.md`, `docs/index.md`,
-  `docs/reference.md`, `docs/design/` (formerly `yeti/`), `docs/specs/`, and
-  `docs/adr/` — an Accepted decision record's file-and-line citations must
-  resolve against the tree exactly like a design doc's, even though the
-  decision it records does not change.
-- Run `make ci`, then grep current-state documentation for the obsolete term,
+- Treat files under `docs/plans/` (except category `TEMPLATE.md` files) as
+  transient or historical plans. Current-state claims belong in `README.md`,
+  `CONFIG.md`, `docs/index.md`, `docs/reference.md`, `docs/design/`,
+  `docs/specs/`, and `docs/adr/` — an Accepted decision record's file-and-line
+  citations must resolve against the tree exactly like a design doc's, even
+  though the decision it records does not change.
+- Run `make ci`, then grep documentation for the obsolete term,
   key, version, or path that prompted the change.

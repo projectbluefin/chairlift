@@ -37,12 +37,10 @@ import (
 // entries — a decision record citing a path that no longer resolves
 // misleads exactly the reader who was told to trust it.
 //
-// Deliberately excluded: the historical class named by the same checklist
-// (README-go-port.md, docs/plans/, docs/superpowers/) and docs/skills/.
-// Those cite files from past states of the tree on purpose — a skill
-// describing a change that added internal/testnames/testnames.go is
-// correct prose about a file that is gone, and a gate that failed on it
-// would be demanding the repository falsify its own history.
+// Deliberately excluded: active or draft plans in docs/plans/ and canonical
+// skills in docs/skills/. Those describe ongoing work or historical bug fixes,
+// and requiring them to mirror current state would demand the repository
+// falsify its development history.
 var currentStateDocRoots = []string{
 	"README.md",
 	"CONFIG.md",
@@ -280,22 +278,9 @@ func TestCurrentStateScopeMatchesDocumentationConsistency(t *testing.T) {
 		}
 	}
 
-	for _, historical := range []string{
-		"`README-go-port.md`",
-		"`docs/plans/`",
-		"`docs/superpowers/`",
-	} {
-		if !strings.Contains(checklist, historical) {
-			t.Errorf("docs/documentation-consistency.md no longer names %s as historical; "+
-				"this gate excludes it on that basis", historical)
-		}
-	}
-
 	for _, root := range currentStateDocRoots {
-		if strings.HasPrefix(filepath.ToSlash(root), "docs/plans") ||
-			strings.HasPrefix(filepath.ToSlash(root), "docs/superpowers") ||
-			root == "README-go-port.md" {
-			t.Errorf("currentStateDocRoots includes historical document root %s", root)
+		if strings.HasPrefix(filepath.ToSlash(root), "docs/plans") {
+			t.Errorf("currentStateDocRoots includes plan document root %s", root)
 		}
 	}
 }

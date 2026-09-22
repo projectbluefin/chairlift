@@ -30,10 +30,10 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   the mill's deep gate calls this exact target. Codecov's remote project status
   additionally rejects coverage regressions greater than one percentage point;
   it has no fixed coverage target and cannot be mirrored locally.
-- `make e2e` — builds both executables, checks the application's real
-  `--help` surface, starts the dry-run GTK window under a private D-Bus/Xvfb
-  session, stages `make install`, and executes the installed privileged
-  helper's rejection paths. Startup polls the three readiness log markers for
+- `make e2e` — builds the application and both privileged helpers, checks the
+  application's real `--help` surface, starts the dry-run GTK window under a
+  private D-Bus/Xvfb session, stages `make install`, and executes the installed
+  privileged helpers' rejection paths. Startup polls the three readiness log markers for
   up to 30 seconds, requires one additional second of process stability, and
   terminates the private process group as soon as the smoke check passes.
   Terminating it is not the end of the story: startup's Homebrew readers are
@@ -640,15 +640,12 @@ An agent must not break these:
 
 ## Documentation
 
-All documentation lives in the `docs/` tree, in frostyard/core's
-four-category shape (core ADR-0025; the former `yeti/` AI-docs directory is
-folded in). `docs/README.md` carries the category table, the index of every
-doc, and the conventions — new docs start from their category's
-`TEMPLATE.md`, and adding a doc means indexing it there:
+All documentation lives in the `docs/` tree in a four-category shape.
+`docs/README.md` carries the category table, the index of every doc, and
+the conventions — new docs start from their category's `TEMPLATE.md`, and
+adding a doc means indexing it there:
 
-- `docs/adr/` — why: repo-local decisions, immutable once accepted. Org-wide
-  decisions go to frostyard/core instead, per
-  [docs/org-adrs.md](docs/org-adrs.md).
+- `docs/adr/` — why: repo-local decisions, immutable once accepted.
 - `docs/design/` — how it fits together: living architecture docs. The entry
   point is `docs/design/overview.md` (formerly `yeti/OVERVIEW.md`); read it
   and `docs/design/package-managers.md` (formerly `yeti/package-managers.md`)
@@ -729,9 +726,3 @@ than merges and the gate question has to be settled before that call; the local
 mechanics, including the GraphQL `dequeuePullRequest` escape hatch and its
 narrow window, are in
 [`docs/skills/factory-onboarding/SKILL.md`](docs/skills/factory-onboarding/SKILL.md).
-
-## Org-wide decisions
-
-Org-level conventions this repo follows are recorded as ADRs in
-frostyard/core — see [docs/org-adrs.md](docs/org-adrs.md) for the list that
-binds this repo. Change the ADR (in core) before changing behavior it covers.

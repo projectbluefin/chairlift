@@ -1,6 +1,6 @@
 # 0010 — Treat documentation as a CI-gated artifact split into current-state and historical
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0013](0013-purge-historical-plan-and-port-artifacts.md)
 - **Date:** 2026-08-12
 
 ## Context

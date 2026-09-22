@@ -7,8 +7,7 @@ may have drifted.
 Reconcile ChairLift's current-state documentation for [TOPIC].
 
 Read AGENTS.md, docs/SKILL.md, the matching package from docs/skills/, and
-docs/documentation-consistency.md. Treat README-go-port.md and docs/plans/ as
-historical, not as sources of current behavior.
+docs/documentation-consistency.md.
 
 Trace the topic to its live sources:
 - config.yml and internal/config for page/group keys and defaults;

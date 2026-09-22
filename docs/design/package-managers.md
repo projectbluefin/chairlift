@@ -1,7 +1,6 @@
 # Package Manager Wrappers
 
-Living design document (formerly `yeti/package-managers.md`; folded into
-`docs/` per [frostyard/core ADR-0025](https://github.com/frostyard/core/blob/main/docs/adr/0025-consolidate-repository-docs-into-docs.md)).
+Living design document describing external tool wrappers and view-layer leaf packages.
 
 Each wrapper lives in its own package under `internal/` and follows a consistent pattern: module-level dry-run flag, availability check with cached variant (`IsInstalledCached()` using `sync.Once`), and context-based timeouts in two classes — 30s for read-only commands, 30m for state-changing ones, selected per invocation by each package's `commandTimeout(args)` helper from its `stateChangingCommands` map. All are called from `internal/views/` page builders. The cached availability check is important for the deferred-visibility startup pattern — multiple goroutines may check the same tool, and the result should only be computed once.
 
@@ -208,7 +207,7 @@ Its exported outcomes are:
   and truncates longer values to 19 characters plus an ellipsis.
 
 `pageview_test.go` calls every exported function directly and table-tests every
-branch above. `wiring_test.go` inventories all six page files and requires each
+branch above. `wiring_test.go` inventories all seven page files and requires each
 to call its corresponding `pageview` functions while rejecting the retired
 inline implementations. This supplies headless enforcement without adding a
 test binary to the puregotk-importing parent package.

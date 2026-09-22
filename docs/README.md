@@ -1,14 +1,11 @@
 # Documentation
 
-ChairLift keeps one documentation tree, `docs/`, in frostyard/core's
-four-category shape
-([core ADR-0025](https://github.com/frostyard/core/blob/main/docs/adr/0025-consolidate-repository-docs-into-docs.md);
-the former `yeti/` AI-docs directory is folded in here). Docs are split by
-the question they answer:
+ChairLift keeps one documentation tree, `docs/`, split by the question each
+directory answers:
 
 | Directory | Question | Contents |
 | --- | --- | --- |
-| [adr/](adr/) | **Why** did we choose this? | Repo-local Architecture Decision Records — immutable once accepted; superseded, never edited. Org-wide decisions go to frostyard/core instead (see [org-adrs.md](org-adrs.md)) |
+| [adr/](adr/) | **Why** did we choose this? | Repo-local Architecture Decision Records — immutable once accepted; superseded, never edited |
 | [design/](design/) | **How** does it fit together? | Living documents describing the current architecture; [design/overview.md](design/overview.md) is the entry point |
 | [specs/](specs/) | **What exactly** is the contract? | Precise, testable interface definitions, changed only alongside implementing code |
 | [plans/](plans/) | **When/in what order** do we build? | Phased plans with "Done when" outcomes |
@@ -25,8 +22,7 @@ contributor-facing index of everything under `docs/`.
 ### Decisions (ADRs)
 
 Repo-local decisions get the next free number from
-[adr/TEMPLATE.md](adr/TEMPLATE.md); org-wide decisions that bind this repo
-are listed in [org-adrs.md](org-adrs.md).
+[adr/TEMPLATE.md](adr/TEMPLATE.md).
 
 - [adr/0001-fixed-path-pkexec-privilege-boundary.md](adr/0001-fixed-path-pkexec-privilege-boundary.md)
   — every root mutation goes through pkexec at hardcoded absolute paths
@@ -61,12 +57,15 @@ are listed in [org-adrs.md](org-adrs.md).
   `[DRY-RUN]` message prefixes, and single tested decision structs gating
   toast + UI mutation together
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
-  — documentation splits into current-state vs historical and is enforced by
-  string-matching unit tests; prose is testable
+  — documentation consistency enforced by string-matching unit tests (superseded by ADR-0013)
+- [adr/0011-chairlift-owns-bluefin-family-rebasing.md](adr/0011-chairlift-owns-bluefin-family-rebasing.md)
+  — ChairLift owns Bluefin-family image rebase logic, channel switches, and hardware-driver mapping
 - [adr/0012-ship-as-control-center-keep-chairlift-code-name.md](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)
   — the application ships as "Control Center" and keeps ChairLift as the code
   name; `branding.AppName` owns every user-visible spelling, and three
   `internal/installcheck` gates hold the split
+- [adr/0013-purge-historical-plan-and-port-artifacts.md](adr/0013-purge-historical-plan-and-port-artifacts.md)
+  — purge historical plan/port files in favor of living design documentation
 
 ### Design
 
@@ -83,19 +82,8 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Plans
 
-Historical plan/design artifacts from past automated runs (per
-[documentation-consistency.md](documentation-consistency.md), not sources of
-current behavior):
-
-- [plans/2026-02-27-extensions-to-features-design.md](plans/2026-02-27-extensions-to-features-design.md)
-- [plans/2026-02-27-extensions-to-features-plan.md](plans/2026-02-27-extensions-to-features-plan.md)
-- [plans/2026-02-27-feature-update-check-design.md](plans/2026-02-27-feature-update-check-design.md)
-- [plans/2026-03-04-puregotk-alignment-design.md](plans/2026-03-04-puregotk-alignment-design.md)
-- [plans/2026-03-04-puregotk-alignment-plan.md](plans/2026-03-04-puregotk-alignment-plan.md)
-- [adr/0011-chairlift-owns-bluefin-family-rebasing.md](adr/0011-chairlift-owns-bluefin-family-rebasing.md)
-- [plans/2026-08-17-bluefin-suite-parity-plan.md](plans/2026-08-17-bluefin-suite-parity-plan.md)
-- [walkthrough.md](walkthrough.md) — every screen, captured from the real application
-
+Active implementation plans with "Done when" outcomes start from
+[plans/TEMPLATE.md](plans/TEMPLATE.md).
 ### Factory and agent process
 
 - [SKILL.md](SKILL.md) — local skill router
@@ -116,23 +104,18 @@ current behavior):
 - [metrics.md](metrics.md) and [metrics/README.md](metrics/README.md) —
   metrics definitions and the public metrics catalog
 - [documentation-consistency.md](documentation-consistency.md) — checklist
-  for keeping current-state docs in sync with source; defines which docs are
-  current-state vs historical
+  for keeping documentation in sync with source code and configuration
+- [walkthrough.md](walkthrough.md) — every screen, captured from the real application
 - [risk-tiers.md](risk-tiers.md) — change risk classification used by PRs
 - [review-rubric.md](review-rubric.md) — pull request review rubric
 - [SECURITY-AI.md](SECURITY-AI.md) — AI security policy
-- [org-adrs.md](org-adrs.md) — frostyard/core ADRs that bind this repository
 - [prompts/index.md](prompts/index.md) — reusable agent prompt catalog
-- [superpowers/](superpowers/) — historical plan/spec artifacts from past
-  superpowers runs (not sources of current behavior)
 
 ## Conventions
 
 - **New docs start from their category's `TEMPLATE.md`** (in each directory).
 - New repo-local decision → new ADR with the next number; if it reverses an
   old one, mark the old one `Superseded by NNNN` rather than editing it.
-  Org-wide decisions become ADRs in frostyard/core plus a line in
-  [org-adrs.md](org-adrs.md).
 - Design docs are updated in place to always reflect reality.
 - Specs change only alongside the code that implements them.
 - Cross-links between categories are mandatory in both directions.
