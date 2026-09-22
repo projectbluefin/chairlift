@@ -8,10 +8,11 @@ import (
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/branding"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/notify"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
-
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -145,11 +146,25 @@ func (s *UpdateShell) StartUpdate() {
 	}
 	go func() {
 		defer cancel()
-		defer s.mutation.Store(false)
+		defer func() {
+			s.mutation.Store(false)
+			finalSnap := s.coordinator.Snapshot()
+			s.publish(finalSnap)
+			if ctx.Err() == nil && !dryrun.Enabled() && s.toasts != nil {
+				notif := notify.UpdateAllComplete(
+					len(finalSnap.CompletedSources),
+					len(finalSnap.FailedSources),
+					0,
+					finalSnap.RestartRequired(),
+				)
+				sgtk.RunOnMainThread(func() {
+					s.toasts.NotifyBackground(notif.Title, notif.Body, notif.Urgency == notify.UrgencyHigh)
+				})
+			}
+		}()
 		s.coordinator.UpdateAll(ctx, current, preferences, s.publish)
 	}()
 }
-
 // Busy reports whether the coordinator is currently mutating updates.
 func (s *UpdateShell) Busy() bool {
 	return s != nil &&

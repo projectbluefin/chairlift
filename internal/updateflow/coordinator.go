@@ -395,6 +395,11 @@ func (c *Coordinator) orderSources(state Snapshot) Snapshot {
 	return state
 }
 
+// Snapshot returns the most recent coordinator snapshot.
+func (c *Coordinator) Snapshot() Snapshot {
+	return c.snapshot()
+}
+
 func (c *Coordinator) snapshot() Snapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
