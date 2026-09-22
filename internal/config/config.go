@@ -10,7 +10,7 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	SystemPage       PageConfig `yaml:"system_page"`
+	AgentsPage       PageConfig `yaml:"agents_page"`
 	UpdatesPage      PageConfig `yaml:"updates_page"`
 	ApplicationsPage PageConfig `yaml:"applications_page"`
 	MaintenancePage  PageConfig `yaml:"maintenance_page"`
@@ -55,7 +55,7 @@ type ActionConfig struct {
 // file; loadFromPath merges it onto defaultConfig() to produce the *Config
 // callers see.
 type rawConfig struct {
-	SystemPage       rawPageConfig `yaml:"system_page"`
+	AgentsPage       rawPageConfig `yaml:"agents_page"`
 	UpdatesPage      rawPageConfig `yaml:"updates_page"`
 	ApplicationsPage rawPageConfig `yaml:"applications_page"`
 	MaintenancePage  rawPageConfig `yaml:"maintenance_page"`
@@ -185,7 +185,7 @@ func loadResolvedPath(src configSource) (*Config, *LoadError) {
 // visits the same pages the rest of the package knows about.
 func configPages(cfg *Config) []PageConfig {
 	return []PageConfig{
-		cfg.SystemPage,
+		cfg.AgentsPage,
 		cfg.UpdatesPage,
 		cfg.ApplicationsPage,
 		cfg.MaintenancePage,
@@ -233,7 +233,7 @@ func disabledConfig() *Config {
 // def's outright.
 func mergeConfig(def *Config, raw *rawConfig) *Config {
 	return &Config{
-		SystemPage:       mergePage(def.SystemPage, raw.SystemPage),
+		AgentsPage:       mergePage(def.AgentsPage, raw.AgentsPage),
 		UpdatesPage:      mergePage(def.UpdatesPage, raw.UpdatesPage),
 		ApplicationsPage: mergePage(def.ApplicationsPage, raw.ApplicationsPage),
 		MaintenancePage:  mergePage(def.MaintenancePage, raw.MaintenancePage),
@@ -307,18 +307,10 @@ func mergeGroup(def GroupConfig, raw rawGroupConfig) GroupConfig {
 // defaultConfig returns the default configuration
 func defaultConfig() *Config {
 	return &Config{
-		SystemPage: PageConfig{
-			"system_info_group":  GroupConfig{Enabled: true},
-			"bootc_status_group": GroupConfig{Enabled: true},
-			// Which image this machine runs, and the graphics driver that
-			// image carries. Both describe the system's identity, so they
-			// belong beside the rest of it rather than among the features
-			// you switch on.
-			"channel_group": GroupConfig{Enabled: true},
-			"health_group": GroupConfig{
-				Enabled: true,
-				AppID:   "io.missioncenter.MissionCenter",
-			},
+		// Local AI runs rootless in the invoking account, so it crosses no
+		// privilege boundary and needs no administrator route.
+		AgentsPage: PageConfig{
+			"agents_group": GroupConfig{Enabled: true},
 		},
 		UpdatesPage: PageConfig{
 			// Whether this system updates itself on a schedule. Updating
@@ -329,6 +321,14 @@ func defaultConfig() *Config {
 			"flatpak_updates_group":   GroupConfig{Enabled: true},
 			"brew_updates_group":      GroupConfig{Enabled: true},
 			"brew_trust_group":        GroupConfig{Enabled: true},
+			// Which release stream this machine follows, and the graphics
+			// driver the image carries. Both replace the operating system
+			// and need a restart, so they sit with updates rather than in a
+			// separate place describing the machine.
+			"channel_group": GroupConfig{Enabled: true},
+			// The compact system-version readout. Technical identity stays
+			// behind a details row.
+			"bootc_status_group": GroupConfig{Enabled: true},
 		},
 		ApplicationsPage: PageConfig{
 			"applications_installed_group": GroupConfig{
@@ -340,12 +340,8 @@ func defaultConfig() *Config {
 			"brew_group":           GroupConfig{Enabled: true},
 			"brew_search_group":    GroupConfig{Enabled: true},
 			"brew_bundles_group": GroupConfig{
-				Enabled: true,
-				BundlesPaths: []string{
-					"/usr/share/ublue-os/homebrew",
-					"/usr/share/chairlift/bundles",
-					"/etc/chairlift/bundles",
-				},
+				Enabled:      true,
+				BundlesPaths: []string{"/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles"},
 			},
 		},
 		MaintenancePage: PageConfig{
@@ -359,9 +355,11 @@ func defaultConfig() *Config {
 					},
 				},
 			},
-			"maintenance_brew_group":         GroupConfig{Enabled: true},
-			"maintenance_flatpak_group":      GroupConfig{Enabled: true},
-			"maintenance_optimization_group": GroupConfig{Enabled: true},
+			// One routine cleanup action, composing the existing typed
+			// post-update maintenance runner. Enabled because it is safe:
+			// it removes cached downloads and unused supporting software,
+			// never installed apps, documents or containers.
+			"maintenance_freespace_group": GroupConfig{Enabled: true},
 			// Powerwash and Factory Reset. Disabled by default, the same as
 			// maintenance_cleanup_group: both are irreversible, so an
 			// administrator opts in explicitly rather than exposing them on
@@ -375,7 +373,6 @@ func defaultConfig() *Config {
 			// which is every non-Bluefin host including Snow Linux.
 			"dx_group":              GroupConfig{Enabled: true},
 			"gaming_group":          GroupConfig{Enabled: true},
-			"ai_group":              GroupConfig{Enabled: true},
 			"troubleshooting_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
@@ -390,9 +387,9 @@ func defaultConfig() *Config {
 		HelpPage: PageConfig{
 			"help_resources_group": GroupConfig{
 				Enabled: true,
-				Website: "https://docs.projectbluefin.io/",
-				Issues:  "https://issues.projectbluefin.io/",
-				Chat:    "https://ask.projectbluefin.io/",
+				Website: "https://projectbluefin.io",
+				Issues:  "https://github.com/projectbluefin/dakota/issues",
+				Chat:    "https://docs.projectbluefin.io/",
 			},
 		},
 	}
@@ -402,8 +399,8 @@ func defaultConfig() *Config {
 func (c *Config) IsGroupEnabled(pageName, groupName string) bool {
 	var page PageConfig
 	switch pageName {
-	case "system_page":
-		page = c.SystemPage
+	case "agents_page":
+		page = c.AgentsPage
 	case "updates_page":
 		page = c.UpdatesPage
 	case "applications_page":
@@ -431,8 +428,8 @@ func (c *Config) IsGroupEnabled(pageName, groupName string) bool {
 func (c *Config) GetGroupConfig(pageName, groupName string) *GroupConfig {
 	var page PageConfig
 	switch pageName {
-	case "system_page":
-		page = c.SystemPage
+	case "agents_page":
+		page = c.AgentsPage
 	case "updates_page":
 		page = c.UpdatesPage
 	case "applications_page":

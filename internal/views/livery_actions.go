@@ -61,6 +61,9 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 			if err := livery.Clear(ctx, livery.AppGrid); err != nil {
 				uh.reportLiveryFailure("removing the app grid mark", err)
 			}
+			if err := livery.RefreshShellIcons(); err != nil {
+				uh.reportLiveryFailure("refreshing the shell's icons", err)
+			}
 			return
 		}
 		// Turning the section on with nothing chosen is not a failure; the

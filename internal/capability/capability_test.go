@@ -296,7 +296,7 @@ func TestSupportsTreatsUnclassifiedGroupAsSupported(t *testing.T) {
 // configuration may subtract from the capability set and never add to it.
 func TestComposeRequiresConfigurationAndCapability(t *testing.T) {
 	configured := func(page, group string) bool {
-		return page == "features_page" && group == "ai_group"
+		return page == "agents_page" && group == "agents_group"
 	}
 
 	tests := []struct {
@@ -309,16 +309,16 @@ func TestComposeRequiresConfigurationAndCapability(t *testing.T) {
 	}{
 		{
 			name:       "configured and capable",
-			page:       "features_page",
-			group:      "ai_group",
+			page:       "agents_page",
+			group:      "agents_group",
 			configured: configured,
 			set:        Set{Podman: true},
 			want:       true,
 		},
 		{
 			name:       "configured but incapable",
-			page:       "features_page",
-			group:      "ai_group",
+			page:       "agents_page",
+			group:      "agents_group",
 			configured: configured,
 			set:        Set{},
 			want:       false,
@@ -333,8 +333,8 @@ func TestComposeRequiresConfigurationAndCapability(t *testing.T) {
 		},
 		{
 			name:       "nil configuration fails closed even where the host is capable",
-			page:       "features_page",
-			group:      "ai_group",
+			page:       "agents_page",
+			group:      "agents_group",
 			configured: nil,
 			set:        fullSet(),
 			want:       false,

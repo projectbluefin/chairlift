@@ -20,6 +20,7 @@ type Bundle struct {
 	Name        string
 	Description string
 	Path        string
+	ItemCount   int
 }
 
 // AvailableBundles discovers regular *.Brewfile entries immediately inside
@@ -88,10 +89,12 @@ func AvailableBundles(paths []string) ([]Bundle, error) {
 			if name == "" {
 				name = entry.Name()
 			}
+			itemCount, _ := countBundleItems(path)
 			bundles = append(bundles, Bundle{
 				Name:        name,
 				Description: description,
 				Path:        path,
+				ItemCount:   itemCount,
 			})
 		}
 	}
@@ -181,4 +184,27 @@ func humanizeBundleName(name string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+var bundleEntryPrefixes = []string{"brew ", "cask ", "flatpak ", "mas ", "vscode "}
+
+func countBundleItems(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = file.Close() }()
+
+	count := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		for _, prefix := range bundleEntryPrefixes {
+			if strings.HasPrefix(line, prefix) {
+				count++
+				break
+			}
+		}
+	}
+	return count, scanner.Err()
 }

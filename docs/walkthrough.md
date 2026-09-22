@@ -3,7 +3,7 @@
 Every screen in Control Center, captured from the real app by `make
 screenshots` (see [below](#how-these-are-made)) — not mockups.
 
-One app for Snow Linux and the Bluefin family (Bluefin, Bluefin LTS, Dakota).
+One app for the Bluefin family (Bluefin, Bluefin LTS, Dakota).
 Everything here is one control per decision — no strategy pickers, no
 schedule choosers, no feature grids.
 
@@ -11,68 +11,114 @@ schedule choosers, no feature grids.
 
 ## Updates
 
-![Updates](screenshots/3-updates.png)
+![Updates](screenshots/1-updates.png)
 
-**Update All** updates your system, your apps, and your packages in one
-click, and tells you when it's done. It only asks you to restart if something
-actually needs one. **Automatic Updates** keeps everything up to date in the
-background. The Flatpak and Homebrew groups below let you update just one
-thing if you prefer.
+The page leads with where you stand: **System is up to date**, or how many
+updates are waiting. Below that, **Update sources** lists the four things
+that can be updated — Applications, Developer tools, System components, and
+Operating system — each with its own state, so you can see which one is
+holding you up without opening anything.
+
+One button covers all of them. It reads **Check again** when nothing is
+pending, **Update all** when something is, **Retry failed** if a source
+didn't finish, and **Restart now** once a new system version is staged and
+waiting. It only asks you to restart when something actually needs one, and
+a source that fails doesn't stop the others. A run long enough that you
+wandered off finishes with a desktop notification.
+
+**Automatic updates** is the one switch for whether this system keeps itself
+up to date in the background. It appears only on systems that ship the
+unattended-update timer, and it's a choice about the future — updating right
+now is the button above.
+
+Further down, each source keeps its own group for when you want to update
+just one thing: **Apps** lists the Flatpak updates waiting, and **Developer
+tools** lists the command-line tools you installed with Homebrew.
 
 **System Updates** adds **Roll Back**, which returns you to the previous
 version if an update went badly, and **What's Changing**, which lists exactly
 what software a pending update will add, remove, or upgrade. That group only
 appears on systems that update as a whole, so it's not in the shot above.
 
+The same page holds the two choices that replace the operating system itself,
+because both land through an update and both need a restart.
+**Release Channel** switches between the stable version and the early one, and
+**Graphics Driver** switches you to the NVIDIA driver if your card wants it.
+Neither appears unless there is actually something to switch to. Above them,
+a compact line says what's installed now and what's queued for the next
+restart; the exact build identifiers sit behind **Details** for when you need
+to quote them in a bug report.
+
+If a Homebrew package came from an unofficial source, the page asks you to
+trust that source before it will keep updating it.
+
+There is no separate System page. What this computer *is* — its name, memory,
+disk, and hardware — is GNOME Settings' job, and Control Center does not
+duplicate it.
+
 ---
 
-## System
+## Apps
 
-![System](screenshots/4-system.png)
+![Apps](screenshots/2-applications.png)
 
-Your system details. **System Image** — what's installed now, and what's
-queued for the next restart — only appears on systems that update as a
-whole, so it's not in the shot above. **Release Channel** switches between
-the stable version and the early one. **Graphics Driver** switches you to
-the NVIDIA driver if your card wants it. Neither appears unless there's
-actually something to switch to. **Mission Center** opens the system
-monitor.
+**App collections** lead the page: install a set of apps and tools together in
+one step, rather than hunting them down one at a time. Collections come from
+Homebrew, a third-party source, and can be a large download — the page says so
+once, at the top, instead of nagging on every row.
+
+Below that sit the apps already installed, the packages Homebrew manages, and
+a search across both. **Export package list** saves what you have installed so
+you can put it back on another machine.
+
+---
+
+## Agents
+
+![Agents](screenshots/3-agents.png)
+
+One switch runs an AI model on this computer. Answers are generated locally —
+nothing you type is sent to a cloud service — and your graphics card
+accelerates it if you have one. Turning it on downloads several gigabytes.
+
+**Details** names the model, the graphics acceleration in use, and the address
+other apps can reach it on. Everything here runs in your own account, so it
+never asks for an administrator password.
 
 ---
 
 ## Features
 
-![Features](screenshots/5-features.png)
+![Features](screenshots/4-features.png)
 
-**Developer Mode** gives your account access to containers, virtual machines,
-and serial devices. Switching it on also opens three tabs in your browser —
-the Bluefin developer documentation, the Project Bluefin training catalog,
-and the GNOME Developer Center — so the material you need next is already
-open. Switching Developer Mode back off opens nothing.
-**Gaming Mode** installs Steam and the tools that make
-games run well. **Local AI** runs an AI model on your own machine instead of
-in the cloud, using your graphics card if you have one — the first start
-downloads several GB. **Enhanced Troubleshooting** sets up an AI assistant
-that can read your logs, services, and network to help work out what's wrong,
-then launches it — the row says which AI service answers your questions,
-since the default one is Google's. It is only offered where Homebrew is
-installed, so it's not in the shot above. **System Features** is Snow
-Linux's feature manager, and is empty elsewhere.
+**Developer tools** lets you run containers and virtual machines, and use USB
+and serial hardware, without being asked for permission each time. It needs
+your administrator password, and takes effect after you log out and back in.
+**Gaming** is a switch: on installs Steam and the tools that make Windows
+games run, off removes them again. On an image that already ships them, the
+page says so instead of offering a switch that would do nothing.
+**Enhanced Troubleshooting** sets up an AI assistant that can read your logs,
+services, and network to help work out what's wrong, then launches it — the
+row says which AI service answers your questions, since the default one is
+Google's. It is only offered where Homebrew is installed, so it's not in the
+shot above. **Optional features** is the distribution's own feature manager,
+and is empty where the distribution ships none.
+
+Local AI used to live here. It has its own **Agents** page now.
 
 ---
 
 ## Livery
 
-![Livery](screenshots/6-livery.png)
+![Livery](screenshots/5-livery.png)
 
 Who you are, who you stand with, and what you roll with.
 
 **App Grid Livery** is your own mark on the Show Applications button. Search
 all 3,461 brands [Simple Icons](https://simpleicons.org/) publishes — your
 project, your employer, whatever you answer to — and Control Center fetches it
-and nudges GNOME Shell to re-read its application icons so it appears straight
-away — nothing is reloaded or rebuilt. You set it once; it never changes on its
-own, because a personal mark that rotated would stop being personal.
+and rebuilds the dock so it appears straight away. You set it once; it never changes on its own, because a personal mark that
+rotated would stop being personal.
 
 **Foundational Livery** puts a foundation's mark in the top bar: CNCF, the
 Linux Foundation, GNOME, freedesktop.org, Apache, Rust, Universal Blue,
@@ -91,9 +137,7 @@ sign in — so you stand somewhere slightly different every day without ever
 picking again.
 
 Any section will also take an SVG of your own, which is the way in for
-anything not on the list. A section pointed at your own file stops rotating —
-rotation walks a catalogue, and your file is not in one — so the **Rotate at
-Login** switch greys out and nothing overwrites your mark at the next sign-in.
+anything not on the list.
 
 Three things worth knowing. The top-bar section needs the Custom Command Menu
 GNOME extension; without it the section says so and stays switched off rather
@@ -109,25 +153,18 @@ mark your distribution set rather than one you chose.
 
 ---
 
-## Applications
-
-![Applications](screenshots/1-applications.png)
-
-Your installed apps and Homebrew packages, search across both, **Bundles**
-for installing a whole set at once, and a prompt before using an unofficial
-Homebrew tap.
-
----
-
 ## Maintenance
 
-![Maintenance](screenshots/2-maintenance.png)
+![Maintenance](screenshots/6-maintenance.png)
 
-Clean up files you no longer need, plus anything else your distribution added
-here. **Reset** holds the two you can't undo, so each asks first: Powerwash
-removes everything you installed, and Factory Reset puts the system back to
-how it shipped. It's switched off normally, and turned on above so you can
-see it.
+One button. **Free up space** removes old downloads and supporting software
+nothing uses any more, and leaves your apps, files, and containers alone. It
+tells you how much it reclaimed only when it could measure it. Below it sit
+any **Maintenance tasks** whoever set up this computer added. **Recovery**
+holds the two you can't undo, so each asks first: one removes the apps you
+installed and your development containers, the other reinstalls the system
+from scratch. Both of those are switched off normally, and turned on above so
+you can see them.
 
 ---
 
@@ -135,7 +172,8 @@ see it.
 
 ![Help](screenshots/7-help.png)
 
-Links to the distribution's website, issues, and discussions.
+Three links, each shown only when it is configured: **Website**, **Report a
+problem** (the `issues` URL, where bug reports go), and **Documentation**.
 
 ---
 

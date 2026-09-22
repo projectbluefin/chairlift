@@ -55,13 +55,11 @@ valid page.
 
 ## Available Pages and Groups
 
-### System Page (`system_page`)
+### Agents Page (`agents_page`)
 
-- `system_info_group`: Operating system information from /etc/os-release
-- `bootc_status_group`: System status information from bootc (when available)
-- `channel_group`: Release channel and graphics-driver switching; shown only when `/usr/share/ublue-os/image-info.json` is present
-- `health_group`: System health monitoring and performance tools
-  - `app_id`: Application ID for the system monitoring tool (default: `io.missioncenter.MissionCenter`)
+- `agents_group`: Local AI language model served from a rootless container in the invoking user's own account; shown where Podman is present. Nothing here crosses a privilege boundary.
+  - `ai_images`: Map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
+  - `ai_model`: Model reference to serve (default: `ollama://qwen2.5:7b`)
 
 ### Updates Page (`updates_page`)
 
@@ -71,6 +69,8 @@ valid page.
 - `flatpak_updates_group`: Available Flatpak application updates (user and system)
 - `brew_updates_group`: Homebrew package updates and outdated packages
 - `brew_trust_group`: Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); only shown when there is something to trust
+- `channel_group`: Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present
+- `bootc_status_group`: Compact system-version readout, with build identifiers behind a details row (when available)
 
 ### Applications Page (`applications_page`)
 
@@ -85,7 +85,7 @@ valid page.
 - `brew_search_group`: Search and install Homebrew formulae and casks
 - `brew_bundles_group`: Curated Homebrew package bundles
   - `bundles_paths`: Array of directories searched for immediate
-    `*.Brewfile` entries (default: `['/usr/share/ublue-os/homebrew', '/usr/share/chairlift/bundles', '/etc/chairlift/bundles']`). Missing
+    `*.Brewfile` entries (default: `['/usr/share/ublue-os/homebrew']`). Missing
     directories are ignored so one configuration can cover multiple
     distribution variants. Other unreadable paths are reported in the group
     while bundles from readable paths remain available. Repeating the same
@@ -99,19 +99,14 @@ valid page.
     - `title`: Display name for the action
     - `script`: Absolute path to the script to execute. Required when `sudo: true`.
     - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec). `sudo: true` is accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The rule is applied to the effective configuration, so an untrusted file may not enable a group whose actions include a privileged one, even when it inherits that action from the built-in defaults rather than declaring `sudo: true` itself.
-- `maintenance_brew_group`: Homebrew cleanup (runs `brew cleanup` to remove old versions and cache)
-- `maintenance_flatpak_group`: Flatpak cleanup (runs `flatpak uninstall --unused` to remove unused runtimes)
-- `maintenance_optimization_group`: System optimization tools
+- `maintenance_freespace_group`: One routine cleanup action composing the shared post-update maintenance runner; removes cached downloads and unused supporting software, never installed apps, documents, or containers
 - `reset_group`: Powerwash (removes user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`) utilities (disabled by default)
 
 ### Features Page (`features_page`)
 
 - `features_group`: System features managed by updex (requires `updex` command)
-- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present). Switching it on also opens three onboarding tabs in the default browser — the Bluefin developer documentation, the Project Bluefin training catalog, and the GNOME Developer Center. Opening the tabs is unprivileged (it uses the same `xdg-open` helper as the Help page links) and happens only on a confirmed live enable: never under `--dry-run`, never when switching the mode off, and never when the group change fails. The URLs are not configurable
+- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `gaming_group`: Gaming Mode; toggles gaming optimizations (shown only when `/usr/share/ublue-os/image-info.json` is present)
-- `ai_group`: Local AI language model served in a rootless container via Quadlet/Podman; shown when Podman is present
-  - `ai_images`: Map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
-  - `ai_model`: Model reference to serve (default: `ollama://qwen2.5:7b`)
 - `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (shown only when Homebrew is present)
 
 ### Livery Page (`livery_page`)
@@ -167,21 +162,15 @@ applications_page:
     enabled: false # Hide Homebrew bundles
 
 # Other pages remain fully enabled
-system_page:
-  system_info_group:
-    enabled: true
-  health_group:
+agents_page:
+  agents_group:
     enabled: true
 
 maintenance_page:
   maintenance_cleanup_group:
     enabled: true
-  maintenance_brew_group:
+  maintenance_freespace_group:
     enabled: false # Hide Homebrew cleanup
-  maintenance_flatpak_group:
-    enabled: true
-  maintenance_optimization_group:
-    enabled: true
 
 features_page:
   troubleshooting_group:

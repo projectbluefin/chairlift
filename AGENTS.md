@@ -148,32 +148,57 @@ An agent must not break these:
   switch is resolved by the same helper, so it must not be configurable from
   a user-writable path, and keeping both tables in one file removes any way
   for the GUI and the helper to load different ones.
-- **Update All composes; it does not add a privileged route.** `internal/updateall`
-  is the pure sequencer for the OS/Flatpak/Homebrew update run: it executes
-  nothing itself, taking every provider as a function seam whose production
-  value is the existing `internal/bootc`, `internal/flatpak`, and
-  `internal/homebrew` entry point. Its OS phase must keep going through
-  `internal/bootc`'s staging path. Adding a `bootc upgrade` route to
-  `chairlift-ublue-helper` would break both the staging-ownership invariant
-  below and the system-integration package's fixed-path contract. The run's
-  only new privileged surface is `restart`. `Summarize`'s `RestartRequired`
-  is true only when an image was genuinely staged — the stage script is
-  idempotent and exits 0 on an already-current system, so a successful OS
-  phase is not by itself evidence anything changed.
+- **The unified update run composes; it does not add a privileged route.**
+  `internal/updateflow` is the pure coordinator for the one-action update run:
+  it owns the phases, the primary action, and the per-source state for the
+  four sources (`applications`, `developer-tools`, `system-components`,
+  `operating-system`), and it executes nothing itself — every provider is an
+  `updateflow.Provider` whose production value in `internal/updateproviders`
+  wraps the existing `internal/flatpak`, `internal/homebrew`,
+  `internal/updex`, `internal/bootc`, and `internal/sysupdate` entry points.
+  `internal/views/updatepresent` is the equally pure presentation layer: it
+  maps one immutable snapshot to a title, description, banner, and action
+  label, so the shell's copy is testable on a headless host.
+  `internal/views/update_shell.go` is widget wiring only — it holds no update
+  state of its own and decides nothing the coordinator or the presenter
+  already decided. Keep those three layers separate; do not move a phase
+  decision into the widget file or a string into the coordinator.
+  The operating-system source must keep going through `internal/bootc`'s
+  staging path (or `internal/sysupdate`'s on a native A/B host). Adding a
+  `bootc upgrade` route to `chairlift-ublue-helper` would break both the
+  staging-ownership invariant below and the system-integration package's
+  fixed-path contract. The run's only privileged surface of its own is
+  `restart`: `updateflow.ActionRestart` is set when the snapshot reaches
+  `PhaseRestartRequired`, `updatepresent` renders it as a destructive
+  "Restart now" button, and `UpdateShell.StartRestart` calls `ublue.Restart`.
+  That phase is reached only when a source genuinely reports a restart is
+  required — the stage script is idempotent and exits 0 on an already-current
+  system, so a successful OS source is not by itself evidence anything
+  changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-ublue-helper` now carries nine subcommands
+  binary.** `chairlift-ublue-helper` carries nine subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`), each selected by exactly one PolicyKit action. Every one
-  takes a fixed argv or a word validated against a closed set: no image
-  reference, no username, no systemd unit, no delay, and no rollback or reset
-  target crosses the boundary, because each would be a value an authenticated
-  caller controls. `internal/ubluehelper`'s tests assert this per command, and
-  the e2e boundary test asserts the installed binary rejects each shape.
-  The accepted half is asserted separately, because `main`'s dispatch
-  `switch` has no `default`: a command with no arm parses, matches nothing
-  and exits 0 having done nothing, and `cmd/` is outside the
-  `./internal/...` unit gate. `test/e2e/helper_commands_test.go` runs every
+  `factory-reset`), each selected by exactly one PolicyKit
+  action. Every one takes a fixed argv or a word validated against a closed
+  set: no image reference, no username, no systemd unit, no delay, and no
+  rollback or reset target crosses the boundary, because each
+  would be a value an authenticated caller controls. `factory-reset` is the
+  extreme case and the shape to copy: it is the most destructive privileged
+  action ChairLift offers, so both the program (`bootc`) and its entire argv
+  (`ubluehelper.FactoryResetArgs`, the fixed
+  `install reset --experimental --apply`) are spelled in the helper, and the
+  GUI sends nothing but the command word — a factory reset has exactly one
+  target, the image already booted, so there is nothing for a caller to name.
+  `rollback` is the same shape with an even shorter argv.
+  `internal/ubluehelper`'s tests assert
+  this per command, and the e2e boundary test asserts the installed binary
+  rejects each shape. `cmd/chairlift-ublue-helper`'s dispatch carries a
+  `default` arm that exits non-zero: a command the parser accepts and the
+  switch does not handle would otherwise exit 0 having done nothing, which
+  the GUI cannot tell apart from a privileged action that worked. The
+  accepted half is asserted separately, because `cmd/` is outside the
+  `./internal/...` unit gate: `test/e2e/helper_commands_test.go` runs every
   command in `ubluehelper.SupportedCommands` and
   `updexhelper.SupportedCommands` through the staged binary with
   `--dry-run` and asserts the arm's own output, and derives its own
@@ -189,8 +214,8 @@ An agent must not break these:
   in `config.SchemaGroups` has no walkthrough entry. That last check is the
   forcing function: the group-to-phrase table is hand-written but its
   completeness is derived from the config schema, so a feature added to an
-  *existing* page — which is how Update All, Automatic Updates, and Roll Back
-  all landed — cannot slip through undocumented. The check is deliberately referential rather
+  *existing* page — which is how the unified update shell, Automatic updates,
+  and Roll Back all landed — cannot slip through undocumented. The check is deliberately referential rather
   than a pixel comparison: font hinting and GTK point releases move pixels, so
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
@@ -269,34 +294,16 @@ An agent must not break these:
   transition (visible-row index, visible child, title, and collapsed-layout
   content reveal). The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
-  `internal/window` or `internal/app`.
-- **The host capability floor has one owner.** `internal/capability` is the
-  puregotk-free authority for what this host can back a page or group with,
-  and its probes are non-blocking only (`exec.LookPath`, `os.Stat`, environment
-  reads), because page-level resolution runs synchronously on the GTK main
-  thread during `buildUI`. A capability is the presence of a backing tool or
-  asset, never a runtime state: a gate that needs a query (`bootc status`,
-  updex's feature store, `uupd.timer`'s systemd state) stays asynchronous in
-  its view and builds a hidden shell. Capability is a floor — configuration may
-  subtract from it and never add to it — so its composed predicate is the one
-  `navigation.VisibleItems` and the view builders share; do not reintroduce a
-  second availability probe in a view. The prerequisites table is total over
-  `config.SchemaGroups` in both directions, enforced by
-  `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`, so
-  a new config group is classified in the same change that adds it.
-- **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`
-  is the only place ChairLift decides which `brew` it means: the `brew` that
-  `$PATH` resolves, or `/home/linuxbrew/.linuxbrew/bin/brew` when `$PATH` has
-  none. That fallback is the path `data/chairlift-wrapper.sh` evaluates
-  `shellenv` from, so a launch through the wrapper finds `brew` on `$PATH` and
-  a direct binary launch — the desktop entry, or `chairlift` run from a shell —
-  does not, even though the same Homebrew is installed. Visibility
-  (`IsInstalled`, and through it every view that hides or disables a Homebrew
-  affordance) and execution (`runBrewCommandCtx`, and through it every brew
-  command ChairLift issues) both read it, so a host whose Homebrew is reachable
-  only at the fallback is reported as installed *and* actually driven. A `brew`
-  on `$PATH` wins over the fallback. Do not reintroduce a second resolution: no
-  bare `"brew"` at an exec site, and no private copy of the fallback path.- **Homebrew update actions preserve known state.** Per-package upgrades and
+  `internal/window` or `internal/app`. The inventory is seven pages, in this
+  order: Updates, Apps, Agents, Features, Livery, Maintenance, Help. Two
+  details in it are easy to get wrong. The sidebar title for
+  `applications_page` is "Apps", not "Applications" — the page name and the
+  title are separate fields and only `internal/navigation` reconciles them.
+  And there is no System page: "about this computer" belongs to GNOME
+  Settings, which every host running this application already ships, so the
+  system-version readout and the release-channel switch live on Updates,
+  beside the thing that changes them.
+- **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
   changing rows or counts. A live package success removes its row, decrements
@@ -356,7 +363,8 @@ An agent must not break these:
   value is that it is genuinely one choke point for every privileged action,
   not most of them.
 - **Desktop notifications stay rare.** `internal/notify` sends exactly one:
-  Update All's completion, because it is the one action long enough a user may
+  the unified update run's completion (`notify.UpdateAllComplete`, sent from
+  `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
 - **Enhanced Troubleshooting reads state, it does not infer it.**
@@ -388,28 +396,13 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
-- **The dated-build catalog reads the registry, and reads it read-only.**
-  `internal/registrytags` is the leaf package behind the rollback calendar
-  (ADR-0013): `Client.Tags` lists a repository through the registry's
-  `Link: rel="next"` pagination, `ParseBuild` reads the day out of the tag
-  name, and `Client.Tag` resolves one tag to its digest and its
-  `org.opencontainers.image.created` timestamp. Every request goes through the
-  `Client.HTTP` transport, the same seam `internal/sbom` uses, so no gate in
-  `make ci` makes an outbound request — its tests drive a loopback `httptest`
-  registry that models GHCR's pagination, its 404 `MANIFEST_UNKNOWN`, and the
-  fact that the response's `Content-Type` header, not the body's `mediaType`
-  field, is the media-type authority (GHCR omits `mediaType` on some dated-tag
-  manifests — verified 2026-09-22). Two rules keep it safe to grow: nothing it
-  returns may reach a privileged path — a `bootc switch` target is still
-  `internal/imageinfo`'s tables and only those (ADR-0011), and a pin is a
-  separate decision because no image reference crosses the ublue pkexec
-  boundary — and the catalog is never baked, cached to disk, or served stale,
-  because a catalog that is not the registry's is the failure this design
-  exists to avoid. A failed read is returned to the caller, never cached and
-  never replaced by a previous answer. `Catalog` caches in process only,
-  bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
-  GTK main thread, so it must stay safe for concurrent readers.
-- **The local-AI stack is one switch, and it is unprivileged.** ChairLift
+- **The local-AI stack is one switch on its own page, and it is
+  unprivileged.** It lives on `agents_page`, built by
+  `internal/views/agents_page.go`, as that page's single group
+  (`agents_group`). It used to be a group on the Features page, between
+  developer mode and gaming mode, where it read as one more system
+  preference; what it turns on is a service a person then points other
+  applications at. ChairLift
   ships one runtime (RamaLama) whose per-accelerator image is chosen by
   `internal/gpu`, not bluefinctl's twelve-quadlet vendor catalog — that
   catalog has no answer for an Intel or a GPU-less host. `internal/aistack`
@@ -502,28 +495,12 @@ An agent must not break these:
   therefore left the previous mark on screen until the shell restarted — the
   write succeeded, the file changed, and nothing happened. `gsettings monitor`
   reported two change events for three writes when one repeated a value.
-  Writing a different name per selection makes the value genuinely change
-  (custom SVGs append a short SHA-256 fingerprint so swapping custom files also varies the key);
-  `TestPanelIconNameVariesWithSelection` and `TestCustomPanelReplacementUpdatesIconNameAndPrunesOldFile` pin it, and `removePanelIcons`
+  Writing a different name per selection makes the value genuinely change;
+  `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
   sweeps the marks earlier selections left behind. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon
-  without persisting a flag to say so. When an icon carries that prefix,
-  accompanying display mode `2` is also cleared as ChairLift's paired value
-  so it is not pinned as a permanent user override, while a user mode `2`
-  without a ChairLift icon prefix is preserved. Every section's master
-  switch — app grid, panel, and dock — is serialized with its own
-  `actionstate.Gate` (`liveryToggleGate`) and set insensitive during worker
-  execution, so rapid off-on toggles cannot land `Apply` before the earlier
-  `Clear` and leave a switch showing enabled with the mark file removed; the
-  panel's gate additionally protects dconf capture and restore. Selections
-  need a different primitive: each carries a value the user picked, so
-  refusing the second click would discard it. Brand, project, foundation, and
-  custom-file changes therefore run behind a per-section
-  `actionstate.Serializer` (`liverySelectionWork`), which queues each attempt
-  and drops one a newer pick has overtaken — two rapid picks otherwise
-  interleave and leave the persisted id naming one mark while the installed
-  icon is another.
+  without persisting a flag to say so.
 - **Connect GTK signals once, at page-build time — never inside a refresh
   path.** puregotk routes every `Connect*` through `purego.NewCallbackFnPtr`,
   which caches by the *address* of the func variable and draws from a fixed
@@ -562,12 +539,7 @@ An agent must not break these:
   revert resets; different means a genuine override, so revert restores that
   exact string. `CapturePanelOverrides` uses that comparison and
   `ClearPanelSettings` acts on it; `TestUserValueIgnoresADistroDefault` pins
-  the case that was broken. The capture is taken only when both saved keys are
-  empty, so restoring it must also empty them again
-  (`ForgetPanelOverrides`, and the page's in-memory copy with it): otherwise
-  enable, disable, a manual panel-icon change, enable, disable restores the
-  value captured before the *first* enable and discards the newer manual
-  choice. `TestClearPanelSettingsForgetsTheCapture` holds it. Capturing the merged value instead — which an
+  the case that was broken. Capturing the merged value instead — which an
   earlier version did — made revert write the distro default back as a user
   value, pinning the mark forever and overriding any later change to the
   distro layer. A user who has deliberately set the same string as the default
@@ -597,24 +569,12 @@ An agent must not break these:
   `WantedBy=graphical-session.target` user unit written to the user's
   `~/.config/systemd/user`, the same unprivileged posture as the AI stack's
   quadlet; it invokes `chairlift --rotate-livery`, which short-circuits before
-  `app.New()` so a headless service never opens a display. The two runtime
-  paths it interpolates — `os.Executable()` and `$GSETTINGS_SCHEMA_DIR` — are
-  written through `systemdQuote`, because a unit file is neither shell nor
-  free text: a space splits `ExecStart` into another argument, `%` starts a
-  specifier systemd expands, `\` starts an escape, and a newline ends the
-  directive and would let a path carry a further one into the file. Quoting
-  and doubling handle the first three; the newline has no representation
-  inside a unit value, so `InstallRotation` refuses it instead of writing.
-  Login, not logout:
+  `app.New()` so a headless service never opens a display. Login, not logout:
   an abrupt logout does not fire a hook, so a logout-triggered rotation would
   fall back to leaving the previous mark — exactly the outcome the feature
   exists to avoid. Idempotence comes from `last-rotation-token`, the graphical
   session's `ActiveEnterTimestampMonotonic`, so re-running the unit cannot
-  double-advance — and because that token is recorded even for a failed pass,
-  the dock's fetch is retried in-process (`rotateRetryDelays`) while the
-  failure still looks like a network that is not up yet: a user manager cannot
-  order against `network-online.target`, so a login that beats connectivity
-  would otherwise rotate nothing and say so only in the journal. Only the two foundation sections rotate; the app-grid mark
+  double-advance. Only the two foundation sections rotate; the app-grid mark
   is the user's own brand and is set once. ChairLift ships two GSettings schemas:
   `io.projectbluefin.chairlift.livery` (appearance preferences) and
   `io.projectbluefin.chairlift.updates` (user source toggles for updates). Both
@@ -638,10 +598,27 @@ An agent must not break these:
   `make screenshots` runs the real application with `--dry-run`; artwork is
   still resolved under dry-run so a missing custom file or unknown brand is
   still reported.
+- **Routine cleanup has one key and one owner.** The Maintenance page offers
+  a single "Free up space" action, gated by `maintenance_freespace_group`.
+  That key is `internal/updateproviders.CleanupGroup`, the same constant
+  gating the update run's post-update maintenance step
+  (`updateproviders.NewMaintenance`), so one configuration switch
+  governs both surfaces — a second key would let one surface clean while the
+  other claimed the feature was disabled. The action composes
+  `internal/updateproviders`' typed step inventory; do not reintroduce
+  per-package-manager cleanup buttons, which asked the user to know which
+  package manager owned their wasted disk space. The wording and the
+  result-summarisation rules live in `internal/views/cleanupview`, which
+  exists to enforce one thing: never claim more than happened. An absent
+  provider was skipped, a dismissed authentication cleaned nothing, and a
+  reclaimed-bytes figure appears only when both free-space readings succeeded
+  and the difference clears `MinReportableBytes`.
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are
-  irreversible. Neither may run without the `AdwAlertDialog` confirmation in
+  irreversible. Its group is titled "Recovery" rather than anything
+  resembling cleanup, so a person hunting for disk space does not press it.
+  Neither may run without the `AdwAlertDialog` confirmation in
   `internal/views/reset.go` first — that dialog's title and body come from
   `pageview.PowerwashConfirmation`/`FactoryResetConfirmation`, which is where
   the `--experimental` disclosure for Factory Reset's `bootc install reset`
@@ -658,7 +635,7 @@ An agent must not break these:
   install prefix, so it never moves (ADR-0012). Every user-visible spelling of
   the product name resolves through `internal/branding.AppName` — window title,
   navigation page, About dialog, the About menu item, the Help description, the
-  Update All notification, and `config.LoadError.ToastMessage`, the fail-closed
+  update-run completion notification, and `config.LoadError.ToastMessage`, the fail-closed
   configuration toast. `branding` imports nothing on purpose: `internal/config`
   and `internal/notify` both need the constant, and the constant's first home,
   `internal/views/pageview`, transitively pulls in `internal/sbom`,

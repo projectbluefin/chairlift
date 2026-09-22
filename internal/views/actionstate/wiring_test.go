@@ -77,7 +77,14 @@ func TestFeaturesPageDeveloperModeUsesGate(t *testing.T) {
 	for _, required := range []string{
 		`uh.developerGate.TryStart()`,
 		`uh.developerGate.Reset()`,
-		`toggle.SetState(`,
+		// The recursion guard used to be a bare `toggle.SetState(` beside
+		// every `SetActive`, which only held while every call site
+		// remembered to pair them. guardedSwitch owns that pairing —
+		// newGuardedSwitch sets both, and set() re-enters behind an
+		// `applying` flag the handler checks — so the property is now
+		// asserted where it is enforced rather than at each call site.
+		`toggle.set(`,
+		`newGuardedSwitch(`,
 	} {
 		if !strings.Contains(featuresText, required) {
 			t.Errorf("features_page wiring does not contain %q", required)

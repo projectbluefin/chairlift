@@ -233,65 +233,44 @@ type Prerequisite struct {
 // other entry names the presence that makes its group meaningful, and the
 // group is satisfied by any one of them.
 var prerequisites = []Prerequisite{
-	// System. The image-identity group has nothing to show without the
-	// descriptor; the rest are local reads.
-	{Page: "system_page", Group: "system_info_group"},
-	{Page: "system_page", Group: "bootc_status_group"},
-	{Page: "system_page", Group: "channel_group", AnyOf: []Capability{ImageDescriptor}},
-	{Page: "system_page", Group: "health_group"},
-
-	// Updates. Update All is the union of the per-provider groups: its plan
-	// only contains phases whose own group is present, so a host with no
-	// provider at all has an Update All group with nothing to offer and must
-	// not construct it. The automatic-updates switch inside that group is a
-	// row, not a group — its uupd.timer prerequisite keeps its own
-	// asynchronous gate in internal/autoupdate.
-	{Page: "updates_page", Group: "update_all_group", AnyOf: []Capability{BootcStage, Sysupdate, Flatpak, Homebrew}},
+	// Updates.
+	{Page: "updates_page", Group: "automatic_updates_group"},
+	{Page: "updates_page", Group: "bootc_status_group"},
 	{Page: "updates_page", Group: "bootc_updates_group", AnyOf: []Capability{BootcStage}},
-	{Page: "updates_page", Group: "sysupdate_updates_group", AnyOf: []Capability{Sysupdate}},
-	{Page: "updates_page", Group: "flatpak_updates_group", AnyOf: []Capability{Flatpak}},
-	{Page: "updates_page", Group: "brew_updates_group", AnyOf: []Capability{Homebrew}},
 	{Page: "updates_page", Group: "brew_trust_group", AnyOf: []Capability{Homebrew}},
+	{Page: "updates_page", Group: "brew_updates_group", AnyOf: []Capability{Homebrew}},
+	{Page: "updates_page", Group: "channel_group", AnyOf: []Capability{ImageDescriptor}},
+	{Page: "updates_page", Group: "flatpak_updates_group", AnyOf: []Capability{Flatpak}},
+	{Page: "updates_page", Group: "sysupdate_updates_group", AnyOf: []Capability{Sysupdate}},
 
-	// Applications. applications_installed_group only launches a Flatpak
-	// application manager by ID, which a host without Flatpak can still fail
-	// to launch the same way it does today; the group advertises an external
-	// tool rather than driving one, so it is not gated on Flatpak.
+	// Applications.
 	{Page: "applications_page", Group: "applications_installed_group"},
-	{Page: "applications_page", Group: "flatpak_user_group", AnyOf: []Capability{Flatpak}},
-	{Page: "applications_page", Group: "flatpak_system_group", AnyOf: []Capability{Flatpak}},
+	{Page: "applications_page", Group: "brew_bundles_group", AnyOf: []Capability{Homebrew}},
 	{Page: "applications_page", Group: "brew_group", AnyOf: []Capability{Homebrew}},
 	{Page: "applications_page", Group: "brew_search_group", AnyOf: []Capability{Homebrew}},
-	{Page: "applications_page", Group: "brew_bundles_group", AnyOf: []Capability{Homebrew}},
+	{Page: "applications_page", Group: "flatpak_system_group", AnyOf: []Capability{Flatpak}},
+	{Page: "applications_page", Group: "flatpak_user_group", AnyOf: []Capability{Flatpak}},
 
-	// Maintenance. Powerwash removes every user Flatpak and Distrobox
-	// container, and each of its two steps already reports OutcomeSkipped
-	// when its tool is absent, so the group needs either one to do anything.
-	{Page: "maintenance_page", Group: "maintenance_cleanup_group"},
-	{Page: "maintenance_page", Group: "maintenance_brew_group", AnyOf: []Capability{Homebrew}},
-	{Page: "maintenance_page", Group: "maintenance_flatpak_group", AnyOf: []Capability{Flatpak}},
-	{Page: "maintenance_page", Group: "maintenance_optimization_group"},
-	{Page: "maintenance_page", Group: "reset_group", AnyOf: []Capability{Flatpak, Distrobox}},
+	// Agents.
+	{Page: "agents_page", Group: "agents_group", AnyOf: []Capability{Podman}},
 
-	// Features. The developer and gaming groups both render Bluefin-family
-	// state from the image descriptor. Troubleshooting installs everything it
-	// needs from Homebrew. The AI stack needs Podman, whose Quadlet support
-	// its rootless container is built on.
-	{Page: "features_page", Group: "features_group"},
+	// Features.
 	{Page: "features_page", Group: "dx_group", AnyOf: []Capability{ImageDescriptor}},
+	{Page: "features_page", Group: "features_group"},
 	{Page: "features_page", Group: "gaming_group", AnyOf: []Capability{ImageDescriptor}},
-	{Page: "features_page", Group: "ai_group", AnyOf: []Capability{Podman}},
 	{Page: "features_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
-	// Livery. The app-grid mark, dock, and panel foundation marks write
-	// icons into the user's theme and preferences into dconf, with no
-	// external host tool prerequisites.
+	// Livery.
 	{Page: "livery_page", Group: "livery_app_grid_group"},
 	{Page: "livery_page", Group: "livery_dock_group"},
 	{Page: "livery_page", Group: "livery_foundation_group"},
 
-	// Help is always retained in the sidebar, so its group is never the
-	// reason a page disappears.
+	// Maintenance.
+	{Page: "maintenance_page", Group: "maintenance_cleanup_group"},
+	{Page: "maintenance_page", Group: "maintenance_freespace_group"},
+	{Page: "maintenance_page", Group: "reset_group", AnyOf: []Capability{Flatpak, Distrobox}},
+
+	// Help.
 	{Page: "help_page", Group: "help_resources_group"},
 }
 

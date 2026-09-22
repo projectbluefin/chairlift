@@ -50,9 +50,9 @@ func TestAvailableBundlesDiscoversEveryConfiguredDirectory(t *testing.T) {
 	}
 
 	want := []Bundle{
-		{Name: "cli", Description: "Command-line tools", Path: firstCLI},
-		{Name: "cli", Description: "Alternate CLI set", Path: secondCLI},
-		{Name: "fonts", Description: "Fonts", Path: fonts},
+		{Name: "cli", Description: "Command-line tools", Path: firstCLI, ItemCount: 1},
+		{Name: "cli", Description: "Alternate CLI set", Path: secondCLI, ItemCount: 1},
+		{Name: "fonts", Description: "Fonts", Path: fonts, ItemCount: 1},
 	}
 	if !reflect.DeepEqual(bundles, want) {
 		t.Fatalf("AvailableBundles() = %#v, want %#v", bundles, want)
