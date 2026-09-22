@@ -31,6 +31,13 @@ Control Center provides six configurable pages:
 A functional page is omitted when all of its groups are disabled. Help is
 always retained so the window always has a valid destination.
 
+The Features page also carries the **Local AI** switch, which
+[ADR-0013](adr/0013-agent-mode-architecture-and-state-contract.md) supersedes:
+that switch and its RamaLama-backed runtime are removed rather than extended,
+in favour of **Agent Mode** — a `llmman`-backed surface whose page, Ask Bluefin
+menu entry, and keyboard shortcut all read one state contract. Until the
+removal lands, Local AI remains the only local-AI feature this release ships.
+
 ## Keyboard Shortcuts
 
 | Shortcut | Action |

@@ -376,37 +376,48 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
-- **The local-AI stack is one switch, and it is unprivileged.** ChairLift
-  ships one runtime (RamaLama) whose per-accelerator image is chosen by
-  `internal/gpu`, not bluefinctl's twelve-quadlet vendor catalog — that
-  catalog has no answer for an Intel or a GPU-less host. `internal/aistack`
-  writes one quadlet to the user's `~/.config/containers/systemd` and drives
-  it with `systemctl --user`, so the container is rootless in the invoking
-  account and nothing is layered onto a bootc image. That is why its image
-  and model overrides (`ai_images`, `ai_model`) live in the ordinary
-  `config.yml` rather than the root-only `channels.yml`: pointing a rootless
-  container at another image grants nothing running podman directly would
-  not. Do not give it a pkexec route, and do not reintroduce a vendor/stack
-  matrix in the UI.
-  Disabling must preserve the quadlet when `systemctl --user stop` fails and a
-  follow-up `is-active` check cannot prove the service stopped; removing the
-  unit while the service is still active makes the switch lie and removes the
-  user's management handle.
+- **Agent Mode has one state contract, and no call site computes its own.**
+  Agent Mode is the local-AI surface built on `llmman`, and the split is
+  fixed: llmman owns model storage, inference, and the engine it picks for the
+  detected hardware; Goose is the GUI troubleshooting client; Oh My Pi is the
+  configured shell; Jan is the Ask Bluefin chat client; ChairLift owns the
+  surface, the readiness decision, and the recommended model. `internal/agentmode`
+  is the single owner of the six states (`disabled`, `unavailable`,
+  `provisioning`, `unconfigured`, `degraded`, `ready`), the Ask Bluefin
+  predicate, the artifact ownership table, and the security boundaries —
+  decision record
+  [ADR-0013](docs/adr/0013-agent-mode-architecture-and-state-contract.md). The
+  Custom Command Menu entry and the Ctrl+Alt+Backspace shortcut are two
+  triggers of one dispatcher, so both resolve through `agentmode.AskBluefin`:
+  a launch path that re-derives readiness for itself is the divergence this
+  package exists to prevent. Jan is launched only when the loopback endpoint
+  is healthy, an active model is available, and the Jan integration is
+  configured; otherwise the Agent Mode surface opens with the unmet
+  prerequisite visible. That predicate is deliberately not
+  `Ready(o) && JanConfigured` — readiness additionally requires the service to
+  be active, and the fact a chat client depends on is that the endpoint
+  answers.
 
-  The four images in `internal/aistack`'s `stacks` map are pinned by digest,
-  and the digest must be the multi-arch **manifest index**, never one of its
-  per-architecture children. `.github/workflows/test.yml` ships a
-  `[amd64, arm64]` matrix, so a child-manifest pin silently removes the AI
-  stack from arm64 hosts. A request without the index `Accept` headers is how
-  the wrong digests were obtained: on 2026-09-18 a bare
-  `curl -sI quay.io/v2/ramalama/<image>/manifests/latest` against all four
-  images content-negotiated down to the amd64 child manifest rather than the
-  index. That is why the roll procedure recorded beside the map sends the
-  index `Accept` headers and confirms the response's `mediaType` is an index
-  before the value is used. `TestEveryStackIsPinnedByAnImmutableDigest`
-  holds the shape of the pin — `@sha256:` present, `:latest` absent — but it
-  cannot check architecture coverage or freshness, so both belong to whoever
-  rolls the digests. See
+  Agent Mode has no `pkexec` path and may not gain one: installation, the user
+  service, and every configuration write stay in the invoking account, so no
+  PolicyKit action and no new helper subcommand may be introduced for it. The
+  daemon binds loopback only, the user service sets `LLMMAN_SHELL=off`
+  literally, `linux-mcp-server` stays restricted to its fixed toolset, and
+  this host is never advertised as an aggregation peer. ChairLift owns no
+  model store and writes no file owned by another component — not llmman's
+  configuration, not Goose's, not a global Oh My Pi profile — so a slice that
+  needs a change in one of them owes an upstream request instead of a local
+  edit.
+
+  `internal/aistack` and the `ai_group` key are the superseded Local AI
+  implementation. ADR-0013 removes them from the architecture and #256 deletes
+  them from the tree, with no migration, no cache conversion, and no
+  compatibility path promised. Until that lands they are the only AI runtime
+  here, and nothing may be added to them: no new capability in
+  `internal/aistack`, and no second runtime path anywhere. Their four
+  digest-pinned images and the stop-before-remove rule for the quadlet go with
+  the code that used them; the manifest-index rule that produced those pins
+  outlives them in
   [`docs/skills/multi-arch-digest-pinning/SKILL.md`](docs/skills/multi-arch-digest-pinning/SKILL.md).
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** `internal/livery` sets three marks — the app-grid button

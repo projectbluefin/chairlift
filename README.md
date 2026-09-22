@@ -60,6 +60,19 @@ so they cost nothing on Snow Linux or any other host.
   inventoried as such, so it is installed once and removed again with the
   rest of the stack
 
+### 🤖 Agent Mode
+
+Agent Mode is the local-AI surface Control Center is growing: one-click,
+user-scope setup backed by [`llmman`](https://github.com/llmmanorg/llmman),
+with Goose as the GUI troubleshooting client, Oh My Pi as the configured
+shell, and Jan behind the **Ask Bluefin** entry point. It replaces the
+RamaLama-backed **Local AI** switch this release still ships, and it keeps the
+whole stack unprivileged — the daemon is loopback-only, `llmman`'s web shell is
+off, and nothing about Agent Mode goes through `pkexec`. The architecture, the
+six states its surface renders, and the one readiness rule the page, the menu
+entry, and the keyboard shortcut share are recorded in
+[ADR-0013](docs/adr/0013-agent-mode-architecture-and-state-contract.md).
+
 ### 🔄 Update All
 
 One action brings the whole system up to date — the OS image, Flatpak

@@ -144,13 +144,20 @@ Each action has:
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Local AI | `ai_group` | Runs a language model in a rootless container on detected hardware; shown when Podman is present |
+| Local AI (superseded) | `ai_group` | RamaLama-backed language model in a rootless container on detected hardware; shown when Podman is present. [ADR-0013](adr/0013-agent-mode-architecture-and-state-contract.md) removes this group in favour of the Agent Mode surface, and the removal promises no migration and no compatibility path |
 | Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; shown only when Homebrew is present |
 
 `ai_group` supports:
 
 - `ai_images` — map pinning container images per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
 - `ai_model` — model reference to serve (default: `ollama://qwen2.5:7b`)
+
+Agent Mode has no configuration group yet: its surface and its state contract
+arrive with the slices [ADR-0013](adr/0013-agent-mode-architecture-and-state-contract.md)
+maps. Until the `ai_group` removal lands, that key is the only local-AI
+configuration the schema accepts, and an administrator who has customized it
+should expect the removal to reject the key rather than ignore it — unknown
+keys fail closed.
 
 Feature operations (enable, disable, update) require administrator
 authentication through PolicyKit and are performed by the fixed

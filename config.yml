@@ -93,6 +93,12 @@ features_page:
   # accelerator this machine has. Shown everywhere Podman exists; the model
   # is only downloaded once the switch is turned on.
   #
+  # Superseded: ADR-0013 replaces this group and its RamaLama-backed runtime
+  # with the Agent Mode surface, built on llmman. The removal promises no
+  # migration and no compatibility path, and because unknown keys fail closed
+  # a configuration that still sets ai_group will be rejected rather than
+  # silently ignored once the key leaves the schema.
+  #
   # ai_images pins the container image per GPU vendor (nvidia, amd, intel,
   # none) — for a site that mirrors registries — and ai_model changes what is
   # served. Both are ordinary settings rather than root-only ones because the

@@ -52,7 +52,10 @@ open. Switching Developer Mode back off opens nothing.
 **Gaming Mode** installs Steam and the tools that make
 games run well. **Local AI** runs an AI model on your own machine instead of
 in the cloud, using your graphics card if you have one — the first start
-downloads several GB. **Enhanced Troubleshooting** sets up an AI assistant
+downloads several GB. It is the switch [ADR-0013](adr/0013-agent-mode-architecture-and-state-contract.md)
+supersedes: the **Agent Mode** surface replaces it, and the replacement
+promises no migration and no compatibility path.
+**Enhanced Troubleshooting** sets up an AI assistant
 that can read your logs, services, and network to help work out what's wrong,
 then launches it — the row says which AI service answers your questions,
 since the default one is Google's. It is only offered where Homebrew is

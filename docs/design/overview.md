@@ -1486,32 +1486,92 @@ requirement, and that re-verification recipe live in
 counts are pinned in the package's tests, so adding a feed is a reviewable
 curation event rather than a data edit.
 
-### Local AI
+### Agent Mode
 
-`internal/aistack` is ChairLift's answer to bluefinctl's `stacks/` directory.
-bluefinctl ships twelve quadlet definitions under `nvidia/` and `amd/` and
-makes the user choose one; ChairLift ships one runtime whose image is chosen
-by the hardware. RamaLama publishes a per-accelerator image
-(`quay.io/ramalama/{cuda,rocm,intel-gpu,ramalama}`), so `Select(gpu.Set)` is
-the entire selection logic and every host — including Intel and GPU-less
-ones, which bluefinctl's catalog cannot serve at all — gets a working answer.
-Each of those four references is pinned to a multi-arch index digest rather
-than `:latest`, so a re-pushed tag cannot silently replace the image and the
-pin still resolves on CI's arm64 matrix leg.
+Agent Mode is ChairLift's local-AI surface, built on `llmman`, and it replaces
+the Local AI switch this repository used to ship. The responsibility split is
+fixed by [ADR-0013](../adr/0013-agent-mode-architecture-and-state-contract.md):
+`llmman` owns model storage, inference, and the engine it selects for the
+detected hardware; Goose is the GUI troubleshooting client; Oh My Pi is the
+configured shell; Jan is the Ask Bluefin chat client; ChairLift owns the
+surface, the readiness decision, and the recommended model. ChairLift therefore
+never writes a provider, an alias, a peer, or a credential — those are
+`llmman`'s, and they move only through `llmman`'s own commands.
 
-The package splits the same way the rest of the codebase does: `Select` and
-`RenderUnit` are pure and table-tested across all four hardware cases plus
-the hybrid laptop, while the filesystem and `systemctl --user` calls sit
-behind the `unitDir`/`runSystemctl` seams. Nothing is privileged — the
-quadlet goes in the user's own `~/.config/containers/systemd` — so there is
-no helper subcommand and no PolicyKit action, the same shape as gaming mode.
-`IsEnabled` reads the unit file's presence rather than the service's runtime
-state, because the first start pulls several gigabytes and a status-derived
-switch would flicker for the whole pull.
-Disabling stops `chairlift-ai.service` before removing the unit. A failed stop
-is accepted only when a follow-up `systemctl --user is-active` reports the
-service is no longer active or is not loaded; if the service remains active or
-cannot be verified, the unit stays on disk and the UI surfaces the stop error.
+`internal/agentmode` is the single owner of the state model, in the shape
+[ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md)
+requires: it imports nothing, observes nothing, and runs nothing. `Classify`
+maps an `Observation` — a struct of facts each named owner establishes — onto
+exactly one of six states, in precedence order: `disabled`, `unavailable`,
+`provisioning`, `unconfigured`, `degraded`, `ready`. The ordering is the
+design. The user's own off switch outranks every condition, because an explicit
+"off" is not a malfunction to diagnose; an unsupported host outranks a running
+setup; and `unconfigured` is decided by a persisted *provisioned* marker rather
+than by the present prerequisites, because without that marker a model deleted
+after a working install is indistinguishable from a model never chosen and the
+surface would offer first-time setup to a user whose installation just broke.
+
+Two predicates exist and are deliberately not the same one. Agent Mode
+readiness — what the surface draws — is `service active ∧ endpoint healthy ∧
+active model available`. The Ask Bluefin predicate — what the dispatcher, and
+therefore both the Custom Command Menu entry and the Ctrl+Alt+Backspace
+shortcut, decide — is exactly `endpoint healthy ∧ active model available ∧ Jan
+integration configured`; anything less opens the Agent Mode surface with the
+unmet prerequisite visible. The dispatcher's terms exclude the service's
+systemd state on purpose: a machine whose service is inactive while the
+endpoint answers with a model loaded is one systemd has not caught up with, and
+the fact a chat client depends on is that the endpoint answers. Rewriting the
+dispatcher as `Ready(o) && JanConfigured` would refuse Jan on exactly that
+machine, so the distinction is held by a test rather than by a comment.
+
+Both intents resolve through one function, and it is a function of the
+observation alone — never of whether an instance is already running. A cold
+start shows the surface in the window it creates and a warm start shows it in
+the window that already exists, through the application's action mechanism; no
+caller may branch on "already running" to pick a different target, because that
+branch is what turns a single application instance into two windows with two
+states.
+
+The unmet-prerequisite list is gated on the state, minimally: on a host that
+cannot run `llmman` the endpoint is unhealthy as a *consequence*, and reporting
+that consequence beside "host unsupported" would hand the user a repair step
+that cannot work. Only the conditions that are a state's own cause are listed,
+and the surface shows the first as primary. The machine identifiers live in
+`internal/agentmode`; their user-visible text belongs to
+`internal/views/pageview`, which is where this repository's display strings are
+tested ([ADR-0012](../adr/0012-ship-as-control-center-keep-chairlift-code-name.md)).
+
+Agent Mode also carries the ownership table and the security boundaries, so a
+later slice reads them from one place instead of restating them. Every owned
+file and service has exactly one writer and a stated cleanup policy — including
+the artifacts that are deliberately left alone, since "left in place" is a
+decision and an unstated policy is how a model store or a user's Goose
+configuration gets deleted by someone who assumed it was ours. There is no
+`pkexec` path and no PolicyKit action: installation, the user service, and
+every configuration write stay in the invoking account. The daemon binds
+loopback only, the user service sets `LLMMAN_SHELL=off` literally,
+`linux-mcp-server` stays restricted to its fixed toolset, and this host is
+never advertised as an aggregation peer.
+
+`internal/installcheck` holds the record and the package together: every state,
+artifact, cleanup policy, and boundary rule the package declares must appear in
+ADR-0013, the record may not cite an issue outside its own map, and a
+current-state document that still describes the superseded RamaLama-backed
+runtime must cite the decision that supersedes it.
+
+#### Superseded: the Local AI switch
+
+`internal/aistack` and the `ai_group` key are the implementation ADR-0013
+removes. They are still in the tree — #256 deletes them along with the
+RamaLama-backed quadlet — and until then they are the only AI runtime here;
+nothing may be added to them, and no second runtime path may be introduced
+anywhere. The removal promises no compatibility path and no migration: the
+model cache and the pulled images are left where they are, and because
+`ai_group` leaves the schema while unknown keys stay a hard error
+([ADR-0003](../adr/0003-two-tier-config-with-fail-closed-semantics.md),
+[ADR-0005](../adr/0005-config-schema-reflected-from-canonical-struct.md)), a
+configuration file that still sets it fails closed rather than silently losing
+one group.
 
 ### Powerwash and Factory Reset
 
@@ -1798,7 +1858,7 @@ page_name:
 | `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
 | `features_page`     | `dx_group`                       | Developer Mode (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                                          |
 | `features_page`     | `gaming_group`                   | Gaming Mode optimizations (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                              |
-| `features_page`     | `ai_group`                       | Local AI language model served in rootless Quadlet/Podman container (configurable `ai_images`, `ai_model`)                                                                                             |
+| `features_page`     | `ai_group`                       | Local AI container on detected hardware (configurable `ai_images`, `ai_model`); **superseded** — [ADR-0013](../adr/0013-agent-mode-architecture-and-state-contract.md) removes it in favour of the Agent Mode surface                                               |
 | `features_page`     | `troubleshooting_group`          | Enhanced Troubleshooting AI assistant (gated on Homebrew)                                                                                                                                               |
 | `help_page`         | `help_resources_group`           | Configurable links (website, issues, chat)                                                                                                                                                              |
 

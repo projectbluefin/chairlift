@@ -67,6 +67,11 @@ are listed in [org-adrs.md](org-adrs.md).
   — the application ships as "Control Center" and keeps ChairLift as the code
   name; `branding.AppName` owns every user-visible spelling, and three
   `internal/installcheck` gates hold the split
+- [adr/0013-agent-mode-architecture-and-state-contract.md](adr/0013-agent-mode-architecture-and-state-contract.md)
+  — Agent Mode replaces the Local AI runtime: six states with one precedence
+  order, one readiness predicate shared by the surface and both launch paths,
+  a single owner and cleanup policy per artifact, and a security contract that
+  keeps the whole stack unprivileged and loopback-only
 
 ### Design
 

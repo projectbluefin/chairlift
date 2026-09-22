@@ -109,7 +109,7 @@ valid page.
 - `features_group`: System features managed by updex (requires `updex` command)
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present). Switching it on also opens three onboarding tabs in the default browser — the Bluefin developer documentation, the Project Bluefin training catalog, and the GNOME Developer Center. Opening the tabs is unprivileged (it uses the same `xdg-open` helper as the Help page links) and happens only on a confirmed live enable: never under `--dry-run`, never when switching the mode off, and never when the group change fails. The URLs are not configurable
 - `gaming_group`: Gaming Mode; toggles gaming optimizations (shown only when `/usr/share/ublue-os/image-info.json` is present)
-- `ai_group`: Local AI language model served in a rootless container via Quadlet/Podman; shown when Podman is present
+- `ai_group`: Local AI language model served in a rootless container via Quadlet/Podman; shown when Podman is present. Superseded: [ADR-0013](docs/adr/0013-agent-mode-architecture-and-state-contract.md) removes this group and its runtime in favour of Agent Mode, with no migration and no compatibility path
   - `ai_images`: Map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
   - `ai_model`: Model reference to serve (default: `ollama://qwen2.5:7b`)
 - `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (shown only when Homebrew is present)
