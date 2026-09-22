@@ -19,17 +19,13 @@ agents_page:
     # ai_model: ollama://qwen2.5:7b
 
 updates_page:
-  # Update All leads the page; the per-provider groups below it remain
-  # available for anything it does not cover.
+  # Whether this system installs updates on its own schedule. Updating now
+  # is the status-first shell's single action and needs no config key; this
+  # switch is a preference about the future, so it gets its own group.
   #
-  # The Automatic Updates switch is rendered inside this group, because it
-  # answers the same question — how does this system get updated — and
-  # splitting it out would present two unrelated-looking settings. Disabling
-  # this group therefore hides that switch too. There is deliberately no
-  # separate key for it: an independent key could be enabled while this one
-  # was disabled, which would leave the Updates page claiming a group it does
-  # not draw.
-  update_all_group:
+  # Hidden entirely on a host with no unattended-update timer, so a machine
+  # that cannot update itself never shows a switch that would do nothing.
+  automatic_updates_group:
     enabled: true
   bootc_updates_group:
     enabled: true

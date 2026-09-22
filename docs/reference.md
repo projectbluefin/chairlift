@@ -52,7 +52,7 @@ order below. Help is always retained.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Update All | `update_all_group` | Multi-phase update sequencing (OS image, Flatpaks, Homebrew) and automatic background updates switch |
+| Automatic updates | `automatic_updates_group` | The switch deciding whether this system installs updates on its own schedule; hidden on a host with no unattended-update timer. Updating now is the Updates page's own action and has no config key. |
 | bootc Updates | `bootc_updates_group` | Download and stage the next bootc system image update (applies on restart); shown only when bootc-booted and the fixed `/usr/libexec/bootc-update-stage` helper is present. Non-Snow distributions must provide a trusted implementation there before enabling this group; ChairLift's system-integration package does not supply one. |
 | Native A/B Updates | `sysupdate_updates_group` | Download and stage the next native A/B (systemd-sysupdate) system image update (applies on restart), plus a read-only previous-version rollback row; shown only when the `/usr/lib/snosi/native-ab` marker and the fixed `/usr/libexec/snosi-sysupdate-stage` helper are present. The OS image ships both; ChairLift's system-integration package supplies only the PolicyKit policy. |
 | Flatpak Updates | `flatpak_updates_group` | Pending Flatpak application updates |
@@ -143,7 +143,7 @@ unavailable.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the cleanup phase of an Update All run, so cleanup cannot be on in one place and off in the other |
+| Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other |
 | Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
 | Recovery | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`); irreversible actions disabled by default |
 
@@ -178,7 +178,7 @@ Each action has:
 |-------|-------------|
 | `website` | Project website URL (default: `https://projectbluefin.io`) |
 | `issues` | Issue tracker URL (default: `https://github.com/projectbluefin/dakota/issues`) |
-| `chat` | Community documentation or chat URL (default: `https://docs.projectbluefin.io/`) |
+| `chat` | Documentation URL (default: `https://docs.projectbluefin.io/`). The key is named `chat` for backward compatibility; the link is titled "Documentation" |
 
 ## Example
 
@@ -194,7 +194,7 @@ applications_page:
     enabled: false
 
 updates_page:
-  update_all_group:
+  automatic_updates_group:
     enabled: false
   brew_updates_group:
     enabled: false

@@ -38,11 +38,11 @@ func (uh *UserHome) buildUpdatesPage() {
 	if page == nil {
 		return
 	}
-	// Update All leads the page: one action covering every provider this
-	// host can update. The per-provider groups below it stay available for
-	// anything it does not cover.
-	if uh.config.IsGroupEnabled("updates_page", "update_all_group") {
-		uh.buildUpdateAllGroup(page)
+	// Whether this machine updates itself on a schedule. The act of
+	// updating now belongs to the status-first shell above this page
+	// (internal/updateflow); this is the preference about the future.
+	if uh.config.IsGroupEnabled("updates_page", "automatic_updates_group") {
+		uh.buildAutomaticUpdatesGroup(page)
 	}
 
 	// What this machine is running, in words. Built hidden and revealed

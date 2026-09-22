@@ -61,14 +61,30 @@ func (d Driver) suffix() string {
 //	bluefin-surface          200    404    404  404  404  404
 //
 // So an LTS host has **no** NVIDIA variant: the driver images are published
-// for the latest/stable/gts/beta streams only. finupdate's KNOWN_FAMILIES
-// models variants per family rather than per stream and would offer
+// for the latest/stable/gts streams only. finupdate's KNOWN_FAMILIES models
+// variants per family rather than per stream and would offer
 // `bluefin-nvidia:lts`, which is a 404. ChairLift keys on both.
 //
-// For ghcr.io/projectbluefin/dakota, both `dakota` and `dakota-nvidia` exist
-// on latest, stable, and testing. `dakota-dx` and `dakota-nvidia-open` are
-// not published at all. ghcr.io/projectbluefin/bluefin-lts publishes no
-// variants.
+// Re-probed 2026-09-21: `bluefin:beta` is now 404, so the beta column is
+// gone from the table below. `bluefin-nvidia:beta` still answers 200, but
+// a host that switched to it could not switch back, so it is not offered.
+// `stable-daily` was confirmed 200 on the base and on both NVIDIA variants
+// and is now listed for all three.
+//
+// For ghcr.io/projectbluefin/dakota, re-probed on 2026-09-21 (the full
+// table is recorded above imageChannelMap in imageinfo.go): the base image
+// publishes latest, stable, testing, next, and btw, while `dakota-nvidia`
+// publishes every one of those except latest — that tag was still live on
+// 2026-08-17 and now answers 404, so it is no longer claimed here.
+// `dakota-dx` and `dakota-nvidia-open` are not published at all.
+//
+// The gaming flavour is its own base image: `dakota-gaming` and
+// `dakota-nvidia-gaming` both publish stable, testing, next, and btw. Note
+// the name shape — the driver suffix sits *before* the flavour suffix, so
+// the NVIDIA variant of `dakota-gaming` is `dakota-nvidia-gaming`, never
+// `dakota-gaming-nvidia`, which is a 404. driverRef composes it.
+//
+// ghcr.io/projectbluefin/bluefin-lts publishes no variants.
 type driverStreams struct {
 	// driver is the flavour these streams belong to.
 	driver Driver
@@ -88,13 +104,25 @@ type driverStreams struct {
 // channels.yml; see LoadTable.
 var imageDriverMap = map[string][]driverStreams{
 	"ghcr.io/ublue-os/bluefin": {
-		{driver: DriverStandard, streams: []string{"latest", "stable", "stable-daily", "gts", "beta", "lts", "lts-hwe", "lts-testing", "lts-hwe-testing"}},
-		{driver: DriverNVIDIA, streams: []string{"latest", "stable", "gts", "beta"}},
-		{driver: DriverNVIDIAOpen, streams: []string{"latest", "stable", "gts", "beta"}},
+		// No "beta" anywhere: ghcr.io/ublue-os/bluefin:beta answered 404 on
+		// 2026-09-21. bluefin-nvidia:beta is still 200, but with no base
+		// image on that stream a host that took the switch could not come
+		// back, so the variant is not offered either.
+		{driver: DriverStandard, streams: []string{"latest", "stable", "stable-daily", "gts", "lts", "lts-hwe", "lts-testing", "lts-hwe-testing"}},
+		{driver: DriverNVIDIA, streams: []string{"latest", "stable", "stable-daily", "gts"}},
+		{driver: DriverNVIDIAOpen, streams: []string{"latest", "stable", "stable-daily", "gts"}},
 	},
 	"ghcr.io/projectbluefin/dakota": {
-		{driver: DriverStandard, streams: []string{"latest", "stable", "testing"}},
-		{driver: DriverNVIDIA, streams: []string{"latest", "stable", "testing"}},
+		{driver: DriverStandard, streams: []string{"latest", "stable", "testing", "next", "btw"}},
+		// No "latest": ghcr.io/projectbluefin/dakota-nvidia:latest answered
+		// 404 on 2026-09-21, so a dakota:latest host has no driver choice.
+		{driver: DriverNVIDIA, streams: []string{"stable", "testing", "next", "btw"}},
+	},
+	// The gaming images are their own base/variant pair; see driverRef for
+	// why the composed name is dakota-nvidia-gaming, not dakota-gaming-nvidia.
+	"ghcr.io/projectbluefin/dakota-gaming": {
+		{driver: DriverStandard, streams: []string{"stable", "testing", "next", "btw"}},
+		{driver: DriverNVIDIA, streams: []string{"stable", "testing", "next", "btw"}},
 	},
 	// projectbluefin/bluefin-lts publishes no driver variants; listing the
 	// base explicitly is what makes "no variant to offer" a known answer
@@ -108,22 +136,52 @@ var imageDriverMap = map[string][]driverStreams{
 // first so that "nvidia-open" is matched before "nvidia".
 var knownDrivers = []Driver{DriverNVIDIAOpen, DriverNVIDIA}
 
+// flavorSuffixes are image-name suffixes that a published driver variant
+// keeps *after* its driver suffix, so they cannot be treated as part of the
+// base name when one is composed or taken apart.
+//
+// There is one: the gaming flavour. ghcr.io/projectbluefin/dakota-gaming's
+// NVIDIA variant is published as dakota-nvidia-gaming; appending the driver
+// suffix to the end instead yields dakota-gaming-nvidia, which answered 404
+// on 2026-09-21.
+var flavorSuffixes = []string{gamingSuffix}
+
+// splitFlavor separates a clean registry path from the trailing flavour
+// suffix its driver variants carry at the end of the name.
+func splitFlavor(cleanRef string) (stem, flavor string) {
+	for _, candidate := range flavorSuffixes {
+		if strings.HasSuffix(cleanRef, candidate) {
+			return strings.TrimSuffix(cleanRef, candidate), candidate
+		}
+	}
+	return cleanRef, ""
+}
+
+// driverRef composes the published image name for a driver flavour of base,
+// inserting the driver suffix ahead of any flavour suffix.
+func driverRef(base string, driver Driver) string {
+	stem, flavor := splitFlavor(base)
+	return stem + driver.suffix() + flavor
+}
+
 // SplitDriver separates a clean registry path into its base image and the
 // variant its name encodes. An unrecognized suffix is not treated as a
 // variant: `bluefin-asus` is a hardware-specific image ChairLift does not
 // manage, and mistaking "asus" for a driver flavour would offer a switch
 // that drops the machine's hardware support.
 func SplitDriver(cleanRef string) (base string, driver Driver) {
+	stem, flavor := splitFlavor(cleanRef)
 	for _, candidate := range knownDrivers {
 		suffix := candidate.suffix()
-		if strings.HasSuffix(cleanRef, suffix) {
-			trimmed := strings.TrimSuffix(cleanRef, suffix)
-			// Only accept the split if the remainder is an image the table
-			// knows, so `bluefin-dx-nvidia` — a variant of an image
-			// ChairLift does not manage — is left alone.
-			if _, ok := activeDriverTable[trimmed]; ok {
-				return trimmed, candidate
-			}
+		if !strings.HasSuffix(stem, suffix) {
+			continue
+		}
+		// Only accept the split if the remainder is an image the table
+		// knows, so `bluefin-dx-nvidia` — a variant of an image ChairLift
+		// does not manage — is left alone.
+		trimmed := strings.TrimSuffix(stem, suffix) + flavor
+		if _, ok := activeDriverTable[trimmed]; ok {
+			return trimmed, candidate
 		}
 	}
 	return cleanRef, DriverStandard
@@ -167,7 +225,7 @@ func DriverTarget(cleanRef, tag string, driver Driver) (string, bool) {
 	if !contains(driverNames(AvailableDrivers(cleanRef, tag)), string(driver)) {
 		return "", false
 	}
-	return fmt.Sprintf("%s%s:%s", base, driver.suffix(), tag), true
+	return fmt.Sprintf("%s:%s", driverRef(base, driver), tag), true
 }
 
 func driverNames(drivers []Driver) []string {

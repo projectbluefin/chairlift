@@ -224,13 +224,6 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		// image already booted.
 		{name: "ublue factory reset with a flag", helper: "chairlift-ublue-helper", args: []string{"factory-reset", "--force"}, wantStderr: "usage: chairlift-ublue-helper factory-reset"},
 		{name: "ublue factory reset with extra argument", helper: "chairlift-ublue-helper", args: []string{"factory-reset", "--dry-run", "now"}, wantStderr: "usage: chairlift-ublue-helper factory-reset"},
-		// The on-demand update runs a program rather than staging one, so
-		// neither a module name, a flag, nor a configuration path may stand
-		// where nothing at all belongs.
-		{name: "ublue update now with a flag", helper: "chairlift-ublue-helper", args: []string{"update-now", "--force"}, wantStderr: "usage: chairlift-ublue-helper update-now"},
-		{name: "ublue update now with a module", helper: "chairlift-ublue-helper", args: []string{"update-now", "flatpak"}, wantStderr: "usage: chairlift-ublue-helper update-now"},
-		{name: "ublue update now with a config path", helper: "chairlift-ublue-helper", args: []string{"update-now", "/tmp/evil.json"}, wantStderr: "usage: chairlift-ublue-helper update-now"},
-		{name: "ublue update now with extra argument", helper: "chairlift-ublue-helper", args: []string{"update-now", "--dry-run", "now"}, wantStderr: "usage: chairlift-ublue-helper update-now"},
 	}
 
 	for _, test := range tests {

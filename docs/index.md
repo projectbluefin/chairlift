@@ -75,7 +75,7 @@ groups configuration enables, not on runtime tool availability.
 | `/usr/lib/snosi/native-ab` marker + `/usr/libexec/snosi-sysupdate-stage` | Staged native A/B (systemd-sysupdate) system updates |
 | Updex | System feature toggles |
 | Podman | The Agents page's local model container |
-| `/usr/bin/uupd` | The on-demand full-system update and the automatic-updates switch |
+| `uupd.timer` systemd unit | The automatic-updates switch. ChairLift reads the unit's state and enables or masks it; it never executes the `uupd` binary |
 
 ## Building
 

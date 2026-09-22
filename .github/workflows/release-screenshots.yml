@@ -54,13 +54,14 @@ jobs:
 
       # Same package list as test.yml's E2E job — see that workflow's
       # comment for why each package is here: x11-apps for xwd (a separate
-      # Debian/Ubuntu package from x11-utils) and flatpak so the Update All
-      # group's provider check finds at least one provider (Homebrew is on
+      # Debian/Ubuntu package from x11-utils) and flatpak so the update
+      # shell finds at least one reachable source (Homebrew is on
       # the runner but not on PATH; bootc is never present in a container).
       - name: Install headless GTK runtime
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
+            adwaita-icon-theme \
             dbus-x11 \
             flatpak \
             imagemagick \

@@ -81,13 +81,13 @@ are all disabled, and Help is always retained:
 
 | Page         | File                   | Purpose                                                                                                                                                                              |
 | ------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Updates      | `updates_page.go`      | The whole update story: Update All, bootc or native A/B (systemd-sysupdate) staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts, the system-version readout, and release-channel/graphics-driver switching |
+| Updates      | `updates_page.go` + `update_shell.go` | The whole update story: the status-first update shell (`internal/updateflow`), the automatic-updates switch, bootc or native A/B (systemd-sysupdate) staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts, the system-version readout, and release-channel/graphics-driver switching |
 | Apps         | `applications_page.go` | Manage Homebrew formulae/casks and installed Flatpaks; install app collections; launch an external manager for new Flatpak installs                                                   |
 | Agents       | `agents_page.go`       | One unprivileged switch running a language model in a rootless container in the invoking account (`internal/aistack`)                                                                 |
 | Features     | `features_page.go`     | Updex feature toggles plus Developer Mode, Gaming Mode, and Enhanced Troubleshooting                                                                                                  |
 | Livery       | `livery_page.go`       | App-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`)                                                                           |
 | Maintenance  | `maintenance_page.go`  | One "Free up space" action, administrator-configured maintenance scripts (executed via `exec.Command`/`pkexec`), and the opt-in Recovery group                                        |
-| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`)                                                                                                                  |
+| Help         | `help_page.go`         | Configurable links to the website, issue tracker, and documentation (opened via `xdg-open`)                                                                           |
 
 The sidebar title for `applications_page` is "Apps", not "Applications";
 `internal/navigation` owns that distinction and `internal/window` reads it.
@@ -126,9 +126,9 @@ To avoid blocking startup on slow tool-availability checks, groups that depend o
 3. Spawn a goroutine that calls `IsInstalledCached()` (see below)
 4. On the main thread, either hide the group (`SetVisible(false)`) or update its description
 
-This applies to: `featuresGroup`/`featuresUnavailableGroup` and `updateAllGroup` (the Update All hero row on the Updates page). The Features page uses a dual-group approach — one for available features, one for "not available" — toggling visibility between them. The Maintenance page no longer uses it: its one cleanup action is always shown, because which package managers are installed is the cleanup runner's business and not something a user should have to learn from a group appearing or disappearing.
+This applies to: `featuresGroup`/`featuresUnavailableGroup` and the Updates page's automatic-updates group. The Features page uses a dual-group approach — one for available features, one for "not available" — toggling visibility between them. The Maintenance page no longer uses it: its one cleanup action is always shown, because which package managers are installed is the cleanup runner's business and not something a user should have to learn from a group appearing or disappearing.
 
-The Update All group is the one place the *startup* path must not probe providers at all. Its rows are determined by which of bootc, Flatpak, and Homebrew exist on this host, and whether the unattended-update timer is installed — four separate subprocess checks that can each approach a multi-second timeout on a slow or wedged host. `buildUpdateAllGroup` therefore builds only a hidden shell with a "Checking…" description; `loadUpdateAllGroup` runs the availability probes (`hostAvailability()` and `autoupdate.Detect`) in a worker, and `populateUpdateAllGroup` marshals the resulting rows back onto the GTK main thread once every probe has answered. When no provider can update anything, the group simply stays hidden, matching the previous behavior of omitting it entirely.
+The automatic-updates group (`automatic_updates_group`, `internal/views/automatic_updates.go`) is the one place the *startup* path must not probe at all. Whether it has anything to show depends on `systemctl is-enabled`/`is-active` for `uupd.timer`, two queries that can each approach a multi-second timeout on a slow or wedged host. `buildAutomaticUpdatesGroup` therefore adds an empty, hidden group and returns; `loadAutomaticUpdatesGroup` runs `autoupdate.Detect` in a worker under a five-second `autoUpdateProbeTimeout`; and `buildAutomaticUpdatesRow` marshals the switch back onto the GTK main thread and reveals the group only once the probe has answered. A host with no unattended-update timer never sees a switch that would do nothing — the group simply stays hidden (chairlift#79).
 
 ### bootc boot gate
 
@@ -1137,7 +1137,7 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on each
 action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's ten actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's nine actions annotate
 `/usr/bin/chairlift-ublue-helper`. Both helper policies use
 `org.freedesktop.policykit.exec.argv1` to select exactly one action for the
 first helper argument. PolicyKit does not validate the remainder of argv, so
@@ -1148,8 +1148,8 @@ accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
 <stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
 [--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
-`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
-[--dry-run]`, and `update-now [--dry-run]`. A bare, `$PATH`-resolved command
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
+[--dry-run]`. A bare, `$PATH`-resolved command
 name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
@@ -1189,51 +1189,75 @@ the same shape one level up: a scope that cannot be listed is tolerated, but
 a *kind* that answered in neither scope is fatal, because reporting its
 components missing is exactly the loop that bug was.
 
-### Update All
+### Unified updates
 
-`internal/updateall` sequences the one-action update that both bluefinctl
-(`bctl update`) and finupdate (the hero button) lead with. It is a pure
-package: `Plan` selects the phases available on this host, `Runner.Run`
-executes them through function seams, and `Summarize` aggregates the outcome.
-Nothing in it executes a command directly, which is why the whole
-ordering/failure/cancellation/restart matrix is table-tested on a host with
-no bootc, Flatpak, or Homebrew.
+The Updates page's single "update this machine" surface is three layers, two
+of which are pure and testable on a headless host:
 
-Each exported function's distinct outcomes:
+- **`internal/updateflow`** is the coordinator. It owns the four update
+  sources (`applications`, `developer-tools`, `system-components`,
+  `operating-system`), their per-source state, the aggregate `Phase`, and the
+  single primary `Action` a snapshot offers. It executes nothing itself:
+  every source is an `updateflow.Provider` (`ID`, `Available`, `Check`,
+  `Apply`), and post-update cleanup is an `updateflow.Maintenance` seam.
+  `Check` runs the configured, available, user-enabled sources concurrently;
+  `UpdateAll` applies them *serially*, in the coordinator's fixed provider
+  order, publishing an immutable `Snapshot` at every transition.
+- **`internal/views/updatepresent`** is the presentation layer, and is
+  equally pure: `Snapshot` maps one coordinator snapshot to a
+  `Presentation{Icon, Title, Description, ActionLabel, ShowAction,
+  ActionStyle, Banner}`, and `Source` (title plus subtitle), `SourceIcon`, and
+  `ItemSubtitle` render one source row. Every user-visible string in the
+  update surface lives here, so the copy is unit-tested without a display.
+- **`internal/views/update_shell.go`** (`UpdateShell`) is widget wiring only.
+  It holds no update state of its own: it starts generation-guarded work off
+  the GTK thread, marshals each published snapshot back through
+  `sgtk.RunOnMainThread`, and applies whatever `updatepresent` decided.
 
-- `Plan` returns the phases in execution order — OS image, then applications,
-  then Homebrew packages — omitting any whose provider is absent. An empty
-  plan means Update All is not offered at all.
-- `Runner.Run` emits one `EventPhaseStarted` and one `EventPhaseFinished` per
-  planned phase, plus `EventMessage` for each streamed output line, and
-  returns one `Result` per phase. A phase failure does **not** abort the run:
-  applications and packages are independent of the OS image and of each
-  other. Context cancellation is the one exception and marks every remaining
-  phase `OutcomeSkipped`. The phase that was still running when the user
-  cancelled is classified the same way: its error unwraps to
-  `context.Canceled`, so `Run` reports it `OutcomeSkipped` with detail
-  `Cancelled` rather than `OutcomeFailed`, and a user-requested stop never
-  reads as a broken update. Every other provider error is still
-  `OutcomeFailed`. A nil provider seam yields `OutcomeFailed`, never
-  success. Events are dropped rather than blocking when nothing is receiving.
-- `Summarize` produces the counts, the `FailedPhases` list, `RestartRequired`,
-  and one `Headline`. The distinct headlines are: nothing planned, every phase
-  failed, some failed with a staged image, some failed without one, cancelled,
-  a restart is pending, and everything was already current.
+Keeping those three separate is the point. A phase decision belongs in
+`updateflow`, a string belongs in `updatepresent`, and `update_shell.go`
+decides neither.
 
-`RestartRequired` deserves its own note: the OS phase stages an image rather
-than applying it, and the stage script is idempotent — it exits 0 without
-staging when the system is already current. So the phase's success is not
-evidence that anything changed. The decision comes from the `StagedAfter`
-probe re-reading `bootc status`, and a missing probe resolves to "no restart
-needed" rather than to a spurious prompt.
+`derive` is where the aggregate state is computed, and its precedence is
+deliberate: checking and updating outrank everything; an apply failure
+(`PhasePartialFailure`, `ActionRetryFailed`) outranks a check failure
+(`PhaseCheckFailed`, `ActionCheck`); a maintenance failure is reported as a
+partial failure rather than swallowed; and only once nothing has failed does
+a pending restart (`PhaseRestartRequired`, `ActionRestart`) or ordinary
+readiness (`ActionUpdateAll` when something is pending, `ActionCheck` when
+nothing is) apply. A source that fails does not stop the others: applications,
+developer tools, system components, and the OS image are independent.
 
-The restart itself is the run's only new privileged surface: a `restart`
+`ActionRestart` exists because `PhaseRestartRequired` previously resolved to
+`ActionNone` — the page told the user to restart and gave them nothing to
+press. `updatepresent` renders it as a `destructive-action` button labelled
+"Restart now", and `UpdateShell.StartRestart` calls `ublue.Restart`.
+
+That restart is the run's only privileged surface of its own: the `restart`
 subcommand on `chairlift-ublue-helper` running `systemctl reboot`, with a
 fixed argv that takes no delay and no target. Scheduled restarts
 (finupdate's "Restart Tonight", bluefinctl's reboot-on-logout) would each
 need their own action rather than a parameter here, precisely because a time
 argument crossing the boundary is another value the caller would control.
+Everything else the run does goes through the providers' existing routes —
+in particular the operating-system source stages through
+`internal/bootc` (or `internal/sysupdate` on a native A/B host) and its
+`/usr/libexec/…-stage` polkit action. There is deliberately no `bootc
+upgrade` route on the ublue helper: adding one would break both the
+staging-ownership rule and the system-integration package's fixed-path
+contract.
+
+The restart prompt's trigger deserves its own note: the OS source stages an
+image rather than applying it, and the stage script is idempotent — it exits
+0 without staging when the system is already current. So a successful OS
+source is not by itself evidence that anything changed. `PhaseRestartRequired`
+is reached only when a source's `ApplyResult` genuinely reported
+`RestartRequired` and nothing is still pending.
+
+Automatic background updates are no longer part of this surface. They are a
+preference about the future rather than an action taken now, so they live in
+their own `automatic_updates_group` on the same page
+(`internal/views/automatic_updates.go`), gating only that one switch.
 
 ### Action journal and desktop notifications
 
@@ -1263,8 +1287,9 @@ every `os/exec` call site under `internal/` as privileged or unprivileged and
 requires each privileged one to record both suppression states, so a fourth
 executor cannot reopen the hole silently.
 
-`internal/notify` sends exactly one desktop `GNotification`: Update All's
-completion, through `views.ToastAdder.NotifyBackground` (implemented by
+`internal/notify` sends exactly one desktop `GNotification`: the unified
+update run's completion (`notify.UpdateAllComplete`, sent from
+`views.UpdateShell.notifyUpdateComplete`), through `views.ToastAdder.NotifyBackground` (implemented by
 `internal/window.Window`, the one place holding a `*gtk.Application` handle).
 It is the only ChairLift action long enough that a user plausibly stepped
 away before it finished; every other toggle completes in view and already has
@@ -1368,8 +1393,8 @@ cannot be verified, the unit stays on disk and the UI surfaces the stop error.
 
 ### Powerwash and Factory Reset
 
-`internal/powerwash` is Powerwash's pure sequencer, in the same shape as
-`internal/updateall`: `Runner.Run` executes the two steps (removing every
+`internal/powerwash` is Powerwash's pure sequencer, in the same shape as the
+other pure runners: `Runner.Run` executes the two steps (removing every
 user-scope Flatpak, removing every Distrobox container) through function
 seams, and `Summarize` aggregates the outcome. A step whose tool is not
 installed is `OutcomeSkipped`, not a failure — there is nothing for it to
@@ -1431,26 +1456,53 @@ on the machine.
 `internal/imageinfo` owns the mapping from a running image and tag to the tag
 its stable or testing counterpart is published under. The mapping is keyed on
 the **registry path**, not on the tag alone, because the same tag word means
-different things across images. Verified against GHCR by manifest request on
-2026-08-17:
+different things across images. Verified against GHCR by manifest request,
+most recently on 2026-09-21:
 
 | Image | Stable streams | Testing streams |
 | --- | --- | --- |
-| `ghcr.io/ublue-os/bluefin` | `latest`, `stable`, `stable-daily`, `gts`, `beta`, `lts`, `lts-hwe` | `lts-testing`, `lts-hwe-testing` |
+| `ghcr.io/ublue-os/bluefin` | `latest`, `stable`, `stable-daily`, `gts`, `lts`, `lts-hwe` | `lts-testing`, `lts-hwe-testing` |
 | `ghcr.io/projectbluefin/bluefin-lts` | `lts`, `stable` | `testing` |
 | `ghcr.io/projectbluefin/dakota` | `latest`, `stable` | `testing` |
+| `ghcr.io/projectbluefin/dakota-gaming` | `stable` | `testing` |
 
-Two consequences follow, both of which a tag-only mapping gets wrong:
+Three consequences follow, all of which a tag-only mapping gets wrong:
 
 - `ghcr.io/ublue-os/bluefin:testing` does not exist. A Bluefin Stable host on
-  `latest`, `stable`, `gts`, or `beta` has **no testing counterpart**, and the
-  Testing Channel switch is correctly rendered insensitive there. Only the
-  `lts` and `lts-hwe` streams on that image are switchable.
+  `latest`, `stable`, `stable-daily`, or `gts` has **no testing counterpart**,
+  and the Testing Channel switch is correctly rendered insensitive there. Only
+  the `lts` and `lts-hwe` streams on that image are switchable. The `beta`
+  stream is gone entirely: it answered 200 on 2026-08-17 and 404 on
+  2026-09-21.
 - `ghcr.io/projectbluefin/bluefin-lts:lts-testing` does not exist either; that
   image's testing stream is the bare `testing` tag.
+- The gaming image is a separate registry path, not a tag or variant of
+  `dakota`, and it publishes no `latest`. `dakota-gaming` and its NVIDIA
+  variant `dakota-nvidia-gaming` ship `stable`, `testing`, and the `next`
+  stream (whose `btw` tag is an alias for the same digest). `next`/`btw` are
+  deliberately unclassified: they are a third, more bleeding-edge stream, not
+  a stable or testing counterpart of anything.
 
 bluefinctl's `bctl toggle-testing` uses a tag-only map that targets both of
 those nonexistent references. ChairLift does not reproduce it.
+
+**Which tag the machine is actually on.** Resolving a channel needs the
+running tag, and `/usr/share/ublue-os/image-info.json`'s `image-tag` is not a
+reliable answer on every image. Dakota promotes a stream by retagging an
+existing digest rather than rebuilding, so every Dakota image — base, NVIDIA,
+and gaming — bakes `image-tag: latest` whatever stream it ships on;
+`projectbluefin/dakota` records this in `elements/bluefin/common.bst`, where
+it patches fastfetch for the same reason. On a gaming host the baked value is
+not merely imprecise, it names a tag that image does not publish at all.
+`imageinfo.Detect` therefore also reads the boot-time marker
+`/run/ublue-os/booted-image`, written by `ublue-booted-image.service`, and
+`Info.EffectiveTag` prefers it. The marker is honoured only when it names the
+image the descriptor names, so a stale marker from a previous deployment
+cannot move a host onto another image's streams, and a digest-pinned marker
+yields no tag at all — a pinned host is on no stream and is offered no switch.
+A host without the marker keeps using the baked tag. Both the GUI and the
+privileged helper obtain `Info` from `Detect`, so they always agree on the
+running stream.
 
 An image outside the table resolves to no channel and no switch, rather than
 to a guessed tag suffix. Other images — TunaOS, a downstream rebuild, a
@@ -1526,7 +1578,7 @@ them and inversely by what they cost.
 
 First, one routine cleanup action. `maintenance_freespace_group` is a single
 "Free up space" button that composes the typed cleanup runner already used by
-Update All's post-update phase (`internal/updateproviders.Cleanup`, whose
+the update run's post-update maintenance step (`internal/updateproviders.Cleanup`, whose
 `CleanupGroup` constant *is* `maintenance_freespace_group`). One key gates
 both surfaces deliberately: a user who turned cleanup off has turned cleanup
 off, and two keys would let one surface clean while the other claimed the
@@ -1658,7 +1710,7 @@ page_name:
 | ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `updates_page`      | `bootc_status_group`             | Compact booted/staged system-version readout, technical identity behind a details row (gated on `bootc.IsBootcBootedCached()`)                                                                           |
 | `updates_page`      | `channel_group`                  | Release channel and graphics-driver switching (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                          |
-| `updates_page`      | `update_all_group`               | Multi-phase update sequencing (OS image, Flatpaks, Homebrew) and automatic background updates switch                                                                                                    |
+| `updates_page`      | `automatic_updates_group`        | The automatic-background-updates switch only (`uupd.timer`); hidden on a host with no unattended-update timer. Updating now is the update shell's single primary action and has no config key             |
 | `updates_page`      | `bootc_updates_group`            | bootc system updates — stage via `bootc-update-stage`, apply on restart (gated on `bootc.IsBootcBootedCached()` and stage script availability)                                                          |
 | `updates_page`      | `sysupdate_updates_group`        | native A/B system updates — stage via `snosi-sysupdate-stage`, apply on restart, with a read-only previous-version rollback row (gated on `sysupdate.IsNativeABCached()` and stage script availability) |
 | `updates_page`      | `flatpak_updates_group`          | Flatpak pending updates                                                                                                                                                                                 |
@@ -1671,7 +1723,7 @@ page_name:
 | `applications_page` | `brew_bundles_group`             | App collections discovered as `*.Brewfile` definitions in every configured `bundles_paths` directory (default `/usr/share/ublue-os/homebrew`), named by `internal/views/bundleview`, with guarded install actions |
 | `applications_page` | `applications_installed_group`   | External Flatpak-manager launcher for discovery/install (configurable `app_id`, default: Bazaar); ChairLift has no direct Flatpak-install UI                                                            |
 | `agents_page`       | `agents_group`                   | Local AI language model served in a rootless Quadlet/Podman container in the invoking account (configurable `ai_images`, `ai_model`); no privileged route                                               |
-| `maintenance_page`  | `maintenance_freespace_group`    | The single "Free up space" action, composing `internal/updateproviders`' typed cleanup inventory; the same key gates the Update All cleanup phase                                                        |
+| `maintenance_page`  | `maintenance_freespace_group`    | The single "Free up space" action, composing `internal/updateproviders`' typed cleanup inventory; the same key gates the update run's post-update maintenance step                                       |
 | `maintenance_page`  | `maintenance_cleanup_group`      | Administrator-configured scripts (5min timeout, pkexec for sudo), listed apart from routine cleanup; **disabled by default**                                                                             |
 | `maintenance_page`  | `reset_group`                    | Powerwash and Factory Reset recovery actions; **disabled by default**                                                                                                                                   |
 | `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
@@ -1681,7 +1733,7 @@ page_name:
 | `livery_page`       | `livery_app_grid_group`          | The Show Applications mark, from a Simple Icons brand                                                                                                                                                   |
 | `livery_page`       | `livery_foundation_group`        | The top-bar menu mark, optionally advancing at each login                                                                                                                                               |
 | `livery_page`       | `livery_dock_group`              | The Files application icon, from a CNCF project's colour artwork                                                                                                                                        |
-| `help_page`         | `help_resources_group`           | Configurable links (website, issues, chat)                                                                                                                                                              |
+| `help_page`         | `help_resources_group`           | Configurable links (`website`, `issues`, and `chat` — the third key is named for compatibility but points at documentation)                                                                              |
 
 ## Build and Release
 

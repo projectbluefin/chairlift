@@ -103,14 +103,6 @@ type UserHome struct {
 	liverySuppress    bool
 	liveryLoaded      bool
 
-	// Update All references
-	updateAllGroup   *adw.PreferencesGroup
-	updateAllRow     *adw.ActionRow
-	updateAllBtn     *gtk.Button
-	updateAllPhases  map[string]*adw.ActionRow
-	updateAllRestart *adw.ActionRow
-	updateAllGate    actionstate.Gate
-
 	// Automatic background updates
 	autoUpdatesRow    *adw.ActionRow
 	autoUpdatesSwitch *gtk.Switch

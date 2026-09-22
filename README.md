@@ -61,13 +61,17 @@ so they cost nothing on Snow Linux or any other host.
   inventoried as such, so it is installed once and removed again with the
   rest of the stack
 
-### 🔄 Update All
+### 🔄 Unified Updates
 
-One action brings the whole system up to date — the OS image, Flatpak
-applications, and Homebrew packages — with per-phase status and a single
-restart prompt. The prompt appears only when an OS image was actually staged,
-so a system that was already current never asks for a reboot. A phase that
-fails does not stop the others.
+The Updates page leads with the system's status — "System is up to date", or
+how many updates are waiting — above an **Update sources** list of the four
+things that can be updated: Applications, Developer tools, System components,
+and Operating system. One primary action covers all of them: **Check again**
+when nothing is pending, **Update all** when something is, **Retry failed**
+when a source did not finish, and **Restart now** once an OS image is staged.
+A source that fails does not stop the others, and the restart prompt appears
+only when an image was actually staged, so a system that was already current
+never asks for a reboot.
 
 ### 🔁 Automatic Updates & Rollback
 
@@ -196,8 +200,8 @@ retain a successful authorization briefly. The updex helper accepts only
 <stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
 [--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
-`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
-[--dry-run]`, and `update-now [--dry-run]`. Both helpers reject every other
+`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, and `factory-reset
+[--dry-run]`. Both helpers reject every other
 argument shape inside the privileged process.
 
 Both paths install package-maintainer configuration defaults at
@@ -260,7 +264,7 @@ Other useful targets: `make dev` (CGO-enabled build with `-race` for development
 - The snow `/usr/libexec/snosi-sysupdate-stage` script and `/usr/lib/snosi/native-ab` marker (optional; enables staged system updates on native A/B installs)
 - `updex` features configured on the system (optional; toggled via the Features page)
 - Podman (optional; runs the Agents page's local model container)
-- `/usr/bin/uupd` (optional; the on-demand full-system update and the automatic-updates switch)
+- The `uupd.timer` systemd unit (optional; backs the automatic-updates switch, whose state `internal/autoupdate` reads and whose enable/mask the ublue helper performs — ChairLift never executes the `uupd` binary itself)
 
 ---
 

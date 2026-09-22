@@ -465,28 +465,6 @@ func FactoryReset(dryRun bool) FeatureToggleDecision {
 	}
 }
 
-// UpdateNow decides whether the on-demand full-update row should adopt its
-// finished subtitle, and what toast to show. Confirm is exactly !dryRun, for
-// the same reason as Rollback: under dry-run ublue.runHelper short-circuits
-// before pkexec, so nothing was downloaded or installed.
-//
-// The live toast names a restart as conditional rather than required. This
-// run updates apps and packages immediately but only stages a new system
-// version, and telling every user to restart after an update that changed
-// two Flatpaks would train them to ignore the one time it matters.
-func UpdateNow(dryRun bool) FeatureToggleDecision {
-	if dryRun {
-		return FeatureToggleDecision{
-			Confirm: false,
-			Toast:   "[DRY-RUN] Preview: would update the system, apps and packages — no changes made",
-		}
-	}
-	return FeatureToggleDecision{
-		Confirm: true,
-		Toast:   "Update finished. Restart if a new system version was installed.",
-	}
-}
-
 // Powerwash decides whether the Powerwash row should show its outcome, and
 // what toast to display. Unlike Rollback and FactoryReset, Powerwash runs
 // two independent, unprivileged steps that can each succeed, fail, or be

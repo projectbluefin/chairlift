@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -95,11 +94,6 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			wantArgs: []string{ubluehelper.CommandFactoryReset},
 		},
 		{
-			name:     "UpdateNow",
-			call:     UpdateNow,
-			wantArgs: []string{ubluehelper.CommandUpdateNow},
-		},
-		{
 			name:     "SetAutomaticUpdates enabled",
 			call:     func(ctx context.Context) error { return SetAutomaticUpdates(ctx, true) },
 			wantArgs: []string{ubluehelper.CommandAutoEnable},
@@ -170,7 +164,6 @@ func TestEmittedCommandsAreAllHelperSupported(t *testing.T) {
 		ubluehelper.CommandAutoEnable,
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
-		ubluehelper.CommandUpdateNow,
 	}
 	for _, command := range emitted {
 		if !supported[command] {
@@ -237,88 +230,6 @@ func TestDefaultContextCarriesTheDefaultDeadline(t *testing.T) {
 	cancel()
 	if !errors.Is(ctx.Err(), context.Canceled) {
 		t.Errorf("after cancel, ctx.Err() = %v, want context.Canceled", ctx.Err())
-	}
-}
-
-// The GUI must outlive the helper it is waiting on. If the client gave up
-// first the user would be shown a generic timeout while a root updater kept
-// running, instead of the helper's own message about what failed.
-func TestUpdateNowContextOutlivesTheHelperDeadline(t *testing.T) {
-	if UpdateNowTimeout <= ubluehelper.UpdateNowTimeout {
-		t.Fatalf("UpdateNowTimeout = %v, want more than the helper's %v",
-			UpdateNowTimeout, ubluehelper.UpdateNowTimeout)
-	}
-
-	ctx, cancel := UpdateNowContext()
-	defer cancel()
-
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		t.Fatal("UpdateNowContext returned a context with no deadline")
-	}
-	if remaining := time.Until(deadline); remaining <= ubluehelper.UpdateNowTimeout {
-		t.Errorf("UpdateNowContext deadline in %v, want more than %v", remaining, ubluehelper.UpdateNowTimeout)
-	}
-}
-
-// A host with no updater must not be offered the action: PolicyKit would
-// authenticate first and the helper would then fail on a missing binary,
-// spending the user's password to tell them nothing.
-func TestUpdateNowAvailabilityNeedsAnExecutableUpdater(t *testing.T) {
-	tests := []struct {
-		name string
-		mode os.FileMode
-		stat func(string) (os.FileInfo, error)
-		want bool
-	}{
-		{name: "executable file", mode: 0o755, want: true},
-		{name: "present but not executable", mode: 0o644, want: false},
-		{name: "absent", stat: func(string) (os.FileInfo, error) { return nil, os.ErrNotExist }, want: false},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			stat := test.stat
-			if stat == nil {
-				path := filepath.Join(t.TempDir(), "uupd")
-				if err := os.WriteFile(path, []byte("#!/bin/sh\n"), test.mode); err != nil {
-					t.Fatalf("writing stand-in updater: %v", err)
-				}
-				stat = func(string) (os.FileInfo, error) { return os.Stat(path) }
-			}
-
-			original := statUpdater
-			statUpdater = stat
-			updaterOnce = sync.Once{}
-			t.Cleanup(func() {
-				statUpdater = original
-				updaterOnce = sync.Once{}
-				updaterFound = false
-			})
-
-			if got := UpdateNowAvailable(); got != test.want {
-				t.Errorf("UpdateNowAvailable() = %t, want %t", got, test.want)
-			}
-		})
-	}
-}
-
-// A directory named like the updater must never count as one: the helper
-// would fail to exec it after the user had already authenticated.
-func TestUpdateNowAvailabilityRejectsADirectory(t *testing.T) {
-	dir := t.TempDir()
-
-	original := statUpdater
-	statUpdater = func(string) (os.FileInfo, error) { return os.Stat(dir) }
-	updaterOnce = sync.Once{}
-	t.Cleanup(func() {
-		statUpdater = original
-		updaterOnce = sync.Once{}
-		updaterFound = false
-	})
-
-	if UpdateNowAvailable() {
-		t.Error("UpdateNowAvailable() = true for a directory, want false")
 	}
 }
 

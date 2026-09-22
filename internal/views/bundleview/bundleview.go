@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -156,11 +157,13 @@ func isHeading(comment string) bool {
 		return true
 	}
 	for _, word := range words {
-		for _, r := range word {
-			if unicode.IsLower(r) {
-				return false
-			}
-			break
+		// Only the leading rune decides. An administrator's "k9s" or "GPU"
+		// must survive intact, so a lowercase tail is not evidence of a
+		// sentence — and decoding just the first rune avoids allocating a
+		// []rune per word.
+		first, _ := utf8.DecodeRuneInString(word)
+		if unicode.IsLower(first) {
+			return false
 		}
 	}
 	return true

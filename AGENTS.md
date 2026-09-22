@@ -154,31 +154,50 @@ An agent must not break these:
   switch is resolved by the same helper, so it must not be configurable from
   a user-writable path, and keeping both tables in one file removes any way
   for the GUI and the helper to load different ones.
-- **Update All composes; it does not add a privileged route.** `internal/updateall`
-  is the pure sequencer for the OS/Flatpak/Homebrew update run: it executes
-  nothing itself, taking every provider as a function seam whose production
-  value is the existing `internal/bootc`, `internal/flatpak`, and
-  `internal/homebrew` entry point. Its OS phase must keep going through
-  `internal/bootc`'s staging path. Adding a `bootc upgrade` route to
-  `chairlift-ublue-helper` would break both the staging-ownership invariant
-  below and the system-integration package's fixed-path contract. The run's
-  only new privileged surface is `restart`. `Summarize`'s `RestartRequired`
-  is true only when an image was genuinely staged — the stage script is
-  idempotent and exits 0 on an already-current system, so a successful OS
-  phase is not by itself evidence anything changed.
+- **The unified update run composes; it does not add a privileged route.**
+  `internal/updateflow` is the pure coordinator for the one-action update run:
+  it owns the phases, the primary action, and the per-source state for the
+  four sources (`applications`, `developer-tools`, `system-components`,
+  `operating-system`), and it executes nothing itself — every provider is an
+  `updateflow.Provider` whose production value in `internal/updateproviders`
+  wraps the existing `internal/flatpak`, `internal/homebrew`,
+  `internal/updex`, `internal/bootc`, and `internal/sysupdate` entry points.
+  `internal/views/updatepresent` is the equally pure presentation layer: it
+  maps one immutable snapshot to a title, description, banner, and action
+  label, so the shell's copy is testable on a headless host.
+  `internal/views/update_shell.go` is widget wiring only — it holds no update
+  state of its own and decides nothing the coordinator or the presenter
+  already decided. Keep those three layers separate; do not move a phase
+  decision into the widget file or a string into the coordinator.
+  The operating-system source must keep going through `internal/bootc`'s
+  staging path (or `internal/sysupdate`'s on a native A/B host). Adding a
+  `bootc upgrade` route to `chairlift-ublue-helper` would break both the
+  staging-ownership invariant below and the system-integration package's
+  fixed-path contract. The run's only privileged surface of its own is
+  `restart`: `updateflow.ActionRestart` is set when the snapshot reaches
+  `PhaseRestartRequired`, `updatepresent` renders it as a destructive
+  "Restart now" button, and `UpdateShell.StartRestart` calls `ublue.Restart`.
+  That phase is reached only when a source genuinely reports a restart is
+  required — the stage script is idempotent and exits 0 on an already-current
+  system, so a successful OS source is not by itself evidence anything
+  changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-ublue-helper` now carries ten subcommands
+  binary.** `chairlift-ublue-helper` carries nine subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`, `update-now`), each selected by exactly one PolicyKit
+  `factory-reset`), each selected by exactly one PolicyKit
   action. Every one takes a fixed argv or a word validated against a closed
-  set: no image reference, no username, no systemd unit, no delay, no updater
-  path, and no rollback or reset target crosses the boundary, because each
-  would be a value an authenticated caller controls. `update-now` is the
-  extreme case and the shape to copy: it runs the host's integrated updater,
-  so both the program (`ubluehelper.UpdaterPath`) and its argv
-  (`UpdateNowArgs`, deliberately empty) are fixed in the helper, and the GUI
-  sends nothing but the command word. `internal/ubluehelper`'s tests assert
+  set: no image reference, no username, no systemd unit, no delay, and no
+  rollback or reset target crosses the boundary, because each
+  would be a value an authenticated caller controls. `factory-reset` is the
+  extreme case and the shape to copy: it is the most destructive privileged
+  action ChairLift offers, so both the program (`bootc`) and its entire argv
+  (`ubluehelper.FactoryResetArgs`, the fixed
+  `install reset --experimental --apply`) are spelled in the helper, and the
+  GUI sends nothing but the command word — a factory reset has exactly one
+  target, the image already booted, so there is nothing for a caller to name.
+  `rollback` is the same shape with an even shorter argv.
+  `internal/ubluehelper`'s tests assert
   this per command, and the e2e boundary test asserts the installed binary
   rejects each shape. `cmd/chairlift-ublue-helper`'s dispatch carries a
   `default` arm that exits non-zero: a command the parser accepts and the
@@ -194,8 +213,8 @@ An agent must not break these:
   in `config.SchemaGroups` has no walkthrough entry. That last check is the
   forcing function: the group-to-phrase table is hand-written but its
   completeness is derived from the config schema, so a feature added to an
-  *existing* page — which is how Update All, Automatic Updates, and Roll Back
-  all landed — cannot slip through undocumented. The check is deliberately referential rather
+  *existing* page — which is how the unified update shell, Automatic updates,
+  and Roll Back all landed — cannot slip through undocumented. The check is deliberately referential rather
   than a pixel comparison: font hinting and GTK point releases move pixels, so
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
@@ -316,7 +335,8 @@ An agent must not break these:
   value is that it is genuinely one choke point for every privileged action,
   not most of them.
 - **Desktop notifications stay rare.** `internal/notify` sends exactly one:
-  Update All's completion, because it is the one action long enough a user may
+  the unified update run's completion (`notify.UpdateAllComplete`, sent from
+  `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
 - **Enhanced Troubleshooting reads state, it does not infer it.**
@@ -553,7 +573,8 @@ An agent must not break these:
 - **Routine cleanup has one key and one owner.** The Maintenance page offers
   a single "Free up space" action, gated by `maintenance_freespace_group`.
   That key is `internal/updateproviders.CleanupGroup`, the same constant
-  gating Update All's post-update cleanup phase, so one configuration switch
+  gating the update run's post-update maintenance step
+  (`updateproviders.NewMaintenance`), so one configuration switch
   governs both surfaces — a second key would let one surface clean while the
   other claimed the feature was disabled. The action composes
   `internal/updateproviders`' typed step inventory; do not reintroduce
@@ -586,7 +607,7 @@ An agent must not break these:
   install prefix, so it never moves (ADR-0012). Every user-visible spelling of
   the product name resolves through `internal/branding.AppName` — window title,
   navigation page, About dialog, the About menu item, the Help description, the
-  Update All notification, and `config.LoadError.ToastMessage`, the fail-closed
+  update-run completion notification, and `config.LoadError.ToastMessage`, the fail-closed
   configuration toast. `branding` imports nothing on purpose: `internal/config`
   and `internal/notify` both need the constant, and the constant's first home,
   `internal/views/pageview`, transitively pulls in `internal/sbom`,

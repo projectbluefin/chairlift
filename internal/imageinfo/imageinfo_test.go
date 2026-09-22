@@ -3,6 +3,7 @@ package imageinfo
 import (
 	"errors"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -348,7 +349,7 @@ func TestCleanRefStripsTransportAndTag(t *testing.T) {
 	}
 }
 
-func TestEffectiveTagFallsBackToRef(t *testing.T) {
+func TestEffectiveTagPrefersTheBootedStream(t *testing.T) {
 	tests := []struct {
 		name string
 		info Info
@@ -358,6 +359,60 @@ func TestEffectiveTagFallsBackToRef(t *testing.T) {
 		{name: "falls back to ref tag", info: Info{Ref: "docker://ghcr.io/x/y:testing"}, want: "testing"},
 		{name: "no tag anywhere", info: Info{Ref: "docker://ghcr.io/x/y"}, want: ""},
 		{name: "registry port is not a tag", info: Info{Ref: "registry.example:5000/x/y"}, want: ""},
+
+		// The boot-time marker outranks the baked tag, because Dakota bakes
+		// "latest" on every stream. This is the case observed on a real
+		// dakota-gaming host on 2026-09-21: the descriptor said "latest",
+		// which that image does not publish, and the marker said "testing".
+		{
+			name: "boot marker outranks a baked tag",
+			info: Info{
+				Tag:       "latest",
+				Ref:       "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
+				BootedRef: "ghcr.io/projectbluefin/dakota-gaming:testing",
+			},
+			want: "testing",
+		},
+		{
+			name: "boot marker keeps its transport prefix out of the tag",
+			info: Info{
+				Tag:       "latest",
+				Ref:       "docker://ghcr.io/projectbluefin/dakota",
+				BootedRef: "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota:stable",
+			},
+			want: "stable",
+		},
+		{
+			// A marker left by a deployment of a different image must not
+			// move this host onto that image's streams.
+			name: "marker for another image is ignored",
+			info: Info{
+				Tag:       "stable",
+				Ref:       "docker://ghcr.io/projectbluefin/dakota-gaming",
+				BootedRef: "ghcr.io/projectbluefin/dakota:testing",
+			},
+			want: "stable",
+		},
+		{
+			// A pinned host is on no stream at all, and the baked tag must
+			// not be allowed to invent one for it.
+			name: "digest-pinned marker names no stream",
+			info: Info{
+				Tag:       "latest",
+				Ref:       "docker://ghcr.io/projectbluefin/dakota-gaming",
+				BootedRef: "ghcr.io/projectbluefin/dakota-gaming@sha256:0123456789abcdef",
+			},
+			want: "",
+		},
+		{
+			name: "marker without a tag names no stream",
+			info: Info{
+				Tag:       "latest",
+				Ref:       "docker://ghcr.io/projectbluefin/dakota-gaming",
+				BootedRef: "ghcr.io/projectbluefin/dakota-gaming",
+			},
+			want: "",
+		},
 	}
 
 	for _, test := range tests {
@@ -366,6 +421,76 @@ func TestEffectiveTagFallsBackToRef(t *testing.T) {
 				t.Errorf("EffectiveTag() = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+// The marker is a file on tmpfs that may be absent, empty, or larger than
+// one reference. Reading it must never be the reason startup fails.
+func TestBootedRefReadsTheMarkerDefensively(t *testing.T) {
+	dir := t.TempDir()
+
+	if got := readBootedRef(filepath.Join(dir, "absent")); got != "" {
+		t.Errorf("readBootedRef(absent) = %q, want \"\"", got)
+	}
+
+	tests := []struct {
+		name    string
+		content string
+		want    string
+	}{
+		{name: "one reference", content: "ghcr.io/projectbluefin/dakota-gaming:testing\n", want: "ghcr.io/projectbluefin/dakota-gaming:testing"},
+		{name: "no trailing newline", content: "ghcr.io/projectbluefin/dakota:stable", want: "ghcr.io/projectbluefin/dakota:stable"},
+		{name: "surrounding whitespace", content: "  ghcr.io/projectbluefin/dakota:stable  \n", want: "ghcr.io/projectbluefin/dakota:stable"},
+		{name: "only the first line", content: "ghcr.io/projectbluefin/dakota:stable\nghcr.io/someone/else:latest\n", want: "ghcr.io/projectbluefin/dakota:stable"},
+		{name: "empty", content: "", want: ""},
+		// A corrupt marker must not be read without bound, and must not be
+		// mistaken for a reference.
+		{name: "oversized junk", content: strings.Repeat("x", 4096), want: strings.Repeat("x", 1024)},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(dir, "booted-image")
+			if err := os.WriteFile(path, []byte(test.content), 0o644); err != nil {
+				t.Fatalf("writing marker: %v", err)
+			}
+			if got := readBootedRef(path); got != test.want {
+				t.Errorf("readBootedRef() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+// The shape of the machine this alpha was cut on, observed 2026-09-21: the
+// descriptor bakes image-tag "latest", which dakota-gaming does not
+// publish, while the boot-time marker records the stream it really booted.
+// Without the marker this host is on no stream and is offered no switch,
+// which is the whole reason the release-channel row looked dead on it.
+func TestAGamingHostResolvesItsRealStream(t *testing.T) {
+	descriptor := Info{
+		Name:   "dakota-gaming",
+		Vendor: "projectbluefin",
+		Flavor: "gaming",
+		Tag:    "latest",
+		Ref:    "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
+	}
+
+	if got := descriptor.Channel(); got != ChannelUnknown {
+		t.Errorf("without the marker, Channel() = %q, want %q", got, ChannelUnknown)
+	}
+
+	booted := descriptor
+	booted.BootedRef = "ghcr.io/projectbluefin/dakota-gaming:testing"
+
+	if got := booted.Channel(); got != ChannelTesting {
+		t.Fatalf("Channel() = %q, want %q", got, ChannelTesting)
+	}
+	target, ok := booted.SwitchTarget(ChannelStable)
+	if !ok || target != "ghcr.io/projectbluefin/dakota-gaming:stable" {
+		t.Errorf("SwitchTarget(stable) = (%q, %v), want (%q, true)", target, ok, "ghcr.io/projectbluefin/dakota-gaming:stable")
+	}
+	if _, ok := booted.SwitchTarget(ChannelTesting); ok {
+		t.Error("SwitchTarget(testing) offered a switch to the stream the host is already on")
 	}
 }
 
@@ -383,7 +508,10 @@ func TestChannelClassifiesRunningTagPerImage(t *testing.T) {
 		{name: "bluefin latest", ref: "ghcr.io/ublue-os/bluefin", tag: "latest", want: ChannelStable},
 		{name: "bluefin stable", ref: "ghcr.io/ublue-os/bluefin", tag: "stable", want: ChannelStable},
 		{name: "bluefin gts", ref: "ghcr.io/ublue-os/bluefin", tag: "gts", want: ChannelStable},
-		{name: "bluefin beta", ref: "ghcr.io/ublue-os/bluefin", tag: "beta", want: ChannelStable},
+		{name: "bluefin stable-daily", ref: "ghcr.io/ublue-os/bluefin", tag: "stable-daily", want: ChannelStable},
+		// Retired upstream: ghcr.io/ublue-os/bluefin:beta was 200 on
+		// 2026-08-17 and 404 on 2026-09-21, so it names no stream now.
+		{name: "bluefin beta is retired", ref: "ghcr.io/ublue-os/bluefin", tag: "beta", want: ChannelUnknown},
 		{name: "bluefin lts", ref: "ghcr.io/ublue-os/bluefin", tag: "lts", want: ChannelStable},
 		{name: "bluefin lts-testing", ref: "ghcr.io/ublue-os/bluefin", tag: "lts-testing", want: ChannelTesting},
 		{name: "bluefin lts-hwe-testing", ref: "ghcr.io/ublue-os/bluefin", tag: "lts-hwe-testing", want: ChannelTesting},
@@ -399,6 +527,16 @@ func TestChannelClassifiesRunningTagPerImage(t *testing.T) {
 		{name: "dakota stable", ref: "ghcr.io/projectbluefin/dakota", tag: "stable", want: ChannelStable},
 		{name: "dakota testing", ref: "ghcr.io/projectbluefin/dakota", tag: "testing", want: ChannelTesting},
 		{name: "dakota pinned build", ref: "ghcr.io/projectbluefin/dakota", tag: "latest.20260212", want: ChannelUnknown},
+
+		{name: "dakota gaming stable", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "stable", want: ChannelStable},
+		{name: "dakota gaming testing", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "testing", want: ChannelTesting},
+		// The gaming image publishes no "latest", even though its own
+		// descriptor declares image-tag "latest". Classifying that tag onto
+		// a stream would claim a reference GHCR answers 404 for.
+		{name: "dakota gaming has no latest stream", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "latest", want: ChannelUnknown},
+		// "next" and "btw" are published but unclassified, so they are not
+		// silently folded into either stream.
+		{name: "dakota gaming next is unclassified", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "next", want: ChannelUnknown},
 
 		{name: "unknown image", ref: "ghcr.io/someone/custom-bluefin", tag: "latest", want: ChannelUnknown},
 		{name: "no tag", ref: "ghcr.io/projectbluefin/dakota", tag: "", want: ChannelUnknown},
@@ -484,6 +622,47 @@ func TestSwitchTargetBuildsFullReferences(t *testing.T) {
 			channel: ChannelTesting,
 			want:    "ghcr.io/projectbluefin/dakota:testing",
 			wantOK:  true,
+		},
+		{
+			// The shipping gaming image. Before it had a table entry of its
+			// own, a gaming host matched nothing and the Updates page
+			// offered no release-channel switch at all.
+			name: "dakota gaming to testing",
+			info: Info{
+				Name:   "dakota-gaming",
+				Flavor: "gaming",
+				Tag:    "stable",
+				Ref:    "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
+			},
+			channel: ChannelTesting,
+			want:    "ghcr.io/projectbluefin/dakota-gaming:testing",
+			wantOK:  true,
+		},
+		{
+			name: "dakota gaming back to stable",
+			info: Info{
+				Name:   "dakota-gaming",
+				Flavor: "gaming",
+				Tag:    "testing",
+				Ref:    "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
+			},
+			channel: ChannelStable,
+			want:    "ghcr.io/projectbluefin/dakota-gaming:stable",
+			wantOK:  true,
+		},
+		{
+			// The descriptor the image actually ships declares image-tag
+			// "latest", which GHCR does not publish for it. Recognizing it
+			// would put the host on a stream that does not exist.
+			name: "dakota gaming on the unpublished latest tag",
+			info: Info{
+				Name:   "dakota-gaming",
+				Flavor: "gaming",
+				Tag:    "latest",
+				Ref:    "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
+			},
+			channel: ChannelTesting,
+			wantOK:  false,
 		},
 		{
 			name:    "bluefin lts to testing",

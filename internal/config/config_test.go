@@ -485,7 +485,7 @@ func repoRoot() string {
 // re-added under its old name or under any new one.
 func TestUpdatesPageDefaultGroupSetIsExact(t *testing.T) {
 	want := map[string]bool{
-		"update_all_group":        true,
+		"automatic_updates_group": true,
 		"bootc_updates_group":     true,
 		"sysupdate_updates_group": true,
 		"flatpak_updates_group":   true,

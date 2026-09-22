@@ -257,29 +257,3 @@ func TestAIStackDisableConfirms(t *testing.T) {
 		t.Errorf("toast does not say the model stopped: %q", decision.Toast)
 	}
 }
-
-// Under dry-run ublue.runHelper short-circuits before pkexec, so nothing was
-// downloaded or installed and the row must not adopt its finished subtitle.
-func TestUpdateNowNeverConfirmsUnderDryRun(t *testing.T) {
-	decision := UpdateNow(true)
-
-	if decision.Confirm {
-		t.Error("UpdateNow(true).Confirm = true, want false")
-	}
-	if !strings.Contains(decision.Toast, "DRY-RUN") {
-		t.Errorf("toast is not marked as a preview: %q", decision.Toast)
-	}
-}
-
-// The live run updates apps and packages immediately but only stages a new
-// system version, so the toast offers a restart instead of demanding one.
-func TestUpdateNowLiveToastMakesTheRestartConditional(t *testing.T) {
-	decision := UpdateNow(false)
-
-	if !decision.Confirm {
-		t.Error("UpdateNow(false).Confirm = false, want true")
-	}
-	if !strings.Contains(decision.Toast, "Restart if") {
-		t.Errorf("toast does not make the restart conditional: %q", decision.Toast)
-	}
-}

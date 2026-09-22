@@ -8,7 +8,7 @@
 # user-writable table would let any local user redirect an authenticated
 # system switch.
 #
-# ChairLift already knows the three Bluefin-family images:
+# ChairLift already knows the Bluefin-family images:
 #
 #   ghcr.io/ublue-os/bluefin            lts <-> lts-testing, lts-hwe <-> lts-hwe-testing
 #                                       (latest/stable/gts/beta publish no
@@ -16,6 +16,11 @@
 #                                       switch as unavailable)
 #   ghcr.io/projectbluefin/bluefin-lts  lts, stable -> testing; testing -> stable
 #   ghcr.io/projectbluefin/dakota       latest, stable -> testing; testing -> stable
+#   ghcr.io/projectbluefin/dakota-gaming
+#                                       stable -> testing; testing -> stable
+#                                       (the gaming image publishes no
+#                                       "latest" tag, so a host on one is
+#                                       recognized as no stream at all)
 #
 # Entries here are overlaid on those. A key that matches a built-in replaces
 # it outright, so an override can remove a mapping as well as add one; any
@@ -70,6 +75,11 @@ images:
 #   standard: base image with open-source drivers (AMD/Intel) - REQUIRED
 #   nvidia: proprietary NVIDIA driver (switches to <base>-nvidia:<tag>)
 #   nvidia-open: NVIDIA open kernel modules (switches to <base>-nvidia-open:<tag>)
+#
+# The driver suffix is inserted ahead of a trailing flavour suffix rather
+# than appended, because that is how the images are published: the NVIDIA
+# variant of ghcr.io/projectbluefin/dakota-gaming is dakota-nvidia-gaming,
+# not dakota-gaming-nvidia.
 #
 # The `standard` driver entry is mandatory and must declare a non-empty stream
 # list, so a host on a driver image can always switch back to the base image.

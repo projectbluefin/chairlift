@@ -313,10 +313,9 @@ func defaultConfig() *Config {
 			"agents_group": GroupConfig{Enabled: true},
 		},
 		UpdatesPage: PageConfig{
-			// Update All leads the page: it is the one action most users
-			// need, with the per-provider groups below it for the cases it
-			// does not cover.
-			"update_all_group":        GroupConfig{Enabled: true},
+			// Whether this system updates itself on a schedule. Updating
+			// now is the Updates page's own action and needs no key.
+			"automatic_updates_group": GroupConfig{Enabled: true},
 			"bootc_updates_group":     GroupConfig{Enabled: true},
 			"sysupdate_updates_group": GroupConfig{Enabled: true},
 			"flatpak_updates_group":   GroupConfig{Enabled: true},

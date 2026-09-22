@@ -13,16 +13,27 @@ schedule choosers, no feature grids.
 
 ![Updates](screenshots/1-updates.png)
 
-**Update All** updates your system, your apps, and your packages in one
-click, and tells you when it's done. It only asks you to restart if something
-actually needs one. **Automatic Updates** keeps everything up to date in the
-background. The Flatpak and Homebrew groups below let you update just one
-thing if you prefer.
+The page leads with where you stand: **System is up to date**, or how many
+updates are waiting. Below that, **Update sources** lists the four things
+that can be updated — Applications, Developer tools, System components, and
+Operating system — each with its own state, so you can see which one is
+holding you up without opening anything.
 
-**Update everything now** hands the same job to the updater built into the
-system image, which also covers your development containers. It asks for your
-administrator password before it starts, it can pull a large download, and it
-only appears on systems that ship that updater.
+One button covers all of them. It reads **Check again** when nothing is
+pending, **Update all** when something is, **Retry failed** if a source
+didn't finish, and **Restart now** once a new system version is staged and
+waiting. It only asks you to restart when something actually needs one, and
+a source that fails doesn't stop the others. A run long enough that you
+wandered off finishes with a desktop notification.
+
+**Automatic updates** is the one switch for whether this system keeps itself
+up to date in the background. It appears only on systems that ship the
+unattended-update timer, and it's a choice about the future — updating right
+now is the button above.
+
+Further down, each source keeps its own group for when you want to update
+just one thing: **Apps** lists the Flatpak updates waiting, and **Developer
+tools** lists the command-line tools you installed with Homebrew.
 
 **System Updates** adds **Roll Back**, which returns you to the previous
 version if an update went badly, and **What's Changing**, which lists exactly
@@ -161,7 +172,8 @@ you can see them.
 
 ![Help](screenshots/7-help.png)
 
-Links to the distribution's website, issues, and discussions.
+Three links, each shown only when it is configured: **Website**, **Report a
+problem** (the `issues` URL, where bug reports go), and **Documentation**.
 
 ---
 

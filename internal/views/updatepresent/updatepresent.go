@@ -25,7 +25,7 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 	case updateflow.PhaseChecking:
 		return Presentation{
 			Icon:        "view-refresh-symbolic",
-			Title:       gotext.Get("Checking for Updates"),
+			Title:       gotext.Get("Checking for updates"),
 			Description: checkingDescription(state),
 		}
 	case updateflow.PhaseReady:
@@ -33,42 +33,44 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 	case updateflow.PhaseCheckFailed:
 		presentation := Presentation{
 			Icon:        "network-error-symbolic",
-			Title:       gotext.Get("Unable to Check for Updates"),
+			Title:       gotext.Get("Unable to check for updates"),
 			Description: checkErrorDescription(state),
-			Banner:      gotext.Get("Unable to Check for Updates"),
+			Banner:      gotext.Get("Unable to check for updates"),
 		}
-		addAction(&presentation, state.Action, gotext.Get("Try Again"))
+		addAction(&presentation, state.Action, gotext.Get("Try again"))
 		return presentation
 	case updateflow.PhaseUpdating:
 		return Presentation{
 			Icon:        "content-loading-symbolic",
-			Title:       gotext.Get("Installing Updates"),
+			Title:       gotext.Get("Installing updates"),
 			Description: updatingDescription(state),
 		}
 	case updateflow.PhasePartialFailure:
-		banner := gotext.Get("Some Updates Could Not Be Installed")
+		banner := gotext.Get("Some updates could not be installed")
 		if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
-			banner = gotext.Get("Maintenance Failed")
+			banner = gotext.Get("Maintenance failed")
 		}
 		presentation := Presentation{
 			Icon:        "dialog-warning-symbolic",
-			Title:       gotext.Get("Some Updates Could Not Be Installed"),
+			Title:       gotext.Get("Some updates could not be installed"),
 			Description: partialFailureDescription(state),
 			Banner:      banner,
 		}
-		addAction(&presentation, state.Action, gotext.Get("Retry Failed"))
+		addAction(&presentation, state.Action, gotext.Get("Retry failed"))
 		return presentation
 	case updateflow.PhaseRestartRequired:
-		return Presentation{
+		presentation := Presentation{
 			Icon:        "system-reboot-symbolic",
-			Title:       gotext.Get("Restart Required"),
+			Title:       gotext.Get("Restart required"),
 			Description: gotext.Get("Restart to finish installing updates."),
-			Banner:      gotext.Get("Restart Required"),
+			Banner:      gotext.Get("Restart required"),
 		}
+		addAction(&presentation, state.Action, gotext.Get("Restart now"))
+		return presentation
 	default:
 		return Presentation{
 			Icon:        "view-refresh-symbolic",
-			Title:       gotext.Get("Checking for Updates"),
+			Title:       gotext.Get("Checking for updates"),
 			Description: gotext.Get("Preparing to check for updates…"),
 		}
 	}
@@ -84,7 +86,7 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case !state.Available:
 		return title, gotext.Get("Not available on this system")
 	case !state.Enabled:
-		return title, gotext.Get("Disabled in Preferences")
+		return title, gotext.Get("Disabled in preferences")
 	case state.Checking:
 		return title, gotext.Get("Checking for updates…")
 	case state.Updating:
@@ -165,14 +167,14 @@ func SourceSubtitleLines(compact bool) int32 {
 func readyPresentation(state updateflow.Snapshot) Presentation {
 	presentation := Presentation{
 		Icon:  "emblem-system-symbolic",
-		Title: gotext.Get("System Is Up to Date"),
+		Title: gotext.Get("System is up to date"),
 	}
 	switch {
 	case state.Action == updateflow.ActionNone && state.TotalUpdates == 0:
 		presentation.Description = gotext.Get("No update sources are available.")
 	case state.TotalUpdates > 0:
 		presentation.Icon = "software-update-available-symbolic"
-		presentation.Title = gotext.Get("Updates Available")
+		presentation.Title = gotext.Get("Updates available")
 		presentation.Description = gotext.GetN(
 			"%d update is available.",
 			"%d updates are available.",
@@ -185,9 +187,9 @@ func readyPresentation(state updateflow.Snapshot) Presentation {
 	default:
 		presentation.Description = upToDateDescription(state)
 	}
-	addAction(&presentation, state.Action, gotext.Get("Check Again"))
+	addAction(&presentation, state.Action, gotext.Get("Check again"))
 	if state.Action == updateflow.ActionUpdateAll {
-		presentation.ActionLabel = gotext.Get("Update All")
+		presentation.ActionLabel = gotext.Get("Update all")
 	}
 	return presentation
 }
@@ -253,13 +255,19 @@ func addAction(presentation *Presentation, action updateflow.Action, checkLabel 
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
 	case updateflow.ActionUpdateAll:
-		presentation.ActionLabel = gotext.Get("Update All")
+		presentation.ActionLabel = gotext.Get("Update all")
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
 	case updateflow.ActionRetryFailed:
-		presentation.ActionLabel = gotext.Get("Retry Failed")
+		presentation.ActionLabel = gotext.Get("Retry failed")
 		presentation.ShowAction = true
 		presentation.ActionStyle = "suggested-action"
+	case updateflow.ActionRestart:
+		presentation.ActionLabel = gotext.Get("Restart now")
+		presentation.ShowAction = true
+		// Destructive rather than suggested: this ends the user's session
+		// and closes whatever they have open.
+		presentation.ActionStyle = "destructive-action"
 	}
 }
 
@@ -268,11 +276,11 @@ func sourceTitle(id updateflow.SourceID) string {
 	case updateflow.Applications:
 		return gotext.Get("Applications")
 	case updateflow.DeveloperTools:
-		return gotext.Get("Developer Tools")
+		return gotext.Get("Developer tools")
 	case updateflow.SystemComponents:
-		return gotext.Get("System Components")
+		return gotext.Get("System components")
 	case updateflow.OperatingSystem:
-		return gotext.Get("Operating System")
+		return gotext.Get("Operating system")
 	default:
 		return gotext.Get("Updates")
 	}

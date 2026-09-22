@@ -26,7 +26,6 @@ package ubluehelper
 import (
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
@@ -46,28 +45,7 @@ const (
 	CommandAutoDisable   = "auto-updates-disable"
 	CommandDriverSwitch  = "driver-switch"
 	CommandFactoryReset  = "factory-reset"
-	CommandUpdateNow     = "update-now"
 )
-
-// UpdaterPath is the fixed, absolute path of Universal Blue's integrated
-// updater, the one program CommandUpdateNow runs. It is resolved here rather
-// than accepted as an argument for the same reason no image reference
-// crosses the boundary: a caller-supplied path would turn one authenticated
-// action into arbitrary root execution, which is precisely what PolicyKit's
-// exec.argv1 selection cannot prevent on its own.
-const UpdaterPath = "/usr/bin/uupd"
-
-// UpdateNowTimeout bounds an on-demand full update in the privileged helper.
-// It is an hour rather than the ten minutes that bound a staged switch or a
-// unit-file change because this one command pulls a whole image and then
-// every Flatpak, Homebrew package, and container the host has; on a slow link
-// that routinely outlasts a staging transaction.
-//
-// The GUI's own deadline is derived from this one (internal/ublue) so it is
-// always the longer of the two: whichever side gives up first decides what
-// the user is told, and the helper's own failure message is more useful than
-// a generic client-side timeout.
-const UpdateNowTimeout = time.Hour
 
 // The channel words accepted as channel-switch's second argument. They are
 // the string forms of imageinfo.ChannelStable and imageinfo.ChannelTesting;
@@ -118,11 +96,10 @@ func SupportedCommands() []string {
 		CommandAutoDisable,
 		CommandDriverSwitch,
 		CommandFactoryReset,
-		CommandUpdateNow,
 	}
 }
 
-// ParseInvocation accepts only the ten argv shapes ChairLift emits:
+// ParseInvocation accepts only the nine argv shapes ChairLift emits:
 //
 //	channel-switch <stable|testing> [--dry-run]
 //	dx-enable [--dry-run]
@@ -133,7 +110,6 @@ func SupportedCommands() []string {
 //	auto-updates-disable [--dry-run]
 //	driver-switch <standard|nvidia|nvidia-open> [--dry-run]
 //	factory-reset [--dry-run]
-//	update-now [--dry-run]
 //
 // Everything else — extra arguments, a misplaced flag, an unknown channel
 // word, an unknown command — is rejected.
@@ -176,7 +152,7 @@ func ParseInvocation(args []string) (Invocation, error) {
 		return Invocation{Command: CommandDriverSwitch, Driver: driver, DryRun: dryRun}, nil
 
 	case CommandDXEnable, CommandDXDisable, CommandRestart, CommandRollback,
-		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset, CommandUpdateNow:
+		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset:
 		if len(args) > 2 || (len(args) == 2 && args[1] != "--dry-run") {
 			return Invocation{}, fmt.Errorf("usage: chairlift-ublue-helper %s [--dry-run]", args[0])
 		}
@@ -274,24 +250,6 @@ func RollbackArgs() []string {
 // already booted.
 func FactoryResetArgs() []string {
 	return []string{"install", "reset", "--experimental", "--apply"}
-}
-
-// UpdateNowArgs returns the argv passed to UpdaterPath for an on-demand full
-// update. It is deliberately empty: the updater's own default run is exactly
-// the operation the user asked for — the booted image, then Flatpaks,
-// Homebrew packages, and containers — and every flag it accepts is either
-// redundant with that default or a decision that belongs to the user rather
-// than to an authenticated argv.
-//
-// Three omissions are load-bearing. `--apply` would restart the machine at
-// the end of an update the user did not ask to end their session; restarting
-// stays the separately confirmed CommandRestart action. `--force` would skip
-// the updater's own pre-update checks. `--config` takes a path, and a path
-// crossing this boundary would let an authenticated caller redirect every
-// module's binary at a file they control — which is why the whole argv is
-// fixed here rather than assembled from the invocation.
-func UpdateNowArgs() []string {
-	return []string{}
 }
 
 // AutoUpdateArgs returns the ordered systemctl argv lists that turn automatic

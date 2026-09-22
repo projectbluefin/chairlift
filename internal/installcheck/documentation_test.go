@@ -103,8 +103,8 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 
 	t.Run("privileged integration inventory is complete", func(t *testing.T) {
 		ubluePolicy := readRepoFile(t, filepath.Join("data", "io.projectbluefin.chairlift.ublue.policy"))
-		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 10 {
-			t.Fatalf("ublue policy actions = %d, want 10", got)
+		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 9 {
+			t.Fatalf("ublue policy actions = %d, want 9", got)
 		}
 
 		current := strings.Join([]string{
@@ -125,9 +125,8 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 			"/usr/share/chairlift/config.yml",
 			"/usr/share/doc/chairlift/channels.example.yml",
-			"ten actions",
+			"nine actions",
 			"factory-reset",
-			"update-now",
 		} {
 			if !strings.Contains(current, required) {
 				t.Errorf("current documentation does not contain %q", required)
@@ -139,8 +138,8 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"all three policies",
 			"the three PolicyKit policies",
 			"eight subcommands",
-			"nine subcommands",
-			"nine actions",
+			"ten subcommands",
+			"ten actions",
 			"declaring the three actions",
 			"builds two binaries",
 			"chairlift-updex-helper` only",

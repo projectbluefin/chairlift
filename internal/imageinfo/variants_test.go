@@ -18,6 +18,12 @@ func TestSplitDriverRecognizesOnlyManagedImages(t *testing.T) {
 		// host is misread as proprietary and offered a pointless switch.
 		{name: "bluefin nvidia open", ref: "ghcr.io/ublue-os/bluefin-nvidia-open", wantBase: "ghcr.io/ublue-os/bluefin", wantDriver: DriverNVIDIAOpen},
 		{name: "dakota nvidia", ref: "ghcr.io/projectbluefin/dakota-nvidia", wantBase: "ghcr.io/projectbluefin/dakota", wantDriver: DriverNVIDIA},
+		// The gaming flavour keeps its suffix last, so the driver suffix is
+		// an infix. Splitting on the trailing "-gaming" would leave the
+		// nvidia variant unrecognized, and composing the driver suffix at
+		// the end would produce dakota-gaming-nvidia, which is a 404.
+		{name: "dakota gaming is its own base", ref: "ghcr.io/projectbluefin/dakota-gaming", wantBase: "ghcr.io/projectbluefin/dakota-gaming", wantDriver: DriverStandard},
+		{name: "dakota nvidia gaming", ref: "ghcr.io/projectbluefin/dakota-nvidia-gaming", wantBase: "ghcr.io/projectbluefin/dakota-gaming", wantDriver: DriverNVIDIA},
 		// bluefin-dx-nvidia is a variant of an image ChairLift does not
 		// manage. Splitting it would produce base "ghcr.io/ublue-os/
 		// bluefin-dx", which is not in the table, so it must be left whole.
@@ -43,7 +49,8 @@ func TestSplitDriverRecognizesOnlyManagedImages(t *testing.T) {
 
 // The whole point of keying on the stream: driver images are published for
 // some streams and not others. Every row here is a manifest request made on
-// 2026-08-17 and recorded in variants.go's table comment.
+// 2026-08-17 or, for the dakota rows, re-made on 2026-09-21, and recorded in
+// variants.go's table comment.
 func TestAvailableDriversAreStreamDependent(t *testing.T) {
 	tests := []struct {
 		name string
@@ -79,9 +86,18 @@ func TestAvailableDriversAreStreamDependent(t *testing.T) {
 			want: nil,
 		},
 		{
-			name: "dakota latest has nvidia",
+			// The 2026-09-21 correction: dakota-nvidia:latest is now a 404,
+			// so a dakota host on latest has no driver choice left. It was
+			// published on 2026-08-17, which is how the stale entry got in.
+			name: "dakota latest lost its nvidia variant",
 			ref:  "ghcr.io/projectbluefin/dakota",
 			tag:  "latest",
+			want: nil,
+		},
+		{
+			name: "dakota stable has nvidia",
+			ref:  "ghcr.io/projectbluefin/dakota",
+			tag:  "stable",
 			want: []Driver{DriverStandard, DriverNVIDIA},
 		},
 		{
@@ -89,6 +105,28 @@ func TestAvailableDriversAreStreamDependent(t *testing.T) {
 			ref:  "ghcr.io/projectbluefin/dakota",
 			tag:  "testing",
 			want: []Driver{DriverStandard, DriverNVIDIA},
+		},
+		{
+			name: "dakota gaming stable has nvidia",
+			ref:  "ghcr.io/projectbluefin/dakota-gaming",
+			tag:  "stable",
+			want: []Driver{DriverStandard, DriverNVIDIA},
+		},
+		{
+			// A gaming host already on the NVIDIA image must see the same
+			// choice, which only works if the infix split found its base.
+			name: "dakota nvidia gaming sees the full choice",
+			ref:  "ghcr.io/projectbluefin/dakota-nvidia-gaming",
+			tag:  "testing",
+			want: []Driver{DriverStandard, DriverNVIDIA},
+		},
+		{
+			// The gaming images publish no latest, so neither flavour is
+			// available on it and there is nothing to offer.
+			name: "dakota gaming has no latest stream",
+			ref:  "ghcr.io/projectbluefin/dakota-gaming",
+			tag:  "latest",
+			want: nil,
 		},
 		{
 			name: "projectbluefin lts publishes no variants",
@@ -144,12 +182,27 @@ func TestDriverTargetBuildsPublishedReferencesOnly(t *testing.T) {
 			name: "dakota to nvidia", ref: "ghcr.io/projectbluefin/dakota", tag: "testing", driver: DriverNVIDIA,
 			want: "ghcr.io/projectbluefin/dakota-nvidia:testing", wantOK: true,
 		},
+		{
+			// The published name is dakota-nvidia-gaming. Appending the
+			// driver suffix instead gives dakota-gaming-nvidia, a 404 that
+			// would only be discovered as a failed switch on a real host.
+			name: "dakota gaming to nvidia keeps the flavour last", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "stable", driver: DriverNVIDIA,
+			want: "ghcr.io/projectbluefin/dakota-nvidia-gaming:stable", wantOK: true,
+		},
+		{
+			name: "dakota nvidia gaming back to standard", ref: "ghcr.io/projectbluefin/dakota-nvidia-gaming", tag: "testing", driver: DriverStandard,
+			want: "ghcr.io/projectbluefin/dakota-gaming:testing", wantOK: true,
+		},
+		{name: "dakota gaming has no latest stream", ref: "ghcr.io/projectbluefin/dakota-gaming", tag: "latest", driver: DriverNVIDIA, wantOK: false},
+		{name: "dakota latest lost its nvidia variant", ref: "ghcr.io/projectbluefin/dakota", tag: "latest", driver: DriverNVIDIA, wantOK: false},
 		// The reference that must never be produced.
 		{name: "lts cannot reach nvidia", ref: "ghcr.io/ublue-os/bluefin", tag: "lts", driver: DriverNVIDIA, wantOK: false},
 		{name: "already on the requested driver", ref: "ghcr.io/ublue-os/bluefin-nvidia", tag: "latest", driver: DriverNVIDIA, wantOK: false},
 		{name: "unknown image", ref: "ghcr.io/someone/custom", tag: "latest", driver: DriverNVIDIA, wantOK: false},
 		{name: "no tag", ref: "ghcr.io/ublue-os/bluefin", tag: "", driver: DriverNVIDIA, wantOK: false},
-		{name: "dakota has no open modules", ref: "ghcr.io/projectbluefin/dakota", tag: "latest", driver: DriverNVIDIAOpen, wantOK: false},
+		// On a stream that does publish a driver variant, so the refusal is
+		// about the open modules and not about the stream.
+		{name: "dakota has no open modules", ref: "ghcr.io/projectbluefin/dakota", tag: "stable", driver: DriverNVIDIAOpen, wantOK: false},
 	}
 
 	for _, test := range tests {
@@ -180,7 +233,19 @@ func TestRecommendedDriverIsNarrowAndOneDirectional(t *testing.T) {
 		},
 		{
 			name:      "dakota with an nvidia card",
+			info:      Info{Name: "dakota", Tag: "stable", Ref: "docker://ghcr.io/projectbluefin/dakota"},
+			hasNVIDIA: true, wantDriver: DriverNVIDIA, wantOffer: true,
+		},
+		{
+			// dakota-nvidia:latest stopped being published, so a latest
+			// host has nowhere to go even with the card.
+			name:      "dakota latest has no driver image to offer",
 			info:      Info{Name: "dakota", Tag: "latest", Ref: "docker://ghcr.io/projectbluefin/dakota"},
+			hasNVIDIA: true, wantDriver: DriverStandard, wantOffer: false,
+		},
+		{
+			name:      "dakota gaming with an nvidia card",
+			info:      Info{Name: "dakota-gaming", Tag: "stable", Ref: "docker://ghcr.io/projectbluefin/dakota-gaming"},
 			hasNVIDIA: true, wantDriver: DriverNVIDIA, wantOffer: true,
 		},
 		{

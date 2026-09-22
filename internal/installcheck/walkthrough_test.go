@@ -149,7 +149,7 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		// agents_page
 		"agents_group": "Agents",
 		// updates_page
-		"update_all_group":        "Update All",
+		"automatic_updates_group": "Automatic updates",
 		"bootc_updates_group":     "System Updates",
 		"sysupdate_updates_group": "System Updates",
 		"flatpak_updates_group":   "Flatpak",
