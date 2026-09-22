@@ -135,8 +135,10 @@ func (e gooseExt) valid() bool {
 }
 
 // lookPath is an injection seam for binary detection, so Detect is testable
-// without installing anything. Bare names are resolved on $PATH, the same
-// way internal/homebrew finds brew itself.
+// without installing anything. Bare names are resolved on $PATH. Homebrew is
+// deliberately not detected this way: internal/homebrew.ExecutablePath is the
+// one resolution for `brew`, and it falls back to the Linuxbrew install path
+// when $PATH has none.
 var lookPath = defaultLookPath
 
 func defaultLookPath(name string) bool {

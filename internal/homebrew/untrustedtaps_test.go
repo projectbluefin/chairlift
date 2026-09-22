@@ -193,9 +193,12 @@ func TestBrewPrefixTrimsTrailingNewline(t *testing.T) {
 
 // TestBrewPrefixWithoutBrewReportsNotFound covers brew being absent from
 // $PATH entirely, which must surface as the actionable NotFoundError rather
-// than a bare exec failure.
+// than a bare exec failure. The Linuxbrew fallback is pointed at a path that
+// does not exist, so the test asserts the same absence on a host that has a
+// real Homebrew installed there.
 func TestBrewPrefixWithoutBrewReportsNotFound(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
+	withHostResolution(t, "", absentPath(t))
 
 	prefix, err := brewPrefix()
 	if err == nil {

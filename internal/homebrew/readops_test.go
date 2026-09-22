@@ -228,8 +228,12 @@ func TestBrewIsInstalledEndToEnd(t *testing.T) {
 		}
 	})
 
-	t.Run("false when brew is absent from PATH", func(t *testing.T) {
+	t.Run("false when brew is absent from PATH and from the fallback", func(t *testing.T) {
+		// Both resolution inputs are pinned: brew is nowhere on $PATH and the
+		// Linuxbrew fallback does not exist, so the assertion holds on a host
+		// that has a real Homebrew installed at the fallback path too.
 		t.Setenv("PATH", t.TempDir())
+		withHostResolution(t, "", absentPath(t))
 
 		if IsInstalled() {
 			t.Fatal("IsInstalled() = true, want false")

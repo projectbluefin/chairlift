@@ -284,7 +284,19 @@ An agent must not break these:
   `config.SchemaGroups` in both directions, enforced by
   `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`, so
   a new config group is classified in the same change that adds it.
-- **Homebrew update actions preserve known state.** Per-package upgrades and
+- **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`
+  is the only place ChairLift decides which `brew` it means: the `brew` that
+  `$PATH` resolves, or `/home/linuxbrew/.linuxbrew/bin/brew` when `$PATH` has
+  none. That fallback is the path `data/chairlift-wrapper.sh` evaluates
+  `shellenv` from, so a launch through the wrapper finds `brew` on `$PATH` and
+  a direct binary launch — the desktop entry, or `chairlift` run from a shell —
+  does not, even though the same Homebrew is installed. Visibility
+  (`IsInstalled`, and through it every view that hides or disables a Homebrew
+  affordance) and execution (`runBrewCommandCtx`, and through it every brew
+  command ChairLift issues) both read it, so a host whose Homebrew is reachable
+  only at the fallback is reported as installed *and* actually driven. A `brew`
+  on `$PATH` wins over the fallback. Do not reintroduce a second resolution: no
+  bare `"brew"` at an exec site, and no private copy of the fallback path.- **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
   changing rows or counts. A live package success removes its row, decrements

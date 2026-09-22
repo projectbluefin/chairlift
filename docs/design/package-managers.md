@@ -128,9 +128,51 @@ the generation-guarded `loadHomebrewPackages` refresh. The refresh, rather
 than the action callback, owns row replacement, so overlapping loads cannot
 publish stale installed state.
 
+### Executable resolution (`internal/homebrew/executable.go`)
+
+`ExecutablePath() string` is the one place ChairLift decides *which* `brew` it
+means, and both halves of the wrapper read it. It returns the `brew` that
+`$PATH` resolves, or the Linuxbrew install path
+`/home/linuxbrew/.linuxbrew/bin/brew` when `$PATH` has none, or `""` when the
+host has no Homebrew at all.
+
+Both halves matter because Homebrew is reachable by two launch routes.
+`data/chairlift-wrapper.sh:5-8` evaluates `brew shellenv` before it exec's the
+application, so a launch through the wrapper finds `brew` on `$PATH`; a direct
+binary launch — the desktop entry, or `chairlift` run from a shell — does not,
+even though the same Homebrew is installed. Resolving only `$PATH` therefore
+reported an installed Homebrew as absent, and the fallback is what the wrapper
+would have supplied. The fallback is tested with `os.Stat` plus
+`Mode().IsRegular()`, the same `[ -f "$BREW_PATH" ]` test the wrapper performs,
+so presence means the same thing in both places.
+
+- **Visibility** — `IsInstalled()` resolves through this function and
+  short-circuits to `false` when nothing resolves. Every view reads availability
+  through `IsInstalledCached()`, so the Applications, Updates, and Maintenance
+  pages agree on whether Homebrew is present.
+- **Execution** — `runBrewCommandCtx` passes `brewExecutable()`, which is
+  `ExecutablePath()` with the not-found case kept as the bare name `"brew"` so
+  the failure keeps its `*NotFoundError` classification and its "Please install
+  Homebrew first" message. Nothing resolves in that case, so the two halves
+  still agree: both report no Homebrew.
+
+A `brew` on `$PATH` wins over the fallback, so a user who customised their
+`$PATH` keeps the Homebrew they chose. Resolution runs per call rather than
+being memoized in a package variable: `exec.CommandContext` already resolves a
+bare command name on every exec, so a cache would save nothing measurable while
+freezing the answer ahead of any change on the host. The session-stable answer
+the UI needs is `IsInstalledCached`'s, which caches the availability verdict
+rather than the path. `lookPath` and `statFile` are function seams — the same
+pattern as `internal/troubleshoot`'s `lookPath` — and `linuxbrewExecutable` is a
+variable for the same reason, so a test can assert the fallback on a host
+without Linuxbrew and assert absence on a host with one.
+`internal/homebrew/executable_test.go` covers the precedence, the fallback, the
+empty case, a directory at the fallback path, and both halves executing the
+resolved path end to end.
+
 ### Error handling
 
-`runBrewCommand` is a thin wrapper: it builds a context from `commandTimeout(args)` and delegates to `runBrewCommandCtx(ctx context.Context, args ...string) (string, error)`, which applies the dry-run skip (before any `exec.Cmd` exists) and otherwise calls the unexported `runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, error)`, always passing `"brew"`. The executable path and context are parameters purely so `runner_test.go` can drive a `#!/bin/sh` script from `t.TempDir()` and control the deadline — the same seam `stageexec.Run` gives OS staging. `Update(ctx context.Context) error` is the one exported function that takes a `context.Context`: it narrows the caller's context with `context.WithTimeout(ctx, mutationTimeout)` — whichever deadline is nearer wins — and passes it to the same `runBrewCommandCtx`, so Update All's cancellation stops `brew update` instead of the command running on to its own 30-minute budget. Every other exported function gets a deadline, not cancellation. Routing both paths through `runBrewCommandCtx` keeps a single dry-run gate, so the two cannot drift apart.
+`runBrewCommand` is a thin wrapper: it builds a context from `commandTimeout(args)` and delegates to `runBrewCommandCtx(ctx context.Context, args ...string) (string, error)`, which applies the dry-run skip (before any `exec.Cmd` exists) and otherwise calls the unexported `runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, error)`, passing the path `brewExecutable` resolved rather than the bare name (see "Executable resolution" above). The executable path and context are parameters purely so `runner_test.go` can drive a `#!/bin/sh` script from `t.TempDir()` and control the deadline — the same seam `stageexec.Run` gives OS staging. `Update(ctx context.Context) error` is the one exported function that takes a `context.Context`: it narrows the caller's context with `context.WithTimeout(ctx, mutationTimeout)` — whichever deadline is nearer wins — and passes it to the same `runBrewCommandCtx`, so Update All's cancellation stops `brew update` instead of the command running on to its own 30-minute budget. Every other exported function gets a deadline, not cancellation. Routing both paths through `runBrewCommandCtx` keeps a single dry-run gate, so the two cannot drift apart.
 
 `runBrewCommandAt` starts the command in its own process group (`cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}`) and sets `cmd.Cancel` to `syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)`, so brew's helper processes (git, curl, download workers) are killed with the command instead of being orphaned when only the direct child is signalled. `cmd.WaitDelay` (5s) bounds the wait, because those helpers inherit the stdout/stderr pipes and a straggler would otherwise hold `Wait` open indefinitely. `cmd.Run` still reaps the child. Read-only commands still capture full stdout for JSON/text parsers. State-changing commands wire stdout and stderr to 64 KiB tail writers instead: successful mutation output is discarded, and failures retain only bounded diagnostic context (stderr, or stdout when stderr is empty).
 

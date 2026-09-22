@@ -177,6 +177,9 @@ func runBrewCommand(args ...string) (string, error) {
 // entry points such as Update supply the caller's context already narrowed to
 // the mutation budget, so cancellation propagates without a second gate that
 // could drift out of sync.
+//
+// The executable comes from brewExecutable, the same resolution IsInstalled
+// reports through, so visibility and execution cannot name different binaries.
 func runBrewCommandCtx(ctx context.Context, args ...string) (string, error) {
 	if isStateChanging(args) && dryrun.Enabled() {
 		msg := fmt.Sprintf("[DRY-RUN] Would execute: brew %s", strings.Join(args, " "))
@@ -184,15 +187,16 @@ func runBrewCommandCtx(ctx context.Context, args ...string) (string, error) {
 		return msg, nil
 	}
 
-	return runBrewCommandAt(ctx, "brew", args...)
+	return runBrewCommandAt(ctx, brewExecutable(), args...)
 }
 
 // runBrewCommandAt runs exe with args under ctx. Read-only commands return
 // full stdout for parsers; state-changing commands discard successful output
 // and retain only bounded stdout/stderr tails for failure diagnostics. The
 // executable and context are parameters so tests can drive a fake script and
-// control the deadline; the sole production caller (runBrewCommandCtx) always
-// passes "brew".
+// control the deadline; the sole production caller (runBrewCommandCtx) passes
+// the path brewExecutable resolved, so the binary that runs is the one
+// ExecutablePath reported as installed.
 //
 // The command runs in its own process group and cancellation signals the
 // whole group, so brew's helper processes (git, curl, download workers) die
@@ -284,12 +288,24 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 	return stdout.String(), nil
 }
 
-// IsInstalled checks if Homebrew is installed and accessible
+// IsInstalled checks if Homebrew is installed and accessible.
+//
+// It asks ExecutablePath where brew is instead of assuming $PATH, so a host
+// whose Homebrew is only reachable at the Linuxbrew install path — reached by
+// a direct binary launch, which bypasses data/chairlift-wrapper.sh and the
+// `brew shellenv` it runs — is reported as installed exactly when
+// runBrewCommandCtx would find a binary to run (issue #207). An absent
+// Homebrew short-circuits rather than exec'ing a command that cannot resolve.
 func IsInstalled() bool {
+	exe := ExecutablePath()
+	if exe == "" {
+		return false
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "brew", "--version")
+	cmd := exec.CommandContext(ctx, exe, "--version")
 	err := cmd.Run()
 	return err == nil
 }
