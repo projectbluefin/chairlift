@@ -394,9 +394,14 @@ An agent must not break these:
   is healthy, an active model is available, and the Jan integration is
   configured; otherwise the Agent Mode surface opens with the unmet
   prerequisite visible. That predicate is deliberately not
-  `Ready(o) && JanConfigured` — readiness additionally requires the service to
-  be active, and the fact a chat client depends on is that the endpoint
-  answers.
+  `Ready(o) && JanConfigured` — readiness additionally requires the switch,
+  host support, the provisioned marker and an active service, while the fact a
+  chat client depends on is that the endpoint answers. The switch's absence
+  from those terms is pinned by a test: `disabled` outranks every other
+  *state*, and the decision still reports it, but Jan is the distribution's
+  application and disabling Agent Mode unprovisions llmman's service, so the
+  endpoint stops answering and the switch surfaces as the unmet prerequisite on
+  its own.
 
   Agent Mode has no `pkexec` path and may not gain one: installation, the user
   service, and every configuration write stay in the invoking account, so no

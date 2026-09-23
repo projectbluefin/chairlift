@@ -107,6 +107,18 @@ the endpoint answers. The two predicates must not be collapsed into
 machine. `internal/agentmode` holds the distinction as a test rather than as a
 comment.
 
+The dispatcher's terms do not include the user's switch either, and that
+follows from the same reasoning rather than contradicting `disabled`'s
+precedence. `disabled` outranks every other *state*, and the decision carries
+that state, so the surface never offers to repair a feature the user switched
+off. Jan is not that feature: the distribution installs and owns it, and
+nothing this switch does removes it. Turning Agent Mode off stops and
+unprovisions `llmman`'s user service, so the endpoint stops answering and the
+dispatcher opens the surface with the switch as the unmet prerequisite on its
+own. Refusing a launch on a machine whose endpoint still answers would withhold
+a working chat client on the strength of a switch that no longer describes the
+machine, so that row is pinned by a test rather than left as an accident.
+
 Both intents resolve through one function so the menu entry and the shortcut
 cannot disagree. A cold start and a warm start resolve to the same surface: the
 intent never opens a second window, and no caller may branch on "an instance is
@@ -117,6 +129,14 @@ cannot run `llmman` the endpoint is unhealthy as a *consequence*, and reporting
 "endpoint unhealthy" beside "host unsupported" would hand the user a repair
 step that cannot work. Each state therefore contributes only the conditions
 that are its own cause, and the surface shows the first one as primary.
+
+`unconfigured` is the one state whose list names conditions setup has not yet
+established — the endpoint, the model, and the integration — rather than a
+single "setup incomplete" prerequisite. There is no such prerequisite because
+setup is not a condition a user restores; it is the act of establishing those
+three, so the residual list *is* the cause a first-time user can act on. The
+contrast with `unavailable` holds: there, nothing in the list can be acted on
+at all.
 
 ### Ownership
 

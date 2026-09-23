@@ -236,13 +236,29 @@ type Decision struct {
 // The three terms are evaluated directly rather than through Classify, so the
 // predicate is the one the epic states and does not silently widen when the
 // state model changes. The two are deliberately not the same predicate: Ready
-// additionally requires ServiceActive, so Ready(o) implies all three terms
-// but the converse does not hold. A machine whose service is inactive while
-// its endpoint answers with a model loaded is one systemd has not caught up
-// with, and the fact a chat client depends on is that the endpoint answers —
-// so the dispatcher launches Jan there while the surface still reports the
-// service problem. Rewriting this as Ready(o) && o.JanConfigured would refuse
-// Jan on that machine, which is why the distinction has its own test.
+// requires Enabled, Supported, Provisioned, !Provisioning and ServiceActive on
+// top of the endpoint and the model, so Ready(o) implies the endpoint and
+// model terms but the converse does not hold. A machine whose service is
+// inactive while its endpoint answers with a model loaded is one systemd has
+// not caught up with, and the fact a chat client depends on is that the
+// endpoint answers — so the dispatcher launches Jan there while the surface
+// still reports the service problem. Rewriting this as Ready(o) &&
+// o.JanConfigured would refuse Jan on that machine, which is why the
+// distinction has its own test.
+//
+// That gap includes Enabled, and the omission is deliberate rather than an
+// oversight of the "disabled outranks everything" rule. The rule governs the
+// state this package reports: Classify still answers StateDisabled, and the
+// Decision carries that state so the surface never offers to repair a feature
+// the user switched off. It does not govern Jan, which the distribution
+// installs and owns (ADR-0013's ownership table) and which ChairLift's switch
+// never uninstalls. Turning Agent Mode off stops and unprovisions llmman's
+// user service through llmman's own commands, so the endpoint stops answering
+// and the dispatcher opens the surface with PrerequisiteEnabled on its own.
+// Refusing a launch while the endpoint *does* still answer would withhold a
+// working chat client because of a switch that no longer describes the
+// machine. TestADisabledSwitchStillLaunchesJanWhileTheEndpointAnswers pins
+// this row so the behavior is a decision rather than a side effect.
 func AskBluefin(o Observation) Decision {
 	if o.EndpointHealthy && o.ActiveModel && o.JanConfigured {
 		return Decision{Target: TargetJan, State: Classify(o)}
@@ -262,6 +278,14 @@ func AskBluefin(o Observation) Decision {
 // alongside "host unsupported" would hand the user a repair step that cannot
 // work. Each state therefore contributes only the conditions that are its own
 // cause.
+//
+// StateUnconfigured is the one state that names consequences, and it does so
+// deliberately: there is no "setup incomplete" prerequisite, because setup is
+// not a condition a user restores — it is the act of establishing the
+// endpoint, the model, and the integration in the first place. The residual
+// list is what setup still owes, which is the cause a first-time user can act
+// on. The unavailable state is different only because nothing in its list can
+// be acted on at all.
 func unmetPrerequisites(o Observation) []Prerequisite {
 	switch Classify(o) {
 	case StateDisabled:

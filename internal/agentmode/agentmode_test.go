@@ -238,6 +238,48 @@ func TestAskBluefinLaunchesJanOnlyWhenEveryTermHolds(t *testing.T) {
 	}
 }
 
+// TestADisabledSwitchStillLaunchesJanWhileTheEndpointAnswers pins the row the
+// dispatcher's truth table does not reach, because every row there is built
+// from fullyReady() and therefore has Enabled=true.
+//
+// The three terms do not name the user's switch, so an observation with Agent
+// Mode off and an endpoint that still answers launches Jan. That is a
+// decision, not an oversight of "disabled outranks everything": that rule
+// governs the state, which the decision still reports as StateDisabled so the
+// surface never offers to repair a feature the user turned off. Jan belongs to
+// the distribution and this switch never uninstalls it, and disabling Agent
+// Mode unprovisions llmman's service — so on an ordinary machine the endpoint
+// stops answering and the switch surfaces as the unmet prerequisite by itself.
+func TestADisabledSwitchStillLaunchesJanWhileTheEndpointAnswers(t *testing.T) {
+	observation := fullyReady()
+	observation.Enabled = false
+
+	decision := AskBluefin(observation)
+	if decision.Target != TargetJan {
+		t.Errorf("AskBluefin(%+v).Target = %q, want %q: the dispatcher's terms are the endpoint, the model, and Jan",
+			observation, decision.Target, TargetJan)
+	}
+	if decision.State != StateDisabled {
+		t.Errorf("AskBluefin(%+v).State = %q, want %q: the decision still reports the user's intent",
+			observation, decision.State, StateDisabled)
+	}
+	if len(decision.Unmet) != 0 {
+		t.Errorf("AskBluefin(%+v).Unmet = %v, want none: a launch has nothing unmet to show",
+			observation, decision.Unmet)
+	}
+
+	observation.EndpointHealthy = false
+	stopped := AskBluefin(observation)
+	if stopped.Target != TargetAgentModeSurface {
+		t.Errorf("AskBluefin(%+v).Target = %q, want %q: a disabled switch with a silent endpoint opens the surface",
+			observation, stopped.Target, TargetAgentModeSurface)
+	}
+	if len(stopped.Unmet) != 1 || stopped.Unmet[0] != PrerequisiteEnabled {
+		t.Errorf("AskBluefin(%+v).Unmet = %v, want only %q",
+			observation, stopped.Unmet, PrerequisiteEnabled)
+	}
+}
+
 // TestUnmetPrerequisitesNameTheCauseNotTheSymptom checks the gating rule: a
 // host that cannot run llmman has an unhealthy endpoint as a consequence, and
 // reporting that consequence would hand the user a repair step that cannot
