@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
@@ -32,6 +33,10 @@ func newFakeCommands(t *testing.T) *fakeCommands {
 	fakeBinDir := t.TempDir()
 	dconfPath := filepath.Join(fakeBinDir, "dconf")
 	if err := os.WriteFile(dconfPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(fakeBinDir, "gtk-update-icon-cache")
+	if err := os.WriteFile(cachePath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", fakeBinDir+":"+os.Getenv("PATH"))
@@ -204,6 +209,130 @@ func TestAppGridOverrideTargetsTheAdwaitaTheme(t *testing.T) {
 	wantDock := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.gnome.Nautilus.svg")
 	if dock != wantDock {
 		t.Errorf("dock override path = %q, want %q", dock, wantDock)
+	}
+}
+
+// TestKDEFilesMarkTargetsDolphinInHicolor asserts that on KDE Plasma, the Files
+// mark shadows org.kde.dolphin in hicolor.
+//
+// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
+// so hicolor placement correctly overrides the application launcher icon across
+// Plasma surfaces (Epic #211, issue #216).
+func TestKDEFilesMarkTargetsDolphinInHicolor(t *testing.T) {
+	dir := useTempDataHome(t)
+
+	// Verify icon path resolution on KDE.
+	dockKDE, err := IconPathFor(deskenv.KDE, Dock, "")
+	if err != nil {
+		t.Fatalf("IconPathFor(KDE, Dock): %v", err)
+	}
+	wantKDE := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	if dockKDE != wantKDE {
+		t.Errorf("KDE dock override path = %q, want %q", dockKDE, wantKDE)
+	}
+
+	// Verify constant and helper mappings.
+	if got := DockIconNameFor(deskenv.KDE); got != DockIconNameKDE {
+		t.Errorf("DockIconNameFor(KDE) = %q, want %q", got, DockIconNameKDE)
+	}
+	if got := DockIconNameFor(deskenv.GNOME); got != DockIconNameGNOME {
+		t.Errorf("DockIconNameFor(GNOME) = %q, want %q", got, DockIconNameGNOME)
+	}
+	if DockIconNameKDE != "org.kde.dolphin" {
+		t.Errorf("DockIconNameKDE = %q, want %q", DockIconNameKDE, "org.kde.dolphin")
+	}
+}
+
+// TestKDESurfaceAppliesAndRemovesDolphinIcon asserts that Apply and Clear
+// correctly create and delete ~/.local/share/icons/hicolor/scalable/apps/org.kde.dolphin.svg
+// and trigger icon cache refresh on KDE Plasma sessions.
+func TestKDESurfaceAppliesAndRemovesDolphinIcon(t *testing.T) {
+	dir := useTempDataHome(t)
+	fake := newFakeCommands(t)
+
+	originalDesktop := detectDesktop
+	detectDesktop = func() deskenv.Desktop { return deskenv.KDE }
+	t.Cleanup(func() { detectDesktop = originalDesktop })
+
+	if err := Apply(context.Background(), Dock, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+		t.Fatalf("Apply(Dock): %v", err)
+	}
+
+	expectedPath := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	data, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Apply did not write expected Dolphin icon %s: %v", expectedPath, err)
+	}
+	wantAsset, err := Asset(DefaultID)
+	if err != nil {
+		t.Fatalf("Asset: %v", err)
+	}
+	if !bytes.Equal(data, wantAsset) {
+		t.Errorf("installed icon contents differ from asset")
+	}
+
+	hicolorDir := filepath.Join(dir, "icons", "hicolor")
+	if !fake.sawPrefix("gtk-update-icon-cache -f -t -q " + hicolorDir) {
+		t.Errorf("Apply did not refresh hicolor icon cache; calls: %v", fake.calls)
+	}
+
+	if err := Clear(context.Background(), Dock); err != nil {
+		t.Fatalf("Clear(Dock): %v", err)
+	}
+	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
+		t.Errorf("Clear left Dolphin icon behind at %s", expectedPath)
+	}
+}
+
+// TestKDEUnsupportedSurfaces asserts that surfaces unsupported on KDE
+// (AppGrid and Panel) fail closed and report an explanatory error.
+func TestKDEUnsupportedSurfaces(t *testing.T) {
+	for name, surface := range map[string]Surface{"app-grid": AppGrid, "panel": Panel} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := IconPathFor(deskenv.KDE, surface, ""); err == nil {
+				t.Errorf("IconPathFor(KDE, %s) succeeded, want error", name)
+			}
+			originalDesktop := detectDesktop
+			detectDesktop = func() deskenv.Desktop { return deskenv.KDE }
+			t.Cleanup(func() { detectDesktop = originalDesktop })
+
+			if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err == nil {
+				t.Errorf("Apply(KDE, %s) succeeded, want error", name)
+			}
+			if err := Clear(context.Background(), surface); err == nil {
+				t.Errorf("Clear(KDE, %s) succeeded, want error", name)
+			}
+		})
+	}
+}
+
+// TestKDESessionDetectionViaEnvironment asserts that environment variables
+// (e.g. XDG_CURRENT_DESKTOP=KDE or DESKTOP_SESSION=plasma) automatically
+// configure IconPath to target Dolphin without manual injection.
+func TestKDESessionDetectionViaEnvironment(t *testing.T) {
+	dir := useTempDataHome(t)
+
+	t.Setenv(deskenv.XDGCurrentDesktop, "KDE")
+	t.Setenv(deskenv.DesktopSession, "")
+	t.Setenv(deskenv.KDEFullSession, "")
+
+	path, err := IconPath(Dock, "")
+	if err != nil {
+		t.Fatalf("IconPath(Dock): %v", err)
+	}
+	want := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	if path != want {
+		t.Errorf("IconPath(Dock) with XDG_CURRENT_DESKTOP=KDE = %q, want %q", path, want)
+	}
+
+	t.Setenv(deskenv.XDGCurrentDesktop, "")
+	t.Setenv(deskenv.DesktopSession, "plasma")
+	pathPlasma, err := IconPath(Dock, "")
+	if err != nil {
+		t.Fatalf("IconPath(Dock) with plasma session: %v", err)
+	}
+	if pathPlasma != want {
+		t.Errorf("IconPath(Dock) with DESKTOP_SESSION=plasma = %q, want %q", pathPlasma, want)
 	}
 }
 
