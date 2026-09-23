@@ -107,7 +107,7 @@ valid page.
 - `features_group`: System features managed by updex (requires `updex` command)
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `gaming_group`: Gaming Mode; toggles gaming optimizations (shown only when `/usr/share/ublue-os/image-info.json` is present)
-- `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (shown only when Homebrew is present)
+
 
 ### Livery Page (`livery_page`)
 
@@ -121,6 +121,7 @@ and nothing is written outside `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME`.
 
 ### Help Page (`help_page`)
 
+- `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (moved here from Features, issue #249; shown only when Homebrew is present)
 - `help_resources_group`: Help and support resources
   - `website`: URL to the project website
   - `issues`: URL to the issue tracker for bug reports and feature requests
@@ -172,11 +173,9 @@ maintenance_page:
   maintenance_freespace_group:
     enabled: false # Hide Homebrew cleanup
 
-features_page:
+help_page:
   troubleshooting_group:
     enabled: false # Hide Homebrew-backed troubleshooting assistant
-
-help_page:
   help_resources_group:
     enabled: true
 ```

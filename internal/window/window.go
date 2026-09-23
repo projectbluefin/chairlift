@@ -120,9 +120,9 @@ func (w *Window) buildUI() {
 	// Create views manager
 	w.views = views.New(w.config, w)
 	// Wire the Recovery detail navigation before any page can open it. The
-	// System page opens Recovery; Recovery's back button returns to System.
+	// Maintenance page opens Recovery; Recovery's back button returns to Maintenance.
 	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
-	w.views.SetCloseRecoveryDetail(w.showSystem)
+	w.views.SetCloseRecoveryDetail(w.showMaintenance)
 	log.Printf("window: views built in %s", time.Since(start))
 
 	// Initialize unified updates engine
@@ -147,7 +147,7 @@ func (w *Window) buildUI() {
 		},
 		w,
 	)
-
+	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
 	// Create the navigation split view
 	w.splitView = adw.NewNavigationSplitView()
 
@@ -430,10 +430,10 @@ func (w *Window) showRecoveryDetail() {
 	w.splitView.SetShowContent(true)
 }
 
-// showSystem returns from Recovery to System via the normal System route, so
+// showMaintenance returns from Recovery to Maintenance via the normal route, so
 // the sidebar row and transition state stay consistent.
-func (w *Window) showSystem() {
-	w.navigateToPage("system")
+func (w *Window) showMaintenance() {
+	w.navigateToPage("maintenance")
 }
 
 // onShowShortcuts shows the keyboard shortcuts window

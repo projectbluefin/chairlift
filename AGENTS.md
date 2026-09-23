@@ -37,13 +37,16 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   up to 30 seconds, requires one additional second of process stability, and
   terminates the private process group as soon as the smoke check passes.
   Terminating it is not the end of the story: startup's Homebrew readers are
-  grandchildren, so `cmd.Wait` never observes them and they keep writing into
-  the temporary `HOME` after the leader is reaped. The smoke test therefore
-  scans `/proc` for the group's surviving members, kills whatever ignored the
-  signal, and only returns once none are left — a cleanup registered *after*
-  `t.TempDir()` so it runs before the directory is removed (issue #91). A test
-  that launches a process group owes the same drain. It
-  requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
+  grandchildren, and the Homebrew runner starts them in new process groups.
+  The smoke test launches a private **session** (`Setsid: true`), scans `/proc`
+  for surviving members of that session even when their process-group IDs
+  differ, kills them, and only then removes its temporary `HOME`. A
+  process-group-only scan missed those workers and intermittently failed
+  `t.TempDir()` cleanup with `directory not empty`. Never scan or signal the
+  test runner's shared session. The drain cleanup is registered *after*
+  `t.TempDir()` so it runs before the directory removal. A test that launches
+  a private session and lends it a temporary directory owes the same drain.
+  The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
@@ -220,6 +223,15 @@ An agent must not break these:
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
   extending `docs/walkthrough.md` in the same change.
+  The screenshot runner must write its reset-group override as
+  `config.dev.yml` beside the tagged binary: that is the first relative
+  candidate, ahead of the checkout's own `config.dev.yml` and any
+  executable-adjacent `config.yml`. The E2E walkthrough requires the
+  `views: reset group built` marker so a plausible screenshot cannot hide
+  the opt-in Reset rows silently.
+  The E2E workflows also pass `CHAIRLIFT_SCHEMA_DIR=build/schemas` to the
+  capture script; without it, the real Livery page shows a missing-schema
+  toast that obscures screenshots even though every page capture test passes.
 - **The `chairlift_e2e` stub surface is capped and centralized.** Three
   behaviors are stubbed so the screenshot walkthrough can render features a CI
   runner cannot have: the image descriptor (`CHAIRLIFT_IMAGE_INFO`), the
@@ -266,6 +278,12 @@ An agent must not break these:
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
   worker goroutine.
+- **GObject constructor properties cross the native ABI.** Pass native
+  `GoPointer()` values for object-valued `gobject.NewObject` properties, not
+  Go wrapper addresses, and terminate the C variadic property list with
+  `uintptr(0)`. The wrong pointer emitted a GLib critical on every window
+  launch; the E2E dry-run startup now uses `G_DEBUG=fatal-criticals` so the
+  actual binary fails instead of only logging it.
 - **Streamed command output renders bounded.** A stage helper prints an
   unbounded number of lines, so a view may not answer one line with one
   `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
@@ -303,6 +321,33 @@ An agent must not break these:
   Settings, which every host running this application already ships, so the
   system-version readout and the release-channel switch live on Updates,
   beside the thing that changes them.
+- **The host capability floor has one owner.** `internal/capability` is the
+  puregotk-free authority for what this host can back a page or group with,
+  and its probes are non-blocking only (`exec.LookPath`, `os.Stat`, environment
+  reads), because page-level resolution runs synchronously on the GTK main
+  thread during `buildUI`. A capability is the presence of a backing tool or
+  asset, never a runtime state: a gate that needs a query (`bootc status`,
+  updex's feature store, `uupd.timer`'s systemd state) stays asynchronous in
+  its view and builds a hidden shell. Capability is a floor — configuration may
+  subtract from it and never add to it — so its composed predicate is the one
+  `navigation.VisibleItems` and the view builders share; do not reintroduce a
+  second availability probe in a view. The prerequisites table is total over
+  `config.SchemaGroups` in both directions, enforced by
+  `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`, so
+  a new config group is classified in the same change that adds it.
+- **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`
+  is the only place ChairLift decides which `brew` it means: the `brew` that
+  `$PATH` resolves, or `/home/linuxbrew/.linuxbrew/bin/brew` when `$PATH` has
+  none. That fallback is the path `data/chairlift-wrapper.sh` evaluates
+  `shellenv` from, so a launch through the wrapper finds `brew` on `$PATH` and
+  a direct binary launch — the desktop entry, or `chairlift` run from a shell —
+  does not, even though the same Homebrew is installed. Visibility
+  (`IsInstalled`, and through it every view that hides or disables a Homebrew
+  affordance) and execution (`runBrewCommandCtx`, and through it every brew
+  command ChairLift issues) both read it, so a host whose Homebrew is reachable
+  only at the fallback is reported as installed *and* actually driven. A `brew`
+  on `$PATH` wins over the fallback. Do not reintroduce a second resolution: no
+  bare `"brew"` at an exec site, and no private copy of the fallback path.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
@@ -319,11 +364,27 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+- **A visible retryable control must reset its action gate.**
+  `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
+  controls that become permanently unavailable after live success. Update All,
+  driver switching, Powerwash, and Factory Reset restore their buttons after
+  a run, so they reset their gates even after failure or dry-run. Roll Back is
+  different: `bootc rollback` toggles the selected deployment, so a successful
+  live click completes its gate and leaves its button insensitive; only a
+  failure or preview resets it. `internal/views/actionstate`'s wiring tests
+  guard both lifetimes.
+  Both the dedicated bootc stage action and Update All's OS phase refresh
+  the badge and changelog's Compare references from the new status rather
+  than leaving Compare disabled until restart.
+  A changed pinned image pair clears old diff rows; an in-flight comparison
+  for the old pair must not render after the refresh.
 - **Update badge counts have one state owner.** Bootc, sysupdate, Flatpak,
   and Homebrew counts live in the pure `internal/views/badgestate` package.
-  Refreshes replace a provider's count, successful row removals decrement
-  without going negative, and the displayed total is always the sum of all
-  four providers. Do not restore independent integer fields in `UserHome`.
+  Verified refreshes replace a provider's count, while a failed bootc or
+  native A/B status read keeps the last known count through `SetObserved`
+  rather than inventing zero. Successful row removals decrement without
+  going negative, and the displayed total is always the sum of all four
+  providers. Do not restore independent integer fields in `UserHome`.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
@@ -396,6 +457,27 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
+- **The dated-build catalog reads the registry, and reads it read-only.**
+  `internal/registrytags` is the leaf package behind the rollback calendar
+  (ADR-0013): `Client.Tags` lists a repository through the registry's
+  `Link: rel="next"` pagination, `ParseBuild` reads the day out of the tag
+  name, and `Client.Tag` resolves one tag to its digest and its
+  `org.opencontainers.image.created` timestamp. Every request goes through the
+  `Client.HTTP` transport, the same seam `internal/sbom` uses, so no gate in
+  `make ci` makes an outbound request — its tests drive a loopback `httptest`
+  registry that models GHCR's pagination, its 404 `MANIFEST_UNKNOWN`, and the
+  fact that the response's `Content-Type` header, not the body's `mediaType`
+  field, is the media-type authority (GHCR omits `mediaType` on some dated-tag
+  manifests — verified 2026-09-22). Two rules keep it safe to grow: nothing it
+  returns may reach a privileged path — a `bootc switch` target is still
+  `internal/imageinfo`'s tables and only those (ADR-0011), and a pin is a
+  separate decision because no image reference crosses the ublue pkexec
+  boundary — and the catalog is never baked, cached to disk, or served stale,
+  because a catalog that is not the registry's is the failure this design
+  exists to avoid. A failed read is returned to the caller, never cached and
+  never replaced by a previous answer. `Catalog` caches in process only,
+  bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
+  GTK main thread, so it must stay safe for concurrent readers.
 - **The local-AI stack is one switch on its own page, and it is
   unprivileged.** It lives on `agents_page`, built by
   `internal/views/agents_page.go`, as that page's single group

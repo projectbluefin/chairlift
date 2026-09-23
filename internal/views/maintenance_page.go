@@ -54,11 +54,27 @@ func (uh *UserHome) buildMaintenancePage() {
 		uh.buildConfiguredTasksGroup(page)
 	}
 
-	// Reset group (Powerwash / Factory Reset). reset_group lives under
-	// maintenance_page, so the guard stays here — but the rows are rendered
-	// on the Recovery detail view, never in routine cleanup. A reset is a
-	// deliberate Recovery action, so it is gated by reset_group (disabled by
-	// shipped default) and built on the recovery page's preferences page.
+	// Recovery detail entry. The detail view houses rollback and reset.
+	if uh.recoveryProvidersAvailable() {
+		recoveryGroup := adw.NewPreferencesGroup()
+		recoveryGroup.SetTitle("Recovery")
+		recoveryRow := adw.NewActionRow()
+		recoveryRow.SetTitle("Recovery")
+		recoveryRow.SetSubtitle(pageview.RecoveryEntrySubtitle())
+		recoveryRow.SetActivatable(true)
+		icon := gtk.NewImageFromIconName("pan-end-symbolic")
+		recoveryRow.AddSuffix(&icon.Widget)
+		recoveryActivatedCb := func(row adw.ActionRow) {
+			if uh.openRecoveryDetail != nil {
+				uh.openRecoveryDetail()
+			}
+		}
+		recoveryRow.ConnectActivated(&recoveryActivatedCb)
+		recoveryGroup.Add(&recoveryRow.Widget)
+		page.Add(recoveryGroup)
+	}
+
+	// Reset group (Powerwash / Factory Reset).
 	if uh.config.IsGroupEnabled("maintenance_page", "reset_group") {
 		uh.buildResetGroup(uh.recoveryPrefsPage)
 	}

@@ -102,9 +102,8 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 	}
 	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
 	for file, gates := range map[string][]string{
-		"update_all.go":  {"updateAllGate"},
-		"system_page.go": {"driverGate"},
-		"reset.go":       {"powerwashGate", "factoryResetGate"},
+		"updates_page.go": {"driverGate"},
+		"reset.go":        {"powerwashGate", "factoryResetGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {

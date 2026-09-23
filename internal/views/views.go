@@ -5,9 +5,12 @@ import (
 	"log"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
@@ -252,8 +255,47 @@ func New(cfg *config.Config, toastAdder ToastAdder) *UserHome {
 	uh.buildRecoveryPage()
 
 	log.Printf("views: all pages built in %s", time.Since(start))
-
 	return uh
+}
+
+// OnUpdateFinished refreshes inventories and changelog state after a non-preview update run.
+func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
+	if final.Preview {
+		return
+	}
+	uh.loadFlatpakUpdates()
+	uh.loadOutdatedPackages()
+	for _, source := range final.CompletedSources {
+		if source == updateflow.OperatingSystem {
+			go func() {
+				if sysupdate.IsNativeABCached() {
+					status, err := sysupdate.GetStatus()
+					count := 0
+					if status.IsStaged() {
+						count = 1
+					}
+					uh.updateCounts.SetObserved(badgestate.Sysupdate, count, err == nil)
+					uh.updateBadgeCount()
+					return
+				}
+				ctx, cancel := bootc.DefaultContext()
+				defer cancel()
+				status, err := bootc.GetStatus(ctx)
+				if err == nil {
+					sgtk.RunOnMainThread(func() {
+						uh.refreshChangelogAvailability(status)
+					})
+				}
+				count := 0
+				if status != nil && status.Status.Staged != nil {
+					count = 1
+				}
+				uh.updateCounts.SetObserved(badgestate.Bootc, count, err == nil)
+				uh.updateBadgeCount()
+			}()
+			break
+		}
+	}
 }
 
 // updateBadgeCount updates the total update count and notifies the window

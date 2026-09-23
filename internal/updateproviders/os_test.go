@@ -77,8 +77,8 @@ func TestOperatingSystemSelectionMatrix(t *testing.T) {
 				SysupdateCheck: func(context.Context) (sysupdate.AvailableUpdate, error) {
 					return test.sysCheck, nil
 				},
-				SysupdateStatus: func() sysupdate.Status {
-					return sysupdate.Status{}
+				SysupdateStatus: func() (sysupdate.Status, error) {
+					return sysupdate.Status{}, nil
 				},
 			})
 
@@ -157,11 +157,11 @@ func TestOperatingSystemCheckMapsCurrentVersionAndRestartState(t *testing.T) {
 		SysupdateCheck: func(context.Context) (sysupdate.AvailableUpdate, error) {
 			return sysupdate.AvailableUpdate{Available: true, Version: "20260907134040"}, nil
 		},
-		SysupdateStatus: func() sysupdate.Status {
+		SysupdateStatus: func() (sysupdate.Status, error) {
 			return sysupdate.Status{
 				Check:  &sysupdate.UpdateCheck{RunningVersion: "20260901"},
 				Staged: &sysupdate.StagedUpdate{Version: "20260906120000"},
-			}
+			}, nil
 		},
 	})
 
@@ -268,9 +268,9 @@ func TestOperatingSystemApplySysupdateDryRunReportsPreview(t *testing.T) {
 			close(events)
 			return nil
 		},
-		SysupdateStatus: func() sysupdate.Status {
+		SysupdateStatus: func() (sysupdate.Status, error) {
 			statusCalls++
-			return sysupdate.Status{}
+			return sysupdate.Status{}, nil
 		},
 	})
 
@@ -345,9 +345,9 @@ func TestOperatingSystemApplyPropagatesStageErrorWithoutRefreshingStatus(t *test
 			close(events)
 			return wantErr
 		},
-		SysupdateStatus: func() sysupdate.Status {
+		SysupdateStatus: func() (sysupdate.Status, error) {
 			statusCalls++
-			return sysupdate.Status{}
+			return sysupdate.Status{}, nil
 		},
 	})
 
@@ -390,8 +390,8 @@ func TestOperatingSystemApplyUsesItemScope(t *testing.T) {
 			close(events)
 			return nil
 		},
-		SysupdateStatus: func() sysupdate.Status {
-			return sysupdate.Status{}
+		SysupdateStatus: func() (sysupdate.Status, error) {
+			return sysupdate.Status{}, nil
 		},
 	})
 

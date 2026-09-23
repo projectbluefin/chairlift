@@ -13,7 +13,7 @@ type HomebrewDeps struct {
 	Installed    func() bool
 	ListOutdated func() ([]homebrew.Package, error)
 	Update       func(ctx context.Context) error
-	Upgrade      func(name string) error
+	Upgrade      func(ctx context.Context, name string) error
 	DryRun       func() bool
 }
 type homebrewProvider struct {
@@ -68,7 +68,7 @@ func (p *homebrewProvider) Apply(ctx context.Context, _ []updateflow.Item, _ fun
 	if err := ctx.Err(); err != nil {
 		return updateflow.ApplyResult{}, err
 	}
-	if err := p.deps.Upgrade(""); err != nil {
+	if err := p.deps.Upgrade(ctx, ""); err != nil {
 		return updateflow.ApplyResult{}, err
 	}
 

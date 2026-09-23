@@ -126,6 +126,11 @@ func kinds() []flatpak.Kind {
 	return result
 }
 
+// ComponentCount returns the total number of components in the gaming stack.
+func ComponentCount() int {
+	return len(components)
+}
+
 // Scope records where each installed component lives. ChairLift installs
 // into the user scope; an image may preinstall a component system-wide.
 type Scope struct {

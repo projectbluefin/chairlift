@@ -14,6 +14,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/sysupdate"
+	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
@@ -77,7 +78,6 @@ func (uh *UserHome) buildUpdatesPage() {
 
 		group.Add(&uh.bootcStageExpander.Widget)
 
-
 		page.Add(group)
 
 		go uh.loadBootcUpdateStatus(group)
@@ -107,7 +107,6 @@ func (uh *UserHome) buildUpdatesPage() {
 		}
 		uh.sysupdateStageBtn.ConnectClicked(&sysupdateClickedCb)
 		uh.sysupdateStageExpander.AddSuffix(&uh.sysupdateStageBtn.Widget)
-
 
 		group.Add(&uh.sysupdateStageExpander.Widget)
 		page.Add(group)
@@ -818,7 +817,7 @@ func (uh *UserHome) onBootcStageClicked() {
 			if staged {
 				version = status.Status.Staged.Version()
 			}
-			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version, lastMessage))
+			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 		})
 	}()
@@ -941,7 +940,7 @@ func (uh *UserHome) onSysupdateStageClicked() {
 				return
 			}
 
-			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version, lastMessage))
+			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 		})
 	}()
@@ -981,69 +980,6 @@ func (uh *UserHome) updateHomebrew(button gtk.Button, gate *actionstate.Gate) {
 			})
 		}
 	})
-}
-
-// loadBootcRollbackStatus reveals the "Go back" row when this machine still
-// keeps its previous version. A host with none — a fresh install, or one
-// whose previous version has been pruned — leaves the row hidden rather
-// than showing an inert control.
-func (uh *UserHome) loadBootcRollbackStatus() {
-	ctx, cancel := bootc.DefaultContext()
-	defer cancel()
-
-	status, err := bootc.GetStatus(ctx)
-
-	sgtk.RunOnMainThread(func() {
-		if uh.bootcRollbackRow == nil {
-			return
-		}
-		if err != nil || status.Status.Rollback == nil {
-			uh.bootcRollbackRow.SetVisible(false)
-			return
-		}
-
-		deployment := status.Status.Rollback
-		presentation := pageview.BootcRollbackRow(deployment.Version(), deployment.Timestamp())
-		uh.bootcRollbackRow.SetSubtitle(presentation.Subtitle)
-		uh.bootcRollbackRow.SetVisible(true)
-		log.Printf("views: bootc rollback available version=%q", deployment.Version())
-	})
-}
-
-// onBootcRollbackClicked asks for the previous version to start next. It
-// does not restart: going back and restarting are separate decisions.
-func (uh *UserHome) onBootcRollbackClicked() {
-	if !uh.bootcRollbackGate.TryStart() {
-		return
-	}
-
-	button := uh.bootcRollbackBtn
-	row := uh.bootcRollbackRow
-	button.SetSensitive(false)
-
-	go func() {
-		ctx, cancel := ublue.DefaultContext()
-		defer cancel()
-
-		err := ublue.Rollback(ctx)
-
-		sgtk.RunOnMainThread(func() {
-			uh.bootcRollbackGate.Complete()
-			button.SetSensitive(true)
-
-			if err != nil {
-				log.Printf("going back to the previous version failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not go back to the previous version")
-				return
-			}
-
-			decision := actionmsg.Rollback(dryrun.Enabled())
-			if decision.Confirm {
-				row.SetSubtitle(pageview.BootcRollbackResultSubtitle())
-			}
-			uh.toastAdder.ShowToast(decision.Toast)
-		})
-	}()
 }
 
 // buildSystemVersionGroup builds the read-only "System version" group: one
@@ -1264,7 +1200,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 		err := ublue.SwitchDriver(ctx, driver)
 
 		sgtk.RunOnMainThread(func() {
-			uh.driverGate.Complete()
+			uh.driverGate.Reset()
 			button.SetSensitive(true)
 			button.SetLabel("Switch")
 

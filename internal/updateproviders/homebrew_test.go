@@ -69,7 +69,7 @@ func TestHomebrewApplyUpdatesMetadataThenAllPackagesOnce(t *testing.T) {
 			calls = append(calls, "update")
 			return nil
 		},
-		Upgrade: func(name string) error {
+		Upgrade: func(ctx context.Context, name string) error {
 			calls = append(calls, "upgrade:"+name)
 			return nil
 		},
@@ -95,7 +95,7 @@ func TestHomebrewApplyMetadataFailureStopsBeforeUpgrade(t *testing.T) {
 	upgradeCalls := 0
 	provider := newHomebrew(HomebrewDeps{
 		Update: func(context.Context) error { return wantErr },
-		Upgrade: func(string) error {
+		Upgrade: func(context.Context, string) error {
 			upgradeCalls++
 			return nil
 		},
@@ -118,7 +118,7 @@ func TestHomebrewApplyUpgradeFailure(t *testing.T) {
 			calls = append(calls, "update")
 			return nil
 		},
-		Upgrade: func(name string) error {
+		Upgrade: func(ctx context.Context, name string) error {
 			calls = append(calls, "upgrade:"+name)
 			return wantErr
 		},
@@ -140,7 +140,7 @@ func TestHomebrewApplyDryRunReportsPreviewWithoutCompletedMutation(t *testing.T)
 			calls = append(calls, "update")
 			return nil
 		},
-		Upgrade: func(name string) error {
+		Upgrade: func(ctx context.Context, name string) error {
 			calls = append(calls, "upgrade:"+name)
 			return nil
 		},

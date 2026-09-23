@@ -115,9 +115,8 @@ other than `tap`.
 | Group | Key | Description |
 |-------|-----|-------------|
 | Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; shown only when Homebrew is present |
 
 Feature operations (enable, disable, update) require administrator
 authentication through PolicyKit and are performed by the fixed
@@ -174,10 +173,12 @@ Each action has:
 | `script` | Absolute path to the script. Required when `sudo` is `true`. |
 | `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The check covers the effective configuration: an untrusted file may not enable a group whose actions include a privileged one, including a privileged action inherited from the built-in defaults. |
 
+
 ### Help Page (`help_page`)
 
 | Group | Key | Description |
 |-------|-----|-------------|
+| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; moved here from Features (issue #249); shown only when Homebrew is present |
 | Resources | `help_resources_group` | Links to project resources |
 
 `help_resources_group` supports:
@@ -213,7 +214,7 @@ maintenance_page:
   maintenance_freespace_group:
     enabled: false
 
-features_page:
+help_page:
   troubleshooting_group:
     enabled: false
 ```

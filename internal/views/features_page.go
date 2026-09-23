@@ -435,7 +435,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 // and applies the result to the gaming row.
 func (uh *UserHome) refreshGamingState(toggle *guardedSwitch, row *adw.ActionRow) {
 	state, err := gaming.Status()
-	total := len(gaming.Components())
+	total := gaming.ComponentCount()
 
 	sgtk.RunOnMainThread(func() {
 		if toggle == nil || row == nil {
@@ -483,14 +483,26 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 				return
 			}
 
+			succeeded := err == nil
 			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled)
 			toggle.set(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
+
+			uh.openDeveloperOnboarding(enabled, succeeded)
 		})
 	}()
+}
+
+// openDeveloperOnboarding opens the developer onboarding tabs for a confirmed
+// live enable, and runs on the GTK main thread from the one branch of
+// onDeveloperToggled that reached a successful promotion.
+func (uh *UserHome) openDeveloperOnboarding(enabled, succeeded bool) {
+	for _, link := range pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded) {
+		uh.openURL(link.URL)
+	}
 }
 
 // onGamingToggled installs or removes the gaming applications. Unlike the

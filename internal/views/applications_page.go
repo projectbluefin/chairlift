@@ -243,6 +243,11 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 							gate.Reset()
 							btn.SetLabel("Install")
 							btn.SetSensitive(homebrewAvailable)
+							var trustErr *homebrew.UntrustedTapError
+							if errors.As(err, &trustErr) {
+								uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title, trustErr.Tap))
+								return
+							}
 							uh.toastAdder.ShowErrorToast(fmt.Sprintf(
 								"Could not install %s. Part of it may have been installed before it stopped.",
 								collection.Title,

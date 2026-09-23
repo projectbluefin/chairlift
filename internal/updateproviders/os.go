@@ -35,7 +35,7 @@ type OSDeps struct {
 	SysupdateCheck          func(context.Context) (sysupdate.AvailableUpdate, error)
 	SysupdateStage          func(context.Context, chan<- sysupdate.ProgressEvent) error
 	SysupdateDryRun         func() bool
-	SysupdateStatus         func() sysupdate.Status
+	SysupdateStatus         func() (sysupdate.Status, error)
 }
 
 type operatingSystemProvider struct {
@@ -141,7 +141,11 @@ func (p *operatingSystemProvider) checkSysupdate(ctx context.Context) (updateflo
 
 	var status sysupdate.Status
 	if p.deps.SysupdateStatus != nil {
-		status = p.deps.SysupdateStatus()
+		st, stErr := p.deps.SysupdateStatus()
+		if stErr != nil {
+			return updateflow.CheckResult{}, stErr
+		}
+		status = st
 	}
 
 	result := updateflow.CheckResult{
@@ -225,9 +229,13 @@ func (p *operatingSystemProvider) Apply(
 	if p.deps.SysupdateStatus == nil {
 		return updateflow.ApplyResult{Changed: true}, nil
 	}
+	st, stErr := p.deps.SysupdateStatus()
+	if stErr != nil {
+		return updateflow.ApplyResult{}, stErr
+	}
 	return updateflow.ApplyResult{
 		Changed:         true,
-		RestartRequired: p.deps.SysupdateStatus().IsStaged(),
+		RestartRequired: st.IsStaged(),
 	}, nil
 }
 

@@ -35,10 +35,11 @@ Further down, each source keeps its own group for when you want to update
 just one thing: **Apps** lists the Flatpak updates waiting, and **Developer
 tools** lists the command-line tools you installed with Homebrew.
 
-**System Updates** adds **Roll Back**, which returns you to the previous
-version if an update went badly, and **What's Changing**, which lists exactly
-what software a pending update will add, remove, or upgrade. That group only
-appears on systems that update as a whole, so it's not in the shot above.
+**System Updates** adds **What's Changing**, which lists exactly what software
+a pending update will add, remove, or upgrade. That group only appears on
+systems that update as a whole, so it's not in the shot above. **Roll Back** —
+returning to the previous version if an update went badly — lives under
+**Recovery**, and only appears where a previous deployment actually exists.
 
 The same page holds the two choices that replace the operating system itself,
 because both land through an update and both need a restart.
@@ -161,10 +162,10 @@ One button. **Free up space** removes old downloads and supporting software
 nothing uses any more, and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. Below it sit
 any **Maintenance tasks** whoever set up this computer added. **Recovery**
-holds the two you can't undo, so each asks first: one removes the apps you
-installed and your development containers, the other reinstalls the system
-from scratch. Both of those are switched off normally, and turned on above so
-you can see them.
+holds the actions you can't undo (under **Maintenance → Recovery**): one returns
+to a previous system version, one removes the apps you installed and your
+development containers, and the other reinstalls the system from scratch.
+Those stay hidden normally until turned on or until a rollback exists.
 
 ---
 

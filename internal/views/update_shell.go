@@ -55,7 +55,16 @@ type UpdateShell struct {
 	content *gtk.Box
 	// secondary is whatever SetSecondaryContent last parented, kept so a
 	// repeat call replaces it instead of adding a second copy.
-	secondary *gtk.Widget
+	secondary        *gtk.Widget
+	onUpdateFinished func(updateflow.Snapshot)
+}
+
+// SetOnUpdateFinished registers a callback invoked on the GTK main thread
+// after an update run finishes.
+func (s *UpdateShell) SetOnUpdateFinished(fn func(updateflow.Snapshot)) {
+	if s != nil {
+		s.onUpdateFinished = fn
+	}
 }
 
 // NewUpdateShell builds a status-first update surface and starts its initial
@@ -201,6 +210,13 @@ func (s *UpdateShell) StartUpdate() {
 			s.publish(snapshot)
 		})
 		s.notifyUpdateComplete(final)
+		if s.onUpdateFinished != nil {
+			sgtk.RunOnMainThread(func() {
+				if s.onUpdateFinished != nil {
+					s.onUpdateFinished(final)
+				}
+			})
+		}
 	}()
 }
 
@@ -245,7 +261,7 @@ func (s *UpdateShell) StartRestart() {
 // have stepped away; every other action completes in view and already has a
 // toast. See internal/notify.
 func (s *UpdateShell) notifyUpdateComplete(final updateflow.Snapshot) {
-	if s == nil || s.toasts == nil || !updatepresent.ShouldPublish(s.closed.Load()) {
+	if s == nil || s.toasts == nil || final.Preview || !updatepresent.ShouldPublish(s.closed.Load()) {
 		return
 	}
 
