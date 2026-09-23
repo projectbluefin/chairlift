@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/deskenv"
 )
 
 // rotateState installs a fake gsettings layer holding the given key/value
@@ -278,5 +280,29 @@ func TestRotationUnitRefusesANewlineInAPath(t *testing.T) {
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Error("a rejected path still wrote a unit file")
+	}
+}
+
+// TestRotateSkipsASurfaceTheSessionCannotResolve covers a user whose stored
+// rotation state was written under GNOME and who then logs into Plasma. The
+// panel surface has no Plasma equivalent, so the pass must skip it rather
+// than turn every login into a non-zero exit from the rotation unit.
+func TestRotateSkipsASurfaceTheSessionCannotResolve(t *testing.T) {
+	useLoopbackCNCFFetch(t)
+	panelID := Foundations()[0].ID
+	f := rotateState(t, map[string]string{
+		KeyPanelEnabled: "true", KeyPanelRotate: "true", KeyPanelID: "'" + panelID + "'",
+		KeyDockEnabled: "true", KeyDockRotate: "true", KeyDockID: "'" + DefaultCNCFID + "'",
+	})
+	useDesktop(t, deskenv.KDE)
+
+	if err := Rotate(context.Background()); err != nil {
+		t.Fatalf("Rotate on KDE: %v", err)
+	}
+	if f.sawPrefix("gsettings set " + SchemaID + " " + KeyPanelID) {
+		t.Errorf("rotation advanced the panel on a desktop that has no panel surface: %v", f.calls)
+	}
+	if want := setCall(KeyDockID, NextCNCFID(DefaultCNCFID)); !f.sawPrefix(want) {
+		t.Errorf("the dock, which KDE does have, was not advanced; wanted %q in %v", want, f.calls)
 	}
 }

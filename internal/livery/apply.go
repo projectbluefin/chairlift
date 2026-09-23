@@ -93,9 +93,23 @@ var surfacesByDesktop = map[deskenv.Desktop]map[Surface]surfaceSpec{
 }
 
 // surfaceFor returns the surface specification for the given surface on the
-// target desktop environment. When the desktop environment is Unknown (such
-// as in headless unit tests), it falls back to GNOME defaults so existing
-// behaviors are preserved.
+// target desktop environment.
+//
+// Unknown resolves to the GNOME table, and that is a deliberate exception to
+// deskenv's fail-closed default rather than an oversight. Every ChairLift
+// surface predates this map and was written into the GNOME names
+// unconditionally, so a session deskenv cannot name — Cinnamon, Xfce, Sway, a
+// container, a TTY, an unset session — kept working because those writes
+// landed anyway. Failing closed here would turn that into "livery is
+// unavailable on your desktop" for users who have marks installed today, a
+// removal this change does not intend. The write is inert where nothing
+// resolves the name: it places a file in the user's own icon theme and edits
+// nothing another package owns.
+//
+// Only a desktop deskenv *does* recognize gets a fail-closed answer, because
+// there the session is known not to resolve the other table's names: a
+// surface missing from that desktop's table returns false and every caller
+// reports it. That is what keeps KDE from receiving GNOME-targeted writes.
 func surfaceFor(s Surface, de deskenv.Desktop) (surfaceSpec, bool) {
 	table, ok := surfacesByDesktop[de]
 	if !ok {
@@ -103,6 +117,41 @@ func surfaceFor(s Surface, de deskenv.Desktop) (surfaceSpec, bool) {
 	}
 	spec, ok := table[s]
 	return spec, ok
+}
+
+// surfaceSupported reports whether a surface has anywhere to land on the given
+// desktop. Callers that run unattended — rotation, most of all — ask this
+// instead of letting Apply fail, so a section whose state was written under a
+// different desktop is skipped rather than turned into an error every login.
+func surfaceSupported(s Surface, de deskenv.Desktop) bool {
+	_, ok := surfaceFor(s, de)
+	return ok
+}
+
+// overridePathsForSurface returns every path this package could have written
+// for one surface, across every desktop table, on this host.
+//
+// Clear consults all of them rather than only the current desktop's, because
+// the desktop is read at call time and a user's sessions are not fixed: a
+// Files mark applied under GNOME writes org.gnome.Nautilus.svg, and a Clear
+// run in a later Plasma session that unlinked only org.kde.dolphin.svg would
+// leave that file behind for good — state says the surface is off while the
+// override still overrides. Clear never asks it for the panel, whose file name
+// varies per selection; removePanelIcons sweeps those by prefix instead.
+func overridePathsForSurface(s Surface, selectionID string) (map[string]string, error) {
+	paths := map[string]string{}
+	for desktop := range surfacesByDesktop {
+		spec, ok := surfaceFor(s, desktop)
+		if !ok {
+			continue
+		}
+		path, err := IconPathFor(desktop, s, selectionID)
+		if err != nil {
+			return nil, err
+		}
+		paths[path] = spec.theme
+	}
+	return paths, nil
 }
 
 // detectDesktop detects the current session's desktop environment.
@@ -508,6 +557,9 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 }
 
 // Clear removes a surface's override, restoring whatever the system supplies.
+//
+// Removal spans every desktop's variant of the surface, not just the running
+// session's: see overridePathsForSurface.
 func Clear(ctx context.Context, s Surface) error {
 	desktop := detectDesktop()
 	spec, ok := surfaceFor(s, desktop)
@@ -528,11 +580,25 @@ func Clear(ctx context.Context, s Surface) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("livery: removing %s: %w", dest, err)
-	}
-	if err := refreshIconCache(ctx, spec.theme); err != nil {
+	// Every desktop's variant of this surface is removed, not only the one
+	// this session would write, so a mark applied under another desktop does
+	// not outlive the state that says it is gone.
+	paths, err := overridePathsForSurface(s, "")
+	if err != nil {
 		return err
+	}
+	paths[dest] = spec.theme
+	themes := map[string]bool{}
+	for path, theme := range paths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("livery: removing %s: %w", path, err)
+		}
+		themes[theme] = true
+	}
+	for theme := range themes {
+		if err := refreshIconCache(ctx, theme); err != nil {
+			return err
+		}
 	}
 	// The app grid lives in a theme directory ChairLift created. Leaving an
 	// empty tree behind would keep a user-scope Adwaita directory in the
