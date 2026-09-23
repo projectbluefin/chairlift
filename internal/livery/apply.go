@@ -58,9 +58,8 @@ type surfaceSpec struct {
 //
 // GNOME and KDE shadow different application names: GNOME's Files application
 // is org.gnome.Nautilus, while KDE Plasma's file manager is org.kde.dolphin.
-// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-// so hicolor placement correctly overrides the application launcher icon across
-// Plasma surfaces without touching vendor desktop entries.
+// Why each lands in hicolor rather than the session's own theme is recorded
+// once on DockIconNameKDE.
 var surfacesByDesktop = map[deskenv.Desktop]map[Surface]surfaceSpec{
 	deskenv.GNOME: {
 		// dash-to-dock asks for `view-app-grid-${sessionMode}-symbolic`, i.e.
@@ -85,9 +84,7 @@ var surfacesByDesktop = map[deskenv.Desktop]map[Surface]surfaceSpec{
 		Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: DockIconNameGNOME},
 	},
 	deskenv.KDE: {
-		// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-		// so hicolor placement correctly overrides the application launcher icon across
-		// Plasma surfaces.
+		// hicolor, not Breeze: see DockIconNameKDE.
 		Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: DockIconNameKDE},
 	},
 }
@@ -202,9 +199,15 @@ const (
 	DockIconNameGNOME = "org.gnome.Nautilus"
 
 	// DockIconNameKDE is the icon-theme name the Files mark shadows on KDE Plasma.
-	// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-	// so hicolor placement correctly overrides the application launcher icon across
-	// Plasma surfaces.
+	//
+	// This is the canonical record of why the KDE Files mark is written into
+	// hicolor rather than Breeze; other sites refer here instead of repeating
+	// it. XDG resolves the current theme and its parents before hicolor, so a
+	// name the session's theme already ships can only be shadowed inside that
+	// theme. Breeze does not ship org.kde.dolphin.svg — it ships only
+	// system-file-manager.svg — so nothing shadows hicolor for this name and
+	// the placement overrides the application launcher icon across Plasma
+	// surfaces without touching vendor desktop entries.
 	DockIconNameKDE = "org.kde.dolphin"
 )
 
@@ -559,26 +562,14 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 // Clear removes a surface's override, restoring whatever the system supplies.
 //
 // Removal spans every desktop's variant of the surface, not just the running
-// session's: see overridePathsForSurface.
+// session's, and deliberately does not consult the running session at all: see
+// overridePathsForSurface. Apply fails closed on a surface the current desktop
+// has no table entry for, but Clear must not, or a mark applied under GNOME
+// would be unremovable from a later Plasma session — state would read
+// "disabled" while the override file kept overriding.
 func Clear(ctx context.Context, s Surface) error {
-	desktop := detectDesktop()
-	spec, ok := surfaceFor(s, desktop)
-	if !ok {
-		return fmt.Errorf("livery: surface %s is not supported on %s", surfaceName(s), desktop)
-	}
-	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would remove the %s mark and refresh the %s icon cache", spec.theme, spec.theme)
-		return nil
-	}
 	if s == Panel {
-		if err := removePanelIcons(); err != nil {
-			return err
-		}
-		return refreshIconCache(ctx, spec.theme)
-	}
-	dest, err := IconPathFor(desktop, s, "")
-	if err != nil {
-		return err
+		return clearPanel(ctx)
 	}
 	// Every desktop's variant of this surface is removed, not only the one
 	// this session would write, so a mark applied under another desktop does
@@ -587,13 +578,23 @@ func Clear(ctx context.Context, s Surface) error {
 	if err != nil {
 		return err
 	}
-	paths[dest] = spec.theme
+	if len(paths) == 0 {
+		return fmt.Errorf("livery: surface %s has no override on any desktop", surfaceName(s))
+	}
 	themes := map[string]bool{}
-	for path, theme := range paths {
+	for _, theme := range paths {
+		themes[theme] = true
+	}
+	if dryrun.Enabled() {
+		for path, theme := range paths {
+			log.Printf("[DRY-RUN] would remove %s and refresh the %s icon cache", path, theme)
+		}
+		return nil
+	}
+	for path := range paths {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("livery: removing %s: %w", path, err)
 		}
-		themes[theme] = true
 	}
 	for theme := range themes {
 		if err := refreshIconCache(ctx, theme); err != nil {
@@ -602,11 +603,35 @@ func Clear(ctx context.Context, s Surface) error {
 	}
 	// The app grid lives in a theme directory ChairLift created. Leaving an
 	// empty tree behind would keep a user-scope Adwaita directory in the
-	// search path for no reason, so prune it back out.
+	// search path for no reason, so prune it back out. Pruning is safe for
+	// any theme here: it removes only directories that are already empty.
 	if s == AppGrid {
-		pruneEmptyThemeDir(spec.theme)
+		for theme := range themes {
+			pruneEmptyThemeDir(theme)
+		}
 	}
 	return nil
+}
+
+// clearPanel sweeps the panel's marks.
+//
+// The panel's file name varies per selection, so overridePathsForSurface
+// cannot name them; removePanelIcons matches PanelIconPrefix instead. The
+// panel exists in one table only, and its theme is fixed, so the sweep is
+// desktop-independent for the same reason Clear is.
+func clearPanel(ctx context.Context) error {
+	spec, ok := surfaceFor(Panel, deskenv.GNOME)
+	if !ok {
+		return errors.New("livery: panel surface not configured")
+	}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would remove the panel marks and refresh the %s icon cache", spec.theme)
+		return nil
+	}
+	if err := removePanelIcons(); err != nil {
+		return err
+	}
+	return refreshIconCache(ctx, spec.theme)
 }
 
 // ClearPanelSettings puts the extension's settings back the way they were.

@@ -251,9 +251,8 @@ func TestAppGridOverrideTargetsTheAdwaitaTheme(t *testing.T) {
 // TestKDEFilesMarkTargetsDolphinInHicolor asserts that on KDE Plasma, the Files
 // mark shadows org.kde.dolphin in hicolor.
 //
-// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-// so hicolor placement correctly overrides the application launcher icon across
-// Plasma surfaces (Epic #211, issue #216).
+// Why hicolor rather than Breeze is recorded on DockIconNameKDE
+// (Epic #211, issue #216).
 func TestKDEFilesMarkTargetsDolphinInHicolor(t *testing.T) {
 	dir := useTempDataHome(t)
 
@@ -317,8 +316,12 @@ func TestKDESurfaceAppliesAndRemovesDolphinIcon(t *testing.T) {
 	}
 }
 
-// TestKDEUnsupportedSurfaces asserts that surfaces unsupported on KDE
-// (AppGrid and Panel) fail closed and report an explanatory error.
+// TestKDEUnsupportedSurfaces asserts that Apply fails closed for surfaces
+// unsupported on KDE (AppGrid and Panel) and reports an explanatory error.
+//
+// Clear is deliberately excluded: it must keep working for every surface on
+// every desktop, or a mark applied under GNOME could never be removed from a
+// Plasma session. TestClearRemovesGNOMEMarkFromKDESession covers that.
 func TestKDEUnsupportedSurfaces(t *testing.T) {
 	for name, surface := range map[string]Surface{"app-grid": AppGrid, "panel": Panel} {
 		t.Run(name, func(t *testing.T) {
@@ -330,8 +333,41 @@ func TestKDEUnsupportedSurfaces(t *testing.T) {
 			if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err == nil {
 				t.Errorf("Apply(KDE, %s) succeeded, want error", name)
 			}
-			if err := Clear(context.Background(), surface); err == nil {
-				t.Errorf("Clear(KDE, %s) succeeded, want error", name)
+		})
+	}
+}
+
+// TestClearRemovesGNOMEMarkFromKDESession asserts that a mark applied under
+// GNOME can be cleared from a later Plasma session.
+//
+// The desktop is read at call time and a user's sessions are not fixed. If
+// Clear fail-closed on the running session's table, the UI toggle-off would
+// error while the override file stayed on disk: state disabled, icon still
+// overridden, and no way back short of deleting the file by hand.
+func TestClearRemovesGNOMEMarkFromKDESession(t *testing.T) {
+	for name, surface := range map[string]Surface{"app-grid": AppGrid, "panel": Panel, "dock": Dock} {
+		t.Run(name, func(t *testing.T) {
+			useTempDataHome(t)
+			newFakeCommands(t)
+
+			useDesktop(t, deskenv.GNOME)
+			if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+				t.Fatalf("Apply(GNOME, %s): %v", name, err)
+			}
+			applied, err := IconPathFor(deskenv.GNOME, surface, DefaultID)
+			if err != nil {
+				t.Fatalf("IconPathFor(GNOME, %s): %v", name, err)
+			}
+			if _, err := os.Stat(applied); err != nil {
+				t.Fatalf("Apply(GNOME, %s) did not write %s: %v", name, applied, err)
+			}
+
+			useDesktop(t, deskenv.KDE)
+			if err := Clear(context.Background(), surface); err != nil {
+				t.Fatalf("Clear(KDE, %s): %v", name, err)
+			}
+			if _, err := os.Stat(applied); !os.IsNotExist(err) {
+				t.Errorf("Clear(KDE, %s) left the GNOME mark behind at %s", name, applied)
 			}
 		})
 	}
