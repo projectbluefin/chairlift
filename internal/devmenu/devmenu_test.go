@@ -575,6 +575,34 @@ func TestApplyDoesNotPinWhenSemanticallyEqual(t *testing.T) {
 	}
 }
 
+func TestApplyDoesNotResetWhenSemanticallyEqualToDefault(t *testing.T) {
+	origLookPath := lookPath
+	origRunCommand := runCommand
+	defer func() {
+		lookPath = origLookPath
+		runCommand = origRunCommand
+	}()
+
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	mock := newMockDconf()
+	mock.defaults[DconfPath+"command8"] = `('Terminal', 'ptyxis --new-window', 'utilities-terminal-symbolic', true)`
+	// Resolved value equals the default entry, differing only in quoting and spacing.
+	mock.user[DconfPath+"command8"] = `("Terminal",  "ptyxis --new-window",  "utilities-terminal-symbolic",  true)`
+	runCommand = mock.runCommand
+
+	if err := Apply(context.Background(), true); err != nil {
+		t.Fatalf("Apply(true) error: %v", err)
+	}
+
+	if len(mock.resets) > 0 {
+		t.Errorf("Apply(true) reset an entry already equal to the default: %v", mock.resets)
+	}
+	if len(mock.writes) > 0 {
+		t.Errorf("Apply(true) wrote an entry already equal to the default: %v", mock.writes)
+	}
+}
+
 func TestApplyNeverConsultsGsettings(t *testing.T) {
 	origLookPath := lookPath
 	origRunCommand := runCommand

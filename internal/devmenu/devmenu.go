@@ -351,27 +351,31 @@ func Apply(ctx context.Context, developerMode bool) error {
 			}
 		}
 
+		// Compare parsed entries, never their textual forms: `dconf dump` quoting
+		// and spacing differ from FormatEntry's, so a string comparison would write
+		// a semantically identical value into the user layer and pin it.
+		if entry == desired {
+			continue
+		}
+
 		if defMatches {
-			if cur != def {
-				if dryrun.Enabled() {
-					log.Printf("[DRY-RUN] would reset Custom Command Menu %s to default", key)
-				} else {
-					out, err := runCommand(ctx, "dconf", "reset", dconfKeyPath)
-					if err != nil {
-						return fmt.Errorf("devmenu: resetting %s: %w: %s", key, err, strings.TrimSpace(out))
-					}
+			if dryrun.Enabled() {
+				log.Printf("[DRY-RUN] would reset Custom Command Menu %s to default", key)
+			} else {
+				out, err := runCommand(ctx, "dconf", "reset", dconfKeyPath)
+				if err != nil {
+					return fmt.Errorf("devmenu: resetting %s: %w: %s", key, err, strings.TrimSpace(out))
 				}
 			}
+			continue
+		}
+
+		if dryrun.Enabled() {
+			log.Printf("[DRY-RUN] would set Custom Command Menu %s visible=%t", key, targetVisible)
 		} else {
-			if entry != desired {
-				if dryrun.Enabled() {
-					log.Printf("[DRY-RUN] would set Custom Command Menu %s visible=%t", key, targetVisible)
-				} else {
-					out, err := runCommand(ctx, "dconf", "write", dconfKeyPath, desiredFormatted)
-					if err != nil {
-						return fmt.Errorf("devmenu: writing %s: %w: %s", key, err, strings.TrimSpace(out))
-					}
-				}
+			out, err := runCommand(ctx, "dconf", "write", dconfKeyPath, desiredFormatted)
+			if err != nil {
+				return fmt.Errorf("devmenu: writing %s: %w: %s", key, err, strings.TrimSpace(out))
 			}
 		}
 	}
