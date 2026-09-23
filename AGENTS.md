@@ -490,7 +490,7 @@ An agent must not break these:
   (`view-app-grid-symbolic`), the panel menu button
   (`PanelIconName(id)`, i.e. `chairlift-livery-<id>-symbolic`, via the Custom
   Command Menu extension's `menuicon-setting`), and the Files application
-  (`org.gnome.Nautilus`) — by
+  (`org.gnome.Nautilus` on GNOME, `org.kde.dolphin` on KDE Plasma) — by
   installing an SVG into the user's icon theme and referencing it by bare
   name. A GNOME panel icon is a themed *name*, never a path: the extension
   builds `new St.Icon({icon_name: …})`, so an absolute path there renders
@@ -498,9 +498,13 @@ An agent must not break these:
   load-bearing, because XDG resolves the current theme and its parents before
   falling back to hicolor: a name Adwaita already ships can only be shadowed
   inside `~/.local/share/icons/Adwaita`, while a name it does not ship
-  (`org.gnome.Nautilus`) works from hicolor. Getting this backwards produces a
+  (`org.gnome.Nautilus` or `org.kde.dolphin`) works from hicolor. Breeze does
+  not ship `org.kde.dolphin.svg` (shipping only `system-file-manager.svg`), so
+  hicolor placement correctly overrides the application launcher icon across
+  Plasma surfaces. Getting this backwards produces a
   write that succeeds and an icon that never changes;
-  `TestAppGridOverrideTargetsTheAdwaitaTheme` holds both cases.
+  `TestAppGridOverrideTargetsTheAdwaitaTheme` and
+  `TestKDEDockOverrideTargetsDolphinInHicolor` hold both cases.
   Every write ends in `gtk-update-icon-cache -f -t`, without which GTK trusts an existing
   `icon-theme.cache` and never sees the new file; `-t` is
   `--ignore-theme-index`, which is what lets a user theme directory with no
