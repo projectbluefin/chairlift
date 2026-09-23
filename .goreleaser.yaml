@@ -215,7 +215,7 @@ nfpms:
       # Desktop file
       - src: ./data/io.projectbluefin.chairlift.desktop
         dst: /usr/share/applications/io.projectbluefin.chairlift.desktop
-      # GSettings schemas, backing the Livery and Updates settings. They are not
+      # GSettings schemas, backing the Livery, Updates, and First-Run settings. They are not
       # in the system-integration package: that package ships no GUI, and
       # nothing but these pages reads these keys. The postinstall script
       # recompiles the schema cache, without which GSettings cannot see them.
@@ -225,6 +225,8 @@ nfpms:
           mode: 0644
       - src: ./data/io.projectbluefin.chairlift.updates.gschema.xml
         dst: /usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.updates.gschema.xml
+        file_info:
+          mode: 0644
       - src: ./data/io.projectbluefin.chairlift.firstrun.gschema.xml
         dst: /usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.firstrun.gschema.xml
         file_info:
