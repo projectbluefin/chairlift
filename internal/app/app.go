@@ -22,6 +22,11 @@ import (
 
 const appID = "io.projectbluefin.chairlift"
 
+// optionSetup is the long name of the --setup option, and with it the key
+// GLib uses for the option in the command-line dictionary it forwards to the
+// primary instance.
+const optionSetup = "setup"
+
 var (
 	gTypeApplication gobject.Type
 	appRegistry      *gobj.InstanceRegistry
@@ -59,20 +64,37 @@ func init() {
 				}
 				(*Application)(ptr).onActivate()
 			})
+			appClass.OverrideCommandLine(func(a *gio.Application, cl *gio.ApplicationCommandLine) int32 {
+				ptr := reg.Get(a.GoPointer())
+				if ptr == nil {
+					log.Fatal("Application instance not found")
+				}
+				return (*Application)(ptr).onCommandLine(cl)
+			})
 		},
 	})
 }
 
 // New creates a new ChairLift application
 func New() *Application {
-	obj := gobject.NewObject(gTypeApplication, "application_id", appID, "flags", gio.GApplicationFlagsNoneValue, uintptr(0))
+	// HandlesCommandLine, not None: a second `chairlift --setup` against a
+	// running instance does not run this function at all, so a flag read
+	// from that process's os.Args can never reach the process owning the
+	// window. With this flag GLib forwards the parsed option dictionary to
+	// the primary instance's command_line handler, which is what makes
+	// --setup re-open the assistant at any time as README documents.
+	obj := gobject.NewObject(gTypeApplication, "application_id", appID, "flags", gio.GApplicationHandlesCommandLineValue, uintptr(0))
 	if obj == nil {
 		log.Fatal("Failed to create application")
 	}
 
 	app := (*Application)(appRegistry.Get(obj.GoPointer()))
 
-	// Check for --dry-run and --setup flags before GTK processes args
+	// Check for --dry-run before GTK processes args. Dry-run stays a local
+	// read: it is a property of this process's integrations, and a remote
+	// invocation must not be able to flip the mode of a running window.
+	// --setup is read from the option dictionary in onCommandLine instead,
+	// so it works for a remote invocation too.
 	for _, arg := range os.Args[1:] {
 		if arg == "--dry-run" || arg == "-d" {
 			log.Println("Running in dry-run mode")
@@ -84,9 +106,6 @@ func New() *Application {
 			// rows on a host that is not a Bluefin system. This is a no-op
 			// in every ordinary build; see imageinfo_override.go.
 			applyImageInfoOverride()
-		}
-		if arg == "--setup" || arg == "-s" {
-			app.setupRequested = true
 		}
 	}
 
@@ -107,12 +126,55 @@ func New() *Application {
 	return app
 }
 
+// onCommandLine runs on the primary instance for every invocation, local or
+// remote, and owns the --setup decision.
+//
+// A remote invocation reaches here with the option dictionary GLib forwarded
+// from the other process; the primary's own os.Args says nothing about it.
+// When the window already exists the assistant is presented directly, because
+// activation reuses the window and deliberately does not re-run the first-run
+// check.
+func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
+	setup := commandLineRequestsSetup(cl)
+	running := a.window != nil
+
+	// Consumed by onActivate's first-run check when this invocation is the
+	// one that creates the window, so the explicit request skips the
+	// disposition probe instead of racing it to Present.
+	a.setupRequested = setup
+
+	a.Activate()
+
+	if setup && running && a.window != nil {
+		a.window.PresentFirstRun()
+	}
+	return 0
+}
+
+// commandLineRequestsSetup reports whether the invocation carried --setup/-s.
+//
+// GLib keys the dictionary on the long option name, so the short form needs
+// no separate lookup.
+func commandLineRequestsSetup(cl *gio.ApplicationCommandLine) bool {
+	if cl == nil {
+		return false
+	}
+	opts := cl.GetOptionsDict()
+	if opts == nil {
+		return false
+	}
+	return opts.Contains(optionSetup)
+}
+
 // onActivate is called when the application is activated
 func (a *Application) onActivate() {
 	activateStart := time.Now()
 	log.Println("ChairLift activated")
 
-	// Guard: reuse existing window if already created
+	// Guard: reuse existing window if already created. The first-run check
+	// deliberately does not re-run here — re-activating the application
+	// (clicking its icon) would otherwise rebuild the assistant's model and
+	// send a user who is mid-wizard back to the welcome screen.
 	if a.window != nil {
 		a.window.Present()
 		return
@@ -161,7 +223,7 @@ func (a *Application) registerOptions() {
 		"",
 	)
 	a.AddMainOption(
-		"setup",
+		optionSetup,
 		's',
 		glib.GOptionFlagNoneValue,
 		glib.GOptionArgNoneValue,

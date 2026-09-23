@@ -27,6 +27,7 @@ type FirstRunAssistant struct {
 	secondaryBtn    *gtk.Button
 	backBtn         *gtk.Button
 	forwardBtn      *gtk.Button
+	open            bool
 }
 
 // NewFirstRunAssistant constructs the assistant and wires all signals once.
@@ -215,6 +216,13 @@ func (a *FirstRunAssistant) buildUI() {
 		a.onFinish()
 	}
 	forwardBtn.ConnectClicked(&finishClicked)
+
+	// Tracks whether the assistant is on screen so a later Present can tell a
+	// fresh run from a re-present of a wizard already in progress.
+	dialogClosed := func(_ adw.Dialog) {
+		a.open = false
+	}
+	dialog.ConnectClosed(&dialogClosed)
 }
 
 // applyWordmark points the wordmark picture at the variant matching the
@@ -252,9 +260,7 @@ func (a *FirstRunAssistant) onConfigure() {
 	next, dismissed, disp := a.model.SelectFlow(firstrun.FlowChoiceConfigure)
 	if dismissed {
 		if disp == firstrun.DispositionCompleted {
-			if err := a.store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
-				logDispositionError("completed", err)
-			}
+			a.recordCompletion()
 		}
 		a.dialog.Close()
 		return
@@ -267,23 +273,49 @@ func (a *FirstRunAssistant) onConfigure() {
 
 func (a *FirstRunAssistant) onGetMoving() {
 	a.dialog.Close()
-
-	// The assistant is reachable again after setup finished, so a skip here
-	// must not overwrite a recorded completion with a weaker state.
-	ctx := context.Background()
-	current, err := a.store.GetDisposition(ctx)
-	if err != nil {
-		current = firstrun.DispositionNotAddressed
-	}
-	if next := firstrun.SkipPreserving(current); next != current {
-		if err := a.store.SetDisposition(ctx, next); err != nil {
-			logDispositionError("skipped", err)
-		}
-	}
+	a.recordSkip()
 
 	if a.toastAdder != nil {
 		a.toastAdder.ShowToast(pageview.GetMovingToastMessage())
 	}
+}
+
+// recordCompletion persists a finished setup off the GTK main thread.
+//
+// The write spawns `gsettings`, and a click handler runs on the GTK main
+// thread, which internal/livery's convention keeps subprocess work off.
+// Nothing on screen depends on the result, so the dialog closes without
+// waiting for it.
+func (a *FirstRunAssistant) recordCompletion() {
+	store := a.store
+	go func() {
+		if err := store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
+			logDispositionError("completed", err)
+		}
+	}()
+}
+
+// recordSkip persists a skip off the GTK main thread, for the same reason as
+// recordCompletion and more so, since the read and the write are two spawns.
+//
+// The assistant is reachable again after setup finished, so a skip here must
+// not overwrite a recorded completion with a weaker state.
+func (a *FirstRunAssistant) recordSkip() {
+	store := a.store
+	go func() {
+		ctx := context.Background()
+		current, err := store.GetDisposition(ctx)
+		if err != nil {
+			current = firstrun.DispositionNotAddressed
+		}
+		next := firstrun.SkipPreserving(current)
+		if next == current {
+			return
+		}
+		if err := store.SetDisposition(ctx, next); err != nil {
+			logDispositionError("skipped", err)
+		}
+	}()
 }
 
 // logDispositionError reports a failed disposition write, naming the missing
@@ -317,9 +349,7 @@ func (a *FirstRunAssistant) onBack() {
 func (a *FirstRunAssistant) onFinish() {
 	step, done := a.model.Advance()
 	if done {
-		if err := a.store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
-			logDispositionError("completed", err)
-		}
+		a.recordCompletion()
 		a.dialog.Close()
 		if a.toastAdder != nil {
 			a.toastAdder.ShowToast(pageview.SetupCompletedMessage)
@@ -330,11 +360,19 @@ func (a *FirstRunAssistant) onFinish() {
 }
 
 // Present displays the assistant dialog attached to the given parent widget.
+//
+// A request that arrives while the assistant is already open re-presents it
+// as it stands. Rebuilding the model there would discard the step the user is
+// on, which is what a second Setup Assistant… activation, or a `chairlift
+// --setup` aimed at the running instance, would otherwise do.
 func (a *FirstRunAssistant) Present(parent *gtk.Widget) {
-	a.model = firstrun.NewAssistantModel(a.filter)
-	a.applyWordmark()
-	a.stack.SetVisibleChildName("welcome")
-	a.dialog.SetDefaultWidget(&a.primaryBtn.Widget)
-	a.dialog.SetFocus(&a.primaryBtn.Widget)
+	if !a.open {
+		a.model = firstrun.NewAssistantModel(a.filter)
+		a.applyWordmark()
+		a.stack.SetVisibleChildName("welcome")
+		a.dialog.SetDefaultWidget(&a.primaryBtn.Widget)
+		a.dialog.SetFocus(&a.primaryBtn.Widget)
+		a.open = true
+	}
 	a.dialog.Present(parent)
 }

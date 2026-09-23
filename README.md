@@ -274,8 +274,12 @@ chairlift
 - `--setup`, `-s`: open the first-run onboarding assistant. The assistant
   normally appears only once, the first time Control Center runs; this flag
   re-runs it at any time, as does **Setup Assistant…** in the application
-  menu. Choosing *Get Moving* on the welcome screen closes it and records
-  that setup was settled, so it does not reappear on its own.
+  menu. Control Center is a single-instance application, so running it with
+  this flag while a window is already open re-opens the assistant on that
+  window rather than starting a second copy — and if the assistant is
+  already open, it is brought forward on the step you were on. Choosing
+  *Get Moving* on the welcome screen closes it and records that setup was
+  settled, so it does not reappear on its own.
 - `--dry-run`, `-d`: preview actions without changing the system. Automatic
   presentation of the onboarding assistant is suppressed in this mode;
   `--setup` still opens it explicitly.
