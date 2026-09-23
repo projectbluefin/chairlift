@@ -144,6 +144,34 @@ func TestWorkflowUsesLeastPrivilege(t *testing.T) {
 	}
 }
 
+func TestCIWalkthroughLoadsItsCompiledSchema(t *testing.T) {
+	for _, file := range []string{"test.yml", "release.yml"} {
+		t.Run(file, func(t *testing.T) {
+			var workflow struct {
+				Jobs map[string]struct {
+					Steps []struct {
+						Run string            `yaml:"run"`
+						Env map[string]string `yaml:"env"`
+					} `yaml:"steps"`
+				} `yaml:"jobs"`
+			}
+			if err := yaml.Unmarshal([]byte(readRepoFile(t, filepath.Join(".github", "workflows", file))), &workflow); err != nil {
+				t.Fatal(err)
+			}
+			for _, step := range workflow.Jobs["e2e"].Steps {
+				if strings.TrimSpace(step.Run) != "make e2e" {
+					continue
+				}
+				if got := step.Env["CHAIRLIFT_SCHEMA_DIR"]; got != "${{ github.workspace }}/build/schemas" {
+					t.Errorf("%s walkthrough schema directory = %q, want the compiled source schema", file, got)
+				}
+				return
+			}
+			t.Fatal("CI has no make e2e step")
+		})
+	}
+}
+
 func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	path := filepath.Join(".github", "workflows", "release.yml")
 	workflow := readRepoFile(t, path)

@@ -137,6 +137,7 @@ jobs:
       - name: Run E2E tests
         env:
           CHAIRLIFT_WALKTHROUGH_DIR: ${{ github.workspace }}/walkthrough
+          CHAIRLIFT_SCHEMA_DIR: ${{ github.workspace }}/build/schemas
           E2E_COVERDIR: ${{ github.workspace }}/covdata-e2e
         run: make e2e
 

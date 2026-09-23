@@ -214,6 +214,9 @@ An agent must not break these:
   executable-adjacent `config.yml`. The E2E walkthrough requires the
   `views: reset group built` marker so a plausible screenshot cannot hide
   the opt-in Reset rows silently.
+  The E2E workflows also pass `CHAIRLIFT_SCHEMA_DIR=build/schemas` to the
+  capture script; without it, the real Livery page shows a missing-schema
+  toast that obscures screenshots even though every page capture test passes.
 - **The `chairlift_e2e` stub surface is capped and centralized.** Three
   behaviors are stubbed so the screenshot walkthrough can render features a CI
   runner cannot have: the image descriptor (`CHAIRLIFT_IMAGE_INFO`), the
