@@ -56,7 +56,10 @@ func TestGetStatusWithNoStateFilesIsIdle(t *testing.T) {
 	requireAbsent(t, UpdateCheckPath)
 	requireAbsent(t, StagedSemaphorePath)
 
-	status := GetStatus()
+	status, err := GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus() with missing state files: %v", err)
+	}
 	if status.Check != nil {
 		t.Errorf("GetStatus().Check = %+v, want nil", status.Check)
 	}

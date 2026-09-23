@@ -398,7 +398,7 @@ func (uh *UserHome) loadOutdatedPackagesGeneration(generation uint64, done func(
 				btn.SetSensitive(false)
 				btn.SetLabel("Upgrading...")
 				go func() {
-					err := homebrew.Upgrade(pkgName)
+					err := homebrew.Upgrade(context.Background(), pkgName)
 					dryRun := dryrun.Enabled()
 					decision := actionstate.PackageUpgrade(err == nil, dryRun)
 					if err != nil {
@@ -605,11 +605,11 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 	status, err := bootc.GetStatus(ctx)
 
 	staged := err == nil && status.Status.Staged != nil
+	count := 0
 	if staged {
-		uh.updateCounts.Set(badgestate.Bootc, 1)
-	} else {
-		uh.updateCounts.Set(badgestate.Bootc, 0)
+		count = 1
 	}
+	uh.updateCounts.SetObserved(badgestate.Bootc, count, err == nil)
 	uh.updateBadgeCount()
 
 	sgtk.RunOnMainThread(func() {
@@ -768,21 +768,34 @@ func (uh *UserHome) onBootcStageClicked() {
 		statusCancel()
 
 		staged := statusErr == nil && status.Status.Staged != nil
+		count := 0
 		if staged {
-			uh.updateCounts.Set(badgestate.Bootc, 1)
-		} else {
-			uh.updateCounts.Set(badgestate.Bootc, 0)
+			count = 1
 		}
+		uh.updateCounts.SetObserved(badgestate.Bootc, count, statusErr == nil)
 		uh.updateBadgeCount()
 
 		sgtk.RunOnMainThread(func() {
 			spinner.Stop()
 			button.SetSensitive(true)
 			button.SetLabel("Check for Updates")
+			if statusErr == nil {
+				uh.refreshChangelogAvailability(status)
+			}
 
 			if stageErr != nil {
 				expander.SetSubtitle(fmt.Sprintf("Update failed: %v", stageErr))
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Update failed: %v", stageErr))
+				return
+			}
+			if statusErr != nil {
+				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				expander.SetSubtitle(message)
+				if dryrun.Enabled() {
+					uh.toastAdder.ShowToast(actionmsg.BootcStage(true, false))
+				} else {
+					uh.toastAdder.ShowErrorToast(message)
+				}
 				return
 			}
 
@@ -808,21 +821,25 @@ func (uh *UserHome) loadSysupdateUpdateStatus(group *adw.PreferencesGroup) {
 	ctx, cancel := sysupdate.DefaultContext()
 	defer cancel()
 
-	status := sysupdate.GetStatus()
+	status, statusErr := sysupdate.GetStatus()
 	rollbackVersion, _ := sysupdate.RollbackVersion(ctx)
 
+	count := 0
 	if status.IsStaged() {
-		uh.updateCounts.Set(badgestate.Sysupdate, 1)
-	} else {
-		uh.updateCounts.Set(badgestate.Sysupdate, 0)
+		count = 1
 	}
+	uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
 	uh.updateBadgeCount()
 
 	outcome, version, checkedAt := status.Presentation()
 	sgtk.RunOnMainThread(func() {
 		group.SetVisible(true)
-		uh.sysupdateStageExpander.SetSubtitle(pageview.SysupdateUpdateSubtitle(outcome, version, checkedAt))
 		uh.sysupdateRollbackRow.SetSubtitle(pageview.SysupdateRollbackSubtitle(rollbackVersion))
+		if statusErr != nil {
+			uh.sysupdateStageExpander.SetSubtitle(fmt.Sprintf("Error reading system update status: %v", statusErr))
+			return
+		}
+		uh.sysupdateStageExpander.SetSubtitle(pageview.SysupdateUpdateSubtitle(outcome, version, checkedAt))
 	})
 }
 
@@ -886,17 +903,17 @@ func (uh *UserHome) onSysupdateStageClicked() {
 		// reflect reality (staged vs already-current) rather than guessing
 		// from output. A stage fills the inactive slot with the newer
 		// version, so the rollback candidate must be recomputed too.
-		status := sysupdate.GetStatus()
+		status, statusErr := sysupdate.GetStatus()
 		rollbackCtx, rollbackCancel := sysupdate.DefaultContext()
 		rollbackVersion, _ := sysupdate.RollbackVersion(rollbackCtx)
 		rollbackCancel()
 
 		staged := status.IsStaged()
+		count := 0
 		if staged {
-			uh.updateCounts.Set(badgestate.Sysupdate, 1)
-		} else {
-			uh.updateCounts.Set(badgestate.Sysupdate, 0)
+			count = 1
 		}
+		uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
 		uh.updateBadgeCount()
 
 		_, version, _ := status.Presentation()
@@ -909,6 +926,16 @@ func (uh *UserHome) onSysupdateStageClicked() {
 			if stageErr != nil {
 				expander.SetSubtitle(fmt.Sprintf("Update failed: %v", stageErr))
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Update failed: %v", stageErr))
+				return
+			}
+			if statusErr != nil {
+				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				expander.SetSubtitle(message)
+				if dryrun.Enabled() {
+					uh.toastAdder.ShowToast(actionmsg.SysupdateStage(true, false))
+				} else {
+					uh.toastAdder.ShowErrorToast(message)
+				}
 				return
 			}
 
@@ -998,7 +1025,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 		err := ublue.Rollback(ctx)
 
 		sgtk.RunOnMainThread(func() {
-			uh.bootcRollbackGate.Complete()
+			uh.bootcRollbackGate.Reset()
 			button.SetSensitive(true)
 
 			if err != nil {

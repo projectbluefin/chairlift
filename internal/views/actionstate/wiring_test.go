@@ -85,3 +85,31 @@ func TestFeaturesPageDeveloperModeUsesGate(t *testing.T) {
 		}
 	}
 }
+
+// A button that is made sensitive again after a run must release its gate;
+// Complete permanently rejects every future click, including retries after
+// a failed or dry-run action. Views cannot be imported by headless tests.
+func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
+	for file, gates := range map[string][]string{
+		"update_all.go":   {"updateAllGate"},
+		"updates_page.go": {"bootcRollbackGate"},
+		"system_page.go":  {"driverGate"},
+		"reset.go":        {"powerwashGate", "factoryResetGate"},
+	} {
+		data, err := os.ReadFile(filepath.Join(viewsDir, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		for _, gate := range gates {
+			if !strings.Contains(text, "uh."+gate+".TryStart()") || !strings.Contains(text, "uh."+gate+".Reset()") || strings.Contains(text, "uh."+gate+".Complete()") {
+				t.Errorf("%s: repeatable %s must start and reset, never complete", file, gate)
+			}
+		}
+	}
+}

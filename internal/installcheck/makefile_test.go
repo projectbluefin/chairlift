@@ -120,6 +120,15 @@ func assertInstallsPackageLayout(t *testing.T, output, destDir string) {
 		t.Errorf("make -n install output does not install config.yml at %q\nwant substring: %q\noutput:\n%s", maintainerConfig, want, output)
 	}
 
+	for src, dst := range map[string]string{
+		"data/io.projectbluefin.chairlift.desktop":            "/usr/share/applications/io.projectbluefin.chairlift.desktop",
+		"data/io.projectbluefin.chairlift.livery.gschema.xml": "/usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.livery.gschema.xml",
+	} {
+		want := "install -Dm644 " + src + " " + filepath.Join(destDir, dst)
+		if !strings.Contains(output, want) {
+			t.Errorf("make -n install does not install %s: want %q", src, want)
+		}
+	}
 	adminConfig := filepath.Join(destDir, "/etc/chairlift/config.yml")
 	if strings.Contains(output, adminConfig) {
 		t.Errorf("make install must not overwrite administrator config %q\noutput:\n%s", adminConfig, output)

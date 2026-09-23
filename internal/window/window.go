@@ -100,7 +100,7 @@ func init() {
 
 // New creates a new main window
 func New(app adw.Application) *Window {
-	obj := gobject.NewObject(gTypeWindow, "application", &app.Application)
+	obj := gobject.NewObject(gTypeWindow, "application", app.Application.GoPointer(), uintptr(0))
 	if obj == nil {
 		log.Fatal("Failed to create window")
 	}

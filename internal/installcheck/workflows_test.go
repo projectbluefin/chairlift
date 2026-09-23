@@ -236,6 +236,44 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	}
 }
 
+// Tag validation must use the same reviewed linter as the merge-queue gate;
+// "latest" can block an unchanged commit only after its release tag is pushed.
+func TestReleaseLintVersionMatchesCIGate(t *testing.T) {
+	version := func(file string) string {
+		var workflow struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Uses string `yaml:"uses"`
+					With struct {
+						Version string `yaml:"version"`
+					} `yaml:"with"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal([]byte(readRepoFile(t, filepath.Join(".github", "workflows", file))), &workflow); err != nil {
+			t.Fatal(err)
+		}
+		found := ""
+		for _, job := range workflow.Jobs {
+			for _, step := range job.Steps {
+				if strings.HasPrefix(step.Uses, "golangci/golangci-lint-action@") {
+					if found != "" {
+						t.Fatalf("%s has multiple linter installations", file)
+					}
+					found = step.With.Version
+				}
+			}
+		}
+		if found == "" || found == "latest" {
+			t.Fatalf("%s linter version %q is not pinned", file, found)
+		}
+		return found
+	}
+	if release, ci := version("release.yml"), version("test.yml"); release != ci {
+		t.Errorf("release linter %q differs from CI linter %q", release, ci)
+	}
+}
+
 // mergeQueueGateJob is the aggregating job in test.yml, and
 // mergeQueueGateContext is the check-run name it publishes. That name is the
 // single required status check on the default-branch ruleset, so renaming

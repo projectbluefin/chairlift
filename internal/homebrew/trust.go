@@ -10,14 +10,14 @@ import (
 	"strings"
 )
 
-var untrustedTapErrRe = regexp.MustCompile(`(?m)^Error: .*from untrusted tap ([^\s.]+/[^\s.]+)`)
+var untrustedTapErrRe = regexp.MustCompile(`(?m)^Error: .*from untrusted tap ([^\s]+/[^\s]+)`)
 
 func untrustedTapFromErrorLine(s string) (string, bool) {
 	m := untrustedTapErrRe.FindStringSubmatch(s)
 	if m == nil {
 		return "", false
 	}
-	return m[1], true
+	return strings.TrimSuffix(m[1], "."), true
 }
 
 // UntrustedTap describes an untrusted tap and the packages installed from it.

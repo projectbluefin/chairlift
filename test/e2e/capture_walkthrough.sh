@@ -64,7 +64,7 @@ xdpyinfo >/dev/null 2>&1 || { echo "Xvfb on $DISPLAY_NUM never became ready" >&2
 
 # The same environment the dry-run startup smoke test uses, so the two agree
 # on what a clean headless launch looks like.
-export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory
+export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory G_DEBUG=fatal-criticals
 # The Livery page reads its selections through `gsettings`, which needs
 # ChairLift's schema on the search path. A source build has not run
 # `make install`, so without this the page would capture its
@@ -88,11 +88,11 @@ mkdir -p "$HOME"
 # Show the Powerwash / Factory Reset rows. reset_group ships disabled — both
 # actions are irreversible — but the walkthrough exists to document every
 # feature, including the ones an administrator has to opt into. Config, not a
-# build-tag stub, is the intended mechanism: internal/config resolves a
-# relative candidate alongside the executable first, so a file dropped next
-# to the e2e binary applies to this capture only and leaves the shipped
-# config.yml untouched.
-cat > "$(dirname "$APP")/config.yml" <<'YAML'
+# build-tag stub, is the intended mechanism. config.dev.yml is the first
+# relative candidate; use its executable-adjacent copy so a checkout's own
+# config.dev.yml cannot shadow the reset-group override. This changes only
+# the tagged e2e binary's configuration, never the shipped config.yml.
+cat > "$(dirname "$APP")/config.dev.yml" <<'YAML'
 maintenance_page:
   reset_group:
     enabled: true

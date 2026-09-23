@@ -126,3 +126,145 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		})
 	}
 }
+
+// Staging changes the pair of images Compare uses. Startup's status refresh
+// alone is insufficient: the same window must enable Compare after staging.
+func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	path := filepath.Join(filepath.Dir(filename), "..", "updates_page.go")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := strings.SplitN(string(source), "func (uh *UserHome) onBootcStageClicked()", 2)
+	if len(stage) != 2 {
+		t.Fatal("bootc staging handler not found")
+	}
+	body := strings.SplitN(stage[1], "func (uh *UserHome) loadSysupdateUpdateStatus(", 2)[0]
+	if !strings.Contains(body, "uh.refreshChangelogAvailability(status)") {
+		t.Error("successful bootc staging never refreshes the Compare references and button")
+	}
+	// A successful stage with an unreadable status is not evidence that the
+	// image is current. Refuse the success toast when the re-read failed.
+	if !strings.Contains(body, "if statusErr != nil {") || !strings.Contains(body, "Could not verify staged update") {
+		t.Error("bootc staging claims a known result after its status re-read failed")
+	}
+	allPath := filepath.Join(filepath.Dir(filename), "..", "update_all.go")
+	allSource, err := os.ReadFile(allPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completion := strings.SplitN(string(allSource), "func (uh *UserHome) finishUpdateAll(", 2)
+	if len(completion) != 2 {
+		t.Fatal("Update All completion handler not found")
+	}
+	allBody := strings.SplitN(completion[1], "func (uh *UserHome) onRestartClicked(", 2)[0]
+	for _, required := range []string{"updateall.PhaseOS", "bootc.GetStatus(", "uh.updateCounts.SetObserved(badgestate.Bootc,", "uh.refreshChangelogAvailability(status)"} {
+		if !strings.Contains(allBody, required) {
+			t.Errorf("Update All OS staging never applies %q to the Compare row and badge", required)
+		}
+	}
+}
+
+func TestUpdateAllBrewPhaseUpgradesAfterMetadata(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "update_all.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := strings.SplitN(string(data), "func hostRunner()", 2)
+	if len(runner) != 2 {
+		t.Fatal("Update All runner not found")
+	}
+	body := strings.SplitN(runner[1], "func (uh *UserHome) onUpdateAllClicked(", 2)[0]
+	update := strings.Index(body, "homebrew.Update(ctx)")
+	upgrade := strings.Index(body, "homebrew.Upgrade(ctx, \"\")")
+	if update < 0 || upgrade <= update {
+		t.Error("Update All must refresh brew metadata and then upgrade installed packages using the run context")
+	}
+}
+
+func TestUpdateAllRefreshesProviderInventories(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "update_all.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	completion := strings.SplitN(string(data), "func (uh *UserHome) finishUpdateAll(", 2)
+	if len(completion) != 2 {
+		t.Fatal("Update All completion handler not found")
+	}
+	body := strings.SplitN(completion[1], "func (uh *UserHome) onRestartClicked(", 2)[0]
+	for _, call := range []string{"uh.loadFlatpakUpdates()", "uh.loadOutdatedPackages()"} {
+		if !strings.Contains(body, call) {
+			t.Errorf("Update All leaves stale inventory without %s", call)
+		}
+	}
+}
+
+func TestSysupdateStageDoesNotClaimCurrentOnUnreadableStatus(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "updates_page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := strings.SplitN(string(data), "func (uh *UserHome) onSysupdateStageClicked()", 2)
+	if len(stage) != 2 {
+		t.Fatal("native staging handler not found")
+	}
+	body := strings.SplitN(stage[1], "func (uh *UserHome) updateHomebrew(", 2)[0]
+	if !strings.Contains(body, "if statusErr != nil {") || !strings.Contains(body, "Could not verify staged update") {
+		t.Error("native A/B staging claims the system is current after an unreadable status")
+	}
+}
+
+func TestUpdateAllDryRunDoesNotAnnounceUpdates(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "update_all.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	clicked := strings.SplitN(text, "func (uh *UserHome) onUpdateAllClicked(", 2)
+	if len(clicked) != 2 {
+		t.Fatal("Update All click handler not found")
+	}
+	clickedBody := strings.SplitN(clicked[1], "func (uh *UserHome) applyUpdateAllEvent(", 2)[0]
+	guard := strings.Index(clickedBody, "if !dryrun.Enabled() {")
+	hide := strings.Index(clickedBody, "uh.updateAllRestart.SetVisible(false)")
+	if guard < 0 || hide <= guard {
+		t.Error("Update All must guard restart-row hiding so previews preserve known state")
+	}
+	completion := strings.SplitN(text, "func (uh *UserHome) finishUpdateAll(", 2)
+	if len(completion) != 2 {
+		t.Fatal("Update All completion handler not found")
+	}
+	preview := strings.Index(completion[1], "[DRY-RUN] Preview")
+	notify := strings.Index(completion[1], "NotifyBackground(")
+	if preview < 0 || notify <= preview || !strings.Contains(completion[1][:notify], "if dryrun.Enabled() {") {
+		t.Error("dry-run Update All must report a preview before any completion notification")
+	}
+	phase := strings.SplitN(text, "func (uh *UserHome) applyUpdateAllEvent(", 2)
+	if len(phase) != 2 {
+		t.Fatal("Update All phase renderer not found")
+	}
+	phaseBody := strings.SplitN(phase[1], "func (uh *UserHome) finishUpdateAll(", 2)[0]
+	if !strings.Contains(phaseBody, "dryrun.Enabled() && event.Result.Outcome == updateall.OutcomeSucceeded") || !strings.Contains(phaseBody, "[DRY-RUN] Preview") {
+		t.Error("a dry-run phase claims it finished updating packages")
+	}
+}

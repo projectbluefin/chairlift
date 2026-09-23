@@ -135,6 +135,8 @@ func TestUntrustedTapFromErrorLine(t *testing.T) {
 	}{
 		{"Error: Refusing to load formula opencode from untrusted tap anomalyco/tap.", "anomalyco/tap", true},
 		{"Error: Refusing to load cask foo from untrusted tap bar/baz.", "bar/baz", true},
+		{"Error: Refusing to load formula foo from untrusted tap owner/tap.with.dots.", "owner/tap.with.dots", true},
+		{"Error: Refusing to load cask foo from untrusted tap owner.name/tap.name.", "owner.name/tap.name", true},
 		{"Warning: The following taps are not trusted:\n  multica-ai/tap", "", false},
 		{"Error: No such formula", "", false},
 		{"", "", false},
