@@ -769,7 +769,7 @@ func (uh *UserHome) onBootcStageClicked() {
 				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
 				expander.SetSubtitle(message)
 				if dryrun.Enabled() {
-					uh.toastAdder.ShowToast(actionmsg.BootcStage(true, false))
+					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
 				} else {
 					uh.toastAdder.ShowErrorToast(message)
 				}
@@ -894,7 +894,7 @@ func (uh *UserHome) onSysupdateStageClicked() {
 				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
 				expander.SetSubtitle(message)
 				if dryrun.Enabled() {
-					uh.toastAdder.ShowToast(actionmsg.SysupdateStage(true, false))
+					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
 				} else {
 					uh.toastAdder.ShowErrorToast(message)
 				}
