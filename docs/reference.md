@@ -115,8 +115,21 @@ other than `tap`.
 | Group | Key | Description |
 |-------|-----|-------------|
 | Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs. Shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
+
+`dx_group` supports two optional, default-off steps that run off the GTK main
+thread after a confirmed live enable, and never on a disable, a page restore, a
+failed helper call, or a `--dry-run` preview:
+
+- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a user-scope Flatpak from Flathub. No `pkexec`, no root: the same unprivileged posture as gaming mode
+- `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
+
+The two outcomes are reported separately from developer access. The privileged
+enable has already succeeded by the time these run, so a failed Flatpak install
+says only that, and does not withdraw the groups — and disabling Developer Mode
+is a clean no-op for Pulp, the staged file, and the feeds a user has imported
+from it.
 
 Feature operations (enable, disable, update) require administrator
 authentication through PolicyKit and are performed by the fixed

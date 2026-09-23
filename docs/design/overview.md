@@ -167,6 +167,7 @@ Per-wrapper mechanics:
 - **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.SetActive(enabled)`) or reverts to its pre-click state (`toggle.SetActive(!enabled)`).
 - **avatar**: `Applier.Dispatch` (`internal/avatar/applier.go`) reads `dryrun.Enabled()` first and returns before constructing a process or opening a file, logging `[DRY-RUN] would set avatar to <id>`. A live dispatch reports which route took effect as an `avatar.Route`: `RouteBusctl` when AccountsService accepted `SetIconFile` over `busctl`, `RouteFaceFile` when that call failed or was unreachable and the icon was written to `~/.face.icon` and `~/.face` instead (picked up at the next session start, not immediately), and no route at all when both failed. A canceled context is reported as an error rather than being treated as an unreachable bus, so an abandoned action never writes into the user's home. The dispatch is deliberately unprivileged — AccountsService authorizes it for the caller's own account — so it takes no `pkexec` route and is classified as an unprivileged `os/exec` site in `internal/installcheck`'s journal contract.
 - **Developer onboarding tabs**: `openDeveloperOnboarding` (`internal/views/features_page.go`) is reached only from the success branch of `onDeveloperToggled`, and dispatches through `pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded)`. That pure function is the whole admission rule — a confirmed live enable is the only input combination that yields the three URLs, so `--dry-run` opens no browser processes during `make screenshots`, a disable is a no-op, and a failed promotion opens nothing. The URLs and their order are asserted headlessly in `internal/views/pageview`; the dispatch itself reuses `UserHome.openURL`, the same asynchronous `xdg-open` path the Help page links use, so a browser that fails to start reports its own failure by toast without touching the group promotion or the switch.
+- **Optional developer feed setup**: `startDeveloperFeedSetup` (`internal/views/features_page.go`) is called from that same success branch, and its admission rule is `actionmsg.DeveloperFeedSetupPlan(dryrun.Enabled(), enabled, succeeded, installPulp, stageFeeds)`. Only a confirmed live enable with at least one of `dx_group`'s `install_pulp`/`stage_feeds` set produces non-empty work, so a preview installs nothing during `make screenshots`, a disable is a no-op, and a failed promotion starts no worker. The plan is a value read from config on the main thread before the goroutine starts, so the worker touches no widget and no view state; it calls `internal/developerfeeds`'s `Provision` and `StageOPML` (both of which re-check `dryrun.Enabled()` as defense in depth) and marshals a single `actionmsg.DeveloperFeedFeedback` result back through `sgtk.RunOnMainThread` to one toast. `developerFeedGate` refuses a second setup while an install is in flight, and the toast is nil-guarded. The wording and the failure classification come from the same tested decision struct, which is what keeps a failed optional install from reading as a failed permission change and keeps "staged" from reading as "imported".
 ### Configuration-driven UI visibility
 
 Each preference group on every page checks `config.IsGroupEnabled(pageName, groupName)` before building its widgets. Groups default to enabled if not specified in config. Both `maintenance_cleanup_group` and `reset_group` default to disabled in the default config.
@@ -1528,6 +1529,24 @@ requirement, and that re-verification recipe live in
 [specs/developer-feeds.md](../specs/developer-feeds.md). The per-category feed
 counts are pinned in the package's tests, so adding a feed is a reviewable
 curation event rather than a data edit.
+
+The same package owns the two optional Developer Mode steps that consume the
+catalog, in `pulp.go`: `IsInstalled` queries the user scope with
+`flatpak list --user --app` rather than reading anything inside Pulp's sandbox,
+`Provision` installs `org.gnome.gitlab.cheywood.Pulp` from Flathub only when
+that check says it is missing, and `StageOPML` writes the embedded asset to
+`~/.local/share/chairlift/developer-feeds.opml` (0644, directory created) with
+`OPMLPath` reporting where. All three are unprivileged and user-scoped: no
+`pkexec`, no root, and no write into Pulp's own SQLite store, whose schema is
+Pulp's to migrate. `Provision` and `StageOPML` each short-circuit on
+`dryrun.Enabled()` themselves, and `TestPackageStaysOffline`'s import ban still
+scopes the *catalog and validator* files: the provisioning half reaches a
+command runner only through `internal/flatpak`, which is the same runner the
+Applications page uses. The view half — when these run, and what may be claimed
+afterwards — is `actionmsg.DeveloperFeedSetupPlan`/`DeveloperFeedFeedback`,
+described under "Dry-run mode" above; the user-facing contract, including the
+deliberate absence of a Pulp import API, is
+[specs/developer-feeds.md](../specs/developer-feeds.md).
 
 ### Local AI
 

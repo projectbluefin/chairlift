@@ -188,6 +188,33 @@ func TestStageOPMLWritesFileWithPermissions(t *testing.T) {
 	}
 }
 
+// OPMLPath answers where StageOPML writes without writing anything, which is
+// what the Developer Mode feedback names to the user. It must agree with the
+// file the staging step actually produces, or the banner points at a path
+// that does not exist.
+func TestOPMLPathMatchesTheStagedFile(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	path, err := OPMLPath()
+	if err != nil {
+		t.Fatalf("OPMLPath() error = %v", err)
+	}
+	if want := filepath.Join(home, ".local", "share", "chairlift", OPMLFileName); path != want {
+		t.Fatalf("OPMLPath() = %q, want %q", path, want)
+	}
+
+	if err := StageOPML(); err != nil {
+		t.Fatalf("StageOPML() error = %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("stat OPMLPath() = %v, want the staged catalog to exist there", err)
+	}
+}
+
 func TestStageOPMLDryRunWritesNothing(t *testing.T) {
 	dryrun.Set(true)
 	t.Cleanup(func() { dryrun.Set(false) })

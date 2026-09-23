@@ -95,6 +95,10 @@ never asks for an administrator password.
 **Developer tools** lets you run containers and virtual machines, and use USB
 and serial hardware, without being asked for permission each time. It needs
 your administrator password, and takes effect after you log out and back in.
+A distribution may also configure it to install the Pulp feed reader and stage
+a curated list of developer feeds in your home folder once you switch it on —
+both are off by default, and turning Developer tools back off never removes the
+reader, the file, or anything you imported from it.
 **Gaming** is a switch: on installs Steam and the tools that make Windows
 games run, off removes them again. On an image that already ships them, the
 page says so instead of offering a switch that would do nothing.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/developerfeeds"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
@@ -492,6 +493,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 			uh.toastAdder.ShowToast(decision.Toast)
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
+			uh.startDeveloperFeedSetup(enabled, succeeded)
 		})
 	}()
 }
@@ -503,6 +505,83 @@ func (uh *UserHome) openDeveloperOnboarding(enabled, succeeded bool) {
 	for _, link := range pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded) {
 		uh.openURL(link.URL)
 	}
+}
+
+// startDeveloperFeedSetup runs the optional developer feed work for a
+// confirmed live enable: install the Pulp reader and stage the curated OPML
+// catalog, each only when `dx_group` asks for it. Like openDeveloperOnboarding
+// it is called from the one branch of onDeveloperToggled that reached a
+// successful live promotion, so a page restore, a failed helper call, a
+// disable, and a preview all reach the empty plan and spawn nothing.
+//
+// The optional steps are deliberately not part of the enable's own outcome.
+// Developer access is granted by the privileged helper; an install that then
+// fails is reported as its own failure and rolls nothing back, because
+// withdrawing the groups the user asked for over an unrelated Flatpak would
+// be a second, unrequested change.
+//
+// Everything the worker reads is captured here, on the main thread, before it
+// starts: the plan is a value, and no widget is touched off the main thread.
+// The one widget-adjacent call is the toast, which is marshalled back through
+// sgtk.RunOnMainThread and nil-guarded — this window's group may have been
+// rebuilt or dismissed while a Flatpak install was running.
+func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
+	var installPulp, stageFeeds bool
+	if group := uh.config.GetGroupConfig("features_page", "dx_group"); group != nil {
+		installPulp, stageFeeds = group.InstallPulp, group.StageFeeds
+	}
+
+	setup := actionmsg.DeveloperFeedSetupPlan(dryrun.Enabled(), enabled, succeeded, installPulp, stageFeeds)
+	if !setup.Any() {
+		return
+	}
+
+	// Overlapping setup runs are refused rather than queued: two concurrent
+	// `flatpak install` calls for the same application are one too many, and
+	// the work left by the run already in flight is the same work.
+	if !uh.developerFeedGate.TryStart() {
+		return
+	}
+
+	go func() {
+		var outcome actionmsg.DeveloperFeedOutcome
+
+		if setup.InstallPulp {
+			if err := developerfeeds.Provision(); err != nil {
+				log.Printf("views: developer feed setup could not provision %s: %v", developerfeeds.PulpID, err)
+			} else {
+				outcome.PulpReady = true
+			}
+		}
+
+		if setup.StageFeeds {
+			if err := developerfeeds.StageOPML(); err != nil {
+				log.Printf("views: developer feed setup could not stage the feed catalog: %v", err)
+			} else {
+				outcome.FeedsStaged = true
+				// The path is only for the banner. A home directory that
+				// cannot be resolved after a successful write costs the
+				// message its exact location, not the feedback.
+				if path, err := developerfeeds.OPMLPath(); err == nil {
+					outcome.StagedPath = path
+				}
+			}
+		}
+
+		sgtk.RunOnMainThread(func() {
+			defer uh.developerFeedGate.Reset()
+
+			if uh.toastAdder == nil {
+				return
+			}
+			result := actionmsg.DeveloperFeedFeedback(setup, outcome)
+			if result.Failed {
+				uh.toastAdder.ShowErrorToast(result.Message)
+				return
+			}
+			uh.toastAdder.ShowToast(result.Message)
+		})
+	}()
 }
 
 // onGamingToggled installs or removes the gaming applications. Unlike the

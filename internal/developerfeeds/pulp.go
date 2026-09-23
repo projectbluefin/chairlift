@@ -74,8 +74,13 @@ func dataDir() (string, error) {
 	return filepath.Join(home, ".local", "share", "chairlift"), nil
 }
 
-// opmlPath returns the absolute path of the staged catalog.
-func opmlPath() (string, error) {
+// OPMLPath returns the absolute path of the staged catalog.
+//
+// It is exported for the same reason OPMLFileName is: the Developer Mode
+// feedback has to tell the user where the file is, since importing it is
+// their own action inside the reader and "somewhere in your home folder" is
+// not something they can act on.
+func OPMLPath() (string, error) {
 	dir, err := dataDir()
 	if err != nil {
 		return "", err
@@ -88,7 +93,7 @@ func opmlPath() (string, error) {
 // is a user-scope write — no pkexec, no root. In dry-run it logs the target
 // path and writes nothing, so screenshot generation never mutates user state.
 func StageOPML() error {
-	path, err := opmlPath()
+	path, err := OPMLPath()
 	if err != nil {
 		return err
 	}

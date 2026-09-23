@@ -104,6 +104,11 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 	for file, gates := range map[string][]string{
 		"updates_page.go": {"driverGate"},
 		"reset.go":        {"powerwashGate", "factoryResetGate"},
+		// The developer switch and the optional feed setup behind it are
+		// both repeatable: the switch is used again after every toggle, and
+		// the setup gate has to reopen when its worker finishes or a second
+		// enable could never install anything.
+		"features_page.go": {"developerGate", "developerFeedGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {

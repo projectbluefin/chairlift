@@ -40,6 +40,17 @@ type GroupConfig struct {
 	AIImages map[string]string `yaml:"ai_images,omitempty"`
 	// AIModel overrides the model the stack serves.
 	AIModel string `yaml:"ai_model,omitempty"`
+	// InstallPulp and StageFeeds are the optional developer feed onboarding
+	// steps `dx_group` may run after a confirmed Developer Mode enable. Both
+	// default to false: they have side effects (a user-scope Flatpak install
+	// and a file written into the user's data directory), so the same
+	// conservative posture as reset_group applies — an administrator opts in
+	// explicitly rather than every enable performing them. Neither is
+	// consulted when Developer Mode is switched off, which is a clean no-op
+	// for Pulp, the staged file, and any subscriptions already imported from
+	// it.
+	InstallPulp bool `yaml:"install_pulp,omitempty"`
+	StageFeeds  bool `yaml:"stage_feeds,omitempty"`
 }
 
 // ActionConfig represents a configurable action
@@ -82,6 +93,8 @@ type rawGroupConfig struct {
 	BundlesPaths *[]string          `yaml:"bundles_paths"`
 	AIImages     *map[string]string `yaml:"ai_images"`
 	AIModel      *string            `yaml:"ai_model"`
+	InstallPulp  *bool              `yaml:"install_pulp"`
+	StageFeeds   *bool              `yaml:"stage_feeds"`
 }
 
 // trustedConfigPaths are the fixed administrator- and package-owned candidates
@@ -300,6 +313,12 @@ func mergeGroup(def GroupConfig, raw rawGroupConfig) GroupConfig {
 	if raw.BundlesPaths != nil {
 		result.BundlesPaths = *raw.BundlesPaths
 	}
+	if raw.InstallPulp != nil {
+		result.InstallPulp = *raw.InstallPulp
+	}
+	if raw.StageFeeds != nil {
+		result.StageFeeds = *raw.StageFeeds
+	}
 
 	return result
 }
@@ -371,6 +390,12 @@ func defaultConfig() *Config {
 			// Capabilities you turn on. Both hide themselves when
 			// internal/ublue reports no /usr/share/ublue-os/image-info.json,
 			// which is every non-Bluefin host including Snow Linux.
+			//
+			// dx_group's optional feed onboarding (InstallPulp, StageFeeds)
+			// is left at its zero value here on purpose: enabling developer
+			// access and installing a feed reader for the account are
+			// separate decisions, and only the first one is what the switch
+			// says it does.
 			"dx_group":     GroupConfig{Enabled: true},
 			"gaming_group": GroupConfig{Enabled: true},
 		},

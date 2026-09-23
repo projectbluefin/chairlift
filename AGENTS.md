@@ -428,6 +428,25 @@ An agent must not break these:
   `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
+- **Developer-mode feed onboarding is opt-in, follows the enable, and never
+  reverses it.** `dx_group`'s `install_pulp` and `stage_feeds` both default to
+  `false`, and they are the only optional work the Developer Mode switch does
+  beyond the privileged group promotion. `startDeveloperFeedSetup`
+  (`internal/views/features_page.go`) runs them from the same success branch
+  `openDeveloperOnboarding` uses, behind
+  `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)`: a
+  `--dry-run` preview, a disable, a page restore, and a failed helper call all
+  produce an empty plan and start no worker. Everything is user-scope — a
+  Flatpak in the invoking account and one file under `~/.local/share/chairlift`
+  — so no `pkexec` route is involved, Pulp's sandboxed store is never written
+  to, and the feedback never claims a subscription was imported. The two
+  optional outcomes are reported separately from the permission change, which
+  has already succeeded: a failed install is a failed install, it rolls nothing
+  back, and it must not read as a failed enable. Disabling Developer Mode is a
+  clean no-op — it removes neither Pulp nor the staged file nor anything the
+  user imported. The worker reads its plan from config on the main thread
+  before it starts, is admitted one at a time by `developerFeedGate`, and
+  reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
 - **Enhanced Troubleshooting reads state, it does not infer it.**
   `internal/troubleshoot` ports Bluefin's `ujust probe` into one row, from
   `ublue-os/tap`: `linux-mcp-server` (which pulls `block-goose-cli`) plus the

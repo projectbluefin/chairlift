@@ -86,8 +86,16 @@ features_page:
   # Capabilities you turn on. Each hides itself on a host with no
   # /usr/share/ublue-os/image-info.json, so leaving them enabled is safe on
   # every other system.
+  #
+  # install_pulp and stage_feeds are optional follow-on steps for a confirmed
+  # Developer Mode enable, and both ship off. Turning the switch on grants
+  # developer access either way; these only add a user-scope Pulp Flatpak and
+  # a staged feed list the user imports themselves. Switching Developer Mode
+  # back off removes neither, and never touches feeds already imported.
   dx_group:
     enabled: true
+    # install_pulp: true
+    # stage_feeds: true
   gaming_group:
     enabled: true
   # A language model served from a rootless container now lives on its own

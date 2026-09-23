@@ -110,6 +110,13 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.FeatureGroupDescription(",
 				"pageview.DeveloperRow(",
 				"pageview.GamingRow(",
+				// Developer-mode onboarding and the optional feed setup both
+				// reach their admission rule rather than inlining it, so the
+				// "only after a confirmed live enable" contract stays
+				// asserted in the puregotk-free packages that own it.
+				"pageview.DeveloperOnboardingTargets(",
+				"actionmsg.DeveloperFeedSetupPlan(",
+				"actionmsg.DeveloperFeedFeedback(",
 			},
 			retired: []string{
 				"row.SetTitle(feat.Description)",

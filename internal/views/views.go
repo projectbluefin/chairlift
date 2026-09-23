@@ -158,12 +158,19 @@ type UserHome struct {
 	developerRow    *adw.ActionRow
 	developerSwitch *gtk.Switch
 	developerGate   actionstate.Gate
-	gamingGroup     *adw.PreferencesGroup
-	gamingRow       *adw.ActionRow
-	gamingSwitch    *gtk.Switch
-	driverRow       *adw.ActionRow
-	driverButton    *gtk.Button
-	driverGate      actionstate.Gate
+	// developerFeedGate admits the optional Pulp/feed-staging work that
+	// follows a confirmed enable. It is a second gate rather than a reuse of
+	// developerGate because its lifetime is different: the switch is
+	// released as soon as the helper returns, while a user-scope Flatpak
+	// install keeps running off the main thread. Overlapping installs are
+	// refused by this gate, not by holding the switch insensitive.
+	developerFeedGate actionstate.Gate
+	gamingGroup       *adw.PreferencesGroup
+	gamingRow         *adw.ActionRow
+	gamingSwitch      *gtk.Switch
+	driverRow         *adw.ActionRow
+	driverButton      *gtk.Button
+	driverGate        actionstate.Gate
 
 	// Staged-update changelog (SBOM diff), a drill-down inside
 	// bootcStageExpander rather than a page of its own.
