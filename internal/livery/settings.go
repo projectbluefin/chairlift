@@ -120,12 +120,6 @@ func (s State) DockSource() Source {
 	return Source{Kind: FromCNCF, Value: s.DockID}
 }
 
-// SchemaAvailable reports whether ChairLift's schema is installed.
-func SchemaAvailable(ctx context.Context) bool {
-	_, err := readAll(ctx)
-	return err == nil
-}
-
 // readAll returns every key in ChairLift's schema from a single call.
 //
 // One `gsettings get` per key is one subprocess per key, and commit c24faa2

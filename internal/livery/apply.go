@@ -703,11 +703,6 @@ func PanelAvailable(ctx context.Context) bool {
 	return err == nil
 }
 
-// CurrentPanelIcon returns the extension's current icon name.
-func CurrentPanelIcon(ctx context.Context) (string, error) {
-	return gsettingsGet(ctx, extensionSchema, extensionIconKey)
-}
-
 // DefaultContext returns a context with the package's standard timeout.
 func DefaultContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), commandTimeout)

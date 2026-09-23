@@ -5,9 +5,32 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// untrustedTapErrRe matches the tap name in brew's "from untrusted tap
+// <user>/<repo>" error line. The capture is restricted to the characters
+// GitHub allows in an owner and a repository name, so output replayed from a
+// third-party installer cannot smuggle shell metacharacters into the
+// `brew trust <tap>` command the toast suggests. Dots are allowed in the repo
+// segment (repository names may contain them); the sentence-ending period
+// brew appends is trimmed afterwards instead of being excluded from the
+// charset, which would truncate a tap such as foo/bar.baz to foo/bar.
+var untrustedTapErrRe = regexp.MustCompile(`(?m)^Error: .*from untrusted tap ([A-Za-z0-9_-]+/[A-Za-z0-9._-]+)`)
+
+func untrustedTapFromErrorLine(s string) (string, bool) {
+	m := untrustedTapErrRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", false
+	}
+	tap := strings.TrimRight(m[1], ".")
+	if _, repo, ok := strings.Cut(tap, "/"); !ok || repo == "" {
+		return "", false
+	}
+	return tap, true
+}
 
 // UntrustedTap describes an untrusted tap and the packages installed from it.
 // Package names are fully qualified (user/tap/name), ready for `brew trust`.
@@ -172,6 +195,7 @@ func ListUntrustedTaps() ([]UntrustedTap, error) {
 // the Untrusted Taps UI instead of dumping raw brew output.
 type UntrustedTapError struct {
 	Message string
+	Tap     string
 }
 
 func (e *UntrustedTapError) Error() string {

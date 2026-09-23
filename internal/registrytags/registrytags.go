@@ -21,6 +21,7 @@
 package registrytags
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -325,10 +326,7 @@ func (c *Client) token(ctx context.Context, host, path string) (string, error) {
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&body); err != nil {
 		return "", nil
 	}
-	if body.Token != "" {
-		return body.Token, nil
-	}
-	return body.AccessToken, nil
+	return cmp.Or(body.Token, body.AccessToken), nil
 }
 
 // get performs one authenticated GET and returns the body and headers.

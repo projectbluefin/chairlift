@@ -32,10 +32,16 @@ type Counts struct {
 // Set replaces one provider's count and returns that count plus the new total.
 // Negative counts are clamped to zero.
 func (c *Counts) Set(source Source, count int) Snapshot {
+	return c.SetObserved(source, count, true)
+}
+
+// SetObserved replaces a provider's count only when its status read succeeded.
+// A failed read knows nothing about staged work and must not clear a known badge.
+func (c *Counts) SetObserved(source Source, count int, known bool) Snapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if valid(source) {
+	if known && valid(source) {
 		c.values[source] = max(0, count)
 	}
 	return c.snapshot(source)

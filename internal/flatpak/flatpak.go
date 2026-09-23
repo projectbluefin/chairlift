@@ -335,6 +335,27 @@ func Install(appID string, user bool) error {
 	return err
 }
 
+// InstallFromRemote installs appID from a specific remote into the user or
+// system scope: `flatpak install -y [--user|--system] <remote> <appID>`. The
+// remote is the origin flatpak pulls from (typically "flathub"); pass "" for
+// the default remote. Like Install it enforces dryrun and runs through the
+// shared runner, so it inherits the process-group and timeout handling.
+func InstallFromRemote(appID, remote string, user bool) error {
+	args := []string{"install", "-y"}
+	if user {
+		args = append(args, "--user")
+	} else {
+		args = append(args, "--system")
+	}
+	if remote != "" {
+		args = append(args, remote)
+	}
+	args = append(args, appID)
+
+	_, err := runFlatpakCommand(args...)
+	return err
+}
+
 // Uninstall removes a Flatpak application
 func Uninstall(appID string, user bool) error {
 	args := []string{"uninstall", "-y"}

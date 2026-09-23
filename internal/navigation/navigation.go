@@ -92,7 +92,7 @@ var items = []Item{
 			"features_group",
 			"dx_group",
 			"gaming_group",
-			"troubleshooting_group",
+
 		},
 	},
 	{
@@ -122,7 +122,11 @@ var items = []Item{
 		Title:      "Help",
 		Icon:       "help-browser-symbolic",
 		ConfigPage: "help_page",
-		Groups:     []string{"help_resources_group"},
+		// Troubleshooting leads Help (issue #249); resources follow it.
+		Groups: []string{
+			"troubleshooting_group",
+			"help_resources_group",
+		},
 		AlwaysShow: true,
 	},
 }

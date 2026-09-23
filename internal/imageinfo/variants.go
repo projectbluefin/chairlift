@@ -2,6 +2,7 @@ package imageinfo
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -199,7 +200,7 @@ func AvailableDrivers(cleanRef, tag string) []Driver {
 
 	available := make([]Driver, 0, len(entries))
 	for _, entry := range entries {
-		if contains(entry.streams, tag) {
+		if slices.Contains(entry.streams, tag) {
 			available = append(available, entry.driver)
 		}
 	}
@@ -222,7 +223,7 @@ func DriverTarget(cleanRef, tag string, driver Driver) (string, bool) {
 	if current == driver {
 		return "", false // already there
 	}
-	if !contains(driverNames(AvailableDrivers(cleanRef, tag)), string(driver)) {
+	if !slices.Contains(driverNames(AvailableDrivers(cleanRef, tag)), string(driver)) {
 		return "", false
 	}
 	return fmt.Sprintf("%s:%s", driverRef(base, driver), tag), true

@@ -324,14 +324,10 @@ func TestSelfUpdate(t *testing.T) {
 	}
 }
 
-// TestBootcStage covers all four (dryRun, staged) combinations for the
-// Updates page's bootc stage-button completion toast. Under dry-run,
-// bootc.StageUpdate never re-checks or re-stages anything for real (it
-// short-circuits before pkexec), so the toast must read as an unambiguous
-// preview regardless of what a live bootc.GetStatus() re-read happens to
-// report as staged — the dryRun=true cases must NOT contain either
-// non-dry-run completion string verbatim.
-func TestBootcStage(t *testing.T) {
+// TestSystemStage covers all four (dryRun, staged) combinations for both
+// staging providers. Dry-run cannot claim that a status re-read is work done
+// by this click, while live staging retains its fixed completion messages.
+func TestSystemStage(t *testing.T) {
 	const stagedMsg = "System update staged. Restart to apply."
 	const upToDateMsg = "System is up to date"
 
@@ -370,93 +366,25 @@ func TestBootcStage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BootcStage(tt.dryRun, tt.staged)
+			got := SystemStage(tt.dryRun, tt.staged)
 
 			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("BootcStage(%v, %v) = %q, want %q", tt.dryRun, tt.staged, got, tt.wantExact)
+				t.Errorf("SystemStage(%v, %v) = %q, want %q", tt.dryRun, tt.staged, got, tt.wantExact)
 			}
 			for _, want := range tt.wantContains {
 				if !strings.Contains(got, want) {
-					t.Errorf("BootcStage(%v, %v) = %q, want it to contain %q", tt.dryRun, tt.staged, got, want)
+					t.Errorf("SystemStage(%v, %v) = %q, want it to contain %q", tt.dryRun, tt.staged, got, want)
 				}
 			}
 			if tt.dryRun {
 				if !strings.Contains(got, "Preview") && !strings.Contains(got, "[DRY-RUN]") {
-					t.Errorf("BootcStage(%v, %v) = %q, want it to contain %q or %q", tt.dryRun, tt.staged, got, "Preview", "[DRY-RUN]")
+					t.Errorf("SystemStage(%v, %v) = %q, want it to contain %q or %q", tt.dryRun, tt.staged, got, "Preview", "[DRY-RUN]")
 				}
 				if strings.Contains(got, stagedMsg) {
-					t.Errorf("BootcStage(%v, %v) = %q, must not contain the non-dry-run staged completion string %q", tt.dryRun, tt.staged, got, stagedMsg)
+					t.Errorf("SystemStage(%v, %v) = %q, must not contain the non-dry-run staged completion string %q", tt.dryRun, tt.staged, got, stagedMsg)
 				}
 				if strings.Contains(got, upToDateMsg) {
-					t.Errorf("BootcStage(%v, %v) = %q, must not contain the non-dry-run up-to-date completion string %q", tt.dryRun, tt.staged, got, upToDateMsg)
-				}
-			}
-		})
-	}
-}
-
-// TestSysupdateStage mirrors TestBootcStage: the native A/B stage toast has
-// the identical dry-run contract (a preview string that never claims a
-// completed or verified state, because staged reflects real system state, not
-// this click's work).
-func TestSysupdateStage(t *testing.T) {
-	const stagedMsg = "System update staged. Restart to apply."
-	const upToDateMsg = "System is up to date"
-
-	tests := []struct {
-		name         string
-		dryRun       bool
-		staged       bool
-		wantExact    string
-		wantContains []string
-	}{
-		{
-			name:      "live run, staged reports the fixed staged message",
-			dryRun:    false,
-			staged:    true,
-			wantExact: stagedMsg,
-		},
-		{
-			name:      "live run, not staged reports the fixed up-to-date message",
-			dryRun:    false,
-			staged:    false,
-			wantExact: upToDateMsg,
-		},
-		{
-			name:         "dry-run, staged previews without claiming completion",
-			dryRun:       true,
-			staged:       true,
-			wantContains: []string{"no changes made"},
-		},
-		{
-			name:         "dry-run, not staged previews without claiming completion",
-			dryRun:       true,
-			staged:       false,
-			wantContains: []string{"no changes made"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := SysupdateStage(tt.dryRun, tt.staged)
-
-			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("SysupdateStage(%v, %v) = %q, want %q", tt.dryRun, tt.staged, got, tt.wantExact)
-			}
-			for _, want := range tt.wantContains {
-				if !strings.Contains(got, want) {
-					t.Errorf("SysupdateStage(%v, %v) = %q, want it to contain %q", tt.dryRun, tt.staged, got, want)
-				}
-			}
-			if tt.dryRun {
-				if !strings.Contains(got, "Preview") && !strings.Contains(got, "[DRY-RUN]") {
-					t.Errorf("SysupdateStage(%v, %v) = %q, want it to contain %q or %q", tt.dryRun, tt.staged, got, "Preview", "[DRY-RUN]")
-				}
-				if strings.Contains(got, stagedMsg) {
-					t.Errorf("SysupdateStage(%v, %v) = %q, must not contain the non-dry-run staged completion string %q", tt.dryRun, tt.staged, got, stagedMsg)
-				}
-				if strings.Contains(got, upToDateMsg) {
-					t.Errorf("SysupdateStage(%v, %v) = %q, must not contain the non-dry-run up-to-date completion string %q", tt.dryRun, tt.staged, got, upToDateMsg)
+					t.Errorf("SystemStage(%v, %v) = %q, must not contain the non-dry-run up-to-date completion string %q", tt.dryRun, tt.staged, got, upToDateMsg)
 				}
 			}
 		})

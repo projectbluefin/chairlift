@@ -104,7 +104,7 @@ func init() {
 
 // New creates a new main window
 func New(app adw.Application) *Window {
-	obj := gobject.NewObject(gTypeWindow, "application", &app.Application)
+	obj := gobject.NewObject(gTypeWindow, "application", app.Application.GoPointer(), uintptr(0))
 	if obj == nil {
 		log.Fatal("Failed to create window")
 	}
@@ -119,6 +119,10 @@ func (w *Window) buildUI() {
 
 	// Create views manager
 	w.views = views.New(w.config, w)
+	// Wire the Recovery detail navigation before any page can open it. The
+	// System page opens Recovery; Recovery's back button returns to System.
+	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
+	w.views.SetCloseRecoveryDetail(w.showSystem)
 	log.Printf("window: views built in %s", time.Since(start))
 
 	// Initialize unified updates engine
@@ -259,6 +263,13 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 		if page != nil {
 			w.contentStack.AddNamed(&page.Widget, item.Name)
 		}
+	}
+
+	// Recovery is a detail view reached from System, not a sidebar page, so
+	// it is not in navItems. Add it as a content-stack sibling so the System
+	// page can open it and its back button can close it. See #241.
+	if recovery := w.views.RecoveryPage(); recovery != nil {
+		w.contentStack.AddNamed(&recovery.Widget, "recovery")
 	}
 
 	// Create navigation page with initial title from first nav item
@@ -407,6 +418,22 @@ func (w *Window) navigateToPage(pageName string) {
 	w.contentStack.SetVisibleChildName(transition.VisibleChild)
 	w.contentPage.SetTitle(transition.Title)
 	w.splitView.SetShowContent(transition.ShowContent)
+}
+
+// showRecoveryDetail opens the Recovery detail view from System. Recovery is a
+// content-stack sibling of System, not a sidebar page, so it replaces System
+// in the content area and carries its own back button. The System sidebar row
+// stays selected; only the content child changes.
+func (w *Window) showRecoveryDetail() {
+	w.contentStack.SetVisibleChildName("recovery")
+	w.contentPage.SetTitle("Recovery")
+	w.splitView.SetShowContent(true)
+}
+
+// showSystem returns from Recovery to System via the normal System route, so
+// the sidebar row and transition state stay consistent.
+func (w *Window) showSystem() {
+	w.navigateToPage("system")
 }
 
 // onShowShortcuts shows the keyboard shortcuts window

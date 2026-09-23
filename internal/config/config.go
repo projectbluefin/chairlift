@@ -371,9 +371,8 @@ func defaultConfig() *Config {
 			// Capabilities you turn on. Both hide themselves when
 			// internal/ublue reports no /usr/share/ublue-os/image-info.json,
 			// which is every non-Bluefin host including Snow Linux.
-			"dx_group":              GroupConfig{Enabled: true},
-			"gaming_group":          GroupConfig{Enabled: true},
-			"troubleshooting_group": GroupConfig{Enabled: true},
+			"dx_group":     GroupConfig{Enabled: true},
+			"gaming_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
 		// into the user's own icon theme and dconf, so neither needs a
@@ -385,6 +384,11 @@ func defaultConfig() *Config {
 			"livery_dock_group":       GroupConfig{Enabled: true},
 		},
 		HelpPage: PageConfig{
+			// Enhanced Troubleshooting lives on Help (issue #249): one
+			// task-oriented destination for help and support, with the AI
+			// assistant leading. It keeps the Homebrew-backed self-hiding
+			// behavior, so it is safe to enable everywhere Homebrew exists.
+			"troubleshooting_group": GroupConfig{Enabled: true},
 			"help_resources_group": GroupConfig{
 				Enabled: true,
 				Website: "https://projectbluefin.io",

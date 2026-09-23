@@ -88,15 +88,6 @@ func cncfDisplayName(id string) string {
 	return strings.Join(parts, " ")
 }
 
-// CNCFProjects returns every project with a published color icon, in
-// manifest order (alphabetical by id).
-func CNCFProjects() []CNCFProject {
-	cncfOnce.Do(loadCNCF)
-	out := make([]CNCFProject, len(cncfProjects))
-	copy(out, cncfProjects)
-	return out
-}
-
 // LookupCNCF returns the project with the given id.
 func LookupCNCF(id string) (CNCFProject, bool) {
 	cncfOnce.Do(loadCNCF)

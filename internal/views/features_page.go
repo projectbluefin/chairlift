@@ -76,9 +76,8 @@ func (uh *UserHome) buildFeaturesPage() {
 
 	uh.buildBluefinGroups(page)
 
-	if uh.config.IsGroupEnabled("features_page", "troubleshooting_group") {
-		uh.buildTroubleshootGroup(page)
-	}
+	// Enhanced Troubleshooting was moved to Help (issue #249), and Local AI
+	// moved to Agents (issue #244), so neither is built here.
 
 	if uh.config.IsGroupEnabled("features_page", "features_group") {
 		// Build the features group (shown if updex is available)

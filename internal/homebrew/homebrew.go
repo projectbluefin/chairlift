@@ -128,6 +128,30 @@ var stateChangingCommands = map[string]bool{
 	"tap": true,
 }
 
+// bundleSubcommand returns the first non-flag word after "bundle", or
+// "install" for a bare `brew bundle`, which is what brew itself defaults to.
+// It returns "" when args is not a bundle invocation.
+func bundleSubcommand(args []string) string {
+	if len(args) == 0 || args[0] != "bundle" {
+		return ""
+	}
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg
+	}
+	return "install"
+}
+
+// isBundleInstall reports whether a brew invocation is `brew bundle install`.
+// It is derived from argv, which no command output can influence, and that is
+// the point: it is the gate on the stdout-derived untrusted-tap
+// reclassification in runBrewCommandAt.
+func isBundleInstall(args []string) bool {
+	return bundleSubcommand(args) == "install"
+}
+
 // isStateChanging reports whether a brew invocation modifies system state
 // (requiring mutationTimeout, bounded diagnostic output, and dry-run skipping)
 // or is read-only (using readTimeout, full output, and active under dry-run).
@@ -136,24 +160,16 @@ func isStateChanging(args []string) bool {
 		return false
 	}
 	cmd := args[0]
-	if cmd == "bundle" {
+	if sub := bundleSubcommand(args); sub != "" {
 		// Reclassify brew bundle subcommands: check and list are read-only,
-		// while install and dump remain state-changing.
-		for _, arg := range args[1:] {
-			if strings.HasPrefix(arg, "-") {
-				continue
-			}
-			switch arg {
-			case "check", "list":
-				return false
-			default:
-				// install, dump, and any unrecognized subcommand are
-				// treated as state-changing.
-				return true
-			}
+		// while install, dump, and any unrecognized subcommand remain
+		// state-changing.
+		switch sub {
+		case "check", "list":
+			return false
+		default:
+			return true
 		}
-		// A bare "brew bundle" or flags without a subcommand defaults to install
-		return true
 	}
 	return stateChangingCommands[cmd]
 }
@@ -268,13 +284,33 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 			// whole stderr in the error, as before, since nothing else
 			// preserves it and callers such as searchKind match on it.
 			message := diagnosticText
-			tapMessage := stderrText
 			if boundedOutput {
 				message = summarizeDiagnostic(diagnosticText)
-				tapMessage = summarizeDiagnostic(stderrText)
 			}
+			// Only `brew bundle install` replays a third-party installer's
+			// own stdout into the diagnostic, and only it prints the
+			// parseable "from untrusted tap <user>/<tap>" line on stdout
+			// while stderr carries just the bundle summary. Everything
+			// derived from stdout is therefore gated on argv — which no
+			// command output can influence — so a formula that prints a
+			// forged "Error: ... from untrusted tap attacker/tap" line
+			// during an ordinary `brew install`/`upgrade` cannot turn an
+			// unrelated failure into a `brew trust` suggestion for a tap it
+			// chose.
+			bundleInstall := isBundleInstall(args)
 			if isUntrustedTapMessage(stderrText) {
-				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", tapMessage)}
+				// brew's own stderr corroborates the classification here;
+				// the tap name still comes from stderr when it names one.
+				tap, ok := untrustedTapFromErrorLine(stderrText)
+				if !ok && bundleInstall {
+					tap, _ = untrustedTapFromErrorLine(diagnosticText)
+				}
+				return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
+			}
+			if bundleInstall {
+				if tap, ok := untrustedTapFromErrorLine(diagnosticText); ok {
+					return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
+				}
 			}
 			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
 		}
@@ -528,14 +564,17 @@ func Uninstall(name string, isCask bool) error {
 	return err
 }
 
-// Upgrade upgrades a package or all packages
-func Upgrade(name string) error {
+// Upgrade upgrades one package or all packages. The caller's context also
+// bounds the mutation so Update All cancellation stops an in-flight upgrade.
+func Upgrade(ctx context.Context, name string) error {
 	args := []string{"upgrade"}
 	if name != "" {
 		args = append(args, name)
 	}
 
-	_, err := runBrewCommand(args...)
+	runCtx, cancel := context.WithTimeout(ctx, mutationTimeout)
+	defer cancel()
+	_, err := runBrewCommandCtx(runCtx, args...)
 	return err
 }
 

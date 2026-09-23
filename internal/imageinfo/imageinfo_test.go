@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -727,18 +728,18 @@ func TestChannelTableIsInternallyConsistent(t *testing.T) {
 	for ref, channels := range imageChannelMap {
 		t.Run(ref, func(t *testing.T) {
 			for from, to := range channels.toTesting {
-				if !contains(channels.stableTags, from) {
+				if !slices.Contains(channels.stableTags, from) {
 					t.Errorf("toTesting source %q is not listed in stableTags", from)
 				}
-				if !contains(channels.testingTags, to) {
+				if !slices.Contains(channels.testingTags, to) {
 					t.Errorf("toTesting target %q is not listed in testingTags", to)
 				}
 			}
 			for from, to := range channels.toStable {
-				if !contains(channels.testingTags, from) {
+				if !slices.Contains(channels.testingTags, from) {
 					t.Errorf("toStable source %q is not listed in testingTags", from)
 				}
-				if !contains(channels.stableTags, to) {
+				if !slices.Contains(channels.stableTags, to) {
 					t.Errorf("toStable target %q is not listed in stableTags", to)
 				}
 			}

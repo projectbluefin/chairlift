@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 )
 
@@ -287,15 +288,6 @@ func channelsFor(cleanRef string) (imageChannels, bool) {
 	return channels, ok
 }
 
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
-}
-
 // Parse decodes an image descriptor. It returns an error for malformed JSON
 // and for a descriptor carrying neither an image name nor an image ref,
 // which is not usable for any decision this package makes.
@@ -558,9 +550,9 @@ func (i Info) Channel() Channel {
 		return ChannelUnknown
 	}
 	switch {
-	case contains(channels.testingTags, tag):
+	case slices.Contains(channels.testingTags, tag):
 		return ChannelTesting
-	case contains(channels.stableTags, tag):
+	case slices.Contains(channels.stableTags, tag):
 		return ChannelStable
 	default:
 		return ChannelUnknown
@@ -586,13 +578,13 @@ func TargetTag(cleanRef, currentTag string, channel Channel) (string, bool) {
 
 	switch channel {
 	case ChannelTesting:
-		if contains(channels.testingTags, currentTag) {
+		if slices.Contains(channels.testingTags, currentTag) {
 			return "", false // already on testing
 		}
 		target, ok := channels.toTesting[currentTag]
 		return target, ok
 	case ChannelStable:
-		if contains(channels.stableTags, currentTag) {
+		if slices.Contains(channels.stableTags, currentTag) {
 			return "", false // already on stable
 		}
 		target, ok := channels.toStable[currentTag]

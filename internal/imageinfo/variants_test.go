@@ -2,6 +2,7 @@ package imageinfo
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -332,7 +333,7 @@ func TestDriverTableIsInternallyConsistent(t *testing.T) {
 					continue
 				}
 				for _, stream := range entry.streams {
-					if !contains(standard, stream) {
+					if !slices.Contains(standard, stream) {
 						t.Errorf("driver %q claims stream %q, which the base image does not publish", entry.driver, stream)
 					}
 				}

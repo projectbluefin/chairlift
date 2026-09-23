@@ -166,6 +166,8 @@ esac`
 		},
 		{name: "install user", run: func() error { return Install("org.example.App", true) }, want: []string{"install", "-y", "--user", "org.example.App"}},
 		{name: "install system", run: func() error { return Install("org.example.App", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},
+		{name: "install from remote user", run: func() error { return InstallFromRemote("org.example.App", "flathub", true) }, want: []string{"install", "-y", "--user", "flathub", "org.example.App"}},
+		{name: "install from remote system default", run: func() error { return InstallFromRemote("org.example.App", "", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},
 		{name: "uninstall user", run: func() error { return Uninstall("org.example.App", true) }, want: []string{"uninstall", "-y", "--user", "org.example.App"}},
 		{name: "uninstall system", run: func() error { return Uninstall("org.example.App", false) }, want: []string{"uninstall", "-y", "--system", "org.example.App"}},
 		{name: "update one user app", run: func() error { return Update(context.Background(), "org.example.App", true) }, want: []string{"update", "-y", "--user", "org.example.App"}},

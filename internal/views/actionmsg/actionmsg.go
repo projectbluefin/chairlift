@@ -14,7 +14,7 @@
 // packages. See docs/agents/skills/gtk-headless-tests.md.
 //
 // Functions whose result only selects display text (BundleDump, Cleanup,
-// Install, Uninstall, Pin, Upgrade, Update, SelfUpdate, BootcStage,
+// Install, Uninstall, Pin, Upgrade, Update, SelfUpdate, SystemStage,
 // FeatureUpdate) return a plain string: the state-changing/no-op decision for
 // those actions is already made and already tested inside their wrapper
 // package (internal/homebrew, internal/flatpak, internal/bootc,
@@ -146,39 +146,11 @@ func SelfUpdate(dryRun bool, tool string) string {
 	return fmt.Sprintf("%s updated successfully", tool)
 }
 
-// BootcStage returns the toast text for a click of the Updates page's
-// "Check for Updates" bootc stage button, after bootc.StageUpdate's
-// wg.Wait() returns. bootc.StageUpdate already gates the state-changing
-// part correctly: under dry-run it never invokes pkexec, emitting a
-// synthetic "[DRY-RUN] would run ..."/"Dry run complete" event pair
-// instead (internal/bootc/stage.go, tested in internal/bootc/stage_test.go).
-// But the handler's final toast used to be computed purely from a live
-// bootc.GetStatus() re-read, regardless of dryRun — so a dry-run click
-// could show "System update staged. Restart to apply." or "System is up to
-// date", either of which reads as a verified completion claim about a click
-// that, under dry-run, checked and changed nothing. When dryRun is true,
-// BootcStage returns a single, unambiguous preview string regardless of
-// staged, since staged reflects whatever bootc.GetStatus() reports about
-// real system state, not anything this click did. When dryRun is false, it
-// returns the existing staged/not-staged completion strings unchanged.
-func BootcStage(dryRun bool, staged bool) string {
-	if dryRun {
-		return "[DRY-RUN] Preview: no changes made — system state was not checked or modified by this click"
-	}
-	if staged {
-		return "System update staged. Restart to apply."
-	}
-	return "System is up to date"
-}
-
-// SysupdateStage returns the toast text for a click of the Updates page's
-// native A/B "Check for Updates" stage button, after sysupdate.StageUpdate's
-// wg.Wait() returns. It follows BootcStage's contract exactly: under
-// dry-run, sysupdate.StageUpdate never invokes pkexec and staged reflects a
-// re-read of real system state rather than anything this click did, so the
-// dry-run branch returns a single unambiguous preview string regardless of
-// staged.
-func SysupdateStage(dryRun bool, staged bool) string {
+// SystemStage returns the completion toast for either bootc or native A/B
+// staging. Both providers skip pkexec under dry-run, so a status re-read then
+// describes existing system state, not work done by this click. Always report
+// a preview under dry-run; retain the staged and current live messages.
+func SystemStage(dryRun bool, staged bool) string {
 	if dryRun {
 		return "[DRY-RUN] Preview: no changes made — system state was not checked or modified by this click"
 	}

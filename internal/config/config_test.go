@@ -654,3 +654,21 @@ func TestTrustedConfigMayEnableInheritedSudoAction(t *testing.T) {
 		t.Fatalf("maintenance_cleanup_group = %+v, want enabled with the privileged default action", group)
 	}
 }
+
+// TestRepoConfigYmlLoadsCleanlyUnderStrictValidation verifies that the shipped
+// repository config.yml passes strict schema validation when loaded directly
+// from disk via loadFromPath. This ensures that groups and keys defined in
+// config.yml stay in sync with defaultConfig() and cannot silently fail closed
+// in production.
+func TestRepoConfigYmlLoadsCleanlyUnderStrictValidation(t *testing.T) {
+	root := repoRoot()
+	trustConfigDirectory(t, root)
+	path := filepath.Join(root, "config.yml")
+	cfg, err := loadFromPath(path)
+	if err != nil {
+		t.Fatalf("loadFromPath(%q): %v", path, err)
+	}
+	if cfg == nil {
+		t.Fatalf("loadFromPath(%q): returned nil config without error", path)
+	}
+}

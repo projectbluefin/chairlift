@@ -104,16 +104,6 @@ func UnitPath() (string, error) {
 	return filepath.Join(dir, "systemd", "user", UnitName), nil
 }
 
-// RotationInstalled reports whether the rotation unit is on disk.
-func RotationInstalled() bool {
-	path, err := UnitPath()
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(path)
-	return err == nil
-}
-
 // InstallRotation writes and enables the rotation unit. It is idempotent:
 // rewriting an identical unit and re-enabling an enabled unit are both no-ops
 // as far as the user can observe.

@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -254,7 +255,7 @@ func convertDriverEntry(ref string, entry map[string][]string) ([]driverStreams,
 		}
 		if driver != DriverStandard {
 			for _, stream := range streams {
-				if !contains(standardStreams, stream) {
+				if !slices.Contains(standardStreams, stream) {
 					return nil, fmt.Errorf("driver table entry %q: driver %q stream %q is not in the standard stream list, so a host could not switch back", ref, driver, stream)
 				}
 			}
@@ -294,20 +295,20 @@ func convertEntry(ref string, entry rawImageChannels) (imageChannels, error) {
 	}
 
 	for from, to := range entry.ToTesting {
-		if !contains(channels.stableTags, from) {
+		if !slices.Contains(channels.stableTags, from) {
 			return imageChannels{}, fmt.Errorf("channel table entry %q: to_testing source %q is not in stable_tags", ref, from)
 		}
-		if !contains(channels.testingTags, to) {
+		if !slices.Contains(channels.testingTags, to) {
 			return imageChannels{}, fmt.Errorf("channel table entry %q: to_testing target %q is not in testing_tags", ref, to)
 		}
 		channels.toTesting[from] = to
 	}
 
 	for from, to := range entry.ToStable {
-		if !contains(channels.testingTags, from) {
+		if !slices.Contains(channels.testingTags, from) {
 			return imageChannels{}, fmt.Errorf("channel table entry %q: to_stable source %q is not in testing_tags", ref, from)
 		}
-		if !contains(channels.stableTags, to) {
+		if !slices.Contains(channels.stableTags, to) {
 			return imageChannels{}, fmt.Errorf("channel table entry %q: to_stable target %q is not in stable_tags", ref, to)
 		}
 		channels.toStable[from] = to

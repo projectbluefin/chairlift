@@ -7,7 +7,8 @@ import (
 
 // TestSimpleIconsCatalogLoads asserts the embedded brand list parses.
 func TestSimpleIconsCatalogLoads(t *testing.T) {
-	icons := SimpleIcons()
+	simpleOnce.Do(loadSimpleIcons)
+	icons := simpleIcons
 	if len(icons) < 3000 {
 		t.Fatalf("catalog has %d brands, want simpleicons.org's full set", len(icons))
 	}
@@ -33,7 +34,8 @@ func TestSlugsComeFromTheProjectsOwnTable(t *testing.T) {
 		"C++":      "cplusplus",
 	}
 	byTitle := map[string]string{}
-	for _, icon := range SimpleIcons() {
+	simpleOnce.Do(loadSimpleIcons)
+	for _, icon := range simpleIcons {
 		byTitle[icon.Title] = icon.Slug
 	}
 	for title, slug := range want {
@@ -91,7 +93,8 @@ func TestBrandSearchWithNoMatchesReturnsEmpty(t *testing.T) {
 // escaping is still needed.
 func TestCatalogNamesAreLiteralText(t *testing.T) {
 	var withMarkupChars int
-	for _, icon := range SimpleIcons() {
+	simpleOnce.Do(loadSimpleIcons)
+	for _, icon := range simpleIcons {
 		if strings.ContainsAny(icon.Title, "&<>") {
 			withMarkupChars++
 		}

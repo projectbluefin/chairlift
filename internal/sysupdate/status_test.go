@@ -224,3 +224,36 @@ func TestReadUpdateCheckFromFile(t *testing.T) {
 		t.Errorf("readUpdateCheckFrom = %+v", check)
 	}
 }
+
+func TestStatusReadFailureDoesNotLookLikeIdle(t *testing.T) {
+	dir := t.TempDir()
+	checkPath := filepath.Join(dir, "update-check")
+	stagedPath := filepath.Join(dir, "update-staged")
+	if err := os.WriteFile(checkPath, []byte("outcome=staged\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stagedPath, []byte("version=20260810200801\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, err := getStatusFrom(checkPath, stagedPath)
+	if err != nil || !status.IsStaged() {
+		t.Fatalf("readable staged status = (%+v, %v), want staged", status, err)
+	}
+	for _, broken := range []string{"check", "staged"} {
+		t.Run(broken, func(t *testing.T) {
+			unreadable := filepath.Join(t.TempDir(), "directory-not-a-file")
+			if err := os.Mkdir(unreadable, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			check, staged := checkPath, stagedPath
+			if broken == "check" {
+				check = unreadable
+			} else {
+				staged = unreadable
+			}
+			if got, err := getStatusFrom(check, staged); err == nil || got != (Status{}) {
+				t.Errorf("unreadable %s file = (%+v, %v), want an error and no invented idle snapshot", broken, got, err)
+			}
+		})
+	}
+}

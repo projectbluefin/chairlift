@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -74,7 +75,7 @@ func TestOverrideKeepsBuiltinImages(t *testing.T) {
 		"ghcr.io/tuna-os/tromso",
 		"ghcr.io/ublue-os/bluefin",
 	} {
-		if !contains(images, want) {
+		if !slices.Contains(images, want) {
 			t.Errorf("KnownImages() = %v, want it to include %q", images, want)
 		}
 	}
@@ -271,7 +272,7 @@ func TestLoadTableAppliesTheFirstExistingCandidate(t *testing.T) {
 	if applied != second {
 		t.Fatalf("LoadTable() applied %q, want %q", applied, second)
 	}
-	if !contains(KnownImages(), "ghcr.io/tuna-os/tromso") {
+	if !slices.Contains(KnownImages(), "ghcr.io/tuna-os/tromso") {
 		t.Error("LoadTable() did not apply the maintainer table")
 	}
 
@@ -288,10 +289,10 @@ func TestLoadTableAppliesTheFirstExistingCandidate(t *testing.T) {
 		t.Fatalf("LoadTable() applied %q, want the administrator file %q", applied, first)
 	}
 	images := KnownImages()
-	if !contains(images, "ghcr.io/tuna-os/razorfin") {
+	if !slices.Contains(images, "ghcr.io/tuna-os/razorfin") {
 		t.Error("administrator table was not applied")
 	}
-	if contains(images, "ghcr.io/tuna-os/tromso") {
+	if slices.Contains(images, "ghcr.io/tuna-os/tromso") {
 		t.Error("the maintainer table was also applied; only the first existing candidate may win")
 	}
 }
@@ -390,10 +391,10 @@ func TestSystemTablePathsAreRootOwnedLocations(t *testing.T) {
 func TestResetTableRestoresTheBuiltins(t *testing.T) {
 	applyTable(t, tunaOSTable)
 	ResetTable()
-	if contains(KnownImages(), "ghcr.io/tuna-os/tromso") {
+	if slices.Contains(KnownImages(), "ghcr.io/tuna-os/tromso") {
 		t.Error("ResetTable() left the override in place")
 	}
-	if !contains(KnownImages(), "ghcr.io/projectbluefin/dakota") {
+	if !slices.Contains(KnownImages(), "ghcr.io/projectbluefin/dakota") {
 		t.Error("ResetTable() dropped the built-in images")
 	}
 }

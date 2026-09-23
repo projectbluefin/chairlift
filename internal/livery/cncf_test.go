@@ -12,7 +12,8 @@ import (
 // TestCNCFCatalogLoads asserts the embedded manifest parses into a usable
 // catalog, and that the default selection is actually in it.
 func TestCNCFCatalogLoads(t *testing.T) {
-	projects := CNCFProjects()
+	cncfOnce.Do(loadCNCF)
+	projects := cncfProjects
 	if len(projects) < 100 {
 		t.Fatalf("catalog has %d projects, want the full cncf/artwork set", len(projects))
 	}
@@ -31,7 +32,8 @@ func TestCNCFCatalogLoads(t *testing.T) {
 // Deriving the name instead of storing it would 404 on exactly those.
 func TestCNCFPathsAreNotDerivedFromIDs(t *testing.T) {
 	var nonCanonical int
-	for _, p := range CNCFProjects() {
+	cncfOnce.Do(loadCNCF)
+	for _, p := range cncfProjects {
 		if !strings.HasSuffix(p.path, p.ID+"-icon-color.svg") {
 			nonCanonical++
 		}
@@ -47,7 +49,8 @@ func TestCNCFPathsAreNotDerivedFromIDs(t *testing.T) {
 // TestNextCNCFIDWrapsAndIsTotal asserts dock rotation is deterministic and
 // can never leave the selection unset.
 func TestNextCNCFIDWrapsAndIsTotal(t *testing.T) {
-	projects := CNCFProjects()
+	cncfOnce.Do(loadCNCF)
+	projects := cncfProjects
 	last := projects[len(projects)-1].ID
 	if got := NextCNCFID(last); got != projects[0].ID {
 		t.Errorf("NextCNCFID(%q) = %q, want wrap to %q", last, got, projects[0].ID)

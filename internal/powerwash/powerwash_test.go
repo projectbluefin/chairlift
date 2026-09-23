@@ -7,24 +7,19 @@ import (
 	"testing"
 )
 
-func TestStepsAreOrderedAndNotAliased(t *testing.T) {
-	list := Steps()
+func TestStepsAreOrderedAndTitled(t *testing.T) {
+	list := steps
 	want := []StepID{StepFlatpak, StepDistrobox}
 	if len(list) != len(want) {
-		t.Fatalf("Steps() has %d entries, want %d", len(list), len(want))
+		t.Fatalf("step inventory has %d entries, want %d", len(list), len(want))
 	}
 	for i, step := range list {
 		if step.ID != want[i] {
-			t.Errorf("Steps()[%d].ID = %q, want %q", i, step.ID, want[i])
+			t.Errorf("steps[%d].ID = %q, want %q", i, step.ID, want[i])
 		}
 		if step.Title == "" {
-			t.Errorf("Steps()[%d] has no title", i)
+			t.Errorf("steps[%d] has no title", i)
 		}
-	}
-
-	list[0].Title = "mutated"
-	if Steps()[0].Title == "mutated" {
-		t.Error("Steps() returned an aliased slice")
 	}
 }
 

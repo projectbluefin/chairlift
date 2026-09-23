@@ -14,7 +14,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/sysupdate"
-	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
@@ -78,27 +77,10 @@ func (uh *UserHome) buildUpdatesPage() {
 
 		group.Add(&uh.bootcStageExpander.Widget)
 
-		// Going back returns to the version this machine still keeps. The
-		// row is hidden until that version is confirmed to exist, so a
-		// fresh install never offers to return to nothing.
-		uh.bootcRollbackRow = adw.NewActionRow()
-		rollbackPresentation := pageview.BootcRollbackRow("", "")
-		uh.bootcRollbackRow.SetTitle(rollbackPresentation.Title)
-		uh.bootcRollbackRow.SetSubtitle(rollbackPresentation.Subtitle)
-		uh.bootcRollbackBtn = gtk.NewButtonWithLabel("Go back")
-		uh.bootcRollbackBtn.SetValign(gtk.AlignCenterValue)
-		rollbackClickedCb := func(gtk.Button) {
-			uh.onBootcRollbackClicked()
-		}
-		uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
-		uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
-		uh.bootcRollbackRow.SetVisible(false)
-		group.Add(&uh.bootcRollbackRow.Widget)
 
 		page.Add(group)
 
 		go uh.loadBootcUpdateStatus(group)
-		go uh.loadBootcRollbackStatus()
 	}
 
 	// Native A/B (systemd-sysupdate) system updates group - built hidden,
@@ -126,12 +108,8 @@ func (uh *UserHome) buildUpdatesPage() {
 		uh.sysupdateStageBtn.ConnectClicked(&sysupdateClickedCb)
 		uh.sysupdateStageExpander.AddSuffix(&uh.sysupdateStageBtn.Widget)
 
-		uh.sysupdateRollbackRow = adw.NewActionRow()
-		uh.sysupdateRollbackRow.SetTitle("Previous version")
-		uh.sysupdateRollbackRow.SetSubtitle("Checking…")
 
 		group.Add(&uh.sysupdateStageExpander.Widget)
-		group.Add(&uh.sysupdateRollbackRow.Widget)
 		page.Add(group)
 
 		go uh.loadSysupdateUpdateStatus(group)
@@ -422,7 +400,7 @@ func (uh *UserHome) loadOutdatedPackagesGeneration(generation uint64, done func(
 				btn.SetSensitive(false)
 				btn.SetLabel("Updating…")
 				go func() {
-					err := homebrew.Upgrade(pkgName)
+					err := homebrew.Upgrade(context.Background(), pkgName)
 					dryRun := dryrun.Enabled()
 					decision := actionstate.PackageUpgrade(err == nil, dryRun)
 					if err != nil {
@@ -635,11 +613,11 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 	status, err := bootc.GetStatus(ctx)
 
 	staged := err == nil && status.Status.Staged != nil
+	count := 0
 	if staged {
-		uh.updateCounts.Set(badgestate.Bootc, 1)
-	} else {
-		uh.updateCounts.Set(badgestate.Bootc, 0)
+		count = 1
 	}
+	uh.updateCounts.SetObserved(badgestate.Bootc, count, err == nil)
 	uh.updateBadgeCount()
 
 	sgtk.RunOnMainThread(func() {
@@ -803,11 +781,11 @@ func (uh *UserHome) onBootcStageClicked() {
 		statusCancel()
 
 		staged := statusErr == nil && status.Status.Staged != nil
+		count := 0
 		if staged {
-			uh.updateCounts.Set(badgestate.Bootc, 1)
-		} else {
-			uh.updateCounts.Set(badgestate.Bootc, 0)
+			count = 1
 		}
+		uh.updateCounts.SetObserved(badgestate.Bootc, count, statusErr == nil)
 		uh.updateBadgeCount()
 
 		sgtk.RunOnMainThread(func() {
@@ -822,43 +800,50 @@ func (uh *UserHome) onBootcStageClicked() {
 				return
 			}
 
+			if statusErr == nil {
+				uh.refreshChangelogAvailability(status)
+			}
+			if statusErr != nil {
+				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				expander.SetSubtitle(message)
+				if dryrun.Enabled() {
+					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
+				} else {
+					uh.toastAdder.ShowErrorToast(message)
+				}
+				return
+			}
+
 			version := ""
 			if staged {
 				version = status.Status.Staged.Version()
 			}
-			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
-			uh.toastAdder.ShowToast(actionmsg.BootcStage(dryrun.Enabled(), staged))
+			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version, lastMessage))
+			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 		})
 	}()
 }
 
 // loadSysupdateUpdateStatus gates the native A/B updates group and reflects
-// the /run/snosi state files in the expander subtitle, rollback row, and
-// update badge. The reads are unprivileged: the stager's state files are
-// world-readable and the rollback candidate comes from partition labels.
+// the /run/snosi state files in the expander subtitle and update badge. The
+// reads are unprivileged: the stager's state files are world-readable.
 func (uh *UserHome) loadSysupdateUpdateStatus(group *adw.PreferencesGroup) {
 	if !sysupdate.IsNativeABCached() || !sysupdate.StageScriptAvailable() {
 		return // group stays hidden
 	}
 
-	ctx, cancel := sysupdate.DefaultContext()
-	defer cancel()
-
-	status := sysupdate.GetStatus()
-	rollbackVersion, _ := sysupdate.RollbackVersion(ctx)
-
+	status, statusErr := sysupdate.GetStatus()
+	count := 0
 	if status.IsStaged() {
-		uh.updateCounts.Set(badgestate.Sysupdate, 1)
-	} else {
-		uh.updateCounts.Set(badgestate.Sysupdate, 0)
+		count = 1
 	}
+	uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
 	uh.updateBadgeCount()
 
 	outcome, version, checkedAt := status.Presentation()
 	sgtk.RunOnMainThread(func() {
 		group.SetVisible(true)
 		uh.sysupdateStageExpander.SetSubtitle(pageview.SysupdateUpdateSubtitle(outcome, version, checkedAt))
-		uh.sysupdateRollbackRow.SetSubtitle(pageview.SysupdateRollbackSubtitle(rollbackVersion))
 	})
 }
 
@@ -919,21 +904,17 @@ func (uh *UserHome) onSysupdateStageClicked() {
 
 		wg.Wait()
 
-		// Re-read the state files so the subtitle, rollback row, and badge
-		// reflect reality (staged vs already-current) rather than guessing
-		// from output. A stage fills the inactive slot with the newer
-		// version, so the rollback candidate must be recomputed too.
-		status := sysupdate.GetStatus()
-		rollbackCtx, rollbackCancel := sysupdate.DefaultContext()
-		rollbackVersion, _ := sysupdate.RollbackVersion(rollbackCtx)
-		rollbackCancel()
+		// Re-read the state files so the subtitle and badge reflect reality
+		// (staged vs already-current) rather than guessing from output. A
+		// stage fills the inactive slot with the newer version.
+		status, statusErr := sysupdate.GetStatus()
 
 		staged := status.IsStaged()
+		count := 0
 		if staged {
-			uh.updateCounts.Set(badgestate.Sysupdate, 1)
-		} else {
-			uh.updateCounts.Set(badgestate.Sysupdate, 0)
+			count = 1
 		}
+		uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
 		uh.updateBadgeCount()
 
 		_, version, _ := status.Presentation()
@@ -941,7 +922,6 @@ func (uh *UserHome) onSysupdateStageClicked() {
 			spinner.Stop()
 			button.SetSensitive(true)
 			button.SetLabel("Check for updates")
-			uh.sysupdateRollbackRow.SetSubtitle(pageview.SysupdateRollbackSubtitle(rollbackVersion))
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
@@ -950,8 +930,19 @@ func (uh *UserHome) onSysupdateStageClicked() {
 				return
 			}
 
-			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version))
-			uh.toastAdder.ShowToast(actionmsg.SysupdateStage(dryrun.Enabled(), staged))
+			if statusErr != nil {
+				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				expander.SetSubtitle(message)
+				if dryrun.Enabled() {
+					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
+				} else {
+					uh.toastAdder.ShowErrorToast(message)
+				}
+				return
+			}
+
+			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version, lastMessage))
+			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 		})
 	}()
 }

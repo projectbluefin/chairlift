@@ -10,11 +10,11 @@
 # The others worked only because no directory happens to share their names.
 .PHONY: all deps tidy
 .PHONY: schemas
-.PHONY: build build-app build-helper build-ublue-helper
+.PHONY: build
 .PHONY: build-linux-amd64 build-linux-arm64
 .PHONY: run dev clean
 .PHONY: test fmt lint
-.PHONY: build-e2e e2e install-deps
+.PHONY: build-e2e e2e
 .PHONY: install uninstall
 .PHONY: bump
 
@@ -56,7 +56,6 @@ GOCMD=$(shell if [ -x $(HOMEBREW_GO) ]; then echo $(HOMEBREW_GO); else echo go; 
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
-GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # CGO is not needed with puregotk!
@@ -73,18 +72,10 @@ tidy:
 # `schemas` is a prerequisite because a binary that writes a key the compiled
 # schema does not carry fails at runtime with "No such key" — a confusing way
 # to discover build/schemas went stale after the gschema gained one.
-build: schemas build-app build-helper build-ublue-helper
-
-build-app:
+build: schemas
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
-
-build-helper:
-	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(HELPER_NAME) ./cmd/chairlift-updex-helper
-
-build-ublue-helper:
-	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -o $(BUILD_DIR)/$(UBLUE_HELPER_NAME) ./cmd/chairlift-ublue-helper
 
 run: build
@@ -181,10 +172,6 @@ endif
 dev:
 	CGO_ENABLED=1 $(GOBUILD) -race -o $(BUILD_DIR)/$(BINARY_NAME)-dev ./cmd/chairlift
 
-# Install dependencies
-install-deps:
-	$(GOGET) codeberg.org/puregotk/puregotk
-	$(GOGET) gopkg.in/yaml.v3
 
 # Format code
 fmt:

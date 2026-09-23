@@ -174,14 +174,14 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"features_group",
 			"dx_group",
 			"gaming_group",
-			"troubleshooting_group",
+
 		},
 		"livery": {
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
 		},
-		"help": {"help_resources_group"},
+		"help": {"troubleshooting_group", "help_resources_group"},
 	}
 
 	items := Items()

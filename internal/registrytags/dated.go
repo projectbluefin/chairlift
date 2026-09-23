@@ -60,7 +60,7 @@ func ParseBuild(tag string) (Build, bool) {
 	}
 
 	stream, digits := tag[:separator], tag[separator+1:]
-	if len(digits) != len(dateLayout) || !isDigits(digits) {
+	if len(digits) != len(dateLayout) {
 		return Build{}, false
 	}
 
@@ -69,16 +69,6 @@ func ParseBuild(tag string) (Build, bool) {
 		return Build{}, false
 	}
 	return Build{Tag: tag, Stream: stream, Date: date.UTC()}, true
-}
-
-// isDigits reports whether every byte of value is an ASCII digit.
-func isDigits(value string) bool {
-	for index := 0; index < len(value); index++ {
-		if value[index] < '0' || value[index] > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // Builds returns the dated builds among tags at or after since, newest

@@ -138,6 +138,118 @@ exit 1`)
 		}
 	})
 
+	t.Run("bundle install untrusted tap in stdout yields UntrustedTapError", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Error: Refusing to load formula x from untrusted tap foo/bar."
+echo "Error: Homebrew Bundle failed! 1 Brewfile dependency failed to install." >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/x.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if !errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want *UntrustedTapError", err, err)
+		}
+		if trustErr.Tap != "foo/bar" {
+			t.Fatalf("trustErr.Tap = %q, want \"foo/bar\"", trustErr.Tap)
+		}
+	})
+
+	// `brew bundle install` prints its untrusted-tap summary on stderr while
+	// the only parseable "from untrusted tap <user>/<tap>" line is replayed on
+	// stdout, so the stderr-matched branch must still recover the tap name
+	// from the combined diagnostic or the toast loses its `brew trust`
+	// guidance.
+	t.Run("untrusted tap summary on stderr still extracts tap from stdout", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Error: Refusing to load formula x from untrusted tap foo/bar.baz."
+echo "Error: the following taps are not trusted" >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/x.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if !errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want *UntrustedTapError", err, err)
+		}
+		if trustErr.Tap != "foo/bar.baz" {
+			t.Fatalf("trustErr.Tap = %q, want \"foo/bar.baz\"", trustErr.Tap)
+		}
+	})
+
+	t.Run("warning on untrusted taps on stdout with No such formula yields Error not UntrustedTapError", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Warning: The following taps are not trusted:
+  some/untrusted-tap"
+echo "Error: No such formula" >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "bundle", "install", "--file=/x.Brewfile")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want regular *Error instead of *UntrustedTapError", err, err)
+		}
+	})
+
+	// A third-party installer's stdout is replayed into the diagnostic, so a
+	// forged "from untrusted tap" line there must not reclassify an unrelated
+	// failure of a non-bundle command: the toast would otherwise tell the user
+	// to run `brew trust` on a tap the attacker picked.
+	t.Run("forged untrusted tap line on stdout of a non-bundle command yields Error", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Error: Refusing to load formula x from untrusted tap attacker/evil."
+echo "Error: Failure while executing; git exited with 1." >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "install", "somepkg")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want regular *Error instead of *UntrustedTapError", err, err)
+		}
+	})
+
+	// When stderr does corroborate the trust failure, a non-bundle command is
+	// still classified as an untrusted-tap error, but the tap name may only
+	// come from stderr — never from the replayed stdout an installer controls.
+	t.Run("untrusted tap on stderr of a non-bundle command ignores a stdout tap name", func(t *testing.T) {
+		script := fakeBrew(t, `echo "Error: Refusing to load formula x from untrusted tap attacker/evil."
+echo "Error: the following taps are not trusted" >&2
+exit 1`)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		_, err := runBrewCommandAt(ctx, script, "upgrade", "somepkg")
+		if err == nil {
+			t.Fatal("runBrewCommandAt = nil error, want failure")
+		}
+		var trustErr *UntrustedTapError
+		if !errors.As(err, &trustErr) {
+			t.Fatalf("err = %T (%v), want *UntrustedTapError", err, err)
+		}
+		if trustErr.Tap != "" {
+			t.Fatalf("trustErr.Tap = %q, want \"\" (stdout must not name the tap)", trustErr.Tap)
+		}
+	})
+
 	t.Run("missing executable path yields NotFoundError", func(t *testing.T) {
 		missing := filepath.Join(t.TempDir(), "definitely-not-here")
 
@@ -399,6 +511,16 @@ func TestUpdatePropagatesContextCancellation(t *testing.T) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		t.Error("Update error must not classify as a deadline")
 	}
+}
+
+func TestUpgradeHonorsCanceledContext(t *testing.T) {
+	argvLog := fakeBrewOnPath(t, "exit 0")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := Upgrade(ctx, ""); !errors.Is(err, context.Canceled) {
+		t.Errorf("Upgrade(canceled context) = %v, want context.Canceled", err)
+	}
+	assertArgv(t, argvLog, nil)
 }
 
 // A read-only command that fails keeps its whole stderr in the error: nothing

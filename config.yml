@@ -92,12 +92,6 @@ features_page:
     enabled: true
   # A language model served from a rootless container now lives on its own
   # Agents page; see agents_page above.
-  # An AI assistant that can read this system's logs, services, and network
-  # to help diagnose problems. Everything it installs comes from Homebrew, so
-  # the group hides itself where Homebrew is absent. Nothing is downloaded
-  # until the user presses Set Up.
-  troubleshooting_group:
-    enabled: true
 
 # Who you are, who you stand with, and what you roll with. Each section
 # shadows one icon-theme name in the user's own theme; nothing here is
@@ -118,6 +112,12 @@ livery_page:
     enabled: true
 
 help_page:
+  # An AI assistant that can read this system's logs, services, and network
+  # to help diagnose problems. Everything it installs comes from Homebrew, so
+  # the group hides itself where Homebrew is absent. Nothing is downloaded
+  # until the user presses Set Up.
+  troubleshooting_group:
+    enabled: true
   help_resources_group:
     enabled: true
     website: https://projectbluefin.io

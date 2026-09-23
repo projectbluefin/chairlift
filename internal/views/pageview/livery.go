@@ -24,12 +24,6 @@ const (
 	LiveryDockFragment    = "What you roll with"
 )
 
-// LiveryFragments returns the fragments in presentation order, so a test can
-// hold them to LiveryPageDescription.
-func LiveryFragments() []string {
-	return []string{LiveryAppGridFragment, LiveryPanelFragment, LiveryDockFragment}
-}
-
 // Section titles.
 const (
 	LiveryAppGridTitle = "App Grid Livery"

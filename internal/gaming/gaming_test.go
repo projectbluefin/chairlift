@@ -41,10 +41,10 @@ func refsOf(ids ...string) map[Ref]bool {
 	return refs
 }
 
-func TestComponentsAreStableAndNotAliased(t *testing.T) {
-	got := Components()
+func TestComponentsHaveUniqueIDsAndDisplayText(t *testing.T) {
+	got := components
 	if len(got) == 0 {
-		t.Fatal("Components() is empty")
+		t.Fatal("gaming stack is empty")
 	}
 
 	seen := make(map[string]bool, len(got))
@@ -60,18 +60,13 @@ func TestComponentsAreStableAndNotAliased(t *testing.T) {
 		}
 		seen[component.ID] = true
 	}
-
-	got[0].ID = "mutated"
-	if Components()[0].ID == "mutated" {
-		t.Error("Components() returned an aliased slice")
-	}
 }
 
 // Kind is not a decoration: it selects the `flatpak list` filter a component
 // is looked for under, and the zero value would silently be neither of the
 // two valid kinds.
 func TestEveryComponentDeclaresARefKind(t *testing.T) {
-	for _, component := range Components() {
+	for _, component := range components {
 		switch component.Kind {
 		case flatpak.KindApplication, flatpak.KindRuntime:
 		default:
@@ -85,7 +80,7 @@ func TestEveryComponentDeclaresARefKind(t *testing.T) {
 // classifying it as an application is what made it read as permanently
 // missing: `flatpak list --app` cannot see it no matter how it was installed.
 func TestMangoHudIsModelledAsARuntimeExtension(t *testing.T) {
-	for _, component := range Components() {
+	for _, component := range components {
 		if component.ID != mangohud {
 			continue
 		}
@@ -106,18 +101,15 @@ func TestStackKindsCoverApplicationsAndRuntimes(t *testing.T) {
 }
 
 func TestCoreComponentsDefineTheOnOffThreshold(t *testing.T) {
-	core := CoreComponents()
 	wantCore := []string{steam, protonUp}
-
-	got := make([]string, 0, len(core))
-	for _, component := range core {
-		if !component.Core {
-			t.Errorf("CoreComponents() returned non-core component %q", component.ID)
+	var got []string
+	for _, component := range components {
+		if component.Core {
+			got = append(got, component.ID)
 		}
-		got = append(got, component.ID)
 	}
 	if !reflect.DeepEqual(got, wantCore) {
-		t.Fatalf("CoreComponents() = %v, want %v", got, wantCore)
+		t.Fatalf("core component IDs = %v, want %v", got, wantCore)
 	}
 }
 
@@ -134,7 +126,7 @@ func TestDeriveClassifiesEveryInstallationShape(t *testing.T) {
 			installed:     nil,
 			wantEnabled:   false,
 			wantInstalled: nil,
-			// Reported in Components order, not alphabetical.
+			// Reported in stack order, not alphabetical.
 			wantMissingCore: []string{steam, protonUp},
 		},
 		{

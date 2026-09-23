@@ -113,7 +113,7 @@ var components = []Component{
 	},
 }
 
-// kinds returns the ref kinds the stack actually contains, in Components
+// kinds returns the ref kinds the stack actually contains, in install
 // order and without duplicates. It is what decides which listings the
 // inventory must be able to answer with.
 func kinds() []flatpak.Kind {
@@ -121,27 +121,6 @@ func kinds() []flatpak.Kind {
 	for _, component := range components {
 		if !slices.Contains(result, component.Kind) {
 			result = append(result, component.Kind)
-		}
-	}
-	return result
-}
-
-// Components returns the canonical gaming stack in install order. The
-// returned slice is freshly allocated on every call, so callers cannot
-// mutate the package's definition of the feature.
-func Components() []Component {
-	result := make([]Component, len(components))
-	copy(result, components)
-	return result
-}
-
-// CoreComponents returns only the components whose absence means gaming mode
-// is off.
-func CoreComponents() []Component {
-	result := make([]Component, 0, len(components))
-	for _, component := range components {
-		if component.Core {
-			result = append(result, component)
 		}
 	}
 	return result
@@ -162,18 +141,17 @@ type Scope struct {
 type State struct {
 	// Enabled reports whether every core component is installed.
 	Enabled bool
-	// Installed lists the installed component IDs, in Components order.
+	// Installed lists the installed component IDs, in stack order.
 	Installed []string
 	// UserInstalled lists the installed component IDs ChairLift can
-	// remove, in Components order.
+	// remove, in stack order.
 	UserInstalled []string
 	// SystemOnly lists installed component IDs that exist only in the
 	// system scope. They count toward Enabled — the components are present
 	// and usable — but Disable skips them rather than failing on an
 	// uninstall it has no standing to perform.
 	SystemOnly []string
-	// Missing lists the not-yet-installed component IDs, in Components
-	// order.
+	// Missing lists the not-yet-installed component IDs, in stack order.
 	Missing []string
 	// MissingCore lists only the missing core component IDs. A non-empty
 	// value with a non-empty Installed is the partial state — some of the

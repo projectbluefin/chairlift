@@ -37,14 +37,6 @@ var steps = []Step{
 	{ID: StepDistrobox, Title: "Distrobox Containers"},
 }
 
-// Steps returns the canonical step inventory. The returned slice is freshly
-// allocated on every call.
-func Steps() []Step {
-	result := make([]Step, len(steps))
-	copy(result, steps)
-	return result
-}
-
 // Outcome is one step's result.
 type Outcome string
 

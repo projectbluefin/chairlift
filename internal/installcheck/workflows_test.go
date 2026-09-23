@@ -144,6 +144,34 @@ func TestWorkflowUsesLeastPrivilege(t *testing.T) {
 	}
 }
 
+func TestCIWalkthroughLoadsItsCompiledSchema(t *testing.T) {
+	for _, file := range []string{"test.yml", "release.yml"} {
+		t.Run(file, func(t *testing.T) {
+			var workflow struct {
+				Jobs map[string]struct {
+					Steps []struct {
+						Run string            `yaml:"run"`
+						Env map[string]string `yaml:"env"`
+					} `yaml:"steps"`
+				} `yaml:"jobs"`
+			}
+			if err := yaml.Unmarshal([]byte(readRepoFile(t, filepath.Join(".github", "workflows", file))), &workflow); err != nil {
+				t.Fatal(err)
+			}
+			for _, step := range workflow.Jobs["e2e"].Steps {
+				if strings.TrimSpace(step.Run) != "make e2e" {
+					continue
+				}
+				if got := step.Env["CHAIRLIFT_SCHEMA_DIR"]; got != "${{ github.workspace }}/build/schemas" {
+					t.Errorf("%s walkthrough schema directory = %q, want the compiled source schema", file, got)
+				}
+				return
+			}
+			t.Fatal("CI has no make e2e step")
+		})
+	}
+}
+
 func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	path := filepath.Join(".github", "workflows", "release.yml")
 	workflow := readRepoFile(t, path)
@@ -233,6 +261,44 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	}
 	if !hasGate || !hasE2E {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
+	}
+}
+
+// Tag validation must use the same reviewed linter as the merge-queue gate;
+// "latest" can block an unchanged commit only after its release tag is pushed.
+func TestReleaseLintVersionMatchesCIGate(t *testing.T) {
+	version := func(file string) string {
+		var workflow struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Uses string `yaml:"uses"`
+					With struct {
+						Version string `yaml:"version"`
+					} `yaml:"with"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal([]byte(readRepoFile(t, filepath.Join(".github", "workflows", file))), &workflow); err != nil {
+			t.Fatal(err)
+		}
+		found := ""
+		for _, job := range workflow.Jobs {
+			for _, step := range job.Steps {
+				if strings.HasPrefix(step.Uses, "golangci/golangci-lint-action@") {
+					if found != "" {
+						t.Fatalf("%s has multiple linter installations", file)
+					}
+					found = step.With.Version
+				}
+			}
+		}
+		if found == "" || found == "latest" {
+			t.Fatalf("%s linter version %q is not pinned", file, found)
+		}
+		return found
+	}
+	if release, ci := version("release.yml"), version("test.yml"); release != ci {
+		t.Errorf("release linter %q differs from CI linter %q", release, ci)
 	}
 }
 

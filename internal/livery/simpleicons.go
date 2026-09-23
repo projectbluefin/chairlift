@@ -194,14 +194,6 @@ func loadSimpleIcons() {
 	})
 }
 
-// SimpleIcons returns the full brand catalog, in title order.
-func SimpleIcons() []SimpleIcon {
-	simpleOnce.Do(loadSimpleIcons)
-	out := make([]SimpleIcon, len(simpleIcons))
-	copy(out, simpleIcons)
-	return out
-}
-
 // LookupSimpleIcon returns the brand with the given slug.
 func LookupSimpleIcon(slug string) (SimpleIcon, bool) {
 	simpleOnce.Do(loadSimpleIcons)

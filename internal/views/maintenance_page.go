@@ -54,10 +54,13 @@ func (uh *UserHome) buildMaintenancePage() {
 		uh.buildConfiguredTasksGroup(page)
 	}
 
-	// Reset group: irreversible actions, disabled by default in config.yml —
-	// see reset.go.
+	// Reset group (Powerwash / Factory Reset). reset_group lives under
+	// maintenance_page, so the guard stays here — but the rows are rendered
+	// on the Recovery detail view, never in routine cleanup. A reset is a
+	// deliberate Recovery action, so it is gated by reset_group (disabled by
+	// shipped default) and built on the recovery page's preferences page.
 	if uh.config.IsGroupEnabled("maintenance_page", "reset_group") {
-		uh.buildResetGroup(page)
+		uh.buildResetGroup(uh.recoveryPrefsPage)
 	}
 }
 

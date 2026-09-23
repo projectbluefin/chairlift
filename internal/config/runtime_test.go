@@ -369,7 +369,7 @@ func TestConfigurationGuideExamplePassesStrictValidation(t *testing.T) {
 				{"applications_page", "brew_search_group"},
 				{"applications_page", "brew_bundles_group"},
 				{"maintenance_page", "maintenance_freespace_group"},
-				{"features_page", "troubleshooting_group"},
+				{"help_page", "troubleshooting_group"},
 			} {
 				if merged.IsGroupEnabled(check.page, check.group) {
 					t.Errorf("%s example leaves %s.%s enabled", tc.relPath, check.page, check.group)

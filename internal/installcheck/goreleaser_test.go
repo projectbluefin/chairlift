@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -84,6 +85,32 @@ func nfpmByPackageName(t *testing.T, cfg GoreleaserConfig, packageName string) N
 		t.Fatalf("nfpms entries with package_name %q = %d, want exactly 1", packageName, len(matches))
 	}
 	return matches[0]
+}
+
+// A tarball installation needs the same schema as the nFPM and source
+// installs; without it the Livery page cannot load its GSettings keys.
+func TestGoreleaserArchivesShipTheLiverySchema(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join(RepoRoot(), ".goreleaser.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Archives []struct {
+			Files []string `yaml:"files"`
+		} `yaml:"archives"`
+	}
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Archives) == 0 {
+		t.Fatal("no release archives configured")
+	}
+	const schema = "data/io.projectbluefin.chairlift.livery.gschema.xml"
+	for i, archive := range cfg.Archives {
+		if !slices.Contains(archive.Files, schema) {
+			t.Errorf("archives[%d] omits %s", i, schema)
+		}
+	}
 }
 
 // TestGoreleaserNfpmLayoutMatchesUsrPrefix parses the real .goreleaser.yaml

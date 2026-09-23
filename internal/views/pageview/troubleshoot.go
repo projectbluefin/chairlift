@@ -13,7 +13,7 @@ func TroubleshootRow(state troubleshoot.State) Row {
 
 	switch {
 	case state.Ready():
-		row.Subtitle = "Ready — " + providerNote(state.Provider)
+		row.Subtitle = "Ready — " + TroubleshootProviderNote(state.Provider)
 	case state.ServerInstalled && state.AgentInstalled:
 		// Everything is installed but the agent cannot see the system: the
 		// state goose-mcp-setup leaves behind when a config already exists.
@@ -24,11 +24,10 @@ func TroubleshootRow(state troubleshoot.State) Row {
 	return row
 }
 
-// providerNote says which service answers the questions. It is the one thing
-// about this feature a user cannot discover from the UI: the setup script
-// configures Google's Gemini by default, so the row says so rather than
-// leaving "AI assistant" to imply the work happens locally.
-func providerNote(provider string) string {
+// TroubleshootProviderNote says which service answers the questions. The setup script
+// configures Google's Gemini by default, so the row names it rather than
+// implying the work happens locally.
+func TroubleshootProviderNote(provider string) string {
 	switch provider {
 	case "":
 		return "no AI service configured yet"
@@ -41,18 +40,12 @@ func providerNote(provider string) string {
 	}
 }
 
-// TroubleshootProviderNote exposes providerNote for the rows that report a
-// provider outside the main row text.
-func TroubleshootProviderNote(provider string) string {
-	return providerNote(provider)
-}
-
 // TroubleshootSetupSubtitle returns the subtitle after setup finishes.
 // Setup can succeed at every step and still leave the feature unusable,
 // which the row has to say rather than reporting a bare success.
 func TroubleshootSetupSubtitle(state troubleshoot.State) string {
 	if state.Ready() {
-		return "Ready — " + providerNote(state.Provider)
+		return "Ready — " + TroubleshootProviderNote(state.Provider)
 	}
 	if state.ServerInstalled && state.AgentInstalled {
 		return "Installed, but Goose already had a configuration — add the linux-tools extension to it by hand"
