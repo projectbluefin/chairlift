@@ -34,6 +34,7 @@ var codeNameExemptions = map[string]string{
 	"CONFIGURATION ERROR: %s; all feature groups were disabled; fix the configuration file and restart ChairLift":                       "log line, not the toast; internal/config.LoadError.ToastMessage is the user-facing counterpart and uses branding.AppName",
 	"sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift) (line %d)":                        "user-visible validation error, but the code name appears only as the two trusted configuration directories, which are filesystem paths fixed by ADR-0002",
 	"group %q enables sudo action %q; sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift)": "same: the code name appears only as filesystem paths the user must actually navigate to",
+	"You're ready to go! You can launch %s anytime from the Application Menu or by running chairlift .":                                 "First-run exit toast naming the CLI binary as an alternative launch method (issue #265)",
 }
 
 // exemptStructurally reports whether a literal spelling the code name is a

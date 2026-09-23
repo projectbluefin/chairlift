@@ -2,6 +2,7 @@
 package window
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/config"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/settings"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
@@ -52,6 +55,7 @@ type Window struct {
 	configError *config.LoadError
 	views       *views.UserHome
 	updateShell *views.UpdateShell
+	firstRun    *views.FirstRunAssistant
 	updateBadge *gtk.Label // Noninteractive badge for the updates count
 	navItems    []navigation.Item
 }
@@ -315,6 +319,7 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 
 	// Add menu items
 	menu.Append("Preferences", "win.show-preferences")
+	menu.Append("Setup Assistant…", "win.show-setup")
 	menu.Append("Keyboard Shortcuts", "win.show-shortcuts")
 	menu.Append("About "+branding.AppName, "win.show-about")
 	// Create menu button
@@ -364,6 +369,14 @@ func (w *Window) setupActions() {
 	}
 	helpAction.ConnectActivate(&helpActivateCb)
 	w.AddAction(helpAction)
+	// Setup assistant action
+	setupAction := gio.NewSimpleAction("show-setup", nil)
+	setupActivateCb := func(action gio.SimpleAction, param uintptr) {
+		w.PresentFirstRun()
+	}
+	setupAction.ConnectActivate(&setupActivateCb)
+	w.AddAction(setupAction)
+
 	// Show shortcuts action
 	shortcutsAction := gio.NewSimpleAction("show-shortcuts", nil)
 	shortcutsActivateCb := func(action gio.SimpleAction, param uintptr) {
@@ -615,5 +628,21 @@ func (w *Window) SetUpdateBadge(count int) {
 		w.updateBadge.SetVisible(true)
 	} else {
 		w.updateBadge.SetVisible(false)
+	}
+}
+
+// PresentFirstRun opens the first-run onboarding assistant dialog.
+func (w *Window) PresentFirstRun() {
+	if w.firstRun == nil {
+		w.firstRun = views.NewFirstRunAssistant(w.config.IsGroupEnabled, w)
+	}
+	w.firstRun.Present(&w.Widget)
+}
+
+// CheckFirstRun presents the onboarding assistant if required on startup.
+func (w *Window) CheckFirstRun(explicitSetup bool) {
+	store := firstrun.NewGSettingsStore()
+	if firstrun.ShouldPresent(context.Background(), dryrun.Enabled(), explicitSetup, store) {
+		w.PresentFirstRun()
 	}
 }

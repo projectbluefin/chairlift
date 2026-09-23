@@ -198,6 +198,7 @@ install: build
 	# cache so `gsettings` can see them.
 	install -Dm644 data/io.projectbluefin.chairlift.livery.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	install -Dm644 data/io.projectbluefin.chairlift.updates.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
+	install -Dm644 data/io.projectbluefin.chairlift.firstrun.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.firstrun.gschema.xml
 	# Only for a direct install. Under DESTDIR the tree is a staging area
 	# holding this schema alone, so compiling there would produce a
 	# shipping that file would overwrite the system cache and break GSettings
@@ -254,6 +255,7 @@ schemas:
 		mkdir -p $(BUILD_DIR)/schemas && \
 		cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/ && \
 		cp data/io.projectbluefin.chairlift.updates.gschema.xml $(BUILD_DIR)/schemas/ && \
+		cp data/io.projectbluefin.chairlift.firstrun.gschema.xml $(BUILD_DIR)/schemas/ && \
 		glib-compile-schemas $(BUILD_DIR)/schemas && \
 		echo "==> schemas compiled to $(BUILD_DIR)/schemas"; \
 	fi
@@ -266,6 +268,7 @@ uninstall:
 	rm -f $(DESTDIR)$(CONFIGDIR)/config.yml
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
+	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.firstrun.gschema.xml
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	rm -f $(DESTDIR)$(BINDIR)/$(HELPER_NAME)

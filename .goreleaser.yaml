@@ -225,6 +225,8 @@ nfpms:
           mode: 0644
       - src: ./data/io.projectbluefin.chairlift.updates.gschema.xml
         dst: /usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.updates.gschema.xml
+      - src: ./data/io.projectbluefin.chairlift.firstrun.gschema.xml
+        dst: /usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.firstrun.gschema.xml
         file_info:
           mode: 0644
       # Package-maintainer defaults; never install into the administrator-owned /etc path

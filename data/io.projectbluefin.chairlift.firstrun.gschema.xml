@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GSettings schema for first-run assistant disposition and completion tracking.
+-->
+<schemalist>
+  <schema id="io.projectbluefin.chairlift.firstrun" path="/io/projectbluefin/chairlift/firstrun/">
+    <key name="completed-version" type="s">
+      <default>''</default>
+      <summary>Version string of ChairLift that completed setup</summary>
+      <description>Version string of ChairLift that completed setup; empty means setup is pending or was skipped without completion.</description>
+    </key>
+
+    <key name="disposition" type="s">
+      <default>'not-addressed'</default>
+      <summary>First-run setup disposition</summary>
+      <description>Setup state: 'not-addressed', 'skipped', or 'completed'.</description>
+    </key>
+  </schema>
+</schemalist>

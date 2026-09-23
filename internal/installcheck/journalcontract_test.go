@@ -91,6 +91,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                  // bootc status (read-only)
 	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                // bootc upgrade --check (read-only)
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},              // distrobox
+	{File: "internal/firstrun/settings.go", Func: "execCommand"},              // gsettings
 	{File: "internal/flatpak/flatpak.go", Func: "runFlatpakCommandAt"},        // flatpak
 	{File: "internal/flatpak/flatpak.go", Func: "IsInstalled"},                // flatpak --version
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},         // brew

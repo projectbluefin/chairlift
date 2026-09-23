@@ -1,0 +1,97 @@
+package firstrun
+
+import (
+	"embed"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+)
+
+// assets holds the embedded Project Bluefin brand and mascot illustrations.
+//
+// Embedding rather than referencing filesystem paths ensures the assistant
+// is fully self-contained in standalone binaries and cannot suffer missing-asset
+// failures in minimal environments.
+//
+//go:embed assets/*.svg
+var assets embed.FS
+
+const (
+	// AssetDinosaur is the mascot logo.
+	AssetDinosaur = "assets/bluefin.svg"
+
+	// AssetWordmark is the official wordmark.
+	AssetWordmark = "assets/bluefin-wordmark.svg"
+
+	// AssetWordmarkDark is the dark-theme variant with light lettering.
+	AssetWordmarkDark = "assets/bluefin-wordmark-dark.svg"
+
+	// AssetWordmarkLight is the light-theme variant with dark lettering.
+	AssetWordmarkLight = "assets/bluefin-wordmark-light.svg"
+)
+
+var (
+	cacheMu  sync.Mutex
+	cacheDir string
+)
+
+// Asset returns the raw SVG byte contents for the specified embedded asset path.
+func Asset(name string) ([]byte, error) {
+	data, err := assets.ReadFile(name)
+	if err != nil {
+		return nil, fmt.Errorf("firstrun: reading asset %s: %w", name, err)
+	}
+	return data, nil
+}
+
+// DinosaurLogo returns the SVG bytes of the official Bluefin dinosaur logo.
+func DinosaurLogo() ([]byte, error) {
+	return Asset(AssetDinosaur)
+}
+
+// Wordmark returns the SVG bytes for the wordmark tailored to light or dark themes.
+func Wordmark(dark bool) ([]byte, error) {
+	if dark {
+		return Asset(AssetWordmarkDark)
+	}
+	return Asset(AssetWordmarkLight)
+}
+
+// AssetPath returns a filesystem path for the requested embedded asset.
+//
+// If the file exists directly under the current directory or repository tree
+// (e.g. during local development), that path is returned. Otherwise, the embedded
+// bytes are written to a process-scoped temporary directory so GTK and librsvg
+// can load the vector graphic via file path.
+func AssetPath(name string) (string, error) {
+	// First check local disk path relative to repo or working tree
+	direct := filepath.Join("internal", "firstrun", name)
+	if info, err := os.Stat(direct); err == nil && !info.IsDir() {
+		return direct, nil
+	}
+
+	data, err := Asset(name)
+	if err != nil {
+		return "", err
+	}
+
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	if cacheDir == "" {
+		dir, err := os.MkdirTemp("", "bluefin-firstrun-assets-*")
+		if err != nil {
+			return "", fmt.Errorf("firstrun: creating asset temp dir: %w", err)
+		}
+		cacheDir = dir
+	}
+
+	dest := filepath.Join(cacheDir, filepath.Base(name))
+	if _, err := os.Stat(dest); os.IsNotExist(err) {
+		if err := os.WriteFile(dest, data, 0o644); err != nil {
+			return "", fmt.Errorf("firstrun: writing cached asset: %w", err)
+		}
+	}
+	return dest, nil
+}

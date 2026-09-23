@@ -30,7 +30,8 @@ var (
 // Application wraps the Adwaita Application as a proper GObject subtype
 type Application struct {
 	adw.Application
-	window *window.Window
+	window         *window.Window
+	setupRequested bool
 }
 
 func init() {
@@ -71,7 +72,7 @@ func New() *Application {
 
 	app := (*Application)(appRegistry.Get(obj.GoPointer()))
 
-	// Check for --dry-run flag before GTK processes args
+	// Check for --dry-run and --setup flags before GTK processes args
 	for _, arg := range os.Args[1:] {
 		if arg == "--dry-run" || arg == "-d" {
 			log.Println("Running in dry-run mode")
@@ -83,7 +84,9 @@ func New() *Application {
 			// rows on a host that is not a Bluefin system. This is a no-op
 			// in every ordinary build; see imageinfo_override.go.
 			applyImageInfoOverride()
-			break
+		}
+		if arg == "--setup" || arg == "-s" {
+			app.setupRequested = true
 		}
 	}
 
@@ -122,6 +125,7 @@ func (a *Application) onActivate() {
 	a.registerQuitAction()
 	a.setupKeyboardShortcuts(win.NavigationItems())
 	win.Present()
+	win.CheckFirstRun(a.setupRequested)
 	log.Printf("app: window presented in %s (since activate)", time.Since(activateStart))
 }
 
@@ -154,6 +158,14 @@ func (a *Application) registerOptions() {
 		glib.GOptionFlagNoneValue,
 		glib.GOptionArgNoneValue,
 		"Don't make any changes to the system.",
+		"",
+	)
+	a.AddMainOption(
+		"setup",
+		's',
+		glib.GOptionFlagNoneValue,
+		glib.GOptionArgNoneValue,
+		"Display the first-run onboarding assistant.",
 		"",
 	)
 }
