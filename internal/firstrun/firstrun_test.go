@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
@@ -92,9 +93,9 @@ func TestFlowSelectionConfigureWithNoConfigStepsCompletes(t *testing.T) {
 }
 
 func TestStepFilteringHonorsGroupPredicate(t *testing.T) {
-	// Enable only livery_group
+	// Enable only the Appearance step's groups.
 	model := NewAssistantModel(func(page, group string) bool {
-		return group == "livery_group"
+		return page == StepTheme.Page
 	})
 
 	steps := model.Steps()
@@ -107,6 +108,76 @@ func TestStepFilteringHonorsGroupPredicate(t *testing.T) {
 	if steps[1].ID != StepIDTheme {
 		t.Errorf("step 1 = %q, want %q", steps[1].ID, StepIDTheme)
 	}
+}
+
+// TestEveryStepNamesRealConfigGroups is the gate the synthetic predicates in
+// the other filtering tests cannot be: production filters with
+// config.IsGroupEnabled, which defaults an unknown page and an unknown group
+// to enabled, so a step naming a page or group the schema does not carry is
+// never filtered and shows on every host regardless of configuration.
+func TestEveryStepNamesRealConfigGroups(t *testing.T) {
+	for _, step := range candidateSteps {
+		groups, err := config.SchemaGroups(step.Page)
+		if err != nil {
+			t.Errorf("step %q names page %q: %v", step.ID, step.Page, err)
+			continue
+		}
+		known := make(map[string]bool, len(groups))
+		for _, group := range groups {
+			known[group] = true
+		}
+		if len(step.Groups) == 0 {
+			t.Errorf("step %q names no configuration group", step.ID)
+		}
+		for _, group := range step.Groups {
+			if !known[group] {
+				t.Errorf("step %q names group %q, absent from %s in the config schema",
+					step.ID, group, step.Page)
+			}
+		}
+	}
+}
+
+func TestDisablingEveryBackingGroupDropsTheStep(t *testing.T) {
+	// An absent group reads as enabled, so naming only the disabled ones
+	// models an administrator's overlay exactly.
+	cfg := &config.Config{
+		ApplicationsPage: config.PageConfig{},
+		FeaturesPage:     config.PageConfig{"ai_group": config.GroupConfig{Enabled: false}},
+	}
+	for _, group := range StepApps.Groups {
+		cfg.ApplicationsPage[group] = config.GroupConfig{Enabled: false}
+	}
+
+	got := make(map[string]bool)
+	for _, step := range NewAssistantModel(cfg.IsGroupEnabled).Steps() {
+		got[step.ID] = true
+	}
+
+	if got[StepIDApps] {
+		t.Error("Applications step survived every one of its groups being disabled")
+	}
+	if got[StepIDAI] {
+		t.Error("AI step survived ai_group being disabled")
+	}
+	if !got[StepIDTheme] || !got[StepIDDeveloper] {
+		t.Errorf("enabled steps were dropped: %v", got)
+	}
+}
+
+func TestOneEnabledGroupKeepsTheStep(t *testing.T) {
+	cfg := &config.Config{ApplicationsPage: config.PageConfig{}}
+	for _, group := range StepApps.Groups {
+		cfg.ApplicationsPage[group] = config.GroupConfig{Enabled: false}
+	}
+	cfg.ApplicationsPage["brew_group"] = config.GroupConfig{Enabled: true}
+
+	for _, step := range NewAssistantModel(cfg.IsGroupEnabled).Steps() {
+		if step.ID == StepIDApps {
+			return
+		}
+	}
+	t.Error("Applications step was dropped while brew_group remained enabled")
 }
 
 func TestLinearStepNavigationNextAndPrevious(t *testing.T) {
@@ -211,6 +282,33 @@ func TestShouldPresentHonorsDryRunAndExplicitFlags(t *testing.T) {
 					tc.dryRun, tc.explicitSetup, tc.disposition, got, tc.wantPresent)
 			}
 		})
+	}
+}
+
+// errStore answers every read with a fixed error.
+type errStore struct{ err error }
+
+func (e errStore) GetDisposition(ctx context.Context) (Disposition, error) {
+	return DispositionNotAddressed, e.err
+}
+
+func (e errStore) SetDisposition(ctx context.Context, d Disposition) error { return e.err }
+
+// TestShouldPresentStaysSilentWhenTheSchemaIsMissing covers the one error a
+// user cannot settle: with no compiled schema, "Get Moving" writes nothing,
+// so presenting anyway means presenting on every launch forever.
+func TestShouldPresentStaysSilentWhenTheSchemaIsMissing(t *testing.T) {
+	ctx := context.Background()
+	store := errStore{err: ErrSchemaMissing}
+
+	if ShouldPresent(ctx, false, false, store) {
+		t.Error("ShouldPresent = true for a missing schema, want false")
+	}
+	if !ShouldPresent(ctx, false, true, store) {
+		t.Error("explicit setup must present even with a missing schema")
+	}
+	if !ShouldPresent(ctx, false, false, errStore{err: errors.New("gsettings exploded")}) {
+		t.Error("an ordinary read failure must still present")
 	}
 }
 

@@ -7,7 +7,12 @@ const (
 	// DispositionNotAddressed indicates setup has never been presented or decided.
 	DispositionNotAddressed Disposition = "not-addressed"
 
-	// DispositionSkipped indicates the user selected "Get Moving" or dismissed setup.
+	// DispositionSkipped indicates the user selected "Get Moving".
+	//
+	// Closing the dialog is deliberately not this: the dialog can be closed
+	// (Esc, or the header close button) and that records nothing, so the
+	// assistant is presented again on the next launch. Only an explicit
+	// choice settles setup.
 	DispositionSkipped Disposition = "skipped"
 
 	// DispositionCompleted indicates the user stepped through to completion.

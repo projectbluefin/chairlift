@@ -21,9 +21,6 @@ const (
 	// AssetDinosaur is the mascot logo.
 	AssetDinosaur = "assets/bluefin.svg"
 
-	// AssetWordmark is the official wordmark.
-	AssetWordmark = "assets/bluefin-wordmark.svg"
-
 	// AssetWordmarkDark is the dark-theme variant with light lettering.
 	AssetWordmarkDark = "assets/bluefin-wordmark-dark.svg"
 

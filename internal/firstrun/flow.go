@@ -12,12 +12,19 @@ const (
 )
 
 // Step represents one screen or decision step in the onboarding assistant.
+//
+// Page and Groups name real entries in the configuration schema — the same
+// strings config.IsGroupEnabled switches on — because that predicate is what
+// filters the sequence in production. It defaults an unknown page and an
+// unknown group to enabled, so a step naming anything else is never filtered
+// at all: every step would show regardless of configuration.
+// TestEveryStepNamesRealConfigGroups holds both halves against the schema.
 type Step struct {
 	ID          string
 	Title       string
 	Description string
 	Page        string
-	Group       string
+	Groups      []string
 }
 
 // Well-known step identifiers.
@@ -53,32 +60,41 @@ var (
 		ID:          StepIDTheme,
 		Title:       "Appearance",
 		Description: "Personalize system wallpaper, branding, and dinosaur avatars",
-		Page:        "livery",
-		Group:       "livery_group",
+		Page:        "livery_page",
+		Groups: []string{
+			"livery_app_grid_group",
+			"livery_foundation_group",
+			"livery_dock_group",
+		},
 	}
 
 	StepApps = Step{
 		ID:          StepIDApps,
 		Title:       "Applications",
 		Description: "Discover curated Flatpak applications and Homebrew packages",
-		Page:        "applications",
-		Group:       "flatpak_group",
+		Page:        "applications_page",
+		Groups: []string{
+			"applications_installed_group",
+			"flatpak_user_group",
+			"flatpak_system_group",
+			"brew_group",
+		},
 	}
 
 	StepDev = Step{
 		ID:          StepIDDeveloper,
 		Title:       "Developer Access",
 		Description: "Configure development containers and developer environment mode",
-		Page:        "features",
-		Group:       "developer_group",
+		Page:        "features_page",
+		Groups:      []string{"dx_group"},
 	}
 
 	StepAI = Step{
 		ID:          StepIDAI,
 		Title:       "AI Tools",
 		Description: "Configure local AI models and hardware acceleration services",
-		Page:        "features",
-		Group:       "aistack_group",
+		Page:        "features_page",
+		Groups:      []string{"ai_group"},
 	}
 )
 
@@ -99,10 +115,15 @@ type AssistantModel struct {
 
 // NewAssistantModel creates a step sequence filtered by group availability.
 // The Welcome hero screen is always included as the first step.
+//
+// A step is offered when at least one of the groups behind it is enabled,
+// because a step stands for a whole area of the application: Applications is
+// worth offering while any one of its Flatpak or Homebrew groups survives,
+// and drops out only once an administrator has disabled all of them.
 func NewAssistantModel(filter func(page, group string) bool) *AssistantModel {
 	active := []Step{StepWelcome}
 	for _, s := range candidateSteps {
-		if filter == nil || filter(s.Page, s.Group) {
+		if s.enabled(filter) {
 			active = append(active, s)
 		}
 	}
@@ -110,6 +131,19 @@ func NewAssistantModel(filter func(page, group string) bool) *AssistantModel {
 		steps:   active,
 		current: 0,
 	}
+}
+
+// enabled reports whether any group backing the step is enabled.
+func (s Step) enabled(filter func(page, group string) bool) bool {
+	if filter == nil || len(s.Groups) == 0 {
+		return true
+	}
+	for _, group := range s.Groups {
+		if filter(s.Page, group) {
+			return true
+		}
+	}
+	return false
 }
 
 // Steps returns the active step sequence.

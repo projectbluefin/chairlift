@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/firstrun"
@@ -252,7 +253,7 @@ func (a *FirstRunAssistant) onConfigure() {
 	if dismissed {
 		if disp == firstrun.DispositionCompleted {
 			if err := a.store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
-				log.Printf("firstrun: saving completed disposition: %v", err)
+				logDispositionError("completed", err)
 			}
 		}
 		a.dialog.Close()
@@ -276,13 +277,28 @@ func (a *FirstRunAssistant) onGetMoving() {
 	}
 	if next := firstrun.SkipPreserving(current); next != current {
 		if err := a.store.SetDisposition(ctx, next); err != nil {
-			log.Printf("firstrun: saving skipped disposition: %v", err)
+			logDispositionError("skipped", err)
 		}
 	}
 
 	if a.toastAdder != nil {
 		a.toastAdder.ShowToast(pageview.GetMovingToastMessage())
 	}
+}
+
+// logDispositionError reports a failed disposition write, naming the missing
+// schema for what it is.
+//
+// firstrun.ShouldPresent answers false for that condition, so the assistant
+// does not return uninvited on every launch of an install whose schema was
+// never compiled; the log line says why nothing was recorded rather than
+// leaving a bare gsettings failure behind.
+func logDispositionError(state string, err error) {
+	if errors.Is(err, firstrun.ErrSchemaMissing) {
+		log.Printf("firstrun: not recording %s disposition: %v; run `make schemas` or install the application to compile the settings schema", state, err)
+		return
+	}
+	log.Printf("firstrun: saving %s disposition: %v", state, err)
 }
 
 func (a *FirstRunAssistant) onBack() {
@@ -302,7 +318,7 @@ func (a *FirstRunAssistant) onFinish() {
 	step, done := a.model.Advance()
 	if done {
 		if err := a.store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
-			log.Printf("firstrun: saving completed disposition: %v", err)
+			logDispositionError("completed", err)
 		}
 		a.dialog.Close()
 		if a.toastAdder != nil {

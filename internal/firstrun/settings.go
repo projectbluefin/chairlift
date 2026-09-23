@@ -190,9 +190,15 @@ func unquote(s string) string {
 
 // ShouldPresent decides whether to present the first-run assistant dialog.
 //
-// 1. Explicit setup (--setup flag or menu action) always presents, even under --dry-run.
-// 2. Automated presentation is suppressed under --dry-run (e.g. during headless screenshots).
-// 3. Automated presentation is suppressed if setup was already completed or skipped.
+//  1. Explicit setup (--setup flag or menu action) always presents, even under --dry-run.
+//  2. Automated presentation is suppressed under --dry-run (e.g. during headless screenshots).
+//  3. Automated presentation is suppressed if setup was already completed or skipped.
+//  4. Automated presentation is suppressed when the schema is not installed,
+//     because nothing can be recorded there: a source or development install
+//     with no compiled schema cache would otherwise present the assistant on
+//     every launch with no way to settle it, since the skip written by
+//     "Get Moving" fails against the same missing schema. An explicit request
+//     still presents, having already returned above.
 func ShouldPresent(ctx context.Context, dryRun, explicitSetup bool, store Store) bool {
 	if explicitSetup {
 		return true
@@ -206,7 +212,7 @@ func ShouldPresent(ctx context.Context, dryRun, explicitSetup bool, store Store)
 
 	disp, err := store.GetDisposition(ctx)
 	if err != nil {
-		return true
+		return !errors.Is(err, ErrSchemaMissing)
 	}
 	return !disp.IsSettled()
 }
