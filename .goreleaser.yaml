@@ -87,7 +87,10 @@ archives:
       - data/chairlift-wrapper.sh
       - data/io.projectbluefin.chairlift.desktop
       - data/io.projectbluefin.chairlift.livery.gschema.xml
+      - data/io.projectbluefin.chairlift.updates.gschema.xml
+      - data/io.projectbluefin.chairlift.firstrun.gschema.xml
       - data/icons/**/*
+      - data/icons/NOTICE
       - data/io.projectbluefin.chairlift.bootc.policy
       - data/io.projectbluefin.chairlift.updex.policy
       - data/io.projectbluefin.chairlift.sysupdate.policy
@@ -269,6 +272,11 @@ nfpms:
         dst: /usr/share/doc/chairlift/channels.example.yml
         file_info:
           mode: 0644
+      # Icon licensing notice and Bluefin artwork attribution
+      - src: ./data/icons/NOTICE
+        dst: /usr/share/doc/chairlift/NOTICE.icons
+        file_info:
+          mode: 0644
     # Recompile the system GSettings schema cache so the Livery page can see
     # ChairLift's schema. An installed but uncompiled schema is invisible to
     # GSettings, which the page would report as its settings being missing.
@@ -334,6 +342,7 @@ nfpms:
       - apk
 
 release:
+  prerelease: auto
   header: |
     ## Verifying this release
 
