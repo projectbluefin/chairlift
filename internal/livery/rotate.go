@@ -259,8 +259,19 @@ func Rotate(ctx context.Context) error {
 	}
 
 	var failures []string
-	rotatedDock := state.DockRotate && state.DockEnabled && state.DockID != CustomID
-	if state.PanelRotate && state.PanelEnabled && state.PanelID != CustomID {
+	desktop := detectDesktop()
+	// A surface the running session cannot resolve is skipped, not attempted.
+	// Rotation state outlives the session it was set in: a user who enabled
+	// panel rotation under GNOME and then logs into Plasma would otherwise
+	// make the rotation unit exit non-zero at every login, reporting a
+	// failure about a surface Plasma simply does not have.
+	rotatedDock := state.DockRotate && state.DockEnabled && state.DockID != CustomID && surfaceSupported(Dock, desktop)
+	wantsPanel := state.PanelRotate && state.PanelEnabled && state.PanelID != CustomID
+	rotatedPanel := wantsPanel && surfaceSupported(Panel, desktop)
+	if wantsPanel && !rotatedPanel {
+		log.Printf("livery: skipping panel rotation: the surface is not supported on %s", desktop)
+	}
+	if rotatedPanel {
 		next := NextID(state.PanelID)
 		if err := Apply(ctx, Panel, Source{Kind: FromCatalog, Value: next}); err != nil {
 			failures = append(failures, err.Error())

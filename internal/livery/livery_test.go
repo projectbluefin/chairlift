@@ -35,6 +35,10 @@ func newFakeCommands(t *testing.T) *fakeCommands {
 	if err := os.WriteFile(dconfPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	cachePath := filepath.Join(fakeBinDir, "gtk-update-icon-cache")
+	if err := os.WriteFile(cachePath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", fakeBinDir+":"+os.Getenv("PATH"))
 	original := runCommand
 	runCommand = func(_ context.Context, name string, args ...string) (string, error) {
@@ -81,6 +85,42 @@ func (f *fakeCommands) sawPrefix(prefix string) bool {
 		}
 	}
 	return false
+}
+
+// TestMain pins the desktop seam for the whole package.
+//
+// Apply, Clear, IconPath and Rotate all resolve their target from the running
+// session, so without this every test in this package would read the
+// developer's own XDG_CURRENT_DESKTOP: the suite passed on a GNOME or
+// headless host and failed on a Plasma workstation with "surface Panel is not
+// supported on KDE". The default is GNOME because that is the desktop the
+// pre-existing expectations describe; a test that wants another desktop calls
+// useDesktop.
+func TestMain(m *testing.M) {
+	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
+	os.Exit(m.Run())
+}
+
+// useDesktop pins the session's desktop for one test and restores the
+// package default afterwards.
+func useDesktop(t *testing.T, desktop deskenv.Desktop) {
+	t.Helper()
+	original := detectDesktop
+	detectDesktop = func() deskenv.Desktop { return desktop }
+	t.Cleanup(func() { detectDesktop = original })
+}
+
+// useEnvironmentDetection restores real, environment-driven detection for a
+// test that is about detection itself, and clears the three session variables
+// so the host's own session cannot answer for it.
+func useEnvironmentDetection(t *testing.T) {
+	t.Helper()
+	original := detectDesktop
+	detectDesktop = deskenv.Detect
+	t.Cleanup(func() { detectDesktop = original })
+	t.Setenv(deskenv.XDGCurrentDesktop, "")
+	t.Setenv(deskenv.DesktopSession, "")
+	t.Setenv(deskenv.KDEFullSession, "")
 }
 
 // useTempDataHome points the icon writes at a temporary directory.
@@ -208,6 +248,186 @@ func TestAppGridOverrideTargetsTheAdwaitaTheme(t *testing.T) {
 	}
 }
 
+// TestKDEFilesMarkTargetsDolphinInHicolor asserts that on KDE Plasma, the Files
+// mark shadows org.kde.dolphin in hicolor.
+//
+// Why hicolor rather than Breeze is recorded on DockIconNameKDE
+// (Epic #211, issue #216).
+func TestKDEFilesMarkTargetsDolphinInHicolor(t *testing.T) {
+	dir := useTempDataHome(t)
+
+	// Verify icon path resolution on KDE.
+	dockKDE, err := IconPathFor(deskenv.KDE, Dock, "")
+	if err != nil {
+		t.Fatalf("IconPathFor(KDE, Dock): %v", err)
+	}
+	wantKDE := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	if dockKDE != wantKDE {
+		t.Errorf("KDE dock override path = %q, want %q", dockKDE, wantKDE)
+	}
+
+	// Verify constant and helper mappings.
+	if got := DockIconNameFor(deskenv.KDE); got != DockIconNameKDE {
+		t.Errorf("DockIconNameFor(KDE) = %q, want %q", got, DockIconNameKDE)
+	}
+	if got := DockIconNameFor(deskenv.GNOME); got != DockIconNameGNOME {
+		t.Errorf("DockIconNameFor(GNOME) = %q, want %q", got, DockIconNameGNOME)
+	}
+	if DockIconNameKDE != "org.kde.dolphin" {
+		t.Errorf("DockIconNameKDE = %q, want %q", DockIconNameKDE, "org.kde.dolphin")
+	}
+}
+
+// TestKDESurfaceAppliesAndRemovesDolphinIcon asserts that Apply and Clear
+// correctly create and delete ~/.local/share/icons/hicolor/scalable/apps/org.kde.dolphin.svg
+// and trigger icon cache refresh on KDE Plasma sessions.
+func TestKDESurfaceAppliesAndRemovesDolphinIcon(t *testing.T) {
+	dir := useTempDataHome(t)
+	fake := newFakeCommands(t)
+	useDesktop(t, deskenv.KDE)
+
+	if err := Apply(context.Background(), Dock, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+		t.Fatalf("Apply(Dock): %v", err)
+	}
+
+	expectedPath := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	data, err := os.ReadFile(expectedPath)
+	if err != nil {
+		t.Fatalf("Apply did not write expected Dolphin icon %s: %v", expectedPath, err)
+	}
+	wantAsset, err := Asset(DefaultID)
+	if err != nil {
+		t.Fatalf("Asset: %v", err)
+	}
+	if !bytes.Equal(data, wantAsset) {
+		t.Errorf("installed icon contents differ from asset")
+	}
+
+	hicolorDir := filepath.Join(dir, "icons", "hicolor")
+	if !fake.sawPrefix("gtk-update-icon-cache -f -t -q " + hicolorDir) {
+		t.Errorf("Apply did not refresh hicolor icon cache; calls: %v", fake.calls)
+	}
+
+	if err := Clear(context.Background(), Dock); err != nil {
+		t.Fatalf("Clear(Dock): %v", err)
+	}
+	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
+		t.Errorf("Clear left Dolphin icon behind at %s", expectedPath)
+	}
+}
+
+// TestKDEUnsupportedSurfaces asserts that Apply fails closed for surfaces
+// unsupported on KDE (AppGrid and Panel) and reports an explanatory error.
+//
+// Clear is deliberately excluded: it must keep working for every surface on
+// every desktop, or a mark applied under GNOME could never be removed from a
+// Plasma session. TestClearRemovesGNOMEMarkFromKDESession covers that.
+func TestKDEUnsupportedSurfaces(t *testing.T) {
+	for name, surface := range map[string]Surface{"app-grid": AppGrid, "panel": Panel} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := IconPathFor(deskenv.KDE, surface, ""); err == nil {
+				t.Errorf("IconPathFor(KDE, %s) succeeded, want error", name)
+			}
+			useDesktop(t, deskenv.KDE)
+
+			if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err == nil {
+				t.Errorf("Apply(KDE, %s) succeeded, want error", name)
+			}
+		})
+	}
+}
+
+// TestClearRemovesGNOMEMarkFromKDESession asserts that a mark applied under
+// GNOME can be cleared from a later Plasma session.
+//
+// The desktop is read at call time and a user's sessions are not fixed. If
+// Clear fail-closed on the running session's table, the UI toggle-off would
+// error while the override file stayed on disk: state disabled, icon still
+// overridden, and no way back short of deleting the file by hand.
+func TestClearRemovesGNOMEMarkFromKDESession(t *testing.T) {
+	for name, surface := range map[string]Surface{"app-grid": AppGrid, "panel": Panel, "dock": Dock} {
+		t.Run(name, func(t *testing.T) {
+			useTempDataHome(t)
+			newFakeCommands(t)
+
+			useDesktop(t, deskenv.GNOME)
+			if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+				t.Fatalf("Apply(GNOME, %s): %v", name, err)
+			}
+			applied, err := IconPathFor(deskenv.GNOME, surface, DefaultID)
+			if err != nil {
+				t.Fatalf("IconPathFor(GNOME, %s): %v", name, err)
+			}
+			if _, err := os.Stat(applied); err != nil {
+				t.Fatalf("Apply(GNOME, %s) did not write %s: %v", name, applied, err)
+			}
+
+			useDesktop(t, deskenv.KDE)
+			if err := Clear(context.Background(), surface); err != nil {
+				t.Fatalf("Clear(KDE, %s): %v", name, err)
+			}
+			if _, err := os.Stat(applied); !os.IsNotExist(err) {
+				t.Errorf("Clear(KDE, %s) left the GNOME mark behind at %s", name, applied)
+			}
+		})
+	}
+}
+
+// TestKDESessionDetectionViaEnvironment asserts that environment variables
+// (e.g. XDG_CURRENT_DESKTOP=KDE or DESKTOP_SESSION=plasma) automatically
+// configure IconPath to target Dolphin without manual injection.
+func TestKDESessionDetectionViaEnvironment(t *testing.T) {
+	dir := useTempDataHome(t)
+	useEnvironmentDetection(t)
+
+	t.Setenv(deskenv.XDGCurrentDesktop, "KDE")
+
+	path, err := IconPath(Dock, "")
+	if err != nil {
+		t.Fatalf("IconPath(Dock): %v", err)
+	}
+	want := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
+	if path != want {
+		t.Errorf("IconPath(Dock) with XDG_CURRENT_DESKTOP=KDE = %q, want %q", path, want)
+	}
+
+	t.Setenv(deskenv.XDGCurrentDesktop, "")
+	t.Setenv(deskenv.DesktopSession, "plasma")
+	pathPlasma, err := IconPath(Dock, "")
+	if err != nil {
+		t.Fatalf("IconPath(Dock) with plasma session: %v", err)
+	}
+	if pathPlasma != want {
+		t.Errorf("IconPath(Dock) with DESKTOP_SESSION=plasma = %q, want %q", pathPlasma, want)
+	}
+}
+
+// TestClearRemovesTheOtherDesktopsOverride is the regression test for a mark
+// that outlived the session it was applied in: a Files mark installed under
+// GNOME writes org.gnome.Nautilus.svg, and a Clear run in a later Plasma
+// session must not leave it behind while the stored state reads disabled.
+func TestClearRemovesTheOtherDesktopsOverride(t *testing.T) {
+	dir := useTempDataHome(t)
+	newFakeCommands(t)
+	useDesktop(t, deskenv.GNOME)
+
+	if err := Apply(context.Background(), Dock, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+		t.Fatalf("Apply(GNOME, Dock): %v", err)
+	}
+	gnomePath := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", DockIconNameGNOME+".svg")
+	if _, err := os.Stat(gnomePath); err != nil {
+		t.Fatalf("Apply did not install %s: %v", gnomePath, err)
+	}
+
+	useDesktop(t, deskenv.KDE)
+	if err := Clear(context.Background(), Dock); err != nil {
+		t.Fatalf("Clear(KDE, Dock): %v", err)
+	}
+	if _, err := os.Stat(gnomePath); !os.IsNotExist(err) {
+		t.Errorf("Clear under KDE left the GNOME override at %s", gnomePath)
+	}
+}
+
 // TestEverySurfaceInstallsAndRemovesItsFile covers all three surfaces, so a
 // surface added without a spec entry cannot pass.
 func TestEverySurfaceInstallsAndRemovesItsFile(t *testing.T) {
@@ -234,186 +454,6 @@ func TestEverySurfaceInstallsAndRemovesItsFile(t *testing.T) {
 				t.Errorf("Clear left %s behind", path)
 			}
 		})
-	}
-}
-
-// TestKDEDockOverrideTargetsDolphinInHicolor verifies that on KDE Plasma, the
-// Files/Dock mark targets org.kde.dolphin in the hicolor icon theme.
-//
-// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-// so placing org.kde.dolphin.svg in hicolor overrides the application launcher icon
-// across Plasma surfaces (Issue #216).
-func TestKDEDockOverrideTargetsDolphinInHicolor(t *testing.T) {
-	dir := useTempDataHome(t)
-	t.Setenv("XDG_CURRENT_DESKTOP", "KDE")
-
-	dock, err := IconPath(Dock, "")
-	if err != nil {
-		t.Fatalf("IconPath(Dock): %v", err)
-	}
-	wantDock := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
-	if dock != wantDock {
-		t.Errorf("KDE dock override path = %q, want %q", dock, wantDock)
-	}
-
-	dockExplicit, err := IconPathForDesktop(deskenv.KDE, Dock, "")
-	if err != nil {
-		t.Fatalf("IconPathForDesktop(KDE, Dock): %v", err)
-	}
-	if dockExplicit != wantDock {
-		t.Errorf("IconPathForDesktop(KDE, Dock) = %q, want %q", dockExplicit, wantDock)
-	}
-}
-
-// TestGNOMEDockOverrideTargetsNautilusInHicolor verifies that on GNOME, the
-// Files/Dock mark targets org.gnome.Nautilus in the hicolor icon theme.
-func TestGNOMEDockOverrideTargetsNautilusInHicolor(t *testing.T) {
-	dir := useTempDataHome(t)
-	t.Setenv("XDG_CURRENT_DESKTOP", "GNOME")
-
-	dock, err := IconPath(Dock, "")
-	if err != nil {
-		t.Fatalf("IconPath(Dock): %v", err)
-	}
-	wantDock := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.gnome.Nautilus.svg")
-	if dock != wantDock {
-		t.Errorf("GNOME dock override path = %q, want %q", dock, wantDock)
-	}
-
-	dockExplicit, err := IconPathForDesktop(deskenv.GNOME, Dock, "")
-	if err != nil {
-		t.Fatalf("IconPathForDesktop(GNOME, Dock): %v", err)
-	}
-	if dockExplicit != wantDock {
-		t.Errorf("IconPathForDesktop(GNOME, Dock) = %q, want %q", dockExplicit, wantDock)
-	}
-}
-
-// TestKDEFilesMarkInstallsAndRemovesDolphinInHicolor verifies that on KDE Plasma,
-// applying and clearing the Files mark installs and removes org.kde.dolphin.svg
-// under hicolor without touching GNOME extension settings.
-func TestKDEFilesMarkInstallsAndRemovesDolphinInHicolor(t *testing.T) {
-	dir := useTempDataHome(t)
-	fake := newFakeCommands(t)
-	t.Setenv("XDG_CURRENT_DESKTOP", "KDE")
-
-	if err := Apply(context.Background(), Dock, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
-		t.Fatalf("Apply: %v", err)
-	}
-	path, err := IconPath(Dock, DefaultID)
-	if err != nil {
-		t.Fatalf("IconPath: %v", err)
-	}
-	wantPath := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", "org.kde.dolphin.svg")
-	if path != wantPath {
-		t.Errorf("installed path = %q, want %q", path, wantPath)
-	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("Apply did not install %s: %v", path, err)
-	}
-	if fake.sawPrefix("gsettings set " + extensionSchema) {
-		t.Errorf("KDE Files mark wrote a GNOME extension setting it does not own: %v", fake.calls)
-	}
-
-	fake.calls = nil
-	if err := Clear(context.Background(), Dock); err != nil {
-		t.Fatalf("Clear: %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("Clear left %s behind", path)
-	}
-}
-
-// TestDesktopEnvironmentSurfaceParameterization asserts that session environment
-// strings select the appropriate Files application icon name across desktops.
-func TestDesktopEnvironmentSurfaceParameterization(t *testing.T) {
-	cases := []struct {
-		name     string
-		env      map[string]string
-		wantIcon string
-	}{
-		{
-			name:     "KDE standard variable",
-			env:      map[string]string{"XDG_CURRENT_DESKTOP": "KDE"},
-			wantIcon: "org.kde.dolphin.svg",
-		},
-		{
-			name:     "Plasma session name",
-			env:      map[string]string{"DESKTOP_SESSION": "plasma"},
-			wantIcon: "org.kde.dolphin.svg",
-		},
-		{
-			name:     "Plasma X11 session name",
-			env:      map[string]string{"DESKTOP_SESSION": "plasmax11"},
-			wantIcon: "org.kde.dolphin.svg",
-		},
-		{
-			name:     "KDE fallback boolean flag",
-			env:      map[string]string{"KDE_FULL_SESSION": "true"},
-			wantIcon: "org.kde.dolphin.svg",
-		},
-		{
-			name:     "GNOME standard variable",
-			env:      map[string]string{"XDG_CURRENT_DESKTOP": "GNOME"},
-			wantIcon: "org.gnome.Nautilus.svg",
-		},
-		{
-			name:     "Ubuntu GNOME compound name",
-			env:      map[string]string{"XDG_CURRENT_DESKTOP": "ubuntu:GNOME"},
-			wantIcon: "org.gnome.Nautilus.svg",
-		},
-		{
-			name:     "GNOME Classic session",
-			env:      map[string]string{"XDG_CURRENT_DESKTOP": "GNOME-Classic:GNOME"},
-			wantIcon: "org.gnome.Nautilus.svg",
-		},
-		{
-			name:     "Unknown compositor falls back to default GNOME",
-			env:      map[string]string{"XDG_CURRENT_DESKTOP": "sway"},
-			wantIcon: "org.gnome.Nautilus.svg",
-		},
-		{
-			name:     "Unset environment falls back to default GNOME",
-			env:      map[string]string{},
-			wantIcon: "org.gnome.Nautilus.svg",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := useTempDataHome(t)
-			t.Setenv("XDG_CURRENT_DESKTOP", tc.env["XDG_CURRENT_DESKTOP"])
-			t.Setenv("DESKTOP_SESSION", tc.env["DESKTOP_SESSION"])
-			t.Setenv("KDE_FULL_SESSION", tc.env["KDE_FULL_SESSION"])
-
-			got, err := IconPath(Dock, "")
-			if err != nil {
-				t.Fatalf("IconPath(Dock): %v", err)
-			}
-			want := filepath.Join(dir, "icons", "hicolor", "scalable", "apps", tc.wantIcon)
-			if got != want {
-				t.Errorf("IconPath(Dock) = %q, want %q", got, want)
-			}
-		})
-	}
-}
-
-// TestKDEUnsupportedSurfacesFailClosed asserts that GNOME-specific surfaces
-// (AppGrid and Panel) fail closed on KDE rather than writing to nonexistent paths.
-func TestKDEUnsupportedSurfacesFailClosed(t *testing.T) {
-	useTempDataHome(t)
-	t.Setenv("XDG_CURRENT_DESKTOP", "KDE")
-
-	for _, surface := range []Surface{AppGrid, Panel} {
-		if _, err := IconPath(surface, DefaultID); err == nil {
-			t.Errorf("IconPath(%d) on KDE succeeded; want failure", surface)
-		}
-		if err := Apply(context.Background(), surface, Source{Kind: FromCatalog, Value: DefaultID}); err == nil {
-			t.Errorf("Apply(%d) on KDE succeeded; want failure", surface)
-		}
-		if err := Clear(context.Background(), surface); err == nil {
-			t.Errorf("Clear(%d) on KDE succeeded; want failure", surface)
-		}
 	}
 }
 

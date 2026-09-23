@@ -54,55 +54,118 @@ type surfaceSpec struct {
 	name string
 }
 
-var surfaces = map[Surface]surfaceSpec{
-	// dash-to-dock asks for `view-app-grid-${sessionMode}-symbolic`, i.e.
-	// view-app-grid-user-symbolic, which exists nowhere on disk. It reaches
-	// the real icon through St's fallback: appIcons.js sets
-	// `fallbackIconName = this._iconActor.iconName` — the base
-	// ShowAppsIcon's view-app-grid-symbolic — before overwriting iconName.
-	// Shadowing the fallback name is therefore what actually moves the
-	// button, and it moves the overview's app-grid button too, since both
-	// resolve the same name.
-	AppGrid: {theme: "Adwaita", subdir: filepath.Join("symbolic", "actions"), name: "view-app-grid-symbolic"},
-	// ChairLift's own name, referenced only by the extension's
-	// menuicon-setting, so writing it can never clobber another package's
-	// icon and reverting is one unlink.
-	// name is empty: the panel's icon name depends on the selection, so
-	// iconPath computes it. See PanelIconName.
-	Panel: {theme: "hicolor", subdir: filepath.Join("scalable", "actions"), name: ""},
-	// The Files application's own name. GNOME stores one icon per
-	// application, so this shadows the mark everywhere Files is drawn — the
-	// dash, the app grid, the window switcher, notifications — not only on
-	// the dock.
-	Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: GNOMEDockIconName},
-}
-
-var kdeSurfaces = map[Surface]surfaceSpec{
-	// The Dolphin application's icon-theme name on KDE Plasma. Breeze does
-	// not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-	// so hicolor placement correctly overrides the application launcher icon
-	// across Plasma surfaces.
-	Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: KDEDockIconName},
-}
-
+// surfacesByDesktop maps each supported desktop environment to its surface table.
+//
+// GNOME and KDE shadow different application names: GNOME's Files application
+// is org.gnome.Nautilus, while KDE Plasma's file manager is org.kde.dolphin.
+// Why each lands in hicolor rather than the session's own theme is recorded
+// once on DockIconNameKDE.
 var surfacesByDesktop = map[deskenv.Desktop]map[Surface]surfaceSpec{
-	deskenv.GNOME: surfaces,
-	deskenv.KDE:   kdeSurfaces,
+	deskenv.GNOME: {
+		// dash-to-dock asks for `view-app-grid-${sessionMode}-symbolic`, i.e.
+		// view-app-grid-user-symbolic, which exists nowhere on disk. It reaches
+		// the real icon through St's fallback: appIcons.js sets
+		// `fallbackIconName = this._iconActor.iconName` — the base
+		// ShowAppsIcon's view-app-grid-symbolic — before overwriting iconName.
+		// Shadowing the fallback name is therefore what actually moves the
+		// button, and it moves the overview's app-grid button too, since both
+		// resolve the same name.
+		AppGrid: {theme: "Adwaita", subdir: filepath.Join("symbolic", "actions"), name: "view-app-grid-symbolic"},
+		// ChairLift's own name, referenced only by the extension's
+		// menuicon-setting, so writing it can never clobber another package's
+		// icon and reverting is one unlink.
+		// name is empty: the panel's icon name depends on the selection, so
+		// iconPath computes it. See PanelIconName.
+		Panel: {theme: "hicolor", subdir: filepath.Join("scalable", "actions"), name: ""},
+		// The Files application's own name. GNOME stores one icon per
+		// application, so this shadows the mark everywhere Files is drawn — the
+		// dash, the app grid, the window switcher, notifications — not only on
+		// the dock.
+		Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: DockIconNameGNOME},
+	},
+	deskenv.KDE: {
+		// hicolor, not Breeze: see DockIconNameKDE.
+		Dock: {theme: "hicolor", subdir: filepath.Join("scalable", "apps"), name: DockIconNameKDE},
+	},
 }
 
-// currentDesktop is an injection seam for desktop environment detection,
-// defaulting to deskenv.Detect.
-var currentDesktop = deskenv.Detect
-
-// surfaceFor returns the surface specification for a surface in the given
-// desktop environment.
-func surfaceFor(de deskenv.Desktop, s Surface) (surfaceSpec, bool) {
+// surfaceFor returns the surface specification for the given surface on the
+// target desktop environment.
+//
+// Unknown resolves to the GNOME table, and that is a deliberate exception to
+// deskenv's fail-closed default rather than an oversight. Every ChairLift
+// surface predates this map and was written into the GNOME names
+// unconditionally, so a session deskenv cannot name — Cinnamon, Xfce, Sway, a
+// container, a TTY, an unset session — kept working because those writes
+// landed anyway. Failing closed here would turn that into "livery is
+// unavailable on your desktop" for users who have marks installed today, a
+// removal this change does not intend. The write is inert where nothing
+// resolves the name: it places a file in the user's own icon theme and edits
+// nothing another package owns.
+//
+// Only a desktop deskenv *does* recognize gets a fail-closed answer, because
+// there the session is known not to resolve the other table's names: a
+// surface missing from that desktop's table returns false and every caller
+// reports it. That is what keeps KDE from receiving GNOME-targeted writes.
+func surfaceFor(s Surface, de deskenv.Desktop) (surfaceSpec, bool) {
 	table, ok := surfacesByDesktop[de]
 	if !ok {
-		table = surfaces
+		table = surfacesByDesktop[deskenv.GNOME]
 	}
 	spec, ok := table[s]
 	return spec, ok
+}
+
+// surfaceSupported reports whether a surface has anywhere to land on the given
+// desktop. Callers that run unattended — rotation, most of all — ask this
+// instead of letting Apply fail, so a section whose state was written under a
+// different desktop is skipped rather than turned into an error every login.
+func surfaceSupported(s Surface, de deskenv.Desktop) bool {
+	_, ok := surfaceFor(s, de)
+	return ok
+}
+
+// overridePathsForSurface returns every path this package could have written
+// for one surface, across every desktop table, on this host.
+//
+// Clear consults all of them rather than only the current desktop's, because
+// the desktop is read at call time and a user's sessions are not fixed: a
+// Files mark applied under GNOME writes org.gnome.Nautilus.svg, and a Clear
+// run in a later Plasma session that unlinked only org.kde.dolphin.svg would
+// leave that file behind for good — state says the surface is off while the
+// override still overrides. Clear never asks it for the panel, whose file name
+// varies per selection; removePanelIcons sweeps those by prefix instead.
+func overridePathsForSurface(s Surface, selectionID string) (map[string]string, error) {
+	paths := map[string]string{}
+	for desktop := range surfacesByDesktop {
+		spec, ok := surfaceFor(s, desktop)
+		if !ok {
+			continue
+		}
+		path, err := IconPathFor(desktop, s, selectionID)
+		if err != nil {
+			return nil, err
+		}
+		paths[path] = spec.theme
+	}
+	return paths, nil
+}
+
+// detectDesktop detects the current session's desktop environment.
+// It is an injection seam so tests can exercise desktop paths deterministically.
+var detectDesktop = deskenv.Detect
+
+func surfaceName(s Surface) string {
+	switch s {
+	case AppGrid:
+		return "AppGrid"
+	case Panel:
+		return "Panel"
+	case Dock:
+		return "Dock"
+	default:
+		return fmt.Sprintf("Surface(%d)", s)
+	}
 }
 
 // PanelIconPrefix begins every icon name ChairLift installs for the panel.
@@ -127,17 +190,35 @@ func PanelIconName(id string) string {
 	return PanelIconPrefix + id + "-symbolic"
 }
 
-// GNOMEDockIconName is the icon-theme name the Files mark shadows on GNOME.
-const GNOMEDockIconName = "org.gnome.Nautilus"
-
-// KDEDockIconName is the icon-theme name the Files mark shadows on KDE Plasma.
-// Breeze does not ship org.kde.dolphin.svg (shipping only system-file-manager.svg),
-// so hicolor placement correctly overrides the application launcher icon across
-// Plasma surfaces.
-const KDEDockIconName = "org.kde.dolphin"
-
 // DockIconName is the icon-theme name the Files mark shadows on GNOME.
-const DockIconName = GNOMEDockIconName
+// Retained for backward compatibility. See DockIconNameGNOME and DockIconNameKDE.
+const DockIconName = DockIconNameGNOME
+
+const (
+	// DockIconNameGNOME is the icon-theme name the Files mark shadows on GNOME.
+	DockIconNameGNOME = "org.gnome.Nautilus"
+
+	// DockIconNameKDE is the icon-theme name the Files mark shadows on KDE Plasma.
+	//
+	// This is the canonical record of why the KDE Files mark is written into
+	// hicolor rather than Breeze; other sites refer here instead of repeating
+	// it. XDG resolves the current theme and its parents before hicolor, so a
+	// name the session's theme already ships can only be shadowed inside that
+	// theme. Breeze does not ship org.kde.dolphin.svg — it ships only
+	// system-file-manager.svg — so nothing shadows hicolor for this name and
+	// the placement overrides the application launcher icon across Plasma
+	// surfaces without touching vendor desktop entries.
+	DockIconNameKDE = "org.kde.dolphin"
+)
+
+// DockIconNameFor returns the icon-theme name shadowed by the Files mark on
+// the given desktop environment.
+func DockIconNameFor(desktop deskenv.Desktop) string {
+	if desktop == deskenv.KDE {
+		return DockIconNameKDE
+	}
+	return DockIconNameGNOME
+}
 
 // extensionSchema is the Custom Command Menu extension's schema. It is
 // installed by the extension and read-only to ChairLift; only the user's own
@@ -232,22 +313,22 @@ func themeDir(theme string) (string, error) {
 	return filepath.Join(dir, "icons", theme), nil
 }
 
-// IconPath returns where a surface's override is installed for a selection
-// in the current desktop environment.
+// IconPath returns where a surface's override is installed for a selection on
+// the current desktop environment.
 //
 // selectionID is only consulted for the panel, whose icon name varies per
 // selection; the other two surfaces shadow a fixed name their consumer
 // already asks for.
 func IconPath(s Surface, selectionID string) (string, error) {
-	return IconPathForDesktop(currentDesktop(), s, selectionID)
+	return IconPathFor(detectDesktop(), s, selectionID)
 }
 
-// IconPathForDesktop returns where a surface's override is installed for a
-// selection on the specified desktop environment.
-func IconPathForDesktop(de deskenv.Desktop, s Surface, selectionID string) (string, error) {
-	spec, ok := surfaceFor(de, s)
+// IconPathFor returns where a surface's override is installed for a selection
+// on a specific desktop environment.
+func IconPathFor(desktop deskenv.Desktop, s Surface, selectionID string) (string, error) {
+	spec, ok := surfaceFor(s, desktop)
 	if !ok {
-		return "", fmt.Errorf("livery: unknown surface %d for desktop %s", s, de)
+		return "", fmt.Errorf("livery: surface %s is not supported on %s", surfaceName(s), desktop)
 	}
 	dir, err := themeDir(spec.theme)
 	if err != nil {
@@ -263,9 +344,9 @@ func IconPathForDesktop(de deskenv.Desktop, s Surface, selectionID string) (stri
 // panelIconDir is where every panel mark is installed, used to sweep marks
 // left by previous selections.
 func panelIconDir() (string, error) {
-	spec, ok := surfaceFor(currentDesktop(), Panel)
+	spec, ok := surfaceFor(Panel, deskenv.GNOME)
 	if !ok {
-		spec = surfaces[Panel]
+		return "", errors.New("livery: panel surface not configured")
 	}
 	dir, err := themeDir(spec.theme)
 	if err != nil {
@@ -411,9 +492,10 @@ func looksLikeSVG(data []byte) bool {
 // name; the other two surfaces shadow a name their consumer already asks for,
 // so installing the file is the whole operation.
 func Apply(ctx context.Context, s Surface, src Source) error {
-	spec, ok := surfaceFor(currentDesktop(), s)
+	desktop := detectDesktop()
+	spec, ok := surfaceFor(s, desktop)
 	if !ok {
-		return fmt.Errorf("livery: unknown surface %d", s)
+		return fmt.Errorf("livery: surface %s is not supported on %s", surfaceName(s), desktop)
 	}
 	data, err := resolve(ctx, src)
 	if err != nil {
@@ -436,7 +518,7 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 			selectionID = "cncf-" + src.Value
 		}
 	}
-	dest, err := IconPath(s, selectionID)
+	dest, err := IconPathFor(desktop, s, selectionID)
 	if err != nil {
 		return err
 	}
@@ -478,38 +560,78 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 }
 
 // Clear removes a surface's override, restoring whatever the system supplies.
+//
+// Removal spans every desktop's variant of the surface, not just the running
+// session's, and deliberately does not consult the running session at all: see
+// overridePathsForSurface. Apply fails closed on a surface the current desktop
+// has no table entry for, but Clear must not, or a mark applied under GNOME
+// would be unremovable from a later Plasma session — state would read
+// "disabled" while the override file kept overriding.
 func Clear(ctx context.Context, s Surface) error {
-	spec, ok := surfaceFor(currentDesktop(), s)
-	if !ok {
-		return fmt.Errorf("livery: unknown surface %d", s)
-	}
-	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would remove the %s mark and refresh the %s icon cache", spec.theme, spec.theme)
-		return nil
-	}
 	if s == Panel {
-		if err := removePanelIcons(); err != nil {
-			return err
-		}
-		return refreshIconCache(ctx, spec.theme)
+		return clearPanel(ctx)
 	}
-	dest, err := IconPath(s, "")
+	// Every desktop's variant of this surface is removed, not only the one
+	// this session would write, so a mark applied under another desktop does
+	// not outlive the state that says it is gone.
+	paths, err := overridePathsForSurface(s, "")
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("livery: removing %s: %w", dest, err)
+	if len(paths) == 0 {
+		return fmt.Errorf("livery: surface %s has no override on any desktop", surfaceName(s))
 	}
-	if err := refreshIconCache(ctx, spec.theme); err != nil {
-		return err
+	themes := map[string]bool{}
+	for _, theme := range paths {
+		themes[theme] = true
+	}
+	if dryrun.Enabled() {
+		for path, theme := range paths {
+			log.Printf("[DRY-RUN] would remove %s and refresh the %s icon cache", path, theme)
+		}
+		return nil
+	}
+	for path := range paths {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("livery: removing %s: %w", path, err)
+		}
+	}
+	for theme := range themes {
+		if err := refreshIconCache(ctx, theme); err != nil {
+			return err
+		}
 	}
 	// The app grid lives in a theme directory ChairLift created. Leaving an
 	// empty tree behind would keep a user-scope Adwaita directory in the
-	// search path for no reason, so prune it back out.
+	// search path for no reason, so prune it back out. Pruning is safe for
+	// any theme here: it removes only directories that are already empty.
 	if s == AppGrid {
-		pruneEmptyThemeDir(spec.theme)
+		for theme := range themes {
+			pruneEmptyThemeDir(theme)
+		}
 	}
 	return nil
+}
+
+// clearPanel sweeps the panel's marks.
+//
+// The panel's file name varies per selection, so overridePathsForSurface
+// cannot name them; removePanelIcons matches PanelIconPrefix instead. The
+// panel exists in one table only, and its theme is fixed, so the sweep is
+// desktop-independent for the same reason Clear is.
+func clearPanel(ctx context.Context) error {
+	spec, ok := surfaceFor(Panel, deskenv.GNOME)
+	if !ok {
+		return errors.New("livery: panel surface not configured")
+	}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would remove the panel marks and refresh the %s icon cache", spec.theme)
+		return nil
+	}
+	if err := removePanelIcons(); err != nil {
+		return err
+	}
+	return refreshIconCache(ctx, spec.theme)
 }
 
 // ClearPanelSettings puts the extension's settings back the way they were.
