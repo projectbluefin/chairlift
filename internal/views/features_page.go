@@ -473,6 +473,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 		defer cancel()
 
 		err := ublue.SetDeveloperMode(ctx, enabled)
+		succeeded := err == nil
 
 		var menuErr error
 		if succeeded {
@@ -496,7 +497,6 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Custom Command Menu update failed: %v", menuErr))
 			}
 
-			succeeded := err == nil
 			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled)
 			toggle.set(decision.Confirm == enabled)
 			if decision.Confirm {

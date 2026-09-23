@@ -239,6 +239,12 @@ func TestDeveloperMenuFeaturesPageWiring(t *testing.T) {
 	if !strings.Contains(text, `err := ublue.SetDeveloperMode(ctx, enabled)`) {
 		t.Error("features_page.go does not call ublue.SetDeveloperMode")
 	}
+	if !strings.Contains(text, `succeeded := err == nil`) {
+		t.Error("features_page.go does not define succeeded := err == nil")
+	}
+	if !strings.Contains(text, `if succeeded {`) {
+		t.Error("features_page.go does not gate devmenu.Apply on succeeded")
+	}
 	if !strings.Contains(text, `devmenu.Apply(ctx, enabled)`) {
 		t.Error("features_page.go does not call devmenu.Apply")
 	}
