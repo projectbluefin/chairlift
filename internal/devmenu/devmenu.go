@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -68,44 +69,84 @@ func ResetTestRunners() {
 	runCommand = execCommand
 }
 
+// scan reads every command key under the extension's dconf path with a single
+// `dconf dump`, returning key name (command1..command99) to resolved tuple value.
+// dconf resolves through the whole profile, so the dump carries distro defaults
+// (e.g. Bluefin's 04-bluefin-custom-command-menu) as well as user-layer overrides;
+// one subprocess therefore replaces a per-key read of all 99 keys.
+func scan(ctx context.Context) (map[string]string, error) {
+	out, err := runCommand(ctx, "dconf", "dump", DconfPath)
+	if err != nil {
+		return nil, fmt.Errorf("devmenu: dumping %s: %w: %s", DconfPath, err, strings.TrimSpace(out))
+	}
+	return parseDump(out), nil
+}
+
+// parseDump parses `dconf dump` keyfile output, keeping only command keys that
+// live directly under the dumped path.
+func parseDump(out string) map[string]string {
+	entries := make(map[string]string)
+	inRoot := false
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			inRoot = line == "[/]"
+			continue
+		}
+		if !inRoot {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if value == "" || !isCommandKey(key) {
+			continue
+		}
+		entries[key] = value
+	}
+	return entries
+}
+
+// isCommandKey reports whether key names one of command1..command99.
+func isCommandKey(key string) bool {
+	digits, found := strings.CutPrefix(key, "command")
+	if !found || digits == "" || strings.HasPrefix(digits, "0") {
+		return false
+	}
+	n, err := strconv.Atoi(digits)
+	if err != nil {
+		return false
+	}
+	return n >= 1 && n <= MaxCommands
+}
+
+// load probes the extension and returns its command entries in one dconf dump.
+func load(ctx context.Context) (map[string]string, error) {
+	if _, err := lookPath("dconf"); err != nil {
+		return nil, nil
+	}
+	return scan(ctx)
+}
+
 // Available reports whether the Custom Command Menu extension is present and can be managed.
 // It decides availability from dconf alone without relying on gsettings (which cannot locate
 // schemas compiled only inside the extension's private directory on Bluefin).
 // The extension is considered present when dconf is available and any command key (command1..command99)
 // under /org/gnome/shell/extensions/custom-command-list/ has a distro default or user-set value.
-// Bluefin's 04-bluefin-custom-command-menu distro.d profile guarantees command1, so on Bluefin
-// this probe returns true on the first key.
 // A missing dconf tool or absence of custom-command-list keys returns false, nil (supported no-op
 // for Plasma/non-GNOME or environments without the extension).
 func Available(ctx context.Context) (bool, error) {
-	if _, err := lookPath("dconf"); err != nil {
-		return false, nil
+	entries, err := load(ctx)
+	if err != nil {
+		return false, err
 	}
-
-	for i := 1; i <= MaxCommands; i++ {
-		key := fmt.Sprintf("command%d", i)
-		dconfKeyPath := DconfPath + key
-
-		// Distro defaults (e.g. 04-bluefin-custom-command-menu)
-		defOut, err := runCommand(ctx, "dconf", "read", "-d", dconfKeyPath)
-		if err != nil {
-			return false, fmt.Errorf("devmenu: checking dconf default %s: %w: %s", key, err, strings.TrimSpace(defOut))
-		}
-		if strings.TrimSpace(defOut) != "" {
-			return true, nil
-		}
-
-		// User layer overrides
-		userOut, err := runCommand(ctx, "dconf", "read", dconfKeyPath)
-		if err != nil {
-			return false, fmt.Errorf("devmenu: checking dconf %s: %w: %s", key, err, strings.TrimSpace(userOut))
-		}
-		if strings.TrimSpace(userOut) != "" {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return len(entries) > 0, nil
 }
 
 // ParseEntry parses a GVariant (sssb) tuple representation into an Entry.
@@ -237,26 +278,21 @@ func escapeGVariant(s string) string {
 // in the Custom Command Menu extension according to developerMode.
 // Missing extension or non-GNOME environment is a supported no-op.
 func Apply(ctx context.Context, developerMode bool) error {
-	avail, err := Available(ctx)
+	entries, err := load(ctx)
 	if err != nil {
 		return err
 	}
-	if !avail {
+	if len(entries) == 0 {
 		return nil
 	}
 
 	for i := 1; i <= MaxCommands; i++ {
 		key := fmt.Sprintf("command%d", i)
-		dconfKeyPath := DconfPath + key
-
-		currentRaw, err := runCommand(ctx, "dconf", "read", dconfKeyPath)
-		if err != nil {
-			return fmt.Errorf("devmenu: reading %s: %w: %s", key, err, strings.TrimSpace(currentRaw))
-		}
-		cur := strings.TrimSpace(currentRaw)
-		if cur == "" {
+		cur, ok := entries[key]
+		if !ok {
 			continue
 		}
+		dconfKeyPath := DconfPath + key
 
 		entry, err := ParseEntry(cur)
 		if err != nil {

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
@@ -36,6 +37,8 @@ func (m *mockDconfStore) run(ctx context.Context, name string, args ...string) (
 
 	sub := args[0]
 	switch sub {
+	case "dump":
+		return m.dump(args[1]), nil
 	case "read":
 		if len(args) == 3 && args[1] == "-d" {
 			return m.defaults[args[2]], nil
@@ -59,6 +62,36 @@ func (m *mockDconfStore) run(ctx context.Context, name string, args ...string) (
 	default:
 		return "", fmt.Errorf("unsupported dconf subcommand: %s", sub)
 	}
+}
+
+// dump renders `dconf dump`-style keyfile output for the keys under prefix,
+// with the user layer resolved over the distro defaults.
+func (m *mockDconfStore) dump(prefix string) string {
+	merged := make(map[string]string)
+	for path, val := range m.defaults {
+		merged[path] = val
+	}
+	for path, val := range m.user {
+		merged[path] = val
+	}
+
+	keys := make([]string, 0, len(merged))
+	for path := range merged {
+		if strings.HasPrefix(path, prefix) {
+			keys = append(keys, strings.TrimPrefix(path, prefix))
+		}
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	sb.WriteString("[/]\n")
+	for _, key := range keys {
+		fmt.Fprintf(&sb, "%s=%s\n", key, merged[prefix+key])
+	}
+	return sb.String()
 }
 
 func TestDeveloperMenuLabelMatchingOverFixedIndices(t *testing.T) {

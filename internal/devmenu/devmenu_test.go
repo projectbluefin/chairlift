@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"testing"
 
@@ -151,8 +152,8 @@ func TestAvailableChecks(t *testing.T) {
 			return "/usr/bin/" + file, nil
 		}
 		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
-			if name == "dconf" && len(args) == 3 && args[0] == "read" && args[1] == "-d" && args[2] == DconfPath+"command1" {
-				return "('Terminal', 'ptyxis', 'utilities-terminal-symbolic', true)", nil
+			if name == "dconf" && len(args) == 2 && args[0] == "dump" && args[1] == DconfPath {
+				return "[/]\ncommand1=('Terminal', 'ptyxis', 'utilities-terminal-symbolic', true)\n", nil
 			}
 			return "", nil
 		}
@@ -170,8 +171,8 @@ func TestAvailableChecks(t *testing.T) {
 			return "/usr/bin/" + file, nil
 		}
 		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
-			if name == "dconf" && len(args) == 2 && args[0] == "read" && args[1] == DconfPath+"command3" {
-				return "('Custom', 'custom-cmd', 'icon', true)", nil
+			if name == "dconf" && args[0] == "dump" {
+				return "[/]\ncommand3=('Custom', 'custom-cmd', 'icon', true)\n", nil
 			}
 			return "", nil
 		}
@@ -181,6 +182,39 @@ func TestAvailableChecks(t *testing.T) {
 		}
 		if !avail {
 			t.Error("Available() = false, want true when user key exists in dconf")
+		}
+	})
+
+	t.Run("single dump replaces the per-key scan", func(t *testing.T) {
+		lookPath = func(file string) (string, error) {
+			return "/usr/bin/" + file, nil
+		}
+		calls := 0
+		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+			calls++
+			return "[/]\ncommand8=('Terminal', 'ptyxis', 'term', true)\n", nil
+		}
+		if _, err := Available(context.Background()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("Available() spawned %d dconf processes, want 1", calls)
+		}
+	})
+
+	t.Run("keys outside the command range are ignored", func(t *testing.T) {
+		lookPath = func(file string) (string, error) {
+			return "/usr/bin/" + file, nil
+		}
+		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+			return "[/]\nmenuicon-setting='ublue-logo-symbolic'\ncommand100=('Terminal', 'ptyxis', 'term', true)\n\n[nested]\ncommand1=('Terminal', 'ptyxis', 'term', true)\n", nil
+		}
+		avail, err := Available(context.Background())
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if avail {
+			t.Error("Available() = true, want false when no command1..command99 key is present at the dumped path")
 		}
 	})
 }
@@ -203,16 +237,14 @@ func newMockDconf() *mockDconf {
 }
 
 func (m *mockDconf) runCommand(ctx context.Context, name string, args ...string) (string, error) {
-	if name == "gsettings" {
-		// Even if gsettings reports "No such schema", devmenu relies on dconf alone
-		return "No such schema \"org.gnome.shell.extensions.custom-command-list\"", errors.New("exit 1")
-	}
 	if name != "dconf" {
 		return "", fmt.Errorf("unexpected command: %s", name)
 	}
 
 	sub := args[0]
 	switch sub {
+	case "dump":
+		return dumpMock(args[1], m.defaults, m.user), nil
 	case "read":
 		if len(args) == 3 && args[1] == "-d" {
 			path := args[2]
@@ -237,6 +269,36 @@ func (m *mockDconf) runCommand(ctx context.Context, name string, args ...string)
 	default:
 		return "", fmt.Errorf("unsupported dconf subcommand: %s", sub)
 	}
+}
+
+// dumpMock renders `dconf dump`-style keyfile output for the keys under prefix,
+// with the user layer resolved over the distro defaults.
+func dumpMock(prefix string, defaults, user map[string]string) string {
+	merged := make(map[string]string)
+	for path, val := range defaults {
+		merged[path] = val
+	}
+	for path, val := range user {
+		merged[path] = val
+	}
+
+	keys := make([]string, 0, len(merged))
+	for path := range merged {
+		if strings.HasPrefix(path, prefix) {
+			keys = append(keys, strings.TrimPrefix(path, prefix))
+		}
+	}
+	if len(keys) == 0 {
+		return ""
+	}
+	sort.Strings(keys)
+
+	var sb strings.Builder
+	sb.WriteString("[/]\n")
+	for _, key := range keys {
+		fmt.Fprintf(&sb, "%s=%s\n", key, merged[prefix+key])
+	}
+	return sb.String()
 }
 
 func TestApplyMockBluefinProfile(t *testing.T) {
@@ -470,7 +532,7 @@ func TestApplyPreviewDryRun(t *testing.T) {
 	}
 }
 
-func TestApplyWhenGSettingsReportsNoSuchSchema(t *testing.T) {
+func TestApplyNeverConsultsGsettings(t *testing.T) {
 	origLookPath := lookPath
 	origRunCommand := runCommand
 	defer func() {
@@ -488,10 +550,11 @@ func TestApplyWhenGSettingsReportsNoSuchSchema(t *testing.T) {
 	mock := newMockDconf()
 	mock.defaults[termPath] = initialTerm
 
-	// Model a host where gsettings reports "No such schema" (like Bluefin where schema
-	// is compiled only in extension's private directory)
+	// Model a host where gsettings reports "No such schema" (like Bluefin where the schema
+	// is compiled only in the extension's private directory): devmenu must never call it.
 	runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
 		if name == "gsettings" {
+			t.Errorf("devmenu invoked gsettings %v; availability must come from dconf alone", args)
 			return "No such schema \"org.gnome.shell.extensions.custom-command-list\"", errors.New("exit 1")
 		}
 		return mock.runCommand(ctx, name, args...)
@@ -526,20 +589,19 @@ func TestApplyOperationalFailures(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error on dconf read failure, got nil")
 		}
-		if !strings.Contains(err.Error(), "command1") {
+		if !strings.Contains(err.Error(), "dumping "+DconfPath) {
 			t.Errorf("unexpected error message: %v", err)
 		}
 	})
 
 	t.Run("write failure", func(t *testing.T) {
 		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
-			if args[0] == "read" {
-				if len(args) == 3 && args[1] == "-d" {
-					return "('Terminal', 'ptyxis', 'term', true)", nil
-				}
+			switch args[0] {
+			case "dump":
+				return "[/]\ncommand1=('Terminal', 'ptyxis', 'term', true)\n", nil
+			case "read":
 				return "('Terminal', 'ptyxis', 'term', true)", nil
-			}
-			if args[0] == "write" {
+			case "write":
 				return "permission denied", errors.New("write failed")
 			}
 			return "", nil
@@ -549,6 +611,22 @@ func TestApplyOperationalFailures(t *testing.T) {
 			t.Fatal("expected error on dconf write failure, got nil")
 		}
 		if !strings.Contains(err.Error(), "writing command1") {
+			t.Errorf("unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("default read failure", func(t *testing.T) {
+		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+			if args[0] == "dump" {
+				return "[/]\ncommand1=('Terminal', 'ptyxis', 'term', true)\n", nil
+			}
+			return "", errors.New("dconf read error: disk failure")
+		}
+		err := Apply(context.Background(), false)
+		if err == nil {
+			t.Fatal("expected error on dconf default read failure, got nil")
+		}
+		if !strings.Contains(err.Error(), "reading default command1") {
 			t.Errorf("unexpected error message: %v", err)
 		}
 	})
