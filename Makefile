@@ -194,13 +194,15 @@ install: build
 	install -Dm755 $(BUILD_DIR)/$(BINARY_NAME) $(DESTDIR)$(BINDIR)/$(BINARY_NAME)
 	# Install wrapper script
 	install -Dm755 data/chairlift-wrapper.sh $(DESTDIR)$(BINDIR)/chairlift-wrapper
-	# Install the Livery and Updates GSettings schemas, then recompile the system schema
-	# cache so `gsettings` can see them.
+	# Install ChairLift's GSettings schemas — Livery preferences, Updates
+	# preferences, and the first-run disposition — then recompile the system
+	# schema cache so `gsettings` can see them.
 	install -Dm644 data/io.projectbluefin.chairlift.livery.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	install -Dm644 data/io.projectbluefin.chairlift.updates.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
 	install -Dm644 data/io.projectbluefin.chairlift.firstrun.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.firstrun.gschema.xml
 	# Only for a direct install. Under DESTDIR the tree is a staging area
-	# holding this schema alone, so compiling there would produce a
+	# holding these schemas alone, so compiling there would produce a
+	# gschemas.compiled containing only ChairLift's schemas — and a package
 	# shipping that file would overwrite the system cache and break GSettings
 	# for every other application. Packages run glib-compile-schemas from
 	# their postinstall scriptlet instead; see packaging/postinstall.sh.

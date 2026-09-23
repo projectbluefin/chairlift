@@ -20,6 +20,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views"
 
 	"github.com/frostyard/snowkit/gobj"
+	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gio"
@@ -640,9 +641,28 @@ func (w *Window) PresentFirstRun() {
 }
 
 // CheckFirstRun presents the onboarding assistant if required on startup.
+//
+// The disposition probe spawns `gsettings`, so it must not run inline here:
+// onActivate is the GTK startup path, and internal/livery documents why
+// subprocess probes were moved off it. An explicit request needs no probe at
+// all, and under --dry-run automated presentation is suppressed outright
+// (ADR-0014), so neither shape pays for a spawn.
 func (w *Window) CheckFirstRun(explicitSetup bool) {
-	store := firstrun.NewGSettingsStore()
-	if firstrun.ShouldPresent(context.Background(), dryrun.Enabled(), explicitSetup, store) {
+	if explicitSetup {
 		w.PresentFirstRun()
+		return
 	}
+	if dryrun.Enabled() {
+		return
+	}
+
+	go func() {
+		store := firstrun.NewGSettingsStore()
+		if !firstrun.ShouldPresent(context.Background(), false, false, store) {
+			return
+		}
+		sgtk.RunOnMainThread(func() {
+			w.PresentFirstRun()
+		})
+	}()
 }

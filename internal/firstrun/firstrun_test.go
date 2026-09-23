@@ -2,6 +2,7 @@ package firstrun
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -294,5 +295,93 @@ func TestAssetPathResolvesExistingFile(t *testing.T) {
 	}
 	if info.Size() == 0 {
 		t.Errorf("asset file %s is empty", path)
+	}
+}
+
+// TestAdvanceDisplaysEveryStepBeforeCompleting pins the distinction the view
+// got wrong: a move onto the final step must hand that step back for display,
+// not report completion because no step follows it.
+func TestAdvanceDisplaysEveryStepBeforeCompleting(t *testing.T) {
+	model := NewAssistantModel(func(page, group string) bool { return true })
+
+	if _, dismissed, _ := model.SelectFlow(FlowChoiceConfigure); dismissed {
+		t.Fatal("configure flow dismissed instead of advancing")
+	}
+
+	displayed := []string{model.CurrentStep().ID}
+	for {
+		step, done := model.Advance()
+		if done {
+			break
+		}
+		displayed = append(displayed, step.ID)
+	}
+
+	want := []string{StepIDTheme, StepIDApps, StepIDDeveloper, StepIDAI}
+	if len(displayed) != len(want) {
+		t.Fatalf("displayed steps = %v, want %v", displayed, want)
+	}
+	for i, id := range want {
+		if displayed[i] != id {
+			t.Errorf("displayed[%d] = %q, want %q", i, displayed[i], id)
+		}
+	}
+}
+
+// TestAdvanceFromTheOnlyStepCompletes covers the welcome-only sequence, where
+// there is genuinely nothing to display next.
+func TestAdvanceFromTheOnlyStepCompletes(t *testing.T) {
+	model := NewAssistantModel(func(page, group string) bool { return false })
+
+	if step, done := model.Advance(); !done || step.ID != "" {
+		t.Errorf("Advance() = (%v, %v), want (zero step, true)", step, done)
+	}
+}
+
+func TestGetDispositionReportsAMissingSchema(t *testing.T) {
+	original := runCommand
+	defer func() { runCommand = original }()
+
+	calls := 0
+	runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+		calls++
+		return "No such schema “" + SchemaID + "”", errors.New("exit status 1")
+	}
+
+	disp, err := NewGSettingsStore().GetDisposition(context.Background())
+	if !errors.Is(err, ErrSchemaMissing) {
+		t.Errorf("err = %v, want ErrSchemaMissing", err)
+	}
+	if disp != DispositionNotAddressed {
+		t.Errorf("disp = %v, want DispositionNotAddressed", disp)
+	}
+	if calls != 1 {
+		t.Errorf("gsettings spawned %d times, want 1", calls)
+	}
+}
+
+func TestGetDispositionReadsEveryKeyInOneSpawn(t *testing.T) {
+	original := runCommand
+	defer func() { runCommand = original }()
+
+	calls := 0
+	runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
+		calls++
+		if len(args) < 2 || args[0] != "list-recursively" {
+			t.Errorf("unexpected gsettings invocation %v", args)
+		}
+		return SchemaID + " " + KeyCompletedVersion + " '1.2.3'\n" +
+			SchemaID + " " + KeyDisposition + " ''\n", nil
+	}
+
+	disp, err := NewGSettingsStore().GetDisposition(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisposition: %v", err)
+	}
+	if disp != DispositionCompleted {
+		t.Errorf("disp = %v, want DispositionCompleted (completed-version set by an earlier build)", disp)
+	}
+	if calls != 1 {
+		t.Errorf("gsettings spawned %d times, want 1", calls)
 	}
 }

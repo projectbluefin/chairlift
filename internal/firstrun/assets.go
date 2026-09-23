@@ -60,17 +60,13 @@ func Wordmark(dark bool) ([]byte, error) {
 
 // AssetPath returns a filesystem path for the requested embedded asset.
 //
-// If the file exists directly under the current directory or repository tree
-// (e.g. during local development), that path is returned. Otherwise, the embedded
-// bytes are written to a process-scoped temporary directory so GTK and librsvg
-// can load the vector graphic via file path.
+// The embedded bytes are written to a process-scoped temporary directory so
+// GTK and librsvg can load the vector graphic via file path. The embedded
+// copy is the only source: an earlier version preferred
+// internal/firstrun/<name> relative to the working directory as a
+// development convenience, which meant a binary launched from an untrusted
+// directory rendered an attacker-planted SVG through librsvg.
 func AssetPath(name string) (string, error) {
-	// First check local disk path relative to repo or working tree
-	direct := filepath.Join("internal", "firstrun", name)
-	if info, err := os.Stat(direct); err == nil && !info.IsDir() {
-		return direct, nil
-	}
-
 	data, err := Asset(name)
 	if err != nil {
 		return "", err

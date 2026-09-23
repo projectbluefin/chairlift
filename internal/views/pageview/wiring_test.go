@@ -120,6 +120,23 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "firstrun.go",
+			required: []string{
+				"pageview.GetMovingDescription(",
+				"pageview.ConfigStepInfoSubtitle(",
+				// Advance owns the "is there a step left to display" answer.
+				"a.model.Advance(",
+			},
+			retired: []string{
+				// Asking HasNext after Next skipped the final step: the move
+				// onto it already made HasNext false, so the dialog closed
+				// and recorded completion without ever showing it.
+				"a.model.HasNext()",
+				`"Control Center"`,
+				`infoRow.SetSubtitle("`,
+			},
+		},
+		{
 			file:     "help_page.go",
 			required: []string{"pageview.HelpResources("},
 			retired:  []string{`row.SetTitle("Website")`, `row.SetTitle("Report Issues")`},

@@ -132,7 +132,7 @@ func (a *FirstRunAssistant) buildUI() {
 	secondaryBtn.AddCssClass("flat")
 	secondaryBtn.AddCssClass("pill")
 	secondaryBtn.SetSizeRequest(240, 38)
-	secondaryBtn.SetTooltipText(pageview.GetMovingDescription)
+	secondaryBtn.SetTooltipText(pageview.GetMovingDescription())
 	actionBox.Append(&secondaryBtn.Widget)
 
 	welcomeBox.Append(&actionBox.Widget)
@@ -165,8 +165,8 @@ func (a *FirstRunAssistant) buildUI() {
 
 	stepGroup := adw.NewPreferencesGroup()
 	infoRow := adw.NewActionRow()
-	infoRow.SetTitle("Onboarding Configuration")
-	infoRow.SetSubtitle("Configuration for this step can be adjusted at any time in Control Center.")
+	infoRow.SetTitle(pageview.ConfigStepInfoTitle)
+	infoRow.SetSubtitle(pageview.ConfigStepInfoSubtitle())
 	stepGroup.Add(&infoRow.Widget)
 	configBox.Append(&stepGroup.Widget)
 
@@ -261,8 +261,8 @@ func (a *FirstRunAssistant) onBack() {
 }
 
 func (a *FirstRunAssistant) onFinish() {
-	_, finished, _ := a.model.Next()
-	if finished || !a.model.HasNext() {
+	step, done := a.model.Advance()
+	if done {
 		if err := a.store.SetDisposition(context.Background(), firstrun.DispositionCompleted); err != nil {
 			log.Printf("firstrun: saving completed disposition: %v", err)
 		}
@@ -270,11 +270,10 @@ func (a *FirstRunAssistant) onFinish() {
 		if a.toastAdder != nil {
 			a.toastAdder.ShowToast("Setup completed!")
 		}
-	} else {
-		step := a.model.CurrentStep()
-		a.configStepTitle.SetText(step.Title)
-		a.configStepDesc.SetText(step.Description)
+		return
 	}
+	a.configStepTitle.SetText(step.Title)
+	a.configStepDesc.SetText(step.Description)
 }
 
 // Present displays the assistant dialog attached to the given parent widget.

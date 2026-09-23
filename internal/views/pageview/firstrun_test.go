@@ -54,6 +54,11 @@ func TestGetMovingToastMessageContainsAppNameAndCommand(t *testing.T) {
 	if !strings.Contains(msg, "chairlift") {
 		t.Errorf("toast message %q does not mention chairlift command", msg)
 	}
+	// Issue #265 specifies "by running `chairlift`." — a space before the
+	// period reads as a typo in a toast the user cannot dismiss and reread.
+	if strings.Contains(msg, " .") {
+		t.Errorf("toast message %q has a stray space before the period", msg)
+	}
 	if !strings.Contains(msg, "Application Menu") {
 		t.Errorf("toast message %q does not mention Application Menu", msg)
 	}
@@ -75,7 +80,35 @@ func TestWelcomeActionHeadingsAndSubtitlesAreNonEmpty(t *testing.T) {
 	if GetMovingAction == "" {
 		t.Error("GetMovingAction must not be empty")
 	}
-	if GetMovingDescription == "" {
+	if GetMovingDescription() == "" {
 		t.Error("GetMovingDescription must not be empty")
+	}
+	if ConfigStepInfoSubtitle() == "" {
+		t.Error("ConfigStepInfoSubtitle must not be empty")
+	}
+}
+
+// TestFirstRunCopyNamesTheProductThroughBranding holds the branding package's
+// ownership of the user-facing product name: a literal here drifts silently on
+// rename, because installcheck's display-name gate only covers the code name.
+func TestFirstRunCopyNamesTheProductThroughBranding(t *testing.T) {
+	for name, text := range map[string]string{
+		"GetMovingDescription":   GetMovingDescription(),
+		"ConfigStepInfoSubtitle": ConfigStepInfoSubtitle(),
+		"GetMovingToastMessage":  GetMovingToastMessage(),
+	} {
+		if !strings.Contains(text, branding.AppName) {
+			t.Errorf("%s() = %q, does not name branding.AppName %q", name, text, branding.AppName)
+		}
+	}
+
+	for name, format := range map[string]string{
+		"GetMovingDescriptionFormat":   GetMovingDescriptionFormat,
+		"ConfigStepInfoSubtitleFormat": ConfigStepInfoSubtitleFormat,
+		"GetMovingToastFormat":         GetMovingToastFormat,
+	} {
+		if !strings.Contains(format, "%s") {
+			t.Errorf("%s = %q, must interpolate the product name", name, format)
+		}
 	}
 }

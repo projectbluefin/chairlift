@@ -3,6 +3,7 @@ package firstrun
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -66,6 +67,14 @@ func (m *MemoryStore) SetDisposition(ctx context.Context, d Disposition) error {
 	return nil
 }
 
+// ErrSchemaMissing reports that the firstrun settings schema is not installed.
+//
+// A user-scoped install whose schema was never compiled into the system cache
+// answers every read with "No such schema"; that is a different condition from
+// a key the schema does not yet carry, and the caller must be able to tell
+// them apart.
+var ErrSchemaMissing = errors.New("firstrun: the firstrun settings schema is not installed")
+
 // GSettingsStore manages persistence through GSettings.
 type GSettingsStore struct{}
 
@@ -88,29 +97,59 @@ func execCommand(ctx context.Context, name string, args ...string) (string, erro
 	return stdout.String(), nil
 }
 
-// GetDisposition reads the current setup state from GSettings.
-func (g *GSettingsStore) GetDisposition(ctx context.Context) (Disposition, error) {
-	out, err := runCommand(ctx, "gsettings", "get", SchemaID, KeyDisposition)
+// readAll returns every key in the firstrun schema from a single call.
+//
+// One `gsettings get` per key is one subprocess per key, and internal/livery
+// documents why provider probes were deliberately moved off the GTK startup
+// path for exactly that cost. `list-recursively` answers the whole schema in
+// one spawn; its output is one "<schema> <key> <value>" line per key.
+func readAll(ctx context.Context) (map[string]string, error) {
+	out, err := runCommand(ctx, "gsettings", "list-recursively", SchemaID)
 	if err != nil {
-		verOut, verErr := runCommand(ctx, "gsettings", "get", SchemaID, KeyCompletedVersion)
-		if verErr == nil {
-			val := unquote(strings.TrimSpace(verOut))
-			if val != "" {
-				return DispositionCompleted, nil
-			}
+		if isMissingSchema(out) {
+			return nil, ErrSchemaMissing
 		}
+		return nil, fmt.Errorf("firstrun: reading settings: %w: %s", err, strings.TrimSpace(out))
+	}
+	values := make(map[string]string, len(Keys))
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.SplitN(strings.TrimSpace(line), " ", 3)
+		if len(fields) < 3 || fields[0] != SchemaID {
+			continue
+		}
+		values[fields[1]] = unquote(strings.TrimSpace(fields[2]))
+	}
+	if len(values) == 0 {
+		return nil, ErrSchemaMissing
+	}
+	return values, nil
+}
+
+func isMissingSchema(out string) bool {
+	return strings.Contains(out, "No such schema") || strings.Contains(out, "not installed")
+}
+
+// GetDisposition reads the current setup state from GSettings.
+//
+// A schema carrying a completed version but no recognized disposition is a
+// setup finished by an earlier build, before the disposition key existed.
+func (g *GSettingsStore) GetDisposition(ctx context.Context) (Disposition, error) {
+	values, err := readAll(ctx)
+	if err != nil {
 		return DispositionNotAddressed, err
 	}
 
-	val := unquote(strings.TrimSpace(out))
-	switch val {
+	switch values[KeyDisposition] {
 	case string(DispositionSkipped):
 		return DispositionSkipped, nil
 	case string(DispositionCompleted):
 		return DispositionCompleted, nil
-	default:
-		return DispositionNotAddressed, nil
 	}
+
+	if values[KeyCompletedVersion] != "" {
+		return DispositionCompleted, nil
+	}
+	return DispositionNotAddressed, nil
 }
 
 // SetDisposition writes the updated setup state to GSettings.
@@ -123,12 +162,18 @@ func (g *GSettingsStore) SetDisposition(ctx context.Context, d Disposition) erro
 		return nil
 	}
 
-	if _, err := runCommand(ctx, "gsettings", "set", SchemaID, KeyDisposition, strconv.Quote(string(d))); err != nil {
+	if out, err := runCommand(ctx, "gsettings", "set", SchemaID, KeyDisposition, strconv.Quote(string(d))); err != nil {
+		if isMissingSchema(out) {
+			return ErrSchemaMissing
+		}
 		return fmt.Errorf("firstrun: writing disposition: %w", err)
 	}
 
 	if d == DispositionCompleted {
-		if _, err := runCommand(ctx, "gsettings", "set", SchemaID, KeyCompletedVersion, strconv.Quote(version.Version)); err != nil {
+		if out, err := runCommand(ctx, "gsettings", "set", SchemaID, KeyCompletedVersion, strconv.Quote(version.Version)); err != nil {
+			if isMissingSchema(out) {
+				return ErrSchemaMissing
+			}
 			return fmt.Errorf("firstrun: writing completed version: %w", err)
 		}
 	}

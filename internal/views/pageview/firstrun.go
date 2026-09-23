@@ -23,12 +23,31 @@ const (
 	// GetMovingAction is the label for immediately exiting the wizard to the desktop.
 	GetMovingAction = "Get Moving"
 
-	// GetMovingDescription describes skipping the wizard while affirming Control Center availability.
-	GetMovingDescription = "Jump straight to your desktop. You can open Control Center anytime from the Application Menu or terminal."
+	// GetMovingDescriptionFormat is the template describing the skip action;
+	// the product name is interpolated from branding.AppName.
+	GetMovingDescriptionFormat = "Jump straight to your desktop. You can open %s anytime from the Application Menu or terminal."
+
+	// ConfigStepInfoTitle heads the reassurance row on a configuration step.
+	ConfigStepInfoTitle = "Onboarding Configuration"
+
+	// ConfigStepInfoSubtitleFormat is the template reassuring the user the
+	// choice is not final; the product name comes from branding.AppName.
+	ConfigStepInfoSubtitleFormat = "Configuration for this step can be adjusted at any time in %s."
 
 	// GetMovingToastFormat is the template for the reassuring exit toast.
-	GetMovingToastFormat = "You're ready to go! You can launch %s anytime from the Application Menu or by running chairlift ."
+	GetMovingToastFormat = "You're ready to go! You can launch %s anytime from the Application Menu or by running chairlift."
 )
+
+// GetMovingDescription describes skipping the wizard while affirming the
+// application remains available afterwards.
+func GetMovingDescription() string {
+	return fmt.Sprintf(GetMovingDescriptionFormat, branding.AppName)
+}
+
+// ConfigStepInfoSubtitle returns the reassurance subtitle for a configuration step.
+func ConfigStepInfoSubtitle() string {
+	return fmt.Sprintf(ConfigStepInfoSubtitleFormat, branding.AppName)
+}
 
 // GetMovingToastMessage returns the affirming status toast text.
 func GetMovingToastMessage() string {
@@ -61,7 +80,7 @@ func NewWelcomeViewModel(isDark bool) WelcomeViewModel {
 		PrimaryButtonText:      ConfigureEverythingAction,
 		PrimaryButtonTooltip:   ConfigureEverythingDescription,
 		SecondaryButtonText:    GetMovingAction,
-		SecondaryButtonTooltip: GetMovingDescription,
+		SecondaryButtonTooltip: GetMovingDescription(),
 		DefaultIsPrimary:       true,
 		DinosaurAsset:          firstrun.AssetDinosaur,
 		WordmarkAsset:          wordmark,

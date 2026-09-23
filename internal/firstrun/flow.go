@@ -172,6 +172,22 @@ func (m *AssistantModel) Next() (next *Step, finished bool, disp Disposition) {
 	return nil, true, DispositionCompleted
 }
 
+// Advance moves to the following step and reports what the view must display.
+//
+// Next reports finished only when there was no step left to move onto, so a
+// move onto the *last* step returns that step with finished = false. Asking
+// HasNext after the move instead answers false at that point — it describes
+// the step after the one just reached — which closed the dialog without ever
+// displaying the final step. Advance is the single answer both the view and
+// this package's tests use, so that distinction cannot be re-derived wrong.
+func (m *AssistantModel) Advance() (step Step, done bool) {
+	next, finished, _ := m.Next()
+	if finished || next == nil {
+		return Step{}, true
+	}
+	return *next, false
+}
+
 // Previous moves back to the preceding step.
 func (m *AssistantModel) Previous() (prev *Step, ok bool) {
 	if m.current > 0 {
