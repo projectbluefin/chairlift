@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -245,6 +246,12 @@ func TestBrewIsInstalledEndToEnd(t *testing.T) {
 // is reused for the process lifetime even after $PATH changes underneath it.
 // It is the only test that may consume the package-level installedOnce.
 func TestCachedInstallCheckRunsOnce(t *testing.T) {
+	installedOnce = sync.Once{}
+	installedResult = false
+	t.Cleanup(func() {
+		installedOnce = sync.Once{}
+		installedResult = false
+	})
 	argvLog := fakeBrewOnPath(t, "exit 0")
 
 	first := IsInstalledCached()

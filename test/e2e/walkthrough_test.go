@@ -142,6 +142,9 @@ func TestWalkthroughScreenshots(t *testing.T) {
 
 	assertBluefinGroupsRendered(t, outDir)
 	assertUpdateAllRendered(t, outDir)
+	// The reset group is opt-in and the capture enables it explicitly; a
+	// higher-priority checkout config must not silently hide both rows.
+	findLogLine(t, outDir, "views: reset group built")
 
 	geometry, cropped := readWindowGeometry(t, outDir)
 

@@ -63,13 +63,24 @@ func (uh *UserHome) refreshChangelogAvailability(status *bootc.Status) {
 		booted = sbom.PinnedReference(status.Status.Booted.ImageRef(), status.Status.Booted.Digest())
 		staged = sbom.PinnedReference(status.Status.Staged.ImageRef(), status.Status.Staged.Digest())
 	}
+	changed := booted != uh.changelogBooted || staged != uh.changelogStaged
+	if changed {
+		if uh.bootcStageExpander != nil {
+			for _, section := range uh.changelogSections {
+				uh.bootcStageExpander.Remove(&section.Widget)
+			}
+		}
+		uh.changelogSections = nil
+	}
 
 	uh.changelogBooted = booted
 	uh.changelogStaged = staged
 
 	available := booted != "" && staged != ""
-	uh.changelogButton.SetSensitive(available)
-	uh.changelogRow.SetSubtitle(pageview.ChangelogRow(available).Subtitle)
+	if changed && uh.changelogButton.GetLabel() != "Comparing..." {
+		uh.changelogButton.SetSensitive(available)
+		uh.changelogRow.SetSubtitle(pageview.ChangelogRow(available).Subtitle)
+	}
 }
 
 // onChangelogClicked fetches both SBOMs and renders the diff.
@@ -87,14 +98,20 @@ func (uh *UserHome) onChangelogClicked() {
 	row.SetSubtitle("Downloading both package lists...")
 
 	go func() {
-		defer uh.changelogGate.Reset()
-
 		ctx, cancel := context.WithTimeout(context.Background(), changelogTimeout)
 		defer cancel()
 
 		result, err := sbom.Compare(ctx, fetchSBOM, booted, staged)
 
 		sgtk.RunOnMainThread(func() {
+			defer uh.changelogGate.Reset()
+			if booted != uh.changelogBooted || staged != uh.changelogStaged {
+				available := uh.changelogBooted != "" && uh.changelogStaged != ""
+				button.SetSensitive(available)
+				button.SetLabel("Compare")
+				row.SetSubtitle(pageview.ChangelogRow(available).Subtitle)
+				return
+			}
 			button.SetSensitive(true)
 			button.SetLabel("Compare")
 

@@ -84,9 +84,12 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		"NO_AT_BRIDGE=1",
 		"GTK_A11Y=none",
 		"GSETTINGS_BACKEND=memory",
+		"G_DEBUG=fatal-criticals",
 		"HOME="+home,
 	)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// A fresh session includes Homebrew children even when they create their own
+	// process groups. Never scan or signal the test runner's shared session.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	output := &lockedBuffer{}
 	cmd.Stdout = output
 	cmd.Stderr = output
@@ -108,7 +111,7 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 	// reported as a nondeterministic `directory not empty`. Registering it
 	// rather than calling it on each exit path also covers the paths that end
 	// in t.Fatal.
-	t.Cleanup(func() { stopProcessGroup(t, cmd, done) })
+	t.Cleanup(func() { stopProcessSession(t, cmd, done) })
 
 	want := []string{
 		"Running in dry-run mode",
@@ -175,6 +178,7 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 	for _, path := range []string{
 		"usr/share/chairlift/config.yml",
 		"usr/share/applications/io.projectbluefin.chairlift.desktop",
+		"usr/share/glib-2.0/schemas/io.projectbluefin.chairlift.livery.gschema.xml",
 		"usr/share/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg",
 		"usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg",
 		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
@@ -305,19 +309,16 @@ func missingOutput(output string, markers []string) string {
 	return strings.Join(missing, ", ")
 }
 
-// stopProcessGroup ends the smoke run and does not return while any of it is
-// still running. Reaping the leader is not enough: startup's Homebrew readers
-// are grandchildren, so they are reparented to init rather than to this test,
-// `cmd.Wait` never observes them, and they keep creating files under the
-// temporary HOME after the leader is gone.
-func stopProcessGroup(t *testing.T, cmd *exec.Cmd, done <-chan error) {
+// stopProcessSession ends the smoke run and drains every subprocess in its
+// private session, including Homebrew workers in new process groups. Reaping
+// the leader alone cannot stop grandchildren still writing into temporary HOME.
+func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	t.Helper()
 
 	group := cmd.Process.Pid
-	// Once the leader has been reaped the group id is a PID the kernel may
-	// hand to an unrelated process, so the whole-group signals below are only
-	// safe while it is still running. The drain that follows signals the
-	// surviving members individually for the same reason.
+	// Once the leader has been reaped its process-group ID may be reused;
+	// group-wide signals are safe only while it is alive. The later session
+	// scan signals remaining workers individually, including other groups.
 	if !hasExited(done) {
 		if err := syscall.Kill(-group, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 			t.Errorf("terminate ChairLift smoke process group: %v", err)
@@ -332,8 +333,8 @@ func stopProcessGroup(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 		}
 	}
 
-	if err := awaitProcessGroupExit(hostDrain(), group, shutdownTimeout, drainTimeout); err != nil {
-		t.Errorf("ChairLift smoke process group %d: %v", group, err)
+	if err := awaitSessionExit(hostDrain(), group, shutdownTimeout, drainTimeout); err != nil {
+		t.Errorf("ChairLift smoke session %d: %v", group, err)
 	}
 }
 
@@ -346,37 +347,37 @@ func hasExited(done <-chan error) bool {
 	}
 }
 
-// procGroupDrain is what awaitProcessGroupExit needs from the host: the process
+// sessionDrain is what awaitSessionExit needs from the host: the process
 // table to scan and the signal to send. The smoke test hands it the kernel's,
 // so that the drain acts on the processes actually holding the temporary HOME
 // open; the unit tests hand it a fixture, so the escalation can be observed
 // without racing real processes.
-type procGroupDrain struct {
+type sessionDrain struct {
 	procTable string
 	kill      func(pid int) error
 }
 
-func hostDrain() procGroupDrain {
-	return procGroupDrain{
+func hostDrain() sessionDrain {
+	return sessionDrain{
 		procTable: defaultProcTable,
 		kill:      func(pid int) error { return syscall.Kill(pid, syscall.SIGKILL) },
 	}
 }
 
-// awaitProcessGroupExit blocks until no live process is left in group, killing
+// awaitSessionExit blocks until no live process is left in the private session, killing
 // whatever ignored the earlier signal once escalateAfter has passed. It kills
 // on every scan from then on rather than sweeping once: a member that forks
 // during or after a single sweep leaves a child that was never signalled, and
 // the drain would then only poll to its own timeout while that child keeps
 // writing into the temporary HOME.
 //
-// The group's leader must already have been reaped: its PID is the group id,
-// and once the kernel is free to reuse that PID an unrelated process would look
-// like a member, so the id itself is never counted or signalled here.
-func awaitProcessGroupExit(drain procGroupDrain, group int, escalateAfter, timeout time.Duration) error {
+// The session's leader must already have been reaped: its PID is the session
+// id, and once the kernel is free to reuse that PID an unrelated process might
+// wear it. The leader PID itself is never counted or signalled here.
+func awaitSessionExit(drain sessionDrain, sessionID int, escalateAfter, timeout time.Duration) error {
 	start := time.Now()
 	for {
-		members, err := liveProcessGroupMembers(drain.procTable, group)
+		members, err := liveSessionMembers(drain.procTable, sessionID)
 		if err != nil {
 			return err
 		}
@@ -387,10 +388,10 @@ func awaitProcessGroupExit(drain procGroupDrain, group int, escalateAfter, timeo
 		elapsed := time.Since(start)
 		if elapsed >= escalateAfter {
 			for _, member := range members {
-				// By PID, not by group: the group id may have been recycled
-				// since the leader was reaped, and signalling it would reach a
-				// stranger. A member can still exit between this scan and the
-				// signal, so this is subject to the ordinary kill-by-PID race
+				// By PID, not by group: signalling the leader's recycled
+				// process-group ID could reach an unrelated process. A member
+				// can still exit between this scan and the signal, so this is
+				// subject to the ordinary kill-by-PID race
 				// on a recycled PID; ESRCH is the expected outcome there, and
 				// repeating SIGKILL on a PID already killed is harmless.
 				if err := drain.kill(member.pid); err != nil && !errors.Is(err, syscall.ESRCH) {
@@ -405,17 +406,17 @@ func awaitProcessGroupExit(drain procGroupDrain, group int, escalateAfter, timeo
 	}
 }
 
-// processGroupMember is one entry of the kernel's process table.
-type processGroupMember struct {
+// sessionMember is one entry of the kernel's process table.
+type sessionMember struct {
 	pid  int
 	name string
 }
 
-func (member processGroupMember) String() string {
+func (member sessionMember) String() string {
 	return fmt.Sprintf("%s (pid %d)", member.name, member.pid)
 }
 
-func describeMembers(members []processGroupMember) string {
+func describeMembers(members []sessionMember) string {
 	described := make([]string, 0, len(members))
 	for _, member := range members {
 		described = append(described, member.String())
@@ -430,23 +431,20 @@ func plural(count int, noun string) string {
 	return fmt.Sprintf("%d %ss", count, noun)
 }
 
-// liveProcessGroupMembers reports the processes under procTable that belong to
-// the given process group and can still execute, in ascending PID order.
-// Zombies are excluded deliberately: an exited-but-unreaped process answers
-// signal 0 and owns a PID, yet it has no address space and cannot write a
-// file, so waiting for one would mean waiting on a reaper that is not this
-// test. The group's own id is excluded for the reason given above
-// awaitProcessGroupExit.
-func liveProcessGroupMembers(procTable string, group int) ([]processGroupMember, error) {
+// liveSessionMembers reports processes under procTable in the private session,
+// even if a child changed process group with Setpgid. Zombies cannot write to
+// HOME and are excluded. The session leader PID is excluded because it was
+// reaped before this scan and may have been recycled.
+func liveSessionMembers(procTable string, sessionID int) ([]sessionMember, error) {
 	entries, err := os.ReadDir(procTable)
 	if err != nil {
 		return nil, fmt.Errorf("read the process table at %s: %w", procTable, err)
 	}
 
-	members := make([]processGroupMember, 0, 4)
+	members := make([]sessionMember, 0, 4)
 	for _, entry := range entries {
 		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || pid == group {
+		if err != nil || pid == sessionID {
 			continue
 		}
 		// A process that exits between the listing and the read is exactly
@@ -455,35 +453,35 @@ func liveProcessGroupMembers(procTable string, group int) ([]processGroupMember,
 		if err != nil {
 			continue
 		}
-		name, state, pgrp, ok := parseProcessStat(string(stat))
-		if !ok || pgrp != group || state == "Z" {
+		name, state, session, ok := parseProcessStat(string(stat))
+		if !ok || session != sessionID || state == "Z" {
 			continue
 		}
-		members = append(members, processGroupMember{pid: pid, name: name})
+		members = append(members, sessionMember{pid: pid, name: name})
 	}
 	sort.Slice(members, func(i, j int) bool { return members[i].pid < members[j].pid })
 	return members, nil
 }
 
-// parseProcessStat reads the command name, run state, and process group out of
+// parseProcessStat reads the command name, run state, and session out of
 // a /proc/<pid>/stat line. The command is parenthesized and may itself contain
 // spaces and parentheses, so the fixed fields are taken after the final ')'
 // rather than by splitting the whole line.
-func parseProcessStat(stat string) (name, state string, group int, ok bool) {
+func parseProcessStat(stat string) (name, state string, session int, ok bool) {
 	open := strings.Index(stat, "(")
 	closed := strings.LastIndex(stat, ")")
 	if open < 0 || closed < open {
 		return "", "", 0, false
 	}
 	fields := strings.Fields(stat[closed+1:])
-	if len(fields) < 3 {
+	if len(fields) < 4 {
 		return "", "", 0, false
 	}
-	group, err := strconv.Atoi(fields[2])
+	session, err := strconv.Atoi(fields[3])
 	if err != nil {
 		return "", "", 0, false
 	}
-	return stat[open+1 : closed], fields[0], group, true
+	return stat[open+1 : closed], fields[0], session, true
 }
 
 func repoRoot(t *testing.T) string {

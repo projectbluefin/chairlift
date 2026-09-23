@@ -16,6 +16,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/updateall"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/badgestate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -235,12 +236,15 @@ func hostRunner() updateall.Runner {
 			}
 			return <-done
 		},
-		StagedAfter: func(ctx context.Context) (bool, string) {
+		StagedAfter: func(ctx context.Context) (bool, string, error) {
 			status, err := bootc.GetStatus(ctx)
-			if err != nil || status.Status.Staged == nil {
-				return false, ""
+			if err != nil {
+				return false, "", err
 			}
-			return true, status.Status.Staged.Version()
+			if status.Status.Staged == nil {
+				return false, "", nil
+			}
+			return true, status.Status.Staged.Version(), nil
 		},
 		UpdateFlatpak: func(ctx context.Context) error {
 			// The empty application ID updates every installed application;
@@ -251,7 +255,10 @@ func hostRunner() updateall.Runner {
 			return flatpak.Update(ctx, "", true)
 		},
 		UpdateBrew: func(ctx context.Context) error {
-			return homebrew.Update(ctx)
+			if err := homebrew.Update(ctx); err != nil {
+				return err
+			}
+			return homebrew.Upgrade(ctx, "")
 		},
 	}
 }
@@ -265,7 +272,9 @@ func (uh *UserHome) onUpdateAllClicked(plan []updateall.Phase) {
 
 	uh.updateAllBtn.SetSensitive(false)
 	uh.updateAllBtn.SetLabel("Updating…")
-	uh.updateAllRestart.SetVisible(false)
+	if !dryrun.Enabled() {
+		uh.updateAllRestart.SetSensitive(false)
+	}
 	for _, phase := range plan {
 		if row := uh.updateAllPhases[string(phase.ID)]; row != nil {
 			row.SetSubtitle(pageview.UpdateAllPhaseSubtitle(false, ""))
@@ -305,6 +314,9 @@ func (uh *UserHome) applyUpdateAllEvent(event updateall.Event) {
 	detail := ""
 	if !running {
 		detail = event.Result.Detail
+		if dryrun.Enabled() && event.Result.Outcome == updateall.OutcomeSucceeded {
+			detail = "[DRY-RUN] Preview: no changes made"
+		}
 	}
 	phaseID := string(event.Phase.ID)
 
@@ -321,24 +333,95 @@ func (uh *UserHome) applyUpdateAllEvent(event updateall.Event) {
 // prompt when an image was actually staged.
 func (uh *UserHome) finishUpdateAll(results []updateall.Result) {
 	summary := updateall.Summarize(results)
+	// Update All can stage the OS through the same bootc path as the dedicated
+	// button. Its completion must refresh that button's state and Compare too.
+	var status *bootc.Status
+	for _, result := range results {
+		if result.Phase.ID == updateall.PhaseOS {
+			ctx, cancel := bootc.DefaultContext()
+			var err error
+			status, err = bootc.GetStatus(ctx)
+			cancel()
+			count := 0
+			if err == nil && status.Status.Staged != nil {
+				count = 1
+			}
+			uh.updateCounts.SetObserved(badgestate.Bootc, count, err == nil)
+			uh.updateBadgeCount()
+			if err != nil {
+				status = nil
+				log.Printf("views: could not refresh bootc status after Update All: %v", err)
+			}
+			break
+		}
+	}
 
 	log.Printf("views: update all finished succeeded=%d failed=%d skipped=%d restart_required=%v",
 		summary.Succeeded, summary.Failed, summary.Skipped, summary.RestartRequired)
 
 	sgtk.RunOnMainThread(func() {
-		uh.updateAllGate.Complete()
+		uh.updateAllGate.Reset()
+		if status != nil {
+			uh.refreshChangelogAvailability(status)
+			if uh.bootcStageExpander != nil {
+				staged := status.Status.Staged != nil
+				version := ""
+				if staged {
+					version = status.Status.Staged.Version()
+				}
+				uh.bootcStageExpander.SetSubtitle(pageview.BootcUpdateSubtitle(staged, version))
+			}
+		}
 
 		if uh.updateAllBtn != nil {
 			uh.updateAllBtn.SetSensitive(true)
 			uh.updateAllBtn.SetLabel("Update All")
 		}
+		if dryrun.Enabled() {
+			message := "[DRY-RUN] Preview: no changes made"
+			if summary.Failed > 0 {
+				message = fmt.Sprintf("[DRY-RUN] Preview incomplete: %d check(s) failed; no changes made", summary.Failed)
+			}
+			if uh.updateAllRow != nil {
+				uh.updateAllRow.SetSubtitle(message)
+			}
+			if summary.Failed > 0 {
+				uh.toastAdder.ShowErrorToast(message)
+			} else {
+				uh.toastAdder.ShowToast(message)
+			}
+			return
+		}
 		if uh.updateAllRow != nil {
 			uh.updateAllRow.SetSubtitle(summary.Headline)
 		}
-		if uh.updateAllRestart != nil && summary.RestartRequired {
-			presentation := pageview.RestartRow(summary.StagedVersion)
-			uh.updateAllRestart.SetSubtitle(presentation.Subtitle)
-			uh.updateAllRestart.SetVisible(true)
+		if uh.updateAllRestart != nil {
+			uh.updateAllRestart.SetSensitive(true)
+			if status != nil {
+				if staged := status.Status.Staged; staged != nil {
+					uh.updateAllRestart.SetSubtitle(pageview.RestartRow(staged.Version()).Subtitle)
+					uh.updateAllRestart.SetVisible(true)
+				} else {
+					uh.updateAllRestart.SetVisible(false)
+				}
+			} else if summary.RestartRequired {
+				uh.updateAllRestart.SetSubtitle(pageview.RestartRow(summary.StagedVersion).Subtitle)
+				uh.updateAllRestart.SetVisible(true)
+			}
+		}
+		// A failed or canceled phase may have applied some updates. Re-query
+		// every planned provider, including partially completed phases.
+		for _, result := range results {
+			switch result.Phase.ID {
+			case updateall.PhaseFlatpak:
+				if uh.flatpakUpdatesExpander != nil {
+					uh.loadFlatpakUpdates()
+				}
+			case updateall.PhaseBrew:
+				if uh.outdatedExpander != nil {
+					uh.loadOutdatedPackages()
+				}
+			}
 		}
 
 		notification := notify.UpdateAllComplete(summary.Succeeded, summary.Failed, summary.Skipped, summary.RestartRequired)

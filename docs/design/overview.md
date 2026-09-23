@@ -98,6 +98,14 @@ Application and Window are registered as GObject subtypes using `gobj.RegisterTy
 
 See `internal/app/app.go` and `internal/window/window.go`.
 
+`gobject.NewObject` forwards variadic arguments to GLib's C constructor.
+Object-valued properties need the native pointer (`app.Application.GoPointer()`),
+not the address of the Go binding wrapper (`&app.Application`), and the property
+list ends with `uintptr(0)`. Passing the wrapper address produced a
+`g_object_new_valist: invalid object type` critical on every window launch;
+the E2E startup runs with `G_DEBUG=fatal-criticals` so it fails rather than
+shipping a warning that normal GTK startup only logs.
+
 ### Async operations with main-thread dispatch
 
 All external tool calls run in goroutines. UI updates are marshaled back via `sgtk.RunOnMainThread()`:
@@ -1215,21 +1223,22 @@ message match `context.DeadlineExceeded` / `context.Canceled` under
 
 ### bootc progress UI (updates page)
 
-`onBootcStageClicked()` (`internal/views/updates_page.go`) drives the "System Update" expander: it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes the `ProgressEvent` channel on a second goroutine through `stageProgressSink` — `EventMessage` lines are batched by `internal/views/progresslog` and rendered into a log expander with their arrival timestamps, capped at the most recent `progresslog.DefaultLimit` rows, and `EventComplete` flushes the last batch and marks the activity complete. A returned `stageErr` drives the error subtitle and toast after the stream closes; there is no duplicate error event. After `wg.Wait()` returns, the handler re-reads live `bootc.GetStatus()` and calls `uh.updateCounts.Set(badgestate.Bootc, 0|1)` plus `uh.updateBadgeCount()` unconditionally in both dry-run and live mode (this is a plain read, not a mutation, so it always reflects reality); it then sets `expander`'s subtitle from that same live read unconditionally as well, but shows `actionmsg.BootcStage(dryrun.Enabled(), staged)` for the completion toast — an explicit preview string under dry-run rather than one of the "staged"/"up to date" strings that read as a verified completion claim about a click that, under dry-run, checked and changed nothing. The system page has a separate, simpler bootc path: `loadBootcStatus` (gated on `IsBootcBootedCached()`) calls `bootc.GetStatus` to show the booted/staged/rollback deployment images, versions, and digests, with no staging controls of its own — staging happens on the Updates page.
+`onBootcStageClicked()` (`internal/views/updates_page.go`) drives the "System Update" expander: it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes the `ProgressEvent` channel on a second goroutine through `stageProgressSink` — `EventMessage` lines are batched by `internal/views/progresslog` and rendered into a log expander with their arrival timestamps, capped at the most recent `progresslog.DefaultLimit` rows, and `EventComplete` flushes the last batch and marks the activity complete. A returned `stageErr` drives the error subtitle and toast after the stream closes; there is no duplicate error event. After `wg.Wait()`, the handler re-reads live `bootc.GetStatus()` and calls `SetObserved` for the badge: a successful read replaces the count, while a failed read preserves the last known count and shows a verification error instead of falsely claiming the image is current. The completion toast uses `actionmsg.BootcStage(dryrun.Enabled(), staged)` only when status is known — an explicit preview under dry-run instead of claiming a preview click staged anything. The system page has a separate read-only `loadBootcStatus` path for the booted/staged/rollback deployments; staging controls live on the Updates page.
 
 ### Update badge tracking
 
 The updates page stores bootc, sysupdate, Flatpak, and Homebrew counts in the
 mutex-backed `badgestate.Counts` value on `UserHome`. The bootc provider is 1
-when `bootc.GetStatus()` reports a staged deployment and 0 otherwise — a
-boolean folded into the total, not a count of available images. The sysupdate
-provider follows the same boolean rule: 1 when `sysupdate.GetStatus().IsStaged()`
-(the `/run/snosi/update-staged` semaphore exists, or the last check recorded
-`outcome=staged`) and 0 otherwise, including after a failed check — there is
-no persistent "available but unstaged" state because the snosi stager checks
-and stages in one run. Provider refreshes use
-`Set`, so a repeated load replaces rather than accumulates; successful
-row-level Homebrew upgrades use `Add(Homebrew, -1)`, which cannot go below
+when `bootc.GetStatus()` reports a staged deployment and 0 after a verified
+no-staged read — a boolean folded into the total, not a count of images. The
+sysupdate provider follows the same rule when `sysupdate.GetStatus()` reports
+`IsStaged()` (the `/run/snosi/update-staged` semaphore exists, or the last
+check recorded `outcome=staged`). An outcome of `failed` with readable files
+is a known unstaged state; an unreadable state file is not. Both providers
+use `SetObserved`, preserving the last known count on a read failure. Other
+provider refreshes use `Set`, so a repeated load replaces rather than
+accumulates; successful row-level Homebrew upgrades use
+`Add(Homebrew, -1)`, which cannot go below
 zero. `updateBadgeCount` reads the aggregate `Total` and pushes it through
 `ToastAdder.SetUpdateBadge()`. Refresh requests receive an increasing
 generation from `actionstate.RefreshGate`; only the newest request may apply
@@ -1354,8 +1363,28 @@ Each exported function's distinct outcomes:
 than applying it, and the stage script is idempotent — it exits 0 without
 staging when the system is already current. So the phase's success is not
 evidence that anything changed. The decision comes from the `StagedAfter`
-probe re-reading `bootc status`, and a missing probe resolves to "no restart
-needed" rather than to a spurious prompt.
+probe re-reading `bootc status`: a failed read fails the OS phase instead of
+claiming everything is current, while a missing probe does not invent a
+restart prompt.
+
+The Update All button remains reusable after a completed run: its gate resets
+when the button becomes sensitive again. A completed gate would make every
+subsequent click inert, including a retry after a failed or previewed run.
+
+When the plan includes an OS phase, completion also re-reads bootc status on
+the worker and refreshes the bootc badge, System Update subtitle, and Compare
+references on GTK's main thread. A failed re-read preserves the known badge
+and comparison rather than clearing them; an Update All plan without the OS
+phase does not start an unnecessary bootc query.
+
+The Homebrew phase runs `brew update` and then `brew upgrade` under the same
+cancellable context; metadata refresh alone would leave outdated packages in
+place. After a live run, the existing generation-guarded Flatpak and Homebrew
+loaders refresh the rows and badge for every planned provider, even if a
+phase partially failed. Dry-run does not reload unchanged inventories or hide
+an existing restart prompt; its successful phase rows and headline say
+`[DRY-RUN] Preview` rather than claiming packages are current, and it sends no
+completion notification. A disabled provider group is never dereferenced.
 
 The restart itself is the run's only new privileged surface: a `restart`
 subcommand on `chairlift-ublue-helper` running `systemctl reboot`, with a
@@ -1461,6 +1490,14 @@ diff only means anything relative to a specific staged update, and a page
 would have to invent an answer for a system with nothing staged. The fetch is
 never automatic.
 
+After staging, the view re-reads bootc status and refreshes the Compare row's
+image references and sensitivity in the same window; reopening ChairLift is
+not required. A new pinned image pair removes the previous package-diff rows,
+and an in-flight comparison for the old pair cannot render its result after
+the new status arrives. A failed status read keeps the previous comparison and
+badge state and reports that the staged outcome cannot be verified rather
+than claiming the system is current.
+
 ### Developer feeds catalog (`internal/developerfeeds`)
 
 `internal/developerfeeds` owns the curated feed list Developer Mode offers when
@@ -1539,6 +1576,10 @@ actions. The confirmation text lives in `pageview.PowerwashConfirmation` and
 body names `--experimental` explicitly: `bootc`'s own reset path is not
 stabilized upstream, and hiding that behind friendlier wording would be
 exactly the kind of detail a confirmation dialog exists to surface.
+
+Both reset controls release their in-flight gate when their buttons become
+sensitive again, so a canceled PolicyKit prompt or dry-run preview can be
+retried without restarting the application.
 
 ### Automatic background updates
 
@@ -1653,6 +1694,10 @@ contents contain these installed paths: `/usr/bin/chairlift-updex-helper`,
 `/usr/share/chairlift/config.yml`, and
 `/usr/share/doc/chairlift/channels.example.yml`. The packages declare conflicts
 because they intentionally own the same privileged files.
+
+Release tarballs also include the Livery GSettings XML schema; nFPM packages
+and `make install` place it in `/usr/share/glib-2.0/schemas/` and compile the
+schema cache during installation.
 
 The integration package does **not** ship `bootc-update-stage` or
 `snosi-sysupdate-stage`. Those operations are distro policy, so an image that
@@ -1832,6 +1877,9 @@ page_name:
   [package-managers.md](./package-managers.md#install-path-consistency-internalinstallcheck).
   The `snapshot:` block in `.goreleaser.yaml` configures local
   `goreleaser release --snapshot` builds and needs no workflow.
+  The tag workflow installs the same pinned golangci-lint version as test.yml
+  before running `make ci`, avoiding a newer linter rejecting a previously
+  validated commit only at release time.
 - **Other targets**: `make fmt` (gofmt), `make lint` (golangci-lint), `make install`/`make uninstall` (system install including polkit policies, icons, and wrapper script; default `PREFIX=/usr`, the only prefix that matches where polkit reads policy files and the fixed pkexec exec-path annotations for both helper binaries — see "Privileged operations" above), `make build-linux-amd64`/`make build-linux-arm64` (cross-compilation)
 
 ### Runtime dependencies

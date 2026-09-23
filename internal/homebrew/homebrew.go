@@ -524,14 +524,17 @@ func Uninstall(name string, isCask bool) error {
 	return err
 }
 
-// Upgrade upgrades a package or all packages
-func Upgrade(name string) error {
+// Upgrade upgrades one package or all packages. The caller's context also
+// bounds the mutation so Update All cancellation stops an in-flight upgrade.
+func Upgrade(ctx context.Context, name string) error {
 	args := []string{"upgrade"}
 	if name != "" {
 		args = append(args, name)
 	}
 
-	_, err := runBrewCommand(args...)
+	runCtx, cancel := context.WithTimeout(ctx, mutationTimeout)
+	defer cancel()
+	_, err := runBrewCommandCtx(runCtx, args...)
 	return err
 }
 

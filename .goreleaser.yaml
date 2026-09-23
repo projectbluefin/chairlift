@@ -82,6 +82,7 @@ archives:
       - config.yml
       - data/chairlift-wrapper.sh
       - data/io.projectbluefin.chairlift.desktop
+      - data/io.projectbluefin.chairlift.livery.gschema.xml
       - data/icons/**/*
       - data/io.projectbluefin.chairlift.bootc.policy
       - data/io.projectbluefin.chairlift.updex.policy

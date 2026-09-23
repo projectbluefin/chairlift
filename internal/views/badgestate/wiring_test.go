@@ -21,10 +21,8 @@ func TestViewsUseSharedBadgeCounts(t *testing.T) {
 			`total := uh.updateCounts.Total()`,
 		},
 		filepath.Join(viewsDir, "updates_page.go"): {
-			`uh.updateCounts.Set(badgestate.Bootc, 1)`,
-			`uh.updateCounts.Set(badgestate.Bootc, 0)`,
-			`uh.updateCounts.Set(badgestate.Sysupdate, 1)`,
-			`uh.updateCounts.Set(badgestate.Sysupdate, 0)`,
+			`uh.updateCounts.SetObserved(badgestate.Bootc,`,
+			`uh.updateCounts.SetObserved(badgestate.Sysupdate,`,
 			`uh.updateCounts.Set(badgestate.Flatpak, refresh.Count)`,
 			`uh.updateCounts.Set(badgestate.Homebrew, refresh.Count)`,
 			`uh.updateCounts.Add(badgestate.Homebrew, -1)`,
@@ -55,5 +53,23 @@ func TestViewsUseSharedBadgeCounts(t *testing.T) {
 		if strings.Contains(string(updatesSource), removed) {
 			t.Errorf("updates_page.go still contains retired badge field %q", removed)
 		}
+	}
+}
+
+func TestOSBadgeReadsKeepKnownStateOnError(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	path := filepath.Join(filepath.Dir(filename), "..", "updates_page.go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(data), "uh.updateCounts.SetObserved(badgestate.Bootc,"); got != 2 {
+		t.Errorf("bootc startup and staging must each preserve a known badge on failed status reads; found %d observed updates", got)
+	}
+	if got := strings.Count(string(data), "uh.updateCounts.SetObserved(badgestate.Sysupdate,"); got != 2 {
+		t.Errorf("native A/B startup and staging must each preserve a known badge on failed status reads; found %d observed updates", got)
 	}
 }

@@ -114,7 +114,7 @@ func TestAvailableRejectsUnknownPhase(t *testing.T) {
 func okRunner() Runner {
 	return Runner{
 		StageOS:       func(context.Context, func(string)) error { return nil },
-		StagedAfter:   func(context.Context) (bool, string) { return true, "42.20260817" },
+		StagedAfter:   func(context.Context) (bool, string, error) { return true, "42.20260817", nil },
 		UpdateFlatpak: func(context.Context) error { return nil },
 		UpdateBrew:    func(context.Context) error { return nil },
 	}
@@ -357,7 +357,7 @@ func TestOSPhaseDistinguishesStagedFromAlreadyCurrent(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			runner := okRunner()
-			runner.StagedAfter = func(context.Context) (bool, string) { return test.staged, test.version }
+			runner.StagedAfter = func(context.Context) (bool, string, error) { return test.staged, test.version, nil }
 
 			results, _ := runWith(t, runner, Plan(Availability{OS: true}))
 			if results[0].Outcome != OutcomeSucceeded {
@@ -383,6 +383,23 @@ func TestOSPhaseDistinguishesStagedFromAlreadyCurrent(t *testing.T) {
 				t.Errorf("Result.Staged() = %v, want %v", got, test.wantRestart)
 			}
 		})
+	}
+}
+
+func TestOSStatusProbeFailureDoesNotClaimSystemCurrent(t *testing.T) {
+	runner := okRunner()
+	runner.StagedAfter = func(context.Context) (bool, string, error) {
+		return false, "", errors.New("bootc status unavailable")
+	}
+	results, _ := runWith(t, runner, Plan(Availability{OS: true, Flatpak: true}))
+	if results[0].Outcome != OutcomeFailed || !strings.Contains(results[0].Detail, "bootc status unavailable") {
+		t.Errorf("OS result = %+v, want a visible probe failure", results[0])
+	}
+	if results[1].Outcome != OutcomeSucceeded {
+		t.Errorf("Flatpak outcome = %q, want independent phase to continue", results[1].Outcome)
+	}
+	if summary := Summarize(results); summary.RestartRequired || summary.Headline == "Everything is up to date" {
+		t.Errorf("status probe failure was presented as current: %+v", summary)
 	}
 }
 

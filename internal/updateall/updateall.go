@@ -162,8 +162,9 @@ type Runner struct {
 	StageOS func(ctx context.Context, emit func(string)) error
 	// StagedAfter reports whether an OS image is staged and pending a
 	// restart. It is consulted after StageOS, because a successful stage run
-	// on an already-current system stages nothing.
-	StagedAfter func(ctx context.Context) (staged bool, version string)
+	// on an already-current system stages nothing. A failed status read is an
+	// error, not evidence that the system is current.
+	StagedAfter func(ctx context.Context) (staged bool, version string, err error)
 	// UpdateFlatpak updates all Flatpak applications.
 	UpdateFlatpak func(ctx context.Context) error
 	// UpdateBrew updates Homebrew and upgrades outdated packages.
@@ -217,7 +218,11 @@ func (r Runner) runPhase(ctx context.Context, phase Phase, events chan<- Event) 
 		}
 		staged, version := false, ""
 		if r.StagedAfter != nil {
-			staged, version = r.StagedAfter(ctx)
+			var err error
+			staged, version, err = r.StagedAfter(ctx)
+			if err != nil {
+				return classify(phase, err)
+			}
 		}
 		result := Result{Phase: phase, Outcome: OutcomeSucceeded, Detail: stagedDetail(staged, version)}
 		if staged {

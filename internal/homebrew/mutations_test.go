@@ -72,8 +72,8 @@ func TestMutationWrappersBuildExpectedArgv(t *testing.T) {
 		{"InstallCask", func() error { return Install("firefox", true) }, "install --cask firefox"},
 		{"UninstallFormula", func() error { return Uninstall("gh", false) }, "uninstall gh"},
 		{"UninstallCask", func() error { return Uninstall("firefox", true) }, "uninstall --cask firefox"},
-		{"UpgradeNamed", func() error { return Upgrade("gh") }, "upgrade gh"},
-		{"UpgradeAll", func() error { return Upgrade("") }, "upgrade"},
+		{"UpgradeNamed", func() error { return Upgrade(context.Background(), "gh") }, "upgrade gh"},
+		{"UpgradeAll", func() error { return Upgrade(context.Background(), "") }, "upgrade"},
 		{"Update", func() error { return Update(context.Background()) }, "update"},
 		{"Pin", func() error { return Pin("gh") }, "pin gh"},
 		{"Unpin", func() error { return Unpin("gh") }, "unpin gh"},
@@ -99,12 +99,12 @@ func TestMutationWrappersBuildExpectedArgv(t *testing.T) {
 	}
 }
 
-// Upgrade("") must not append an empty argument: "brew upgrade ”" is not the
-// same command as "brew upgrade".
+// Upgrade(ctx, "") must not append an empty argument: brew upgrade "" is not
+// the same command as "brew upgrade".
 func TestUpgradeAllPassesNoPackageArgument(t *testing.T) {
 	got := captureSingleBrewArgv(t, func() {
-		if err := Upgrade(""); err != nil {
-			t.Fatalf("Upgrade(\"\"): %v", err)
+		if err := Upgrade(context.Background(), ""); err != nil {
+			t.Fatalf("Upgrade(ctx, \"\"): %v", err)
 		}
 	})
 	if strings.Fields(got)[0] != "upgrade" || len(strings.Fields(got)) != 1 {

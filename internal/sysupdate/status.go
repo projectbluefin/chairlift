@@ -1,7 +1,7 @@
 package sysupdate
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -168,19 +168,22 @@ type Status struct {
 	Staged *StagedUpdate
 }
 
-// GetStatus reads both state files. It never fails hard: an unreadable file
-// is logged and treated as absent, so the UI degrades to the idle state
-// rather than an error.
-func GetStatus() Status {
-	check, err := ReadUpdateCheck()
+// GetStatus reads both state files. Missing files mean no known update;
+// unreadable files return an error rather than inventing an idle state.
+func GetStatus() (Status, error) {
+	return getStatusFrom(UpdateCheckPath, StagedSemaphorePath)
+}
+
+func getStatusFrom(checkPath, stagedPath string) (Status, error) {
+	check, err := readUpdateCheckFrom(checkPath)
 	if err != nil {
-		log.Printf("sysupdate: reading %s: %v", UpdateCheckPath, err)
+		return Status{}, fmt.Errorf("reading %s: %w", checkPath, err)
 	}
-	staged, err := ReadStagedUpdate()
+	staged, err := readStagedUpdateFrom(stagedPath)
 	if err != nil {
-		log.Printf("sysupdate: reading %s: %v", StagedSemaphorePath, err)
+		return Status{}, fmt.Errorf("reading %s: %w", stagedPath, err)
 	}
-	return Status{Check: check, Staged: staged}
+	return Status{Check: check, Staged: staged}, nil
 }
 
 // IsStaged reports whether an update is downloaded and pending a reboot.

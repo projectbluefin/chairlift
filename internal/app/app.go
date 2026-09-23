@@ -64,7 +64,7 @@ func init() {
 
 // New creates a new ChairLift application
 func New() *Application {
-	obj := gobject.NewObject(gTypeApplication, "application_id", appID, "flags", gio.GApplicationFlagsNoneValue)
+	obj := gobject.NewObject(gTypeApplication, "application_id", appID, "flags", gio.GApplicationFlagsNoneValue, uintptr(0))
 	if obj == nil {
 		log.Fatal("Failed to create application")
 	}

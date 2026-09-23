@@ -34,6 +34,19 @@ func TestCountsReplaceRepeatedRefreshState(t *testing.T) {
 	}
 }
 
+func TestUnknownStatusPreservesLastKnownBadgeCount(t *testing.T) {
+	for _, source := range []Source{Bootc, Sysupdate, Flatpak, Homebrew} {
+		var counts Counts
+		counts.Set(source, 1)
+		if got := counts.SetObserved(source, 0, false); got != (Snapshot{Count: 1, Total: 1}) {
+			t.Errorf("source %d: failed status read replaced a known update: %+v", source, got)
+		}
+		if got := counts.SetObserved(source, 0, true); got != (Snapshot{Count: 0, Total: 0}) {
+			t.Errorf("source %d: verified no-update state was not adopted: %+v", source, got)
+		}
+	}
+}
+
 func TestCountsAddNeverProducesNegativeBadgeState(t *testing.T) {
 	var counts Counts
 	counts.Set(Homebrew, 2)

@@ -401,6 +401,16 @@ func TestUpdatePropagatesContextCancellation(t *testing.T) {
 	}
 }
 
+func TestUpgradeHonorsCanceledContext(t *testing.T) {
+	argvLog := fakeBrewOnPath(t, "exit 0")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := Upgrade(ctx, ""); !errors.Is(err, context.Canceled) {
+		t.Errorf("Upgrade(canceled context) = %v, want context.Canceled", err)
+	}
+	assertArgv(t, argvLog, nil)
+}
+
 // A read-only command that fails keeps its whole stderr in the error: nothing
 // else preserves it (the failure log line is reserved for state-changing
 // commands), and callers such as searchKind match on the full text.

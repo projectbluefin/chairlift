@@ -37,13 +37,16 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   up to 30 seconds, requires one additional second of process stability, and
   terminates the private process group as soon as the smoke check passes.
   Terminating it is not the end of the story: startup's Homebrew readers are
-  grandchildren, so `cmd.Wait` never observes them and they keep writing into
-  the temporary `HOME` after the leader is reaped. The smoke test therefore
-  scans `/proc` for the group's surviving members, kills whatever ignored the
-  signal, and only returns once none are left — a cleanup registered *after*
-  `t.TempDir()` so it runs before the directory is removed (issue #91). A test
-  that launches a process group owes the same drain. It
-  requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
+  grandchildren, and the Homebrew runner starts them in new process groups.
+  The smoke test launches a private **session** (`Setsid: true`), scans `/proc`
+  for surviving members of that session even when their process-group IDs
+  differ, kills them, and only then removes its temporary `HOME`. A
+  process-group-only scan missed those workers and intermittently failed
+  `t.TempDir()` cleanup with `directory not empty`. Never scan or signal the
+  test runner's shared session. The drain cleanup is registered *after*
+  `t.TempDir()` so it runs before the directory removal. A test that launches
+  a private session and lends it a temporary directory owes the same drain.
+  The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
@@ -160,6 +163,16 @@ An agent must not break these:
   is true only when an image was genuinely staged — the stage script is
   idempotent and exits 0 on an already-current system, so a successful OS
   phase is not by itself evidence anything changed.
+  `StagedAfter` propagates a failed `bootc status` read as an OS phase failure
+  instead of claiming the image is current; independent app/package phases
+  still run.
+  Its Homebrew phase must run both `brew update` and `brew upgrade` under the
+  run's context; metadata refresh alone is not a package upgrade. After a
+  live run, refresh the existing Flatpak and Homebrew inventories and badge
+  through their generation-guarded loaders, even after a partial failure,
+  without dereferencing disabled groups. Dry-run leaves known rows and restart
+  prompts alone, labels both phase rows and the headline as previews, and
+  sends no completion notification.
 - **New privileged operations extend the ublue helper; they do not add a
   binary.** `chairlift-ublue-helper` now carries nine subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
@@ -195,6 +208,12 @@ An agent must not break these:
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
   extending `docs/walkthrough.md` in the same change.
+  The screenshot runner must write its reset-group override as
+  `config.dev.yml` beside the tagged binary: that is the first relative
+  candidate, ahead of the checkout's own `config.dev.yml` and any
+  executable-adjacent `config.yml`. The E2E walkthrough requires the
+  `views: reset group built` marker so a plausible screenshot cannot hide
+  the opt-in Reset rows silently.
 - **The `chairlift_e2e` stub surface is capped and centralized.** Three
   behaviors are stubbed so the screenshot walkthrough can render features a CI
   runner cannot have: the image descriptor (`CHAIRLIFT_IMAGE_INFO`), the
@@ -241,6 +260,12 @@ An agent must not break these:
   UI update marshals back to the GTK main thread via
   `snowkit`'s `sgtk.RunOnMainThread(...)`. Never touch a widget directly from a
   worker goroutine.
+- **GObject constructor properties cross the native ABI.** Pass native
+  `GoPointer()` values for object-valued `gobject.NewObject` properties, not
+  Go wrapper addresses, and terminate the C variadic property list with
+  `uintptr(0)`. The wrong pointer emitted a GLib critical on every window
+  launch; the E2E dry-run startup now uses `G_DEBUG=fatal-criticals` so the
+  actual binary fails instead of only logging it.
 - **Streamed command output renders bounded.** A stage helper prints an
   unbounded number of lines, so a view may not answer one line with one
   `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
@@ -312,11 +337,27 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+- **A visible retryable control must reset its action gate.**
+  `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
+  controls that become permanently unavailable after live success. Update All,
+  driver switching, Powerwash, and Factory Reset restore their buttons after
+  a run, so they reset their gates even after failure or dry-run. Roll Back is
+  different: `bootc rollback` toggles the selected deployment, so a successful
+  live click completes its gate and leaves its button insensitive; only a
+  failure or preview resets it. `internal/views/actionstate`'s wiring tests
+  guard both lifetimes.
+  Both the dedicated bootc stage action and Update All's OS phase refresh
+  the badge and changelog's Compare references from the new status rather
+  than leaving Compare disabled until restart.
+  A changed pinned image pair clears old diff rows; an in-flight comparison
+  for the old pair must not render after the refresh.
 - **Update badge counts have one state owner.** Bootc, sysupdate, Flatpak,
   and Homebrew counts live in the pure `internal/views/badgestate` package.
-  Refreshes replace a provider's count, successful row removals decrement
-  without going negative, and the displayed total is always the sum of all
-  four providers. Do not restore independent integer fields in `UserHome`.
+  Verified refreshes replace a provider's count, while a failed bootc or
+  native A/B status read keeps the last known count through `SetObserved`
+  rather than inventing zero. Successful row removals decrement without
+  going negative, and the displayed total is always the sum of all four
+  providers. Do not restore independent integer fields in `UserHome`.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
