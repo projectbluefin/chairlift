@@ -43,16 +43,15 @@ func TestParseAndFormatEntry(t *testing.T) {
 			wantFmt: "('Containers', '/usr/bin/flatpak run com.ranfdev.DistroShelf', 'org.gnome.Boxes', false)",
 		},
 		{
-			name: "escaped quotes and backslashes",
-			raw:  `('Terminal\'s Choice', 'echo \'hello\nworld\'', 'icon\\test', true)`,
+			name: "escaped quotes, backslashes, and control characters",
+			raw:  `('Terminal\'s Choice', 'echo \'hello\n\t\rworld\'', 'icon\\test', true)`,
 			want: Entry{
 				Label:   "Terminal's Choice",
-				Command: "echo 'hello\nworld'",
+				Command: "echo 'hello\n\t\rworld'",
 				Icon:    `icon\test`,
 				Visible: true,
 			},
-			wantFmt: `('Terminal\'s Choice', 'echo \'hello
-world\'', 'icon\\test', true)`,
+			wantFmt: `('Terminal\'s Choice', 'echo \'hello\n\t\rworld\'', 'icon\\test', true)`,
 		},
 		{
 			name: "double quoted strings in tuple",
@@ -122,12 +121,12 @@ func TestAvailableChecks(t *testing.T) {
 			}
 			return "/usr/bin/" + file, nil
 		}
-		avail, err := Available(context.Background())
+		avail, err := available(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if avail {
-			t.Error("Available() = true, want false when dconf is missing")
+			t.Error("available() = true, want false when dconf is missing")
 		}
 	})
 
@@ -138,12 +137,12 @@ func TestAvailableChecks(t *testing.T) {
 		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
 			return "", nil
 		}
-		avail, err := Available(context.Background())
+		avail, err := available(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if avail {
-			t.Error("Available() = true, want false when dconf has no custom-command-list keys")
+			t.Error("available() = true, want false when dconf has no custom-command-list keys")
 		}
 	})
 
@@ -157,12 +156,12 @@ func TestAvailableChecks(t *testing.T) {
 			}
 			return "", nil
 		}
-		avail, err := Available(context.Background())
+		avail, err := available(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !avail {
-			t.Error("Available() = false, want true when distro default key exists in dconf")
+			t.Error("available() = false, want true when distro default key exists in dconf")
 		}
 	})
 
@@ -176,12 +175,12 @@ func TestAvailableChecks(t *testing.T) {
 			}
 			return "", nil
 		}
-		avail, err := Available(context.Background())
+		avail, err := available(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if !avail {
-			t.Error("Available() = false, want true when user key exists in dconf")
+			t.Error("available() = false, want true when user key exists in dconf")
 		}
 	})
 
@@ -194,11 +193,11 @@ func TestAvailableChecks(t *testing.T) {
 			calls++
 			return "[/]\ncommand8=('Terminal', 'ptyxis', 'term', true)\n", nil
 		}
-		if _, err := Available(context.Background()); err != nil {
+		if _, err := available(context.Background()); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if calls != 1 {
-			t.Errorf("Available() spawned %d dconf processes, want 1", calls)
+			t.Errorf("available() spawned %d dconf processes, want 1", calls)
 		}
 	})
 
@@ -209,12 +208,12 @@ func TestAvailableChecks(t *testing.T) {
 		runCommand = func(ctx context.Context, name string, args ...string) (string, error) {
 			return "[/]\nmenuicon-setting='ublue-logo-symbolic'\ncommand100=('Terminal', 'ptyxis', 'term', true)\n\n[nested]\ncommand1=('Terminal', 'ptyxis', 'term', true)\n", nil
 		}
-		avail, err := Available(context.Background())
+		avail, err := available(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if avail {
-			t.Error("Available() = true, want false when no command1..command99 key is present at the dumped path")
+			t.Error("available() = true, want false when no command1..command99 key is present at the dumped path")
 		}
 	})
 }
@@ -513,6 +512,7 @@ func TestApplyPreviewDryRun(t *testing.T) {
 
 	dryrun.Set(true)
 
+	// Case 1: write branch preview
 	if err := Apply(context.Background(), false); err != nil {
 		t.Fatalf("Apply(false) under dry-run error: %v", err)
 	}
@@ -525,10 +525,53 @@ func TestApplyPreviewDryRun(t *testing.T) {
 		t.Errorf("dry-run performed resets: %v", mock.resets)
 	}
 
-	// Must log the preview string
+	// Must log the preview string for write
 	wantLog := "[DRY-RUN] would set Custom Command Menu command8 visible=false"
 	if !strings.Contains(buf.String(), wantLog) {
 		t.Errorf("log output %q does not contain %q", buf.String(), wantLog)
+	}
+
+	// Case 2: reset branch preview when default matches target
+	buf.Reset()
+	mock.user[DconfPath+"command8"] = "('Terminal', 'ptyxis', 'term', false)"
+	if err := Apply(context.Background(), true); err != nil {
+		t.Fatalf("Apply(true) under dry-run error: %v", err)
+	}
+	if len(mock.writes) > 0 {
+		t.Errorf("dry-run reset performed writes: %v", mock.writes)
+	}
+	if len(mock.resets) > 0 {
+		t.Errorf("dry-run reset performed resets: %v", mock.resets)
+	}
+	wantResetLog := "[DRY-RUN] would reset Custom Command Menu command8 to default"
+	if !strings.Contains(buf.String(), wantResetLog) {
+		t.Errorf("log output %q does not contain %q", buf.String(), wantResetLog)
+	}
+}
+
+func TestApplyDoesNotPinWhenSemanticallyEqual(t *testing.T) {
+	origLookPath := lookPath
+	origRunCommand := runCommand
+	defer func() {
+		lookPath = origLookPath
+		runCommand = origRunCommand
+	}()
+
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+
+	mock := newMockDconf()
+	// User override matches desired entry semantically, but uses different quoting and spacing
+	mock.user[DconfPath+"command8"] = `("Terminal",  "ptyxis --new-window",  "utilities-terminal-symbolic",  false)`
+	runCommand = mock.runCommand
+
+	// Apply(false) when entry is already semantically hidden:
+	// must NOT rewrite or pin user overrides
+	if err := Apply(context.Background(), false); err != nil {
+		t.Fatalf("Apply(false) error: %v", err)
+	}
+
+	if len(mock.writes) > 0 {
+		t.Errorf("Apply(false) rewrote semantically identical entry: %v", mock.writes)
 	}
 }
 

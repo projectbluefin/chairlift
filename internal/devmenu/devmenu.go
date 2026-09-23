@@ -134,14 +134,14 @@ func load(ctx context.Context) (map[string]string, error) {
 	return scan(ctx)
 }
 
-// Available reports whether the Custom Command Menu extension is present and can be managed.
+// available reports whether the Custom Command Menu extension is present and can be managed.
 // It decides availability from dconf alone without relying on gsettings (which cannot locate
 // schemas compiled only inside the extension's private directory on Bluefin).
 // The extension is considered present when dconf is available and any command key (command1..command99)
 // under /org/gnome/shell/extensions/custom-command-list/ has a distro default or user-set value.
 // A missing dconf tool or absence of custom-command-list keys returns false, nil (supported no-op
 // for Plasma/non-GNOME or environments without the extension).
-func Available(ctx context.Context) (bool, error) {
+func available(ctx context.Context) (bool, error) {
 	entries, err := load(ctx)
 	if err != nil {
 		return false, err
@@ -269,9 +269,33 @@ func FormatEntry(e Entry) string {
 }
 
 func escapeGVariant(s string) string {
-	s = strings.ReplaceAll(s, `\`, `\\`)
-	s = strings.ReplaceAll(s, `'`, `\'`)
-	return s
+	var sb strings.Builder
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		switch b {
+		case '\\':
+			sb.WriteString(`\\`)
+		case '\'':
+			sb.WriteString(`\'`)
+		case '\n':
+			sb.WriteString(`\n`)
+		case '\t':
+			sb.WriteString(`\t`)
+		case '\r':
+			sb.WriteString(`\r`)
+		case '\a':
+			sb.WriteString(`\a`)
+		case '\b':
+			sb.WriteString(`\b`)
+		case '\f':
+			sb.WriteString(`\f`)
+		case '\v':
+			sb.WriteString(`\v`)
+		default:
+			sb.WriteByte(b)
+		}
+	}
+	return sb.String()
 }
 
 // Apply updates the visibility of developer entries (Terminal, Containers)
@@ -330,7 +354,7 @@ func Apply(ctx context.Context, developerMode bool) error {
 		if defMatches {
 			if cur != def {
 				if dryrun.Enabled() {
-					log.Printf("[DRY-RUN] would set Custom Command Menu %s visible=%t", key, targetVisible)
+					log.Printf("[DRY-RUN] would reset Custom Command Menu %s to default", key)
 				} else {
 					out, err := runCommand(ctx, "dconf", "reset", dconfKeyPath)
 					if err != nil {
@@ -339,7 +363,7 @@ func Apply(ctx context.Context, developerMode bool) error {
 				}
 			}
 		} else {
-			if entry.Visible != targetVisible || cur != desiredFormatted {
+			if entry != desired {
 				if dryrun.Enabled() {
 					log.Printf("[DRY-RUN] would set Custom Command Menu %s visible=%t", key, targetVisible)
 				} else {
