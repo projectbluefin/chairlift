@@ -126,6 +126,12 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.ConfigStepInfoSubtitle(",
 				// Advance owns the "is there a step left to display" answer.
 				"a.model.Advance(",
+				// The forward button's label depends on whether a step
+				// follows; pageview owns which word describes the click.
+				"pageview.StepForwardAction(",
+				"pageview.SetupCompletedMessage",
+				// A skip must not overwrite a recorded completion.
+				"firstrun.SkipPreserving(",
 			},
 			retired: []string{
 				// Asking HasNext after Next skipped the final step: the move
@@ -134,6 +140,11 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"a.model.HasNext()",
 				`"Control Center"`,
 				`infoRow.SetSubtitle("`,
+				// Completion copy belongs in pageview with the rest.
+				`"Setup completed!"`,
+				// A forward button hard-labeled Finish misdescribes every
+				// intermediate step it advances through.
+				`gtk.NewButtonWithLabel("Finish")`,
 			},
 		},
 		{

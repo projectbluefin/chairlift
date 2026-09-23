@@ -112,3 +112,39 @@ func TestFirstRunCopyNamesTheProductThroughBranding(t *testing.T) {
 		}
 	}
 }
+
+// TestStepForwardActionNamesWhatTheClickDoes covers the label the forward
+// button carries: "Finish" on an intermediate step promises a completion the
+// click does not deliver, because the assistant shows the next step instead.
+func TestStepForwardActionNamesWhatTheClickDoes(t *testing.T) {
+	if got := StepForwardAction(false); got != NextStepAction {
+		t.Errorf("StepForwardAction(false) = %q, want %q", got, NextStepAction)
+	}
+	if got := StepForwardAction(true); got != FinishAction {
+		t.Errorf("StepForwardAction(true) = %q, want %q", got, FinishAction)
+	}
+}
+
+func TestNavigationAndCompletionCopyIsNonEmpty(t *testing.T) {
+	for name, text := range map[string]string{
+		"BackAction":            BackAction,
+		"NextStepAction":        NextStepAction,
+		"FinishAction":          FinishAction,
+		"SetupCompletedMessage": SetupCompletedMessage,
+	} {
+		if text == "" {
+			t.Errorf("%s must not be empty", name)
+		}
+	}
+}
+
+// TestWelcomeCopyIsReExportedFromFirstrun keeps the welcome screen's copy
+// owned by one package; a restated literal here drifts from the step.
+func TestWelcomeCopyIsReExportedFromFirstrun(t *testing.T) {
+	if WelcomeTitle != firstrun.StepWelcome.Title {
+		t.Errorf("WelcomeTitle = %q, want %q", WelcomeTitle, firstrun.StepWelcome.Title)
+	}
+	if WelcomeSubtitle != firstrun.StepWelcome.Description {
+		t.Errorf("WelcomeSubtitle = %q, want %q", WelcomeSubtitle, firstrun.StepWelcome.Description)
+	}
+}

@@ -269,6 +269,17 @@ Launch Control Center from your application menu or run:
 chairlift
 ```
 
+### Command Line Options
+
+- `--setup`, `-s`: open the first-run onboarding assistant. The assistant
+  normally appears only once, the first time Control Center runs; this flag
+  re-runs it at any time, as does **Setup Assistant…** in the application
+  menu. Choosing *Get Moving* on the welcome screen closes it and records
+  that setup was settled, so it does not reappear on its own.
+- `--dry-run`, `-d`: preview actions without changing the system. Automatic
+  presentation of the onboarding assistant is suppressed in this mode;
+  `--setup` still opens it explicitly.
+
 ### Main Sections
 
 1. **Updates**: Update everything in one action or per provider — stage bootc

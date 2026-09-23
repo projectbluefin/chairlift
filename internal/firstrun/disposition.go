@@ -18,3 +18,18 @@ const (
 func (d Disposition) IsSettled() bool {
 	return d == DispositionSkipped || d == DispositionCompleted
 }
+
+// SkipPreserving returns the disposition to record when the user chooses
+// "Get Moving" while current is already recorded.
+//
+// The assistant is reachable again from the menu and from --setup after setup
+// finished, so "Get Moving" can be pressed by someone who already completed
+// every step. Writing skipped unconditionally would regress that record,
+// because GetDisposition prefers the disposition key over the completed
+// version: a finished setup would read back as skipped forever after.
+func SkipPreserving(current Disposition) Disposition {
+	if current == DispositionCompleted {
+		return DispositionCompleted
+	}
+	return DispositionSkipped
+}

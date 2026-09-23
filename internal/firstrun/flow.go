@@ -29,12 +29,23 @@ const (
 	StepIDAI        = "ai"
 )
 
+// Welcome screen copy. The hero screen and the welcome step are the same
+// screen, so the strings have one owner here and internal/views/pageview
+// re-exports them rather than restating them.
+const (
+	// WelcomeStepTitle is the prominent header on the onboarding hero screen.
+	WelcomeStepTitle = "Welcome to Bluefin"
+
+	// WelcomeStepDescription is the narrative copy under the welcome header.
+	WelcomeStepDescription = "Your cloud-native developer workstation is ready. Choose how you'd like to get started."
+)
+
 var (
 	// StepWelcome is the initial hero screen with branding and flow selection.
 	StepWelcome = Step{
 		ID:          StepIDWelcome,
-		Title:       "Welcome to Bluefin",
-		Description: "Your cloud-native developer workstation is ready. Choose how you'd like to get started.",
+		Title:       WelcomeStepTitle,
+		Description: WelcomeStepDescription,
 	}
 
 	// Candidate optional configuration steps following the welcome screen.
@@ -139,6 +150,17 @@ func (m *AssistantModel) CanGoBack() bool {
 // HasNext reports whether there is a subsequent step in the sequence.
 func (m *AssistantModel) HasNext() bool {
 	return m.current+1 < len(m.steps)
+}
+
+// ForwardFinishes reports what advancing from the displayed step does: true
+// when it finishes setup, false when it moves onto another step.
+//
+// The view labels one button with this answer. HasNext is the raw predicate
+// and is deliberately not consulted by the view, because asking it around a
+// move is what previously skipped the final step; this names the question the
+// button actually asks.
+func (m *AssistantModel) ForwardFinishes() bool {
+	return !m.HasNext()
 }
 
 // SelectFlow processes the user's choice on the welcome screen.

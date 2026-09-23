@@ -9,10 +9,12 @@ import (
 
 const (
 	// WelcomeTitle is the prominent header on the onboarding hero screen.
-	WelcomeTitle = "Welcome to Bluefin"
+	// The welcome step and the hero screen are one screen, so the copy is
+	// owned by internal/firstrun and re-exported here.
+	WelcomeTitle = firstrun.WelcomeStepTitle
 
 	// WelcomeSubtitle is the welcoming narrative copy explaining the system's nature.
-	WelcomeSubtitle = "Your cloud-native developer workstation is ready. Choose how you'd like to get started."
+	WelcomeSubtitle = firstrun.WelcomeStepDescription
 
 	// ConfigureEverythingAction is the label for the recommended default action.
 	ConfigureEverythingAction = "Configure Everything"
@@ -36,7 +38,33 @@ const (
 
 	// GetMovingToastFormat is the template for the reassuring exit toast.
 	GetMovingToastFormat = "You're ready to go! You can launch %s anytime from the Application Menu or by running chairlift."
+
+	// BackAction labels the configuration step's reverse navigation button.
+	BackAction = "Back"
+
+	// NextStepAction labels the forward button while configuration steps remain.
+	NextStepAction = "Next"
+
+	// FinishAction labels the forward button on the final configuration step.
+	FinishAction = "Finish"
+
+	// SetupCompletedMessage is the toast confirming the assistant finished.
+	SetupCompletedMessage = "Setup completed!"
 )
+
+// StepForwardAction names the forward navigation button for a configuration
+// step. finishes reports whether clicking it concludes setup rather than
+// moving onto a further step.
+//
+// The button advances through the remaining steps before it finishes setup,
+// so labeling it "Finish" on an intermediate step misdescribes the click the
+// user is about to make.
+func StepForwardAction(finishes bool) string {
+	if finishes {
+		return FinishAction
+	}
+	return NextStepAction
+}
 
 // GetMovingDescription describes skipping the wizard while affirming the
 // application remains available afterwards.

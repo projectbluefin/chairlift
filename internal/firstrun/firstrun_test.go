@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -383,5 +384,102 @@ func TestGetDispositionReadsEveryKeyInOneSpawn(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Errorf("gsettings spawned %d times, want 1", calls)
+	}
+}
+
+// TestForwardFinishesOnlyOnTheFinalStep pins the answer the view labels its
+// forward button with: "Finish" on an intermediate step misdescribes a click
+// that merely shows the next step.
+func TestForwardFinishesOnlyOnTheFinalStep(t *testing.T) {
+	model := NewAssistantModel(func(page, group string) bool { return true })
+
+	if _, dismissed, _ := model.SelectFlow(FlowChoiceConfigure); dismissed {
+		t.Fatal("configure flow dismissed instead of advancing")
+	}
+
+	for {
+		step := model.CurrentStep()
+		finishes := model.ForwardFinishes()
+
+		next, done := model.Advance()
+		if finishes != done {
+			t.Errorf("step %q: ForwardFinishes() = %v, but Advance() done = %v",
+				step.ID, finishes, done)
+		}
+		if done {
+			break
+		}
+		_ = next
+	}
+}
+
+// TestForwardFinishesOnWelcomeOnlySequence covers the sequence with no
+// configuration steps, where the first forward click genuinely finishes.
+func TestForwardFinishesOnWelcomeOnlySequence(t *testing.T) {
+	model := NewAssistantModel(func(page, group string) bool { return false })
+	if !model.ForwardFinishes() {
+		t.Error("ForwardFinishes() = false on a welcome-only sequence, want true")
+	}
+}
+
+// TestSkipPreservingKeepsARecordedCompletion holds the re-entry case: the
+// assistant reopens from the menu and from --setup after setup finished, and
+// GetDisposition prefers the disposition key over the completed version, so
+// writing skipped there would regress a finished setup permanently.
+func TestSkipPreservingKeepsARecordedCompletion(t *testing.T) {
+	for _, tc := range []struct {
+		current Disposition
+		want    Disposition
+	}{
+		{DispositionNotAddressed, DispositionSkipped},
+		{DispositionSkipped, DispositionSkipped},
+		{DispositionCompleted, DispositionCompleted},
+	} {
+		if got := SkipPreserving(tc.current); got != tc.want {
+			t.Errorf("SkipPreserving(%q) = %q, want %q", tc.current, got, tc.want)
+		}
+	}
+}
+
+// TestCleanupAssetsRemovesTheExtractionDirectory keeps the extraction
+// directory from outliving the process that created it.
+func TestCleanupAssetsRemovesTheExtractionDirectory(t *testing.T) {
+	path, err := AssetPath(AssetDinosaur)
+	if err != nil {
+		t.Fatalf("AssetPath: %v", err)
+	}
+	dir := filepath.Dir(path)
+
+	if err := CleanupAssets(); err != nil {
+		t.Fatalf("CleanupAssets: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("asset directory %s still present after cleanup (err = %v)", dir, err)
+	}
+
+	// A second call has nothing to remove and must not report failure.
+	if err := CleanupAssets(); err != nil {
+		t.Errorf("second CleanupAssets: %v", err)
+	}
+
+	// Cleanup does not disable extraction: a later presentation re-extracts.
+	again, err := AssetPath(AssetDinosaur)
+	if err != nil {
+		t.Fatalf("AssetPath after cleanup: %v", err)
+	}
+	if _, err := os.Stat(again); err != nil {
+		t.Errorf("stat re-extracted asset %s: %v", again, err)
+	}
+	t.Cleanup(func() { _ = CleanupAssets() })
+}
+
+// TestWelcomeCopyHasOneOwner keeps the hero screen's copy from being restated
+// in the presentation package, where the two would silently drift apart.
+func TestWelcomeCopyHasOneOwner(t *testing.T) {
+	if StepWelcome.Title != WelcomeStepTitle {
+		t.Errorf("StepWelcome.Title = %q, want %q", StepWelcome.Title, WelcomeStepTitle)
+	}
+	if StepWelcome.Description != WelcomeStepDescription {
+		t.Errorf("StepWelcome.Description = %q, want %q", StepWelcome.Description, WelcomeStepDescription)
 	}
 }

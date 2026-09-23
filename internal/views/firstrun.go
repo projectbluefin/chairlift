@@ -21,10 +21,11 @@ type FirstRunAssistant struct {
 	filter          func(page, group string) bool
 	configStepTitle *gtk.Label
 	configStepDesc  *gtk.Label
+	wordmarkPic     *gtk.Picture
 	primaryBtn      *gtk.Button
 	secondaryBtn    *gtk.Button
 	backBtn         *gtk.Button
-	finishBtn       *gtk.Button
+	forwardBtn      *gtk.Button
 }
 
 // NewFirstRunAssistant constructs the assistant and wires all signals once.
@@ -84,22 +85,16 @@ func (a *FirstRunAssistant) buildUI() {
 		heroBox.Append(&dinoPic.Widget)
 	}
 
-	// Wordmark illustration supporting light/dark theme palettes
-	isDark := false
-	if sm := adw.StyleManagerGetDefault(); sm != nil {
-		isDark = sm.GetDark()
-	}
-	vm := pageview.NewWelcomeViewModel(isDark)
-	wordmarkPath, _ := firstrun.AssetPath(vm.WordmarkAsset)
-	if wordmarkPath != "" {
-		wordmarkPic := gtk.NewPictureForFilename(wordmarkPath)
-		wordmarkPic.SetCanShrink(true)
-		wordmarkPic.SetKeepAspectRatio(true)
-		wordmarkPic.SetContentFit(gtk.ContentFitContainValue)
-		wordmarkPic.SetHalign(gtk.AlignCenterValue)
-		wordmarkPic.SetSizeRequest(260, 52)
-		heroBox.Append(&wordmarkPic.Widget)
-	}
+	// Wordmark illustration supporting light/dark theme palettes. The file is
+	// chosen in applyWordmark rather than here because the assistant is cached
+	// on the window and presented again later, possibly after a theme change.
+	wordmarkPic := gtk.NewPicture()
+	wordmarkPic.SetCanShrink(true)
+	wordmarkPic.SetKeepAspectRatio(true)
+	wordmarkPic.SetContentFit(gtk.ContentFitContainValue)
+	wordmarkPic.SetHalign(gtk.AlignCenterValue)
+	wordmarkPic.SetSizeRequest(260, 52)
+	heroBox.Append(&wordmarkPic.Widget)
 
 	welcomeBox.Append(&heroBox.Widget)
 
@@ -174,14 +169,14 @@ func (a *FirstRunAssistant) buildUI() {
 	navBox.SetMarginTop(20)
 	navBox.SetHalign(gtk.AlignEndValue)
 
-	backBtn := gtk.NewButtonWithLabel("Back")
+	backBtn := gtk.NewButtonWithLabel(pageview.BackAction)
 	backBtn.AddCssClass("pill")
 	navBox.Append(&backBtn.Widget)
 
-	finishBtn := gtk.NewButtonWithLabel("Finish")
-	finishBtn.AddCssClass("suggested-action")
-	finishBtn.AddCssClass("pill")
-	navBox.Append(&finishBtn.Widget)
+	forwardBtn := gtk.NewButtonWithLabel(pageview.FinishAction)
+	forwardBtn.AddCssClass("suggested-action")
+	forwardBtn.AddCssClass("pill")
+	navBox.Append(&forwardBtn.Widget)
 
 	configBox.Append(&navBox.Widget)
 	configClamp.SetChild(&configBox.Widget)
@@ -191,10 +186,13 @@ func (a *FirstRunAssistant) buildUI() {
 	a.stack = stack
 	a.configStepTitle = configStepTitle
 	a.configStepDesc = configStepDesc
+	a.wordmarkPic = wordmarkPic
 	a.primaryBtn = primaryBtn
 	a.secondaryBtn = secondaryBtn
 	a.backBtn = backBtn
-	a.finishBtn = finishBtn
+	a.forwardBtn = forwardBtn
+
+	a.applyWordmark()
 
 	// Wire signal callbacks once at build time
 	primaryClicked := func(_ gtk.Button) {
@@ -215,7 +213,38 @@ func (a *FirstRunAssistant) buildUI() {
 	finishClicked := func(_ gtk.Button) {
 		a.onFinish()
 	}
-	finishBtn.ConnectClicked(&finishClicked)
+	forwardBtn.ConnectClicked(&finishClicked)
+}
+
+// applyWordmark points the wordmark picture at the variant matching the
+// current light/dark palette.
+//
+// The assistant is cached on the window and presented repeatedly, so the
+// variant cannot be decided once at build time: a theme change between two
+// presentations would otherwise leave dark lettering on a dark background.
+func (a *FirstRunAssistant) applyWordmark() {
+	if a.wordmarkPic == nil {
+		return
+	}
+	isDark := false
+	if sm := adw.StyleManagerGetDefault(); sm != nil {
+		isDark = sm.GetDark()
+	}
+	vm := pageview.NewWelcomeViewModel(isDark)
+	path, err := firstrun.AssetPath(vm.WordmarkAsset)
+	if err != nil {
+		log.Printf("firstrun: resolving wordmark asset: %v", err)
+		return
+	}
+	a.wordmarkPic.SetFilename(path)
+}
+
+// showStep displays a configuration step and labels the forward button for
+// what clicking it actually does next.
+func (a *FirstRunAssistant) showStep(step firstrun.Step) {
+	a.configStepTitle.SetText(step.Title)
+	a.configStepDesc.SetText(step.Description)
+	a.forwardBtn.SetLabel(pageview.StepForwardAction(a.model.ForwardFinishes()))
 }
 
 func (a *FirstRunAssistant) onConfigure() {
@@ -230,17 +259,27 @@ func (a *FirstRunAssistant) onConfigure() {
 		return
 	}
 	if next != nil {
-		a.configStepTitle.SetText(next.Title)
-		a.configStepDesc.SetText(next.Description)
+		a.showStep(*next)
 		a.stack.SetVisibleChildName("config")
 	}
 }
 
 func (a *FirstRunAssistant) onGetMoving() {
 	a.dialog.Close()
-	if err := a.store.SetDisposition(context.Background(), firstrun.DispositionSkipped); err != nil {
-		log.Printf("firstrun: saving skipped disposition: %v", err)
+
+	// The assistant is reachable again after setup finished, so a skip here
+	// must not overwrite a recorded completion with a weaker state.
+	ctx := context.Background()
+	current, err := a.store.GetDisposition(ctx)
+	if err != nil {
+		current = firstrun.DispositionNotAddressed
 	}
+	if next := firstrun.SkipPreserving(current); next != current {
+		if err := a.store.SetDisposition(ctx, next); err != nil {
+			log.Printf("firstrun: saving skipped disposition: %v", err)
+		}
+	}
+
 	if a.toastAdder != nil {
 		a.toastAdder.ShowToast(pageview.GetMovingToastMessage())
 	}
@@ -254,8 +293,7 @@ func (a *FirstRunAssistant) onBack() {
 			a.dialog.SetDefaultWidget(&a.primaryBtn.Widget)
 			a.dialog.SetFocus(&a.primaryBtn.Widget)
 		} else {
-			a.configStepTitle.SetText(prev.Title)
-			a.configStepDesc.SetText(prev.Description)
+			a.showStep(*prev)
 		}
 	}
 }
@@ -268,17 +306,17 @@ func (a *FirstRunAssistant) onFinish() {
 		}
 		a.dialog.Close()
 		if a.toastAdder != nil {
-			a.toastAdder.ShowToast("Setup completed!")
+			a.toastAdder.ShowToast(pageview.SetupCompletedMessage)
 		}
 		return
 	}
-	a.configStepTitle.SetText(step.Title)
-	a.configStepDesc.SetText(step.Description)
+	a.showStep(step)
 }
 
 // Present displays the assistant dialog attached to the given parent widget.
 func (a *FirstRunAssistant) Present(parent *gtk.Widget) {
 	a.model = firstrun.NewAssistantModel(a.filter)
+	a.applyWordmark()
 	a.stack.SetVisibleChildName("welcome")
 	a.dialog.SetDefaultWidget(&a.primaryBtn.Widget)
 	a.dialog.SetFocus(&a.primaryBtn.Widget)

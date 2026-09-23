@@ -91,3 +91,23 @@ func AssetPath(name string) (string, error) {
 	}
 	return dest, nil
 }
+
+// CleanupAssets removes the temporary directory AssetPath extracted into.
+//
+// The directory is process-scoped, so nothing outside this process can still
+// be reading from it once the process is shutting down; leaving it behind
+// accumulates one stray directory per application run.
+func CleanupAssets() error {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	if cacheDir == "" {
+		return nil
+	}
+	dir := cacheDir
+	cacheDir = ""
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("firstrun: removing asset temp dir: %w", err)
+	}
+	return nil
+}

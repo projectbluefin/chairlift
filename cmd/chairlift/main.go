@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/app"
+	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/version"
 )
@@ -39,7 +40,17 @@ func main() {
 	defer application.Unref()
 	log.Printf("main: application created in %s", time.Since(processStart))
 
-	if code := application.Run(int32(len(os.Args)), os.Args); code > 0 {
+	code := application.Run(int32(len(os.Args)), os.Args)
+
+	// The first-run assistant extracts its embedded SVGs into a
+	// process-scoped temp directory; removing it here keeps a run from
+	// leaving one behind. os.Exit below skips deferred calls, so this
+	// cannot be a defer.
+	if err := firstrun.CleanupAssets(); err != nil {
+		log.Printf("main: %v", err)
+	}
+
+	if code > 0 {
 		os.Exit(int(code))
 	}
 }
