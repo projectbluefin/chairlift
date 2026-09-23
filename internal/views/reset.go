@@ -82,7 +82,7 @@ func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group.Add(&resetRow.Widget)
 
 	page.Add(group)
-	log.Printf("views: recovery group built")
+	log.Printf("views: reset group built")
 }
 
 // onPowerwashClicked shows the confirmation dialog, then runs Powerwash on
