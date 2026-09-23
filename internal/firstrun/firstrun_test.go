@@ -143,7 +143,7 @@ func TestDisablingEveryBackingGroupDropsTheStep(t *testing.T) {
 	// models an administrator's overlay exactly.
 	cfg := &config.Config{
 		ApplicationsPage: config.PageConfig{},
-		FeaturesPage:     config.PageConfig{"ai_group": config.GroupConfig{Enabled: false}},
+		AgentsPage:       config.PageConfig{"agents_group": config.GroupConfig{Enabled: false}},
 	}
 	for _, group := range StepApps.Groups {
 		cfg.ApplicationsPage[group] = config.GroupConfig{Enabled: false}
@@ -158,7 +158,7 @@ func TestDisablingEveryBackingGroupDropsTheStep(t *testing.T) {
 		t.Error("Applications step survived every one of its groups being disabled")
 	}
 	if got[StepIDAI] {
-		t.Error("AI step survived ai_group being disabled")
+		t.Error("AI step survived agents_group being disabled")
 	}
 	if !got[StepIDTheme] || !got[StepIDDeveloper] {
 		t.Errorf("enabled steps were dropped: %v", got)

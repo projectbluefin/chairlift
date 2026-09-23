@@ -93,8 +93,8 @@ var (
 		ID:          StepIDAI,
 		Title:       "AI Tools",
 		Description: "Configure local AI models and hardware acceleration services",
-		Page:        "features_page",
-		Groups:      []string{"ai_group"},
+		Page:        "agents_page",
+		Groups:      []string{"agents_group"},
 	}
 )
 
