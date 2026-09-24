@@ -356,7 +356,9 @@ An agent must not break these:
   affordance) and execution (`runBrewCommandCtx`, and through it every brew
   command ChairLift issues) both read it, so a host whose Homebrew is reachable
   only at the fallback is reported as installed *and* actually driven. A `brew`
-  on `$PATH` wins over the fallback. Do not reintroduce a second resolution: no
+  on `$PATH` wins over the fallback. `internal/capability`'s Homebrew floor
+  resolves through `homebrew.ResolveExecutable`, so the floor, `IsInstalled`,
+  and the exec paths share one answer. Do not reintroduce a second resolution: no
   bare `"brew"` at an exec site, and no private copy of the fallback path.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before

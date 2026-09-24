@@ -87,9 +87,10 @@ func nfpmByPackageName(t *testing.T, cfg GoreleaserConfig, packageName string) N
 	return matches[0]
 }
 
-// A tarball installation needs the same schema as the nFPM and source
-// installs; without it the Livery page cannot load its GSettings keys.
-func TestGoreleaserArchivesShipTheLiverySchema(t *testing.T) {
+// TestGoreleaserArchivesShipAllSchemas asserts that every data/*.gschema.xml
+// file is included in release archives, so tarball installations ship all
+// required schemas without divergence from nFPM packaging.
+func TestGoreleaserArchivesShipAllSchemas(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(RepoRoot(), ".goreleaser.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -105,10 +106,24 @@ func TestGoreleaserArchivesShipTheLiverySchema(t *testing.T) {
 	if len(cfg.Archives) == 0 {
 		t.Fatal("no release archives configured")
 	}
-	const schema = "data/io.projectbluefin.chairlift.livery.gschema.xml"
-	for i, archive := range cfg.Archives {
-		if !slices.Contains(archive.Files, schema) {
-			t.Errorf("archives[%d] omits %s", i, schema)
+
+	schemas, err := filepath.Glob(filepath.Join(RepoRoot(), "data", "*.gschema.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(schemas) == 0 {
+		t.Fatal("no gschemas found in data/")
+	}
+
+	for _, absSchema := range schemas {
+		relSchema, err := filepath.Rel(RepoRoot(), absSchema)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, archive := range cfg.Archives {
+			if !slices.Contains(archive.Files, relSchema) {
+				t.Errorf("archives[%d] omits %s", i, relSchema)
+			}
 		}
 	}
 }

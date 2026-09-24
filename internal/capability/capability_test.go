@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/sysupdate"
 )
@@ -38,8 +39,7 @@ func fakeHost(binaries, assets []string) Probe {
 			}
 			return "", errors.New("executable file not found in $PATH")
 		},
-		// Only the error is meaningful to exists: a capability is a path's
-		// presence, and nothing in this package inspects the FileInfo.
+		// Stat checks path presence and regular file attributes.
 		Stat: func(name string) (os.FileInfo, error) {
 			if present[name] {
 				return statFileInfo{name: name}, nil
@@ -58,7 +58,7 @@ var (
 		sysupdate.MarkerPath,
 		sysupdate.StageScriptPath,
 		imageinfo.DescriptorPath,
-		"/home/linuxbrew/.linuxbrew/bin/brew",
+		homebrew.FallbackExecutable(),
 	}
 )
 
@@ -139,7 +139,7 @@ func TestDetectWithResolvesEveryCapability(t *testing.T) {
 		},
 		{
 			name:  "homebrew at fallback path without brew on PATH",
-			probe: fakeHost(nil, []string{"/home/linuxbrew/.linuxbrew/bin/brew"}),
+			probe: fakeHost(nil, []string{homebrew.FallbackExecutable()}),
 			want:  Set{Homebrew: true},
 		},
 		{

@@ -28,26 +28,15 @@ var (
 	statFile = os.Stat
 )
 
-// ExecutablePath returns the Homebrew executable ChairLift runs: the `brew`
-// $PATH resolves, or the Linuxbrew install path when $PATH has no `brew`, or
-// "" when this host has no Homebrew at all.
-//
-// It is the one resolution both halves of ChairLift read, which is what keeps
-// them from diverging. Visibility — IsInstalled, and through it every view
-// that hides or disables a Homebrew affordance — and execution —
-// runBrewCommandCtx, and through it every brew command ChairLift issues — call
-// this function, so a host whose Homebrew is reachable only at the fallback
-// path is both reported as installed and actually driven, instead of one of
-// the two. Order matters in the other direction as well: a `brew` on $PATH
-// wins, so a user who customised their $PATH keeps the Homebrew they chose.
-//
-// The path is resolved per call rather than memoized in a package variable.
-// Memoizing would save nothing measurable — exec.CommandContext already
-// resolves a bare command name on every exec — while freezing the answer ahead
-// of a test's own seams and of any change on the host, which is precisely the
-// divergence this function exists to remove. The session-stable answer the UI
-// needs is IsInstalledCached's, which caches the availability verdict rather
-// than the path.
+// FallbackExecutable returns Homebrew's supported install location on Linux:
+// "/home/linuxbrew/.linuxbrew/bin/brew".
+func FallbackExecutable() string {
+	return linuxbrewExecutable
+}
+
+// ResolveExecutable resolves the Homebrew executable ChairLift should use: the
+// `brew` $PATH resolves through lookPath, or the Linuxbrew fallback path when
+// a regular file exists at that location, or "" when this host has no Homebrew.
 func ResolveExecutable(lookPath func(string) (string, error), stat func(string) (os.FileInfo, error)) string {
 	if path, err := lookPath("brew"); err == nil && path != "" {
 		return path
@@ -63,6 +52,18 @@ func ResolveExecutable(lookPath func(string) (string, error), stat func(string) 
 	return ""
 }
 
+// ExecutablePath returns the Homebrew executable ChairLift runs: the `brew`
+// $PATH resolves, or the Linuxbrew install path when $PATH has no `brew`, or
+// "" when this host has no Homebrew at all.
+//
+// It is the one resolution both halves of ChairLift read, which is what keeps
+// them from diverging. Visibility — IsInstalled, and through it every view
+// that hides or disables a Homebrew affordance — and execution —
+// runBrewCommandCtx, and through it every brew command ChairLift issues — call
+// this function, so a host whose Homebrew is reachable only at the fallback
+// path is both reported as installed and actually driven, instead of one of
+// the two. Order matters in the other direction as well: a `brew` on $PATH
+// wins, so a user who customised their $PATH keeps the Homebrew they chose.
 func ExecutablePath() string {
 	return ResolveExecutable(lookPath, statFile)
 }
