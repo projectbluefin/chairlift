@@ -64,7 +64,7 @@ xdpyinfo >/dev/null 2>&1 || { echo "Xvfb on $DISPLAY_NUM never became ready" >&2
 
 # The same environment the dry-run startup smoke test uses, so the two agree
 # on what a clean headless launch looks like.
-export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory G_DEBUG=fatal-criticals
+export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory G_DEBUG=fatal-criticals GDK_DEBUG=no-portals
 # The Livery page reads its selections through `gsettings`, which needs
 # ChairLift's schema on the search path. A source build has not run
 # `make install`, so without this the page would capture its
@@ -74,7 +74,10 @@ if [ -n "${CHAIRLIFT_SCHEMA_DIR:-}" ]; then
   export GSETTINGS_SCHEMA_DIR="$CHAIRLIFT_SCHEMA_DIR"
 fi
 export HOME="$OUTDIR/home"
+export XDG_RUNTIME_DIR="$OUTDIR/runtime"
 mkdir -p "$HOME"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 0700 "$XDG_RUNTIME_DIR"
 
 # Render the Bluefin-family rows (release channel, developer mode, gaming)
 # even though the runner is not a Bluefin system. Without this the

@@ -67,6 +67,10 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 	// test ends, so the removal has to happen after every one of those writers
 	// is gone; the cleanup registered below is what orders the two.
 	home := t.TempDir()
+	runtimeDir := filepath.Join(home, "runtime")
+	if err := os.Mkdir(runtimeDir, 0o700); err != nil {
+		t.Fatalf("create isolated XDG_RUNTIME_DIR: %v", err)
+	}
 
 	cmd := exec.Command(
 		dbusRunSession,
@@ -85,7 +89,9 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		"GTK_A11Y=none",
 		"GSETTINGS_BACKEND=memory",
 		"G_DEBUG=fatal-criticals",
+		"GDK_DEBUG=no-portals",
 		"HOME="+home,
+		"XDG_RUNTIME_DIR="+runtimeDir,
 	)
 	// A fresh session includes Homebrew children even when they create their own
 	// process groups. Never scan or signal the test runner's shared session.

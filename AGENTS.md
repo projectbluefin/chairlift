@@ -46,6 +46,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   test runner's shared session. The drain cleanup is registered *after*
   `t.TempDir()` so it runs before the directory removal. A test that launches
   a private session and lends it a temporary directory owes the same drain.
+  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory and
+  sets `GDK_DEBUG=no-portals`. Never run the GTK binary or dry-run tests directly
+  against the developer's live `/run/user/<uid>` or host session bus; ad-hoc runs
+  must use an isolated container or `env -u DBUS_SESSION_BUS_ADDRESS dbus-run-session`
+  with an isolated runtime directory. Never stop, mask, or unmount host desktop portals.
   The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
