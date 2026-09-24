@@ -76,6 +76,13 @@ request here, is that this repository merges through a **merge queue**:
   the workflow files state; do not conclude from a workflow that there is no
   queue, and do not conclude from a green pull-request check that the queue
   will not re-run everything against a newer `main`.
+- Automation cannot push to `main`; it must open a pull request, and not
+  with `GITHUB_TOKEN`: pull requests that token creates trigger no workflow
+  runs, so **Tests Passed** never reports and the queue never admits them.
+  `release-screenshots.yml` mints a MergeRaptor GitHub App token
+  (`MERGERAPTOR_APP_ID`/`MERGERAPTOR_PRIVATE_KEY`) for
+  `peter-evans/create-pull-request`, and its commit carries no `[skip ci]`
+  for the same reason.
 
 The practical rule: resolve every gate question — merge and security alike,
 per pull request, not once per batch instruction — **before** the
