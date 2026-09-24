@@ -197,6 +197,8 @@ Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme
 drift would churn the repo — instead, `.github/workflows/release-screenshots.yml`
 runs it automatically after each published GitHub Release (building from that
-release's tag) and commits any changed PNGs to `main`, so what ships is what's
-pictured here without anyone remembering to do it by hand. `make ci` checks
-that every page and configurable group has a screenshot and an entry here.
+release's tag) and opens a pull request with any changed PNGs against `main`,
+so what ships is what's pictured here without anyone remembering to do it by
+hand (the pull request routes through branch protection and the merge queue,
+which reject direct pushes). `make ci` checks that every page and
+configurable group has a screenshot and an entry here.
