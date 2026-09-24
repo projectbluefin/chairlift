@@ -160,13 +160,13 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		{
 			file: "agents_page.go",
 			required: []string{
-				"pageview.AIStackRow(",
-				"pageview.AIStackDetails(",
-				"pageview.AIStackGroupDescription(",
-				"actionmsg.AIStack(",
+				"pageview.AgentModeSubtitle(",
+				"pageview.AgentModeDetails(",
+				"pageview.AgentModeGroupDescription(",
+				"actionmsg.AgentMode(",
 			},
 			// A bare switch re-enters ::state-set on a programmatic revert,
-			// which would restart the model after a failed stop; the error
+			// which would restart the service after a failed stop; the error
 			// text names the unit file and belongs in the log, not a toast.
 			retired: []string{
 				`row.SetTitle("Local AI Model Server")`,

@@ -92,7 +92,7 @@ var (
 	StepAI = Step{
 		ID:          StepIDAI,
 		Title:       "AI Tools",
-		Description: "Configure local AI models and hardware acceleration services",
+		Description: "Turn on Agent Mode to run AI models on this computer",
 		Page:        "agents_page",
 		Groups:      []string{"agents_group"},
 	}

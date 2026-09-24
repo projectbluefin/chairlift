@@ -513,44 +513,34 @@ An agent must not break these:
   never replaced by a previous answer. `Catalog` caches in process only,
   bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
   GTK main thread, so it must stay safe for concurrent readers.
-- **The local-AI stack is one switch on its own page, and it is
-  unprivileged.** It lives on `agents_page`, built by
+- **Agent Mode is one switch on its own page, runs llmman as a user unit,
+  and is unprivileged.** It lives on `agents_page`, built by
   `internal/views/agents_page.go`, as that page's single group
-  (`agents_group`). It used to be a group on the Features page, between
-  developer mode and gaming mode, where it read as one more system
-  preference; what it turns on is a service a person then points other
-  applications at. ChairLift
-  ships one runtime (RamaLama) whose per-accelerator image is chosen by
-  `internal/gpu`, not bluefinctl's twelve-quadlet vendor catalog — that
-  catalog has no answer for an Intel or a GPU-less host. `internal/aistack`
-  writes one quadlet to the user's `~/.config/containers/systemd` and drives
-  it with `systemctl --user`, so the container is rootless in the invoking
-  account and nothing is layered onto a bootc image. That is why its image
-  and model overrides (`ai_images`, `ai_model`) live in the ordinary
-  `config.yml` rather than the root-only `channels.yml`: pointing a rootless
-  container at another image grants nothing running podman directly would
-  not. Do not give it a pkexec route, and do not reintroduce a vendor/stack
-  matrix in the UI.
-  Disabling must preserve the quadlet when `systemctl --user stop` fails and a
-  follow-up `is-active` check cannot prove the service stopped; removing the
-  unit while the service is still active makes the switch lie and removes the
-  user's management handle.
-
-  The four images in `internal/aistack`'s `stacks` map are pinned by digest,
-  and the digest must be the multi-arch **manifest index**, never one of its
-  per-architecture children. `.github/workflows/test.yml` ships a
-  `[amd64, arm64]` matrix, so a child-manifest pin silently removes the AI
-  stack from arm64 hosts. A request without the index `Accept` headers is how
-  the wrong digests were obtained: on 2026-09-18 a bare
-  `curl -sI quay.io/v2/ramalama/<image>/manifests/latest` against all four
-  images content-negotiated down to the amd64 child manifest rather than the
-  index. That is why the roll procedure recorded beside the map sends the
-  index `Accept` headers and confirms the response's `mediaType` is an index
-  before the value is used. `TestEveryStackIsPinnedByAnImmutableDigest`
-  holds the shape of the pin — `@sha256:` present, `:latest` absent — but it
-  cannot check architecture coverage or freshness, so both belong to whoever
-  rolls the digests. See
-  [`docs/skills/multi-arch-digest-pinning/SKILL.md`](docs/skills/multi-arch-digest-pinning/SKILL.md).
+  (`agents_group`, floored on Homebrew). ADR-0015 is the contract.
+  `internal/aistack` owns exactly three artifacts and nothing else: the
+  generated Brewfile it hands to `brew bundle install` (tap `llmmanorg/tap`,
+  formula `llmmanorg/tap/llmman` unless an `llmman` already resolves, and
+  the `ai.jan.Jan` Flatpak on x86_64 only), the systemd **user** unit
+  `~/.config/systemd/user/chairlift-llmman.service`, and the environment.d
+  fragment `~/.config/environment.d/10-chairlift-llmman.conf`
+  (`OLLAMA_HOST=127.0.0.1:17434`, nothing else — no `OPENAI_BASE_URL` or
+  `OPENAI_API_KEY`). llmman owns models and engine selection; Homebrew owns
+  the binary; lifecycle is ChairLift's, never `brew services`. The unit's
+  `ExecStart` is the absolute `llmman` path resolved after install (`$PATH`,
+  then beside `homebrew.ExecutablePath()`); no Homebrew prefix is spelled.
+  It binds `LLMMAN_HOST=127.0.0.1:17434` and carries the literal
+  `LLMMAN_SHELL=off` and `LLMMAN_NOHISTORY=1`; no `LLMMAN_ORIGINS` is set
+  until Jan's exact origin is verified, and wildcard CORS is forbidden.
+  Enable runs `llmman serve --pull-only` before writing anything so an
+  engine that cannot be fetched fails the switch; readiness is a bounded
+  `GET /llmman/node`, never `systemctl is-active` alone. Every mutation is
+  behind `dryrun.Enabled()`. Disabling removes only the unit and the
+  fragment — binaries, Jan, and models stay — and must preserve both when
+  `systemctl --user disable --now` fails and a follow-up `is-active` check
+  cannot prove the service stopped; removing the unit while the service is
+  still active makes the switch lie and removes the user's management
+  handle. Do not give it a pkexec route, and do not reintroduce a
+  container-image or vendor/stack matrix.
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** `internal/livery` sets three marks — the app-grid button
   (`view-app-grid-symbolic`), the panel menu button
@@ -685,8 +675,8 @@ An agent must not break these:
 - **Livery rotation runs at login, and ChairLift's GSettings schemas hold
   preferences only.** The rotation unit is a `Type=oneshot`
   `WantedBy=graphical-session.target` user unit written to the user's
-  `~/.config/systemd/user`, the same unprivileged posture as the AI stack's
-  quadlet; it invokes `chairlift --rotate-livery`, which short-circuits before
+  `~/.config/systemd/user`, the same unprivileged posture as Agent Mode's
+  llmman unit; it invokes `chairlift --rotate-livery`, which short-circuits before
   `app.New()` so a headless service never opens a display. Login, not logout:
   an abrupt logout does not fire a hook, so a logout-triggered rotation would
   fall back to leaving the previous mark — exactly the outcome the feature

@@ -57,9 +57,7 @@ valid page.
 
 ### Agents Page (`agents_page`)
 
-- `agents_group`: Local AI language model served from a rootless container in the invoking user's own account; shown where Podman is present. Nothing here crosses a privilege boundary.
-  - `ai_images`: Map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
-  - `ai_model`: Model reference to serve (default: `ollama://qwen2.5:7b`)
+- `agents_group`: Agent Mode — llmman installed with Homebrew and served as a systemd user unit on `127.0.0.1:17434` in the invoking user's own account; shown where Homebrew is present. Nothing here crosses a privilege boundary. It has no options beyond `enabled`.
 
 ### Updates Page (`updates_page`)
 
@@ -214,7 +212,7 @@ install -D -m 644 config.yml debian/tmp/usr/share/chairlift/config.yml
     (`true` for every group except `maintenance_cleanup_group` and
     `reset_group`, which default to `false`)
   - An omitted optional field (`app_id`, `website`, `issues`, `chat`,
-    `actions`, `bundles_paths`, `ai_images`, `ai_model`) inherits its documented default value
+    `actions`, `bundles_paths`) inherits its documented default value
   - An explicit empty list (e.g. `actions: []`) clears the field
   - A non-empty list, or an explicitly set scalar value, replaces the
     default outright

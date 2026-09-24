@@ -501,30 +501,21 @@ func DriverSwitch(dryRun bool, driver string) FeatureToggleDecision {
 	}
 }
 
-// AIStack returns the toast for the local-AI switch. It no longer names the
-// compute stack the hardware selected: "CUDA" confirmed nothing a person
-// could act on, and the selected stack is on the Agents page's Details row
-// for anyone it does mean something to.
-func AIStack(dryRun bool, enable bool) FeatureToggleDecision {
+// AgentMode returns the decision for the Agent Mode switch. A dry run never
+// confirms: nothing was installed, written, or started.
+func AgentMode(dryRun bool, enable bool) FeatureToggleDecision {
 	if dryRun {
-		verb := "stopped"
+		verb := "turned off"
 		if enable {
-			verb = "started"
+			verb = "turned on"
 		}
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   fmt.Sprintf("[DRY-RUN] Preview: local AI would be %s — no changes made", verb),
+			Toast:   fmt.Sprintf("[DRY-RUN] Preview: Agent Mode would be %s — no changes made", verb),
 		}
 	}
-
 	if enable {
-		return FeatureToggleDecision{
-			Confirm: true,
-			Toast:   "Local AI is starting. The first model download runs in the background.",
-		}
+		return FeatureToggleDecision{Confirm: true, Toast: "Agent Mode is on."}
 	}
-	return FeatureToggleDecision{
-		Confirm: true,
-		Toast:   "Local AI stopped. The model it downloaded was kept.",
-	}
+	return FeatureToggleDecision{Confirm: true, Toast: "Agent Mode is off. The software and its models were kept."}
 }

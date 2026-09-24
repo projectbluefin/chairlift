@@ -5,7 +5,7 @@
   The Livery page's selections and switches are user preferences with no file
   on disk to infer them from, so they live in dconf where GNOME desktop
   preferences belong. Everything else ChairLift knows is read back from the
-  system it manages: the AI stack's quadlet, the installed Flatpaks, the
+  system it manages: Agent Mode's user unit, the installed Flatpaks, the
   staged image. Do not add keys here for state that can be observed.
 
   Key order matches internal/livery's Keys slice, which

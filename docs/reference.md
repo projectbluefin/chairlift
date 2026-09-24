@@ -102,12 +102,7 @@ other than `tap`.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Local AI | `agents_group` | A language model served from a rootless container in the invoking user's own account. Crosses no privilege boundary, so it has no `pkexec` route. Where Podman is absent the row stays visible with its switch disabled, because the missing piece is named in the row's Details |
-
-`agents_group` supports:
-
-- `ai_images` — map of container image references per GPU vendor (`nvidia`, `amd`, `intel`, `none`)
-- `ai_model` — model reference to serve (default: `ollama://qwen2.5:7b`)
+| Agent Mode | `agents_group` | llmman installed with Homebrew (plus the Jan Flatpak on x86_64) and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
 
 ### Features Page (`features_page`)
 

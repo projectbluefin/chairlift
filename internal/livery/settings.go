@@ -16,7 +16,7 @@ import (
 //
 // ChairLift has exactly one GSettings schema, and this is it. The Livery
 // page's selections and switches are user preferences with no file on disk to
-// infer them from — unlike, say, the AI stack, whose quadlet's presence is its
+// infer them from — unlike, say, Agent Mode, whose user unit's presence is its
 // own state — so they need somewhere to live that survives a restart and a
 // reboot. dconf is where GNOME desktop preferences belong. Do not add keys
 // here for state that can be observed.

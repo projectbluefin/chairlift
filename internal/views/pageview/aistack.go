@@ -1,141 +1,91 @@
 package pageview
 
-import (
-	"fmt"
-	"strings"
-)
+import "github.com/projectbluefin/chairlift/internal/aistack"
 
-// AIStackGroupTitle is the Agents page's local-AI group heading.
-func AIStackGroupTitle() string {
-	return "Local AI"
+// AgentModeGroupTitle is the Agents page's group heading.
+func AgentModeGroupTitle() string {
+	return "Agent Mode"
 }
 
-// AIStackGroupDescription states the property that makes the feature worth
-// having at all. It is the group description rather than the row subtitle
-// because the subtitle has to carry the two facts that vary per machine —
-// graphics acceleration and download size — and a subtitle carrying all
-// three reads as a paragraph.
-func AIStackGroupDescription() string {
-	return "Answers are generated on this computer. Nothing you type is sent to a cloud service."
+// AgentModeGroupDescription states the two properties that make the feature
+// worth having: where answers come from, and that prompts are not kept.
+func AgentModeGroupDescription() string {
+	return "Answers are generated on this computer. Nothing you type is sent to a cloud service, and prompts are not saved."
 }
 
-// AIStackRow returns the local-AI switch row's text. hardware is the
-// human-readable graphics vendor ("AMD", "NVIDIA", "Intel"), and accelerated
-// is false when no graphics hardware was found. The compute stack's own name
-// is deliberately absent: "ROCm" tells a person nothing about whether the
-// feature will work for them, and it is available in the Details row for
-// anyone it does mean something to.
-func AIStackRow(hardware string, accelerated bool) Row {
-	row := Row{Title: "Run an AI model on this computer"}
-	if accelerated {
-		row.Subtitle = fmt.Sprintf("Your %s graphics will speed it up. Turning this on downloads several gigabytes.", hardware)
-		return row
+// AgentModeRowTitle is the switch row's title.
+func AgentModeRowTitle() string {
+	return "Run AI models on this computer"
+}
+
+// AgentModeSubtitle is the switch row's subtitle for a resolved state. The
+// ready text says which processes see the endpoint, because environment
+// changes never reach an application that is already running.
+func AgentModeSubtitle(s aistack.State) string {
+	switch s {
+	case aistack.StateUnavailable:
+		return "Not available on this computer — Homebrew is not installed."
+	case aistack.StateProvisioning:
+		return "Checking whether the model server is answering…"
+	case aistack.StateReady:
+		return "Ready. Apps and terminals opened from now on find it; restart any that are already open."
+	case aistack.StateDegraded:
+		return "Turned on, but the model server is not answering. Turn it off and on again to retry."
+	case aistack.StateDisabled:
+		return "Off. The software and any downloaded models were kept."
+	default:
+		return "Turning this on installs llmman from Homebrew and downloads its engine, which can take a while."
 	}
-	// A machine with no graphics card still gets a working model, but saying
-	// so without saying it is slow would set the wrong expectation for a
-	// first run that takes minutes per answer.
-	row.Subtitle = "No graphics card was found, so answers will be slow. Turning this on downloads several gigabytes."
-	return row
 }
 
-// AIStackWorkingSubtitle returns the subtitle shown while the switch is
-// acting.
-func AIStackWorkingSubtitle(enabling bool) string {
+// AgentModeWorkingSubtitle is shown while the switch is acting.
+func AgentModeWorkingSubtitle(enabling bool) string {
 	if enabling {
-		return "Starting…"
+		return "Setting up… This can take several minutes the first time."
 	}
 	return "Stopping…"
 }
 
-// AIStackResultSubtitle returns the subtitle after the switch has acted.
-// The address the model answers on lives in the Details row, so this stays a
-// sentence rather than becoming a key/value dump.
-func AIStackResultSubtitle(enabled bool) string {
-	if enabled {
-		return "Running. The model downloads in the background the first time, which can take a while."
-	}
-	return "Stopped. The model that was already downloaded was kept."
-}
-
-// AIStackFailureSubtitle returns the subtitle when the switch could not do
-// what was asked. Turning the feature off can fail in a way that leaves the
-// model running — the service refused to stop and a follow-up check could
-// not prove otherwise — and in that case nothing was removed, so the text
-// must not suggest the feature is off.
-func AIStackFailureSubtitle(enabling bool) string {
+// AgentModeFailureSubtitle is shown when the switch could not do what was
+// asked. A failed enable removes the unit it wrote but keeps software that
+// Homebrew already installed; a failed disable keeps everything, because
+// the service could not be proven stopped.
+func AgentModeFailureSubtitle(enabling bool) string {
 	if enabling {
-		return "Could not start. Nothing on this computer was changed."
+		return "Could not turn on. Software that was already installed was kept."
 	}
 	return "Still running — it could not be stopped, so nothing was removed."
 }
 
-// AIStackFailureToast returns the toast for the same two failures. The
-// underlying error is logged rather than shown: it names the background
-// service by its file name, which is not something to put in front of a
-// person.
-func AIStackFailureToast(enabling bool) string {
+// AgentModeFailureToast is the toast for the same two failures. The error
+// itself is logged: it names commands and unit files.
+func AgentModeFailureToast(enabling bool) string {
 	if enabling {
-		return "Local AI could not start. Nothing was changed."
+		return "Agent Mode could not be turned on."
 	}
-	return "Local AI is still running. It could not be stopped, so nothing was removed."
+	return "Agent Mode is still running. It could not be stopped, so nothing was removed."
 }
 
-// AIStackDetailsTitle is the expander holding the technical identity a
-// person needs only when pointing another application at the model.
-func AIStackDetailsTitle() string {
+// AgentModeDetailsTitle is the expander holding what a person needs only
+// when pointing another application at the model server.
+func AgentModeDetailsTitle() string {
 	return "Details"
 }
 
-// AIStackFacts is everything the Details rows are derived from.
-type AIStackFacts struct {
-	// Model is the model reference the service is configured to serve.
-	Model string
-	// Hardware is the human-readable graphics vendor name.
-	Hardware string
-	// Accelerator is the compute stack selected for that hardware.
-	Accelerator string
-	// Accelerated is false when no graphics hardware was found.
-	Accelerated bool
-	// Port is the port the model answers on.
-	Port int
-}
-
-// AIStackDetails returns the rows behind the Details expander.
-func AIStackDetails(f AIStackFacts) []Row {
+// AgentModeDetails returns the rows behind the Details expander. jan reports
+// whether this processor gets the Jan chat app, whose Flathub build is
+// x86_64-only.
+func AgentModeDetails(jan bool) []Row {
+	chat := "Jan"
+	if !jan {
+		chat = "Not offered on this processor"
+	}
 	return []Row{
-		{Title: "Model", Subtitle: AIModelName(f.Model)},
-		{Title: "Graphics acceleration", Subtitle: aiAccelerationDetail(f)},
-		// Without the address a person has a running model and no way to
+		{Title: "Model server", Subtitle: "llmman, installed with Homebrew"},
+		// Without the address a person has a running server and no way to
 		// reach it from anything.
-		{Title: "Address for other apps", Subtitle: fmt.Sprintf("localhost:%d", f.Port)},
+		{Title: "Address for other apps", Subtitle: aistack.Address},
+		{Title: "Found automatically by", Subtitle: "Apps that read OLLAMA_HOST, once restarted"},
+		{Title: "Chat app", Subtitle: chat},
 	}
-}
-
-func aiAccelerationDetail(f AIStackFacts) string {
-	if !f.Accelerated {
-		return "None — runs on the processor"
-	}
-	// "Intel (Intel oneAPI)" reads as a stutter, so a stack that already
-	// names its vendor is shown on its own.
-	if strings.Contains(f.Accelerator, f.Hardware) {
-		return f.Accelerator
-	}
-	return fmt.Sprintf("%s (%s)", f.Hardware, f.Accelerator)
-}
-
-// AIModelName turns a model reference into something readable. References
-// carry a source scheme ("ollama://llama3.2:3b") that identifies where the
-// weights come from, which is noise to everyone except the person who
-// configured it.
-func AIModelName(ref string) string {
-	name := strings.TrimSpace(ref)
-	if name == "" {
-		return "Not configured"
-	}
-	if _, rest, found := strings.Cut(name, "://"); found {
-		if rest = strings.TrimSpace(rest); rest != "" {
-			return rest
-		}
-	}
-	return name
 }

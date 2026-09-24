@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/aistack"
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
@@ -180,11 +181,10 @@ type UserHome struct {
 	troubleshootState  troubleshoot.State
 	troubleshootGate   actionstate.Gate
 
-	// Local AI (features_page ai_group)
-	aiStackGroup  *adw.PreferencesGroup
-	aiStackRow    *adw.ActionRow
-	aiStackSwitch *gtk.Switch
-	aiStackGate   actionstate.Gate
+	// Agent Mode (agents_page agents_group)
+	agentModeRow   *adw.ActionRow
+	agentModeState aistack.State
+	agentModeGate  actionstate.Gate
 
 	// Powerwash / Factory Reset (maintenance_page reset_group)
 	powerwashGate    actionstate.Gate

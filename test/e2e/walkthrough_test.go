@@ -411,18 +411,11 @@ func assertBluefinGroupsRendered(t *testing.T, outDir string) {
 		}
 	}
 
-	// The local-AI stack selects its image from the stubbed GPU. The script
-	// stubs an Intel + NVIDIA hybrid, so the captured frame must show the
-	// CUDA stack — the case a vendor-directory catalog gets wrong. The
-	// repository part alone is matched: the reference carries a pinned index
-	// digest that is rolled periodically, and this gate is about selection.
-	//
-	// The marker is the Agents page's, not a group's: local AI moved off
-	// Features onto its own destination, because what it turns on is a
-	// service a person then points other applications at rather than one
-	// more system preference.
+	// Agent Mode is llmman on loopback. The marker is the Agents page's own,
+	// and it names the fixed address so a bind drifting off loopback fails
+	// here as well as in internal/aistack's unit test.
 	ai := findLogLine(t, outDir, "views: agents page built")
-	for _, want := range []string{"vendor=nvidia", "accelerator=CUDA", "image=quay.io/ramalama/cuda"} {
+	for _, want := range []string{"runtime=llmman", "address=127.0.0.1:17434", "state="} {
 		if !strings.Contains(ai, want) {
 			t.Errorf("agents page marker missing %q\n  %s", want, ai)
 		}

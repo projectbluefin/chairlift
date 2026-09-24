@@ -3,20 +3,12 @@
 # Set "enabled: false" to hide a preference group on any page. A functional
 # page is omitted when all of its groups are disabled; Help is always retained.
 
-# A language model served from a rootless container, on whichever accelerator
-# this machine has. Shown everywhere Podman exists; the model is only
-# downloaded once the switch is turned on.
-#
-# ai_images pins the container image per GPU vendor (nvidia, amd, intel,
-# none) — for a site that mirrors registries — and ai_model changes what is
-# served. Both are ordinary settings rather than root-only ones because the
-# container runs unprivileged in the user's own account.
+# Agent Mode: llmman served as a systemd user unit on 127.0.0.1:17434,
+# installed with Homebrew (plus the Jan chat app on x86_64). Shown where
+# Homebrew exists; nothing is installed until the switch is turned on.
 agents_page:
   agents_group:
     enabled: true
-    # ai_images:
-    #   nvidia: registry.example.internal/ramalama/cuda:latest
-    # ai_model: ollama://qwen2.5:7b
 
 updates_page:
   # Whether this system installs updates on its own schedule. Updating now

@@ -220,40 +220,18 @@ func TestPowerwashConfirmsOnlyWhenSomethingWasRemoved(t *testing.T) {
 	}
 }
 
-// The accelerator's name used to be interpolated into every one of these
-// toasts. It is gone on purpose: "started on the ROCm stack" told a person
-// nothing they could act on, and the guard here is that it stays gone.
-func TestAIStackEnableConfirmsWithoutNamingTheComputeStack(t *testing.T) {
-	decision := AIStack(false, true)
-
-	if !decision.Confirm {
-		t.Error("a live enable did not confirm the switch")
-	}
-	for _, jargon := range []string{"CUDA", "ROCm", "oneAPI", "stack"} {
-		if strings.Contains(decision.Toast, jargon) {
-			t.Errorf("toast leaks %q: %q", jargon, decision.Toast)
+func TestAgentModeDryRunDoesNotConfirm(t *testing.T) {
+	for _, enable := range []bool{true, false} {
+		decision := AgentMode(true, enable)
+		if decision.Confirm || !strings.Contains(decision.Toast, "DRY-RUN") {
+			t.Errorf("dry run enable=%v: %+v", enable, decision)
 		}
 	}
 }
 
-func TestAIStackDryRunDoesNotConfirm(t *testing.T) {
-	decision := AIStack(true, true)
-
-	if decision.Confirm {
-		t.Error("a dry-run enable confirmed the switch")
-	}
-	if !strings.Contains(decision.Toast, "DRY-RUN") {
-		t.Errorf("toast is not marked as a preview: %q", decision.Toast)
-	}
-}
-
-func TestAIStackDisableConfirms(t *testing.T) {
-	decision := AIStack(false, false)
-
-	if !decision.Confirm {
-		t.Error("a live disable did not confirm the switch")
-	}
-	if !strings.Contains(decision.Toast, "stopped") {
-		t.Errorf("toast does not say the model stopped: %q", decision.Toast)
+func TestAgentModeDisableSaysModelsWereKept(t *testing.T) {
+	decision := AgentMode(false, false)
+	if !decision.Confirm || !strings.Contains(decision.Toast, "kept") {
+		t.Errorf("live disable: %+v", decision)
 	}
 }

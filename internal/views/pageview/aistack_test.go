@@ -3,152 +3,86 @@ package pageview
 import (
 	"strings"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/aistack"
 )
 
-func TestAIStackRowNamesTheGraphicsHardwareWithoutNamingTheComputeStack(t *testing.T) {
-	row := AIStackRow("AMD", true)
-
-	if !strings.Contains(row.Subtitle, "AMD") {
-		t.Errorf("subtitle does not say which graphics hardware helps: %q", row.Subtitle)
-	}
-	if strings.Contains(row.Subtitle, "ROCm") || strings.Contains(row.Title, "ROCm") {
-		t.Errorf("the compute stack's name belongs in Details, not the switch row: %q / %q", row.Title, row.Subtitle)
-	}
-}
-
-func TestAIStackRowWarnsThatAMachineWithoutAGraphicsCardIsSlow(t *testing.T) {
-	row := AIStackRow("None detected", false)
-
-	if !strings.Contains(row.Subtitle, "slow") {
-		t.Errorf("subtitle does not warn that answers will be slow: %q", row.Subtitle)
-	}
-	if strings.Contains(row.Subtitle, "None detected") {
-		t.Errorf("subtitle repeats the detection placeholder as if it were hardware: %q", row.Subtitle)
-	}
-}
-
-func TestAIStackRowAlwaysWarnsAboutTheDownload(t *testing.T) {
-	for _, accelerated := range []bool{true, false} {
-		row := AIStackRow("NVIDIA", accelerated)
-		if !strings.Contains(row.Subtitle, "gigabytes") {
-			t.Errorf("AIStackRow(accelerated=%v) does not warn about the download size: %q", accelerated, row.Subtitle)
+func TestAgentModeGroupDescriptionAddressesCloudAndPromptRetention(t *testing.T) {
+	d := AgentModeGroupDescription()
+	for _, want := range []string{"cloud", "not saved"} {
+		if !strings.Contains(d, want) {
+			t.Errorf("description %q does not mention %q", d, want)
 		}
 	}
 }
 
-func TestAIStackGroupDescriptionSaysNothingIsSentToACloud(t *testing.T) {
-	description := AIStackGroupDescription()
-
-	if !strings.Contains(description, "cloud") {
-		t.Errorf("group description does not address where the data goes: %q", description)
+// Every state reads differently, so a degraded or kept-but-off Agent Mode
+// can never be mistaken for ready.
+func TestAgentModeSubtitleDistinguishesEveryState(t *testing.T) {
+	seen := map[string]aistack.State{}
+	for s := aistack.StateUnavailable; s <= aistack.StateDisabled; s++ {
+		text := AgentModeSubtitle(s)
+		if prev, dup := seen[text]; dup {
+			t.Errorf("states %d and %d share subtitle %q", prev, s, text)
+		}
+		seen[text] = s
+		if s != aistack.StateReady && strings.HasPrefix(text, "Ready") {
+			t.Errorf("state %d claims ready: %q", s, text)
+		}
 	}
 }
 
-func TestAIStackResultSubtitleDoesNotClaimTheModelWasDeleted(t *testing.T) {
-	stopped := AIStackResultSubtitle(false)
-
-	if !strings.Contains(stopped, "kept") {
-		t.Errorf("stopping implies the download was discarded: %q", stopped)
+// #262: environment changes never reach running processes, and the text
+// must not pretend they do.
+func TestAgentModeReadySaysRunningAppsMustRestart(t *testing.T) {
+	if got := AgentModeSubtitle(aistack.StateReady); !strings.Contains(got, "restart") {
+		t.Errorf("ready subtitle does not say open apps must restart: %q", got)
 	}
 }
 
-// A failed stop is the one outcome that must not read as success: the unit is
-// deliberately preserved when the service cannot be proven stopped, so the
-// text has to keep saying the model is running.
-func TestAIStackFailureTextDoesNotClaimTheModelStopped(t *testing.T) {
-	subtitle := AIStackFailureSubtitle(false)
-	toast := AIStackFailureToast(false)
+func TestAgentModeDisabledSaysModelsWereKept(t *testing.T) {
+	if got := AgentModeSubtitle(aistack.StateDisabled); !strings.Contains(got, "kept") {
+		t.Errorf("disabled subtitle implies downloads were discarded: %q", got)
+	}
+}
 
-	for name, text := range map[string]string{"subtitle": subtitle, "toast": toast} {
+// A failed stop keeps the unit because the service may still run, so the text
+// has to keep saying it is running.
+func TestAgentModeFailedStopDoesNotClaimItStopped(t *testing.T) {
+	for name, text := range map[string]string{"subtitle": AgentModeFailureSubtitle(false), "toast": AgentModeFailureToast(false)} {
 		lower := strings.ToLower(text)
-		if !strings.Contains(lower, "still running") {
-			t.Errorf("%s does not say the model is still running: %q", name, text)
-		}
-		if !strings.Contains(lower, "nothing was removed") {
-			t.Errorf("%s does not say the preserved unit was left alone: %q", name, text)
+		if !strings.Contains(lower, "still running") || !strings.Contains(lower, "nothing was removed") {
+			t.Errorf("%s = %q", name, text)
 		}
 	}
 }
 
-func TestAIStackFailedStartSaysNothingChanged(t *testing.T) {
-	if got := AIStackFailureSubtitle(true); !strings.Contains(got, "Nothing") {
-		t.Errorf("a failed start does not say nothing changed: %q", got)
-	}
-	if got := AIStackFailureToast(true); !strings.Contains(got, "Nothing") {
-		t.Errorf("a failed start toast does not say nothing changed: %q", got)
-	}
-}
-
-func TestAIStackDetailsGiveTheAddressAndTheModel(t *testing.T) {
-	rows := AIStackDetails(AIStackFacts{
-		Model:       "ollama://llama3.2:3b",
-		Hardware:    "AMD",
-		Accelerator: "ROCm",
-		Accelerated: true,
-		Port:        8080,
-	})
-
-	found := map[string]string{}
-	for _, row := range rows {
-		found[row.Title] = row.Subtitle
-	}
-
-	if found["Model"] != "llama3.2:3b" {
-		t.Errorf("model row = %q, want the bare model name", found["Model"])
-	}
-	if !strings.Contains(found["Address for other apps"], "8080") {
-		t.Errorf("address row does not carry the port: %q", found["Address for other apps"])
-	}
-	if found["Graphics acceleration"] != "AMD (ROCm)" {
-		t.Errorf("acceleration row = %q, want vendor and stack", found["Graphics acceleration"])
-	}
-}
-
-func TestAIStackAccelerationDetailDoesNotStutterTheVendor(t *testing.T) {
-	rows := AIStackDetails(AIStackFacts{
-		Model:       "ollama://x",
-		Hardware:    "Intel",
-		Accelerator: "Intel oneAPI",
-		Accelerated: true,
-		Port:        8080,
-	})
-
-	for _, row := range rows {
-		if row.Title != "Graphics acceleration" {
-			continue
-		}
-		if row.Subtitle != "Intel oneAPI" {
-			t.Errorf("acceleration row = %q, want the stack name alone", row.Subtitle)
+// A failed enable rolls back the unit but not what Homebrew installed, so it
+// must not say nothing changed.
+func TestAgentModeFailedEnableDoesNotClaimNothingChanged(t *testing.T) {
+	for _, text := range []string{AgentModeFailureSubtitle(true), AgentModeFailureToast(true)} {
+		if strings.Contains(strings.ToLower(text), "nothing") {
+			t.Errorf("failed enable claims nothing changed: %q", text)
 		}
 	}
 }
 
-func TestAIStackAccelerationDetailSaysWhatRunsItWithoutAGPU(t *testing.T) {
-	rows := AIStackDetails(AIStackFacts{Model: "ollama://x", Hardware: "None detected", Accelerator: "CPU", Port: 8080})
-
-	for _, row := range rows {
-		if row.Title != "Graphics acceleration" {
-			continue
+func TestAgentModeDetailsGiveTheAddressAndGateJan(t *testing.T) {
+	find := func(rows []Row, title string) string {
+		for _, r := range rows {
+			if r.Title == title {
+				return r.Subtitle
+			}
 		}
-		if !strings.Contains(row.Subtitle, "processor") {
-			t.Errorf("acceleration row = %q, want it to say the processor runs it", row.Subtitle)
-		}
+		return ""
 	}
-}
-
-func TestAIModelNameDropsTheSourceScheme(t *testing.T) {
-	tests := map[string]string{
-		"ollama://llama3.2:3b":       "llama3.2:3b",
-		"huggingface://org/model":    "org/model",
-		"llama3.2:3b":                "llama3.2:3b",
-		"  ollama://llama3.2:3b    ": "llama3.2:3b",
-		"":                           "Not configured",
-		"ollama://":                  "ollama://",
+	if got := find(AgentModeDetails(true), "Address for other apps"); got != "127.0.0.1:17434" {
+		t.Errorf("address row = %q", got)
 	}
-
-	for ref, want := range tests {
-		if got := AIModelName(ref); got != want {
-			t.Errorf("AIModelName(%q) = %q, want %q", ref, got, want)
-		}
+	if got := find(AgentModeDetails(true), "Chat app"); got != "Jan" {
+		t.Errorf("x86_64 chat row = %q", got)
+	}
+	if got := find(AgentModeDetails(false), "Chat app"); strings.Contains(got, "Jan") {
+		t.Errorf("non-x86_64 host offered Jan: %q", got)
 	}
 }

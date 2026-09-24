@@ -76,6 +76,11 @@ are listed in [org-adrs.md](org-adrs.md).
   — page and group visibility is bounded by host capability (`Configured && Available`);
   page-level availability is synchronous and non-blocking, while group-level probes
   can run asynchronously without creating inert placeholders
+- [adr/0015-agent-mode-llmman.md](adr/0015-agent-mode-llmman.md)
+  — Agent Mode runs llmman (installed via a Homebrew Brewfile, Jan Flatpak on
+  x86_64) as the ChairLift-owned user unit `chairlift-llmman.service` on
+  loopback with the web shell and prompt history off; defines the six Agent
+  Mode states, the Ask Bluefin readiness predicate, and artifact ownership
 
 ### Design
 

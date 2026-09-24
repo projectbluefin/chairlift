@@ -51,7 +51,7 @@ func fakeHost(binaries, assets []string) Probe {
 // allBinaries and allAssets are the complete probe answers for a host that has
 // everything.
 var (
-	allBinaries = []string{"flatpak", "podman", "distrobox"}
+	allBinaries = []string{"flatpak", "distrobox"}
 	allAssets   = []string{
 		bootc.StageScriptPath,
 		imageinfo.DescriptorPath,
@@ -91,11 +91,6 @@ func TestDetectWithResolvesEveryCapability(t *testing.T) {
 			name:  "brew on PATH",
 			probe: fakeHost([]string{"brew"}, nil),
 			want:  Set{Homebrew: true},
-		},
-		{
-			name:  "podman on PATH",
-			probe: fakeHost([]string{"podman"}, nil),
-			want:  Set{Podman: true},
 		},
 		{
 			name:  "distrobox on PATH",
@@ -165,18 +160,17 @@ func TestDetectWithResolvesEveryCapability(t *testing.T) {
 // would not. This is the regression test that catches the two helpers
 // drifting apart from production resolution.
 func TestProbeFromPresentAndNamesIsTheE2EHostShapeSeam(t *testing.T) {
-	// A representative Bluefin host shape: flatpak, brew, podman, the bootc
+	// A representative Bluefin host shape: flatpak, brew, the bootc
 	// stage script, and the image descriptor.
 	want := Set{
 		Flatpak:         true,
 		Homebrew:        true,
-		Podman:          true,
 		BootcStage:      true,
 		ImageDescriptor: true,
 	}
 
-	present := ProbeFromPresent(Flatpak, Homebrew, Podman, BootcStage, ImageDescriptor)
-	names := ProbeFromNames("flatpak", "brew", "podman", "bootc-stage", "image-descriptor")
+	present := ProbeFromPresent(Flatpak, Homebrew, BootcStage, ImageDescriptor)
+	names := ProbeFromNames("flatpak", "brew", "bootc-stage", "image-descriptor")
 
 	for _, probe := range []Probe{present, names} {
 		got := DetectWith(probe)
@@ -348,7 +342,7 @@ func TestComposeRequiresConfigurationAndCapability(t *testing.T) {
 			page:       "agents_page",
 			group:      "agents_group",
 			configured: configured,
-			set:        Set{Podman: true},
+			set:        Set{Homebrew: true},
 			want:       true,
 		},
 		{

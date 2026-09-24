@@ -1070,7 +1070,7 @@ than rendered inert — needs one read-only classification instead of the four
 mutually inconsistent answers the views layer gives it today.
 
 A capability is the presence of a backing tool or asset, never a runtime
-state. `Flatpak`, `Homebrew`, `Podman`, and `Distrobox` resolve from one
+state. `Flatpak`, `Homebrew`, and `Distrobox` resolve from one
 `exec.LookPath` each. `BootcStage` and `ImageDescriptor` resolve
 from `os.Stat` against the owning package's own constant —
 `bootc.StageScriptPath` and `imageinfo.DescriptorPath`. Every probe is
@@ -1094,7 +1094,7 @@ make a test's probe substitution order-dependent.
 `Set.Supports(page, group)` is the `func(page, group string) bool` predicate
 `navigation.VisibleItems` already accepts. It resolves the prerequisites table,
 where a group is satisfied by **any one** of the listed capabilities:
-`bootc_updates_group` needs the stage script, `ai_group` needs Podman,
+`bootc_updates_group` needs the stage script, `agents_group` needs Homebrew,
 `reset_group` needs Flatpak or Distrobox because powerwash's two steps
 independently skip when their own tool is absent, and `update_all_group` needs
 any one of the four update providers, so a host with none of them constructs
@@ -1536,32 +1536,50 @@ described under "Dry-run mode" above; the user-facing contract, including the
 deliberate absence of a Pulp import API, is
 [specs/developer-feeds.md](../specs/developer-feeds.md).
 
-### Local AI
+### Agent Mode
 
-`internal/aistack` is ChairLift's answer to bluefinctl's `stacks/` directory.
-bluefinctl ships twelve quadlet definitions under `nvidia/` and `amd/` and
-makes the user choose one; ChairLift ships one runtime whose image is chosen
-by the hardware. RamaLama publishes a per-accelerator image
-(`quay.io/ramalama/{cuda,rocm,intel-gpu,ramalama}`), so `Select(gpu.Set)` is
-the entire selection logic and every host — including Intel and GPU-less
-ones, which bluefinctl's catalog cannot serve at all — gets a working answer.
-Each of those four references is pinned to a multi-arch index digest rather
-than `:latest`, so a re-pushed tag cannot silently replace the image and the
-pin still resolves on CI's arm64 matrix leg.
+`internal/aistack` is Agent Mode's runtime owner; [ADR-0015](../adr/0015-agent-mode-llmman.md)
+is the contract. [llmman](https://github.com/llmmanorg/llmman) chooses the
+engine and backend for the hardware (container runtime, prebuilt binary, or a
+`llama-server` on `$PATH`) and owns the model store, so ChairLift carries no
+image table, no GPU-vendor selection, and no model override. Enabling:
 
-The package splits the same way the rest of the codebase does: `Select` and
-`RenderUnit` are pure and table-tested across all four hardware cases plus
-the hybrid laptop, while the filesystem and `systemctl --user` calls sit
-behind the `unitDir`/`runSystemctl` seams. Nothing is privileged — the
-quadlet goes in the user's own `~/.config/containers/systemd` — so there is
-no helper subcommand and no PolicyKit action, the same shape as gaming mode.
-`IsEnabled` reads the unit file's presence rather than the service's runtime
-state, because the first start pulls several gigabytes and a status-derived
-switch would flicker for the whole pull.
-Disabling stops `chairlift-ai.service` before removing the unit. A failed stop
-is accepted only when a follow-up `systemctl --user is-active` reports the
-service is no longer active or is not loaded; if the service remains active or
-cannot be verified, the unit stays on disk and the UI surfaces the stop error.
+1. Renders a Brewfile (`Brewfile(goarch, haveLLMMan)`: `tap
+   "llmmanorg/tap"` and `brew "llmmanorg/tap/llmman"` unless an `llmman`
+   already resolves, plus `flatpak "ai.jan.Jan"` on amd64 only, because Jan's
+   Flathub build is x86_64-only) and runs it through
+   `homebrew.BundleInstall`, so brew's single dry-run gate and
+   `stateChangingCommands` apply.
+2. Resolves `llmman` (`$PATH`, then beside `homebrew.ExecutablePath()`), and
+   runs `llmman serve --pull-only`, which fetches the engine in the
+   foreground and fails if it cannot — the one mode in which llmman treats a
+   failed fetch as an error.
+3. Atomically writes `~/.config/systemd/user/chairlift-llmman.service`
+   (`RenderUnit`: `ExecStart=<abs> serve`, `LLMMAN_HOST=127.0.0.1:17434`,
+   `LLMMAN_SHELL=off`, `LLMMAN_NOHISTORY=1`) and
+   `~/.config/environment.d/10-chairlift-llmman.conf`
+   (`OLLAMA_HOST=127.0.0.1:17434`), then `daemon-reload`, `enable`, and
+   `restart`. A failure here removes what the call created unless the unit
+   already existed.
+4. Best-effort `dbus-update-activation-environment --systemd
+   OLLAMA_HOST=127.0.0.1:17434`, so processes started afterwards in this
+   session see it. Running processes are not changed, and the ready subtitle
+   says so.
+
+The view then waits up to a minute for `GET /llmman/node` (`WaitHealthy`,
+each probe bounded to two seconds). `Resolve(Facts)` is the pure state
+function behind the row: unavailable (no Homebrew), unconfigured,
+provisioning (in flight, or unit present and not yet probed), ready (unit
+plus a JSON answer from `/llmman/node`), degraded (unit, no answer), and
+disabled (llmman installed, no unit). On page build the non-blocking facts
+render immediately and the health probe runs off the main thread.
+
+Disabling runs `systemctl --user disable --now`, then removes the unit and
+the fragment and `unset-environment OLLAMA_HOST`. A failed stop is accepted
+only when `is-active` reports `inactive`, `failed`, or `unknown`; otherwise
+both files stay and the UI says the service is still running. Binaries, Jan,
+and models are never removed. Nothing is privileged, so there is no helper
+subcommand and no PolicyKit action.
 
 ### Powerwash and Factory Reset
 
@@ -1820,9 +1838,6 @@ page_name:
     website: "..." # Help page URLs
     issues: "..."
     chat: "..."
-    ai_images: # Container images per GPU vendor
-      nvidia: "..."
-    ai_model: "..." # Language model to serve
 ```
 
 ### Key config groups
@@ -1851,7 +1866,7 @@ page_name:
 | `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
 | `features_page`     | `dx_group`                       | Developer Mode (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                                          |
 | `features_page`     | `gaming_group`                   | Gaming Mode optimizations (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                              |
-| `features_page`     | `ai_group`                       | Local AI language model served in rootless Quadlet/Podman container (configurable `ai_images`, `ai_model`)                                                                                             |
+| `agents_page`       | `agents_group`                   | Agent Mode: llmman as a systemd user unit on 127.0.0.1:17434, installed with Homebrew (gated on Homebrew)                                                                                              |
 | `help_page`         | `troubleshooting_group`          | Enhanced Troubleshooting AI assistant (gated on Homebrew); moved from Features (issue #249)                                                                                                             |
 | `help_page`         | `help_resources_group`           | Configurable links (website, issues, chat)                                                                                                                                                              |
 

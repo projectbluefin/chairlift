@@ -54,9 +54,11 @@ Runtime visibility depends on the group:
 - bootc status/staging groups are hidden
   when their tool-specific runtime gates fail;
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
-- Agents, and the Applications and Updates groups for Homebrew and Flatpak,
-  are omitted by the capability floor when Podman, Homebrew, or Flatpak is
-  absent; a tool that is present but fails reports the failure in its row;
+- Agents is hidden where Homebrew is absent, because Agent Mode installs
+  llmman through it;
+- Applications and Updates groups for Homebrew and Flatpak are omitted by the
+  capability floor when Homebrew or Flatpak is absent; a tool that is present
+  but fails reports the failure in its row;
 - Features hides its optional-features group when Updex lists none, and keeps
   it with an error description when the listing fails;
 - Livery hides its top-bar section when the Custom Command Menu extension is
@@ -74,7 +76,7 @@ groups configuration enables, not on runtime tool availability.
 | Flatpak | Installed-application listing/uninstall and updates; new installs are delegated to the configured external manager |
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | Updex | System feature toggles |
-| Podman | The Agents page's local model container |
+| llmman (installed by Agent Mode through Homebrew) | The Agents page's local model server |
 | `uupd.timer` systemd unit | The automatic-updates switch. ChairLift reads the unit's state and enables or masks it; it never executes the `uupd` binary |
 
 ## Building

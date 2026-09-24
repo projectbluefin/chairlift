@@ -268,25 +268,25 @@ func TestVisiblePagesAlwaysKeepHelp(t *testing.T) {
 // The capability floor reaches the sidebar. VisibleItems is driven by the one
 // composed predicate the window builds from config plus the host shape, so a
 // page whose only group's backing tool is absent is hidden even when the
-// administrator's configuration enables it. Without the floor a podman-only
+// administrator's configuration enables it. Without the floor a Homebrew-only
 // page would leak onto a host that cannot run it. See chairlift#205.
 func TestVisibleItemsAppliesTheCapabilityFloor(t *testing.T) {
 	alwaysEnabled := func(page, group string) bool { return true }
 
-	t.Run("agents hidden when Podman absent", func(t *testing.T) {
+	t.Run("agents hidden when Homebrew absent", func(t *testing.T) {
 		predicate := capability.Compose(alwaysEnabled, capability.Set{capability.Flatpak: true})
 		if got := VisibleItems(predicate); containsPage(got, "agents") {
-			t.Errorf("VisibleItems showed agents_page on a host without Podman: %#v", got)
+			t.Errorf("VisibleItems showed agents_page on a host without Homebrew: %#v", got)
 		}
 	})
 
-	t.Run("agents shown when Podman present", func(t *testing.T) {
+	t.Run("agents shown when Homebrew present", func(t *testing.T) {
 		predicate := capability.Compose(
 			alwaysEnabled,
-			capability.Set{capability.Flatpak: true, capability.Podman: true},
+			capability.Set{capability.Flatpak: true, capability.Homebrew: true},
 		)
 		if got := VisibleItems(predicate); !containsPage(got, "agents") {
-			t.Errorf("VisibleItems omitted agents_page with Podman present: %#v", got)
+			t.Errorf("VisibleItems omitted agents_page with Homebrew present: %#v", got)
 		}
 	})
 

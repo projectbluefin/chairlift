@@ -31,15 +31,6 @@ type GroupConfig struct {
 	Issues       string         `yaml:"issues,omitempty"`
 	Chat         string         `yaml:"chat,omitempty"`
 	BundlesPaths []string       `yaml:"bundles_paths,omitempty"`
-	// AIImages overrides the local-AI container image per GPU vendor
-	// ("nvidia", "amd", "intel", "none"). It lives in the ordinary config
-	// file rather than the root-only channels.yml because the AI stack
-	// crosses no privilege boundary: the container runs rootless in the
-	// invoking account, so a user pointing it at their own image can do
-	// nothing they could not do by running podman directly.
-	AIImages map[string]string `yaml:"ai_images,omitempty"`
-	// AIModel overrides the model the stack serves.
-	AIModel string `yaml:"ai_model,omitempty"`
 	// InstallPulp and StageFeeds are the optional developer feed onboarding
 	// steps `dx_group` may run after a confirmed Developer Mode enable. Both
 	// default to false: they have side effects (a user-scope Flatpak install
@@ -84,17 +75,15 @@ type rawPageConfig map[string]rawGroupConfig
 // string/slice, means the file set that field explicitly and it replaces the
 // default outright.
 type rawGroupConfig struct {
-	Enabled      *bool              `yaml:"enabled"`
-	AppID        *string            `yaml:"app_id"`
-	Actions      *[]ActionConfig    `yaml:"actions"`
-	Website      *string            `yaml:"website"`
-	Issues       *string            `yaml:"issues"`
-	Chat         *string            `yaml:"chat"`
-	BundlesPaths *[]string          `yaml:"bundles_paths"`
-	AIImages     *map[string]string `yaml:"ai_images"`
-	AIModel      *string            `yaml:"ai_model"`
-	InstallPulp  *bool              `yaml:"install_pulp"`
-	StageFeeds   *bool              `yaml:"stage_feeds"`
+	Enabled      *bool           `yaml:"enabled"`
+	AppID        *string         `yaml:"app_id"`
+	Actions      *[]ActionConfig `yaml:"actions"`
+	Website      *string         `yaml:"website"`
+	Issues       *string         `yaml:"issues"`
+	Chat         *string         `yaml:"chat"`
+	BundlesPaths *[]string       `yaml:"bundles_paths"`
+	InstallPulp  *bool           `yaml:"install_pulp"`
+	StageFeeds   *bool           `yaml:"stage_feeds"`
 }
 
 // trustedConfigPaths are the fixed administrator- and package-owned candidates
@@ -304,12 +293,6 @@ func mergeGroup(def GroupConfig, raw rawGroupConfig) GroupConfig {
 	if raw.Chat != nil {
 		result.Chat = *raw.Chat
 	}
-	if raw.AIImages != nil {
-		result.AIImages = *raw.AIImages
-	}
-	if raw.AIModel != nil {
-		result.AIModel = *raw.AIModel
-	}
 	if raw.BundlesPaths != nil {
 		result.BundlesPaths = *raw.BundlesPaths
 	}
@@ -326,8 +309,8 @@ func mergeGroup(def GroupConfig, raw rawGroupConfig) GroupConfig {
 // defaultConfig returns the default configuration
 func defaultConfig() *Config {
 	return &Config{
-		// Local AI runs rootless in the invoking account, so it crosses no
-		// privilege boundary and needs no administrator route.
+		// Agent Mode is a systemd user unit in the invoking account, so it
+		// crosses no privilege boundary and needs no administrator route.
 		AgentsPage: PageConfig{
 			"agents_group": GroupConfig{Enabled: true},
 		},

@@ -78,13 +78,17 @@ you can put it back on another machine.
 
 ![Agents](screenshots/3-agents.png)
 
-One switch runs an AI model on this computer. Answers are generated locally —
-nothing you type is sent to a cloud service — and your graphics card
-accelerates it if you have one. Turning it on downloads several gigabytes.
+**Agent Mode** is one switch that runs AI models on this computer. Answers are
+generated locally — nothing you type is sent to a cloud service — and prompts
+are not saved. Turning it on installs the llmman model server from Homebrew
+(and, on x86_64 PCs, the Jan chat app), downloads the engine that suits your
+hardware, and starts it on this computer only. Turning it off stops the
+server and keeps the software and any models you downloaded.
 
-**Details** names the model, the graphics acceleration in use, and the address
-other apps can reach it on. Everything here runs in your own account, so it
-never asks for an administrator password.
+**Details** gives the address other apps can reach it on. Apps and terminals
+opened after Agent Mode is on find it automatically through `OLLAMA_HOST`;
+ones already open need restarting. Everything here runs in your own account,
+so it never asks for an administrator password.
 
 ---
 
@@ -109,7 +113,7 @@ Google's. It is only offered where Homebrew is installed, so it's not in the
 shot above. **Optional features** is the distribution's own feature manager,
 and is empty where the distribution ships none.
 
-Local AI used to live here. It has its own **Agents** page now.
+Agent Mode has its own **Agents** page.
 
 ---
 

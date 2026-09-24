@@ -30,7 +30,8 @@ var codeNameExemptions = map[string]string{
 	"ChairLiftWindow":      "GObject type name registered with the GLib type system",
 	"ChairLift activated": "E2E readiness log marker; a public contract polled by exact literal in " +
 		"test/e2e/e2e_test.go and test/e2e/capture_walkthrough.sh (ADR-0008)",
-	"ChairLift Contributors": "About-dialog credit naming contributors to the project, which is the code name",
+	"10-chairlift-llmman.conf": "environment.d fragment file name Agent Mode owns (ADR-0015); a path component, never shown as prose",
+	"ChairLift Contributors":   "About-dialog credit naming contributors to the project, which is the code name",
 	"CONFIGURATION ERROR: %s; all feature groups were disabled; fix the configuration file and restart ChairLift":                       "log line, not the toast; internal/config.LoadError.ToastMessage is the user-facing counterpart and uses branding.AppName",
 	"sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift) (line %d)":                        "user-visible validation error, but the code name appears only as the two trusted configuration directories, which are filesystem paths fixed by ADR-0002",
 	"group %q enables sudo action %q; sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift)": "same: the code name appears only as filesystem paths the user must actually navigate to",

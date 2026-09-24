@@ -31,11 +31,12 @@ shown in the real application, captured by `make screenshots`.
 
 ### 🤖 Agents
 
-- **Local AI**: one switch runs a language model on this computer, served
-  from a rootless container in your own account. The image is chosen from the
-  graphics hardware that is actually present — NVIDIA, AMD, Intel, or none —
-  so every host gets a working answer. Nothing is layered onto the system
-  image and nothing needs administrator authentication
+- **Agent Mode**: one switch installs [llmman](https://github.com/llmmanorg/llmman)
+  from Homebrew (plus the Jan chat app on x86_64) and runs it as a systemd
+  user service on `127.0.0.1:17434`, with its web shell and prompt history
+  off. llmman picks the engine for your hardware; apps opened afterwards find
+  it through `OLLAMA_HOST`. Turning it off keeps the software and models.
+  Nothing needs administrator authentication
 
 ### 🖥️ Bluefin, Bluefin LTS & Dakota
 
@@ -255,7 +256,7 @@ Other useful targets: `make dev` (CGO-enabled build with `-race` for development
 - Flatpak (optional)
 - `bootc` and the snow `/usr/libexec/bootc-update-stage` script (optional; enables staged system updates on bootc installs)
 - `updex` features configured on the system (optional; toggled via the Features page)
-- Podman (optional; runs the Agents page's local model container)
+- Homebrew with the `llmmanorg/tap` tap reachable (optional; Agent Mode installs `llmmanorg/tap/llmman` and, on x86_64, the `ai.jan.Jan` Flatpak)
 - The `uupd.timer` systemd unit (optional; backs the automatic-updates switch, whose state `internal/autoupdate` reads and whose enable/mask the ublue helper performs — ChairLift never executes the `uupd` binary itself)
 
 ---

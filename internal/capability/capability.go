@@ -62,9 +62,6 @@ const (
 	// visibility half of the unified Homebrew path resolution; the execution
 	// half stays with internal/homebrew.
 	Homebrew Capability = "brew"
-	// Podman is the podman command on $PATH. Quadlet is a Podman feature, so
-	// it is the prerequisite of the rootless local-AI container.
-	Podman Capability = "podman"
 	// Distrobox is the distrobox command on $PATH.
 	Distrobox Capability = "distrobox"
 	// BootcStage is the installed OS staging script internal/bootc invokes
@@ -86,7 +83,6 @@ var pathCapabilities = []struct {
 	binary     string
 }{
 	{Flatpak, "flatpak"},
-	{Podman, "podman"},
 	{Distrobox, "distrobox"},
 }
 
@@ -249,7 +245,7 @@ var prerequisites = []Prerequisite{
 	{Page: "applications_page", Group: "flatpak_user_group", AnyOf: []Capability{Flatpak}},
 
 	// Agents.
-	{Page: "agents_page", Group: "agents_group", AnyOf: []Capability{Podman}},
+	{Page: "agents_page", Group: "agents_group", AnyOf: []Capability{Homebrew}},
 
 	// Features.
 	{Page: "features_page", Group: "dx_group", AnyOf: []Capability{ImageDescriptor}},
@@ -389,7 +385,7 @@ func ProbeFromPresent(present ...Capability) Probe {
 }
 
 // ProbeFromNames builds a Probe from capability *names* — the string form of a
-// Capability constant, e.g. "flatpak", "brew", "podman", "bootc-stage",
+// Capability constant, e.g. "flatpak", "brew", "bootc-stage",
 // "image-descriptor". It is the env-driven host-shape seam the
 // screenshot walkthrough uses: the chairlift_e2e build splits a comma-separated
 // environment variable and passes the words here. Names that are not a
