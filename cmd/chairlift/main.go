@@ -5,7 +5,11 @@ package main
 import (
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
+
+	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"github.com/projectbluefin/chairlift/internal/app"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
@@ -40,7 +44,22 @@ func main() {
 	defer application.Unref()
 	log.Printf("main: application created in %s", time.Since(processStart))
 
+	// SIGTERM (session logout, the E2E harness) and SIGINT quit the
+	// application instead of killing the process, so Run returns, the
+	// cleanup below runs, and a coverage build flushes GOCOVERDIR. The
+	// handler is dropped after the first signal so a second one still
+	// terminates a process whose shutdown has hung.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM, os.Interrupt)
+	go func() {
+		sig := <-signals
+		signal.Stop(signals)
+		log.Printf("main: %v received, quitting", sig)
+		sgtk.RunOnMainThread(application.Quit)
+	}()
+
 	code := application.Run(int32(len(os.Args)), os.Args)
+	log.Printf("main: application exited with status %d", code)
 
 	// The first-run assistant extracts its embedded SVGs into a
 	// process-scoped temp directory; removing it here keeps a run from

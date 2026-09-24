@@ -137,6 +137,14 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 				continue
 			}
 			if time.Since(readyAt) >= stabilityWindow {
+				// SIGTERM must quit the application rather than kill it:
+				// only a normal return from main flushes GOCOVERDIR, and
+				// without it the e2e coverage flag read 0% for every GTK
+				// package (issue #306).
+				stopProcessSession(t, cmd, done)
+				if !strings.Contains(output.String(), "main: application exited") {
+					t.Errorf("ChairLift did not exit normally on SIGTERM\noutput:\n%s", output.String())
+				}
 				return
 			}
 		case <-timer.C:

@@ -49,6 +49,14 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.
+  With `E2E_COVERDIR` set, the GUI's counters reach it only because
+  `cmd/chairlift` handles `SIGTERM`/`SIGINT` by quitting the application on
+  the main thread, so `Run` returns and `main` exits normally; a process that
+  dies by signal never flushes `GOCOVERDIR`, which left the `e2e` Codecov
+  flag at 0% for every GTK package (issue #306). The dry-run smoke test
+  asserts the `main: application exited` marker after its `SIGTERM`, so a
+  regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
+  `SIGKILL` only on timeout.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
