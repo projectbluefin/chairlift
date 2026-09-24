@@ -328,11 +328,13 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	// first. If we signal the whole process group at once, Xvfb and dbus-daemon
 	// die immediately, killing the X connection and aborting chairlift via
 	// fatal-criticals before it can perform a normal exit and flush GOCOVERDIR.
-	if members, err := liveSessionMembers(defaultProcTable, group); err == nil {
-		for _, member := range members {
-			if strings.Contains(member.name, "chairlift") {
-				_ = syscall.Kill(member.pid, syscall.SIGTERM)
-				break
+	if !hasExited(done) {
+		if members, err := liveSessionMembers(defaultProcTable, group); err == nil {
+			for _, member := range members {
+				if member.name == "chairlift" {
+					_ = syscall.Kill(member.pid, syscall.SIGTERM)
+					break
+				}
 			}
 		}
 	}
