@@ -227,17 +227,15 @@ type Prerequisite struct {
 //
 // A group with no capabilities requires nothing of the host, and is listed
 // anyway so that "no prerequisite" is a recorded decision rather than an
-// omission. Three of those are worth naming, because they read like
+// omission. Two of those are worth naming, because they read like
 // omissions:
 //
 //   - bootc_status_group renders whether this machine is booted from a bootc
 //     deployment, which only `bootc status` can answer.
 //   - features_group renders whether updex has features configured, which is
 //     a query against the feature store rather than the presence of an asset.
-//   - maintenance_optimization_group is a placeholder row with no backing
-//     tool at all.
 //
-// Those three keep their existing asynchronous gates in the view layer. Every
+// Those two keep their existing asynchronous gates in the view layer. Every
 // other entry names the presence that makes its group meaningful, and the
 // group is satisfied by any one of them.
 var prerequisites = []Prerequisite{

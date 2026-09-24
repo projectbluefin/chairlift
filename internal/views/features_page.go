@@ -82,12 +82,12 @@ func (uh *UserHome) buildFeaturesPage() {
 	// moved to Agents (issue #244), so neither is built here.
 
 	if uh.groupEnabled("features_page", "features_group") {
-		// Build the features group (shown if updex is available)
+		// Build the features group (hidden once updex reports none)
 		uh.featuresGroup = adw.NewPreferencesGroup()
 		uh.featuresGroup.SetTitle("Optional features")
 		uh.featuresGroup.SetDescription("Checking what this system offers…")
 
-		// Add Update button as header suffix (disabled until availability confirmed)
+		// Add Update button as header suffix (disabled until features are listed)
 		updateBtn := gtk.NewButtonWithLabel("Update")
 		updateBtn.SetValign(gtk.AlignCenterValue)
 		updateBtn.AddCssClass("suggested-action")
@@ -100,45 +100,14 @@ func (uh *UserHome) buildFeaturesPage() {
 
 		page.Add(uh.featuresGroup)
 
-		// Build the "not available" group (hidden by default)
-		uh.featuresUnavailableGroup = adw.NewPreferencesGroup()
-		uh.featuresUnavailableGroup.SetTitle("Optional features")
-		uh.featuresUnavailableGroup.SetVisible(false)
-
-		unavailRow := adw.NewActionRow()
-		unavailRow.SetTitle("Not available on this system")
-		unavailRow.SetSubtitle("This system has no optional features you can turn on here.")
-		uh.featuresUnavailableGroup.Add(&unavailRow.Widget)
-		page.Add(uh.featuresUnavailableGroup)
-
-		// Check availability and load features asynchronously
-		go uh.checkAndLoadFeatures(updateBtn)
+		go uh.loadFeatures(updateBtn)
 	}
 }
 
-// checkAndLoadFeatures checks updex availability then loads features
-func (uh *UserHome) checkAndLoadFeatures(updateBtn *gtk.Button) {
-	if !updex.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if uh.featuresGroup != nil {
-				uh.featuresGroup.SetVisible(false)
-			}
-			if uh.featuresUnavailableGroup != nil {
-				uh.featuresUnavailableGroup.SetVisible(true)
-			}
-		})
-		return
-	}
-
-	sgtk.RunOnMainThread(func() {
-		updateBtn.SetSensitive(true)
-	})
-
-	uh.loadFeatures()
-}
-
-// loadFeatures loads feature information asynchronously
-func (uh *UserHome) loadFeatures() {
+// loadFeatures loads feature information asynchronously. A host that offers
+// no features hides the group rather than rendering an inert one; a failed
+// read is not evidence of that, so it keeps the group and says so.
+func (uh *UserHome) loadFeatures(updateBtn *gtk.Button) {
 	ctx, cancel := updex.DefaultContext()
 	defer cancel()
 
@@ -156,10 +125,11 @@ func (uh *UserHome) loadFeatures() {
 		}
 
 		if len(features) == 0 {
-			uh.featuresGroup.SetDescription("This system offers no optional features.")
+			uh.featuresGroup.SetVisible(false)
 			return
 		}
 
+		updateBtn.SetSensitive(true)
 		uh.featuresGroup.SetDescription(pageview.FeatureGroupDescription(len(features)))
 		uh.featureRows = make(map[string]*adw.ActionRow)
 

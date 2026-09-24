@@ -147,9 +147,11 @@ would have supplied. The fallback is tested with `os.Stat` plus
 so presence means the same thing in both places.
 
 - **Visibility** — `IsInstalled()` resolves through this function and
-  short-circuits to `false` when nothing resolves. Every view reads availability
-  through `IsInstalledCached()`, so the Applications, Updates, and Maintenance
-  pages agree on whether Homebrew is present.
+  short-circuits to `false` when nothing resolves. The views never ask it:
+  every Homebrew group is omitted by `internal/capability`'s floor, which
+  resolves through `ResolveExecutable`, so the Applications, Updates, and Help
+  pages agree on whether Homebrew is present. The update and cleanup providers
+  read `IsInstalledCached()`.
 - **Execution** — `runBrewCommandCtx` passes `brewExecutable()`, which is
   `ExecutablePath()` with the not-found case kept as the bare name `"brew"` so
   the failure keeps its `*NotFoundError` classification and its "Please install

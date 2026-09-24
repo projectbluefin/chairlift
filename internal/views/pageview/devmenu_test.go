@@ -254,9 +254,9 @@ func TestDeveloperMenuFeaturesPageWiring(t *testing.T) {
 	if buildFuncStart == -1 {
 		t.Fatal("buildFeaturesPage not found")
 	}
-	buildFuncEnd := strings.Index(text, "func (uh *UserHome) checkAndLoadFeatures(")
+	buildFuncEnd := strings.Index(text, "func (uh *UserHome) loadFeatures(")
 	if buildFuncEnd == -1 {
-		t.Fatal("checkAndLoadFeatures not found")
+		t.Fatal("loadFeatures not found")
 	}
 	buildSection := text[buildFuncStart:buildFuncEnd]
 	if strings.Contains(buildSection, "devmenu.Apply") {

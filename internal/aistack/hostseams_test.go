@@ -72,18 +72,6 @@ func TestExecSystemctlFailsWhenSystemctlIsAbsent(t *testing.T) {
 	}
 }
 
-func TestAvailabilityFollowsPodmanOnPath(t *testing.T) {
-	fakeBin(t, "podman", "#!/bin/sh\nexit 0\n")
-	if !IsAvailable() {
-		t.Error("IsAvailable reported false with podman on PATH")
-	}
-
-	t.Setenv("PATH", t.TempDir())
-	if IsAvailable() {
-		t.Error("IsAvailable reported true with no podman on PATH")
-	}
-}
-
 func TestDefaultUnitDirIsTheQuadletDirectoryUnderTheUserConfigDir(t *testing.T) {
 	config := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", config)

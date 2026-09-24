@@ -90,7 +90,7 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryPanelTitle)
 	group.SetDescription(pageview.LiveryPanelFragment)
 
-	enableRow, enableSwitch := newSwitchRow(pageview.LiveryPanelRow(true), func(state bool) {
+	enableRow, enableSwitch := newSwitchRow(pageview.LiveryPanelRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Panel, state)
 	})
 	group.Add(&enableRow.Widget)
@@ -116,7 +116,6 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 
 	page.Add(group)
 	uh.liveryPanelGroup = group
-	uh.liveryPanelRow = enableRow
 	uh.liveryPanelSwitch = enableSwitch
 	uh.liveryPanelRotate = rotateSwitch
 
@@ -285,8 +284,10 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable bool) {
 		uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(state.AppGridSlug).Subtitle)
 	}
 
-	if uh.liveryPanelRow != nil {
-		uh.liveryPanelRow.SetSubtitle(pageview.LiveryPanelRow(panelAvailable).Subtitle)
+	// Without the Custom Command Menu extension there is no panel mark to
+	// set, so the section is hidden rather than left as an inert switch.
+	if uh.liveryPanelGroup != nil {
+		uh.liveryPanelGroup.SetVisible(panelAvailable)
 	}
 	if uh.liveryPanelSwitch != nil {
 		uh.liveryPanelSwitch.SetSensitive(panelAvailable)

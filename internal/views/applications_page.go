@@ -188,13 +188,12 @@ func (uh *UserHome) buildApplicationsPage() {
 // goroutine and builds all collection rows on GTK's main thread.
 func (uh *UserHome) loadBrewBundles(paths []string) {
 	bundles, discoveryErr := homebrew.AvailableBundles(paths)
-	homebrewAvailable := homebrew.IsInstalledCached()
 	warning := ""
 	if discoveryErr != nil {
 		log.Printf("Error discovering app collections: %v", discoveryErr)
 		warning = discoveryErr.Error()
 	}
-	presentation := bundleview.Present(len(bundles), warning, homebrewAvailable)
+	presentation := bundleview.Present(len(bundles), warning)
 
 	sgtk.RunOnMainThread(func() {
 		if uh.brewBundlesGroup == nil {
@@ -219,10 +218,6 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			installBtn := gtk.NewButtonWithLabel("Install")
 			installBtn.SetValign(gtk.AlignCenterValue)
 			installBtn.AddCssClass("suggested-action")
-			installBtn.SetSensitive(homebrewAvailable)
-			if !homebrewAvailable {
-				installBtn.SetTooltipText("Homebrew is not installed on this system")
-			}
 
 			gate := &bundleview.InstallGate{}
 			bundle := bundle
@@ -242,7 +237,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 						sgtk.RunOnMainThread(func() {
 							gate.Reset()
 							btn.SetLabel("Install")
-							btn.SetSensitive(homebrewAvailable)
+							btn.SetSensitive(true)
 							var trustErr *homebrew.UntrustedTapError
 							if errors.As(err, &trustErr) {
 								uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title, trustErr.Tap))
@@ -271,7 +266,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 						} else {
 							gate.Reset()
 							btn.SetLabel("Install")
-							btn.SetSensitive(homebrewAvailable)
+							btn.SetSensitive(true)
 						}
 						uh.toastAdder.ShowToast(decision.Toast)
 					})
@@ -288,20 +283,6 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 // loadHomebrewPackages loads installed Homebrew packages asynchronously
 func (uh *UserHome) loadHomebrewPackages() {
 	generation := uh.brewPackagesRefresh.Begin()
-	if !homebrew.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if !uh.brewPackagesRefresh.IsCurrent(generation) {
-				return
-			}
-			if uh.formulaeExpander != nil {
-				uh.formulaeExpander.SetSubtitle("Homebrew is not installed on this system")
-			}
-			if uh.casksExpander != nil {
-				uh.casksExpander.SetSubtitle("Homebrew is not installed on this system")
-			}
-		})
-		return
-	}
 
 	// Load formulae
 	if uh.formulaeExpander != nil {
@@ -592,20 +573,6 @@ func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 // loadFlatpakApplications loads installed Flatpak applications asynchronously
 func (uh *UserHome) loadFlatpakApplications() {
 	generation := uh.flatpakPackagesRefresh.Begin()
-	if !flatpak.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-				return
-			}
-			if uh.flatpakUserExpander != nil {
-				uh.flatpakUserExpander.SetSubtitle("App management is not available on this system")
-			}
-			if uh.flatpakSystemExpander != nil {
-				uh.flatpakSystemExpander.SetSubtitle("App management is not available on this system")
-			}
-		})
-		return
-	}
 
 	// Load user applications
 	if uh.flatpakUserExpander != nil {

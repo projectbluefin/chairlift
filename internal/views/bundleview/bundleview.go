@@ -44,7 +44,7 @@ const groupDescription = "Install a set of apps and tools together in one step. 
 // empty when every existing configured location was read successfully; it is
 // a diagnostic for the log and never reaches the UI, because it names the
 // locations that were searched.
-func Present(count int, warning string, homebrewAvailable bool) Presentation {
+func Present(count int, warning string) Presentation {
 	result := Presentation{Description: groupDescription}
 
 	switch {
@@ -56,10 +56,6 @@ func Present(count int, warning string, homebrewAvailable bool) Presentation {
 		result.PlaceholderSubtitle = "Something went wrong while looking for app collections."
 	case warning != "":
 		result.Description += " Some collections could not be read."
-	}
-
-	if !homebrewAvailable {
-		result.Description += " Homebrew is not installed, so nothing here can be installed yet."
 	}
 	return result
 }

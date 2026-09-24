@@ -127,14 +127,9 @@ go func() {
 
 ### Deferred visibility (async startup)
 
-To avoid blocking startup on slow tool-availability checks, groups that depend on optional tools (Homebrew, Flatpak, Updex) are built immediately with placeholder descriptions and then shown or hidden asynchronously. The pattern:
+A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Could not read the list", "Could not check for tool updates") while keeping the last known rows and counts.
 
-1. Build the UI group unconditionally (if config-enabled), with a placeholder description
-2. Store a reference to the group on `UserHome` (e.g., `maintenanceBrewGroup`)
-3. Spawn a goroutine that calls `IsInstalledCached()` (see below)
-4. On the main thread, either hide the group (`SetVisible(false)`) or update its description
-
-This applies to: `maintenanceBrewGroup`, `maintenanceFlatpakGroup`, `featuresGroup`/`featuresUnavailableGroup`, and `updateAllGroup` (the Update All hero row on the Updates page). The Features page uses a dual-group approach — one for available features, one for "not available" — toggling visibility between them.
+A group whose gate is a *query* keeps an asynchronous gate: it is built immediately with a "Checking…" description, a goroutine asks, and the main thread either populates it or hides it (`SetVisible(false)`). It never swaps in an inert "not available" group. This applies to `featuresGroup` (hidden when updex lists no features; a failed listing keeps the group and reports it), the Homebrew untrusted-taps group (hidden unless there is something to trust), and the Livery panel section (hidden when the Custom Command Menu extension's schema is absent).
 
 The Update All group is the one place the *startup* path must not probe providers at all. Its rows are determined by which of bootc, Flatpak, and Homebrew exist on this host, and whether the unattended-update timer is installed — four separate subprocess checks that can each approach a multi-second timeout on a slow or wedged host. `buildUpdateAllGroup` therefore builds only a hidden shell with a "Checking…" description; `loadUpdateAllGroup` runs the availability probes (`hostAvailability()` and `autoupdate.Detect`) in a worker, and `populateUpdateAllGroup` marshals the resulting rows back onto the GTK main thread once every probe has answered. When no provider can update anything, the group simply stays hidden, matching the previous behavior of omitting it entirely.
 
@@ -1873,7 +1868,6 @@ page_name:
 | `maintenance_page`  | `maintenance_cleanup_group`      | Custom cleanup scripts (5min timeout, pkexec for sudo); **disabled by default**                                                                                                                         |
 | `maintenance_page`  | `maintenance_brew_group`         | Homebrew cleanup (deferred visibility)                                                                                                                                                                  |
 | `maintenance_page`  | `maintenance_flatpak_group`      | Flatpak unused cleanup (deferred visibility)                                                                                                                                                            |
-| `maintenance_page`  | `maintenance_optimization_group` | System optimization (placeholder)                                                                                                                                                                       |
 | `maintenance_page`  | `reset_group`                    | Powerwash and Factory Reset irreversible actions; **disabled by default**                                                                                                                              |
 | `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
 | `features_page`     | `dx_group`                       | Developer Mode (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                                          |

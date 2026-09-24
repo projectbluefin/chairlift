@@ -49,11 +49,12 @@ func (uh *UserHome) buildAIStackGroup(page *adw.PreferencesPage) {
 		}
 	}
 
+	// Podman is agents_group's capability floor (internal/capability), so a
+	// host without it never reaches this builder.
 	stack := aistack.Detect()
-	available := aistack.IsAvailable()
 
-	log.Printf("views: agents page built vendor=%s accelerator=%s image=%s podman=%v",
-		stack.Vendor, stack.Accelerator, stack.Image, available)
+	log.Printf("views: agents page built vendor=%s accelerator=%s image=%s",
+		stack.Vendor, stack.Accelerator, stack.Image)
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle(pageview.AIStackGroupTitle())
@@ -64,7 +65,7 @@ func (uh *UserHome) buildAIStackGroup(page *adw.PreferencesPage) {
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 
-	running := available && aistack.IsEnabled()
+	running := aistack.IsEnabled()
 	if running {
 		row.SetSubtitle(pageview.AIStackResultSubtitle(true))
 	}
@@ -78,11 +79,6 @@ func (uh *UserHome) buildAIStackGroup(page *adw.PreferencesPage) {
 	toggle = newGuardedSwitch(running, func(state bool) {
 		uh.onAIStackToggled(state, toggle, row)
 	})
-
-	if !available {
-		toggle.widget.SetSensitive(false)
-		row.SetSubtitle(pageview.AIStackUnavailableSubtitle())
-	}
 
 	row.AddSuffix(&toggle.widget.Widget)
 	row.SetActivatableWidget(&toggle.widget.Widget)
@@ -100,7 +96,6 @@ func (uh *UserHome) buildAIStackGroup(page *adw.PreferencesPage) {
 		Accelerator: stack.Accelerator,
 		Accelerated: stack.Accelerated(),
 		Port:        aistack.Port,
-		Available:   available,
 	}) {
 		detailRow := adw.NewActionRow()
 		detailRow.SetTitle(detail.Title)

@@ -14,14 +14,12 @@ func TestPresentEnumeratesLoadOutcomes(t *testing.T) {
 		name               string
 		count              int
 		warning            string
-		homebrewAvailable  bool
 		wantDescription    string
 		wantPlaceholder    string
 		wantPlaceholderSub string
 	}{
 		{
 			name:               "empty",
-			homebrewAvailable:  true,
 			wantDescription:    wantGroupDescription,
 			wantPlaceholder:    "No collections available",
 			wantPlaceholderSub: "This system does not offer any app collections.",
@@ -31,41 +29,26 @@ func TestPresentEnumeratesLoadOutcomes(t *testing.T) {
 			// searched, so it stays in the log and never reaches a row.
 			name:               "empty with errors",
 			warning:            "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied",
-			homebrewAvailable:  true,
 			wantDescription:    wantGroupDescription,
 			wantPlaceholder:    "Collections could not be loaded",
 			wantPlaceholderSub: "Something went wrong while looking for app collections.",
 		},
 		{
-			name:              "one",
-			count:             1,
-			homebrewAvailable: true,
-			wantDescription:   wantGroupDescription,
+			name:            "one",
+			count:           1,
+			wantDescription: wantGroupDescription,
 		},
 		{
-			name:              "partial",
-			count:             2,
-			warning:           "read bundle directory \"/opt/extra\": permission denied",
-			homebrewAvailable: true,
-			wantDescription:   wantGroupDescription + " Some collections could not be read.",
-		},
-		{
-			name:               "empty without homebrew",
-			wantDescription:    wantGroupDescription + " Homebrew is not installed, so nothing here can be installed yet.",
-			wantPlaceholder:    "No collections available",
-			wantPlaceholderSub: "This system does not offer any app collections.",
-		},
-		{
-			name:            "partial without homebrew",
+			name:            "partial",
 			count:           2,
 			warning:         "read bundle directory \"/opt/extra\": permission denied",
-			wantDescription: wantGroupDescription + " Some collections could not be read. Homebrew is not installed, so nothing here can be installed yet.",
+			wantDescription: wantGroupDescription + " Some collections could not be read.",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Present(tt.count, tt.warning, tt.homebrewAvailable)
+			got := Present(tt.count, tt.warning)
 			if got.Description != tt.wantDescription {
 				t.Errorf("Present() description = %q, want %q", got.Description, tt.wantDescription)
 			}
@@ -199,7 +182,7 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 		}
 	}
 
-	presentation := Present(0, "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied", false)
+	presentation := Present(0, "read bundle directory \"/usr/share/ublue-os/homebrew\": permission denied")
 	rows = append(rows, presentation.PlaceholderTitle, presentation.PlaceholderSubtitle)
 
 	for _, text := range rows {

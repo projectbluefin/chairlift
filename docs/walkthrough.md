@@ -145,8 +145,8 @@ Any section will also take an SVG of your own, which is the way in for
 anything not on the list.
 
 Three things worth knowing. The top-bar section needs the Custom Command Menu
-GNOME extension; without it the section says so and stays switched off rather
-than offering a control that does nothing. The Files mark is the Files mark
+GNOME extension; without it the section is not shown at all rather than
+offering a control that does nothing. The Files mark is the Files mark
 everywhere — the dock, the app grid, the window switcher — because GNOME keeps
 one icon per app, not one per place, and the app-grid glyph is shared the same
 way. And only the Files icon is in colour: the top bar and the app grid draw

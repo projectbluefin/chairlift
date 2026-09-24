@@ -194,15 +194,10 @@ func LiveryAppGridRow() Row {
 	}
 }
 
-// LiveryPanelRow is the panel section's switch row text. An absent extension
-// is stated plainly rather than left as a control that does nothing.
-func LiveryPanelRow(available bool) Row {
-	if !available {
-		return Row{
-			Title:    "Customize the Panel Icon",
-			Subtitle: "The Custom Command Menu extension is not installed, so the panel mark cannot be set",
-		}
-	}
+// LiveryPanelRow is the panel section's switch row text. A host without the
+// Custom Command Menu extension never shows the section, so there is no
+// unavailable variant.
+func LiveryPanelRow() Row {
 	return Row{Title: "Customize the Panel Icon", Subtitle: "Replaces the top-bar menu button, in your theme's colour"}
 }
 

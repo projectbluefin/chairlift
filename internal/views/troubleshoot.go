@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -49,7 +48,6 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	group.Add(&row.Widget)
 	page.Add(group)
 
-	uh.troubleshootGroup = group
 	uh.troubleshootRow = row
 	uh.troubleshootButton = button
 
@@ -57,19 +55,10 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 }
 
 // refreshTroubleshootState reads the host's state off the main thread and
-// applies it to the row. Homebrew is what every piece is installed with, so
-// without it the group has nothing to offer and hides itself — the same
-// treatment the other Homebrew-backed groups get.
+// applies it to the row. Homebrew is what every piece is installed with; a
+// host without it never builds this group, because troubleshooting_group's
+// capability floor is Homebrew (internal/capability).
 func (uh *UserHome) refreshTroubleshootState() {
-	if !homebrew.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if uh.troubleshootGroup != nil {
-				uh.troubleshootGroup.SetVisible(false)
-			}
-		})
-		return
-	}
-
 	state := troubleshoot.Detect()
 
 	log.Printf("views: troubleshoot group built server=%v agent=%v desktop=%v wired=%v provider=%q",

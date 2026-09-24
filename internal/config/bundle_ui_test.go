@@ -33,7 +33,7 @@ func TestBrewBundleGroupConfigControlsRuntimeWiring(t *testing.T) {
 		`groupCfg.BundlesPaths`,
 		`go uh.loadBrewBundles(bundlePaths)`,
 		`homebrew.AvailableBundles(paths)`,
-		`bundleview.Present(len(bundles), warning, homebrewAvailable)`,
+		`bundleview.Present(len(bundles), warning)`,
 		`bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount)`,
 		`if !gate.TryStart()`,
 		`homebrew.BundleInstall(bundle.Path)`,

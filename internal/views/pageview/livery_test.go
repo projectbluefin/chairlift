@@ -71,14 +71,6 @@ func TestDockRowNamesItsFullReach(t *testing.T) {
 	}
 }
 
-// TestPanelRowExplainsAMissingExtension asserts the unavailable case says why
-// rather than presenting a control that silently does nothing.
-func TestPanelRowExplainsAMissingExtension(t *testing.T) {
-	if got := LiveryPanelRow(false).Subtitle; !strings.Contains(got, "not installed") {
-		t.Errorf("unavailable subtitle = %q, want it to say the extension is absent", got)
-	}
-}
-
 // TestRotationRowWarnsForASourceBuild asserts the switch says when the unit
 // it writes is tied to a disposable path, rather than failing silently at
 // some future login.

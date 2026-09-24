@@ -195,10 +195,6 @@ func (uh *UserHome) buildUpdatesPage() {
 // loadUntrustedTaps populates the unverified-sources group. Runs in a
 // goroutine; the group stays hidden when there is nothing actionable.
 func (uh *UserHome) loadUntrustedTaps() {
-	if !homebrew.IsInstalledCached() {
-		return
-	}
-
 	taps, err := homebrew.ListUntrustedTaps()
 	if err != nil {
 		log.Printf("untrusted tap check failed: %v", err)
@@ -320,28 +316,6 @@ func (uh *UserHome) loadOutdatedPackagesGeneration(generation uint64, done func(
 				done(false)
 			})
 		}
-		return
-	}
-
-	if !homebrew.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if !uh.brewRefresh.IsCurrent(generation) {
-				if done != nil {
-					done(false)
-				}
-				return
-			}
-			uh.updateCounts.Set(badgestate.Homebrew, 0)
-			uh.updateBadgeCount()
-			uh.outdatedRows.Clear(func(row *adw.ActionRow) {
-				uh.outdatedExpander.Remove(&row.Widget)
-			})
-			uh.outdatedExpander.SetSubtitle("Homebrew is not installed")
-			uh.outdatedExpander.SetEnableExpansion(false)
-			if done != nil {
-				done(false)
-			}
-		})
 		return
 	}
 
@@ -470,18 +444,10 @@ func (uh *UserHome) loadFlatpakUpdates() {
 }
 
 func (uh *UserHome) loadFlatpakUpdatesGeneration(generation uint64) {
-	if !flatpak.IsInstalledCached() {
-		sgtk.RunOnMainThread(func() {
-			if !uh.flatpakUpdatesRefresh.IsCurrent(generation) {
-				return
-			}
-			uh.updateCounts.Set(badgestate.Flatpak, 0)
-			uh.updateBadgeCount()
-
-			if uh.flatpakUpdatesExpander != nil {
-				uh.flatpakUpdatesExpander.SetSubtitle("App updates are not available on this system")
-			}
-		})
+	// OnUpdateFinished calls this whether or not flatpak_updates_group was
+	// built; a group the floor or the configuration left out has no
+	// expander, and nothing to check for.
+	if uh.flatpakUpdatesExpander == nil {
 		return
 	}
 

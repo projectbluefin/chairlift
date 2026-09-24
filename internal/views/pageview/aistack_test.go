@@ -86,7 +86,6 @@ func TestAIStackDetailsGiveTheAddressAndTheModel(t *testing.T) {
 		Accelerator: "ROCm",
 		Accelerated: true,
 		Port:        8080,
-		Available:   true,
 	})
 
 	found := map[string]string{}
@@ -103,20 +102,6 @@ func TestAIStackDetailsGiveTheAddressAndTheModel(t *testing.T) {
 	if found["Graphics acceleration"] != "AMD (ROCm)" {
 		t.Errorf("acceleration row = %q, want vendor and stack", found["Graphics acceleration"])
 	}
-	if _, ok := found["Missing software"]; ok {
-		t.Error("an available host was told software is missing")
-	}
-}
-
-func TestAIStackDetailsNameWhatIsMissingWhenTheFeatureCannotRun(t *testing.T) {
-	rows := AIStackDetails(AIStackFacts{Model: "ollama://x", Port: 8080})
-
-	if len(rows) == 0 || rows[0].Title != "Missing software" {
-		t.Fatalf("the reason the feature is unavailable is not the first detail: %+v", rows)
-	}
-	if rows[0].Subtitle == "" {
-		t.Error("the missing software is not named")
-	}
 }
 
 func TestAIStackAccelerationDetailDoesNotStutterTheVendor(t *testing.T) {
@@ -126,7 +111,6 @@ func TestAIStackAccelerationDetailDoesNotStutterTheVendor(t *testing.T) {
 		Accelerator: "Intel oneAPI",
 		Accelerated: true,
 		Port:        8080,
-		Available:   true,
 	})
 
 	for _, row := range rows {
@@ -140,7 +124,7 @@ func TestAIStackAccelerationDetailDoesNotStutterTheVendor(t *testing.T) {
 }
 
 func TestAIStackAccelerationDetailSaysWhatRunsItWithoutAGPU(t *testing.T) {
-	rows := AIStackDetails(AIStackFacts{Model: "ollama://x", Hardware: "None detected", Accelerator: "CPU", Port: 8080, Available: true})
+	rows := AIStackDetails(AIStackFacts{Model: "ollama://x", Hardware: "None detected", Accelerator: "CPU", Port: 8080})
 
 	for _, row := range rows {
 		if row.Title != "Graphics acceleration" {

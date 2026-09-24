@@ -38,14 +38,6 @@ func AIStackRow(hardware string, accelerated bool) Row {
 	return row
 }
 
-// AIStackUnavailableSubtitle returns the subtitle for a computer that cannot
-// run the model at all. It names no product: which piece of software is
-// missing is in the Details row, where someone who can act on the name will
-// look for it.
-func AIStackUnavailableSubtitle() string {
-	return "Not available on this computer — the software it needs is not installed."
-}
-
 // AIStackWorkingSubtitle returns the subtitle shown while the switch is
 // acting.
 func AIStackWorkingSubtitle(enabling bool) string {
@@ -106,26 +98,17 @@ type AIStackFacts struct {
 	Accelerated bool
 	// Port is the port the model answers on.
 	Port int
-	// Available is false when this computer cannot run the model at all.
-	Available bool
 }
 
-// AIStackDetails returns the rows behind the Details expander. When the
-// feature cannot run, the reason leads: it is the only row that tells
-// someone what to do next.
+// AIStackDetails returns the rows behind the Details expander.
 func AIStackDetails(f AIStackFacts) []Row {
-	var rows []Row
-	if !f.Available {
-		rows = append(rows, Row{Title: "Missing software", Subtitle: "Podman"})
-	}
-	rows = append(rows,
-		Row{Title: "Model", Subtitle: AIModelName(f.Model)},
-		Row{Title: "Graphics acceleration", Subtitle: aiAccelerationDetail(f)},
+	return []Row{
+		{Title: "Model", Subtitle: AIModelName(f.Model)},
+		{Title: "Graphics acceleration", Subtitle: aiAccelerationDetail(f)},
 		// Without the address a person has a running model and no way to
 		// reach it from anything.
-		Row{Title: "Address for other apps", Subtitle: fmt.Sprintf("localhost:%d", f.Port)},
-	)
-	return rows
+		{Title: "Address for other apps", Subtitle: fmt.Sprintf("localhost:%d", f.Port)},
+	}
 }
 
 func aiAccelerationDetail(f AIStackFacts) string {

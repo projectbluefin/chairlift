@@ -91,7 +91,6 @@ type UserHome struct {
 	liveryAppGridRow      *adw.ActionRow
 	liveryPickerMode      liveryPickerMode
 	liveryPanelGroup      *adw.PreferencesGroup
-	liveryPanelRow        *adw.ActionRow
 	liveryPanelSwitch     *gtk.Switch
 	liveryPanelMarkRow    *adw.ActionRow
 	liveryPanelRotate     *gtk.Switch
@@ -184,7 +183,6 @@ type UserHome struct {
 	changelogGate     actionstate.Gate
 
 	// Enhanced Troubleshooting (help_page troubleshooting_group)
-	troubleshootGroup  *adw.PreferencesGroup
 	troubleshootRow    *adw.ActionRow
 	troubleshootButton *gtk.Button
 	troubleshootState  troubleshoot.State
@@ -201,9 +199,8 @@ type UserHome struct {
 	factoryResetGate actionstate.Gate
 
 	// Features page references
-	featuresGroup            *adw.PreferencesGroup
-	featuresUnavailableGroup *adw.PreferencesGroup
-	featureRows              map[string]*adw.ActionRow
+	featuresGroup *adw.PreferencesGroup
+	featureRows   map[string]*adw.ActionRow
 
 	// Groups with deferred visibility
 

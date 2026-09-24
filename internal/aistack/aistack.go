@@ -304,13 +304,6 @@ func execSystemctlOutput(ctx context.Context, args ...string) (string, error) {
 	return trimmed, nil
 }
 
-// IsAvailable reports whether this host can run the stack at all. Quadlet is
-// a Podman feature, so without Podman there is nothing to install into.
-func IsAvailable() bool {
-	_, err := exec.LookPath("podman")
-	return err == nil
-}
-
 // UnitPath returns the absolute path of the quadlet file.
 func UnitPath() (string, error) {
 	dir, err := unitDir()

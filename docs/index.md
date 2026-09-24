@@ -54,12 +54,13 @@ Runtime visibility depends on the group:
 - bootc status/staging groups and the native A/B staging group are hidden
   when their tool-specific runtime gates fail;
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
-- Agents keeps its group visible where Podman is absent but disables the
-  switch and says the software it needs is not installed;
-- Features replaces its main group with an explicit unavailable message when
-  Updex is not configured;
-- Applications and Updates groups for Homebrew and Flatpak remain visible and
-  report that the tool is unavailable;
+- Agents, and the Applications and Updates groups for Homebrew and Flatpak,
+  are omitted by the capability floor when Podman, Homebrew, or Flatpak is
+  absent; a tool that is present but fails reports the failure in its row;
+- Features hides its optional-features group when Updex lists none, and keeps
+  it with an error description when the listing fails;
+- Livery hides its top-bar section when the Custom Command Menu extension is
+  not installed;
 - Maintenance's "Free up space" action is always shown. Which package
   managers are installed is the cleanup runner's business, not something a
   user should have to learn from a group appearing or disappearing.
