@@ -324,9 +324,27 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	t.Helper()
 
 	group := cmd.Process.Pid
-	// Once the leader has been reaped its process-group ID may be reused;
-	// group-wide signals are safe only while it is alive. The later session
-	// scan signals remaining workers individually, including other groups.
+	// Find chairlift within the private session and send SIGTERM directly to it
+	// first. If we signal the whole process group at once, Xvfb and dbus-daemon
+	// die immediately, killing the X connection and aborting chairlift via
+	// fatal-criticals before it can perform a normal exit and flush GOCOVERDIR.
+	if members, err := liveSessionMembers(defaultProcTable, group); err == nil {
+		for _, member := range members {
+			if strings.Contains(member.name, "chairlift") {
+				_ = syscall.Kill(member.pid, syscall.SIGTERM)
+				break
+			}
+		}
+	}
+
+	// Wait briefly for chairlift to complete its graceful exit.
+	select {
+	case <-done:
+	case <-time.After(shutdownTimeout):
+	}
+
+	// Once chairlift has had a chance to exit normally, terminate any remaining
+	// processes in the private session.
 	if !hasExited(done) {
 		if err := syscall.Kill(-group, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 			t.Errorf("terminate ChairLift smoke process group: %v", err)
