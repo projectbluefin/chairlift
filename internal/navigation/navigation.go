@@ -99,6 +99,7 @@ var items = []Item{
 		Icon:       "preferences-desktop-appearance-symbolic",
 		ConfigPage: "livery_page",
 		Groups: []string{
+			"account_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",

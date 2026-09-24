@@ -62,6 +62,7 @@ var (
 		Description: "Personalize system wallpaper, branding, and dinosaur avatars",
 		Page:        "livery_page",
 		Groups: []string{
+			"account_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",

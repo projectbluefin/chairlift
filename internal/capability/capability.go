@@ -258,6 +258,7 @@ var prerequisites = []Prerequisite{
 	{Page: "help_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
 	// Livery.
+	{Page: "livery_page", Group: "account_group"},
 	{Page: "livery_page", Group: "livery_app_grid_group"},
 	{Page: "livery_page", Group: "livery_dock_group"},
 	{Page: "livery_page", Group: "livery_foundation_group"},

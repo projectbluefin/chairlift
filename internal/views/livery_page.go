@@ -32,6 +32,9 @@ func (uh *UserHome) buildLiveryPage() {
 	}
 	page.SetDescription(pageview.LiveryPageDescription)
 
+	if uh.groupEnabled("livery_page", "account_group") {
+		uh.buildAccountGroup(page)
+	}
 	if uh.groupEnabled("livery_page", "livery_app_grid_group") {
 		uh.buildLiveryAppGridGroup(page)
 	}

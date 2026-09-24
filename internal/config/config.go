@@ -403,6 +403,7 @@ func defaultConfig() *Config {
 		// privileged route; both ship enabled because neither changes
 		// anything until a selection is made.
 		LiveryPage: PageConfig{
+			"account_group":           GroupConfig{Enabled: true},
 			"livery_app_grid_group":   GroupConfig{Enabled: true},
 			"livery_foundation_group": GroupConfig{Enabled: true},
 			"livery_dock_group":       GroupConfig{Enabled: true},

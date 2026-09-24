@@ -130,6 +130,10 @@ type UserHome struct {
 	// onLiveryRotateToggled.
 	liveryRotateWork actionstate.Serializer
 
+	// Profile Picture section of the Livery page; nil when account_group is
+	// disabled. See profile_picture.go.
+	profilePicture *avatarPicker
+
 	// Automatic background updates
 	autoUpdatesRow    *adw.ActionRow
 	autoUpdatesSwitch *gtk.Switch

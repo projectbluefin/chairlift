@@ -119,6 +119,14 @@ Local AI used to live here. It has its own **Agents** page now.
 
 Who you are, who you stand with, and what you roll with.
 
+**Profile Picture** is the picture on your login and lock screens. Pick one of
+Project Bluefin's dinosaurs and Control Center downloads that one illustration
+to preview it; nothing changes until you press Apply. If the download or the
+change fails, the chooser says so and your old picture stays put. Where
+AccountsService is unavailable the picture is saved to your home folder
+instead and appears after you next sign in, and the confirmation says which of
+the two happened.
+
 **App Grid Livery** is your own mark on the Show Applications button. Search
 all 3,461 brands [Simple Icons](https://simpleicons.org/) publishes — your
 project, your employer, whatever you answer to — and Control Center fetches it

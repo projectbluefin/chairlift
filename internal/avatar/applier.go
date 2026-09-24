@@ -52,6 +52,30 @@ const (
 // is not the same process, so they cannot be 0600.
 const faceFileMode = 0o644
 
+// accountsIconDir is where AccountsService keeps the icon SetIconFile copied
+// in, one file per user name. It is a variable only so tests can point it at
+// a temporary directory.
+var accountsIconDir = "/var/lib/AccountsService/icons"
+
+// CurrentPicture returns the file the account's picture is currently read
+// from, or "" when none exists: AccountsService's own copy first, because
+// that is what the running session shows, then the two face files a
+// fallback dispatch writes. It only stats files, so a page may call it
+// without a subprocess or a network round trip.
+func CurrentPicture(username, home string) string {
+	candidates := []string{
+		filepath.Join(accountsIconDir, username),
+		filepath.Join(home, faceIconFileName),
+		filepath.Join(home, faceFileName),
+	}
+	for _, path := range candidates {
+		if info, err := os.Stat(path); err == nil && info.Mode().IsRegular() {
+			return path
+		}
+	}
+	return ""
+}
+
 // Request is one avatar dispatch.
 //
 // UID and ID are carried as separate facts rather than one being derived from

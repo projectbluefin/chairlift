@@ -99,10 +99,16 @@ features_page:
   # A language model served from a rootless container now lives on its own
   # Agents page; see agents_page above.
 
-# Who you are, who you stand with, and what you roll with. Each section
-# shadows one icon-theme name in the user's own theme; nothing here is
-# privileged and nothing is written outside $XDG_DATA_HOME/$XDG_CONFIG_HOME.
+# Who you are, who you stand with, and what you roll with. Each livery
+# section shadows one icon-theme name in the user's own theme; nothing here
+# is privileged, and apart from the profile picture nothing is written
+# outside $XDG_DATA_HOME/$XDG_CONFIG_HOME.
 livery_page:
+  # The account's profile picture, chosen from Project Bluefin's dinosaur
+  # artwork. Nothing is downloaded until a picture is picked, and nothing is
+  # set until Apply; it goes through AccountsService, unprivileged.
+  account_group:
+    enabled: true
   # The Show Applications mark, fetched from simpleicons.org by brand name.
   # Set once — there is no rotation, because a personal mark that changed on
   # its own would stop being personal.

@@ -406,3 +406,42 @@ func assertDirectoryEmpty(t *testing.T, dir string) {
 		t.Errorf("%s is not empty after a dispatch that should have written nothing: %v", dir, names)
 	}
 }
+
+// The page shows whatever the running session shows: AccountsService's copy
+// wins over the face files, ~/.face.icon over the legacy ~/.face, and a
+// directory where a file should be is not a picture.
+func TestCurrentPicturePrefersAccountsServiceThenFaceFiles(t *testing.T) {
+	icons := t.TempDir()
+	home := t.TempDir()
+	saved := accountsIconDir
+	accountsIconDir = icons
+	t.Cleanup(func() { accountsIconDir = saved })
+
+	if got := CurrentPicture("ada", home); got != "" {
+		t.Fatalf("CurrentPicture with no files = %q, want empty", got)
+	}
+	if err := os.Mkdir(filepath.Join(icons, "ada"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := CurrentPicture("ada", home); got != "" {
+		t.Fatalf("CurrentPicture returned the directory %q", got)
+	}
+
+	steps := []string{
+		filepath.Join(home, faceFileName),
+		filepath.Join(home, faceIconFileName),
+		filepath.Join(icons, "bob"),
+	}
+	for _, path := range steps {
+		if err := os.WriteFile(path, []byte("png"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		user := "ada"
+		if strings.HasSuffix(path, "bob") {
+			user = "bob"
+		}
+		if got := CurrentPicture(user, home); got != path {
+			t.Errorf("CurrentPicture(%q) = %q, want %q", user, got, path)
+		}
+	}
+}

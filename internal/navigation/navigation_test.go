@@ -177,6 +177,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"gaming_group",
 		},
 		"livery": {
+			"account_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
