@@ -1,7 +1,7 @@
 <div align="center">
     <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg" width="128">
     <h1>Control Center</h1>
-    <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a> and <a href="https://github.com/frostyard/snosi">Snow Linux</a></p>
+    <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a></p>
     <p>Manage your Homebrew packages, keep the whole system up to date, and maintain your computer with ease.</p>
     <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b> — see <a href="docs/adr/0012-ship-as-control-center-keep-chairlift-code-name.md">ADR-0012</a>.</sub></p>
 </div>
@@ -42,7 +42,7 @@ shown in the real application, captured by `make screenshots`.
 On [Bluefin](https://projectbluefin.io), Bluefin LTS, and Dakota, Control Center adds
 three switches ported from [bluefinctl](https://github.com/projectbluefin/bluefinctl).
 Each hides itself on a system without `/usr/share/ublue-os/image-info.json`,
-so they cost nothing on Snow Linux or any other host.
+so they cost nothing on any other host.
 
 - **Testing Channel**: Stage a `bootc switch` between the stable and testing
   release streams, then restart to apply. Control Center resolves the target
@@ -99,7 +99,7 @@ never asks for a reboot.
 
 ### 🔧 Updates & Maintenance
 
-- **System Updates**: On bootc-based systems, download and stage the next OS image update (applied on restart) and view booted/staged/rollback deployment status; on native A/B (systemd-sysupdate) installs, stage the next image the same way and see the previous version available for boot-menu rollback
+- **System Updates**: On bootc-based systems, download and stage the next OS image update (applied on restart) and view booted/staged/rollback deployment status
 - **Update Now**: on hosts carrying the integrated updater, one row runs a
   full system update immediately instead of waiting for the background timer
 - **Homebrew Updates**: Check for and install package updates; actions show
@@ -177,19 +177,19 @@ default — no need to pass `PREFIX` explicitly). PolicyKit's `polkitd` reads
 `/usr/share/polkit-1/actions`, and `pkexec` matches each privileged executable
 against the absolute path recorded in that action's
 `org.freedesktop.policykit.exec.path` annotation: `/usr/bin/chairlift-updex-helper`,
-`/usr/bin/chairlift-ublue-helper`, `/usr/libexec/bootc-update-stage`, or
-`/usr/libexec/snosi-sysupdate-stage`. The helper policies also select the
-authorized subcommand through `org.freedesktop.policykit.exec.argv1`.
+`/usr/bin/chairlift-ublue-helper`, or `/usr/libexec/bootc-update-stage`. The
+helper policies also select the authorized subcommand through
+`org.freedesktop.policykit.exec.argv1`.
 Installing under any other prefix places those files where polkit never looks
 or where the helper paths no longer match, so the privileged updex,
-Bluefin-family, bootc-staging, and sysupdate-staging features silently stop
+Bluefin-family, and bootc-staging features silently stop
 working (or fall back to a more restrictive, always-reprompting authentication
 rule). This also matches the layout used by ChairLift's full
 `projectbluefin-chairlift` nFPM package, so a source install and a full
 packaged install end up identical.
 
 Control Center does not install passwordless PolicyKit rules. Bootc staging,
-sysupdate staging, updex writes, and Bluefin-family system operations use the
+updex writes, and Bluefin-family system operations use the
 policies' normal administrator-authentication defaults; an active session may
 retain a successful authorization briefly. The updex helper accepts only
 `enable-feature <name> [--dry-run]`, `disable-feature <name> [--dry-run]`, and
@@ -209,9 +209,8 @@ Releases also publish a small
 `projectbluefin-chairlift-system-integration` deb/rpm/apk for distributions that
 deliver the GUI through a user-scoped mechanism such as the Homebrew cask. It
 installs the fixed helper binaries at `/usr/bin/chairlift-updex-helper` and
-`/usr/bin/chairlift-ublue-helper`; the four policies
+`/usr/bin/chairlift-ublue-helper`; the three policies
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`, and
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`;
 `/usr/share/chairlift/config.yml`; and the documented channel-table example at
@@ -230,15 +229,12 @@ The bootc policy deliberately retains the fixed
 `/usr/libexec/bootc-update-stage` path. A distribution must provide a trusted
 stage helper at exactly that path before enabling `bootc_updates_group`; the
 integration package does not provide a distro-specific staging implementation.
-Control Center hides the group when the helper is absent. The sysupdate policy
-likewise retains the fixed `/usr/libexec/snosi-sysupdate-stage` path used by
-`sysupdate_updates_group` on native A/B installs; that helper (and the
-`/usr/lib/snosi/native-ab` marker gating the group) ship with the OS image.
+Control Center hides the group when the helper is absent.
 
 `PREFIX` can still be overridden (e.g. `make install PREFIX=$HOME/.local`)
 for a non-privileged, non-PolicyKit-integrated install — but the helper
-binaries, bootc staging, and sysupdate staging will not resolve to their fixed
-exec-path annotations in that case.
+binaries and bootc staging will not resolve to their fixed exec-path
+annotations in that case.
 
 `DESTDIR` layers underneath `PREFIX` as usual, unchanged by any of the
 above, for staged/packaged installs (`make install DESTDIR=/path/to/stage
@@ -258,7 +254,6 @@ Other useful targets: `make dev` (CGO-enabled build with `-race` for development
 - Homebrew (optional, for package management features and tap trust)
 - Flatpak (optional)
 - `bootc` and the snow `/usr/libexec/bootc-update-stage` script (optional; enables staged system updates on bootc installs)
-- The snow `/usr/libexec/snosi-sysupdate-stage` script and `/usr/lib/snosi/native-ab` marker (optional; enables staged system updates on native A/B installs)
 - `updex` features configured on the system (optional; toggled via the Features page)
 - Podman (optional; runs the Agents page's local model container)
 - The `uupd.timer` systemd unit (optional; backs the automatic-updates switch, whose state `internal/autoupdate` reads and whose enable/mask the ublue helper performs — ChairLift never executes the `uupd` binary itself)
@@ -291,7 +286,7 @@ chairlift
 ### Main Sections
 
 1. **Updates**: Update everything in one action or per provider — stage bootc
-   or native A/B system updates, apply Flatpak updates, manage Homebrew
+   system updates, apply Flatpak updates, manage Homebrew
    updates and outdated packages, trust Homebrew taps, read the system
    version, and switch release channel or graphics-driver variant
 2. **Apps**: Manage installed Homebrew packages, search for formulae and
@@ -359,9 +354,9 @@ Control Center is highly configurable and can be adapted for different Linux dis
 
 ### Making Control Center Portable
 
-While Control Center was designed for Snow Linux, it can be easily customized for other distributions by:
+While Control Center was designed for Bluefin, it can be easily customized for other distributions by:
 
-- **Disabling Snow-specific features**: Hide Homebrew package management if your distribution doesn't use it
+- **Disabling Bluefin-specific features**: Hide Homebrew package management if your distribution doesn't use it
 - **Customizing system tools**: Configure which application to launch for Flatpak discovery and installation
 - **Setting help resources**: Point users to your distribution's documentation, issue tracker, and community chat
 
@@ -417,7 +412,6 @@ chairlift/
 │   ├── homebrew/  # Homebrew CLI wrapper (incl. tap trust)
 │   ├── flatpak/   # Flatpak CLI wrapper
 │   ├── bootc/     # bootc wrapper (status reads, pkexec stage script)
-│   ├── sysupdate/ # Native A/B wrapper (state-file reads, pkexec stage script)
 │   ├── updex/     # Updex feature manager
 │   └── version/   # Displayed application version
 ├── data/          # Desktop file, icons, and PolicyKit policies
@@ -430,7 +424,6 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 
 - **`internal/homebrew`**: Homebrew CLI wrapper — package listing/searching, install/uninstall, pin/unpin, bundles, updates, and Homebrew 6 tap-trust detection/management
 - **`internal/bootc`**: bootc status reads and pkexec-driven update staging via the snow `bootc-update-stage` script
-- **`internal/sysupdate`**: native A/B (systemd-sysupdate) status reads from the `/run/snosi` state files, rollback-candidate discovery from partition labels, and pkexec-driven update staging via the snow `snosi-sysupdate-stage` script
 - **`internal/views`**: GTK4/Adwaita UI — async operations dispatched via `sgtk.RunOnMainThread`, toast notifications for user feedback
 - **`internal/views/pageview`**: pure-Go row text, page status, os-release parsing, help-link ordering, and maintenance-command selection shared by all seven page builders
 
@@ -484,5 +477,5 @@ See [LICENSE](LICENSE) for details.
 ---
 
 <div align="center">
-    <p>Made with ❤️ for Snow Linux</p>
+    <p>Made with ❤️ for Bluefin</p>
 </div>

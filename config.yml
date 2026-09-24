@@ -29,8 +29,6 @@ updates_page:
     enabled: true
   bootc_updates_group:
     enabled: true
-  sysupdate_updates_group:
-    enabled: true
   flatpak_updates_group:
     enabled: true
   brew_updates_group:

@@ -146,10 +146,10 @@ func SelfUpdate(dryRun bool, tool string) string {
 	return fmt.Sprintf("%s updated successfully", tool)
 }
 
-// SystemStage returns the completion toast for either bootc or native A/B
-// staging. Both providers skip pkexec under dry-run, so a status re-read then
-// describes existing system state, not work done by this click. Always report
-// a preview under dry-run; retain the staged and current live messages.
+// SystemStage returns the completion toast for bootc staging. Staging skips
+// pkexec under dry-run, so a status re-read then describes existing system
+// state, not work done by this click. Always report a preview under dry-run;
+// retain the staged and current live messages.
 func SystemStage(dryRun bool, staged bool) string {
 	if dryRun {
 		return "[DRY-RUN] Preview: no changes made — system state was not checked or modified by this click"

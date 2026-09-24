@@ -230,8 +230,6 @@ install: build
 	install -Dm644 data/io.projectbluefin.chairlift.bootc.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.bootc.policy
 	# Install PolicyKit policy for updex
 	install -Dm644 data/io.projectbluefin.chairlift.updex.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.updex.policy
-	# Install PolicyKit policy for native A/B sysupdate staging
-	install -Dm644 data/io.projectbluefin.chairlift.sysupdate.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.sysupdate.policy
 	# Install PolicyKit policy for the Bluefin-family channel/developer helper
 	install -Dm644 data/io.projectbluefin.chairlift.ublue.policy $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.ublue.policy
 
@@ -281,7 +279,6 @@ uninstall:
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.bootc.rules
 	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.updex.policy
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.updex.rules
-	rm -f $(DESTDIR)$(POLKITACTIONSDIR)/io.projectbluefin.chairlift.sysupdate.policy
 
 # One command mirrors CI's host-independent gates (verify → lint → unit → race
 # → build), in fail-fast order. The GTK/Xvfb-dependent E2E job runs separately

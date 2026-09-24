@@ -2,14 +2,14 @@
 
 ## Supported Versions
 
-ChairLift is developed for Snow Linux and the Bluefin family (Bluefin, Bluefin
-LTS, Dakota). Install the latest
+ChairLift is developed for the Bluefin family (Bluefin, Bluefin LTS, Dakota).
+Install the latest
 [release](https://github.com/projectbluefin/chairlift/releases) and keep it
 updated:
 
 | Version | Supported      |
 | ------- | -------------- |
-| Latest release (Snow Linux, Bluefin, Bluefin LTS, Dakota) | ✅ Yes |
+| Latest release (Bluefin, Bluefin LTS, Dakota) | ✅ Yes |
 | Older releases | ❌ No |
 
 We recommend tracking the upstream release stream so you receive security

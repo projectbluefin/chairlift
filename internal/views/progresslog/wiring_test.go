@@ -53,7 +53,6 @@ func TestStagingHandlersRenderThroughTheBoundedSink(t *testing.T) {
 		// never removed.
 		"evt := event",
 		"case bootc.EventMessage:",
-		"case sysupdate.EventMessage:",
 		`logExpander.SetSubtitle("View output")`,
 	}
 	for _, fragment := range retired {
@@ -62,11 +61,10 @@ func TestStagingHandlersRenderThroughTheBoundedSink(t *testing.T) {
 		}
 	}
 
-	// One sink serves both providers, because bootc.ProgressEvent and
-	// sysupdate.ProgressEvent are the same stageexec.ProgressEvent. Two
-	// constructions and one definition is the whole expected inventory; a
-	// third would mean a handler grew its own copy of the loop.
-	if got := strings.Count(text, "newStageProgressSink("); got != 3 {
-		t.Errorf("updates_page.go mentions newStageProgressSink %d times, want 3 (one definition, one call per staging provider)", got)
+	// One definition and one construction for the bootc staging handler is
+	// the whole expected inventory; another would mean a handler grew its own
+	// copy of the loop.
+	if got := strings.Count(text, "newStageProgressSink("); got != 2 {
+		t.Errorf("updates_page.go mentions newStageProgressSink %d times, want 2 (one definition, one bootc staging call)", got)
 	}
 }

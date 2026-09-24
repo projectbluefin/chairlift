@@ -39,15 +39,15 @@ import (
 // and no gate ever executes it.
 //
 // It is not hypothetical. When this gate was written it found nine such tests
-// across five packages — distrobox, gaming, sysupdate, version, and
-// installcheck — including TestGoreleaserPublishesSystemIntegrationPackage,
+// across five packages — distrobox, gaming, version, installcheck, and a
+// since-removed OS update provider — including TestGoreleaserPublishesSystemIntegrationPackage,
 // the test AGENTS.md and docs/adr/0006 both name as the enforcement for the
 // system-integration package split. Its name matched the `-skip "Integration"`
 // half of the filter, so the unit-test step never selected it. All nine were
 // renamed; all nine pass.
 //
 // Prefer renaming so the first letter after `Test` names the subject
-// (`TestNativeABGateFollowsMarkerFile`, not `TestIsNativeABFollowsMarkerFile`).
+// (`TestValidConfigRejectsUnknownGroup`, not `TestIsValidRejectsUnknownGroup`).
 
 func TestNoInternalTestNameIsExcludedByTheCIFilter(t *testing.T) {
 	root := filepath.Join(RepoRoot(), "internal")

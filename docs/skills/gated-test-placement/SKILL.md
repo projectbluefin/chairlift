@@ -57,13 +57,12 @@ run it again — rather than quoting a remembered or previously-reported
 carries the same evidence standard as any other claim in a PR body. The two
 failures compound: an excluded test both protects nothing and inflates the
 unfiltered number used to argue it does. That gap was measurable in this tree
-until 2026-09-18: `internal/sysupdate` reported 83.2% filtered against 87.4%
-unfiltered, and `internal/distrobox` 83.3% against 91.7%, because
-`TestIsNativeABFollowsMarkerFile`, `TestIsNativeABCachedMatchesAndIsStable`,
-`TestIsNativeABCachedIsRaceFree`, and `TestIsInstalledReflectsPATH` all began
-`TestI`. Those nine excluded tests — across `internal/distrobox`,
-`internal/gaming`, `internal/sysupdate`, `internal/version`, and
-`internal/installcheck` — have since been renamed, and
+until 2026-09-18: the since-removed A/B-partition update package reported 83.2%
+filtered against 87.4% unfiltered, and `internal/distrobox` 83.3% against
+91.7%, because three of that package's `TestIsNativeAB*` tests and
+`TestIsInstalledReflectsPATH` all began `TestI`. Those nine excluded tests —
+across `internal/distrobox`, `internal/gaming`, that A/B-partition package,
+`internal/version`, and `internal/installcheck` — have since been renamed, and
 `internal/installcheck`'s `TestNoInternalTestNameIsExcludedByTheCIFilter`
 keeps the count at zero, so filtered and unfiltered runs under `internal/`
 now select the same tests and report the same number.
@@ -82,6 +81,6 @@ tests named `TestIsBootcBooted*`, `TestIsInstalledEndToEnd`, and
 headlined — which the filter excluded outright. Re-measured with the gated
 command after trimming: `internal/bootc` 68.2% -> 79.5% against a claimed
 76.8% -> 95.5%; `internal/stageexec` 78.4% -> 80.4% against a claimed
-73.0% -> 82.5%; `internal/sysupdate` 69.7% -> 83.2% against a claimed
-73.9% -> 95.8%; `internal/homebrew` 73.2% -> 85.5%, the one claim that
+73.0% -> 82.5%; the since-removed A/B-partition package 69.7% -> 83.2% against a
+claimed 73.9% -> 95.8%; `internal/homebrew` 73.2% -> 85.5%, the one claim that
 survived measurement roughly intact.

@@ -128,7 +128,7 @@ jobs:
       # (internal/updateflow, internal/views/update_shell.go) renders "No
       # update sources are available." when none of its four sources —
       # Applications (Flatpak), Developer tools (Homebrew), System
-      # components (updex), Operating system (bootc/sysupdate) — can be
+      # components (updex), Operating system (bootc) — can be
       # reached, which is a legitimate state but a useless screenshot.
       # ubuntu-latest ships Homebrew, but not
       # on PATH by default (needs `brew shellenv`), and never ships bootc, so

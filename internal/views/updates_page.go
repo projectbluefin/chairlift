@@ -13,7 +13,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
@@ -81,37 +80,6 @@ func (uh *UserHome) buildUpdatesPage() {
 		page.Add(group)
 
 		go uh.loadBootcUpdateStatus(group)
-	}
-
-	// Native A/B (systemd-sysupdate) system updates group - built hidden,
-	// shown asynchronously on native A/B hosts that ship the snosi stager.
-	// Mutually exclusive with the bootc group at runtime: the bootc gate
-	// requires the bootc binary (absent on native A/B images) and this gate
-	// requires the native-ab marker (absent on bootc images), so at most one
-	// operating-system group ever becomes visible.
-	if uh.groupEnabled("updates_page", "sysupdate_updates_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Operating system")
-		group.SetDescription("New versions download in the background and install when you restart.")
-		group.SetVisible(false)
-
-		uh.sysupdateStageExpander = adw.NewExpanderRow()
-		uh.sysupdateStageExpander.SetTitle("System updates")
-		uh.sysupdateStageExpander.SetSubtitle("Checking…")
-
-		uh.sysupdateStageBtn = gtk.NewButtonWithLabel("Check for updates")
-		uh.sysupdateStageBtn.SetValign(gtk.AlignCenterValue)
-		uh.sysupdateStageBtn.AddCssClass("suggested-action")
-		sysupdateClickedCb := func(btn gtk.Button) {
-			uh.onSysupdateStageClicked()
-		}
-		uh.sysupdateStageBtn.ConnectClicked(&sysupdateClickedCb)
-		uh.sysupdateStageExpander.AddSuffix(&uh.sysupdateStageBtn.Widget)
-
-		group.Add(&uh.sysupdateStageExpander.Widget)
-		page.Add(group)
-
-		go uh.loadSysupdateUpdateStatus(group)
 	}
 
 	// Apps
@@ -636,9 +604,7 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 }
 
 // stageProgressSink renders the streamed output of an OS staging run into a
-// bounded rolling log. Both staging providers share it because
-// bootc.ProgressEvent and sysupdate.ProgressEvent are the same
-// stageexec.ProgressEvent.
+// bounded rolling log.
 //
 // It exists for the cost of the obvious alternative. Rendering each line as it
 // arrives queues one sgtk.RunOnMainThread callback per line and leaves one
@@ -818,129 +784,6 @@ func (uh *UserHome) onBootcStageClicked() {
 				version = status.Status.Staged.Version()
 			}
 			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
-			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
-		})
-	}()
-}
-
-// loadSysupdateUpdateStatus gates the native A/B updates group and reflects
-// the /run/snosi state files in the expander subtitle and update badge. The
-// reads are unprivileged: the stager's state files are world-readable.
-func (uh *UserHome) loadSysupdateUpdateStatus(group *adw.PreferencesGroup) {
-	if !sysupdate.IsNativeABCached() || !sysupdate.StageScriptAvailable() {
-		return // group stays hidden
-	}
-
-	status, statusErr := sysupdate.GetStatus()
-	count := 0
-	if status.IsStaged() {
-		count = 1
-	}
-	uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
-	uh.updateBadgeCount()
-
-	outcome, version, checkedAt := status.Presentation()
-	sgtk.RunOnMainThread(func() {
-		group.SetVisible(true)
-		uh.sysupdateStageExpander.SetSubtitle(pageview.SysupdateUpdateSubtitle(outcome, version, checkedAt))
-	})
-}
-
-// onSysupdateStageClicked runs the snosi stager with streamed log output.
-// The script checks, downloads, and stages in one idempotent operation; the
-// downloaded version installs at the next restart.
-func (uh *UserHome) onSysupdateStageClicked() {
-	button := uh.sysupdateStageBtn
-	expander := uh.sysupdateStageExpander
-
-	button.SetSensitive(false)
-	button.SetLabel("Working…")
-	expander.SetExpanded(true)
-	expander.SetSubtitle("Checking for updates…")
-
-	// Remove rows from any previous run before adding new ones, otherwise
-	// repeated clicks stack duplicate Progress/Details rows.
-	if uh.sysupdateActivityRow != nil {
-		expander.Remove(&uh.sysupdateActivityRow.Widget)
-	}
-	if uh.sysupdateLogExpander != nil {
-		expander.Remove(&uh.sysupdateLogExpander.Widget)
-	}
-
-	// Activity row with a spinner (the stage script emits no percentages,
-	// so progress is indeterminate).
-	activityRow := adw.NewActionRow()
-	activityRow.SetTitle("Progress")
-	activityRow.SetSubtitle("Working…")
-	spinner := gtk.NewSpinner()
-	spinner.Start()
-	activityRow.AddSuffix(&spinner.Widget)
-	expander.AddRow(&activityRow.Widget)
-	uh.sysupdateActivityRow = activityRow
-
-	logExpander := adw.NewExpanderRow()
-	logExpander.SetTitle("Details")
-	logExpander.SetSubtitle(pageview.StagingLogSubtitle(0, 0))
-	expander.AddRow(&logExpander.Widget)
-	uh.sysupdateLogExpander = logExpander
-
-	go func() {
-		ctx, cancel := sysupdate.DefaultContext()
-		defer cancel()
-
-		progressCh := make(chan sysupdate.ProgressEvent)
-
-		var stageErr error
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			stageErr = sysupdate.StageUpdate(ctx, progressCh)
-		}()
-
-		// Discarded for the same reason as the bootc path above.
-		newStageProgressSink(activityRow, logExpander).consume(progressCh)
-
-		wg.Wait()
-
-		// Re-read the state files so the subtitle and badge reflect reality
-		// (staged vs already-current) rather than guessing from output. A
-		// stage fills the inactive slot with the newer version.
-		status, statusErr := sysupdate.GetStatus()
-
-		staged := status.IsStaged()
-		count := 0
-		if staged {
-			count = 1
-		}
-		uh.updateCounts.SetObserved(badgestate.Sysupdate, count, statusErr == nil)
-		uh.updateBadgeCount()
-
-		_, version, _ := status.Presentation()
-		sgtk.RunOnMainThread(func() {
-			spinner.Stop()
-			button.SetSensitive(true)
-			button.SetLabel("Check for updates")
-
-			if stageErr != nil {
-				log.Printf("staging the system update failed: %v", stageErr)
-				expander.SetSubtitle("The update could not be downloaded. Open Details to see what happened.")
-				uh.toastAdder.ShowErrorToast("The system update could not be downloaded")
-				return
-			}
-
-			if statusErr != nil {
-				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
-				expander.SetSubtitle(message)
-				if dryrun.Enabled() {
-					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
-				} else {
-					uh.toastAdder.ShowErrorToast(message)
-				}
-				return
-			}
-
-			expander.SetSubtitle(pageview.SysupdateStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 		})
 	}()

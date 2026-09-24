@@ -8,7 +8,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 )
 
 // Every test in this file drives DetectWith with a fake Probe, so the suite
@@ -55,8 +54,6 @@ var (
 	allBinaries = []string{"flatpak", "podman", "distrobox"}
 	allAssets   = []string{
 		bootc.StageScriptPath,
-		sysupdate.MarkerPath,
-		sysupdate.StageScriptPath,
 		imageinfo.DescriptorPath,
 		homebrew.FallbackExecutable(),
 	}
@@ -109,23 +106,6 @@ func TestDetectWithResolvesEveryCapability(t *testing.T) {
 			name:  "bootc stage script installed",
 			probe: fakeHost(nil, []string{bootc.StageScriptPath}),
 			want:  Set{BootcStage: true},
-		},
-		{
-			// The marker file alone is not a staging capability: without the
-			// script the group has nothing to run.
-			name:  "native A/B marker without the staging script",
-			probe: fakeHost(nil, []string{sysupdate.MarkerPath}),
-			want:  Set{},
-		},
-		{
-			name:  "staging script without the native A/B marker",
-			probe: fakeHost(nil, []string{sysupdate.StageScriptPath}),
-			want:  Set{},
-		},
-		{
-			name:  "native A/B marker with the staging script",
-			probe: fakeHost(nil, []string{sysupdate.MarkerPath, sysupdate.StageScriptPath}),
-			want:  Set{Sysupdate: true},
 		},
 		{
 			name:  "ublue image descriptor present",
@@ -186,18 +166,17 @@ func TestDetectWithResolvesEveryCapability(t *testing.T) {
 // drifting apart from production resolution.
 func TestProbeFromPresentAndNamesIsTheE2EHostShapeSeam(t *testing.T) {
 	// A representative Bluefin host shape: flatpak, brew, podman, the bootc
-	// stage script, the sysupdate marker+script, and the image descriptor.
+	// stage script, and the image descriptor.
 	want := Set{
 		Flatpak:         true,
 		Homebrew:        true,
 		Podman:          true,
 		BootcStage:      true,
-		Sysupdate:       true,
 		ImageDescriptor: true,
 	}
 
-	present := ProbeFromPresent(Flatpak, Homebrew, Podman, BootcStage, Sysupdate, ImageDescriptor)
-	names := ProbeFromNames("flatpak", "brew", "podman", "bootc-stage", "sysupdate", "image-descriptor")
+	present := ProbeFromPresent(Flatpak, Homebrew, Podman, BootcStage, ImageDescriptor)
+	names := ProbeFromNames("flatpak", "brew", "podman", "bootc-stage", "image-descriptor")
 
 	for _, probe := range []Probe{present, names} {
 		got := DetectWith(probe)

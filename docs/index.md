@@ -1,6 +1,6 @@
 # Control Center
 
-Control Center is a GTK4/Libadwaita system management GUI for [Snow Linux](https://github.com/frostyard/snosi), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew and Flatpak applications, bootc system updates, system features (via updex), and maintenance tasks.
+Control Center is a GTK4/Libadwaita system management GUI for [Bluefin](https://github.com/projectbluefin/bluefin), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew and Flatpak applications, bootc system updates, system features (via updex), and maintenance tasks.
 
 The project, its repository, and its binaries are named ChairLift; Control
 Center is the name the product ships under, so the paths, package names, and
@@ -21,7 +21,7 @@ Control Center provides seven configurable pages, in sidebar order:
 
 | Page | Description |
 |------|-------------|
-| **Updates** | Update everything in one action or per provider: stage bootc or native A/B (systemd-sysupdate) system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
+| **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
 | **Apps** | Search/install Homebrew formulae and casks; uninstall installed formulae/casks; pin/unpin formulae; install curated app collections. List/uninstall Flatpaks and launch the configured external manager for Flatpak discovery and installation. |
 | **Agents** | Run a language model on this computer, served from a rootless container in your own account. |
 | **Features** | Toggle system features managed by updex, plus Developer Mode, Gaming Mode, and Enhanced Troubleshooting. |
@@ -51,7 +51,7 @@ always retained so the window always has a valid destination.
 
 Runtime visibility depends on the group:
 
-- bootc status/staging groups and the native A/B staging group are hidden
+- bootc status/staging groups are hidden
   when their tool-specific runtime gates fail;
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
 - Agents keeps its group visible where Podman is absent but disables the
@@ -72,7 +72,6 @@ groups configuration enables, not on runtime tool availability.
 | Homebrew | Package management (formulae, casks, bundles) |
 | Flatpak | Installed-application listing/uninstall and updates; new installs are delegated to the configured external manager |
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
-| `/usr/lib/snosi/native-ab` marker + `/usr/libexec/snosi-sysupdate-stage` | Staged native A/B (systemd-sysupdate) system updates |
 | Updex | System feature toggles |
 | Podman | The Agents page's local model container |
 | `uupd.timer` systemd unit | The automatic-updates switch. ChairLift reads the unit's state and enables or masks it; it never executes the `uupd` binary |
@@ -107,9 +106,8 @@ integration requires the default prefix.
 For distributions that install the GUI through a user-scoped Homebrew cask,
 releases also provide a `projectbluefin-chairlift-system-integration` deb/rpm/apk.
 It installs the fixed helper binaries at `/usr/bin/chairlift-updex-helper` and
-`/usr/bin/chairlift-ublue-helper`; the four policies
+`/usr/bin/chairlift-ublue-helper`; the three policies
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`, and
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`;
 `/usr/share/chairlift/config.yml`; and the documented channel-table example at
@@ -117,8 +115,7 @@ It installs the fixed helper binaries at `/usr/bin/chairlift-updex-helper` and
 intentionally conflicts with the self-contained `projectbluefin-chairlift`
 package. Bootc staging additionally requires the distribution to provide its
 trusted implementation at `/usr/libexec/bootc-update-stage`; the integration
-package does not supply one. Native A/B staging uses
-`/usr/libexec/snosi-sysupdate-stage`, which ships with the OS image itself.
+package does not supply one.
 
 ### Development
 

@@ -151,7 +151,6 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		// updates_page
 		"automatic_updates_group": "Automatic updates",
 		"bootc_updates_group":     "System Updates",
-		"sysupdate_updates_group": "System Updates",
 		"flatpak_updates_group":   "Flatpak",
 		"brew_updates_group":      "Homebrew",
 		"brew_trust_group":        "unofficial",

@@ -129,64 +129,6 @@ func StagingLogSubtitle(shown, total int) string {
 	}
 }
 
-// SysupdateUpdateSubtitle returns the native A/B system-update expander
-// subtitle from the /run/snosi state-file presentation (the outcome grammar
-// is internal/sysupdate.Status.Presentation's): "staged" names the version
-// that is waiting, "current" shows the last check time, "failed" prompts a
-// retry, and anything else — including the fresh-boot no-files state — is
-// the neutral idle prompt.
-func SysupdateUpdateSubtitle(outcome, version, checkedAt string) string {
-	switch outcome {
-	case "staged":
-		if version == "" {
-			return "A new version is ready and installs when you restart"
-		}
-		return fmt.Sprintf("Version %s is ready and installs when you restart", version)
-	case "current":
-		if formatted := formatCheckedAt(checkedAt); formatted != "" {
-			return fmt.Sprintf("Your system is up to date, last checked at %s", formatted)
-		}
-		return "Your system is up to date"
-	case "failed":
-		return "The last check did not finish. Try checking again."
-	default:
-		return "Check whether a newer version of the operating system is available"
-	}
-}
-
-// formatCheckedAt renders a stager ISO-8601 timestamp as a local wall-clock
-// time, or "" when unparseable.
-func formatCheckedAt(checkedAt string) string {
-	parsed, err := time.Parse(time.RFC3339, checkedAt)
-	if err != nil {
-		return ""
-	}
-	return parsed.Local().Format("15:04")
-}
-
-// SysupdateStageResultSubtitle returns the subtitle after a native A/B
-// staging action completes. It follows BootcStageResultSubtitle: the
-// stager's own last line is terminal output, not user-facing copy.
-func SysupdateStageResultSubtitle(staged bool, version string) string {
-	if staged {
-		return SysupdateUpdateSubtitle("staged", version, "")
-	}
-	return "Your system is up to date"
-}
-
-// SysupdateRollbackSubtitle returns the read-only previous-version row
-// subtitle. version is the inactive slot's version only when it is older
-// than the running one (internal/sysupdate.RollbackCandidate); a
-// staged-but-newer slot or an empty slot both present as no previous
-// version. Returning to it is a boot-menu choice rather than something this
-// application can do, so the row says that instead of naming the slot.
-func SysupdateRollbackSubtitle(version string) string {
-	if version == "" {
-		return "No previous version is kept on this computer"
-	}
-	return fmt.Sprintf("Version %s is still installed. To go back to it, choose it in the menu when you restart.", version)
-}
-
 // Feature returns the initial row text for an updex feature.
 func Feature(name, description string) Row {
 	return Row{Title: description, Subtitle: name}

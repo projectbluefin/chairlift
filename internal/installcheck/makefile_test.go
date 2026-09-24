@@ -93,7 +93,6 @@ func assertInstallsPackageLayout(t *testing.T, output, destDir string) {
 	for _, rel := range []string{
 		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy"),
 		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy"),
-		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy"),
 		filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy"),
 	} {
 		want := filepath.Join(destDir, rel)

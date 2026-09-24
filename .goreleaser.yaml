@@ -93,7 +93,6 @@ archives:
       - data/icons/NOTICE
       - data/io.projectbluefin.chairlift.bootc.policy
       - data/io.projectbluefin.chairlift.updex.policy
-      - data/io.projectbluefin.chairlift.sysupdate.policy
       - data/io.projectbluefin.chairlift.ublue.policy
       - channels.example.yml
 
@@ -254,11 +253,6 @@ nfpms:
         dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy
         file_info:
           mode: 0644
-      # PolicyKit policy for native A/B sysupdate staging
-      - src: ./data/io.projectbluefin.chairlift.sysupdate.policy
-        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy
-        file_info:
-          mode: 0644
       # PolicyKit policy for the Bluefin-family channel/developer helper
       - src: ./data/io.projectbluefin.chairlift.ublue.policy
         dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy
@@ -291,8 +285,7 @@ nfpms:
   # Root-owned companion for a user-scoped app installation such as the
   # Homebrew cask. It intentionally retains ChairLift's fixed helper and
   # PolicyKit paths. Distros enabling bootc staging must separately provide
-  # /usr/libexec/bootc-update-stage; native A/B hosts ship
-  # /usr/libexec/snosi-sysupdate-stage with the OS image.
+  # /usr/libexec/bootc-update-stage.
   - id: chairlift-system-integration
     ids:
       - chairlift-updex-helper
@@ -322,10 +315,6 @@ nfpms:
           mode: 0644
       - src: ./data/io.projectbluefin.chairlift.updex.policy
         dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy
-        file_info:
-          mode: 0644
-      - src: ./data/io.projectbluefin.chairlift.sysupdate.policy
-        dst: /usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy
         file_info:
           mode: 0644
       - src: ./data/io.projectbluefin.chairlift.ublue.policy

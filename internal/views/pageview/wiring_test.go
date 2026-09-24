@@ -64,8 +64,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.FlatpakUpdate(",
 				"pageview.BootcUpdateSubtitle(",
 				"pageview.BootcStageResultSubtitle(",
-				"pageview.SysupdateUpdateSubtitle(",
-				"pageview.SysupdateStageResultSubtitle(",
 				// Moved here with the release channel and the graphics
 				// driver when the System page was deleted.
 				"pageview.ChannelRow(",
@@ -181,7 +179,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			file: "recovery.go",
 			required: []string{
 				"pageview.BootcRollbackRow(",
-				"pageview.SysupdateRollbackSubtitle(",
 				"pageview.BootcRollbackResultSubtitle(",
 			},
 		},
@@ -225,7 +222,7 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 	if len(stage) != 2 {
 		t.Fatal("bootc staging handler not found")
 	}
-	body := strings.SplitN(stage[1], "func (uh *UserHome) loadSysupdateUpdateStatus(", 2)[0]
+	body := strings.SplitN(stage[1], "func (uh *UserHome) updateHomebrew(", 2)[0]
 	if !strings.Contains(body, "uh.refreshChangelogAvailability(status)") {
 		t.Error("successful bootc staging never refreshes the Compare references and button")
 	}
@@ -276,25 +273,6 @@ func TestUpdateAllDryRunDoesNotAnnounceUpdates(t *testing.T) {
 	text := string(data)
 	if !strings.Contains(text, "final.Preview") {
 		t.Error("dry-run Update All must not announce completion when final.Preview is true")
-	}
-}
-
-func TestSysupdateStageDoesNotClaimCurrentOnUnreadableStatus(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "updates_page.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	stage := strings.SplitN(string(data), "func (uh *UserHome) onSysupdateStageClicked()", 2)
-	if len(stage) != 2 {
-		t.Fatal("native staging handler not found")
-	}
-	body := strings.SplitN(stage[1], "func (uh *UserHome) updateHomebrew(", 2)[0]
-	if !strings.Contains(body, "if statusErr != nil {") || !strings.Contains(body, "Could not verify staged update") {
-		t.Error("native A/B staging claims the system is current after an unreadable status")
 	}
 }
 

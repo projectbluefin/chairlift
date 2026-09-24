@@ -7,9 +7,8 @@
 // deliberately take that program name as a parameter so tests can substitute
 // a stand-in without invoking the real pkexec/polkit stack, but neither
 // executor supplied the production value. Each provider package
-// (internal/bootc, internal/sysupdate, internal/ublue, internal/updex) therefore
-// declared its own private copy, leaving the escalation entrypoint stated four
-// times with no owner and no gate.
+// (internal/bootc, internal/ublue, internal/updex) therefore declared its own
+// private copy, leaving the escalation entrypoint stated repeatedly with no owner and no gate.
 //
 // This package is that owner. Providers name Command; the executors keep their
 // injection seam. internal/installcheck's TestPkexecCommandHasOneOwner keeps a

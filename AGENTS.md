@@ -1,7 +1,7 @@
 # AGENTS
 
 ChairLift is a GTK4/Libadwaita system-management GUI for
-[Snow Linux](https://github.com/frostyard/snosi), written in idiomatic Go using
+[Bluefin](https://projectbluefin.io) and other bootc images, written in idiomatic Go using
 [puregotk](https://codeberg.org/puregotk/puregotk) bindings — **no CGO**. GTK,
 Libadwaita, and GLib shared libraries are loaded at runtime via `dlopen`. The UI
 is YAML-configuration-driven; feature groups toggle on and off per host.
@@ -87,7 +87,8 @@ as `TestIsValid`, `TestInitConfig`, or `TestIndexOf` all start with `TestI`;
 name them so the first letter after `Test` is the subject (see the
 GTK-headless and gated-test-placement skills below). When that gate was added
 it found nine such tests across `internal/distrobox`, `internal/gaming`,
-`internal/sysupdate`, `internal/version`, and `internal/installcheck` — among
+`internal/version`, `internal/installcheck`, and a since-removed OS update
+provider — among
 them the goreleaser test this file and ADR-0006 both cite as enforcing the
 system-integration package split; its name matched `-skip "Integration"`, so the
 filtered unit-test step never selected it.
@@ -107,9 +108,7 @@ An agent must not break these:
 - **Privilege boundary.** State-changing operations that require root go
   through `pkexec` (PolicyKit) with fixed, installed polkit policies and fixed
   helper binaries only: `pkexec /usr/libexec/bootc-update-stage` (action
-  `io.projectbluefin.chairlift.bootc.stage`), `pkexec
-  /usr/libexec/snosi-sysupdate-stage` (`internal/sysupdate.StageScriptPath`,
-  action `io.projectbluefin.chairlift.sysupdate.stage`, native A/B hosts),
+  `io.projectbluefin.chairlift.bootc.stage`),
   `pkexec /usr/bin/chairlift-updex-helper` (`internal/updex.HelperPath`, actions
   `io.projectbluefin.chairlift.updex.{enable-feature,disable-feature,update}`), and
   `pkexec /usr/bin/chairlift-ublue-helper` (`internal/ublue.HelperPath`,
@@ -167,7 +166,7 @@ An agent must not break these:
   `operating-system`), and it executes nothing itself — every provider is an
   `updateflow.Provider` whose production value in `internal/updateproviders`
   wraps the existing `internal/flatpak`, `internal/homebrew`,
-  `internal/updex`, `internal/bootc`, and `internal/sysupdate` entry points.
+  `internal/updex`, and `internal/bootc` entry points.
   `internal/views/updatepresent` is the equally pure presentation layer: it
   maps one immutable snapshot to a title, description, banner, and action
   label, so the shell's copy is testable on a headless host.
@@ -176,7 +175,7 @@ An agent must not break these:
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
   The operating-system source must keep going through `internal/bootc`'s
-  staging path (or `internal/sysupdate`'s on a native A/B host). Adding a
+  staging path. Adding a
   `bootc upgrade` route to `chairlift-ublue-helper` would break both the
   staging-ownership invariant below and the system-integration package's
   fixed-path contract. The run's only privileged surface of its own is
@@ -261,12 +260,12 @@ An agent must not break these:
 - **OS staging execution has one owner.** `internal/stageexec` is the pure-Go
   leaf package that owns the progress event contract, merged stdout/stderr
   streaming, direct-child cancellation, error classification, completion event,
-  and channel closure for both `internal/bootc` and `internal/sysupdate`.
-  Provider packages retain their fixed paths, host detection, dry-run logging,
-  and public error adapters; do not copy the process loop back into either one.
+  and channel closure for `internal/bootc`.
+  The provider package retains its fixed path, host detection, dry-run logging,
+  and public error adapters; do not copy the process loop back into it.
 - **The escalation program name has one owner.** `internal/pkexec.Command` is
   the only place the literal `pkexec` is spelled in Go code; every provider
-  (`internal/bootc`, `internal/sysupdate`, `internal/ublue`, `internal/updex`)
+  (`internal/bootc`, `internal/ublue`, `internal/updex`)
   and `internal/views/pageview` names it instead of declaring a private copy.
   `internal/helperexec` and `internal/stageexec` keep taking the program name
   as an injected parameter — that is their test seam — but production callers
@@ -275,13 +274,11 @@ An agent must not break these:
   and `cmd/` and fails on any other occurrence; it takes no exemptions.
 - **System-integration split.** The
   `projectbluefin-chairlift-system-integration` nFPM package contains the fixed-path
-  updex and ublue helpers, all four PolicyKit policies, package-maintainer
+  updex and ublue helpers, the bootc, updex, and ublue PolicyKit policies, package-maintainer
   config, and the channel-table example, but not the GUI or an OS staging
   implementation. Distributions pairing it with a user-scoped ChairLift install
   must provide their trusted stage helper at `/usr/libexec/bootc-update-stage`
-  before enabling `bootc_updates_group`; native A/B hosts ship
-  `/usr/libexec/snosi-sysupdate-stage` (and the `/usr/lib/snosi/native-ab`
-  marker) with the OS image, which `sysupdate_updates_group` requires. Do not
+  before enabling `bootc_updates_group`. Do not
   make the privileged path configurable from ChairLift's user-writable
   configuration.
 - **GTK main-thread safety.** All external tool calls run in goroutines; every
@@ -298,7 +295,7 @@ An agent must not break these:
   unbounded number of lines, so a view may not answer one line with one
   `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
   callback per line and leaks a heavyweight widget per line, which is the
-  frozen window of issue #81. Both OS staging handlers render through
+  frozen window of issue #81. The bootc staging handler renders through
   `stageProgressSink`, which coalesces a burst into one callback with
   `internal/views/progresslog` and caps the expander at
   `progresslog.DefaultLimit` rows with `rowset.Tracker.TrimTo`; the Details
@@ -390,13 +387,12 @@ An agent must not break these:
   than leaving Compare disabled until restart.
   A changed pinned image pair clears old diff rows; an in-flight comparison
   for the old pair must not render after the refresh.
-- **Update badge counts have one state owner.** Bootc, sysupdate, Flatpak,
-  and Homebrew counts live in the pure `internal/views/badgestate` package.
-  Verified refreshes replace a provider's count, while a failed bootc or
-  native A/B status read keeps the last known count through `SetObserved`
-  rather than inventing zero. Successful row removals decrement without
-  going negative, and the displayed total is always the sum of all four
-  providers. Do not restore independent integer fields in `UserHome`.
+- **Update badge counts have one state owner.** Bootc, Flatpak, and Homebrew
+  counts live in the pure `internal/views/badgestate` package. Verified
+  refreshes replace a provider's count, while a failed bootc status read keeps
+  the last known count through `SetObserved` rather than inventing zero.
+  Successful row removals decrement without going negative, and the displayed
+  total is always the sum of all three providers. Do not restore independent integer fields in `UserHome`.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget

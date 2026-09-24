@@ -6,6 +6,8 @@
   the single-authority design that replaced the per-wrapper
   `SetDryRun`/`IsDryRun` fan-out this rule originally documented (the
   decision itself, and rules 2-3, are unchanged; see Alternatives below).
+- **Amended:** 2026-09-24 — the native A/B staging provider and its dry-run
+  test were removed (#272); the enforcement list below no longer cites them.
 
 ## Context
 
@@ -93,6 +95,5 @@ Three rules, applied uniformly:
 - Builds on: [ADR-0007](0007-pure-leaf-packages-route-around-untestable-gtk.md)
 - Enforced by: `internal/views/actionmsg/actionmsg_test.go`, the wrapper
   packages' dry-run tests (`internal/homebrew`, `internal/flatpak`,
-  `internal/bootc/stage_test.go`, `internal/sysupdate/stage_test.go`,
-  `internal/updex/updex_test.go`), and the wiring tests of
+  `internal/bootc/stage_test.go`, `internal/updex/updex_test.go`), and the wiring tests of
   [ADR-0007](0007-pure-leaf-packages-route-around-untestable-gtk.md)

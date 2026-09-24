@@ -283,7 +283,7 @@ Two of the nine small, puregotk-free packages under `internal/views/` (the other
   - `Update(dryRun bool, appID string) string` — Flatpak per-app update toast (c3)
   - `SelfUpdate(dryRun bool, tool string) string` — Homebrew self-update ("Update Homebrew" button) toast (c3)
   - `TapTrustDecision{MutateUI bool; Toast string}` + `TapTrust(dryRun bool, tapName string) TapTrustDecision` — gates whether `trustTap` removes the tap's row, hides the group, and refreshes outdated packages (c3)
-  - `SystemStage(dryRun bool, staged bool) string` — bootc and native A/B stage-button completion toast; string-only since subtitles stay live in both modes and there is no mutation left to gate (c4)
+  - `SystemStage(dryRun bool, staged bool) string` — bootc stage-button completion toast; string-only since subtitles stay live in both modes and there is no mutation left to gate (c4)
   - `FeatureToggleDecision{Confirm bool; Toast string}` + `FeatureToggle(dryRun, enable bool, name string) FeatureToggleDecision` — gates whether `onFeatureToggled`'s switch confirms the flip or reverts it (c5)
   - `FeatureUpdate(dryRun bool) string` — Features page "Update" button toast (c5)
   - `DeveloperFeedSetup{InstallPulp bool; StageFeeds bool}` + `DeveloperFeedSetupPlan(dryRun, enabled, succeeded, installPulp, stageFeeds bool) DeveloperFeedSetup` — the admission rule for the optional Pulp install and feed staging behind `dx_group`'s `install_pulp`/`stage_feeds` (issue #238). Only a confirmed live enable produces non-empty work, so `startDeveloperFeedSetup` spawns no worker for a preview, a disable, or a failed promotion, and an unconfigured group produces an empty plan
@@ -336,7 +336,7 @@ clear/add bookkeeping; no `_test.go` is added to `internal/views`.
 `internal/views/badgestate` is one of the ten puregotk-free leaf packages
 under `internal/views`. `Counts` replaces the three independent integer fields
 that previously lived on `UserHome` with one mutex-protected owner for Bootc,
-Sysupdate, Flatpak, and Homebrew update counts. `Set(source, count)` models a completed
+Flatpak, and Homebrew update counts. `Set(source, count)` models a completed
 provider refresh and replaces that provider's prior value; `Add(source,
 delta)` models an immediate row-level change such as a successful Homebrew
 upgrade. Both clamp negative results to zero and return an atomic
@@ -347,7 +347,7 @@ leaf package owns only integers and synchronization. `badgestate_test.go`
 proves the zero value, multi-provider totals, replacement rather than
 accumulation across repeated refreshes, decrement/clamping behavior, unknown
 source rejection, and concurrent changes under the race detector.
-`wiring_test.go` verifies `views.go` and `updates_page.go` route all four
+`wiring_test.go` verifies `views.go` and `updates_page.go` route all three
 providers and the displayed total through this owner, and rejects the retired
 independent count fields.
 
@@ -408,7 +408,7 @@ Exported surface:
 - `(*Coalescer) Append(line string) bool` — records a line from the worker goroutine and reports whether the caller must schedule a `Drain`. It returns `true` only for the line that opens a batch, so a burst costs one main-thread callback rather than one per line; past the limit each new line evicts the oldest pending one.
 - `(*Coalescer) Drain() Batch` — returns the pending batch on the main thread and clears the outstanding-callback marker so the next `Append` opens a new batch. Draining without a preceding `Append` reports an empty batch, which is why the completion event can drain unconditionally and lose no trailing line.
 
-`Coalescer` is the one leaf package that *does* take a mutex, because unlike the others it is touched from both sides of the main-thread boundary by design: `Append` runs on the worker goroutine and `Drain` on the GTK main thread. The view half is `stageProgressSink` in `internal/views/updates_page.go`, which both staging handlers share (`bootc.ProgressEvent` and `sysupdate.ProgressEvent` are both `stageexec.ProgressEvent`): `consume` runs on the worker goroutine and touches no widget, `flush` runs on the main thread, renders one batch, calls `rowset.Tracker.TrimTo` to evict older rows from the expander, and sets the Details subtitle from `pageview.StagingLogSubtitle(shown, total)` so a window that hid older lines says so rather than reading like a complete log. `progresslog`'s own tests cover the batching, retention, arrival stamping, and concurrent append/drain; `wiring_test.go` reads `updates_page.go`'s source and fails if either handler goes back to the unbounded per-event shape.
+`Coalescer` is the one leaf package that *does* take a mutex, because unlike the others it is touched from both sides of the main-thread boundary by design: `Append` runs on the worker goroutine and `Drain` on the GTK main thread. The view half is `stageProgressSink` in `internal/views/updates_page.go`, which the bootc staging handler uses (`bootc.ProgressEvent` is `stageexec.ProgressEvent`): `consume` runs on the worker goroutine and touches no widget, `flush` runs on the main thread, renders one batch, calls `rowset.Tracker.TrimTo` to evict older rows from the expander, and sets the Details subtitle from `pageview.StagingLogSubtitle(shown, total)` so a window that hid older lines says so rather than reading like a complete log. `progresslog`'s own tests cover the batching, retention, arrival stamping, and concurrent append/drain; `wiring_test.go` reads `updates_page.go`'s source and fails if the handler goes back to the unbounded per-event shape.
 
 ### View-layer Flatpak update status (`internal/views/flatpakstatus`)
 
@@ -534,10 +534,10 @@ which is what the user can act on from the applications page.
 
 ## Shared OS stage executor (`internal/stageexec`)
 
-`internal/stageexec` is a pure-Go, widget-free leaf package used only by the
-fixed bootc and sysupdate staging adapters. `ProgressEvent`, `EventMessage`, and
-`EventComplete` are defined once there and exposed from both providers through
-type/constant aliases, so existing callers keep their provider-qualified API.
+`internal/stageexec` is a pure-Go, widget-free leaf package used by the
+fixed bootc staging adapter. `ProgressEvent`, `EventMessage`, and
+`EventComplete` are defined once there and exposed from `internal/bootc`
+through type/constant aliases, so callers keep a provider-qualified API.
 
 `Run(ctx, progressCh, name, args...)` owns the complete live process contract:
 successful exit emits exactly one `EventComplete`; trimmed non-empty stdout and
@@ -548,11 +548,10 @@ leaking `signal: killed`; missing bare names and explicit paths return
 `*stageexec.NotFoundError`; and every path closes the channel. `DryRun` emits
 the synthetic preview plus completion, closes the channel, and constructs no
 `exec.Cmd`. `stageexec_test.go` covers each outcome once against local scripts;
-the provider tests cover only fixed-path/dry-run adapters and native A/B
-detection.
+the provider tests cover only the fixed-path/dry-run adapter.
 
-Cancellation deliberately kills and reaps only the direct child. Both callers
-run through `pkexec`, whose privileged child cannot be signaled by ChairLift as
+Cancellation deliberately kills and reaps only the direct child. The caller
+runs through `pkexec`, whose privileged child cannot be signaled by ChairLift as
 an unprivileged process group. The unprivileged Homebrew and Flatpak executors
 retain their separate process-group-kill behavior.
 
@@ -610,7 +609,7 @@ The direct-child cancellation rationale is owned by `internal/stageexec` above.
 `getStatusFrom` is separate: `bootc status` is unprivileged and short-lived, so
 `exec.CommandContext`'s default direct-child kill suffices.
 
-**Why a stage script instead of `bootc upgrade`:** upstream `bootc upgrade`'s registry-transport pull fails on snow's composefs images. The stage script works around this by using `podman pull` (whose pull path works) to fetch the image into containers-storage, then running `bootc switch --transport containers-storage` to stage the already-pulled image — `podman` does the pull, `bootc` does the switch. This keeps the actual workaround logic in one place (the snow-shipped script, source of truth in the snosi project) instead of duplicating pull/switch orchestration inside ChairLift. The script is idempotent: it exits 0 without staging anything when the deployment is already current, so `StageUpdate` doubles as both "check for update" and "apply update".
+**Why a stage script instead of `bootc upgrade`:** upstream `bootc upgrade`'s registry-transport pull fails on snow's composefs images. The stage script works around this by using `podman pull` (whose pull path works) to fetch the image into containers-storage, then running `bootc switch --transport containers-storage` to stage the already-pulled image — `podman` does the pull, `bootc` does the switch. This keeps the actual workaround logic in one place (the OS-shipped script) instead of duplicating pull/switch orchestration inside ChairLift. The script is idempotent: it exits 0 without staging anything when the deployment is already current, so `StageUpdate` doubles as both "check for update" and "apply update".
 
 ### Event types
 
@@ -662,143 +661,6 @@ for event := range progressCh {
 ### Progress UI (`internal/views/updates_page.go`)
 
 `onBootcStageClicked()` drives the updates page's "System Update" expander directly (there is a single staging operation, so no shared cross-operation helper is needed) — it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes events on a second goroutine through the shared `stageProgressSink` (see [`internal/views/progresslog`](#view-layer-bounded-staging-output-internalviewsprogresslog)), restoring button state and showing a toast on completion. The system page's `loadBootcStatus()` is a separate, read-only path: it calls `bootc.GetStatus` to display the booted/staged/rollback deployment images, versions, and digests, with no staging controls — staging only happens from the Updates page.
-
-## snosi sysupdate (`internal/sysupdate/`)
-
-The native A/B (systemd-sysupdate) OS-update wrapper, mirroring
-`internal/bootc`'s split: `sysupdate.go` (detection, dry-run, errors,
-context), `status.go` (unprivileged state-file reads and the presentation
-decision), `rollback.go` (unprivileged previous-version discovery), and
-`stage.go` (privileged staging via pkexec). Everything is puregotk-free and
-gate-tested.
-
-### Host detection
-
-`IsNativeAB()` is an `os.Stat` of `MarkerPath`
-(`/usr/lib/snosi/native-ab`); `IsNativeABCached()` memoizes it via
-`sync.Once`. The marker is snosi's own published contract — every snosi unit
-gates on `ConditionPathExists=/usr/lib/snosi/native-ab` — and is the only
-reliable signal: the `bootc` binary is absent on native A/B images (so a
-bootc probe would hard-fail rather than return false cleanly), and
-`os-release`'s `IMAGE_ID` is identical across the bootc and native A/B
-variants of the same product. The updates-page group additionally requires
-`StageScriptAvailable()` (`os.Stat` of
-`StageScriptPath = /usr/libexec/snosi-sysupdate-stage`).
-
-### Status reads (unprivileged)
-
-The snosi stager writes two world-readable state files under `/run/snosi`
-(tmpfs — both are cleared by the reboot that applies an update):
-
-- `UpdateCheckPath` (`/run/snosi/update-check`), written on every stager run:
-  `outcome=(current|staged|failed)`, `checked_at=<ISO-8601>`,
-  `image=<channel>`, `running_version=`, `remote_version=`. The bootc-only
-  `held-rollback` outcome never occurs on native; `ParseUpdateCheck` maps it
-  (and any unknown value) to `OutcomeUnknown` rather than erroring.
-- `StagedSemaphorePath` (`/run/snosi/update-staged`), present exactly while a
-  downloaded update awaits its applying reboot: `image=`, `staged_at=`, and
-  exactly one of `version=<14-digit>` (native) or `digest=sha256:...`
-  (bootc transport — the file language is shared, so `ParseStagedUpdate`
-  reads both and `DisplayVersion()` prefers the valid version, then a
-  shortened digest).
-
-`GetStatus()` reads both via unexported per-path seams
-(`readUpdateCheckFrom`/`readStagedUpdateFrom`); an absent file is a normal
-state reported as nil, and a read error is logged and treated as absent, so
-the UI degrades to the idle prompt rather than an error.
-`Status.Presentation()` reduces the pair to `(outcome, version, checkedAt)`
-scalars for `pageview.SysupdateUpdateSubtitle`, one row per outcome:
-semaphore present → staged with the semaphore's version (the semaphore wins
-over every check outcome — it legitimately outlives later "nothing newer"
-check runs); no semaphore but `outcome=staged` → staged with
-`remote_version`; `outcome=current` → current with the check time;
-`outcome=failed` → failed; absent/unknown → idle. `Status.IsStaged()` is the
-badge rule: true iff the semaphore exists or the check recorded
-`outcome=staged`. Versions follow the frozen native grammar `ValidVersion`
-(`^[0-9]{14}$`, UTC `YYYYMMDDHHMMSS`) whose fixed width makes lexicographic
-comparison numeric.
-
-### Rollback discovery (unprivileged, read-only)
-
-`RollbackVersion(ctx)` runs `lsblk -J -o PATH,PARTLABEL` and reads
-`IMAGE_ID`/`IMAGE_VERSION` from `/usr/lib/os-release`. `otherSlotFromLsblk`
-walks the JSON recursively (lsblk nests partitions under each disk's
-`children`) selecting labels `<IMAGE_ID>_<version>_r` and excluding the
-running slot **by its PARTLABEL** — never by comparing mount sources,
-because a dm-verity root mounts from `/dev/mapper/root`, which never equals
-a partition path. A fresh install's `_empty` label fails the prefix filter
-naturally. `RollbackCandidate(other, running)` then accepts the other slot's
-version only when it is **older** than the running one: after a stage the
-inactive slot holds the newer pending version, which is not a rollback
-target. The Updates page renders the result as a read-only "Previous
-Version" row (`pageview.SysupdateRollbackSubtitle`); actual rollback is a
-systemd-boot menu selection at restart, deliberately outside ChairLift's
-privilege boundary. `/boot` is never read (the ESP mounts `umask=0077`,
-root-only).
-
-### StageUpdate (privileged)
-
-`StageUpdate(ctx, progressCh)` runs `pkexec /usr/libexec/snosi-sysupdate-stage`
-(polkit action `io.projectbluefin.chairlift.sysupdate.stage`,
-`data/io.projectbluefin.chairlift.sysupdate.policy`, exec.path annotation, no
-argv). The script — shipped by the OS image, not ChairLift — checks the
-sysupdate target for a newer version, downloads it into the inactive
-root/verity slots via `systemd-sysupdate update`, verifies the result
-against the signed index, and writes both state files; it never reboots and
-is idempotent (exits 0 without staging when already current or when the
-candidate already sits in the inactive slot). Output streams through `internal/stageexec`, exactly the same event, process,
-error, completion, and closure contract as bootc. The stager takes no flock; ChairLift's
-button-disable prevents UI-origin overlap, and the OS's
-`snosi-sysupdate-stage.timer` is inert by default, but a concurrent
-timer-driven run is a residual (currently theoretical) race that belongs to
-the OS-owned helper to close.
-
-### Event types
-
-`ProgressEvent{Type, Message}` with `EventMessage` (one output line) and
-`EventComplete` (success). Same enumeration as bootc's; failures are
-returned as the function error, never as an event.
-
-### Error classification (`stageexec.Run` / `StageUpdate`)
-
-| Outcome | Returned type | `errors.Is` sentinel |
-|---------|---------------|----------------------|
-| Deadline | `*Error` "Update staging timed out" | `context.DeadlineExceeded` |
-| Canceled | `*Error` "Update staging was canceled" | `context.Canceled` |
-| Missing executable | `*NotFoundError` | — (`exec.ErrNotFound` or `fs.ErrNotExist` at start) |
-| Non-zero exit | `*Error` carrying exit code + last output line | neither context sentinel |
-
-### Dry-run behavior
-
-`StageUpdate` short-circuits before constructing any `exec.Cmd`: logs the
-would-be command, emits the synthetic `EventMessage`+`EventComplete` pair,
-closes the channel, returns nil — pkexec is never invoked and no auth
-dialog appears. Status and rollback reads are **not** dry-run-gated (they
-are side-effect-free reads of real state), matching the bootc toast/subtitle
-split: only the toast (`actionmsg.SystemStage`) is dry-run-aware.
-
-### Operations
-
-| Function | Command | Privilege | Timeout | Notes |
-|----------|---------|-----------|---------|-------|
-| `GetStatus()` | reads `/run/snosi/update-check` + `/run/snosi/update-staged` | none | — (local file reads) | Absent files are normal states, not errors |
-| `IsNativeAB()` / `IsNativeABCached()` | `os.Stat(MarkerPath)` | none | — | Host-type gate; cached variant memoizes via `sync.Once` |
-| `RollbackVersion(ctx)` | `lsblk -J -o PATH,PARTLABEL` + `/usr/lib/os-release` | none | caller's ctx | Older-only candidate rule |
-| `StageUpdate(ctx, progressCh)` | `pkexec /usr/libexec/snosi-sysupdate-stage` | pkexec (`io.projectbluefin.chairlift.sysupdate.stage`) | 30min (`DefaultContext`) | Streaming; idempotent; dry-run aware |
-| `StageScriptAvailable()` | `os.Stat(StageScriptPath)` | none | — | Hides the updates-page group when the script isn't installed |
-
-### Progress UI (`internal/views/updates_page.go`)
-
-`onSysupdateStageClicked()` is a structural clone of `onBootcStageClicked()`:
-disable button, stream events into a spinner activity row and Details log
-expander through the same `stageProgressSink` (the two providers'
-`ProgressEvent` types are both `stageexec.ProgressEvent`, so one sink serves
-both), then re-read `GetStatus()` and `RollbackVersion()` from real state
-(not stream output) to set the subtitle
-(`pageview.SysupdateStageResultSubtitle`), rollback row, badge
-(`badgestate.Sysupdate`, 1 iff `IsStaged()`), and toast
-(`actionmsg.SystemStage`). `loadSysupdateUpdateStatus()` performs the
-initial gate + reveal.
 
 ## Dated-build registry catalog (`internal/registrytags`)
 
@@ -942,7 +804,6 @@ Behavior varies by wrapper:
 | Homebrew | Skips state-changing commands, returns mock message |
 | Flatpak | Skips state-changing commands, returns mock message |
 | bootc | `StageUpdate` never invokes pkexec; emits synthetic `EventMessage`+`EventComplete` and returns. The Updates page's stage button shows an explicit `actionmsg.SystemStage(dryrun.Enabled(), staged)` preview toast, distinct from its normal staged/up-to-date toasts; the expander subtitle intentionally stays live (from `bootc.GetStatus()`) in both modes |
-| sysupdate | `StageUpdate` never invokes pkexec; emits synthetic `EventMessage`+`EventComplete` and returns. The stage button's toast is `actionmsg.SystemStage(dryrun.Enabled(), staged)`; the expander subtitle and rollback row stay live (from the `/run/snosi` state files and partition labels) in both modes |
 | Updex | Skips helper execution, returns empty results; the helper binary itself (`cmd/chairlift-updex-helper`, via `internal/updexhelper`) also honors `--dry-run` for all three subcommands, defense-in-depth even though `updex.runHelper` never invokes pkexec under dry-run |
 | views (custom maintenance scripts) | `runMaintenanceAction` never constructs an `exec.Cmd` (no `pkexec`, no direct script exec); logs `[DRY-RUN] Would execute: ...` instead |
 
@@ -1019,7 +880,7 @@ external Homebrew calls remain on worker goroutines and all widget mutations,
 including row removal and control restoration, remain inside
 `sgtk.RunOnMainThread`.
 
-The Updates page's bootc "Check for Updates" stage button (`onBootcStageClicked`, `internal/views/updates_page.go`) follows the same `actionmsg` pattern, with one difference from the buttons above: unlike `Install`/`Upgrade`/etc., whose completion text is selected purely by `dryrun.Enabled()`, `SystemStage(dryrun.Enabled(), staged)` also takes the live `staged` result from the post-`wg.Wait()` `bootc.GetStatus()` re-read, because the non-dry-run branch still needs to pick between the "staged" and "up to date" strings. Under dry-run, `staged` is ignored entirely and a single preview string is returned instead — see "Dry-run behavior" under bootc above for why. The expander's `SetSubtitle` calls in the same code block are *not* routed through `actionmsg`; they keep reading live `GetStatus()` output unconditionally, since the subtitle is a persistent status display rather than a per-click completion claim. Native A/B staging follows the identical split with `SystemStage`.
+The Updates page's bootc "Check for Updates" stage button (`onBootcStageClicked`, `internal/views/updates_page.go`) follows the same `actionmsg` pattern, with one difference from the buttons above: unlike `Install`/`Upgrade`/etc., whose completion text is selected purely by `dryrun.Enabled()`, `SystemStage(dryrun.Enabled(), staged)` also takes the live `staged` result from the post-`wg.Wait()` `bootc.GetStatus()` re-read, because the non-dry-run branch still needs to pick between the "staged" and "up to date" strings. Under dry-run, `staged` is ignored entirely and a single preview string is returned instead — see "Dry-run behavior" under bootc above for why. The expander's `SetSubtitle` calls in the same code block are *not* routed through `actionmsg`; they keep reading live `GetStatus()` output unconditionally, since the subtitle is a persistent status display rather than a per-click completion claim.
 
 The Features page's per-feature switch (`onFeatureToggled`, `internal/views/features_page.go`) follows the same decision-struct pattern as maintenance-script execution and tap trust: on a successful `updex.EnableFeature`/`DisableFeature` call, `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` is computed once, and the switch's visual state is driven solely by `decision.Confirm` — `toggle.SetActive(enabled)` (confirming the flip) when `Confirm` is true, `toggle.SetActive(!enabled)` (reverting to the pre-click state) when it is false. Under dry-run, `updex.runHelper` returns before ever invoking pkexec, so nothing was actually toggled and the switch must not visually confirm a change that did not happen — this is the other "switch/list implies a state change after a preview" bug (the tap-trust row-removal case is the same pattern in Homebrew's Untrusted Taps list). The Update button (`onUpdateFeaturesClicked`) has no equivalent mutation to gate — its `SetSensitive`/`SetLabel` reset is unconditional in both modes — so its toast is a plain string, `actionmsg.FeatureUpdate(dryrun.Enabled())`.
 
@@ -1033,11 +894,11 @@ blocks — with no shared code path, so nothing stops them (or
 `internal/updex.HelperPath`, the fixed absolute path `pkexec` matches against
 the policy's `exec.path` annotation) from silently drifting apart.
 
-ChairLift packages the bootc, sysupdate, updex, and ublue `.policy` files. It
+ChairLift packages the bootc, updex, and ublue `.policy` files. It
 no longer ships its old `.rules` files, which returned `YES` for every active
 local member of the `sudo` group and bypassed authentication. Source
 installation explicitly removes those legacy rule paths; package upgrades
-remove them as obsolete tracked files. All four policies use normal
+remove them as obsolete tracked files. Every policy uses normal
 administrator authentication. The updex and ublue policies select one action for
 each supported first argument, and the helpers validate the complete argv shape.
 
@@ -1052,16 +913,14 @@ selects the `chairlift`, `chairlift-updex-helper`, and
 selects both helper builds and packages only `/usr/bin/chairlift-updex-helper`,
 `/usr/bin/chairlift-ublue-helper`,
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy`,
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`,
 `/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`,
 `/usr/share/chairlift/config.yml`, and the channel-table example at
 `/usr/share/doc/chairlift/channels.example.yml`, for pairing with a user-scoped
 app installation. The two package names conflict to
 prevent simultaneous ownership of the same fixed system files. The companion
-does not provide either OS stager; a distro must provide trusted implementations at
-`/usr/libexec/bootc-update-stage` and, on native A/B hosts,
-`/usr/libexec/snosi-sysupdate-stage`. This split is decision
+does not provide the OS stager; a distro must provide a trusted implementation at
+`/usr/libexec/bootc-update-stage`. This split is decision
 record [ADR-0006](../adr/0006-split-system-integration-package-with-mutual-conflicts.md).
 
 `internal/installcheck` holds regression tests, not production code, that turn
@@ -1072,7 +931,7 @@ installed layout itself:
   DESTDIR=<t.TempDir()>` — a dry run, so no compilation, no writes outside
   the temp dir, and no root — once with no `PREFIX` override and once with
   `PREFIX=/usr`, and asserts the printed `install -Dm...` lines place both
-  helper binaries under `DESTDIR/usr/bin` and all four policies under the
+  helper binaries under `DESTDIR/usr/bin` and every policy under the
   fixed `/usr/share/polkit-1/actions` directory PolicyKit reads,
   removes both legacy rules from `DESTDIR/usr/share/polkit-1/rules.d`,
   installs maintainer defaults at
@@ -1095,7 +954,7 @@ installed layout itself:
   still fails — per
   `docs/skills/collection-regressions/SKILL.md`),
   asserts each entry's `bindir` matches the fixed helper directory, its
-  updex/ublue/bootc/sysupdate policy `contents[].dst` entries equal the fixed
+  updex/ublue/bootc policy `contents[].dst` entries equal the fixed
   polkit-1 actions paths, their policy/config modes remain `0644`, and no
   `.rules` content remains. It also requires every package to
   map the repository `config.yml` to

@@ -53,9 +53,8 @@ type privilegedExecSite struct {
 // pkexec. Every privilege ChairLift can exercise reaches one of them:
 //   - helperexec.Run drives both fixed-path helper binaries, and so covers all
 //     9 io.projectbluefin.chairlift.ublue.* and 3 .updex.* polkit actions.
-//   - stageexec.Run, entered only through stageexec.Stage, drives both stage
-//     scripts, covering io.projectbluefin.chairlift.bootc.stage and
-//     .sysupdate.stage.
+//   - stageexec.Run, entered only through stageexec.Stage, drives the bootc
+//     stage script, covering io.projectbluefin.chairlift.bootc.stage.
 //   - UserHome.runMaintenanceAction runs a config-declared maintenance script,
 //     which pageview.MaintenanceCommand prefixes with pkexec when the action
 //     is declared sudo. It has no dedicated polkit action and therefore falls
@@ -98,8 +97,6 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},         // brew
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},              // brew --version
 	{File: "internal/livery/apply.go", Func: "execCommand"},                   // gsettings / dconf / gtk-update-icon-cache / systemctl --user
-	{File: "internal/sysupdate/check.go", Func: "checkUpdateFrom"},            // systemd-sysupdate check-new (read-only)
-	{File: "internal/sysupdate/rollback.go", Func: "runLsblk"},                // lsblk (read-only)
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "defaultRunSetup"},  // user-scope setup
 	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"}, // gtk-launch
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},           // xdg-open

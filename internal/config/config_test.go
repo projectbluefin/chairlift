@@ -499,7 +499,6 @@ func TestUpdatesPageDefaultGroupSetIsExact(t *testing.T) {
 	want := map[string]bool{
 		"automatic_updates_group": true,
 		"bootc_updates_group":     true,
-		"sysupdate_updates_group": true,
 		"flatpak_updates_group":   true,
 		"brew_updates_group":      true,
 		"brew_trust_group":        true,

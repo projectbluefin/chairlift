@@ -9,7 +9,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/livery"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
@@ -144,13 +143,6 @@ type UserHome struct {
 	bootcRollbackRow   *adw.ActionRow
 	bootcRollbackBtn   *gtk.Button
 	bootcRollbackGate  actionstate.Gate
-
-	// native A/B (sysupdate) update references
-	sysupdateStageExpander *adw.ExpanderRow
-	sysupdateStageBtn      *gtk.Button
-	sysupdateActivityRow   *adw.ActionRow
-	sysupdateLogExpander   *adw.ExpanderRow
-	sysupdateRollbackRow   *adw.ActionRow
 
 	// Bluefin-family (channel / developer mode / gaming) references
 	channelGroup    *adw.PreferencesGroup
@@ -295,16 +287,6 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 	for _, source := range final.CompletedSources {
 		if source == updateflow.OperatingSystem {
 			go func() {
-				if sysupdate.IsNativeABCached() {
-					status, err := sysupdate.GetStatus()
-					count := 0
-					if status.IsStaged() {
-						count = 1
-					}
-					uh.updateCounts.SetObserved(badgestate.Sysupdate, count, err == nil)
-					uh.updateBadgeCount()
-					return
-				}
 				ctx, cancel := bootc.DefaultContext()
 				defer cancel()
 				status, err := bootc.GetStatus(ctx)

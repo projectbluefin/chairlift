@@ -6,7 +6,6 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
@@ -55,11 +54,10 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 // to a previous system version or perform an explicitly scoped reset. It is
 // reached from System, never from routine Free Up Space.
 //
-// The rollback controls stay gated by their OS provider group; the reset
-// controls stay gated by reset_group (disabled by shipped default). Nothing
-// here invents a mutation the backend cannot perform: the bootc Roll Back row
-// appears only when bootc records a previous deployment, and the native A/B
-// Previous Version row stays informational unless a rollback is verified.
+// The rollback controls stay gated by bootc_updates_group; the reset controls
+// stay gated by reset_group (disabled by shipped default). Nothing here
+// invents a mutation the backend cannot perform: the bootc Roll Back row
+// appears only when bootc records a previous deployment.
 
 // RecoveryPage returns the Recovery detail ToolbarView so the window can add
 // it to its content stack. Nil-guarded: the page is always built by New.
@@ -88,28 +86,17 @@ func (uh *UserHome) buildRecoveryPage() {
 
 	page.SetTitle("Recovery")
 
-	// Roll Back / Previous Version: gated by the OS provider group, built
-	// hidden, revealed asynchronously once a previous deployment is
-	// confirmed to exist.
-	if uh.groupEnabled("updates_page", "bootc_updates_group") ||
-		uh.groupEnabled("updates_page", "sysupdate_updates_group") {
+	// Roll Back: gated by the OS provider group, built hidden, revealed
+	// asynchronously once a previous deployment is confirmed to exist.
+	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		uh.buildRecoveryRollbackGroup(page)
-	}
-
-	// Kick the async status reads so the rows reveal themselves once a
-	// previous deployment is confirmed.
-	if uh.bootcRollbackRow != nil {
 		go uh.loadBootcRollbackStatus()
-	}
-	if uh.sysupdateRollbackRow != nil {
-		go uh.loadSysupdateRollbackStatus()
 	}
 }
 
-// buildRecoveryRollbackGroup builds the bootc Roll Back row and the native
-// A/B Previous Version row on the Recovery page. Both are built hidden and
-// revealed asynchronously, so a fresh install never offers a rollback to
-// nothing.
+// buildRecoveryRollbackGroup builds the bootc Roll Back row on the Recovery
+// page. It is built hidden and revealed asynchronously, so a fresh install
+// never offers a rollback to nothing.
 func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	// bootc Roll Back returns to the deployment bootc records as the
 	// rollback target. Hidden until that deployment is confirmed to exist.
@@ -126,17 +113,10 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
 	uh.bootcRollbackRow.SetVisible(false)
 
-	// Native A/B Previous Version is informational; it is never upgraded
-	// into a button the backend cannot drive.
-	uh.sysupdateRollbackRow = adw.NewActionRow()
-	uh.sysupdateRollbackRow.SetTitle("Previous Version")
-	uh.sysupdateRollbackRow.SetSubtitle("Checking status...")
-
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
 	group.SetDescription("Return to the previous system version if an update went badly")
 	group.Add(&uh.bootcRollbackRow.Widget)
-	group.Add(&uh.sysupdateRollbackRow.Widget)
 	page.Add(group)
 }
 
@@ -167,43 +147,14 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 	})
 }
 
-// loadSysupdateRollbackStatus reveals the native A/B Previous Version row when
-// a previous deployment exists. The read is unprivileged: the rollback
-// candidate comes from partition labels. Kept informational unless a real
-// previous deployment is present, so it never becomes an unsupported button.
-func (uh *UserHome) loadSysupdateRollbackStatus() {
-	if !sysupdate.IsNativeABCached() {
-		return
-	}
-
-	ctx, cancel := sysupdate.DefaultContext()
-	defer cancel()
-
-	rollbackVersion, _ := sysupdate.RollbackVersion(ctx)
-
-	sgtk.RunOnMainThread(func() {
-		if uh.sysupdateRollbackRow == nil {
-			return
-		}
-		if rollbackVersion == "" {
-			uh.sysupdateRollbackRow.SetSubtitle("No previous version available")
-			uh.sysupdateRollbackRow.SetVisible(false)
-			return
-		}
-		uh.sysupdateRollbackRow.SetSubtitle(pageview.SysupdateRollbackSubtitle(rollbackVersion))
-		uh.sysupdateRollbackRow.SetVisible(true)
-	})
-}
-
 // recoveryProvidersAvailable reports whether the Recovery detail view has
-// anything to show: a reset (reset_group) or a rollback provider (bootc /
-// sysupdate updates group) is enabled. The System page uses it to decide
+// anything to show: a reset (reset_group) or the bootc rollback provider
+// (bootc_updates_group) is enabled. The System page uses it to decide
 // whether to show its Recovery entry, so the entry's gate lives in one place
 // and does not reach across pages from system_page.go.
 func (uh *UserHome) recoveryProvidersAvailable() bool {
 	return uh.groupEnabled("maintenance_page", "reset_group") ||
-		uh.groupEnabled("updates_page", "bootc_updates_group") ||
-		uh.groupEnabled("updates_page", "sysupdate_updates_group")
+		uh.groupEnabled("updates_page", "bootc_updates_group")
 }
 
 // onBootcRollbackClicked stages a rollback to the previous deployment. It

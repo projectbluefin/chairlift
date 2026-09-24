@@ -183,7 +183,6 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		"usr/share/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg",
 		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
 		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy",
-		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy",
 		"usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 		"usr/share/doc/chairlift/channels.example.yml",
 	} {

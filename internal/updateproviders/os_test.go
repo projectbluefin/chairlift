@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
 )
@@ -18,10 +17,7 @@ func TestOperatingSystemSelectionMatrix(t *testing.T) {
 		name        string
 		booted      bool
 		bootcStage  bool
-		native      bool
-		sysStage    bool
 		bootcCheck  bootc.AvailableUpdate
-		sysCheck    sysupdate.AvailableUpdate
 		wantScope   string
 		wantVersion string
 		wantErr     string
@@ -37,26 +33,14 @@ func TestOperatingSystemSelectionMatrix(t *testing.T) {
 			wantAvail:   true,
 		},
 		{
-			name:        "native A/B host",
-			native:      true,
-			sysStage:    true,
-			sysCheck:    sysupdate.AvailableUpdate{Available: true, Version: "20260907134040"},
-			wantScope:   "sysupdate",
-			wantVersion: "20260907134040",
-			wantAvail:   true,
-		},
-		{
 			name:      "no runtime",
 			wantErr:   "runtime-unavailable",
 			wantAvail: false,
 		},
 		{
-			name:       "ambiguous runtimes",
-			booted:     true,
+			name:       "stage helper on a non-bootc host",
 			bootcStage: true,
-			native:     true,
-			sysStage:   true,
-			wantErr:    "ambiguous",
+			wantErr:    "runtime-unavailable",
 			wantAvail:  true,
 		},
 	}
@@ -71,14 +55,6 @@ func TestOperatingSystemSelectionMatrix(t *testing.T) {
 				},
 				BootcStatus: func(context.Context) (*bootc.Status, error) {
 					return &bootc.Status{}, nil
-				},
-				NativeAB:                func() bool { return test.native },
-				SysupdateStageAvailable: func() bool { return test.sysStage },
-				SysupdateCheck: func(context.Context) (sysupdate.AvailableUpdate, error) {
-					return test.sysCheck, nil
-				},
-				SysupdateStatus: func() (sysupdate.Status, error) {
-					return sysupdate.Status{}, nil
 				},
 			})
 
@@ -149,37 +125,6 @@ func TestOperatingSystemCheckMapsCurrentVersionAndRestartState(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("bootc Check() = %#v, want %#v", got, want)
-	}
-
-	sysProvider := newOperatingSystem(OSDeps{
-		NativeAB:                func() bool { return true },
-		SysupdateStageAvailable: func() bool { return true },
-		SysupdateCheck: func(context.Context) (sysupdate.AvailableUpdate, error) {
-			return sysupdate.AvailableUpdate{Available: true, Version: "20260907134040"}, nil
-		},
-		SysupdateStatus: func() (sysupdate.Status, error) {
-			return sysupdate.Status{
-				Check:  &sysupdate.UpdateCheck{RunningVersion: "20260901"},
-				Staged: &sysupdate.StagedUpdate{Version: "20260906120000"},
-			}, nil
-		},
-	})
-
-	got, err = sysProvider.Check(context.Background())
-	if err != nil {
-		t.Fatalf("sysupdate Check() error = %v", err)
-	}
-	want = updateflow.CheckResult{
-		Items: []updateflow.Item{{
-			Name:             "Operating System",
-			CurrentVersion:   "20260901",
-			AvailableVersion: "20260907134040",
-			Scope:            "sysupdate",
-		}},
-		RestartRequired: true,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("sysupdate Check() = %#v, want %#v", got, want)
 	}
 }
 
@@ -260,35 +205,6 @@ func TestOperatingSystemApplyBootcDryRunReportsPreview(t *testing.T) {
 	}
 }
 
-func TestOperatingSystemApplySysupdateDryRunReportsPreview(t *testing.T) {
-	var statusCalls int
-	provider := newOperatingSystem(OSDeps{
-		SysupdateDryRun: func() bool { return true },
-		SysupdateStage: func(_ context.Context, events chan<- sysupdate.ProgressEvent) error {
-			close(events)
-			return nil
-		},
-		SysupdateStatus: func() (sysupdate.Status, error) {
-			statusCalls++
-			return sysupdate.Status{}, nil
-		},
-	})
-
-	result, err := provider.Apply(context.Background(), []updateflow.Item{{
-		Name:  "Operating System",
-		Scope: sysupdateScope,
-	}}, nil)
-	if err != nil {
-		t.Fatalf("Apply() error = %v", err)
-	}
-	if result != (updateflow.ApplyResult{Preview: true}) {
-		t.Fatalf("Apply() result = %#v, want preview without change", result)
-	}
-	if statusCalls != 0 {
-		t.Fatalf("SysupdateStatus calls = %d, want 0 for preview", statusCalls)
-	}
-}
-
 func TestOperatingSystemDryRunRemainsPendingAndSkipsMaintenance(t *testing.T) {
 	var maintenanceCalls int
 	provider := newOperatingSystem(OSDeps{
@@ -341,25 +257,25 @@ func TestOperatingSystemApplyPropagatesStageErrorWithoutRefreshingStatus(t *test
 	wantErr := errors.New("stage failed")
 	statusCalls := 0
 	provider := newOperatingSystem(OSDeps{
-		SysupdateStage: func(_ context.Context, events chan<- sysupdate.ProgressEvent) error {
+		BootcStage: func(_ context.Context, events chan<- bootc.ProgressEvent) error {
 			close(events)
 			return wantErr
 		},
-		SysupdateStatus: func() (sysupdate.Status, error) {
+		BootcStatus: func(context.Context) (*bootc.Status, error) {
 			statusCalls++
-			return sysupdate.Status{}, nil
+			return &bootc.Status{}, nil
 		},
 	})
 
 	_, err := provider.Apply(context.Background(), []updateflow.Item{{
 		Name:  "Operating System",
-		Scope: "sysupdate",
+		Scope: bootcScope,
 	}}, nil)
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("Apply() error = %v, want %v", err, wantErr)
 	}
 	if statusCalls != 0 {
-		t.Fatalf("SysupdateStatus calls = %d, want 0 after stage failure", statusCalls)
+		t.Fatalf("BootcStatus calls = %d, want 0 after stage failure", statusCalls)
 	}
 }
 
@@ -374,34 +290,23 @@ func (m *osTestMaintenance) Run(
 	return m.run(ctx, progress)
 }
 
-func TestOperatingSystemApplyUsesItemScope(t *testing.T) {
-	var bootcCalls, sysupdateCalls int
+func TestOperatingSystemApplyRejectsUnknownScope(t *testing.T) {
+	var bootcCalls int
 	provider := newOperatingSystem(OSDeps{
 		BootcStage: func(_ context.Context, events chan<- bootc.ProgressEvent) error {
 			bootcCalls++
 			close(events)
 			return nil
 		},
-		BootcStatus: func(context.Context) (*bootc.Status, error) {
-			return &bootc.Status{}, nil
-		},
-		SysupdateStage: func(_ context.Context, events chan<- sysupdate.ProgressEvent) error {
-			sysupdateCalls++
-			close(events)
-			return nil
-		},
-		SysupdateStatus: func() (sysupdate.Status, error) {
-			return sysupdate.Status{}, nil
-		},
 	})
 
 	if _, err := provider.Apply(context.Background(), []updateflow.Item{{
 		Name:  "Operating System",
-		Scope: "sysupdate",
-	}}, nil); err != nil {
-		t.Fatalf("Apply() error = %v", err)
+		Scope: "rpm-ostree",
+	}}, nil); err == nil || !strings.Contains(err.Error(), "unknown operating system update scope") {
+		t.Fatalf("Apply() error = %v, want unknown scope", err)
 	}
-	if bootcCalls != 0 || sysupdateCalls != 1 {
-		t.Fatalf("stage calls = bootc %d, sysupdate %d; want 0, 1", bootcCalls, sysupdateCalls)
+	if bootcCalls != 0 {
+		t.Fatalf("bootc stage calls = %d, want 0 for an unknown scope", bootcCalls)
 	}
 }

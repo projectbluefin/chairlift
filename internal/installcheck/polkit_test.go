@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
@@ -251,22 +250,12 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Path:        bootc.StageScriptPath,
 		},
 	})
-
-	assertPolicyActions(t, "io.projectbluefin.chairlift.sysupdate.policy", []expectedPolicyAction{
-		{
-			ID:          "io.projectbluefin.chairlift.sysupdate.stage",
-			Description: "Download and stage a system image update",
-			Message:     "Authentication is required to stage a system update",
-			Path:        sysupdate.StageScriptPath,
-		},
-	})
 }
 
 func TestPolkitPasswordlessRulesAreAbsent(t *testing.T) {
 	for _, name := range []string{
 		"io.projectbluefin.chairlift.updex.rules",
 		"io.projectbluefin.chairlift.bootc.rules",
-		"io.projectbluefin.chairlift.sysupdate.rules",
 		"io.projectbluefin.chairlift.ublue.rules",
 	} {
 		t.Run(name, func(t *testing.T) {

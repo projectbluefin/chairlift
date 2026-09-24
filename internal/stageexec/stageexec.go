@@ -1,5 +1,5 @@
-// Package stageexec runs the fixed privileged staging commands used by OS
-// update providers. It owns their widget-free progress and process contract,
+// Package stageexec runs the fixed privileged staging command used by the OS
+// update provider. It owns their widget-free progress and process contract,
 // including the dry-run gate, the script-availability probe, and the
 // internal/journal record every privileged escalation owes, so each provider
 // package only names its script path.
@@ -7,12 +7,11 @@
 // The journal record is not incidental. internal/journal documents its
 // contract in universal terms — "records every privileged action ChairLift
 // takes or would take" — but for a long time the only package honoring it was
-// internal/helperexec, so the two staging actions
-// (io.projectbluefin.chairlift.bootc.stage and
-// io.projectbluefin.chairlift.sysupdate.stage) escalated with no audit entry.
-// Staging writes the inactive slot or a bootc switch; it is the least
-// undoable thing ChairLift does, which is exactly where the audit trail
-// mattered most. Stage now records both branches, and
+// internal/helperexec, so the staging action
+// (io.projectbluefin.chairlift.bootc.stage) escalated with no audit entry.
+// Staging writes a new bootc deployment; it is the least undoable thing
+// ChairLift does, which is exactly where the audit trail mattered most. Stage
+// now records both branches, and
 // internal/installcheck's journal-contract gate keeps a future privileged
 // executor from reopening the hole.
 package stageexec

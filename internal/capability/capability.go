@@ -48,7 +48,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
-	"github.com/projectbluefin/chairlift/internal/sysupdate"
 )
 
 // Capability names one host facility a group's backing tool or asset
@@ -73,10 +72,6 @@ const (
 	// host with the bootc command but no stage script has nothing for that
 	// group to run.
 	BootcStage Capability = "bootc-stage"
-	// Sysupdate is a native A/B install — snosi's marker file — with the
-	// staging script installed. Both halves are required, matching the gate
-	// the sysupdate updates group already applies.
-	Sysupdate Capability = "sysupdate"
 	// ImageDescriptor is the read-only ublue-os image descriptor. It is the
 	// prerequisite of every Bluefin-family group, which has nothing to render
 	// on a host that runs a different OS.
@@ -96,16 +91,13 @@ var pathCapabilities = []struct {
 }
 
 // assetCapabilities pairs every capability provided by a fixed path with the
-// presence test that decides it. Sysupdate needs both of its halves, which is
-// why each entry holds a whole predicate rather than a path list.
+// presence test that decides it. Each entry holds a whole predicate rather
+// than a path list because Homebrew resolves through $PATH as well.
 var assetCapabilities = []struct {
 	capability Capability
 	present    func(Probe) bool
 }{
 	{BootcStage, func(p Probe) bool { return exists(p, bootc.StageScriptPath) }},
-	{Sysupdate, func(p Probe) bool {
-		return exists(p, sysupdate.MarkerPath) && exists(p, sysupdate.StageScriptPath)
-	}},
 	{ImageDescriptor, func(p Probe) bool { return exists(p, imageinfo.DescriptorPath) }},
 	{Homebrew, func(p Probe) bool {
 		if p.LookPath == nil || p.Stat == nil {
@@ -249,7 +241,6 @@ var prerequisites = []Prerequisite{
 	{Page: "updates_page", Group: "brew_updates_group", AnyOf: []Capability{Homebrew}},
 	{Page: "updates_page", Group: "channel_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "updates_page", Group: "flatpak_updates_group", AnyOf: []Capability{Flatpak}},
-	{Page: "updates_page", Group: "sysupdate_updates_group", AnyOf: []Capability{Sysupdate}},
 
 	// Applications.
 	{Page: "applications_page", Group: "applications_installed_group"},
@@ -336,8 +327,6 @@ func assetPaths(c Capability) []string {
 	switch c {
 	case BootcStage:
 		return []string{bootc.StageScriptPath}
-	case Sysupdate:
-		return []string{sysupdate.MarkerPath, sysupdate.StageScriptPath}
 	case ImageDescriptor:
 		return []string{imageinfo.DescriptorPath}
 	case Homebrew:
@@ -403,7 +392,7 @@ func ProbeFromPresent(present ...Capability) Probe {
 
 // ProbeFromNames builds a Probe from capability *names* — the string form of a
 // Capability constant, e.g. "flatpak", "brew", "podman", "bootc-stage",
-// "sysupdate", "image-descriptor". It is the env-driven host-shape seam the
+// "image-descriptor". It is the env-driven host-shape seam the
 // screenshot walkthrough uses: the chairlift_e2e build splits a comma-separated
 // environment variable and passes the words here. Names that are not a
 // classified capability are ignored, so a typo or an unknown tool never

@@ -23,8 +23,8 @@ const pkexecOwner = "internal/pkexec/pkexec.go"
 // PolicyKit binds every data/*.policy action to. internal/helperexec and
 // internal/stageexec both take it as a parameter so tests can substitute a
 // stand-in, which means the production value lives in the *callers* — and for
-// a long time each of internal/bootc, internal/sysupdate, internal/ublue and
-// internal/updex declared a private copy of it. Four copies of the escalation
+// a long time each OS-update, ublue, and updex provider package declared a
+// private copy of it. Four copies of the escalation
 // entrypoint is four places for one of them to be changed alone.
 //
 // The gate walks Go source rather than grepping so comments (which legitimately

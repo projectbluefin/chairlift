@@ -162,7 +162,6 @@ func TestGoreleaserNfpmLayoutMatchesUsrPrefix(t *testing.T) {
 		{"maintainer config", "config.yml", "/usr/share/chairlift/config.yml"},
 		{"updex policy", "io.projectbluefin.chairlift.updex.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy")},
 		{"bootc policy", "io.projectbluefin.chairlift.bootc.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy")},
-		{"sysupdate policy", "io.projectbluefin.chairlift.sysupdate.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy")},
 		{"ublue policy", "io.projectbluefin.chairlift.ublue.policy", filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy")},
 		{"channel table example", "channels.example.yml", "/usr/share/doc/chairlift/channels.example.yml"},
 	}
@@ -235,11 +234,10 @@ func TestGoreleaserPublishesTheSystemCompanionPackage(t *testing.T) {
 
 	wantIntegrationContents := map[string]string{
 		"config.yml": "/usr/share/chairlift/config.yml",
-		"io.projectbluefin.chairlift.bootc.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy"),
-		"io.projectbluefin.chairlift.updex.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy"),
-		"io.projectbluefin.chairlift.sysupdate.policy": filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.sysupdate.policy"),
-		"io.projectbluefin.chairlift.ublue.policy":     filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy"),
-		"channels.example.yml":                         "/usr/share/doc/chairlift/channels.example.yml",
+		"io.projectbluefin.chairlift.bootc.policy": filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.bootc.policy"),
+		"io.projectbluefin.chairlift.updex.policy": filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.updex.policy"),
+		"io.projectbluefin.chairlift.ublue.policy": filepath.Join(polkitActionsDir, "io.projectbluefin.chairlift.ublue.policy"),
+		"channels.example.yml":                     "/usr/share/doc/chairlift/channels.example.yml",
 	}
 	if len(integration.Contents) != len(wantIntegrationContents) {
 		t.Errorf("%s contents has %d entries, want %d", integrationPackageName, len(integration.Contents), len(wantIntegrationContents))

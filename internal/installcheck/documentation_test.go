@@ -120,7 +120,6 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"/usr/bin/chairlift-updex-helper",
 			"/usr/bin/chairlift-ublue-helper",
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
-			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.sysupdate.policy",
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy",
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 			"/usr/share/chairlift/config.yml",

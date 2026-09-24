@@ -5,9 +5,9 @@ package pageview
 // an explicitly scoped reset. It is reached deliberately from System, so the
 // strings here describe a destination, not a routine control.
 //
-// The bootc rollback row, the native A/B previous-version row, and the two
-// reset rows all live in their own pageview functions (BootcRollbackRow,
-// SysupdateRollbackSubtitle, PowerwashRow, FactoryResetRow); this file only
+// The bootc rollback row and the two reset rows all live in their own
+// pageview functions (BootcRollbackRow, PowerwashRow, FactoryResetRow); this
+// file only
 // supplies the container-level copy that is new to Recovery.
 
 // RecoveryPageSubtitle is the Recovery detail page's heading description. It

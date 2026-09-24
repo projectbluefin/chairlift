@@ -22,7 +22,6 @@ func TestViewsUseSharedBadgeCounts(t *testing.T) {
 		},
 		filepath.Join(viewsDir, "updates_page.go"): {
 			`uh.updateCounts.SetObserved(badgestate.Bootc,`,
-			`uh.updateCounts.SetObserved(badgestate.Sysupdate,`,
 			`uh.updateCounts.Set(badgestate.Flatpak, refresh.Count)`,
 			`uh.updateCounts.Set(badgestate.Homebrew, refresh.Count)`,
 			`uh.updateCounts.Add(badgestate.Homebrew, -1)`,
@@ -68,8 +67,5 @@ func TestOSBadgeReadsKeepKnownStateOnError(t *testing.T) {
 	}
 	if got := strings.Count(string(data), "uh.updateCounts.SetObserved(badgestate.Bootc,"); got != 2 {
 		t.Errorf("bootc startup and staging must each preserve a known badge on failed status reads; found %d observed updates", got)
-	}
-	if got := strings.Count(string(data), "uh.updateCounts.SetObserved(badgestate.Sysupdate,"); got != 2 {
-		t.Errorf("native A/B startup and staging must each preserve a known badge on failed status reads; found %d observed updates", got)
 	}
 }

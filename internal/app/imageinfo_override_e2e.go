@@ -45,7 +45,7 @@ func applyImageInfoOverride() {
 	}
 
 	// CHAIRLIFT_CAPABILITIES is a comma-separated list of capability names
-	// ("flatpak", "brew", "podman", "bootc-stage", "sysupdate",
+	// ("flatpak", "brew", "podman", "bootc-stage",
 	// "image-descriptor"). It lets the walkthrough render a chosen host shape
 	// on a runner that ships none of these tools, matching the env-driven
 	// seam the other stubs in this file use. Unknown names are ignored, so the

@@ -164,7 +164,7 @@ func (w *Window) buildUI() {
 		store.Values,
 		func() map[updateflow.SourceID]bool {
 			return map[updateflow.SourceID]bool{
-				updateflow.OperatingSystem:  w.effectiveEnabled("updates_page", "bootc_updates_group") || w.effectiveEnabled("updates_page", "sysupdate_updates_group"),
+				updateflow.OperatingSystem:  w.effectiveEnabled("updates_page", "bootc_updates_group"),
 				updateflow.Applications:     w.effectiveEnabled("updates_page", "flatpak_updates_group"),
 				updateflow.DeveloperTools:   w.effectiveEnabled("updates_page", "brew_updates_group"),
 				updateflow.SystemComponents: w.effectiveEnabled("features_page", "features_group"),

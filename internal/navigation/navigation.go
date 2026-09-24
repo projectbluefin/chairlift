@@ -54,7 +54,6 @@ var items = []Item{
 		Groups: []string{
 			"automatic_updates_group",
 			"bootc_updates_group",
-			"sysupdate_updates_group",
 			"flatpak_updates_group",
 			"brew_updates_group",
 			"brew_trust_group",
