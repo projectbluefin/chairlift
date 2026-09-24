@@ -62,6 +62,25 @@ func (uh *UserHome) buildHelpPage() {
 
 		page.Add(group)
 	}
+
+	// Feature availability (issue #209): groups configuration enables but
+	// this host cannot back, from the capability set resolved at startup.
+	// Collapsed behind one expander, and absent when nothing is missing.
+	if rows := pageview.UnavailableFeatures(uh.capabilities, uh.config.IsGroupEnabled); len(rows) > 0 {
+		group := adw.NewPreferencesGroup()
+		group.SetTitle("Feature availability")
+		expander := adw.NewExpanderRow()
+		expander.SetTitle("Why is something missing?")
+		expander.SetSubtitle("Features this computer cannot run right now")
+		for _, r := range rows {
+			row := adw.NewActionRow()
+			row.SetTitle(r.Title)
+			row.SetSubtitle(r.Subtitle)
+			expander.AddRow(&row.Widget)
+		}
+		group.Add(&expander.Widget)
+		page.Add(group)
+	}
 }
 
 // openURL opens a URL in the default browser using xdg-open

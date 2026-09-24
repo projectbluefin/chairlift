@@ -154,7 +154,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		},
 		{
 			file:     "help_page.go",
-			required: []string{"pageview.HelpResources("},
+			required: []string{"pageview.HelpResources(", "pageview.UnavailableFeatures("},
 			retired:  []string{`row.SetTitle("Website")`, `row.SetTitle("Report Issues")`},
 		},
 		{

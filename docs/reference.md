@@ -189,6 +189,8 @@ Each action has:
 | Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; moved here from Features (issue #249); shown only when Homebrew is present |
 | Resources | `help_resources_group` | Links to project resources |
 
+Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
+
 `help_resources_group` supports:
 
 | Field | Description |

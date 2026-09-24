@@ -192,6 +192,11 @@ Those stay hidden normally until turned on or until a rollback exists.
 Three links, each shown only when it is configured: **Website**, **Report a
 problem** (the `issues` URL, where bug reports go), and **Documentation**.
 
+When the configuration turns on something this computer cannot run — Flatpak
+or Homebrew is absent, or the machine is not a native A/B install — **Feature
+availability** appears with one collapsed row, **Why is something missing?**,
+that names each such feature and what it needs.
+
 ---
 
 ## How these are made

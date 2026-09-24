@@ -89,7 +89,7 @@ disabled; Help is always retained:
 | System       | `system_page.go`       | OS info (`/etc/os-release`), bootc deployment status, health monitor launch                                                             |
 | Features     | `features_page.go`     | Toggle system features via `updex` tool                                                                                                 |
 | Livery       | `livery_page.go`       | Profile picture (`profile_picture.go`, `internal/avatar`); app-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`) |
-| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`)                                                                     |
+| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`); "Why is something missing?" lists configured groups the capability floor hides |
 
 ## Key Patterns
 
@@ -1120,6 +1120,15 @@ answer alone will not reveal the mistake. Without the gate, a group added to
 `config.yml` and wired into a view would render on hosts whose backing tool is
 absent — the exact degradation policy this package exists to enforce — and no
 other gate would notice.
+
+The Help page's "Why is something missing?" expander is the floor's one
+explanation surface. `pageview.UnavailableFeatures(set, configured)` walks
+`capability.Prerequisites()` with the window's already-resolved set — it never
+re-probes — and lists each group that configuration enables but `Supports`
+rejects, titled for a person and subtitled with the missing capability. A group
+configuration disabled is the administrator's choice and is not listed. Its
+title table is held total over the capability-gated groups by
+`TestEveryCapabilityGatedGroupHasATitle`.
 
 The package's own tests are table-driven and derive their cases from the tables
 they cover, rather than restating them. `TestDetectWithResolvesEveryCapability`

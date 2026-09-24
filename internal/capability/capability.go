@@ -294,9 +294,9 @@ func Required(page, group string) (required []Capability, classified bool) {
 }
 
 // Prerequisites returns every classified pair, ordered by page and then group,
-// each with a copy of its capabilities. It exists so a gate can hold the table
-// to the configuration schema in both directions; nothing in the running
-// application needs the whole table.
+// each with a copy of its capabilities. A gate holds it to the configuration
+// schema in both directions, and the Help page walks it to explain which
+// configured groups this host cannot back.
 func Prerequisites() []Prerequisite {
 	result := make([]Prerequisite, len(prerequisites))
 	for i, p := range prerequisites {
