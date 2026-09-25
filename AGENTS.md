@@ -355,6 +355,16 @@ An agent must not break these:
   `config.SchemaGroups` in both directions, enforced by
   `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`, so
   a new config group is classified in the same change that adds it.
+- **Setup filters choices, not whole pages.** `internal/firstrun` snapshots
+  the shared composed capability floor for at most three optional tasks:
+  Appearance, Apps, and Update Preferences. Each choice retains its original
+  page/group policy references; Update Preferences includes `features_page`'s
+  `features_group`. Nil fails closed, empty tasks disappear, and returned
+  snapshots do not expose mutable model state. Next/Back emit no settings or
+  feature operation; Skip and intentional Dismiss emit the same disposition,
+  preserving an existing completion. The welcome entry is not a decision step.
+  Dedicated controls and dismissal persistence wiring belong to issue #225;
+  do not claim the pure model implements those GTK behaviors.
 - **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`
   is the only place ChairLift decides which `brew` it means: the `brew` that
   `$PATH` resolves, or `/home/linuxbrew/.linuxbrew/bin/brew` when `$PATH` has

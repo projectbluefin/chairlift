@@ -1952,3 +1952,28 @@ There is no separate Go client library dependency for bootc: status/stage types 
 ## Subsystem Details
 
 - [Package Manager Wrappers](./package-managers.md) — Homebrew (including tap trust), Flatpak, bootc, and Updex wrapper details
+
+## Optional setup model
+
+`internal/firstrun/flow.go` consumes the same composed floor supplied by
+`Window.effectiveEnabled` to the rest of the app. It snapshots independently
+allowed choices into Appearance, Apps, and Update Preferences in that order.
+Each choice retains original configuration references, including the system
+components update preference's `features_page/features_group`. The model
+contains no host probe, tool execution, settings binding, or navigation inventory.
+
+A nil floor or no surviving choices leaves only the welcome entry; Configure
+or Next then emits completion without entering an empty configuration screen.
+Otherwise Next returns each remaining step with `not-addressed`, including the
+last step, and only advancing beyond it emits `completed`. Back changes the
+assistant index alone. Skip and intentional Dismiss emit `skipped`, or retain
+`completed` when explicitly reopening previously completed setup. None of these
+transitions persists or executes anything. The dialog must apply emitted decisions
+through the existing store, respecting dry-run and reporting persistence errors.
+
+Issue #224 owns this model; issue #225 owns dedicated control instances, async
+readiness, action admission, and GTK Skip/dismissal callbacks. The current GTK
+adapter displays task descriptions and has not yet implemented those controls.
+A capability floor is necessary but is not permission to expose a control whose
+own desktop/async readiness or implementation is missing. See the
+[setup model contract](../specs/setup-model.md) for the exact boundary and tests.

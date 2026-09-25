@@ -11,100 +11,81 @@ const (
 	FlowChoiceGetMoving FlowChoice = "get-moving"
 )
 
-// Step represents one screen or decision step in the onboarding assistant.
-//
-// Page and Groups name real entries in the configuration schema — the same
-// strings config.IsGroupEnabled switches on — because that predicate is what
-// filters the sequence in production. It defaults an unknown page and an
-// unknown group to enabled, so a step naming anything else is never filtered
-// at all: every step would show regardless of configuration.
-// TestEveryStepNamesRealConfigGroups holds both halves against the schema.
+// PolicyRef retains the original configuration namespace of a real control.
+// Setup task names never replace these keys.
+type PolicyRef struct {
+	Page  string
+	Group string
+}
+
+// Choice identifies a delivered action or preference. Every policy reference
+// must pass the shared floor. Rendering and explicitly invoking the action are
+// the dialog's responsibility; navigation never invokes it.
+type Choice struct {
+	ID     string
+	Title  string
+	Policy []PolicyRef
+}
+
+// Step is an optional task containing independently filtered choices.
+// Welcome is a separate entry screen, not a configuration decision.
 type Step struct {
 	ID          string
 	Title       string
 	Description string
-	Page        string
-	Groups      []string
+	Choices     []Choice
 }
 
-// Well-known step identifiers.
+// Stable task identifiers, independent of primary navigation.
 const (
-	StepIDWelcome   = "welcome"
-	StepIDTheme     = "theme"
-	StepIDApps      = "apps"
-	StepIDDeveloper = "developer"
-	StepIDAI        = "ai"
+	StepIDWelcome = "welcome"
+	StepIDTheme   = "theme"
+	StepIDApps    = "apps"
+	StepIDUpdates = "updates"
 )
 
-// Welcome screen copy. The hero screen and the welcome step are the same
-// screen, so the strings have one owner here and internal/views/pageview
-// re-exports them rather than restating them.
+// Welcome copy has one owner; pageview re-exports it for the hero screen.
 const (
-	// WelcomeStepTitle is the prominent header on the onboarding hero screen.
-	WelcomeStepTitle = "Welcome to Bluefin"
-
-	// WelcomeStepDescription is the narrative copy under the welcome header.
+	WelcomeStepTitle       = "Welcome to Bluefin"
 	WelcomeStepDescription = "Your cloud-native developer workstation is ready. Choose how you'd like to get started."
 )
 
-var (
-	// StepWelcome is the initial hero screen with branding and flow selection.
-	StepWelcome = Step{
-		ID:          StepIDWelcome,
-		Title:       WelcomeStepTitle,
-		Description: WelcomeStepDescription,
-	}
+// StepWelcome is the entry screen with flow selection, not a setup task.
+var StepWelcome = Step{
+	ID:          StepIDWelcome,
+	Title:       WelcomeStepTitle,
+	Description: WelcomeStepDescription,
+}
 
-	// Candidate optional configuration steps following the welcome screen.
-	StepTheme = Step{
-		ID:          StepIDTheme,
-		Title:       "Appearance",
-		Description: "Personalize system wallpaper, branding, and dinosaur avatars",
-		Page:        "livery_page",
-		Groups: []string{
-			"account_group",
-			"livery_app_grid_group",
-			"livery_foundation_group",
-			"livery_dock_group",
-		},
-	}
-
-	StepApps = Step{
-		ID:          StepIDApps,
-		Title:       "Applications",
-		Description: "Discover curated Flatpak applications and Homebrew packages",
-		Page:        "applications_page",
-		Groups: []string{
-			"applications_installed_group",
-			"flatpak_user_group",
-			"flatpak_system_group",
-			"brew_group",
-		},
-	}
-
-	StepDev = Step{
-		ID:          StepIDDeveloper,
-		Title:       "Developer Access",
-		Description: "Configure development containers and developer environment mode",
-		Page:        "features_page",
-		Groups:      []string{"dx_group"},
-	}
-
-	StepAI = Step{
-		ID:          StepIDAI,
-		Title:       "AI Tools",
-		Description: "Turn on Agent Mode to run AI models on this computer",
-		Page:        "agents_page",
-		Groups:      []string{"agents_group"},
-	}
-)
-
-// candidateSteps lists the sequence of optional onboarding steps.
+// Only existing controls belong here. In particular, neither future artwork
+// controls nor developer/AI/gaming activation is a prerequisite for setup.
 var candidateSteps = []Step{
-	StepTheme,
-	StepApps,
-	StepDev,
-	StepAI,
+	{
+		ID: StepIDTheme, Title: "Appearance",
+		Description: "Choose the icons used on your desktop.",
+		Choices: []Choice{
+			{ID: "app-grid", Title: "App launcher icon", Policy: []PolicyRef{{"livery_page", "livery_app_grid_group"}}},
+			{ID: "foundation", Title: "Top-bar icon", Policy: []PolicyRef{{"livery_page", "livery_foundation_group"}}},
+			{ID: "dock", Title: "Files icon", Policy: []PolicyRef{{"livery_page", "livery_dock_group"}}},
+		},
+	},
+	{
+		ID: StepIDApps, Title: "Apps",
+		Description: "Choose optional app and tool collections.",
+		Choices: []Choice{
+			{ID: "bundles", Title: "App and tool collections", Policy: []PolicyRef{{"applications_page", "brew_bundles_group"}}},
+		},
+	},
+	{
+		ID: StepIDUpdates, Title: "Update Preferences",
+		Description: "Choose what to include when checking for updates.",
+		Choices: []Choice{
+			{ID: "applications-enabled", Title: "Applications", Policy: []PolicyRef{{"updates_page", "flatpak_updates_group"}}},
+			{ID: "developer-tools-enabled", Title: "Developer tools", Policy: []PolicyRef{{"updates_page", "brew_updates_group"}}},
+			{ID: "system-components-enabled", Title: "System components", Policy: []PolicyRef{{"features_page", "features_group"}}},
+			{ID: "operating-system-enabled", Title: "Operating system", Policy: []PolicyRef{{"updates_page", "bootc_updates_group"}}},
+		},
+	},
 }
 
 // AssistantModel tracks the linear step progression and flow state of the assistant.
@@ -114,44 +95,72 @@ type AssistantModel struct {
 	current int
 }
 
-// NewAssistantModel creates a step sequence filtered by group availability.
-// The Welcome hero screen is always included as the first step.
-//
-// A step is offered when at least one of the groups behind it is enabled,
-// because a step stands for a whole area of the application: Applications is
-// worth offering while any one of its Flatpak or Homebrew groups survives,
-// and drops out only once an administrator has disabled all of them.
-func NewAssistantModel(filter func(page, group string) bool) *AssistantModel {
+// NewAssistantModel snapshots the session's shared capability.Compose predicate.
+// Callers may further restrict it for desktop/async control readiness, but must
+// never substitute config-only checks. Nil fails closed. Empty tasks are omitted;
+// a welcome-only sequence exits immediately instead of opening an empty wizard.
+func NewAssistantModel(floor func(page, group string) bool) *AssistantModel {
 	active := []Step{StepWelcome}
-	for _, s := range candidateSteps {
-		if s.enabled(filter) {
-			active = append(active, s)
+	for _, candidate := range candidateSteps {
+		step := candidate
+		step.Choices = nil
+		for _, choice := range candidate.Choices {
+			if choice.enabled(floor) {
+				step.Choices = append(step.Choices, cloneChoice(choice))
+			}
+		}
+		if len(step.Choices) != 0 {
+			active = append(active, step)
 		}
 	}
-	return &AssistantModel{
-		steps:   active,
-		current: 0,
-	}
+	return &AssistantModel{steps: active}
 }
 
-// enabled reports whether any group backing the step is enabled.
-func (s Step) enabled(filter func(page, group string) bool) bool {
-	if filter == nil || len(s.Groups) == 0 {
-		return true
+func (c Choice) enabled(floor func(page, group string) bool) bool {
+	if floor == nil || len(c.Policy) == 0 {
+		return false
 	}
-	for _, group := range s.Groups {
-		if filter(s.Page, group) {
-			return true
+	for _, ref := range c.Policy {
+		if !floor(ref.Page, ref.Group) {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
-// Steps returns the active step sequence.
+func cloneChoice(c Choice) Choice {
+	c.Policy = append([]PolicyRef(nil), c.Policy...)
+	return c
+}
+
+func cloneStep(s Step) Step {
+	choices := s.Choices
+	s.Choices = make([]Choice, len(choices))
+	for i, c := range choices {
+		s.Choices[i] = cloneChoice(c)
+	}
+	return s
+}
+
+// Steps returns an independent snapshot, including nested policy references.
 func (m *AssistantModel) Steps() []Step {
 	out := make([]Step, len(m.steps))
-	copy(out, m.steps)
+	for i, s := range m.steps {
+		out[i] = cloneStep(s)
+	}
 	return out
+}
+
+// Skip is available at every stage, even with no choices. It emits only the
+// disposition to persist; it performs no settings or optional feature action.
+func (m *AssistantModel) Skip(current Disposition) Disposition {
+	return SkipPreserving(current)
+}
+
+// Dismiss treats an intentional dialog dismissal as Skip. A crash emits no
+// decision. The dialog owns persistence, including dry-run and write failures.
+func (m *AssistantModel) Dismiss(current Disposition) Disposition {
+	return m.Skip(current)
 }
 
 // TotalSteps returns the count of active steps.
@@ -167,7 +176,7 @@ func (m *AssistantModel) CurrentIndex() int {
 // CurrentStep returns the step currently being presented.
 func (m *AssistantModel) CurrentStep() Step {
 	if m.current >= 0 && m.current < len(m.steps) {
-		return m.steps[m.current]
+		return cloneStep(m.steps[m.current])
 	}
 	return StepWelcome
 }
@@ -207,12 +216,12 @@ func (m *AssistantModel) ForwardFinishes() bool {
 // (if available) or completes if no configuration steps are active.
 func (m *AssistantModel) SelectFlow(choice FlowChoice) (next *Step, dismissed bool, disp Disposition) {
 	if choice == FlowChoiceGetMoving {
-		return nil, true, DispositionSkipped
+		return nil, true, m.Skip(DispositionNotAddressed)
 	}
 
 	if len(m.steps) > 1 {
 		m.current = 1
-		step := m.steps[1]
+		step := cloneStep(m.steps[1])
 		return &step, false, DispositionNotAddressed
 	}
 
@@ -223,7 +232,7 @@ func (m *AssistantModel) SelectFlow(choice FlowChoice) (next *Step, dismissed bo
 func (m *AssistantModel) Next() (next *Step, finished bool, disp Disposition) {
 	if m.current+1 < len(m.steps) {
 		m.current++
-		step := m.steps[m.current]
+		step := cloneStep(m.steps[m.current])
 		return &step, false, DispositionNotAddressed
 	}
 	return nil, true, DispositionCompleted
@@ -249,7 +258,7 @@ func (m *AssistantModel) Advance() (step Step, done bool) {
 func (m *AssistantModel) Previous() (prev *Step, ok bool) {
 	if m.current > 0 {
 		m.current--
-		step := m.steps[m.current]
+		step := cloneStep(m.steps[m.current])
 		return &step, true
 	}
 	return nil, false

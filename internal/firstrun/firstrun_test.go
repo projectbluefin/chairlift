@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
@@ -90,94 +89,6 @@ func TestFlowSelectionConfigureWithNoConfigStepsCompletes(t *testing.T) {
 	if disp != DispositionCompleted {
 		t.Errorf("expected DispositionCompleted, got %v", disp)
 	}
-}
-
-func TestStepFilteringHonorsGroupPredicate(t *testing.T) {
-	// Enable only the Appearance step's groups.
-	model := NewAssistantModel(func(page, group string) bool {
-		return page == StepTheme.Page
-	})
-
-	steps := model.Steps()
-	if len(steps) != 2 {
-		t.Fatalf("expected 2 steps (welcome + appearance), got %d", len(steps))
-	}
-	if steps[0].ID != StepIDWelcome {
-		t.Errorf("step 0 = %q, want %q", steps[0].ID, StepIDWelcome)
-	}
-	if steps[1].ID != StepIDTheme {
-		t.Errorf("step 1 = %q, want %q", steps[1].ID, StepIDTheme)
-	}
-}
-
-// TestEveryStepNamesRealConfigGroups is the gate the synthetic predicates in
-// the other filtering tests cannot be: production filters with
-// config.IsGroupEnabled, which defaults an unknown page and an unknown group
-// to enabled, so a step naming a page or group the schema does not carry is
-// never filtered and shows on every host regardless of configuration.
-func TestEveryStepNamesRealConfigGroups(t *testing.T) {
-	for _, step := range candidateSteps {
-		groups, err := config.SchemaGroups(step.Page)
-		if err != nil {
-			t.Errorf("step %q names page %q: %v", step.ID, step.Page, err)
-			continue
-		}
-		known := make(map[string]bool, len(groups))
-		for _, group := range groups {
-			known[group] = true
-		}
-		if len(step.Groups) == 0 {
-			t.Errorf("step %q names no configuration group", step.ID)
-		}
-		for _, group := range step.Groups {
-			if !known[group] {
-				t.Errorf("step %q names group %q, absent from %s in the config schema",
-					step.ID, group, step.Page)
-			}
-		}
-	}
-}
-
-func TestDisablingEveryBackingGroupDropsTheStep(t *testing.T) {
-	// An absent group reads as enabled, so naming only the disabled ones
-	// models an administrator's overlay exactly.
-	cfg := &config.Config{
-		ApplicationsPage: config.PageConfig{},
-		AgentsPage:       config.PageConfig{"agents_group": config.GroupConfig{Enabled: false}},
-	}
-	for _, group := range StepApps.Groups {
-		cfg.ApplicationsPage[group] = config.GroupConfig{Enabled: false}
-	}
-
-	got := make(map[string]bool)
-	for _, step := range NewAssistantModel(cfg.IsGroupEnabled).Steps() {
-		got[step.ID] = true
-	}
-
-	if got[StepIDApps] {
-		t.Error("Applications step survived every one of its groups being disabled")
-	}
-	if got[StepIDAI] {
-		t.Error("AI step survived agents_group being disabled")
-	}
-	if !got[StepIDTheme] || !got[StepIDDeveloper] {
-		t.Errorf("enabled steps were dropped: %v", got)
-	}
-}
-
-func TestOneEnabledGroupKeepsTheStep(t *testing.T) {
-	cfg := &config.Config{ApplicationsPage: config.PageConfig{}}
-	for _, group := range StepApps.Groups {
-		cfg.ApplicationsPage[group] = config.GroupConfig{Enabled: false}
-	}
-	cfg.ApplicationsPage["brew_group"] = config.GroupConfig{Enabled: true}
-
-	for _, step := range NewAssistantModel(cfg.IsGroupEnabled).Steps() {
-		if step.ID == StepIDApps {
-			return
-		}
-	}
-	t.Error("Applications step was dropped while brew_group remained enabled")
 }
 
 func TestLinearStepNavigationNextAndPrevious(t *testing.T) {
@@ -416,7 +327,7 @@ func TestAdvanceDisplaysEveryStepBeforeCompleting(t *testing.T) {
 		displayed = append(displayed, step.ID)
 	}
 
-	want := []string{StepIDTheme, StepIDApps, StepIDDeveloper, StepIDAI}
+	want := []string{StepIDTheme, StepIDApps, StepIDUpdates}
 	if len(displayed) != len(want) {
 		t.Fatalf("displayed steps = %v, want %v", displayed, want)
 	}

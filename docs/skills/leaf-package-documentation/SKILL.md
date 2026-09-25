@@ -38,3 +38,11 @@ package said only that `checkFeatureUpdates` applies it "on every outcome,"
 without naming the failure/zero/found branches or stating the view composes
 no text of its own. The reviewer flagged it (medium) as insufficient; the
 sweep fixed it by spelling out each outcome and its producing function.
+
+When a pure model precedes its GTK adapter, document both boundaries. A model
+emitting a disposition is not evidence that the dialog persists it, and a choice
+referencing a delivered backend is not evidence that the dialog renders its
+control. For setup (#224/#225), name the model's zero-step exit, intermediate
+navigation, terminal completion, skip and intentional-dismissal outcomes, then
+state which callbacks remain owned by the adapter ticket. This prevents model
+tests from being reported as desktop interaction coverage.

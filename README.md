@@ -282,6 +282,11 @@ chairlift
   already open, it is brought forward on the step you were on. Choosing
   *Get Moving* on the welcome screen closes it and records that setup was
   settled, so it does not reappear on its own.
+  The setup model limits optional tasks to Appearance, Apps, and Update
+  Preferences, omitting choices excluded by configuration or host capability.
+  Dedicated setup controls and dismissal handling are tracked in
+  [#225](https://github.com/projectbluefin/chairlift/issues/225); the current
+  dialog still presents task descriptions.
 - `--dry-run`, `-d`: preview actions without changing the system. Automatic
   presentation of the onboarding assistant is suppressed in this mode;
   `--setup` still opens it explicitly.
