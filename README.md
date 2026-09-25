@@ -2,7 +2,7 @@
     <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg" width="128">
     <h1>Control Center</h1>
     <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a></p>
-    <p>Manage your Homebrew packages, keep the whole system up to date, and maintain your computer with ease.</p>
+    <p>Manage your computer</p>
     <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b> — see <a href="docs/adr/0012-ship-as-control-center-keep-chairlift-code-name.md">ADR-0012</a>.</sub></p>
 </div>
 
@@ -21,62 +21,41 @@ shown in the real application, captured by `make screenshots`.
 
 ### 📦 Homebrew Package Management
 
-- **Manage Installed Packages**: Browse installed formulae and casks, uninstall
-  either type, and pin or unpin formulae with confirmed, refresh-safe actions
-- **Search & Install**: Search formulae and casks, confirm the selected package
-  type, and install with loading, error, refresh, and dry-run states
-- **Update & Upgrade**: Keep Homebrew up-to-date and upgrade outdated packages individually
-- **App Collections**: Install a curated set of apps and tools in one step
-- **Tap Trust Management**: Homebrew 6's per-tap trust model hides packages installed from untrusted taps; Control Center detects them and lets you trust a tap (and resume its updates) with one click, without requiring root
+- Exposes our homebrew bundles as one click buttons.
+- "Turn on developer mode" etc.
 
 ### 🤖 Agents
 
-- **Agent Mode**: one switch installs [llmman](https://github.com/llmmanorg/llmman)
+Turns on Local inference for your system. Eric Curtin @ Docker is helping us out with this one!
+
+- Installs [llmman](https://github.com/llmmanorg/llmman)
   from Homebrew (plus the Jan chat app on x86_64) and runs it as a systemd
   user service on `127.0.0.1:17434`, with its web shell and prompt history
   off. llmman picks the engine for your hardware; apps opened afterwards find
   it through `OLLAMA_HOST`. Turning it off keeps the software and models.
   Nothing needs administrator authentication
 
-### 🖥️ Bluefin, Bluefin LTS & Dakota
+### 🖥️ Bluefin Features
 
-On [Bluefin](https://projectbluefin.io), Bluefin LTS, and Dakota, Control Center adds
-three switches ported from [bluefinctl](https://github.com/projectbluefin/bluefinctl).
-Each hides itself on a system without `/usr/share/ublue-os/image-info.json`,
-so they cost nothing on any other host.
-
-- **Testing Channel**: Stage a `bootc switch` between the stable and testing
-  release streams, then restart to apply. Control Center resolves the target
-  reference from a per-image table rather than a tag suffix, so it never
-  targets a tag the image does not publish — which also means the switch is
-  correctly unavailable on Bluefin Stable's `latest`/`stable`/`gts`/`beta`
-  streams, where no testing image exists. Downstream images add themselves
-  through `channels.yml`; see [`channels.example.yml`](channels.example.yml)
-- **Developer Mode**: Join the container, VM, and serial-device groups
-  (`docker`, `incus-admin`, `libvirt`, `dialout`), effective at next login.
-  This is group membership, not a rebase to a `-dx` image. A distribution may
-  also configure it to install the Pulp feed reader and stage a curated list
-  of developer feeds in your home folder once you switch it on — both are off
-  by default, and turning Developer Mode back off never removes the reader, the
-  staged file, or anything you imported from it.
-- **Gaming Mode**: Install Steam, ProtonUp-Qt, Protontricks, MangoHud,
-  GOverlay, and Flatseal as user Flatpaks — nothing is layered onto the system
-  image, so a system update never has to reconcile it. MangoHud is a Vulkan
-  layer extending the freedesktop runtime rather than an application, and is
-  inventoried as such, so it is installed once and removed again with the
-  rest of the stack
+- Testing mode: aka, switch you to a testing branch and back again
+  - Needs a reboot
+- Developer Mode: Turns DX mode on and off
+  - Adds you to a bunch of groups
+  - brew installs all the devkit stuff
+  - Adds linuxy things like "Containers" for distrobox, terminal in menu, pulp newsreader with changelogs.
+- Gaming Mode: Turns gaming mode on and off
+- Switches you to OGC kernel
+  - Steam, mesa all on the image, like Bazzite
+  - Dedicated gaming session on the login screen
+  - ProtonUp-Qt, Protontricks, MangoHud, GOverlay, and Flatseal as Flatpaks
+  - Needs a reboot
 
 ### 🔄 Unified Updates
 
 The Updates page leads with the system's status — "System is up to date", or
 how many updates are waiting — above an **Update sources** list of the four
 things that can be updated: Applications, Developer tools, System components,
-and Operating system. One primary action covers all of them: **Check again**
-when nothing is pending, **Update all** when something is, **Retry failed**
-when a source did not finish, and **Restart now** once an OS image is staged.
-A source that fails does not stop the others, and the restart prompt appears
-only when an image was actually staged, so a system that was already current
-never asks for a reboot.
+and Operating system.
 
 ### 🔁 Automatic Updates & Rollback
 
@@ -89,7 +68,9 @@ never asks for a reboot.
 
 ### 🎨 Livery
 
-- **App Grid Livery**: your own mark on the Show Applications button —
+Who you are, who you stand with, what you roll with. 
+
+- **App Grid Livery**: your own logo on the Show Applications button —
   searchable across all 3,461 brands [Simple Icons](https://simpleicons.org/)
   publishes, fetched on demand
 - **Foundational Livery**: a mark in the top bar — CNCF, Linux Foundation,
@@ -97,18 +78,9 @@ never asks for a reboot.
   the Open Gaming Collective, which is the default on a gaming image
 - **Dock Livery**: your CNCF project's own colour icon on the Files icon —
   search all 214 projects that publish artwork, from Kubernetes to bootc
-- **Rotate at Login**: the two foundation sections can advance one step each
-  time you sign in. Any section also accepts an SVG of your own
 
 ### 🔧 Updates & Maintenance
 
-- **System Updates**: On bootc-based systems, download and stage the next OS image update (applied on restart) and view booted/staged/rollback deployment status
-- **Update Now**: on hosts carrying the integrated updater, one row runs a
-  full system update immediately instead of waiting for the background timer
-- **Homebrew Updates**: Check for and install package updates; actions show
-  progress, reject repeated clicks, and refresh the outdated rows and sidebar
-  badge after successful live operations
-- **Outdated Packages**: View and upgrade packages that have newer versions available
 - **Free Up Space**: one button removes cached downloads and supporting
   software nothing uses any more, leaving your apps, files, and containers
   alone. It reports what each step actually did, and shows a reclaimed figure
