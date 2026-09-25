@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -226,12 +227,22 @@ func TestATSPINavigationTree(t *testing.T) {
 
 	cmd := exec.Command(script, args...)
 	cmd.Dir = repoRoot(t)
+	// A private session, as the smoke test uses: startup reads the Homebrew
+	// inventory, and brew workers outlive the script and keep writing into
+	// the temporary HOME, which makes t.TempDir's cleanup fail.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	output := &lockedBuffer{}
 	cmd.Stdout = output
 	cmd.Stderr = output
 
-	if err := runWithTimeout(cmd, atspiTimeout); err != nil {
-		t.Fatalf("AT-SPI navigation probe failed: %v\n%s\n%s", err, output.String(), atspiLogs(outDir))
+	runErr := runWithTimeout(cmd, atspiTimeout)
+	// Drain before any Fatalf: the TempDir removal registered above runs as
+	// soon as the test returns.
+	if err := awaitSessionExit(hostDrain(), cmd.Process.Pid, shutdownTimeout, drainTimeout); err != nil {
+		t.Errorf("AT-SPI probe session %d: %v", cmd.Process.Pid, err)
+	}
+	if runErr != nil {
+		t.Fatalf("AT-SPI navigation probe failed: %v\n%s\n%s", runErr, output.String(), atspiLogs(outDir))
 	}
 
 	raw, err := os.ReadFile(filepath.Join(outDir, "atspi-results.txt"))
@@ -366,12 +377,10 @@ func runWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
 // absent, which is the opposite of how the rest of this package treats a
 // missing dependency.
 //
-// The reason is a deliberate ordering: the E2E CI job does not install
-// at-spi2-core or python3-dogtail yet, and a hard failure here would turn
-// every run red for a dependency the test itself cannot add. The skip message
-// names exactly what is missing, so a run that quietly proves nothing says so.
-// Once the job installs the stack, this skip stops firing and the test's
-// assertions bind; it never weakens them.
+// The E2E CI job installs at-spi2-core, gir1.2-atspi-2.0 and python3-dogtail,
+// so there the assertions bind. A developer machine without them gets a skip
+// naming exactly what is missing, so a run that quietly proves nothing says
+// so; it never weakens the assertions where the stack is present.
 func requireATSPIStack(t *testing.T) {
 	t.Helper()
 

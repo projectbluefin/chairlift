@@ -36,8 +36,16 @@ pixels.
 import sys
 
 try:
-    from dogtail import rawinput, tree
+    # dogtail.tree runs checkForA11y() at import time, which reads
+    # org.gnome.desktop.interface toolkit-accessibility through GSettings.
+    # The runner uses GSETTINGS_BACKEND=memory, so that key is always false,
+    # and dogtail would print its complaint to stdout and exit 1 before the
+    # probe starts. The application publishes its tree through GTK_A11Y=atspi
+    # regardless of that key, so the check has to be switched off first.
     from dogtail.config import config
+
+    config.checkForA11y = False
+    from dogtail import rawinput, tree
 except ImportError as error:  # pragma: no cover - reported to the Go side
     print(f"dogtail is not importable: {error}", file=sys.stderr)
     sys.exit(3)
