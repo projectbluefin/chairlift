@@ -363,7 +363,6 @@ func (s *UpdateShell) SourcesReady() bool {
 func (s *UpdateShell) build() {
 	s.toolbarView = adw.NewToolbarView()
 	header := adw.NewHeaderBar()
-	header.SetTitleWidget(&gtk.NewLabel(branding.AppName).Widget)
 	s.refresh = newIconButton("view-refresh-symbolic", "Refresh")
 	s.refresh.SetActionName(commands.CheckAction)
 	header.PackStart(&s.refresh.Widget)
