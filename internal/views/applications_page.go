@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -78,30 +79,17 @@ func (uh *UserHome) buildApplicationsPage() {
 		page.Add(group)
 	}
 
-	// Flatpak User Applications group
-	if uh.groupEnabled("applications_page", "flatpak_user_group") {
+	// Flatpak Applications group
+	if uh.groupEnabled("applications_page", "flatpak_user_group") ||
+		uh.groupEnabled("applications_page", "flatpak_system_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Apps installed for you")
-		group.SetDescription("Available only to your account.")
+		group.SetTitle("Installed applications")
+		group.SetDescription("Applications installed on your system.")
 
-		uh.flatpakUserExpander = adw.NewExpanderRow()
-		uh.flatpakUserExpander.SetTitle("Your apps")
-		uh.flatpakUserExpander.SetSubtitle("Counting…")
-		group.Add(&uh.flatpakUserExpander.Widget)
-
-		page.Add(group)
-	}
-
-	// Flatpak System Applications group
-	if uh.groupEnabled("applications_page", "flatpak_system_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Apps installed for everyone")
-		group.SetDescription("Available to every account on this system.")
-
-		uh.flatpakSystemExpander = adw.NewExpanderRow()
-		uh.flatpakSystemExpander.SetTitle("Shared apps")
-		uh.flatpakSystemExpander.SetSubtitle("Counting…")
-		group.Add(&uh.flatpakSystemExpander.Widget)
+		uh.flatpakExpander = adw.NewExpanderRow()
+		uh.flatpakExpander.SetTitle("Applications")
+		uh.flatpakExpander.SetSubtitle("Counting…")
+		group.Add(&uh.flatpakExpander.Widget)
 
 		page.Add(group)
 	}
@@ -570,131 +558,153 @@ func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 	}
 }
 
+// flatpakAppEntry pairs an application with its scope for unified display.
+type flatpakAppEntry struct {
+	app  flatpak.Application
+	user bool
+}
+
 // loadFlatpakApplications loads installed Flatpak applications asynchronously
 func (uh *UserHome) loadFlatpakApplications() {
 	generation := uh.flatpakPackagesRefresh.Begin()
+	if !flatpak.IsInstalledCached() {
+		sgtk.RunOnMainThread(func() {
+			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+				return
+			}
+			if uh.flatpakExpander != nil {
+				uh.flatpakExpander.SetSubtitle("App management is not available on this system")
+			}
+		})
+		return
+	}
 
-	// Load user applications
-	if uh.flatpakUserExpander != nil {
-		userApps, err := flatpak.ListUserApplications()
-		if err != nil {
-			log.Printf("Error listing applications installed for the current user: %v", err)
-			sgtk.RunOnMainThread(func() {
-				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-					return
-				}
-				uh.flatpakUserExpander.SetSubtitle("Could not read the list")
-			})
-		} else {
-			sgtk.RunOnMainThread(func() {
-				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-					return
-				}
-				// Clear rows added by a previous load before repopulating
-				uh.flatpakUserRows.Clear(func(r *adw.ActionRow) { uh.flatpakUserExpander.Remove(&r.Widget) })
+	userEnabled := uh.groupEnabled("applications_page", "flatpak_user_group")
+	systemEnabled := uh.groupEnabled("applications_page", "flatpak_system_group")
 
-				uh.flatpakUserExpander.SetSubtitle(fmt.Sprintf("%d installed", len(userApps)))
-				uh.flatpakUserExpander.SetEnableExpansion(len(userApps) > 0)
-				for _, app := range userApps {
-					presentation := pageview.FlatpakApplication(app.Name, app.ApplicationID, app.Version)
-					row := adw.NewActionRow()
-					row.SetTitle(presentation.Title)
-					row.SetSubtitle(presentation.Subtitle)
+	var userApps, systemApps []flatpak.Application
+	var userErr, systemErr error
 
-					// Add uninstall button
-					uninstallBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
-					uninstallBtn.SetValign(gtk.AlignCenterValue)
-					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this app from your account")
-
-					appID := app.ApplicationID
-					clickedCb := func(btn gtk.Button) {
-						btn.SetSensitive(false)
-						go func() {
-							if err := flatpak.Uninstall(appID, true); err != nil {
-								log.Printf("Error uninstalling %s for the current user: %v", appID, err)
-								sgtk.RunOnMainThread(func() {
-									btn.SetSensitive(true)
-									uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", app.Name))
-								})
-								return
-							}
-							sgtk.RunOnMainThread(func() {
-								uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), app.Name))
-								go uh.loadFlatpakApplications()
-							})
-						}()
-					}
-					uninstallBtn.ConnectClicked(&clickedCb)
-
-					row.AddSuffix(&uninstallBtn.Widget)
-					uh.flatpakUserExpander.AddRow(&row.Widget)
-					uh.flatpakUserRows.Add(row)
-				}
-			})
+	if userEnabled {
+		userApps, userErr = flatpak.ListUserApplications()
+		if userErr != nil {
+			log.Printf("Error listing applications installed for the current user: %v", userErr)
+		}
+	}
+	if systemEnabled {
+		systemApps, systemErr = flatpak.ListSystemApplications()
+		if systemErr != nil {
+			log.Printf("Error listing applications installed for everyone: %v", systemErr)
 		}
 	}
 
-	// Load system applications
-	if uh.flatpakSystemExpander != nil {
-		systemApps, err := flatpak.ListSystemApplications()
-		if err != nil {
-			log.Printf("Error listing applications installed for everyone: %v", err)
-			sgtk.RunOnMainThread(func() {
-				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-					return
-				}
-				uh.flatpakSystemExpander.SetSubtitle("Could not read the list")
-			})
-		} else {
-			sgtk.RunOnMainThread(func() {
-				if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
-					return
-				}
-				// Clear rows added by a previous load before repopulating
-				uh.flatpakSystemRows.Clear(func(r *adw.ActionRow) { uh.flatpakSystemExpander.Remove(&r.Widget) })
+	// If all enabled sources failed, report error
+	if (userEnabled && userErr != nil && (!systemEnabled || systemErr != nil)) ||
+		(systemEnabled && systemErr != nil && (!userEnabled || userErr != nil)) {
+		sgtk.RunOnMainThread(func() {
+			if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+				return
+			}
+			if uh.flatpakExpander != nil {
+				uh.flatpakExpander.SetSubtitle("Could not read the list")
+			}
+		})
+		return
+	}
 
-				uh.flatpakSystemExpander.SetSubtitle(fmt.Sprintf("%d installed", len(systemApps)))
-				uh.flatpakSystemExpander.SetEnableExpansion(len(systemApps) > 0)
-				for _, app := range systemApps {
-					presentation := pageview.FlatpakApplication(app.Name, app.ApplicationID, app.Version)
-					row := adw.NewActionRow()
-					row.SetTitle(presentation.Title)
-					row.SetSubtitle(presentation.Subtitle)
-
-					// Add uninstall button (requires elevated privileges for system apps)
-					uninstallBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
-					uninstallBtn.SetValign(gtk.AlignCenterValue)
-					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove for everyone — asks for your admin password")
-
-					appID := app.ApplicationID
-					clickedCb := func(btn gtk.Button) {
-						btn.SetSensitive(false)
-						go func() {
-							if err := flatpak.Uninstall(appID, false); err != nil {
-								log.Printf("Error uninstalling %s for everyone: %v", appID, err)
-								sgtk.RunOnMainThread(func() {
-									btn.SetSensitive(true)
-									uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", app.Name))
-								})
-								return
-							}
-							sgtk.RunOnMainThread(func() {
-								uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), app.Name))
-								go uh.loadFlatpakApplications()
-							})
-						}()
-					}
-					uninstallBtn.ConnectClicked(&clickedCb)
-
-					row.AddSuffix(&uninstallBtn.Widget)
-					uh.flatpakSystemExpander.AddRow(&row.Widget)
-					uh.flatpakSystemRows.Add(row)
-				}
-			})
+	var entries []flatpakAppEntry
+	if userEnabled && userErr == nil {
+		for _, app := range userApps {
+			entries = append(entries, flatpakAppEntry{app: app, user: true})
 		}
 	}
+	if systemEnabled && systemErr == nil {
+		for _, app := range systemApps {
+			entries = append(entries, flatpakAppEntry{app: app, user: false})
+		}
+	}
+
+	// Deterministic ordering by app Name then ID then scope
+	sort.Slice(entries, func(i, j int) bool {
+		nameI := entries[i].app.Name
+		if nameI == "" {
+			nameI = entries[i].app.ApplicationID
+		}
+		nameJ := entries[j].app.Name
+		if nameJ == "" {
+			nameJ = entries[j].app.ApplicationID
+		}
+		if nameI != nameJ {
+			return nameI < nameJ
+		}
+		if entries[i].app.ApplicationID != entries[j].app.ApplicationID {
+			return entries[i].app.ApplicationID < entries[j].app.ApplicationID
+		}
+		if entries[i].user != entries[j].user {
+			return entries[i].user // user scope first
+		}
+		return false
+	})
+
+	sgtk.RunOnMainThread(func() {
+		if !uh.flatpakPackagesRefresh.IsCurrent(generation) {
+			return
+		}
+		if uh.flatpakExpander == nil {
+			return
+		}
+
+		// Clear rows added by a previous load before repopulating
+		uh.flatpakRows.Clear(func(r *adw.ActionRow) { uh.flatpakExpander.Remove(&r.Widget) })
+
+		uh.flatpakExpander.SetSubtitle(fmt.Sprintf("%d installed", len(entries)))
+		uh.flatpakExpander.SetEnableExpansion(len(entries) > 0)
+		for _, entry := range entries {
+			app := entry.app
+			isUser := entry.user
+			presentation := pageview.FlatpakApplicationWithScope(app.Name, app.ApplicationID, app.Version, isUser)
+			row := adw.NewActionRow()
+			row.SetTitle(presentation.Title)
+			row.SetSubtitle(presentation.Subtitle)
+
+			uninstallBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
+			uninstallBtn.SetValign(gtk.AlignCenterValue)
+			uninstallBtn.AddCssClass("destructive-action")
+			if isUser {
+				uninstallBtn.SetTooltipText("Remove this app from your account")
+			} else {
+				uninstallBtn.SetTooltipText("Remove for everyone — asks for your admin password")
+			}
+
+			appID := app.ApplicationID
+			clickedCb := func(btn gtk.Button) {
+				btn.SetSensitive(false)
+				go func() {
+					if err := flatpak.Uninstall(appID, isUser); err != nil {
+						if isUser {
+							log.Printf("Error uninstalling %s for the current user: %v", appID, err)
+						} else {
+							log.Printf("Error uninstalling %s for everyone: %v", appID, err)
+						}
+						sgtk.RunOnMainThread(func() {
+							btn.SetSensitive(true)
+							uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", app.Name))
+						})
+						return
+					}
+					sgtk.RunOnMainThread(func() {
+						uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), app.Name))
+						go uh.loadFlatpakApplications()
+					})
+				}()
+			}
+			uninstallBtn.ConnectClicked(&clickedCb)
+
+			row.AddSuffix(&uninstallBtn.Widget)
+			uh.flatpakExpander.AddRow(&row.Widget)
+			uh.flatpakRows.Add(row)
+		}
+	})
 }
 
 // onHomebrewSearch handles the Homebrew search action

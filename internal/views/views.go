@@ -67,12 +67,10 @@ type UserHome struct {
 	outdatedExpander       *adw.ExpanderRow
 	searchResultsExpander  *adw.ExpanderRow
 	searchEntry            *gtk.SearchEntry
-	flatpakUserExpander    *adw.ExpanderRow
-	flatpakSystemExpander  *adw.ExpanderRow
+	flatpakExpander        *adw.ExpanderRow
 	flatpakUpdatesExpander *adw.ExpanderRow
 	flatpakUpdateRows      []*adw.ActionRow               // Store references for cleanup
-	flatpakUserRows        rowset.Tracker[*adw.ActionRow] // Store references for cleanup
-	flatpakSystemRows      rowset.Tracker[*adw.ActionRow] // Store references for cleanup
+	flatpakRows            rowset.Tracker[*adw.ActionRow] // Store references for cleanup
 	formulaeRows           rowset.Tracker[*adw.ActionRow]
 	caskRows               rowset.Tracker[*adw.ActionRow]
 	searchResultRows       rowset.Tracker[*adw.ActionRow]

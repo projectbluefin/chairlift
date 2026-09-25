@@ -43,7 +43,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
-				"pageview.FlatpakApplication(",
+				"pageview.FlatpakApplication",
 				"pageview.SearchResult(",
 				"trustmsg.BundleMessage(",
 			},

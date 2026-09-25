@@ -23,6 +23,21 @@ func TestApplicationRowsCoverEveryPresentation(t *testing.T) {
 			want: Row{Title: "Firefox", Subtitle: "org.mozilla.firefox (128.0)"},
 		},
 		{
+			name: "Flatpak with user scope",
+			got:  FlatpakApplicationWithScope("Firefox", "org.mozilla.firefox", "128.0", true),
+			want: Row{Title: "Firefox", Subtitle: "org.mozilla.firefox (128.0) • Installed for you"},
+		},
+		{
+			name: "Flatpak with system scope and without version",
+			got:  FlatpakApplicationWithScope("Firefox", "org.mozilla.firefox", "", false),
+			want: Row{Title: "Firefox", Subtitle: "org.mozilla.firefox • Installed for everyone"},
+		},
+		{
+			name: "Flatpak with nameless app",
+			got:  FlatpakApplicationWithScope("", "org.mozilla.firefox", "", true),
+			want: Row{Title: "org.mozilla.firefox", Subtitle: "org.mozilla.firefox • Installed for you"},
+		},
+		{
 			name: "unpinned Homebrew package",
 			got:  HomebrewPackage("ripgrep", "14.1.1", false),
 			want: Row{Title: "ripgrep", Subtitle: "14.1.1"},
