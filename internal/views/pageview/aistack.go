@@ -209,3 +209,31 @@ func AgentModeDetails(jan bool) []Row {
 		{Title: "Chat app", Subtitle: chat},
 	}
 }
+
+// AgentModeActiveModelTitle is the title for the active model row.
+func AgentModeActiveModelTitle() string {
+	return "Active Model"
+}
+
+// AgentModeActiveModelSubtitle formats the active model subtitle.
+func AgentModeActiveModelSubtitle(modelRef string) string {
+	if modelRef == "" {
+		return "Default recommended model (Qwen 2.5)"
+	}
+	return modelRef
+}
+
+// AgentModePresetsTitle is the title for model presets selection row.
+func AgentModePresetsTitle() string {
+	return "Recommended Presets"
+}
+
+// AgentModePresetsSubtitle describes the preset choices.
+func AgentModePresetsSubtitle() string {
+	return "Choose between Qwen, Mistral, Gemma, DeepSeek, or GPT-OSS models suited for this system"
+}
+
+// AgentModeSwitchPresetLabel returns the action button label.
+func AgentModeSwitchPresetLabel() string {
+	return "Switch…"
+}

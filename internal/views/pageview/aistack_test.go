@@ -86,3 +86,24 @@ func TestAgentModeDetailsGiveTheAddressAndGateJan(t *testing.T) {
 		t.Errorf("non-x86_64 host offered Jan: %q", got)
 	}
 }
+
+func TestAgentModeActiveModelAndPresetStrings(t *testing.T) {
+	if got := AgentModeActiveModelTitle(); got == "" {
+		t.Error("AgentModeActiveModelTitle is empty")
+	}
+	if got := AgentModeActiveModelSubtitle(""); !strings.Contains(got, "Qwen") {
+		t.Errorf("AgentModeActiveModelSubtitle(\"\") = %q, want default Qwen", got)
+	}
+	if got := AgentModeActiveModelSubtitle("custom/model:latest"); got != "custom/model:latest" {
+		t.Errorf("AgentModeActiveModelSubtitle() = %q, want custom/model:latest", got)
+	}
+	if got := AgentModePresetsTitle(); got == "" {
+		t.Error("AgentModePresetsTitle is empty")
+	}
+	if got := AgentModePresetsSubtitle(); !strings.Contains(got, "Qwen") {
+		t.Errorf("AgentModePresetsSubtitle() = %q, want mention of models", got)
+	}
+	if got := AgentModeSwitchPresetLabel(); got == "" {
+		t.Error("AgentModeSwitchPresetLabel is empty")
+	}
+}

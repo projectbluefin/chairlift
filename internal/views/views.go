@@ -197,9 +197,12 @@ type UserHome struct {
 	troubleshootGate   actionstate.Gate
 
 	// Agent Mode (agents_page agents_group)
-	agentModeRow   *adw.ActionRow
-	agentModeState aistack.State
-	agentModeGate  actionstate.Gate
+	agentModeRow    *adw.ActionRow
+	agentModelRow   *adw.ActionRow
+	agentPresetRow  *adw.ActionRow
+	agentModeState  aistack.State
+	agentModeGate   actionstate.Gate
+	agentPresetGate actionstate.Gate
 
 	// Agent Mode peer offload (agents_page agents_group, "Use another
 	// machine")
