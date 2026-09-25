@@ -53,6 +53,22 @@ remaining Alt+number shortcuts compact in sidebar order. Help remains visible
 even when `help_resources_group` is disabled, so the application always has a
 valid page.
 
+## Legacy System page compatibility
+
+Older files may still contain `system_page`. Its `bootc_status_group` and
+`channel_group` settings are applied to the corresponding groups under
+`updates_page`, preserving `enabled: false`. When both locations specify a
+field, a non-null value under `updates_page` wins; omitted or null fields
+inherit the legacy value. The retired `system_info_group` and `health_group`
+are accepted but have no runtime effect. The System page is not restored.
+
+All four legacy groups still undergo ordinary field, type, and action
+validation, including trusted-path restrictions on `sudo: true`, even for
+retired or superseded values. Unknown names still fail closed. This is a
+compatibility rule for `system_page`, not general acceptance of obsolete keys
+elsewhere in an old file. No file is rewritten: administrators can move the
+two surviving groups to `updates_page` and remove `system_page` when convenient.
+
 ## Available Pages and Groups
 
 ### Agents Page (`agents_page`)

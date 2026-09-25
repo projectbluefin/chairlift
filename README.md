@@ -390,7 +390,9 @@ or contains unknown pages, groups, fields, or invalid field types, Control Cente
 does not use a lower-priority file: it hides every configurable feature group,
 logs a `CONFIGURATION ERROR`, and shows a persistent error toast with the path
 and cause. Fix the file and restart Control Center. If every candidate is absent,
-the built-in defaults apply.
+the built-in defaults apply. Legacy `system_page` settings are validated and
+migrated in memory to Updates where applicable; see
+[legacy configuration compatibility](CONFIG.md#legacy-system-page-compatibility).
 
 ---
 

@@ -1,8 +1,8 @@
 ---
 name: canonical-schema
 description: Use when validation rules need an authoritative schema or struct.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-09-25
 tags:
   - validation
   - schema
@@ -36,3 +36,25 @@ rejected (high severity) because chunk c3 derived and tested top-level page
 keys from `rawConfig` while the spec defined `Config` as authoritative,
 meaning legitimate `Config` fields could be rejected or omitted without the
 planned acceptance test failing.
+
+## Compatibility inputs
+
+Removing a page from the canonical runtime schema can invalidate installed
+configuration even when the shipped defaults are updated. Keep any deliberately
+supported legacy inventory separate from runtime pages, validate its values
+before discarding or migrating them, and preserve explicit disabled settings
+at their new destination. Validate superseded values too: a current override
+must not hide an invalid or untrusted action in the legacy input.
+
+## Verification
+
+For ChairLift's System-page migration, run:
+
+```sh
+go test ./internal/config -run '^TestLegacySystemPage'
+go test ./internal/navigation ./internal/installcheck
+```
+
+The cases must cover installed search candidates, current/legacy collisions,
+nulls, aliases, unknown names, and forbidden privileged actions. Keep legacy
+pages out of `Config` and the navigation inventory.

@@ -46,8 +46,8 @@ import (
 //     not a scalar with ShortTag() == "!!str" is KindParseType
 //     (validatorKeyShapeError) before its value is ever inspected; a
 //     well-formed string key that is not one of SchemaPages()'s canonical
-//     page names is KindSchema (validatorSchemaError) without descending
-//     into its value; a known page's null value is a no-op for that page; a
+//     page names or the legacy system_page input is KindSchema
+//     (validatorSchemaError) without descending into its value; a known page's null value is a no-op for that page; a
 //     known page's non-null scalar or sequence value is KindParseType
 //     (validatorPageValueShapeError); and a known page's mapping value has
 //     its own entries (groups) classified the same way, one level down, by
@@ -70,7 +70,8 @@ import (
 //     then a known field decoded into a fresh value of its declared Go type,
 //     a decode failure being KindParseType with the yaml.v3 error preserved
 //     in Err. Once every entry at every level passes, stage 4 decodes the
-//     effective document into a *rawConfig via yaml.Node.Decode.
+//     effective document into a *rawConfig via yaml.Node.Decode, after
+//     migrating the validated legacy System-page settings to Updates.
 //
 // Stage 4 is a defensive final step (interpretation I4): validateSourceGraph
 // and resolveEffective already prove the effective document is a
@@ -106,6 +107,7 @@ func parseAndValidate(src configSource, data []byte) (*rawConfig, *LoadError) {
 		if err := validatePageEntries(src, top); err != nil {
 			return nil, err
 		}
+		migrateLegacySystemPage(top)
 		var raw rawConfig
 		if err := effective.Decode(&raw); err != nil {
 			return nil, validatorDecodeError(src.path, err)
@@ -126,7 +128,9 @@ func parseAndValidate(src configSource, data []byte) (*rawConfig, *LoadError) {
 // into its value; (c) only then is the page's value shape inspected. The
 // first failing entry's error is returned; nil means every entry passed.
 //
-// Page names are sourced only from SchemaPages() (reflected off Config's
+// The legacy system_page input is validated against its retired inventory
+// separately, then migrated before decoding; it is not a canonical page.
+// Current page names are sourced only from SchemaPages() (reflected off Config's
 // yaml tags via schema.go) — never a literal list here. SchemaPages() can
 // only fail for a malformed struct tag on Config itself, which cannot
 // happen for that canonical struct; that branch is still surfaced
@@ -149,6 +153,12 @@ func validatePageEntries(src configSource, top *yaml.Node) *LoadError {
 		name, ok := schemaKeyName(key)
 		if !ok {
 			return validatorKeyShapeError(src.path, key)
+		}
+		if name == "system_page" {
+			if err := validateLegacySystemPage(src, value); err != nil {
+				return err
+			}
+			continue
 		}
 		if !known[name] {
 			return validatorSchemaError(src.path, key, name)
@@ -190,6 +200,10 @@ func validateGroupEntries(src configSource, page string, groupsNode *yaml.Node) 
 	if err != nil {
 		return validatorSchemaGroupsError(src.path, err)
 	}
+	return validateNamedGroupEntries(src, groups, groupsNode)
+}
+
+func validateNamedGroupEntries(src configSource, groups []string, groupsNode *yaml.Node) *LoadError {
 	known := make(map[string]bool, len(groups))
 	for _, group := range groups {
 		known[group] = true

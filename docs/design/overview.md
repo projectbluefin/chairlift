@@ -179,6 +179,16 @@ be read or validated instead returns `disabledConfig()`: the same defaults
 for non-visibility fields, with every canonical group's `Enabled` field
 forced to false.
 
+**Legacy System-page input (`internal/config/legacy.go`).** After effective
+YAML resolution, schema validation recognizes `system_page`'s four historical
+groups without adding that page to `Config` or `SchemaPages`. All legacy fields
+and actions are validated before migration, including retired groups and
+values superseded by current settings. Before decoding, the two surviving
+groups (`bootc_status_group`, `channel_group`) supply omitted/null Updates
+fields; explicit current values take precedence. Information and health groups
+are ignored by runtime decoding. Source files, search precedence, and
+fail-closed handling for invalid inputs remain unchanged.
+
 **Structured load-error vocabulary (`internal/config/loaderror.go`).** A
 stable `ErrorKind` enumerates why loading/validating a config file could
 fail: `KindRead` ("read") for a filesystem/read failure (e.g. permission

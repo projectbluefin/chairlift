@@ -417,6 +417,11 @@ An agent must not break these:
   authoritative: read, YAML, or schema errors must disable every configurable
   group, emit the `CONFIGURATION ERROR` diagnostic, and remain visible in the
   UI as a persistent toast until the file is fixed and ChairLift is restarted.
+  The legacy `system_page` input is a narrow compatibility exception to the
+  current page inventory: validate its four historical groups before moving
+  `bootc_status_group` and `channel_group` into Updates. Current non-null
+  fields win; retired information/health groups have no runtime effect.
+  This must not add a navigable page or relax unknown-name or sudo validation.
 - **CI actions are immutable.** Every external `uses:` reference under
   `.github/workflows/` must use a full 40-character commit SHA. Keep the
   human-readable version or source ref in a trailing comment and update both
