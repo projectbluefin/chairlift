@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -357,24 +358,31 @@ func quantPriority(quant string) int {
 }
 
 // RankCandidateModels sorts models descending by qualification signals:
-// 1. Fits in memory
-// 2. Downloads + Likes (adoption/qualification across repos)
-// 3. Within the same repo (equal popularity), preferred quantization order (Q4_K_M > Q5_K_M > ...)
-// 4. Size breaks ties so that, for equal popularity and quant, the larger fit within budget wins.
+// 1. Fits in memory (presumed filtered before ranking)
+// 2. Repo capacity / parameter size (larger fit within budget wins)
+// 3. Within the same repo/size, preferred quantization order (Q4_K_M > Q5_K_M > ...)
+// 4. Downloads + Likes as final popularity tie-breaker
 func RankCandidateModels(candidates []CandidateModel) []CandidateModel {
 	res := make([]CandidateModel, len(candidates))
 	copy(res, candidates)
 	sort.Slice(res, func(i, j int) bool {
-		scoreI := int64(res[i].Downloads) + int64(res[i].Likes*100)
-		scoreJ := int64(res[j].Downloads) + int64(res[j].Likes*100)
-		if scoreI != scoreJ {
-			return scoreI > scoreJ
+		// When candidate models are from different repos/sizes, pick the larger model that fits
+		if res[i].Repo != res[j].Repo {
+			if res[i].SizeBytes != res[j].SizeBytes {
+				return res[i].SizeBytes > res[j].SizeBytes
+			}
 		}
-		// Within the same repo / equal popularity, rank by quant preference
+		// Within the same repo (or equal size), rank by preferred quant order
 		pI := quantPriority(res[i].Quant)
 		pJ := quantPriority(res[j].Quant)
 		if pI != pJ {
 			return pI < pJ
+		}
+		// Tie-breaker: popularity
+		scoreI := int64(res[i].Downloads) + int64(res[i].Likes*100)
+		scoreJ := int64(res[j].Downloads) + int64(res[j].Likes*100)
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
 		}
 		return res[i].SizeBytes > res[j].SizeBytes
 	})
@@ -461,6 +469,10 @@ func ResolveFamilyLive(ctx context.Context, family Family, repo string, fetch Fe
 	var candidates []CandidateModel
 	for _, item := range treeItems {
 		if item.Type != "file" || !strings.HasSuffix(item.Path, ".gguf") {
+			continue
+		}
+		// Skip vision projectors (e.g. mmproj-model-f16.gguf)
+		if strings.HasPrefix(filepath.Base(item.Path), "mmproj") {
 			continue
 		}
 		// Skip split shards (model-Q4_K_M-00001-of-00002.gguf): parts of one
@@ -661,10 +673,11 @@ func VerifyModelStored(ctx context.Context, modelRef string) error {
 			lastErr = errors.New("daemon reported no stored models")
 			continue
 		}
-		for k := range node.Stored {
-			if strings.Contains(k, baseRef) || strings.Contains(modelRef, k) {
-				return nil
-			}
+		if _, ok := node.Stored[modelRef]; ok {
+			return nil
+		}
+		if _, ok := node.Stored[baseRef]; ok {
+			return nil
 		}
 		lastErr = fmt.Errorf("%s not found in daemon stored models", modelRef)
 	}

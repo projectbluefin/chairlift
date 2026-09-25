@@ -218,7 +218,7 @@ func AgentModeActiveModelTitle() string {
 // AgentModeActiveModelSubtitle formats the active model subtitle.
 func AgentModeActiveModelSubtitle(modelRef string) string {
 	if modelRef == "" {
-		return "Default recommended model (Qwen 2.5)"
+		return "Default recommended model (Qwen 3)"
 	}
 	return modelRef
 }
