@@ -8,14 +8,14 @@ import (
 	"os/user"
 	"strings"
 
+	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/launcher"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
-
-	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gdk"
@@ -106,8 +106,11 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	copyBtn := gtk.NewButtonWithLabel("Copy")
 	copyBtn.SetValign(gtk.AlignCenterValue)
 	copyBtn.AddCssClass("suggested-action")
-
+	copyGate := &actionstate.Gate{}
 	onCopy := func() {
+		if !copyGate.TryStart() {
+			return
+		}
 		copyBtn.SetSensitive(false)
 		go func() {
 			// Gather diagnostic data off the main thread.
@@ -115,7 +118,7 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 			if info, err := imageinfo.Detect(); err == nil {
 				diag.OSName = info.Name
 				diag.OSVersion = info.EffectiveTag()
-				diag.ImageRef = info.Ref
+				diag.ImageRef = info.CleanRef()
 			}
 			if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
 				diag.Kernel = strings.TrimSpace(string(data))
@@ -135,6 +138,7 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 			text := pageview.FormatScrubbedDiagnostics(diag, username, homedir)
 
 			sgtk.RunOnMainThread(func() {
+				defer copyGate.Reset()
 				defer copyBtn.SetSensitive(true)
 				display := gdk.DisplayGetDefault()
 				if display != nil {
