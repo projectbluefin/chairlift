@@ -133,95 +133,108 @@ func OfflineCatalog() []CandidateModel {
 		// Qwen family
 		{
 			Family:    FamilyQwen,
-			Repo:      "unsloth/Qwen2.5-3B-Instruct-GGUF",
-			File:      "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
+			Repo:      "unsloth/Qwen3-4B-GGUF",
+			File:      "Qwen3-4B-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
-			SizeBytes: 2_100_000_000,
-			Params:    "3B",
+			SizeBytes: 2_500_000_000,
+			Params:    "4B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 120_000,
-			Likes:     450,
+			Downloads: 462_000,
+			Likes:     245,
 			Cached:    true,
 		},
 		{
 			Family:    FamilyQwen,
-			Repo:      "unsloth/Qwen2.5-7B-Instruct-GGUF",
-			File:      "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+			Repo:      "unsloth/Qwen3-8B-GGUF",
+			File:      "Qwen3-8B-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
-			SizeBytes: 4_700_000_000,
-			Params:    "7B",
+			SizeBytes: 5_000_000_000,
+			Params:    "8B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 250_000,
-			Likes:     980,
+			Downloads: 90_000,
+			Likes:     155,
 			Cached:    true,
 		},
 		{
 			Family:    FamilyQwen,
-			Repo:      "unsloth/Qwen2.5-14B-Instruct-GGUF",
-			File:      "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+			Repo:      "unsloth/Qwen3-14B-GGUF",
+			File:      "Qwen3-14B-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
 			SizeBytes: 9_300_000_000,
 			Params:    "14B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 85_000,
-			Likes:     410,
+			Downloads: 57_000,
+			Likes:     142,
 			Cached:    true,
 		},
 		// Mistral / Ministral
 		{
 			Family:    FamilyMistral,
-			Repo:      "unsloth/Ministral-8B-Instruct-2410-GGUF",
-			File:      "Ministral-8B-Instruct-2410-Q4_K_M.gguf",
+			Repo:      "unsloth/Ministral-3-3B-Instruct-2512-GGUF",
+			File:      "Ministral-3-3B-Instruct-2512-Q4_K_M.gguf",
+			Quant:     "Q4_K_M",
+			SizeBytes: 2_200_000_000,
+			Params:    "3B",
+			IsChat:    true,
+			IsGGUF:    true,
+			Downloads: 20_000,
+			Likes:     42,
+			Cached:    true,
+		},
+		{
+			Family:    FamilyMistral,
+			Repo:      "unsloth/Ministral-3-8B-Instruct-2512-GGUF",
+			File:      "Ministral-3-8B-Instruct-2512-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
 			SizeBytes: 5_100_000_000,
 			Params:    "8B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 65_000,
-			Likes:     310,
-			Cached:    true,
-		},
-		{
-			Family:    FamilyMistral,
-			Repo:      "unsloth/Mistral-7B-Instruct-v0.3-GGUF",
-			File:      "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
-			Quant:     "Q4_K_M",
-			SizeBytes: 4_400_000_000,
-			Params:    "7B",
-			IsChat:    true,
-			IsGGUF:    true,
-			Downloads: 190_000,
-			Likes:     820,
+			Downloads: 15_000,
+			Likes:     45,
 			Cached:    true,
 		},
 		// Gemma family
 		{
 			Family:    FamilyGemma,
-			Repo:      "unsloth/gemma-2-2b-it-GGUF",
-			File:      "gemma-2-2b-it-Q4_K_M.gguf",
+			Repo:      "unsloth/gemma-3-1b-it-GGUF",
+			File:      "gemma-3-1b-it-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
-			SizeBytes: 1_700_000_000,
-			Params:    "2B",
+			SizeBytes: 800_000_000,
+			Params:    "1B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 95_000,
-			Likes:     380,
+			Downloads: 41_000,
+			Likes:     94,
 			Cached:    true,
 		},
 		{
 			Family:    FamilyGemma,
-			Repo:      "unsloth/gemma-2-9b-it-GGUF",
-			File:      "gemma-2-9b-it-Q4_K_M.gguf",
+			Repo:      "unsloth/gemma-3-4b-it-GGUF",
+			File:      "gemma-3-4b-it-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
-			SizeBytes: 5_800_000_000,
-			Params:    "9B",
+			SizeBytes: 2_600_000_000,
+			Params:    "4B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 140_000,
-			Likes:     610,
+			Downloads: 84_000,
+			Likes:     206,
+			Cached:    true,
+		},
+		{
+			Family:    FamilyGemma,
+			Repo:      "unsloth/gemma-3-12b-it-GGUF",
+			File:      "gemma-3-12b-it-Q4_K_M.gguf",
+			Quant:     "Q4_K_M",
+			SizeBytes: 7_800_000_000,
+			Params:    "12B",
+			IsChat:    true,
+			IsGGUF:    true,
+			Downloads: 61_000,
+			Likes:     198,
 			Cached:    true,
 		},
 		// DeepSeek family
@@ -310,21 +323,58 @@ func FilterEligibleModels(candidates []CandidateModel, nodeMemoryBytes int64) []
 	return eligible
 }
 
+// quantPriority ranks standard quantizations in order of preference.
+// Lower number = higher preference.
+func quantPriority(quant string) int {
+	switch strings.ToUpper(quant) {
+	case "Q4_K_M":
+		return 1
+	case "Q5_K_M":
+		return 2
+	case "Q4_K_S":
+		return 3
+	case "Q5_K_S":
+		return 4
+	case "Q4_1":
+		return 5
+	case "Q3_K_M":
+		return 6
+	case "Q3_K_S":
+		return 7
+	case "Q6_K":
+		return 8
+	case "Q8_0":
+		return 9
+	case "UD-Q4_K_XL", "Q4_K_XL":
+		return 10
+	case "UD-Q5_K_XL", "Q5_K_XL":
+		return 11
+	case "UD-Q8_K_XL", "Q8_K_XL":
+		return 12
+	default:
+		return 99
+	}
+}
+
 // RankCandidateModels sorts models descending by qualification signals:
 // 1. Fits in memory
-// 2. Downloads + Likes (adoption/qualification)
-// 3. Larger parameter size within budget (closer to capability ceiling)
+// 2. Downloads + Likes (adoption/qualification across repos)
+// 3. Within the same repo (equal popularity), preferred quantization order (Q4_K_M > Q5_K_M > ...)
+// 4. Size breaks ties so that, for equal popularity and quant, the larger fit within budget wins.
 func RankCandidateModels(candidates []CandidateModel) []CandidateModel {
 	res := make([]CandidateModel, len(candidates))
 	copy(res, candidates)
 	sort.Slice(res, func(i, j int) bool {
-		// Rank by adoption first (downloads + likes): a more popular model is
-		// the safer default. Size breaks ties so that, for equal popularity,
-		// the larger fit within budget wins.
 		scoreI := int64(res[i].Downloads) + int64(res[i].Likes*100)
 		scoreJ := int64(res[j].Downloads) + int64(res[j].Likes*100)
 		if scoreI != scoreJ {
 			return scoreI > scoreJ
+		}
+		// Within the same repo / equal popularity, rank by quant preference
+		pI := quantPriority(res[i].Quant)
+		pJ := quantPriority(res[j].Quant)
+		if pI != pJ {
+			return pI < pJ
 		}
 		return res[i].SizeBytes > res[j].SizeBytes
 	})
@@ -501,11 +551,11 @@ func ResolveCandidate(ctx context.Context, family Family, nodeMemoryBytes int64,
 func defaultFamilyRepo(f Family) string {
 	switch f {
 	case FamilyQwen:
-		return "unsloth/Qwen2.5-7B-Instruct-GGUF"
+		return "unsloth/Qwen3-8B-GGUF"
 	case FamilyMistral:
-		return "unsloth/Ministral-8B-Instruct-2410-GGUF"
+		return "unsloth/Ministral-3-8B-Instruct-2512-GGUF"
 	case FamilyGemma:
-		return "unsloth/gemma-2-9b-it-GGUF"
+		return "unsloth/gemma-3-4b-it-GGUF"
 	case FamilyDeepSeek:
 		return "unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF"
 	case FamilyGPTOss:
@@ -587,22 +637,36 @@ func PullModel(ctx context.Context, modelRef string) error {
 // pull or a daemon that never stored the model is reported rather than silently
 // accepted.
 func VerifyModelStored(ctx context.Context, modelRef string) error {
-	node, err := FetchNodeStatus(ctx)
-	if err != nil {
-		return fmt.Errorf("verify stored model: fetch node status: %w", err)
-	}
-	if len(node.Stored) == 0 {
-		return fmt.Errorf("verify stored model: daemon reported no stored models")
-	}
-	// Check if modelRef or base name is key in stored map
 	baseRef := modelRef
 	if idx := strings.LastIndex(modelRef, "/"); idx >= 0 {
 		baseRef = modelRef[idx+1:]
 	}
-	for k := range node.Stored {
-		if strings.Contains(k, baseRef) || strings.Contains(modelRef, k) {
-			return nil
+
+	// Retry shortly to avoid racing the daemon's stored models refresh
+	var lastErr error
+	for attempt := range 3 {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(250 * time.Millisecond):
+			}
 		}
+		node, err := FetchNodeStatus(ctx)
+		if err != nil {
+			lastErr = fmt.Errorf("fetch node status: %w", err)
+			continue
+		}
+		if len(node.Stored) == 0 {
+			lastErr = errors.New("daemon reported no stored models")
+			continue
+		}
+		for k := range node.Stored {
+			if strings.Contains(k, baseRef) || strings.Contains(modelRef, k) {
+				return nil
+			}
+		}
+		lastErr = fmt.Errorf("%s not found in daemon stored models", modelRef)
 	}
-	return fmt.Errorf("verify stored model: %s not found in daemon stored models", modelRef)
+	return fmt.Errorf("verify stored model: %w", lastErr)
 }
