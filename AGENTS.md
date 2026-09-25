@@ -855,12 +855,13 @@ doc, and the conventions — new docs start from their category's
 - `docs/specs/` — exact contracts, changed only alongside implementing code.
 - `docs/plans/` — phased plans with "Done when" outcomes.
 
-After any change to source code, update relevant documentation in `AGENTS.md`,
-`README.md`, and `docs/`. A task is not complete without reviewing
-and updating relevant documentation. For behavior, configuration, dependency,
-or install-layout changes, also follow
-`docs/documentation-consistency.md`; current-state claims must be checked
-against source/config/go.mod rather than copied from historical plans.
+After any change to source code, update relevant documentation in `AGENTS.md`
+and `docs/`. Only humans edit `README.md`; AI agents must never modify or rewrite
+`README.md`. A task is not complete without reviewing and updating relevant
+documentation. For behavior, configuration, dependency, or install-layout
+changes, also follow `docs/documentation-consistency.md`; current-state claims
+must be checked against source/config/go.mod rather than copied from historical
+plans.
 
 **.knowledge/ directory** is the repository's cross-session knowledge index.
 Read `.knowledge/README.md` before working so prior corrections, handoffs,
