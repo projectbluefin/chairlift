@@ -137,6 +137,12 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	group.SetDescription("Return to the previous system version if an update went badly")
 	group.Add(&uh.bootcRollbackRow.Widget)
 	group.Add(&uh.sysupdateRollbackRow.Widget)
+
+	// The published-versions list is a bootc image concept: it reads the
+	// registry the booted image comes from.
+	if uh.groupEnabled("updates_page", "bootc_updates_group") {
+		uh.buildPublishedVersionsRow(group)
+	}
 	page.Add(group)
 }
 
@@ -151,6 +157,12 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 	status, err := bootc.GetStatus(ctx)
 
 	sgtk.RunOnMainThread(func() {
+		if err == nil && status != nil {
+			// Kept for the Published versions list, which marks the
+			// running and previous days.
+			uh.runningVersion = status.Status.Booted.Version()
+			uh.previousVersion = status.Status.Rollback.Version()
+		}
 		if uh.bootcRollbackRow == nil {
 			return
 		}
