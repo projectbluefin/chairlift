@@ -213,7 +213,13 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 		return
 	}
 	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
-
+	if err != nil {
+		log.Printf("views: resolve candidate failed: %v", err)
+		sgtk.RunOnMainThread(func() {
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not find a matching model for %s", fam.DisplayName()))
+		})
+		return
+	}
 	modelRef := candidate.ModelRef()
 	dryRun := dryrun.Enabled()
 	if dryRun {
