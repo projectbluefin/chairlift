@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 // defaultPeerPort is llmman's default listen port, used when a peer address
@@ -406,10 +409,23 @@ func AddPeer(ctx context.Context, address string) error {
 		}
 	}
 	next := peerStore{Peers: append(append([]Peer{}, s.Peers...), Peer{Address: normalized, Enabled: true})}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would configure llmman peers %v and add %s to the peer store", peerAddresses(next), normalized)
+		return nil
+	}
 	if err := applyPeerList(ctx, next); err != nil {
 		return err
 	}
 	return savePeerStore(next)
+}
+
+// peerAddresses is a small dry-run logging helper.
+func peerAddresses(s peerStore) []string {
+	addrs := make([]string, 0, len(s.Peers))
+	for _, p := range s.Peers {
+		addrs = append(addrs, p.Address)
+	}
+	return addrs
 }
 
 // RemovePeer deletes a configured peer entirely. Applied to llmman before
@@ -429,6 +445,10 @@ func RemovePeer(ctx context.Context, address string) error {
 	}
 	updated := append(append([]Peer{}, s.Peers[:idx]...), s.Peers[idx+1:]...)
 	next := peerStore{Peers: updated}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would configure llmman peers %v and remove %s from the peer store", peerAddresses(next), normalized)
+		return nil
+	}
 	if err := applyPeerList(ctx, next); err != nil {
 		return err
 	}
@@ -454,6 +474,10 @@ func SetPeerEnabled(ctx context.Context, address string, enabled bool) error {
 	updated := append([]Peer{}, s.Peers...)
 	updated[idx].Enabled = enabled
 	next := peerStore{Peers: updated}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would configure llmman peers %v (setting %s enabled=%v) and persist the peer store", peerAddresses(next), normalized, enabled)
+		return nil
+	}
 	if err := applyPeerList(ctx, next); err != nil {
 		return err
 	}
@@ -478,6 +502,10 @@ func SetPeerAPIKey(ctx context.Context, apiKey string) error {
 	exe := Executable()
 	if exe == "" {
 		return errors.New("llmman is not installed")
+	}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would set llmman aggregation.api_key via %s config set", exe)
+		return nil
 	}
 	return runSecretConfigSet(ctx, exe, "aggregation.api_key", apiKey)
 }

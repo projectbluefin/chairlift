@@ -532,30 +532,39 @@ An agent must not break these:
   and is unprivileged.** It lives on `agents_page`, built by
   `internal/views/agents_page.go`, as that page's single group
   (`agents_group`, floored on Homebrew). ADR-0015 is the contract.
-  `internal/aistack` owns exactly three artifacts and nothing else: the
+  `internal/aistack` owns exactly four artifacts and nothing else: the
   generated Brewfile it hands to `brew bundle install` (tap `llmmanorg/tap`,
   formula `llmmanorg/tap/llmman` unless an `llmman` already resolves, and
   the `ai.jan.Jan` Flatpak on x86_64 only), the systemd **user** unit
-  `~/.config/systemd/user/chairlift-llmman.service`, and the environment.d
+  `~/.config/systemd/user/chairlift-llmman.service`, the environment.d
   fragment `~/.config/environment.d/10-chairlift-llmman.conf`
   (`OLLAMA_HOST=127.0.0.1:17434`, nothing else — no `OPENAI_BASE_URL` or
-  `OPENAI_API_KEY`). llmman owns models and engine selection; Homebrew owns
-  the binary; lifecycle is ChairLift's, never `brew services`. The unit's
-  `ExecStart` is the absolute `llmman` path resolved after install (`$PATH`,
-  then beside `homebrew.ExecutablePath()`); no Homebrew prefix is spelled.
-  It binds `LLMMAN_HOST=127.0.0.1:17434` and carries the literal
-  `LLMMAN_SHELL=off` and `LLMMAN_NOHISTORY=1`; no `LLMMAN_ORIGINS` is set
-  until Jan's exact origin is verified, and wildcard CORS is forbidden.
-  Enable runs `llmman serve --pull-only` before writing anything so an
-  engine that cannot be fetched fails the switch; readiness is a bounded
-  `GET /llmman/node`, never `systemctl is-active` alone. Every mutation is
-  behind `dryrun.Enabled()`. Disabling removes only the unit and the
-  fragment — binaries, Jan, and models stay — and must preserve both when
-  `systemctl --user disable --now` fails and a follow-up `is-active` check
-  cannot prove the service stopped; removing the unit while the service is
-  still active makes the switch lie and removes the user's management
-  handle. Do not give it a pkexec route, and do not reintroduce a
-  container-image or vendor/stack matrix.
+  `OPENAI_API_KEY`), and `~/.local/share/chairlift/agent-mode-peers.json`,
+  ChairLift's own bookkeeping of which peer offload addresses are known and
+  which are currently enabled (never a credential; the one peer key lives
+  only in llmman's own configuration). llmman owns models and engine
+  selection; Homebrew owns the binary; lifecycle is ChairLift's, never
+  `brew services`. The unit's `ExecStart` is the absolute `llmman` path
+  resolved after install (`$PATH`, then beside `homebrew.ExecutablePath()`);
+  no Homebrew prefix is spelled. It binds `LLMMAN_HOST=127.0.0.1:17434` and
+  carries the literal `LLMMAN_SHELL=off` and `LLMMAN_NOHISTORY=1`; no
+  `LLMMAN_ORIGINS` is set until Jan's exact origin is verified, and
+  wildcard CORS is forbidden. Enable runs `llmman serve --pull-only` before
+  writing anything so an engine that cannot be fetched fails the switch;
+  readiness is a bounded `GET /llmman/node`, never `systemctl is-active`
+  alone. Every mutation — the switch and every peer add/remove/enable/
+  disable/key-save in the page's second group, "Use another machine"
+  (`internal/aistack/peers.go`) — is behind `dryrun.Enabled()`. Disabling
+  removes only the unit and the fragment — binaries, Jan, models, and the
+  peer store stay — and must preserve both when `systemctl --user disable
+  --now` fails and a follow-up `is-active` check cannot prove the service
+  stopped; removing the unit while the service is still active makes the
+  switch lie and removes the user's management handle. Do not give it a
+  pkexec route, and do not reintroduce a container-image or vendor/stack
+  matrix. Known limitation: the peer key is passed to `llmman config set`
+  as an argv token, so any local user can read it from `/proc/<pid>/cmdline`
+  for the life of that one short-lived process; switching to stdin needs
+  llmman support first.
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** `internal/livery` sets three marks — the app-grid button
   (`view-app-grid-symbolic`), the panel menu button

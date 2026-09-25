@@ -82,9 +82,11 @@ func PeersGroupTitle() string {
 // PeersGroupDescription states the one-way nature of the feature up front,
 // including that the remote side needs its own separate setup.
 func PeersGroupDescription() string {
-	return "Send some requests to an llmman service on another machine you already set up. " +
+	return "Send some requests, and their responses, to an llmman service on another machine you already set up. " +
 		"This computer is never made reachable by anyone else, and that other machine must " +
-		"separately turn on a non-loopback, authenticated llmman service and open its own firewall."
+		"separately turn on a non-loopback, authenticated llmman service and open its own firewall. " +
+		"A plain http:// address sends prompts, responses, and the peer key to that machine unencrypted; " +
+		"use https:// if the other machine supports it."
 }
 
 // PeersAddRowTitle is the action row that opens the add-peer dialog.
@@ -129,6 +131,13 @@ func PeerRemoveConfirmBody() string {
 	return "This computer stops sending it requests. Nothing changes on the other machine."
 }
 
+// PeerDisabledSubtitle is shown for a disabled peer, which is never probed:
+// llmman does not currently route requests to it, so a status check would
+// only send its address and the shared key over the network for nothing.
+func PeerDisabledSubtitle() string {
+	return "Disabled — not checked"
+}
+
 // PeerStatusSubtitle renders one peer's probed status line. A peer that has
 // never been probed yet reads as checking, never as unreachable.
 func PeerStatusSubtitle(probed bool, status aistack.PeerStatus) string {
@@ -152,6 +161,24 @@ func PeerAddFailedToast(reason string) string {
 // PeerRemoveFailedToast is the toast for a failed remove.
 func PeerRemoveFailedToast(reason string) string {
 	return "Could not remove that peer: " + reason
+}
+
+// PeerEnableFailedToast is the toast for a failed enable.
+func PeerEnableFailedToast(reason string) string {
+	return "Could not enable that peer: " + reason
+}
+
+// PeerDisableFailedToast is the toast for a failed disable, worded
+// separately from PeerEnableFailedToast rather than reusing
+// PeerAddFailedToast's "add" wording for a disable.
+func PeerDisableFailedToast(reason string) string {
+	return "Could not disable that peer: " + reason
+}
+
+// PeerBusyToast is shown when a peer add, remove, or enable/disable is
+// requested while another one is already in flight.
+func PeerBusyToast() string {
+	return "Another peer change is still in progress. Try again in a moment."
 }
 
 // PeerKeySavedToast confirms the shared key was sent to llmman's own

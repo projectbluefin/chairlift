@@ -207,6 +207,7 @@ func (uh *UserHome) buildPeersGroup(page *adw.PreferencesPage) {
 	empty.SetTitle(pageview.PeersEmptyRowTitle())
 	empty.SetSensitive(false)
 	uh.peersEmptyRow = empty
+	uh.peersEmptyRowShown = false
 
 	page.Add(group)
 	uh.refreshPeersList()
@@ -224,7 +225,10 @@ func (uh *UserHome) refreshPeersList() {
 		group.Remove(&row.Widget)
 	}
 	uh.peersListRows = nil
-	group.Remove(&uh.peersEmptyRow.Widget)
+	if uh.peersEmptyRowShown {
+		group.Remove(&uh.peersEmptyRow.Widget)
+		uh.peersEmptyRowShown = false
+	}
 
 	peers, err := aistack.Peers()
 	if err != nil {
@@ -232,21 +236,32 @@ func (uh *UserHome) refreshPeersList() {
 	}
 	if len(peers) == 0 {
 		group.Add(&uh.peersEmptyRow.Widget)
+		uh.peersEmptyRowShown = true
 		return
 	}
 
+	// Read on the main thread: puregotk widgets, including this entry, must
+	// never be touched from the probe goroutines started below.
+	apiKey := uh.peerAPIKeyForProbe()
+
 	for _, peer := range peers {
 		address := peer.Address
+		enabled := peer.Enabled
 		row := adw.NewActionRow()
 		row.SetTitle(address)
-		row.SetSubtitle(pageview.PeerStatusSubtitle(false, aistack.PeerStatus{}))
+		if enabled {
+			row.SetSubtitle(pageview.PeerStatusSubtitle(false, aistack.PeerStatus{}))
+		} else {
+			row.SetSubtitle(pageview.PeerDisabledSubtitle())
+		}
 
 		// newGuardedSwitch, not a bare gtk.Switch: without it, a revert of
 		// this row's own optimistic state (refreshPeersList rebuilding from
 		// the store after a failed toggle) would re-enter ::state-set and
 		// fire setPeerEnabled a second time for the same click.
-		enabledSwitch := newGuardedSwitch(peer.Enabled, func(state bool) {
-			uh.setPeerEnabled(address, state)
+		var enabledSwitch *guardedSwitch
+		enabledSwitch = newGuardedSwitch(peer.Enabled, func(state bool) {
+			uh.setPeerEnabled(address, state, enabledSwitch)
 		})
 		row.AddSuffix(&enabledSwitch.widget.Widget)
 
@@ -260,10 +275,18 @@ func (uh *UserHome) refreshPeersList() {
 		group.Add(&row.Widget)
 		uh.peersListRows = append(uh.peersListRows, row)
 
+		// Only an enabled peer is currently sent prompts by llmman, and
+		// probing it still sends the shared key in the clear over plain
+		// http:// unless the address is https://. A disabled peer is left
+		// showing "Not checked" rather than being probed for no operational
+		// reason.
+		if !enabled {
+			continue
+		}
 		go func(address string, row *adw.ActionRow) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			status := aistack.ProbePeer(ctx, address, uh.peerAPIKeyForProbe())
+			status := aistack.ProbePeer(ctx, address, apiKey)
 			sgtk.RunOnMainThread(func() {
 				row.SetSubtitle(pageview.PeerStatusSubtitle(true, status))
 			})
@@ -294,8 +317,6 @@ func (uh *UserHome) presentAddPeerDialog() {
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("add", "Add")
 	dialog.SetResponseAppearance("add", adw.ResponseSuggestedValue)
-	uh.peersAddDialog, uh.peersAddEntry = dialog, entry
-
 	responseCb := func(_ adw.AlertDialog, response string) {
 		if response != "add" {
 			return
@@ -311,6 +332,7 @@ func (uh *UserHome) presentAddPeerDialog() {
 // as a toast naming the reason; neither leaves a partial row behind.
 func (uh *UserHome) addPeer(address string) {
 	if !uh.peersMutateGate.TryStart() {
+		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
 		return
 	}
 	go func() {
@@ -349,6 +371,7 @@ func (uh *UserHome) confirmRemovePeer(address string) {
 
 func (uh *UserHome) removePeer(address string) {
 	if !uh.peersMutateGate.TryStart() {
+		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
 		return
 	}
 	go func() {
@@ -371,8 +394,14 @@ func (uh *UserHome) removePeer(address string) {
 // requested state optimistically via GTK's own state-set handling; a
 // failure here is corrected by refreshPeersList rebuilding from the store's
 // real contents.
-func (uh *UserHome) setPeerEnabled(address string, enabled bool) {
+func (uh *UserHome) setPeerEnabled(address string, enabled bool, sw *guardedSwitch) {
 	if !uh.peersMutateGate.TryStart() {
+		// Another peer mutation is already in flight. The switch has
+		// already rendered the requested state via GTK's own
+		// gtk_switch_set_active; revert it and say why, rather than
+		// leaving it showing a state nothing is applying.
+		sw.set(!enabled)
+		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
 		return
 	}
 	go func() {
@@ -383,20 +412,22 @@ func (uh *UserHome) setPeerEnabled(address string, enabled bool) {
 		sgtk.RunOnMainThread(func() {
 			if err != nil {
 				log.Printf("views: setting agent mode peer %s enabled=%v: %v", address, enabled, err)
-				verb := "enable"
-				if !enabled {
-					verb = "disable"
+				if enabled {
+					uh.toastAdder.ShowErrorToast(pageview.PeerEnableFailedToast(err.Error()))
+				} else {
+					uh.toastAdder.ShowErrorToast(pageview.PeerDisableFailedToast(err.Error()))
 				}
-				uh.toastAdder.ShowErrorToast(pageview.PeerAddFailedToast(verb + ": " + err.Error()))
 			}
 			uh.refreshPeersList()
 		})
 	}()
 }
 
-// savePeerAPIKey sends the shared credential to llmman's own configuration
-// and clears the field. The key is never stored by ChairLift and never
-// logged; only success or failure is reported.
+// savePeerAPIKey sends the shared credential to llmman's own configuration.
+// The key is never stored by ChairLift and never logged; only success or
+// failure is reported. The field is left as typed — ChairLift never reads a
+// stored key back, so clearing it here would make a later probe look
+// unauthenticated even though the key was accepted.
 func (uh *UserHome) savePeerAPIKey() {
 	if uh.peersKeyEntry == nil {
 		return

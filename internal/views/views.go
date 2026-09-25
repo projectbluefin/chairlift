@@ -203,13 +203,12 @@ type UserHome struct {
 
 	// Agent Mode peer offload (agents_page agents_group, "Use another
 	// machine")
-	peersGroup      *adw.PreferencesGroup
-	peersListRows   []*adw.ActionRow
-	peersEmptyRow   *adw.ActionRow
-	peersMutateGate actionstate.Gate
-	peersAddDialog  *adw.AlertDialog
-	peersAddEntry   *adw.EntryRow
-	peersKeyEntry   *adw.PasswordEntryRow
+	peersGroup         *adw.PreferencesGroup
+	peersListRows      []*adw.ActionRow
+	peersEmptyRow      *adw.ActionRow
+	peersEmptyRowShown bool
+	peersMutateGate    actionstate.Gate
+	peersKeyEntry      *adw.PasswordEntryRow
 
 	// Powerwash / Factory Reset (maintenance_page reset_group)
 	powerwashGate    actionstate.Gate
