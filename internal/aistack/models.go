@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -22,6 +23,11 @@ const SafetyMarginBytes int64 = 2 * 1024 * 1024 * 1024 // 2 GiB
 
 // FallbackCatalogDate is the ISO date of the offline fallback catalog.
 const FallbackCatalogDate = "2026-09-24"
+
+// splitShard matches a single split-shard GGUF filename (e.g.
+// model-Q4_K_M-00001-of-00002.gguf). A split shard is one part of a model
+// that must be reassembled, so it is not a standalone file llmman can pull.
+var splitShard = regexp.MustCompile(`-\d{5}-of-\d{5}\.gguf$`)
 
 // Family represents one of the 5 supported model families.
 type Family string
@@ -108,7 +114,7 @@ var DefaultFetch FetchFunc = func(ctx context.Context, reqURL string) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; BluefinModelResolver/1.0)")
+	req.Header.Set("User-Agent", "BluefinModelResolver/1.0")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -120,8 +126,8 @@ var DefaultFetch FetchFunc = func(ctx context.Context, reqURL string) ([]byte, e
 	return io.ReadAll(resp.Body)
 }
 
-// OfflineCatalog returns the dated last-known-good fallback models.
-// All entries are verified Unsloth GGUFs for text/chat.
+// OfflineCatalog returns the dated last-known-good fallback models: text/chat
+// GGUFs. Download/like counts are best-effort and may be approximate.
 func OfflineCatalog() []CandidateModel {
 	return []CandidateModel{
 		// Qwen family
@@ -228,8 +234,8 @@ func OfflineCatalog() []CandidateModel {
 			Params:    "1.5B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 310_000,
-			Likes:     1250,
+			Downloads: 58_380,
+			Likes:     161,
 			Cached:    true,
 		},
 		{
@@ -241,8 +247,8 @@ func OfflineCatalog() []CandidateModel {
 			Params:    "7B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 480_000,
-			Likes:     2100,
+			Downloads: 29_105,
+			Likes:     107,
 			Cached:    true,
 		},
 		{
@@ -254,35 +260,22 @@ func OfflineCatalog() []CandidateModel {
 			Params:    "14B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 220_000,
-			Likes:     940,
+			Downloads: 47_668,
+			Likes:     135,
 			Cached:    true,
 		},
 		// GPT-OSS (Open Source GPT-style instruction models)
 		{
 			Family:    FamilyGPTOss,
-			Repo:      "unsloth/Llama-3.2-3B-Instruct-GGUF",
-			File:      "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+			Repo:      "unsloth/gpt-oss-20b-GGUF",
+			File:      "gpt-oss-20b-Q4_K_M.gguf",
 			Quant:     "Q4_K_M",
-			SizeBytes: 2_000_000_000,
-			Params:    "3B",
+			SizeBytes: 11624759488,
+			Params:    "20B",
 			IsChat:    true,
 			IsGGUF:    true,
-			Downloads: 280_000,
-			Likes:     1100,
-			Cached:    true,
-		},
-		{
-			Family:    FamilyGPTOss,
-			Repo:      "unsloth/Meta-Llama-3.1-8B-Instruct-GGUF",
-			File:      "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-			Quant:     "Q4_K_M",
-			SizeBytes: 4_900_000_000,
-			Params:    "8B",
-			IsChat:    true,
-			IsGGUF:    true,
-			Downloads: 510_000,
-			Likes:     2400,
+			Downloads: 520471,
+			Likes:     840,
 			Cached:    true,
 		},
 	}
@@ -325,13 +318,15 @@ func RankCandidateModels(candidates []CandidateModel) []CandidateModel {
 	res := make([]CandidateModel, len(candidates))
 	copy(res, candidates)
 	sort.Slice(res, func(i, j int) bool {
-		// Prefer larger parameter counts if both fit, else rank by adoption (likes + downloads)
+		// Rank by adoption first (downloads + likes): a more popular model is
+		// the safer default. Size breaks ties so that, for equal popularity,
+		// the larger fit within budget wins.
 		scoreI := int64(res[i].Downloads) + int64(res[i].Likes*100)
 		scoreJ := int64(res[j].Downloads) + int64(res[j].Likes*100)
-		if res[i].SizeBytes != res[j].SizeBytes {
-			return res[i].SizeBytes > res[j].SizeBytes
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
 		}
-		return scoreI > scoreJ
+		return res[i].SizeBytes > res[j].SizeBytes
 	})
 	return res
 }
@@ -351,13 +346,24 @@ type hfTreeItem struct {
 	Size int64  `json:"size"`
 }
 
+// escapeRepo escapes a "owner/name" repository for a URL path, preserving the
+// slash between segments. url.PathEscape would encode that slash to %2F, which
+// the Hugging Face API rejects.
+func escapeRepo(repo string) string {
+	parts := strings.Split(repo, "/")
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	return strings.Join(parts, "/")
+}
+
 // ResolveFamilyLive attempts live resolution of an Unsloth model repository on Hugging Face.
 func ResolveFamilyLive(ctx context.Context, family Family, repo string, fetch FetchFunc) ([]CandidateModel, error) {
 	if fetch == nil {
 		fetch = DefaultFetch
 	}
 
-	infoURL := "https://huggingface.co/api/models/" + url.PathEscape(repo)
+	infoURL := "https://huggingface.co/api/models/" + escapeRepo(repo)
 	body, err := fetch(ctx, infoURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch model info for %s: %w", repo, err)
@@ -391,7 +397,7 @@ func ResolveFamilyLive(ctx context.Context, family Family, repo string, fetch Fe
 	}
 
 	// Fetch recursive tree
-	treeURL := fmt.Sprintf("https://huggingface.co/api/models/%s/tree/main?recursive=true", url.PathEscape(repo))
+	treeURL := fmt.Sprintf("https://huggingface.co/api/models/%s/tree/main?recursive=true", escapeRepo(repo))
 	treeBody, err := fetch(ctx, treeURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch tree for %s: %w", repo, err)
@@ -407,8 +413,17 @@ func ResolveFamilyLive(ctx context.Context, family Family, repo string, fetch Fe
 		if item.Type != "file" || !strings.HasSuffix(item.Path, ".gguf") {
 			continue
 		}
-		// Extract quant name (e.g. Q4_K_M from model-Q4_K_M.gguf)
+		// Skip split shards (model-Q4_K_M-00001-of-00002.gguf): parts of one
+		// model, not a standalone file llmman can pull.
+		if splitShard.MatchString(item.Path) {
+			continue
+		}
+		// Extract quant name (e.g. Q4_K_M from model-Q4_K_M.gguf). Files with
+		// no quant token (e.g. model-F16.gguf) are not pullable quants.
 		quant := extractQuant(item.Path)
+		if quant == "" {
+			continue
+		}
 		candidates = append(candidates, CandidateModel{
 			Family:       family,
 			Repo:         repo,
@@ -447,7 +462,7 @@ func extractQuant(filename string) string {
 			return last
 		}
 	}
-	return "Q4_K_M"
+	return ""
 }
 
 // ResolveCandidate resolves the best eligible candidate model for a given family and node memory.
@@ -494,7 +509,7 @@ func defaultFamilyRepo(f Family) string {
 	case FamilyDeepSeek:
 		return "unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF"
 	case FamilyGPTOss:
-		return "unsloth/Meta-Llama-3.1-8B-Instruct-GGUF"
+		return "unsloth/gpt-oss-20b-GGUF"
 	default:
 		return ""
 	}
@@ -537,6 +552,21 @@ func ConfigureActiveModel(ctx context.Context, modelRef string) error {
 	return nil
 }
 
+// ReadActiveModel returns the model ref configured as the active alias
+// `bluefin-active` via `llmman config get`. It returns ("", nil) when no
+// alias has been set yet.
+func ReadActiveModel(ctx context.Context) (string, error) {
+	exe := Executable()
+	if exe == "" {
+		return "", errors.New("llmman executable not found")
+	}
+	out, err := run(ctx, exe, "config", "get", "aliases."+ActiveModelAlias)
+	if err != nil {
+		return "", fmt.Errorf("llmman config get alias: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
 // PullModel pulls the model using `llmman pull <modelRef>` and verifies it was stored in daemon.
 func PullModel(ctx context.Context, modelRef string) error {
 	exe := Executable()
@@ -552,15 +582,17 @@ func PullModel(ctx context.Context, modelRef string) error {
 	return VerifyModelStored(ctx, modelRef)
 }
 
-// VerifyModelStored checks whether the model appears in stored models on /llmman/node.
+// VerifyModelStored checks whether the model appears in stored models on
+// /llmman/node. It returns an error unless the model is present, so a failed
+// pull or a daemon that never stored the model is reported rather than silently
+// accepted.
 func VerifyModelStored(ctx context.Context, modelRef string) error {
 	node, err := FetchNodeStatus(ctx)
 	if err != nil {
-		// Daemon might not have updated immediately; verify if pull exited clean
-		return nil
+		return fmt.Errorf("verify stored model: fetch node status: %w", err)
 	}
 	if len(node.Stored) == 0 {
-		return nil
+		return fmt.Errorf("verify stored model: daemon reported no stored models")
 	}
 	// Check if modelRef or base name is key in stored map
 	baseRef := modelRef
@@ -572,5 +604,5 @@ func VerifyModelStored(ctx context.Context, modelRef string) error {
 			return nil
 		}
 	}
-	return nil
+	return fmt.Errorf("verify stored model: %s not found in daemon stored models", modelRef)
 }

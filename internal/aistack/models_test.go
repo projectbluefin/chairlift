@@ -289,6 +289,17 @@ func TestFetchNodeStatus(t *testing.T) {
 func TestConfigureActiveModelAndPull(t *testing.T) {
 	h := newHost(t)
 
+	// VerifyModelStored (via PullModel) reads /llmman/node, so point the
+	// node server at a mock that reports the model stored.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"memory":17179869184,"loaded":{},"stored":{"unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M":{}}}`))
+	}))
+	defer srv.Close()
+	origNodeURL := nodeURL
+	nodeURL = srv.URL
+	defer func() { nodeURL = origNodeURL }()
+
 	// Configure active model
 	err := ConfigureActiveModel(context.Background(), "unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M")
 	if err != nil {

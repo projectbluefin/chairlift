@@ -131,6 +131,24 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	running := state == aistack.StateReady
 	if uh.agentModelRow != nil {
 		uh.agentModelRow.SetVisible(running)
+		// The row shows the model the server is actually serving, read from
+		// the configured alias, not the catalog default. Read off the main
+		// thread: it shells out to llmman.
+		if running {
+			go func() {
+				ctx, cancel := aistack.DefaultContext()
+				defer cancel()
+				modelRef, err := aistack.ReadActiveModel(ctx)
+				if err != nil {
+					return
+				}
+				sgtk.RunOnMainThread(func() {
+					if uh.agentModelRow != nil {
+						uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
+					}
+				})
+			}()
+		}
 	}
 	if uh.agentPresetRow != nil {
 		uh.agentPresetRow.SetVisible(running)
@@ -152,8 +170,12 @@ func (uh *UserHome) presentModelPresetChooser() {
 	}
 
 	responseCb := func(_ adw.AlertDialog, response string) {
-		defer uh.agentPresetGate.Reset()
+		// Reset only for the non-worker path: cancel, or any response that is
+		// not a family. A family response hands the gate to the worker, whose
+		// defer owns the reset once a pull actually starts, so a second preset
+		// cannot begin while the first is still pulling.
 		if response == "cancel" {
+			uh.agentPresetGate.Reset()
 			return
 		}
 		fam := aistack.Family(response)
@@ -166,6 +188,10 @@ func (uh *UserHome) presentModelPresetChooser() {
 }
 
 func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
+	// The worker owns the preset gate from here until it returns, so a
+	// second preset cannot start while this one is still pulling.
+	defer uh.agentPresetGate.Reset()
+
 	ctx, cancel := aistack.DefaultContext()
 	defer cancel()
 
@@ -175,19 +201,18 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 		}
 	})
 
-	// Get node status for memory fitting
-	status, _ := aistack.FetchNodeStatus(ctx)
-	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
+	// Get node status for memory fitting. Without the memory we cannot fit a
+	// model to the machine, so a failure to reach the server aborts rather
+	// than silently picking the largest model.
+	status, err := aistack.FetchNodeStatus(ctx)
 	if err != nil {
-		log.Printf("views: resolve model candidate for %s failed: %v", fam, err)
+		log.Printf("views: fetch node status failed: %v", err)
 		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not resolve model for %s", fam.DisplayName()))
-			if uh.agentModelRow != nil {
-				uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(""))
-			}
+			uh.toastAdder.ShowErrorToast("Could not reach the model server to check memory")
 		})
 		return
 	}
+	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
 
 	modelRef := candidate.ModelRef()
 	dryRun := dryrun.Enabled()
@@ -202,18 +227,21 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 		return
 	}
 
-	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
-		log.Printf("views: configure alias failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowErrorToast("Could not configure active model alias")
-		})
-		return
-	}
-
+	// Pull first, then set the alias. If the pull fails the alias is left
+	// untouched, so Agent Mode keeps serving the previously working model
+	// instead of pointing at something that is not there.
 	if err := aistack.PullModel(ctx, modelRef); err != nil {
 		log.Printf("views: pull model failed: %v", err)
 		sgtk.RunOnMainThread(func() {
 			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to pull model %s", modelRef))
+		})
+		return
+	}
+
+	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
+		log.Printf("views: configure alias failed: %v", err)
+		sgtk.RunOnMainThread(func() {
+			uh.toastAdder.ShowErrorToast("Could not configure active model alias")
 		})
 		return
 	}
