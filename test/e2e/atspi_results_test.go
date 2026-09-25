@@ -18,7 +18,13 @@ func TestParseATSPIReport(t *testing.T) {
 			"ROW\tindex=0\tname=Updates\tselected=1",
 			"ROW\tindex=1\tname=Apps\tselected=0",
 			"PAGE\tpage=updates\tselected_index=0\tselected_name=Updates\tselected_count=1\tcontent_title_labels=1",
+			"CONTROLS\tpage=updates\tcontrol_count=7\tnameless_count=0\tinoperable_count=0\ttoggle_count=2\tunreadable_toggle_count=0",
 			"PAGE\tpage=applications\tselected_index=1\tselected_name=Apps\tselected_count=1\tcontent_title_labels=2",
+			"CONTROLS\tpage=applications\tcontrol_count=4\tnameless_count=0\tinoperable_count=0\ttoggle_count=1\tunreadable_toggle_count=0",
+			"MENU_BUTTON\tname=Main Menu\trole=toggle button\tshowing=1",
+			"POPOVER\titem_count=4",
+			"DIALOG_SHORTCUTS\tname=Keyboard Shortcuts\tfocused=1\thas_updates=1\thas_quit=1",
+			"DIALOG_ABOUT\tname=About\tfocused=1\tannounces_app=1",
 			"DONE",
 			"",
 		}, "\n")
@@ -55,6 +61,32 @@ func TestParseATSPIReport(t *testing.T) {
 			if report.Pages[index] != want {
 				t.Errorf("page %d = %+v, want %+v", index, report.Pages[index], want)
 			}
+		}
+
+		wantControls := []atspiControls{
+			{Page: "updates", ControlCount: 7, NamelessCount: 0, InoperableCount: 0, ToggleCount: 2, UnreadableToggleCount: 0},
+			{Page: "applications", ControlCount: 4, NamelessCount: 0, InoperableCount: 0, ToggleCount: 1, UnreadableToggleCount: 0},
+		}
+		if len(report.Controls) != len(wantControls) {
+			t.Fatalf("parsed %d controls, want %d", len(report.Controls), len(wantControls))
+		}
+		for index, want := range wantControls {
+			if report.Controls[index] != want {
+				t.Errorf("controls %d = %+v, want %+v", index, report.Controls[index], want)
+			}
+		}
+
+		if report.MenuButton != (atspiMenuButton{Name: "Main Menu", Role: "toggle button", Showing: true}) {
+			t.Errorf("menu button = %+v, want Main Menu toggle button showing", report.MenuButton)
+		}
+		if report.PopoverItemCount != 4 {
+			t.Errorf("popover item count = %d, want 4", report.PopoverItemCount)
+		}
+		if report.ShortcutsDialog != (atspiShortcutsDialog{Name: "Keyboard Shortcuts", Focused: true, HasUpdates: true, HasQuit: true}) {
+			t.Errorf("shortcuts dialog = %+v, want Keyboard Shortcuts focused with updates and quit", report.ShortcutsDialog)
+		}
+		if report.AboutDialog != (atspiAboutDialog{Name: "About", Focused: true, AnnouncesApp: true}) {
+			t.Errorf("about dialog = %+v, want About focused announcing app", report.AboutDialog)
 		}
 	})
 

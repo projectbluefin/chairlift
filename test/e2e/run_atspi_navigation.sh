@@ -81,6 +81,8 @@ unset NO_AT_BRIDGE || true
 if [ -n "${CHAIRLIFT_SCHEMA_DIR:-}" ]; then
   export GSETTINGS_SCHEMA_DIR="$CHAIRLIFT_SCHEMA_DIR"
 fi
+: "${CHAIRLIFT_CAPABILITIES:=image-descriptor,flatpak,brew,podman,bootc-stage}"
+export CHAIRLIFT_CAPABILITIES
 export HOME="$OUTDIR/home"
 export XDG_RUNTIME_DIR="$OUTDIR/runtime"
 mkdir -p "$HOME"

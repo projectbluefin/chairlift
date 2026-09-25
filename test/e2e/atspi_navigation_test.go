@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 )
 
@@ -40,10 +41,44 @@ type atspiPage struct {
 	ContentTitleLabels int
 }
 
+// atspiControls is the control accessibility observed on one page.
+type atspiControls struct {
+	Page                  string
+	ControlCount          int
+	NamelessCount         int
+	InoperableCount       int
+	ToggleCount           int
+	UnreadableToggleCount int
+}
+
+type atspiMenuButton struct {
+	Name    string
+	Role    string
+	Showing bool
+}
+
+type atspiShortcutsDialog struct {
+	Name       string
+	Focused    bool
+	HasUpdates bool
+	HasQuit    bool
+}
+
+type atspiAboutDialog struct {
+	Name         string
+	Focused      bool
+	AnnouncesApp bool
+}
+
 type atspiReport struct {
-	Rows  []atspiRow
-	Pages []atspiPage
-	Done  bool
+	Rows             []atspiRow
+	Pages            []atspiPage
+	Controls         []atspiControls
+	MenuButton       atspiMenuButton
+	PopoverItemCount int
+	ShortcutsDialog  atspiShortcutsDialog
+	AboutDialog      atspiAboutDialog
+	Done             bool
 }
 
 // parseATSPIReport turns the probe's tab-separated records into a report.
@@ -83,6 +118,73 @@ func parseATSPIReport(output string) (atspiReport, error) {
 				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
 			}
 			report.Pages = append(report.Pages, page)
+		case "CONTROLS":
+			controls, err := parseATSPIControls(fields)
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			report.Controls = append(report.Controls, controls)
+		case "MENU_BUTTON":
+			name, err := atspiString(fields, "name")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			role, err := atspiString(fields, "role")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			showing, err := atspiInt(fields, "showing")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			report.MenuButton = atspiMenuButton{Name: name, Role: role, Showing: showing == 1}
+		case "POPOVER":
+			count, err := atspiInt(fields, "item_count")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			report.PopoverItemCount = count
+		case "DIALOG_SHORTCUTS":
+			name, err := atspiString(fields, "name")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			focused, err := atspiInt(fields, "focused")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			hasUpdates, err := atspiInt(fields, "has_updates")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			hasQuit, err := atspiInt(fields, "has_quit")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			report.ShortcutsDialog = atspiShortcutsDialog{
+				Name:       name,
+				Focused:    focused == 1,
+				HasUpdates: hasUpdates == 1,
+				HasQuit:    hasQuit == 1,
+			}
+		case "DIALOG_ABOUT":
+			name, err := atspiString(fields, "name")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			focused, err := atspiInt(fields, "focused")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			announces, err := atspiInt(fields, "announces_app")
+			if err != nil {
+				return atspiReport{}, fmt.Errorf("line %d: %w", number+1, err)
+			}
+			report.AboutDialog = atspiAboutDialog{
+				Name:         name,
+				Focused:      focused == 1,
+				AnnouncesApp: announces == 1,
+			}
 		case "DONE":
 			report.Done = true
 		default:
@@ -177,6 +279,41 @@ func parseATSPIPage(fields map[string]string) (atspiPage, error) {
 	}, nil
 }
 
+func parseATSPIControls(fields map[string]string) (atspiControls, error) {
+	page, err := atspiString(fields, "page")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	controlCount, err := atspiInt(fields, "control_count")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	namelessCount, err := atspiInt(fields, "nameless_count")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	inoperableCount, err := atspiInt(fields, "inoperable_count")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	toggleCount, err := atspiInt(fields, "toggle_count")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	unreadableToggleCount, err := atspiInt(fields, "unreadable_toggle_count")
+	if err != nil {
+		return atspiControls{}, err
+	}
+	return atspiControls{
+		Page:                  page,
+		ControlCount:          controlCount,
+		NamelessCount:         namelessCount,
+		InoperableCount:       inoperableCount,
+		ToggleCount:           toggleCount,
+		UnreadableToggleCount: unreadableToggleCount,
+	}, nil
+}
+
 // TestATSPINavigationTree drives the real application through every
 // navigation page with the accessibility bridge enabled and asserts what an
 // assistive technology would observe.
@@ -266,6 +403,65 @@ func TestATSPINavigationTree(t *testing.T) {
 
 	assertATSPISidebar(t, report.Rows, items)
 	assertATSPIPages(t, report.Pages, items)
+	assertATSPIControls(t, report.Controls, items)
+	assertATSPIMenusAndDialogs(t, report)
+}
+
+// assertATSPIControls verifies that focusable action controls are accessible across all pages.
+func assertATSPIControls(t *testing.T, controls []atspiControls, items []navigation.Item) {
+	t.Helper()
+	if len(controls) != len(items) {
+		t.Errorf("probe reported controls for %d pages, want %d", len(controls), len(items))
+	}
+	for _, c := range controls {
+		if c.ControlCount == 0 {
+			t.Errorf("page %q reported 0 focusable action controls", c.Page)
+		}
+		if c.NamelessCount > 0 {
+			t.Errorf("page %q has %d nameless focusable action controls", c.Page, c.NamelessCount)
+		}
+		if c.InoperableCount > 0 {
+			t.Errorf("page %q has %d inoperable action controls", c.Page, c.InoperableCount)
+		}
+		if c.UnreadableToggleCount > 0 {
+			t.Errorf("page %q has %d toggles whose checked state could not be read", c.Page, c.UnreadableToggleCount)
+		}
+	}
+}
+
+// assertATSPIMenusAndDialogs verifies the Main Menu button, popover, shortcuts dialog, and about dialog.
+func assertATSPIMenusAndDialogs(t *testing.T, report atspiReport) {
+	t.Helper()
+	if report.MenuButton.Name != "Main Menu" {
+		t.Errorf("Main Menu button name = %q, want %q", report.MenuButton.Name, "Main Menu")
+	}
+	if !report.MenuButton.Showing {
+		t.Errorf("Main Menu button is not showing")
+	}
+	if report.PopoverItemCount < 2 {
+		t.Errorf("popover reported %d items, want at least 2", report.PopoverItemCount)
+	}
+	if report.ShortcutsDialog.Name != "Keyboard Shortcuts" {
+		t.Errorf("shortcuts dialog name = %q, want %q", report.ShortcutsDialog.Name, "Keyboard Shortcuts")
+	}
+	if !report.ShortcutsDialog.Focused {
+		t.Errorf("shortcuts dialog did not receive AT-SPI focus")
+	}
+	if !report.ShortcutsDialog.HasUpdates {
+		t.Errorf("shortcuts dialog does not list \"Go to Updates\"")
+	}
+	if !report.ShortcutsDialog.HasQuit {
+		t.Errorf("shortcuts dialog does not list \"Quit\"")
+	}
+	if report.AboutDialog.Name != "About" && report.AboutDialog.Name != "About "+branding.AppName {
+		t.Errorf("about dialog name = %q, want \"About\" or %q", report.AboutDialog.Name, "About "+branding.AppName)
+	}
+	if !report.AboutDialog.Focused {
+		t.Errorf("about dialog did not receive AT-SPI focus")
+	}
+	if !report.AboutDialog.AnnouncesApp {
+		t.Errorf("about dialog does not announce the application name")
+	}
 }
 
 // assertATSPISidebar holds the part of the contract that is about the
