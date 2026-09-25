@@ -377,7 +377,7 @@ func (s *UpdateShell) build() {
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetTooltipText("Main menu")
-	setAccessibleLabel(menuButton, "Main menu")
+	SetAccessibleLabel(menuButton, "Main menu")
 	menuButton.SetMenuModel(&menu.MenuModel)
 	header.PackEnd(&menuButton.Widget)
 	s.toolbarView.AddTopBar(&header.Widget)

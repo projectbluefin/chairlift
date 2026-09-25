@@ -9,7 +9,7 @@ func newIconButton(icon, label string) *gtk.Button {
 	return button
 }
 
-func setAccessibleLabel(widget interface {
+func SetAccessibleLabel(widget interface {
 	UpdateProperty(gtk.AccessibleProperty, ...interface{})
 }, label string) {
 	widget.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)

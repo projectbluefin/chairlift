@@ -348,6 +348,7 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetMenuModel(&menu.MenuModel)
 	menuButton.SetTooltipText("Main Menu")
+	views.SetAccessibleLabel(menuButton, "Main Menu")
 
 	return menuButton
 }
