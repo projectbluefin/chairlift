@@ -202,8 +202,26 @@ func (c *Client) Tags(ctx context.Context, ref string) ([]string, error) {
 		if next == "" {
 			return tags, nil
 		}
+		if !sameHostPath(next) {
+			return nil, fmt.Errorf("listing %s: registry sent a pagination link %q that leaves the registry", ref, next)
+		}
 		endpoint = "https://" + host + next
 	}
+}
+
+// sameHostPath reports whether a pagination link is a host-relative path, so
+// appending it to "https://<host>" cannot change which host the next request
+// reaches. The Link header is registry-controlled data: an absolute URL, a
+// protocol-relative //host form, or a value like "@evil.example/…" (which
+// would turn the original host into URL userinfo) must all be rejected before
+// the bearer token is sent to whatever host the concatenation now names.
+func sameHostPath(next string) bool {
+	parsed, err := url.Parse(next)
+	if err != nil {
+		return false
+	}
+	return !parsed.IsAbs() && parsed.Host == "" && parsed.User == nil &&
+		strings.HasPrefix(parsed.Path, "/")
 }
 
 // nextPage extracts the URL of the next page from a Link header, or returns

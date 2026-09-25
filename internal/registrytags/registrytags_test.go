@@ -41,6 +41,9 @@ type fakeRegistry struct {
 	// listStatus, when non-zero, makes every tag-list request answer with
 	// this status instead of a listing.
 	listStatus int
+	// linkOverride, when non-empty, replaces the Link header on every
+	// tag-list page, for tests about hostile pagination links.
+	linkOverride string
 
 	// mu guards requests, which the handler appends to from its own
 	// goroutine so a test can count the requests a cached call did *not*
@@ -180,7 +183,9 @@ func (f *fakeRegistry) writePage(w http.ResponseWriter, r *http.Request, reposit
 	}
 	page := f.tags[start:end]
 
-	if end < len(f.tags) && len(page) > 0 {
+	if f.linkOverride != "" {
+		w.Header().Set("Link", f.linkOverride)
+	} else if end < len(f.tags) && len(page) > 0 {
 		w.Header().Set("Link", "</v2/"+repositoryPath+"/tags/list?last="+page[len(page)-1]+`&n=0>; rel="next"`)
 	}
 	writeJSON(w, map[string]any{"name": repositoryPath, "tags": page})
@@ -395,5 +400,51 @@ func TestNextPageReadsOnlyTheNextRelation(t *testing.T) {
 		if got := nextPage(tt.header); got != tt.want {
 			t.Errorf("nextPage(%q) = %q, want %q", tt.header, got, tt.want)
 		}
+	}
+}
+
+// A pagination link is appended to "https://<host>", so any form that would
+// make the concatenation name a different host must be rejected before the
+// next request — and its bearer token — goes out.
+func TestSameHostPathRejectsLinksThatLeaveTheRegistry(t *testing.T) {
+	tests := []struct {
+		next string
+		ok   bool
+	}{
+		{next: "/v2/org/image/tags/list?last=x&n=0", ok: true},
+		{next: "/v2/org/image/tags/list", ok: true},
+		// An absolute URL replaces the host outright.
+		{next: "https://evil.example/v2/steal", ok: false},
+		// Appending "@host/…" turns the original host into URL userinfo.
+		{next: "@evil.example/v2/steal", ok: false},
+		// A protocol-relative link also names its own host.
+		{next: "//evil.example/v2/steal", ok: false},
+		// A relative path resolves against whatever the current URL is.
+		{next: "v2/org/image/tags/list", ok: false},
+		{next: "", ok: false},
+	}
+
+	for _, tt := range tests {
+		if got := sameHostPath(tt.next); got != tt.ok {
+			t.Errorf("sameHostPath(%q) = %v, want %v", tt.next, got, tt.ok)
+		}
+	}
+}
+
+// The pagination loop must refuse to follow a hostile Link header rather than
+// send the next request (and its token) wherever the header points.
+func TestTagsRefusesAPaginationLinkThatLeavesTheRegistry(t *testing.T) {
+	fake := &fakeRegistry{
+		tags:         []string{"a", "b", "c"},
+		linkOverride: `<https://evil.example/v2/steal>; rel="next"`,
+	}
+	client, ref := newFake(t, fake)
+
+	_, err := client.Tags(context.Background(), ref)
+	if err == nil {
+		t.Fatal("Tags followed a pagination link naming another host")
+	}
+	if !strings.Contains(err.Error(), "pagination link") {
+		t.Errorf("Tags error %q does not name the hostile pagination link", err)
 	}
 }
