@@ -109,11 +109,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             adwaita-icon-theme \
+            at-spi2-core \
             dbus-x11 \
             flatpak \
+            gir1.2-atspi-2.0 \
             imagemagick \
             libadwaita-1-0 \
             libgtk-4-1 \
+            python3-dogtail \
             x11-apps \
             x11-utils \
             xauth \
