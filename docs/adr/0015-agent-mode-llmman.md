@@ -94,7 +94,10 @@ predicate cannot be met and no launcher is wired; #255 and #261 complete it.
 - *Peers:* client-side consumption only, configured through `llmman config
   set`, authenticated with llmman's own peer key; this host is never
   advertised as a peer, and no firewall, key distribution, folder sync, or
-  sharding is performed.
+  sharding is performed. Known peer addresses and their enabled states are
+  tracked locally in `~/.local/share/chairlift/agent-mode-peers.json`; the peer
+  key is passed to `llmman config set` on argv (a known limitation until stdin
+  support lands).
 - *Configuration ownership:* ChairLift writes no llmman TOML; aliases, peers,
   and auth go through `llmman config set/get`. Goose provider choice stays
   invocation-scoped (`llmman launch goose`); OMP uses a named, isolated

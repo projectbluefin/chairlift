@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 func TestParsePeerAddressAcceptsDocumentedForms(t *testing.T) {
@@ -330,6 +332,61 @@ func TestSetPeerAPIKeyFailsCleanlyWhenLLMManIsNotInstalled(t *testing.T) {
 	brewPath = func() string { return "" }
 	if err := SetPeerAPIKey(context.Background(), "x"); err == nil {
 		t.Error("SetPeerAPIKey succeeded with no llmman installed")
+	}
+}
+
+func TestPeerMutationsHonorDryrun(t *testing.T) {
+	ph := newPeerHost(t)
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	ctx := context.Background()
+	if err := AddPeer(ctx, "spark:17434"); err != nil {
+		t.Fatalf("AddPeer under dryrun: %v", err)
+	}
+	if err := SetPeerAPIKey(ctx, "secret-test-key"); err != nil {
+		t.Fatalf("SetPeerAPIKey under dryrun: %v", err)
+	}
+
+	// Assert runner was never invoked
+	if len(ph.calls) != 0 {
+		t.Errorf("expected no config calls under dryrun, got: %v", ph.calls)
+	}
+
+	// Assert store file was not written
+	storePath := filepath.Join(ph.home, ".local", "share", "chairlift", peersFileName)
+	if _, err := os.Stat(storePath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("peers store %s exists or gave unexpected error: %v", storePath, err)
+	}
+
+	// Pre-populate store to test RemovePeer and SetPeerEnabled under dryrun
+	dryrun.Set(false)
+	if err := AddPeer(ctx, "spark:17434"); err != nil {
+		t.Fatalf("AddPeer setup: %v", err)
+	}
+	ph.calls = nil
+	dryrun.Set(true)
+
+	if err := SetPeerEnabled(ctx, "spark:17434", false); err != nil {
+		t.Fatalf("SetPeerEnabled under dryrun: %v", err)
+	}
+	if err := RemovePeer(ctx, "spark:17434"); err != nil {
+		t.Fatalf("RemovePeer under dryrun: %v", err)
+	}
+
+	// Assert runner still not invoked
+	if len(ph.calls) != 0 {
+		t.Errorf("expected no config calls for SetPeerEnabled/RemovePeer under dryrun, got: %v", ph.calls)
+	}
+
+	// Assert store content remained unchanged from the AddPeer setup
+	dryrun.Set(false)
+	peers, err := Peers()
+	if err != nil {
+		t.Fatalf("Peers(): %v", err)
+	}
+	if len(peers) != 1 || peers[0].Address != "spark:17434" || !peers[0].Enabled {
+		t.Errorf("Peers store modified under dryrun: %+v", peers)
 	}
 }
 

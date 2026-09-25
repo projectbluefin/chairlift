@@ -530,8 +530,8 @@ An agent must not break these:
   last list when a read fails rather than leaving it standing as current.
 - **Agent Mode is one switch on its own page, runs llmman as a user unit,
   and is unprivileged.** It lives on `agents_page`, built by
-  `internal/views/agents_page.go`, as that page's single group
-  (`agents_group`, floored on Homebrew). ADR-0015 is the contract.
+  `internal/views/agents_page.go`, containing two groups under `agents_group`
+  (floored on Homebrew): the Agent Mode switch group and "Use another machine". ADR-0015 is the contract.
   `internal/aistack` owns exactly four artifacts and nothing else: the
   generated Brewfile it hands to `brew bundle install` (tap `llmmanorg/tap`,
   formula `llmmanorg/tap/llmman` unless an `llmman` already resolves, and
