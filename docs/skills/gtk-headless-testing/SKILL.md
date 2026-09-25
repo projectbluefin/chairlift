@@ -109,3 +109,19 @@ the accessibility tree (`test/e2e/atspi_probe.py`, dogtail, pyatspi).
   unnoticed.
 
 **Learned from:** #366/#375, turning the AT-SPI navigation suite on in CI.
+
+## Host Desktop & Portal Isolation for E2E Testing
+
+**The rule:** Never run the GTK binary, `make e2e`, or `make screenshots` directly against the developer's live desktop session, `/run/user/<uid>`, or default session bus.
+
+**Why:** Headless GTK tests running under `dbus-run-session` without an isolated runtime environment inherit the host's `$XDG_RUNTIME_DIR` (`/run/user/<uid>`). When GTK or Flatpak commands run, they can reach desktop portals (`xdg-desktop-portal`, `xdg-document-portal`) over the session bus. This risks unmounting or disconnecting `xdg-document-portal`'s FUSE mount at `/run/user/<uid>/doc`, causing host Flatpak sandboxes (`bwrap`) to immediately fail with:
+```
+bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or directory
+```
+
+**Required harness isolation:**
+1. In Go E2E tests (`test/e2e/e2e_test.go`), allocate a private `0700` directory under `t.TempDir()` and pass `XDG_RUNTIME_DIR=<dir>` in `cmd.Env`.
+2. In shell scripts (`test/e2e/capture_walkthrough.sh`), export `XDG_RUNTIME_DIR="$OUTDIR/runtime"` (mode `0700`).
+3. Always export `GDK_DEBUG=no-portals` in both environments.
+4. Automated enforcement is maintained by `internal/installcheck/e2e_portal_isolation_test.go`.
+5. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
