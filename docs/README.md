@@ -99,6 +99,10 @@ are listed in [org-adrs.md](org-adrs.md).
   rootless printer-application quadlets: host-networking surface,
   authenticated-admin boundary, family inventory, and verified image state
 
+- [design/destination-matrix.md](design/destination-matrix.md) — current group/action
+  inventory, proposed five-destination ownership, and ADR-reference reconciliation
+  for #241/#344; distinguishes implementation targets from shipped navigation
+
 ### Specs
 
 - [specs/setup-model.md](specs/setup-model.md) — optional task/choice filtering,

@@ -77,19 +77,36 @@ The `views.go` file defines the central `UserHome` struct that holds references 
 
 ### Pages
 
-The UI defines six pages, each in its own file under `internal/views/`. Static
-configuration may omit any functional page whose builder-backed groups are all
-disabled; Help is always retained:
+The current UI defines seven primary pages. Static configuration and the host
+capability floor may omit a functional page whose builder-backed groups are all
+disabled or unavailable; Help is always retained. `internal/navigation` owns
+this inventory, independently of the original YAML namespace names.
 
-| Page         | File                   | Purpose                                                                                                                                 |
-| ------------ | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Applications | `applications_page.go` | Manage Homebrew formulae/casks and installed Flatpaks; launch an external manager for new Flatpak installs                              |
-| Maintenance  | `maintenance_page.go`  | Homebrew/Flatpak cleanup, configurable maintenance scripts (executed via `exec.Command`/`pkexec`)                                       |
-| Updates      | `updates_page.go`      | bootc staged system updates, Flatpak updates, Homebrew outdated packages, untrusted-tap trust prompts                                  |
-| System       | `system_page.go`       | OS info (`/etc/os-release`), bootc deployment status, health monitor launch                                                             |
-| Features     | `features_page.go`     | Toggle system features via `updex` tool                                                                                                 |
-| Livery       | `livery_page.go`       | Profile picture (`profile_picture.go`, `internal/avatar`); app-grid, panel, and Files marks, by shadowing icon-theme names in the user's own theme (`internal/livery`) |
-| Help         | `help_page.go`         | Configurable links to website, issues, chat (opened via `xdg-open`); "Why is something missing?" lists configured groups the capability floor hides |
+| Page | File under `internal/views/` | Current purpose |
+| --- | --- | --- |
+| Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
+| Apps | `applications_page.go` | Collections, installed Flatpaks, Homebrew inventory/search/export and external catalog launch |
+| Agents | `agents_page.go` | Agent Mode using llmman |
+| Features | `features_page.go` | Distribution features, Developer Mode and Gaming Mode |
+| Livery | `livery_page.go` | Profile picture and app-grid, panel and Files icon surfaces |
+| Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Recovery entry |
+| Help | `help_page.go` | Troubleshooting, support links and capability explanations |
+
+Recovery is an existing detail built by `recovery.go` and reached from
+Maintenance, with rollback, published-version reads and opt-in reset controls.
+There is no current System primary page or `system_page.go` implementation.
+
+### Architecture route map
+
+The configuration-to-navigation one-to-one assumption is explicitly retired:
+a configuration page is a stable YAML namespace, not a destination identity.
+The [destination and action ownership matrix](destination-matrix.md) records
+all current groups/actions and the five-section target of #241. It retains
+original `(configuration page, group)` references across primary/detail routes,
+including the shared channel and Homebrew inventory cases. That target is not
+a claim that the five-section sidebar has shipped: the current mounts above
+remain until #201's cutover. #342/#343 implement the navigation/composition seam;
+`internal/navigation` remains the sole route authority.
 
 ## Key Patterns
 
@@ -1861,33 +1878,14 @@ page_name:
 
 ### Key config groups
 
-| Page                | Group                            | Controls                                                                                                                                                                                                |
-| ------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `system_page`       | `system_info_group`              | OS info from `/etc/os-release`                                                                                                                                                                          |
-| `system_page`       | `bootc_status_group`             | bootc deployment status display (gated on `bootc.IsBootcBootedCached()`)                                                                                                                                |
-| `system_page`       | `channel_group`                  | Release channel and graphics-driver switching (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                          |
-| `system_page`       | `health_group`                   | System monitor launcher (configurable `app_id`, default: Mission Center)                                                                                                                                |
-| `updates_page`      | `update_all_group`               | Multi-phase update sequencing (OS image, Flatpaks, Homebrew) and automatic background updates switch                                                                                                    |
-| `updates_page`      | `bootc_updates_group`            | bootc system updates — stage via `bootc-update-stage`, apply on restart (gated on `bootc.IsBootcBootedCached()` and stage script availability)                                                          |
-| `updates_page`      | `flatpak_updates_group`          | Flatpak pending updates                                                                                                                                                                                 |
-| `updates_page`      | `brew_updates_group`             | Homebrew outdated packages                                                                                                                                                                              |
-| `updates_page`      | `brew_trust_group`               | Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); hidden unless there is something to trust                                                                                       |
-| `applications_page` | `flatpak_user_group`             | User Flatpak applications with uninstall actions                                                                                                                                                        |
-| `applications_page` | `flatpak_system_group`           | System Flatpak applications with uninstall actions                                                                                                                                                      |
-| `applications_page` | `brew_group`                     | Installed Homebrew formulae/casks with uninstall and formula pin/unpin actions                                                                                                                          |
-| `applications_page` | `brew_search_group`              | Typed Homebrew formula/cask search and confirmed install                                                                                                                                                |
-| `applications_page` | `brew_bundles_group`             | Curated `*.Brewfile` bundles discovered from every configured `bundles_paths` directory, with guarded install actions                                                                                   |
-| `applications_page` | `applications_installed_group`   | External Flatpak-manager launcher for discovery/install (configurable `app_id`, default: Bazaar); ChairLift has no direct Flatpak-install UI                                                            |
-| `maintenance_page`  | `maintenance_cleanup_group`      | Custom cleanup scripts (5min timeout, pkexec for sudo); **disabled by default**                                                                                                                         |
-| `maintenance_page`  | `maintenance_brew_group`         | Homebrew cleanup (deferred visibility)                                                                                                                                                                  |
-| `maintenance_page`  | `maintenance_flatpak_group`      | Flatpak unused cleanup (deferred visibility)                                                                                                                                                            |
-| `maintenance_page`  | `reset_group`                    | Powerwash and Factory Reset irreversible actions; **disabled by default**                                                                                                                              |
-| `features_page`     | `features_group`                 | Updex feature toggles                                                                                                                                                                                   |
-| `features_page`     | `dx_group`                       | Developer Mode (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                                          |
-| `features_page`     | `gaming_group`                   | Gaming Mode optimizations (gated on `/usr/share/ublue-os/image-info.json`)                                                                                                                              |
-| `agents_page`       | `agents_group`                   | Agent Mode: llmman as a systemd user unit on 127.0.0.1:17434, installed with Homebrew (gated on Homebrew)                                                                                              |
-| `help_page`         | `troubleshooting_group`          | Enhanced Troubleshooting AI assistant (gated on Homebrew); moved from Features (issue #249)                                                                                                             |
-| `help_page`         | `help_resources_group`           | Configurable links (website, issues, chat)                                                                                                                                                              |
+The [configuration reference](../reference.md) describes the current schema.
+The [destination matrix](destination-matrix.md#configuration-references-and-owners)
+provides the complete 26-group inventory with original namespaces, current
+mounts, proposed destinations and action owners. Derive additions from
+`config.SchemaGroups`; do not infer keys from the sidebar. In particular,
+`channel_group` and `bootc_status_group` belong to `updates_page`, while
+routine cleanup uses `maintenance_freespace_group`. Legacy System-page input
+is handled by the migration described above, not a current System namespace.
 
 ## Build and Release
 

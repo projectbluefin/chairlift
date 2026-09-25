@@ -1,8 +1,8 @@
 ---
 name: documentation-reconciliation
 description: Use when documentation changes may leave contradictory claims.
-version: 1.0.0
-last_updated: 2026-09-19
+version: 1.1.0
+last_updated: 2026-09-25
 tags:
   - documentation
   - consistency
@@ -46,3 +46,15 @@ even though `defaultConfig()` ships `maintenance_cleanup_group` disabled. The
 reviewer rejected the plan (medium severity) because those exact-checkable
 factual errors were left untouched. Round 2 fixed it by widening the chunk to
 rewrite all three locations and adding grep-based acceptance criteria.
+
+## Reconcile decision identity before citing a numbered ADR
+
+Resolve a claimed ADR number against the actual `docs/adr/` filename, subject,
+and status. Issue prose and even a historical heading can carry a stale number:
+ChairLift's capability decision is the `0014-capability-driven-visibility-as-a-floor.md`
+file although its accepted text retains a `0013` heading; the `0013` file is
+rollback catalog reads, and `0015` is Agent Mode. Link the actual file and
+explain the discrepancy in the living architecture documentation. Do not
+rewrite accepted decisions, invent a missing ADR, or reuse an occupied number.
+Changing an accepted decision requires a new superseding decision and maintainer
+acceptance. Keep proposed route placement separate from current UI claims.
