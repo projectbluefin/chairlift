@@ -46,7 +46,7 @@ covered it before this plan.
 | Rollback to previous deployment | ✅ calendar | ✅ | **Done** — `rollback` helper subcommand |
 | Automatic background updates (uupd timer) | ✅ | ✅ | **Done** — `internal/autoupdate`, one switch |
 | Image variant selection (`-nvidia`) | — | ✅ rebase dialog | **Done** — `internal/imageinfo` driver table, one hardware-driven offer |
-| Pin to dated tag / unpin to stream | — | ✅ | **Partial** — the live registry tag listing landed as `internal/registrytags` (ADR-0013); no GUI wiring and no pin operation yet, see Later/ideas |
+| Pin to dated tag / unpin to stream | — | ✅ | **Partial** — the live registry tag listing (`internal/registrytags`, ADR-0013) is read by Recovery's read-only **Published versions** list; no pin operation yet, see Later/ideas |
 | GPU detection | ✅ | ✅ | **Done** — `internal/gpu`, PCI vendor IDs from sysfs |
 | Action journal of privileged operations | — | ✅ | **Done** — `internal/journal`, wired into both privileged dispatch points |
 | Desktop notifications | ✅ `notify-send` | ✅ `GNotification` | **Done** — `internal/notify`, Update All completion only |
@@ -274,11 +274,12 @@ rather than a stub, and which is therefore in the frame.) The row's text and eve
   pagination, its `Content-Type`-only manifest media type, and its
   `MANIFEST_UNKNOWN` 404, and no gated test reaches the network.
 
-  What remains is not a small step and is deliberately not started:
-  - **No GUI wiring.** Nothing calls the package yet, so there is no calendar
-    and no image choice. The issue's "tab or whatever that has rollback
-    features" is still unbuilt, and closing this row means a page (or a group
-    on an existing one), a walkthrough entry, and a `make screenshots` run.
+  What remains is not a small step:
+  - **GUI wiring: landed as a read-only list.** Recovery's **Published
+    versions** row (`internal/views/versions.go`) reads the catalog when the
+    user presses Check and lists one row per day of the running stream,
+    marking the running and rollback days. It offers no image choice yet;
+    choosing is the pin operation below.
   - **No pin operation.** `chairlift-ublue-helper` accepts no image reference
     (ADR-0001), so a pin cannot reuse `channel-switch`. It needs a new
     privileged subcommand whose target the helper derives from a validated
@@ -289,9 +290,9 @@ rather than a stub, and which is therefore in the frame.) The row's text and eve
     spellings of 2026-06-23 in `ghcr.io/ublue-os/bluefin` (`stable-20260623`,
     `44.20260623`, `stable-44.20260623`, `stable-daily-20260623`,
     `stable-daily-44.20260623`, `gts-20260623`, `gts-44.20260623`) resolve to
-    one digest. A calendar that renders one row per tag shows that day seven
-    times; the caller has to group, and deciding *which* spelling to show
-    depends on the booted stream.
+    one digest. `pageview.PublishedVersions` groups them: it keeps only the
+    running stream's spelling (`pageview.CatalogStream`, which also recovers
+    the stream from a pinned dated tag) and one row per day.
 
 ## Open questions
 

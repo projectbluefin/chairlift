@@ -84,6 +84,8 @@ never asks for a reboot.
   the background. Hidden on systems without the unattended-update timer
 - **Roll Back**: return to the previous system image at the next restart,
   shown only when a previous image exists
+- **Published versions**: under Recovery, list the versions of your release
+  stream the image registry still offers from the last 90 days (read-only)
 
 ### 🎨 Livery
 

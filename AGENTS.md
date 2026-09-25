@@ -512,7 +512,12 @@ An agent must not break these:
   exists to avoid. A failed read is returned to the caller, never cached and
   never replaced by a previous answer. `Catalog` caches in process only,
   bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
-  GTK main thread, so it must stay safe for concurrent readers.
+  GTK main thread, so it must stay safe for concurrent readers. Its one
+  caller is the Recovery page's **Published versions** row
+  (`internal/views/versions.go`), which reads only when the user presses
+  Check, lists one row per day of the running stream
+  (`pageview.PublishedVersions` drops other streams' aliases), and removes the
+  last list when a read fails rather than leaving it standing as current.
 - **Agent Mode is one switch on its own page, runs llmman as a user unit,
   and is unprivileged.** It lives on `agents_page`, built by
   `internal/views/agents_page.go`, as that page's single group

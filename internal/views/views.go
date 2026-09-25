@@ -179,6 +179,19 @@ type UserHome struct {
 	changelogStaged   string
 	changelogGate     actionstate.Gate
 
+	// Published versions (the dated-build catalog, ADR-0013), listed on
+	// the Recovery page under Roll Back. runningVersion and
+	// previousVersion are the bootc versions of the booted and rollback
+	// deployments, recorded by loadBootcRollbackStatus.
+	publishedVersionsRow    *adw.ExpanderRow
+	publishedVersionsButton *gtk.Button
+	publishedVersionRows    []*adw.ActionRow
+	publishedVersionsRepo   string
+	publishedVersionsStream string
+	publishedVersionsGate   actionstate.Gate
+	runningVersion          string
+	previousVersion         string
+
 	// Enhanced Troubleshooting (help_page troubleshooting_group)
 	troubleshootRow    *adw.ActionRow
 	troubleshootButton *gtk.Button
