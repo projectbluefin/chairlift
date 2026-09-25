@@ -139,15 +139,14 @@ func FeatureGroupDescription(count int) string {
 	return fmt.Sprintf("%d features available", count)
 }
 
-// HelpResources returns configured Help links in their display order.
+// HelpResources returns configured Help links in their display order with clear action titles.
 func HelpResources(website, issues, chat string) []HelpResource {
 	candidates := []HelpResource{
-		{Title: "Website", URL: website},
-		{Title: "Report a problem", URL: issues},
+		{Title: "Visit project website", URL: website},
+		{Title: "Report a problem on GitHub", URL: issues},
 		// The third slot's config key is "chat" for backward compatibility,
-		// but it points at documentation — title it for where it goes, not
-		// for the key's name.
-		{Title: "Documentation", URL: chat},
+		// but it points at documentation or community discussions.
+		{Title: "Browse documentation", URL: chat},
 	}
 	resources := make([]HelpResource, 0, len(candidates))
 	for _, resource := range candidates {
