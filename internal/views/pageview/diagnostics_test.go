@@ -82,8 +82,8 @@ func TestHelpResourcesHumanActionTitles(t *testing.T) {
 	if resources[0].Title != "Visit project website" {
 		t.Errorf("resources[0].Title = %q, want 'Visit project website'", resources[0].Title)
 	}
-	if resources[1].Title != "Report a problem on GitHub" {
-		t.Errorf("resources[1].Title = %q, want 'Report a problem on GitHub'", resources[1].Title)
+	if resources[1].Title != "Report a problem" {
+		t.Errorf("resources[1].Title = %q, want 'Report a problem'", resources[1].Title)
 	}
 	if resources[2].Title != "Browse documentation" {
 		t.Errorf("resources[2].Title = %q, want 'Browse documentation'", resources[2].Title)

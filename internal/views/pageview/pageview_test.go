@@ -229,7 +229,7 @@ func TestHelpResourcesPreserveConfiguredOrder(t *testing.T) {
 	}
 
 	all := HelpResources("website", "issues", "chat")
-	if len(all) != 3 || all[1] != (HelpResource{Title: "Report a problem on GitHub", URL: "issues"}) {
+	if len(all) != 3 || all[1] != (HelpResource{Title: "Report a problem", URL: "issues"}) {
 		t.Fatalf("HelpResources(all configured) = %#v, want all three resources in display order", all)
 	}
 	if none := HelpResources("", "", ""); len(none) != 0 {

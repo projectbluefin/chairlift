@@ -143,7 +143,7 @@ func FeatureGroupDescription(count int) string {
 func HelpResources(website, issues, chat string) []HelpResource {
 	candidates := []HelpResource{
 		{Title: "Visit project website", URL: website},
-		{Title: "Report a problem on GitHub", URL: issues},
+		{Title: "Report a problem", URL: issues},
 		// The third slot's config key is "chat" for backward compatibility,
 		// but it points at documentation or community discussions.
 		{Title: "Browse documentation", URL: chat},

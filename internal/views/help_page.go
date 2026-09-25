@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/deskenv"
@@ -113,11 +114,11 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 			var diag pageview.DiagnosticsData
 			if info, err := imageinfo.Detect(); err == nil {
 				diag.OSName = info.Name
-				diag.OSVersion = info.Tag
+				diag.OSVersion = info.EffectiveTag()
 				diag.ImageRef = info.Ref
 			}
 			if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
-				diag.Kernel = string(data)
+				diag.Kernel = strings.TrimSpace(string(data))
 			}
 			diag.DesktopEnv = deskenv.Detect().String()
 			diag.GPU = gpu.Detect().Describe()
