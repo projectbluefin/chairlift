@@ -324,7 +324,7 @@ An agent must not break these:
   cover all seven page builders.
 - **Navigation behavior has one authority.** Page order, titles, icons, and
   advertised/registered accelerators live in the pure
-  `internal/navigation` package. It also decides page visibility from static
+  `internal/navigation` package. It also decides route visibility from static
   group configuration: omit a functional page when all of its builder-backed
   groups are disabled, always retain Help, and compact Alt+number over visible
   pages. Mouse activation and window navigation actions must both call
@@ -332,15 +332,30 @@ An agent must not break these:
   transition (visible-row index, visible child, title, and collapsed-layout
   content reveal). The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
-  `internal/window` or `internal/app`. The inventory is seven pages, in this
-  order: Updates, Apps, Agents, Features, Livery, Maintenance, Help. Two
-  details in it are easy to get wrong. The sidebar title for
-  `applications_page` is "Apps", not "Applications" — the page name and the
-  title are separate fields and only `internal/navigation` reconciles them.
-  And there is no System page: "about this computer" belongs to GNOME
-  Settings, which every host running this application already ships, so the
-  system-version readout and the release-channel switch live on Updates,
-  beside the thing that changes them.
+  `internal/window` or `internal/app`. **The inventory holds two kinds of
+  route.** A *primary* is a sidebar destination with a row, an Alt+number, and
+  a shortcuts-dialog entry; there are seven, in this order: Updates, Apps,
+  Agents, Features, Livery, Maintenance, Help. A *detail* is a focused screen
+  reached from the primary named by its `Parent`: it has no row and no
+  accelerator — `Shortcuts` and `Bindings` skip it structurally, so it can
+  never be advertised or registered by accident — and `Resolve` enters it only
+  when its ancestor is visible and the caller both offers and vouches for it,
+  otherwise falling back to that ancestor and then to Help. Recovery is the
+  live detail: a content-stack child of Maintenance, whose row stays selected
+  while it is shown, with `Back` returning there. **A route's configuration
+  identity is never inferred from its display name.** Each route carries
+  page-qualified `Refs`, not a group list under a route-owned page field,
+  because one destination can consume several namespaces at once: Recovery's
+  rollback controls are gated by `bootc_updates_group` on `updates_page` while
+  its reset controls are gated by `reset_group` on `maintenance_page`. Keep
+  those refs page-qualified and keep them held to `config.SchemaPages()` /
+  `config.SchemaGroups(page)` by `internal/installcheck`. Two details in the
+  inventory are easy to get wrong. The sidebar title for `applications_page`
+  is "Apps", not "Applications" — the page name and the title are separate
+  fields and only `internal/navigation` reconciles them. And there is no System
+  page: "about this computer" belongs to GNOME Settings, which every host
+  running this application already ships, so the system-version readout and the
+  release-channel switch live on Updates, beside the thing that changes them.
 - **The host capability floor has one owner.** `internal/capability` is the
   puregotk-free authority for what this host can back a page or group with,
   and its probes are non-blocking only (`exec.LookPath`, `os.Stat`, environment

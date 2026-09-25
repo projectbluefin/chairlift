@@ -31,7 +31,7 @@ internal/views/                 Page builders and event handlers (one file per p
         │                       └── internal/views/pageview/      ┘
         │
         ├── internal/config/    YAML config loading, feature group enablement
-        ├── internal/navigation/ Canonical pages, shortcuts, and pure navigation transitions
+        ├── internal/navigation/ Canonical route inventory (primaries and details), shortcuts, and pure navigation transitions
         ├── internal/capability/ What this host can back a page or group with, from non-blocking probes
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
         ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
@@ -1771,13 +1771,31 @@ Configurable maintenance scripts (from `config.yml` `actions` entries) are execu
 
 `internal/navigation` is the single puregotk-free authority for sidebar page
 order, titles, icons, advertised shortcuts, registered accelerators, and the
-complete page-selection transition. Its item metadata also maps every page to
-the groups that actually build content. `navigation.VisibleItems` filters that
-inventory using `Config.IsGroupEnabled`, always retains Help, and assigns
-compacted Alt+number keys. `internal/window` uses the result for its sidebar,
-stack, actions, initial selection, and shortcuts dialog. After construction,
-`internal/app` registers `navigation.Bindings(window.NavigationItems())`, so
-the registered and advertised keys use the exact same visible inventory.
+complete page-selection transition. Its canonical inventory is one table of
+routes, each carrying a `Kind` and a page-qualified `Refs` list that names the
+configuration namespaces whose groups build it. `navigation.VisibleItems`
+filters that inventory using `Config.IsGroupEnabled`, always retains Help, and
+assigns compacted Alt+number keys. `internal/window` uses the result for its
+sidebar, stack, actions, initial selection, and shortcuts dialog. After
+construction, `internal/app` registers `navigation.Bindings(window.NavigationItems())`,
+so the registered and advertised keys use the exact same visible inventory.
+
+The inventory holds two kinds of route. A **primary** is a sidebar
+destination: it has a row, an Alt+number, and a shortcuts-dialog entry, and its
+`Refs` are the groups that make it worth showing. A **detail** is a focused
+screen reached from the primary that owns it — `Parent` names that primary, no
+`Refs` entry of a detail is inferred from its display name, and it acquires
+neither a row nor an accelerator: `Shortcuts` and `Bindings` skip it
+structurally, so a detail can never be advertised or registered by accident.
+Recovery is the live detail. It is a content-stack child of Maintenance, whose
+row stays selected while it is shown, and it draws on two configuration
+namespaces at once — `bootc_updates_group` on `updates_page` for its rollback
+controls and `reset_group` on `maintenance_page` for its reset controls — which
+is why a route's refs are `{Page, Group}` pairs rather than one page field per
+route. `navigation.VisibleRoutes` returns the visible primaries followed by the
+details whose own refs are enabled and whose ancestor is itself visible; a
+detail whose ancestor has no row has nowhere to return to, so `Resolve` falls
+back rather than entering it.
 
 The accelerators are:
 
@@ -1790,16 +1808,21 @@ The accelerators are:
 
 Mouse row activation and keyboard navigation actions both call
 `Window.navigateToPage`. That method calls `navigation.Resolve` against the
-visible inventory, rejects an omitted or unconstructed page, then applies all
-four successful outcomes: select the compacted sidebar row, set the stack's
-visible child, update the content-page title, and set
+visible inventory, rejects an omitted or unconstructed route, and enters a
+primary by applying all four of its state changes: select the compacted sidebar
+row, set the stack's visible child, update the content-page title, and set
 `NavigationSplitView.show-content` true so a collapsed layout reveals the
-destination. `internal/navigation` tests every functional page with all of its
-groups disabled, each builder-backed group individually enabled, the Help-only
-fallback, compacted indices/accelerators, unavailable and unknown rejection,
-the complete advertised-to-registered shortcut inventory, the F1 Help
-binding, and static app/window wiring. No `_test.go` is added to the
-puregotk-importing `internal/window` or `internal/app` packages.
+destination. A detail resolves to its ancestor's row index with its own title,
+its own child name, and the ancestor its Back control returns to; a detail the
+caller did not offer resolves to that ancestor and, failing that, to Help, and
+no fallback can reveal a screen or fire a control the user cannot see, because a
+`Transition` carries only the state a window applies. `internal/navigation` tests
+every functional page with all of its groups disabled, each builder-backed group
+individually enabled, the Help-only fallback, compacted indices/accelerators,
+unavailable and unknown rejection, the complete advertised-to-registered
+shortcut inventory, the F1 Help binding, and static app/window wiring. No
+`_test.go` is added to the puregotk-importing `internal/window` or `internal/app`
+packages.
 
 Note: `GtkShortcutsWindow` is not available in puregotk, so a custom `adw.Window` with `adw.PreferencesGroup` rows is used for the shortcuts dialog.
 

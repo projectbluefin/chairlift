@@ -1097,16 +1097,31 @@ exist so `yaml.Unmarshal` has somewhere to put these values, and the
 negative controls (dropping a per-format entry, adding a base-level list,
 adding a dependency to the integration package) each turn the test red.
 
-Two further gates in `navigationschema_test.go` close the page/group contract's
-last unenforced edge. `internal/config` owns the page/group grammar — it derives
-it by reflection from `Config`'s yaml tags and `defaultConfig()` and publishes it
-as `config.SchemaPages()` / `config.SchemaGroups(page)` — while
-`internal/navigation` restates the same grammar as the `ConfigPage` and `Groups`
-fields of its sidebar inventory. **`TestNavigationPagesMatchConfigSchema`** holds
-`navigation.Items()[].ConfigPage` and `config.SchemaPages()` to a bijection,
-rejecting an empty or duplicated `ConfigPage` claim; **`TestNavigationGroupsMatchConfigSchema`**
-holds each item's `Groups` to `config.SchemaGroups(item.ConfigPage)` as per-page
-set equality. Both compare sets, not order: `config.SchemaGroups` sorts its
+Three gates in `navigationschema_test.go` close the page/group contract's last
+unenforced edge. `internal/config` owns the page/group grammar — it derives it
+by reflection from `Config`'s yaml tags and `defaultConfig()` and publishes it as
+`config.SchemaPages()` / `config.SchemaGroups(page)` — while `internal/navigation`
+restates the same grammar as the `Refs` of its canonical route inventory. A `Ref`
+is **page-qualified** — a `{Page, Group}` pair rather than a group under a
+route-owned page field — because one rendered destination can consume several
+configuration namespaces at once. The live case is the Recovery detail, whose
+rollback controls are gated by `bootc_updates_group` on `updates_page` while its
+reset controls are gated by `reset_group` on `maintenance_page`; a single page
+field per route could not express that pair, and the alternative of inferring a
+route's page from its display name is exactly the assumption the page-qualified
+ref retires. **`TestNavigationPagesMatchConfigSchema`** holds the distinct config
+pages the sidebar inventory consumes to `config.SchemaPages()` as a bijection,
+rejecting an unqualified or undeclared ref and two primaries claiming one config
+page; it deduplicates a single route's own repeated page first, because one route
+consuming several groups on one page is the normal case and only two *different*
+routes claiming one page is drift. **`TestNavigationGroupsMatchConfigSchema`**
+holds the union of groups the inventory claims per page to
+`config.SchemaGroups(page)` as set equality, rejecting a group claimed twice.
+**`TestEveryNavigationRefNamesADeclaredGroup`** extends both checks to the detail
+routes — it is the cross-namespace edge, so a detail that drew a group from the
+wrong namespace fails here rather than silently gating itself on a pair nothing
+else recognizes — and refuses to pass vacuously while the inventory declares no
+detail at all. All three compare sets, not order: `config.SchemaGroups` sorts its
 result, while navigation's slices carry sidebar presentation order, which is
 navigation's own concern.
 

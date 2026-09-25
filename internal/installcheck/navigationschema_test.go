@@ -16,8 +16,8 @@ import (
 // already hold CONFIG.md and docs/walkthrough.md to it.
 //
 // internal/navigation restates that same grammar a second time, as the
-// ConfigPage and Groups fields of its canonical sidebar inventory, and the
-// views builders are held to *navigation's* copy by
+// configuration refs of its canonical route inventory, and the views builders
+// are held to *navigation's* copy by
 // navigation.TestPageMetadataMatchesViewBuilders. Nothing held navigation's
 // copy to the owner, so the two halves of the contract could diverge in
 // either direction with every gate still green:
@@ -33,9 +33,18 @@ import (
 //     name unknown to config.SchemaGroups and fails closed — disabling
 //     every configurable group until the file is fixed.
 //
-// These tests close that edge. They assert set equality, not order:
-// config.SchemaGroups sorts its result, while navigation's slices are in
-// sidebar presentation order, which is navigation's own concern.
+// These tests close that edge. A route's refs are page-qualified — the shape
+// that lets one destination consume several namespaces, which is how the
+// Recovery detail draws rollback controls from updates_page and reset
+// controls from maintenance_page — so the page comparison and the group
+// comparison are made per (page, group) pair rather than through one page
+// field per route. The two drift directions above are still checked in both
+// directions; what the inventory no longer claims is that each route maps to
+// exactly one configuration page.
+//
+// These tests assert set equality, not order: config.SchemaGroups sorts its
+// result, while navigation's slices are in sidebar presentation order, which
+// is navigation's own concern.
 
 // sortedNames returns a freshly allocated, lexicographically sorted copy of
 // values, so comparing two inventories never mutates either one.
@@ -45,10 +54,15 @@ func sortedNames(values []string) []string {
 	return result
 }
 
-// TestNavigationPagesMatchConfigSchema holds navigation's ConfigPage values
-// and config.SchemaPages() to a bijection: every configurable page is
-// reachable from the sidebar, and every sidebar entry names a page the
-// schema actually declares.
+// refKey renders one configuration ref for messages.
+func refKey(ref navigation.Ref) string {
+	return ref.Page + "/" + ref.Group
+}
+
+// TestNavigationPagesMatchConfigSchema holds the pages navigation's sidebar
+// inventory consumes and config.SchemaPages() to a bijection: every
+// configurable page is reachable from the sidebar, and every sidebar entry
+// names pages the schema actually declares.
 func TestNavigationPagesMatchConfigSchema(t *testing.T) {
 	schemaPages, err := config.SchemaPages()
 	if err != nil {
@@ -63,64 +77,169 @@ func TestNavigationPagesMatchConfigSchema(t *testing.T) {
 		t.Fatal("navigation.Items() is empty: the gate would be vacuous")
 	}
 
+	declared := make(map[string]bool, len(schemaPages))
+	for _, page := range schemaPages {
+		declared[page] = true
+	}
+
 	navPages := make([]string, 0, len(items))
 	seen := make(map[string]string, len(items))
 	for _, item := range items {
-		if item.ConfigPage == "" {
-			t.Errorf("navigation page %q declares no ConfigPage", item.Name)
+		if len(item.Refs) == 0 {
+			t.Errorf("navigation page %q consumes no configuration ref", item.Name)
 			continue
 		}
-		if previous, dup := seen[item.ConfigPage]; dup {
-			t.Errorf(
-				"navigation pages %q and %q both claim config page %q",
-				previous, item.Name, item.ConfigPage,
-			)
-			continue
+		// One route consumes several groups on one page, so its own refs
+		// repeat that page. Deduplicate within the route before comparing
+		// routes: two *different* pages claiming one configuration page is
+		// the drift this gate exists to catch.
+		pages := make([]string, 0, len(item.Refs))
+		own := make(map[string]bool, len(item.Refs))
+		for _, ref := range item.Refs {
+			if ref.Page == "" {
+				t.Errorf("navigation page %q declares an unqualified ref %q", item.Name, ref.Group)
+				continue
+			}
+			if !declared[ref.Page] {
+				t.Errorf(
+					"navigation page %q consumes %q, which config.SchemaPages() does not declare",
+					item.Name, ref.Page,
+				)
+				continue
+			}
+			if own[ref.Page] {
+				continue
+			}
+			own[ref.Page] = true
+			pages = append(pages, ref.Page)
 		}
-		seen[item.ConfigPage] = item.Name
-		navPages = append(navPages, item.ConfigPage)
+		for _, page := range pages {
+			if previous, dup := seen[page]; dup {
+				t.Errorf(
+					"navigation pages %q and %q both consume config page %q",
+					previous, item.Name, page,
+				)
+				continue
+			}
+			seen[page] = item.Name
+			navPages = append(navPages, page)
+		}
 	}
 
 	want := sortedNames(schemaPages)
 	got := sortedNames(navPages)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf(
-			"navigation ConfigPage inventory = %v, config.SchemaPages() = %v",
+			"navigation consumes config pages %v, config.SchemaPages() = %v",
 			got, want,
 		)
 	}
 }
 
-// TestNavigationGroupsMatchConfigSchema holds every navigation page's Groups
-// slice to the group names config declares for that page, so a group cannot
-// be added to or removed from one side alone.
+// TestNavigationGroupsMatchConfigSchema holds the groups navigation's sidebar
+// inventory consumes to the group names config declares for those pages, so a
+// group cannot be added to or removed from one side alone. Every group of
+// every page the inventory consumes must be claimed by exactly one entry: a
+// group no route names is a feature that cannot make its page appear, and a
+// group no page declares is one an administrator cannot switch off.
 func TestNavigationGroupsMatchConfigSchema(t *testing.T) {
 	items := navigation.Items()
 	if len(items) == 0 {
 		t.Fatal("navigation.Items() is empty: the gate would be vacuous")
 	}
 
+	claimed := make(map[string]map[string]bool)
 	for _, item := range items {
-		t.Run(item.Name, func(t *testing.T) {
-			schemaGroups, err := config.SchemaGroups(item.ConfigPage)
+		for _, ref := range item.Refs {
+			groups, ok := claimed[ref.Page]
+			if !ok {
+				groups = make(map[string]bool)
+				claimed[ref.Page] = groups
+			}
+			if groups[ref.Group] {
+				t.Errorf("navigation claims %s twice", refKey(ref))
+			}
+			groups[ref.Group] = true
+		}
+	}
+
+	for _, page := range sortedNames(pagesOf(claimed)) {
+		t.Run(page, func(t *testing.T) {
+			schemaGroups, err := config.SchemaGroups(page)
 			if err != nil {
-				t.Fatalf("config.SchemaGroups(%q): %v", item.ConfigPage, err)
+				t.Fatalf("config.SchemaGroups(%q): %v", page, err)
 			}
 			if len(schemaGroups) == 0 {
-				t.Fatalf(
-					"config declares no groups for %q: the gate would be vacuous",
-					item.ConfigPage,
-				)
+				t.Fatalf("config declares no groups for %q: the gate would be vacuous", page)
 			}
 
 			want := sortedNames(schemaGroups)
-			got := sortedNames(item.Groups)
+			got := sortedNames(keysOf(claimed[page]))
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf(
 					"navigation groups for %q = %v, config.SchemaGroups(%q) = %v",
-					item.Name, got, item.ConfigPage, want,
+					page, got, page, want,
 				)
 			}
 		})
 	}
+}
+
+// TestEveryNavigationRefNamesADeclaredGroup holds every ref of every route —
+// primaries and details alike — to the schema. It is the cross-namespace
+// edge: a detail's ref must name the page the group is actually declared on,
+// so a route that drew a group from the wrong namespace fails here instead of
+// silently gating itself on a pair nothing else recognizes.
+func TestEveryNavigationRefNamesADeclaredGroup(t *testing.T) {
+	routes := append(navigation.Items(), navigation.Details()...)
+	if len(routes) == 0 {
+		t.Fatal("navigation declares no routes: the gate would be vacuous")
+	}
+	if len(navigation.Details()) == 0 {
+		t.Fatal("navigation declares no detail routes: the cross-namespace case is untested")
+	}
+
+	for _, route := range routes {
+		t.Run(route.Name, func(t *testing.T) {
+			if len(route.Refs) == 0 {
+				t.Fatalf("route %q consumes no configuration ref", route.Name)
+			}
+			for _, ref := range route.Refs {
+				schemaGroups, err := config.SchemaGroups(ref.Page)
+				if err != nil {
+					t.Errorf("route %q consumes %s: %v", route.Name, refKey(ref), err)
+					continue
+				}
+				found := false
+				for _, group := range schemaGroups {
+					if group == ref.Group {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf(
+						"route %q consumes %s, which config does not declare on %q",
+						route.Name, refKey(ref), ref.Page,
+					)
+				}
+			}
+		})
+	}
+}
+
+func pagesOf(claimed map[string]map[string]bool) []string {
+	pages := make([]string, 0, len(claimed))
+	for page := range claimed {
+		pages = append(pages, page)
+	}
+	return pages
+}
+
+func keysOf(groups map[string]bool) []string {
+	names := make([]string, 0, len(groups))
+	for group := range groups {
+		names = append(names, group)
+	}
+	return names
 }
