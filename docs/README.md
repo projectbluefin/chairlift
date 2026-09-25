@@ -85,6 +85,11 @@ are listed in [org-adrs.md](org-adrs.md).
   — printer application administration is denied until authenticated: PAPPL
   serves web admin and IPP on one listener, so the boundary is authorization
   (authenticated or absent web admin), not loopback binding
+- [adr/0017-pin-through-a-validated-day-word.md](adr/0017-pin-through-a-validated-day-word.md)
+  — a pin is a `bootc switch` to a dated build named by the helper from a
+  validated `YYYYMMDD` word plus the booted stream and `internal/imageinfo`'s
+  table; two new ublue actions (`pin`, `unpin`), and the registry confirms the
+  derived reference exists before anything is staged
 
 ### Design
 
