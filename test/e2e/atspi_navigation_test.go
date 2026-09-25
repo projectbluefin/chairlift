@@ -235,14 +235,20 @@ func TestATSPINavigationTree(t *testing.T) {
 	cmd.Stdout = output
 	cmd.Stderr = output
 
-	runErr := runWithTimeout(cmd, atspiTimeout)
-	// Drain before any Fatalf: the TempDir removal registered above runs as
-	// soon as the test returns.
-	if err := awaitSessionExit(hostDrain(), cmd.Process.Pid, shutdownTimeout, drainTimeout); err != nil {
-		t.Errorf("AT-SPI probe session %d: %v", cmd.Process.Pid, err)
-	}
-	if runErr != nil {
-		t.Fatalf("AT-SPI navigation probe failed: %v\n%s\n%s", runErr, output.String(), atspiLogs(outDir))
+	// Cleanups run last-registered-first, so this drain runs before Go
+	// removes the TempDir registered above, on every exit path including
+	// t.Fatal and the timeout below.
+	t.Cleanup(func() {
+		if cmd.Process == nil {
+			return
+		}
+		if err := awaitSessionExit(hostDrain(), cmd.Process.Pid, shutdownTimeout, drainTimeout); err != nil {
+			t.Errorf("AT-SPI probe session %d: %v", cmd.Process.Pid, err)
+		}
+	})
+
+	if err := runWithTimeout(cmd, atspiTimeout); err != nil {
+		t.Fatalf("AT-SPI navigation probe failed: %v\n%s\n%s", err, output.String(), atspiLogs(outDir))
 	}
 
 	raw, err := os.ReadFile(filepath.Join(outDir, "atspi-results.txt"))
@@ -356,7 +362,15 @@ func atspiLogs(outDir string) string {
 	return builder.String()
 }
 
+// runWithTimeout runs cmd to completion or kills it after timeout. For a
+// command started in its own session (Setsid), the kill covers the whole
+// process group, not just the leader. WaitDelay bounds Wait even if a
+// descendant outside that group still holds the captured output pipes;
+// callers drain the session with awaitSessionExit afterwards.
 func runWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
+	if cmd.WaitDelay == 0 {
+		cmd.WaitDelay = shutdownTimeout
+	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s: %w", cmd.Path, err)
 	}
@@ -367,7 +381,11 @@ func runWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
 	case err := <-done:
 		return err
 	case <-time.After(timeout):
-		_ = cmd.Process.Kill()
+		if cmd.SysProcAttr != nil && cmd.SysProcAttr.Setsid {
+			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		} else {
+			_ = cmd.Process.Kill()
+		}
 		<-done
 		return fmt.Errorf("%s did not finish within %s", cmd.Path, timeout)
 	}
