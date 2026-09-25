@@ -1085,3 +1085,33 @@ func TestDryRunDoesNotTouchTheShell(t *testing.T) {
 		t.Error("dry-run created the applications directory")
 	}
 }
+
+// TestPanelAvailableRespectsDesktopEnvironment asserts that top-bar panel
+// customization is omitted on non-GNOME desktops such as KDE Plasma.
+func TestPanelAvailableRespectsDesktopEnvironment(t *testing.T) {
+	origDetect := detectDesktop
+	t.Cleanup(func() { detectDesktop = origDetect })
+
+	// On KDE Plasma, PanelAvailable must return false immediately without checking gsettings.
+	detectDesktop = func() deskenv.Desktop { return deskenv.KDE }
+	if PanelAvailable(context.Background()) {
+		t.Error("PanelAvailable() returned true on KDE Plasma, want false")
+	}
+
+	// On Unknown desktop, surfaceFor falls back to GNOME's table, but gsettings
+	// will fail without the extension responding.
+	detectDesktop = func() deskenv.Desktop { return deskenv.Unknown }
+	fakeNoExt := newFakeCommands(t)
+	fakeNoExt.fail["gsettings get"] = errors.New("extension missing")
+	if PanelAvailable(context.Background()) {
+		t.Error("PanelAvailable() returned true on Unknown desktop with missing extension, want false")
+	}
+
+	// On GNOME with working gsettings, PanelAvailable reports extension availability.
+	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
+	fake := newFakeCommands(t)
+	fake.reply["gsettings get "+extensionSchema+" "+extensionIconKey] = "'ublue-logo-symbolic'"
+	if !PanelAvailable(context.Background()) {
+		t.Error("PanelAvailable() returned false on GNOME with extension present, want true")
+	}
+}

@@ -868,7 +868,13 @@ func CapturePanelOverrides(ctx context.Context) (icon, mode string, ok bool) {
 }
 
 // PanelAvailable reports whether the panel mark can be set on this host.
+// On desktops that do not support the panel surface (such as KDE Plasma),
+// customization is omitted. On desktops supporting it (e.g. GNOME),
+// the Custom Command Menu extension must also be installed and responding.
 func PanelAvailable(ctx context.Context) bool {
+	if !surfaceSupported(Panel, detectDesktop()) {
+		return false
+	}
 	_, err := gsettingsGet(ctx, extensionSchema, extensionIconKey)
 	return err == nil
 }

@@ -61,8 +61,8 @@ Runtime visibility depends on the group:
   but fails reports the failure in its row;
 - Features hides its optional-features group when Updex lists none, and keeps
   it with an error description when the listing fails;
-- Livery hides its top-bar section when the Custom Command Menu extension is
-  not installed;
+- Livery hides its top-bar section on KDE Plasma or when the Custom Command
+  Menu extension is not installed;
 - Maintenance's "Free up space" action is always shown. Which package
   managers are installed is the cleanup runner's business, not something a
   user should have to learn from a group appearing or disappearing.

@@ -136,7 +136,7 @@ authorization rule.
 |-------|-----|-------------|
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork; downloaded only when picked and set only on Apply, through AccountsService with a face-file fallback |
 | App Grid Livery | `livery_app_grid_group` | The Show Applications mark, fetched from simpleicons.org by brand name; set once, never rotated |
-| Foundational Livery | `livery_foundation_group` | The top-bar menu mark, optionally advancing at each login; needs the Custom Command Menu GNOME extension |
+| Foundational Livery | `livery_foundation_group` | The top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
 | Dock Livery | `livery_dock_group` | The Files application icon, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; changes Files everywhere GNOME draws it |
 
 Selections persist in the `io.projectbluefin.chairlift.livery` GSettings
