@@ -52,7 +52,8 @@ documents remain authoritative for cross-repository policy.
 - [grep-acceptance](grep-acceptance/SKILL.md) — account for subtests and
   cross-chunk conflicts in grep-based criteria.
 - [gtk-headless-testing](gtk-headless-testing/SKILL.md) — keep tests out of
-  packages that load GTK through puregotk.
+  packages that load GTK through puregotk; run AT-SPI probes under the E2E
+  harness.
 - [helper-test-surface](helper-test-surface/SKILL.md) — call added helpers
   directly from tests when required.
 - [leaf-package-documentation](leaf-package-documentation/SKILL.md) —

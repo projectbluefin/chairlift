@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
-description: Use when deciding where tests can run without puregotk or GTK libraries.
-version: 1.0.0
-last_updated: 2026-09-19
+description: Use when deciding where tests can run without puregotk or GTK libraries, or when an AT-SPI probe fails under the E2E harness.
+version: 1.1.0
+last_updated: 2026-09-25
 tags:
   - testing
   - gtk
@@ -85,3 +85,27 @@ it belongs here, not in a GTK test binary.
 `internal/views` passed locally (linuxbrew had graphene) but panicked on CI at
 graphene load, failing the Unit Tests and Race jobs. Fixed by extracting the
 pure message to `internal/views/trustmsg` and removing the views-package test.
+
+## AT-SPI probes under the E2E harness
+
+**When it applies:** Adding or changing a test that reads ChairLift through
+the accessibility tree (`test/e2e/atspi_probe.py`, dogtail, pyatspi).
+
+- **dogtail exits at import unless its check is off.** `dogtail.tree` calls
+  `checkForA11y()` on import, which reads `toolkit-accessibility` through
+  GSettings. The harness sets `GSETTINGS_BACKEND=memory`, so the key is always
+  false and dogtail exits 1, printing only to **stdout**, so the probe's stderr
+  log is empty. Set `dogtail.config.config.checkForA11y = False` before
+  importing `dogtail.tree`; the app publishes through `GTK_A11Y=atspi`
+  regardless of that key.
+- **Drain the session the app ran in.** Startup reads Homebrew, and brew
+  workers outlive the script and write into the temporary HOME, so
+  `t.TempDir` cleanup fails with `directory not empty`. Start the script with
+  `Setsid` and register `awaitSessionExit` as a `t.Cleanup` so it runs on every
+  exit path, including timeouts, before the TempDir removal.
+- **A skipping gate proves nothing.** `requireATSPIStack` skips when the
+  runtime is absent. Until the E2E job installed it, the suite skipped in CI,
+  and a real failure on `main` (the Updates header never named its page) went
+  unnoticed.
+
+**Learned from:** #366/#375, turning the AT-SPI navigation suite on in CI.
