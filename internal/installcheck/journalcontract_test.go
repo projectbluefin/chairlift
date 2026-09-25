@@ -85,6 +85,7 @@ var privilegedExecSites = []privilegedExecSite{
 // The comment on each entry is the command word that makes it unprivileged.
 var unprivilegedExecSites = []execSite{
 	{File: "internal/aistack/aistack.go", Func: "execCommand"},                // systemctl --user / llmman / dbus-update-activation-environment
+	{File: "internal/aistack/peers.go", Func: "defaultRunSecretConfigSet"},    // llmman config set aggregation.api_key (unprivileged, user-scope)
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                   // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},      // systemctl (query)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                  // bootc status (read-only)

@@ -14,6 +14,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 // buildAgentsPage builds the Agents page: one switch that turns Agent Mode —
@@ -83,6 +84,8 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	}
 	group.Add(&details.Widget)
 	page.Add(group)
+
+	uh.buildPeersGroup(page)
 
 	if facts.UnitPresent {
 		go func() {
@@ -171,3 +174,248 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 // agentModeReadyWait bounds how long an enable waits for the daemon to
 // answer before reporting it degraded.
 const agentModeReadyWait = time.Minute
+
+// buildPeersGroup builds "Use another machine": the list of already-
+// configured llmman peers this host may route requests to, plus the shared
+// key sent to an authenticated one. It is built unconditionally alongside
+// the Agent Mode switch — offload is configured independently of whether
+// this host's own daemon is currently on, since a disabled local daemon can
+// still forward through llmman once turned on.
+func (uh *UserHome) buildPeersGroup(page *adw.PreferencesPage) {
+	group := adw.NewPreferencesGroup()
+	group.SetTitle(pageview.PeersGroupTitle())
+	group.SetDescription(pageview.PeersGroupDescription())
+	uh.peersGroup = group
+
+	addRow := adw.NewActionRow()
+	addRow.SetTitle(pageview.PeersAddRowTitle())
+	addRow.SetActivatable(true)
+	addIcon := gtk.NewImageFromIconName("list-add-symbolic")
+	addRow.AddSuffix(&addIcon.Widget)
+	addActivated := func(_ adw.ActionRow) { uh.presentAddPeerDialog() }
+	addRow.ConnectActivated(&addActivated)
+	group.Add(&addRow.Widget)
+
+	keyRow := adw.NewPasswordEntryRow()
+	keyRow.SetTitle(pageview.PeersAPIKeyRowTitle())
+	uh.peersKeyEntry = keyRow
+	keyApply := func(_ adw.EntryRow) { uh.savePeerAPIKey() }
+	keyRow.ConnectApply(&keyApply)
+	group.Add(&keyRow.Widget)
+
+	empty := adw.NewActionRow()
+	empty.SetTitle(pageview.PeersEmptyRowTitle())
+	empty.SetSensitive(false)
+	uh.peersEmptyRow = empty
+
+	page.Add(group)
+	uh.refreshPeersList()
+}
+
+// refreshPeersList rebuilds the peer rows from disk and kicks off a status
+// probe for each. Safe to call repeatedly; it removes every row it
+// previously added before re-adding the current set. Main thread only.
+func (uh *UserHome) refreshPeersList() {
+	group := uh.peersGroup
+	if group == nil {
+		return
+	}
+	for _, row := range uh.peersListRows {
+		group.Remove(&row.Widget)
+	}
+	uh.peersListRows = nil
+	group.Remove(&uh.peersEmptyRow.Widget)
+
+	peers, err := aistack.Peers()
+	if err != nil {
+		log.Printf("views: listing agent mode peers: %v", err)
+	}
+	if len(peers) == 0 {
+		group.Add(&uh.peersEmptyRow.Widget)
+		return
+	}
+
+	for _, peer := range peers {
+		address := peer.Address
+		row := adw.NewActionRow()
+		row.SetTitle(address)
+		row.SetSubtitle(pageview.PeerStatusSubtitle(false, aistack.PeerStatus{}))
+
+		// newGuardedSwitch, not a bare gtk.Switch: without it, a revert of
+		// this row's own optimistic state (refreshPeersList rebuilding from
+		// the store after a failed toggle) would re-enter ::state-set and
+		// fire setPeerEnabled a second time for the same click.
+		enabledSwitch := newGuardedSwitch(peer.Enabled, func(state bool) {
+			uh.setPeerEnabled(address, state)
+		})
+		row.AddSuffix(&enabledSwitch.widget.Widget)
+
+		removeBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
+		removeBtn.SetValign(gtk.AlignCenterValue)
+		removeBtn.AddCssClass("flat")
+		removeClicked := func(_ gtk.Button) { uh.confirmRemovePeer(address) }
+		removeBtn.ConnectClicked(&removeClicked)
+		row.AddSuffix(&removeBtn.Widget)
+
+		group.Add(&row.Widget)
+		uh.peersListRows = append(uh.peersListRows, row)
+
+		go func(address string, row *adw.ActionRow) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			status := aistack.ProbePeer(ctx, address, uh.peerAPIKeyForProbe())
+			sgtk.RunOnMainThread(func() {
+				row.SetSubtitle(pageview.PeerStatusSubtitle(true, status))
+			})
+		}(address, row)
+	}
+}
+
+// peerAPIKeyForProbe returns the key most recently entered in this session,
+// if any. ChairLift never reads a stored key back from llmman, so a probe
+// after restart is unauthenticated unless the key is re-entered; that
+// matches ADR-0015's "never read back" rule for this one credential.
+func (uh *UserHome) peerAPIKeyForProbe() string {
+	if uh.peersKeyEntry == nil {
+		return ""
+	}
+	return uh.peersKeyEntry.GetText()
+}
+
+// presentAddPeerDialog opens the add-peer prompt. Built fresh each time:
+// unlike the Agent Mode switch, this dialog carries no long-lived state
+// that a rebuilt callback slot would orphan mid-flight, and rebuilding
+// avoids stale text left over from a previous, cancelled attempt.
+func (uh *UserHome) presentAddPeerDialog() {
+	dialog := adw.NewAlertDialog(pageview.PeerAddDialogTitle(), pageview.PeerAddDialogBody())
+	entry := adw.NewEntryRow()
+	entry.SetTitle(pageview.PeerAddDialogPlaceholder())
+	dialog.SetExtraChild(&entry.Widget)
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("add", "Add")
+	dialog.SetResponseAppearance("add", adw.ResponseSuggestedValue)
+	uh.peersAddDialog, uh.peersAddEntry = dialog, entry
+
+	responseCb := func(_ adw.AlertDialog, response string) {
+		if response != "add" {
+			return
+		}
+		uh.addPeer(entry.GetText())
+	}
+	dialog.ConnectResponse(&responseCb)
+	dialog.Present(&uh.agentsPrefsPage.Widget)
+}
+
+// addPeer validates and adds one peer off the main thread, then refreshes
+// the list. A rejected address or a failed llmman config command surfaces
+// as a toast naming the reason; neither leaves a partial row behind.
+func (uh *UserHome) addPeer(address string) {
+	if !uh.peersMutateGate.TryStart() {
+		return
+	}
+	go func() {
+		defer uh.peersMutateGate.Reset()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := aistack.AddPeer(ctx, address)
+		sgtk.RunOnMainThread(func() {
+			if err != nil {
+				log.Printf("views: adding agent mode peer: %v", err)
+				uh.toastAdder.ShowErrorToast(pageview.PeerAddFailedToast(err.Error()))
+				return
+			}
+			uh.refreshPeersList()
+		})
+	}()
+}
+
+// confirmRemovePeer asks before removing a configured peer; removal is
+// reversible only by re-adding the address, so it is treated like the
+// destructive actions elsewhere in the app.
+func (uh *UserHome) confirmRemovePeer(address string) {
+	dialog := adw.NewAlertDialog(pageview.PeerRemoveConfirmTitle(address), pageview.PeerRemoveConfirmBody())
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("remove", "Remove")
+	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
+	responseCb := func(_ adw.AlertDialog, response string) {
+		if response != "remove" {
+			return
+		}
+		uh.removePeer(address)
+	}
+	dialog.ConnectResponse(&responseCb)
+	dialog.Present(&uh.agentsPrefsPage.Widget)
+}
+
+func (uh *UserHome) removePeer(address string) {
+	if !uh.peersMutateGate.TryStart() {
+		return
+	}
+	go func() {
+		defer uh.peersMutateGate.Reset()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := aistack.RemovePeer(ctx, address)
+		sgtk.RunOnMainThread(func() {
+			if err != nil {
+				log.Printf("views: removing agent mode peer: %v", err)
+				uh.toastAdder.ShowErrorToast(pageview.PeerRemoveFailedToast(err.Error()))
+				return
+			}
+			uh.refreshPeersList()
+		})
+	}()
+}
+
+// setPeerEnabled turns one peer on or off. The switch already shows the
+// requested state optimistically via GTK's own state-set handling; a
+// failure here is corrected by refreshPeersList rebuilding from the store's
+// real contents.
+func (uh *UserHome) setPeerEnabled(address string, enabled bool) {
+	if !uh.peersMutateGate.TryStart() {
+		return
+	}
+	go func() {
+		defer uh.peersMutateGate.Reset()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := aistack.SetPeerEnabled(ctx, address, enabled)
+		sgtk.RunOnMainThread(func() {
+			if err != nil {
+				log.Printf("views: setting agent mode peer %s enabled=%v: %v", address, enabled, err)
+				verb := "enable"
+				if !enabled {
+					verb = "disable"
+				}
+				uh.toastAdder.ShowErrorToast(pageview.PeerAddFailedToast(verb + ": " + err.Error()))
+			}
+			uh.refreshPeersList()
+		})
+	}()
+}
+
+// savePeerAPIKey sends the shared credential to llmman's own configuration
+// and clears the field. The key is never stored by ChairLift and never
+// logged; only success or failure is reported.
+func (uh *UserHome) savePeerAPIKey() {
+	if uh.peersKeyEntry == nil {
+		return
+	}
+	key := uh.peersKeyEntry.GetText()
+	if key == "" {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err := aistack.SetPeerAPIKey(ctx, key)
+		sgtk.RunOnMainThread(func() {
+			if err != nil {
+				log.Printf("views: saving agent mode peer key: %v", err)
+				uh.toastAdder.ShowErrorToast(pageview.PeerKeyFailedToast(err.Error()))
+				return
+			}
+			uh.toastAdder.ShowToast(pageview.PeerKeySavedToast())
+		})
+	}()
+}

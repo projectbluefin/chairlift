@@ -1600,6 +1600,31 @@ both files stay and the UI says the service is still running. Binaries, Jan,
 and models are never removed. Nothing is privileged, so there is no helper
 subcommand and no PolicyKit action.
 
+**Peer offload ("Use another machine", issue #260).** `internal/aistack`'s
+`peers.go` exposes llmman's asymmetric aggregation as a one-way client
+feature: this host may route requests to an already-configured llmman on
+another machine, but the local daemon stays bound to `127.0.0.1:17434` and
+nothing here advertises it or opens a firewall. `ParsePeerAddress` validates
+llmman's documented `[scheme://]host[:port]` grammar (only `http`/`https`,
+no embedded credentials, no path/query/fragment) before anything is stored
+or applied. `AddPeer`, `RemovePeer`, and `SetPeerEnabled` maintain a small
+ChairLift-owned JSON list at `~/.local/share/chairlift/agent-mode-peers.json`
+(addresses and an enabled flag only, never a credential) and, before
+persisting, apply the enabled subset to llmman itself via
+`llmman config set aggregation.peers`, so a failed config command leaves
+both sides unchanged. The one shared client credential used to authenticate
+outgoing requests to a peer is written only through
+`llmman config set aggregation.api_key` (`SetPeerAPIKey`) and is never read
+back, logged, or redisplayed. `ProbePeer` performs one bounded (3s) GET of a
+peer's `/llmman/node` carrying that key as a bearer credential; a timeout or
+connection failure is reported unreachable rather than as an empty answer,
+a `401` is reported distinctly, and the key never appears in a returned
+error. The Agents page's "Use another machine" group (`buildPeersGroup` in
+`internal/views/agents_page.go`) lists configured peers with an enable
+switch and remove action, an add-peer dialog, and the shared key field, and
+states that the remote machine must separately turn on a non-loopback,
+authenticated llmman service and open its own firewall.
+
 ### Powerwash and Factory Reset
 
 `internal/powerwash` is Powerwash's pure sequencer, in the same shape as
