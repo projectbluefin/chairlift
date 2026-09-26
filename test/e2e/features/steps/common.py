@@ -488,7 +488,7 @@ def journal(context):
         return []
 
 
-@then('the action journal records "{action}" as {suppressed:w}')
+@then('the action journal records "{action}" as {suppressed}')
 def step_journal_records(context, action, suppressed):
     def check():
         return [

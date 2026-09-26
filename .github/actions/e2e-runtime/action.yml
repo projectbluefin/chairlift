@@ -20,7 +20,9 @@ runs:
     #   makes the Updates page representative.
     # at-spi2-core, gir1.2-atspi-2.0, python3-gi, python3-pyatspi,
     #   python3-venv: the accessibility bus and the Python bindings the behave
-    #   suite reaches it through.
+    #   suite reaches it through. gir1.2-gtk-3.0: dogtail's rawinput and utils
+    #   modules require the Gtk/Gdk 3.0 typelibs at import time, even though
+    #   the application under test is GTK 4.
     - name: Install headless GTK and accessibility runtime
       shell: bash
       run: |
@@ -31,6 +33,7 @@ runs:
           dbus-x11 \
           flatpak \
           gir1.2-atspi-2.0 \
+          gir1.2-gtk-3.0 \
           gir1.2-gtk-4.0 \
           imagemagick \
           libadwaita-1-0 \

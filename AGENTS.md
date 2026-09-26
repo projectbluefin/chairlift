@@ -46,8 +46,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   test runner's shared session. The drain cleanup is registered *after*
   `t.TempDir()` so it runs before the directory removal. A test that launches
   a private session and lends it a temporary directory owes the same drain.
-  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory and
-  sets `GDK_DEBUG=no-portals`. Never run the GTK binary or dry-run tests directly
+  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory,
+  sets `GDK_DEBUG=no-portals`, and forces `GDK_BACKEND=x11` with
+  `WAYLAND_DISPLAY` cleared — GTK 4 prefers Wayland whenever that variable is
+  set, so a harness started from a desktop session would otherwise open on the
+  live compositor. Never run the GTK binary or dry-run tests directly
   against the developer's live `/run/user/<uid>` or host session bus; ad-hoc runs
   must use an isolated container or `env -u DBUS_SESSION_BUS_ADDRESS dbus-run-session`
   with an isolated runtime directory. When testing in containers, never use
@@ -65,6 +68,22 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
+- **Every destination is driven through AT-SPI.** `make e2e` also runs
+  `TestATSPIBehaveSuite`: the behave + dogtail suite in `test/e2e/features/`,
+  in projectbluefin/testsuite's shape but against a private Xvfb and D-Bus
+  session so it gates every pull request on a stock runner.
+  `features/environment.py` launches a fresh `--dry-run` ChairLift per
+  scenario with its own HOME, runtime directory, config fixture
+  (`@config.<name>`), stubs (`@stub.<name>`), and action journal; the page and
+  shortcut inventories come from `internal/navigation`. The workflows install
+  the runtime through `.github/actions/e2e-runtime` and set
+  `CHAIRLIFT_REQUIRE_ATSPI=1`, so a missing accessibility stack fails rather
+  than skips; failed scenarios upload their accessibility tree and a
+  screenshot in `atspi-results`. A user-facing feature lands with its
+  scenario; a confirmed defect is written as a scenario tagged
+  `@known_issue.<N>` rather than left untested. On a Bluefin host, run it with
+  `test/e2e/dakota_atspi.sh [@tag]` — never on the live session. The
+  `gtk-headless-testing` skill carries the traps.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed

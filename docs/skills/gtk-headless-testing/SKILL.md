@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
-description: Use when deciding where tests can run without puregotk or GTK libraries, or when an AT-SPI probe fails under the E2E harness.
-version: 1.1.0
-last_updated: 2026-09-25
+description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
+version: 2.0.0
+last_updated: 2026-09-26
 tags:
   - testing
   - gtk
@@ -86,29 +86,68 @@ it belongs here, not in a GTK test binary.
 graphene load, failing the Unit Tests and Race jobs. Fixed by extracting the
 pure message to `internal/views/trustmsg` and removing the views-package test.
 
-## AT-SPI probes under the E2E harness
+## The behave AT-SPI suite
 
-**When it applies:** Adding or changing a test that reads ChairLift through
-the accessibility tree (`test/e2e/atspi_probe.py`, dogtail, pyatspi).
+**When it applies:** Adding or changing a test that drives ChairLift through
+the accessibility tree — anything under `test/e2e/features/`.
 
-- **dogtail exits at import unless its check is off.** `dogtail.tree` calls
-  `checkForA11y()` on import, which reads `toolkit-accessibility` through
-  GSettings. The harness sets `GSETTINGS_BACKEND=memory`, so the key is always
-  false and dogtail exits 1, printing only to **stdout**, so the probe's stderr
-  log is empty. Set `dogtail.config.config.checkForA11y = False` before
-  importing `dogtail.tree`; the app publishes through `GTK_A11Y=atspi`
-  regardless of that key.
-- **Drain the session the app ran in.** Startup reads Homebrew, and brew
-  workers outlive the script and write into the temporary HOME, so
-  `t.TempDir` cleanup fails with `directory not empty`. Start the script with
-  `Setsid` and register `awaitSessionExit` as a `t.Cleanup` so it runs on every
-  exit path, including timeouts, before the TempDir removal.
-- **A skipping gate proves nothing.** `requireATSPIStack` skips when the
-  runtime is absent. Until the E2E job installed it, the suite skipped in CI,
-  and a real failure on `main` (the Updates header never named its page) went
-  unnoticed.
+**Shape.** projectbluefin/testsuite's behave + dogtail pattern, minus the VM:
+`run_atspi.sh` owns a private Xvfb (`-displayfd`, so parallel runs never
+collide) and one private `dbus-run-session`; `features/environment.py`
+launches a fresh `--dry-run` ChairLift **per scenario** with its own HOME,
+`XDG_RUNTIME_DIR`, config fixture, and `$CHAIRLIFT_ACTION_JOURNAL`. Scenario
+tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
+`everything`), `@env.KEY=VALUE`, `@stub.<name>` (`fixtures/stubs_<dest>.py`),
+`@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
+only one destination needs goes in `steps/<destination>.py`.
 
-**Learned from:** #366/#375, turning the AT-SPI navigation suite on in CI.
+**Run it.** CI: `make e2e` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a missing stack
+fails instead of skipping; the runtime comes from `.github/actions/e2e-runtime`).
+On a Bluefin/Dakota host: `test/e2e/dakota_atspi.sh [@tag]`, which runs the
+same Go gate in `ghcr.io/projectbluefin/dakota:testing`. Artifacts:
+`build/atspi/<tag>/` locally, the `atspi-results` artifact in CI —
+`behave.log`, JUnit XML, and per scenario `chairlift.log`, `journal.jsonl`,
+and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
+(`ffmpeg -i screen.xwd x.png`). Read `tree.txt` before guessing at a lookup.
+
+**Traps, each learned the hard way:**
+
+- **The host cannot run the suite.** `/usr/share/chairlift/config.yml` on a
+  Bluefin host outranks every `config.dev.yml` fixture; `before_all` refuses
+  to start rather than test the wrong file, and `environment.py` also checks
+  the `Loaded config from <fixture>` marker. The container masks the
+  directory with `--tmpfs …:notmpcopyup` — plain `--tmpfs` copies the image's
+  file into the tmpfs.
+- **GTK 4 on X11 publishes no screen coordinates.** `position` is `None`, so
+  nothing can be clicked by position. Activate through AT-SPI actions
+  (`atspi.activate`) or the keyboard; list rows, which have no action, are
+  reached with arrow keys from the focused row and Return.
+- **GtkMenuButton is two nodes.** An action-less `button` wraps the `toggle
+  button` carrying `click`. `is_button` requires an action so the wrapper
+  never shadows it.
+- **Popover menu items are nameless** on this stack (`@known_issue.347`);
+  `menu_item()` falls back to the `keyshortcuts` attribute, then model order.
+- **AdwAboutDialog is a separate top-level frame** at the suite's window
+  size; `current_dialog` searches in-window `dialog`/`alert` nodes first, then
+  extra top-level frames.
+- **dogtail.tree connects to the bus at import.** The helper library imports
+  it lazily so `TestATSPIFeaturesHaveNoUndefinedSteps` (behave `--dry-run`)
+  needs no display. dogtail's `checkForA11y` must be off before import: the
+  suite uses `GSETTINGS_BACKEND=memory`.
+- **behave drops scenario-scoped context attributes** at scenario end; run-wide
+  counters live in `context.config.userdata`.
+- **Homebrew readers escape the process group.** Teardown kills the group,
+  then every process whose environment carries the scenario's unique journal
+  path; the Go gate drains the whole session before removing the output.
+- **Real `brew` is reachable** on GHA runners and in the container through
+  the fallback path; stub every external tool an assertion depends on with a
+  fake first on `PATH`.
+- **A skipping gate proves nothing.** Before the E2E job installed the stack,
+  the suite skipped in CI and a real failure on `main` went unnoticed.
+
+**Learned from:** #366/#375 (turning the probe on in CI) and #357's Wave 0,
+which replaced the one-probe-per-feature TSV harness — every community PR
+(#372, #373) had forked the runner script and conflicted — with this suite.
 
 ## Host Desktop & Portal Isolation for E2E Testing
 
@@ -121,20 +160,27 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 
 **Required harness isolation:**
 1. In Go E2E tests (`test/e2e/e2e_test.go`), allocate a private `0700` directory under `t.TempDir()` and pass `XDG_RUNTIME_DIR=<dir>` in `cmd.Env`.
-2. In shell scripts (`test/e2e/capture_walkthrough.sh`), export `XDG_RUNTIME_DIR="$OUTDIR/runtime"` (mode `0700`).
-3. Always export `GDK_DEBUG=no-portals` in both environments.
-4. Automated enforcement is maintained by `internal/installcheck/e2e_portal_isolation_test.go`.
-5. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
+2. In shell scripts (`test/e2e/capture_walkthrough.sh`, `test/e2e/run_atspi.sh`), export `XDG_RUNTIME_DIR="$OUTDIR/runtime"` (mode `0700`).
+3. Always export `GDK_DEBUG=no-portals` in every harness.
+4. Always force `GDK_BACKEND=x11` and clear `WAYLAND_DISPLAY`: GTK 4 prefers Wayland whenever `WAYLAND_DISPLAY` is set, so a harness launched from a desktop session otherwise opens the window on the live compositor instead of Xvfb.
+5. Automated enforcement is maintained by `internal/installcheck/e2e_portal_isolation_test.go`.
+6. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
 
 ## Container Testing Environment for ChairLift
 
 **The rule:** When testing ChairLift locally in containers, **NEVER** use Ubuntu or generic Debian containers. Always use the official native Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the standard Homebrew tooling and environment.
 **Why:** ChairLift is specifically built for the Project Bluefin ecosystem. Generic Debian/Ubuntu container environments do not reproduce the Bluefin/Dakota filesystem layout, configuration paths, packaged tooling, system integration, or Homebrew setup. Testing or generating captures in generic Debian/Ubuntu containers produces inaccurate results, missing icons or themes, and incorrect capability evaluations.
 
+### Running the AT-SPI suite with Dakota
+
+`test/e2e/dakota_atspi.sh [@tag]` (see "The behave AT-SPI suite" above).
+It needs Homebrew's `go` and `xorg-server` on the host and creates its venv
+from `test/e2e/requirements-atspi.txt` with the container's interpreter.
+
 ### Generating Walkthrough Screenshots with Lima + Dakota
 
 When host runtime libraries or session portals cannot run the GTK capture harness directly:
 1. Launch the `dakota-fedora` Lima VM (`limactl start dakota-fedora`).
 2. Ensure VM Homebrew has the required tools: `brew install go xdotool xdpyinfo xorg-server libxmu libxkbfile pkgconf` (Homebrew lacks `xwd`, so build `xwd-1.0.9` into `~/xtools`).
-3. Run `make screenshots` inside `ghcr.io/projectbluefin/dakota:testing` via Podman with `--userns=keep-id`, mapping `--tmpfs /tmp:rw,mode=1777`, mounting the source tree to `/workspace`, and masking `/usr/share/chairlift` with an empty directory so the packaged config does not override the test suite's `config.dev.yml`.
+3. Run `make screenshots` inside `ghcr.io/projectbluefin/dakota:testing` via Podman with `--userns=keep-id`, mapping `--tmpfs /tmp:rw,mode=1777`, mounting the source tree to `/workspace`, and masking `/usr/share/chairlift` with an empty directory (`--tmpfs /usr/share/chairlift:notmpcopyup`) so the packaged config does not override the test suite's `config.dev.yml`.
 4. Copy the resulting PNGs out via `limactl copy`.

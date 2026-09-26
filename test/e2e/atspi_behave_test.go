@@ -225,7 +225,10 @@ func missingPythonModules(python string) []string {
 	for _, module := range []string{"behave", "dogtail", "pyatspi"} {
 		probe := "import " + module
 		if module == "dogtail" {
-			probe = "from dogtail.config import config"
+			// dogtail.tree and dogtail.rawinput connect to the bus on import,
+			// so probe what they need instead: its config module and the
+			// GTK 3 typelibs rawinput requires (gir1.2-gtk-3.0).
+			probe = "from dogtail.config import config; import gi; gi.require_version('Gtk', '3.0'); gi.require_version('Gdk', '3.0')"
 		}
 		if err := exec.Command(python, "-c", probe).Run(); err != nil {
 			var exitErr *exec.ExitError
