@@ -262,17 +262,6 @@ func TestGSettingsStoreRespectsDryRun(t *testing.T) {
 }
 
 func TestEmbeddedAssetsAreNonEmpty(t *testing.T) {
-	dino, err := DinosaurLogo()
-	if err != nil {
-		t.Fatalf("DinosaurLogo: %v", err)
-	}
-	if len(dino) == 0 {
-		t.Error("DinosaurLogo returned empty byte slice")
-	}
-	if !strings.Contains(string(dino), "<svg") {
-		t.Error("DinosaurLogo does not contain SVG root element")
-	}
-
 	wordmarkDark, err := Wordmark(true)
 	if err != nil {
 		t.Fatalf("Wordmark(dark): %v", err)
@@ -280,7 +269,9 @@ func TestEmbeddedAssetsAreNonEmpty(t *testing.T) {
 	if len(wordmarkDark) == 0 {
 		t.Error("Wordmark(dark) returned empty byte slice")
 	}
-
+	if !strings.Contains(string(wordmarkDark), "<svg") {
+		t.Error("Wordmark(dark) does not contain SVG root element")
+	}
 	wordmarkLight, err := Wordmark(false)
 	if err != nil {
 		t.Fatalf("Wordmark(light): %v", err)
@@ -288,10 +279,12 @@ func TestEmbeddedAssetsAreNonEmpty(t *testing.T) {
 	if len(wordmarkLight) == 0 {
 		t.Error("Wordmark(light) returned empty byte slice")
 	}
+	if !strings.Contains(string(wordmarkLight), "<svg") {
+		t.Error("Wordmark(light) does not contain SVG root element")
+	}
 }
-
 func TestAssetPathResolvesExistingFile(t *testing.T) {
-	path, err := AssetPath(AssetDinosaur)
+	path, err := AssetPath(AssetWordmarkDark)
 	if err != nil {
 		t.Fatalf("AssetPath: %v", err)
 	}
@@ -453,7 +446,7 @@ func TestSkipPreservingKeepsARecordedCompletion(t *testing.T) {
 // TestCleanupAssetsRemovesTheExtractionDirectory keeps the extraction
 // directory from outliving the process that created it.
 func TestCleanupAssetsRemovesTheExtractionDirectory(t *testing.T) {
-	path, err := AssetPath(AssetDinosaur)
+	path, err := AssetPath(AssetWordmarkDark)
 	if err != nil {
 		t.Fatalf("AssetPath: %v", err)
 	}
@@ -472,7 +465,7 @@ func TestCleanupAssetsRemovesTheExtractionDirectory(t *testing.T) {
 	}
 
 	// Cleanup does not disable extraction: a later presentation re-extracts.
-	again, err := AssetPath(AssetDinosaur)
+	again, err := AssetPath(AssetWordmarkDark)
 	if err != nil {
 		t.Fatalf("AssetPath after cleanup: %v", err)
 	}

@@ -18,9 +18,6 @@ import (
 var assets embed.FS
 
 const (
-	// AssetDinosaur is the mascot logo.
-	AssetDinosaur = "assets/bluefin.svg"
-
 	// AssetWordmarkDark is the dark-theme variant with light lettering.
 	AssetWordmarkDark = "assets/bluefin-wordmark-dark.svg"
 
@@ -40,11 +37,6 @@ func Asset(name string) ([]byte, error) {
 		return nil, fmt.Errorf("firstrun: reading asset %s: %w", name, err)
 	}
 	return data, nil
-}
-
-// DinosaurLogo returns the SVG bytes of the official Bluefin dinosaur logo.
-func DinosaurLogo() ([]byte, error) {
-	return Asset(AssetDinosaur)
 }
 
 // Wordmark returns the SVG bytes for the wordmark tailored to light or dark themes.

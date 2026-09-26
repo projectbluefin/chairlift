@@ -125,3 +125,9 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 3. Always export `GDK_DEBUG=no-portals` in both environments.
 4. Automated enforcement is maintained by `internal/installcheck/e2e_portal_isolation_test.go`.
 5. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
+
+## Container Testing Environment for ChairLift
+
+**The rule:** When testing ChairLift locally in containers, **NEVER** use Ubuntu or generic Debian containers. Always use the official native Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the standard Homebrew tooling and environment.
+
+**Why:** ChairLift is specifically built for the Project Bluefin ecosystem. Generic Debian/Ubuntu container environments do not reproduce the Bluefin/Dakota filesystem layout, configuration paths, packaged tooling, system integration, or Homebrew setup. Testing or generating captures in generic Debian/Ubuntu containers produces inaccurate results, missing icons or themes, and incorrect capability evaluations.

@@ -133,7 +133,7 @@ screenshots: build-e2e schemas
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		$(GOTEST) -count=1 -run TestWalkthroughScreenshots ./test/e2e
 	@test -n "$(SCREENSHOT_DIR)" || { echo "SCREENSHOT_DIR is empty; refusing to clean" >&2; exit 1; }
-	@rm -rf "$(SCREENSHOT_DIR)/home" $(SCREENSHOT_DIR)/*.xwd \
+	@rm -rf "$(SCREENSHOT_DIR)/home" "$(SCREENSHOT_DIR)/runtime" $(SCREENSHOT_DIR)/*.xwd \
 		"$(SCREENSHOT_DIR)/chairlift.log" "$(SCREENSHOT_DIR)/window-geometry.env" \
 		"$(SCREENSHOT_DIR)/image-info.json"
 	@echo "==> screenshots written to $(SCREENSHOT_DIR)"

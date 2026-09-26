@@ -50,7 +50,10 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   sets `GDK_DEBUG=no-portals`. Never run the GTK binary or dry-run tests directly
   against the developer's live `/run/user/<uid>` or host session bus; ad-hoc runs
   must use an isolated container or `env -u DBUS_SESSION_BUS_ADDRESS dbus-run-session`
-  with an isolated runtime directory. Never stop, mask, or unmount host desktop portals.
+  with an isolated runtime directory. When testing in containers, never use
+  Ubuntu or generic Debian containers — always use the official native
+  Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the
+  standard Homebrew environment and tooling. Never stop, mask, or unmount host desktop portals.
   The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
   hosts intentionally do not carry them.

@@ -91,7 +91,6 @@ type WelcomeViewModel struct {
 	SecondaryButtonText    string
 	SecondaryButtonTooltip string
 	DefaultIsPrimary       bool
-	DinosaurAsset          string
 	WordmarkAsset          string
 }
 
@@ -110,7 +109,6 @@ func NewWelcomeViewModel(isDark bool) WelcomeViewModel {
 		SecondaryButtonText:    GetMovingAction,
 		SecondaryButtonTooltip: GetMovingDescription(),
 		DefaultIsPrimary:       true,
-		DinosaurAsset:          firstrun.AssetDinosaur,
 		WordmarkAsset:          wordmark,
 	}
 }

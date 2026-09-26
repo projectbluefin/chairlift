@@ -26,9 +26,6 @@ func TestWelcomeViewModelConstructsProperDefaults(t *testing.T) {
 	if !vm.DefaultIsPrimary {
 		t.Error("DefaultIsPrimary should be true for recommended flow")
 	}
-	if vm.DinosaurAsset != firstrun.AssetDinosaur {
-		t.Errorf("DinosaurAsset = %q, want %q", vm.DinosaurAsset, firstrun.AssetDinosaur)
-	}
 	if vm.WordmarkAsset != firstrun.AssetWordmarkLight {
 		t.Errorf("WordmarkAsset for light theme = %q, want %q", vm.WordmarkAsset, firstrun.AssetWordmarkLight)
 	}

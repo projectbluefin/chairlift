@@ -75,18 +75,6 @@ func (a *FirstRunAssistant) buildUI() {
 	heroBox := gtk.NewBox(gtk.OrientationVerticalValue, 10)
 	heroBox.SetHalign(gtk.AlignCenterValue)
 
-	// Dinosaur mascot illustration
-	dinoPath, _ := firstrun.AssetPath(firstrun.AssetDinosaur)
-	if dinoPath != "" {
-		dinoPic := gtk.NewPictureForFilename(dinoPath)
-		dinoPic.SetCanShrink(true)
-		dinoPic.SetKeepAspectRatio(true)
-		dinoPic.SetContentFit(gtk.ContentFitContainValue)
-		dinoPic.SetHalign(gtk.AlignCenterValue)
-		dinoPic.SetSizeRequest(160, 110)
-		heroBox.Append(&dinoPic.Widget)
-	}
-
 	// Wordmark illustration supporting light/dark theme palettes. The file is
 	// chosen in applyWordmark rather than here because the assistant is cached
 	// on the window and presented again later, possibly after a theme change.
@@ -95,9 +83,8 @@ func (a *FirstRunAssistant) buildUI() {
 	wordmarkPic.SetKeepAspectRatio(true)
 	wordmarkPic.SetContentFit(gtk.ContentFitContainValue)
 	wordmarkPic.SetHalign(gtk.AlignCenterValue)
-	wordmarkPic.SetSizeRequest(260, 52)
+	wordmarkPic.SetSizeRequest(280, 80)
 	heroBox.Append(&wordmarkPic.Widget)
-
 	welcomeBox.Append(&heroBox.Widget)
 
 	titleLabel := gtk.NewLabel(pageview.WelcomeTitle)
