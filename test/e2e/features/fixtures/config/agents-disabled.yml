@@ -1,0 +1,33 @@
+# The everything fixture with the Agents page's only group disabled, so
+# internal/navigation must omit the page from the sidebar.
+#
+# Loaded from an untrusted path (config.dev.yml beside a staged binary), so no
+# action may set sudo: true.
+applications_page:
+  applications_installed_group:
+    enabled: true
+  flatpak_user_group:
+    enabled: true
+  flatpak_system_group:
+    enabled: true
+  brew_group:
+    enabled: true
+  brew_search_group:
+    enabled: true
+  brew_bundles_group:
+    enabled: true
+
+maintenance_page:
+  maintenance_cleanup_group:
+    enabled: true
+    actions:
+      - title: Clean Up Boot Old Entries
+        script: /usr/libexec/bls-gc
+  maintenance_freespace_group:
+    enabled: true
+  reset_group:
+    enabled: true
+
+agents_page:
+  agents_group:
+    enabled: false

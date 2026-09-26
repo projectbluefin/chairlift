@@ -64,10 +64,21 @@ are accepted but have no runtime effect. The System page is not restored.
 
 All four legacy groups still undergo ordinary field, type, and action
 validation, including trusted-path restrictions on `sudo: true`, even for
-retired or superseded values. Unknown names still fail closed. This is a
-compatibility rule for `system_page`, not general acceptance of obsolete keys
-elsewhere in an old file. No file is rewritten: administrators can move the
-two surviving groups to `updates_page` and remove `system_page` when convenient.
+retired or superseded values. Unknown names still fail closed. This compatibility
+handling is limited to `system_page` and the retired `maintenance_page` groups
+described below, not general acceptance of obsolete keys elsewhere in an old
+file. No file is rewritten: administrators can update their configuration when
+convenient.
+
+## Legacy Maintenance groups compatibility
+
+Older configurations (such as maintainer defaults shipping with previous
+Bluefin releases) may specify `maintenance_brew_group`,
+`maintenance_flatpak_group`, or `maintenance_optimization_group`. These retired
+groups undergo ordinary validation (preventing syntax errors or unknown keys)
+and are stripped prior to runtime decoding so they have no runtime effect and
+do not cause a fail-closed schema error. Routine cleanup is handled by
+`maintenance_freespace_group`.
 
 ## Available Pages and Groups
 

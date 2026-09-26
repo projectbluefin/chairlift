@@ -1,9 +1,12 @@
 package aistack
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -387,6 +390,63 @@ func TestPeerMutationsHonorDryrun(t *testing.T) {
 	}
 	if len(peers) != 1 || peers[0].Address != "spark:17434" || !peers[0].Enabled {
 		t.Errorf("Peers store modified under dryrun: %+v", peers)
+	}
+}
+
+// A dry-run preview must name the peers a live run would hand llmman — the
+// enabled subset — not every stored address. Each case previews a mutation
+// over a store holding one disabled peer, then performs it live and
+// requires the preview's list to be exactly the value sent.
+func TestPeerDryRunPreviewNamesTheEnabledPeersLiveWouldSend(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(context.Context) error
+		want   string
+	}{
+		{"disable an enabled peer", func(ctx context.Context) error { return SetPeerEnabled(ctx, "spark", false) }, "tower"},
+		{"enable the disabled peer", func(ctx context.Context) error { return SetPeerEnabled(ctx, "asahi", true) }, "spark,tower,asahi"},
+		{"add a peer", func(ctx context.Context) error { return AddPeer(ctx, "mini") }, "spark,tower,mini"},
+		{"remove an enabled peer", func(ctx context.Context) error { return RemovePeer(ctx, "tower") }, "spark"},
+		{"remove the disabled peer", func(ctx context.Context) error { return RemovePeer(ctx, "asahi") }, "spark,tower"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ph := newPeerHost(t)
+			ctx := context.Background()
+			for _, addr := range []string{"spark", "tower", "asahi"} {
+				if err := AddPeer(ctx, addr); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := SetPeerEnabled(ctx, "asahi", false); err != nil {
+				t.Fatal(err)
+			}
+
+			var buf bytes.Buffer
+			oldOut, oldFlags := log.Writer(), log.Flags()
+			log.SetOutput(&buf)
+			log.SetFlags(0)
+			dryrun.Set(true)
+			err := tc.mutate(ctx)
+			dryrun.Set(false)
+			log.SetOutput(oldOut)
+			log.SetFlags(oldFlags)
+			if err != nil {
+				t.Fatalf("dry run: %v", err)
+			}
+
+			ph.calls = nil
+			if err := tc.mutate(ctx); err != nil {
+				t.Fatalf("live: %v", err)
+			}
+			if len(ph.calls) != 1 || ph.calls[0] != "config set aggregation.peers "+tc.want {
+				t.Fatalf("live calls = %v, want aggregation.peers %s", ph.calls, tc.want)
+			}
+			preview := fmt.Sprintf("would configure llmman peers %v ", strings.Split(tc.want, ","))
+			if !strings.Contains(buf.String(), preview) {
+				t.Errorf("dry-run log %q does not preview %q", buf.String(), preview)
+			}
+		})
 	}
 }
 

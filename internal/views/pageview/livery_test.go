@@ -114,3 +114,30 @@ func TestRotationIsUnavailableForACustomMark(t *testing.T) {
 		t.Error("rotation offered for a section that is not available")
 	}
 }
+
+// TestNoResultsRowNamesTheCatalogItSearched holds issue #350: the brand and
+// mark choosers search Simple Icons and the foundation marks, so their empty
+// result must neither blame cncf/artwork nor call the missing item a project.
+func TestNoResultsRowNamesTheCatalogItSearched(t *testing.T) {
+	cases := []struct {
+		surface livery.Surface
+		title   string
+		catalog string
+	}{
+		{livery.AppGrid, "No matching brand", "Simple Icons"},
+		{livery.Panel, "No matching mark", "foundation mark"},
+		{livery.Dock, "No matching project", "cncf/artwork"},
+	}
+	for _, tc := range cases {
+		row := LiveryNoResultsRow(tc.surface, "zzq")
+		if row.Title != tc.title {
+			t.Errorf("surface %d: title %q, want %q", tc.surface, row.Title, tc.title)
+		}
+		if !strings.Contains(row.Subtitle, tc.catalog) || !strings.Contains(row.Subtitle, `"zzq"`) {
+			t.Errorf("surface %d: subtitle %q does not name %q and the query", tc.surface, row.Subtitle, tc.catalog)
+		}
+		if tc.surface != livery.Dock && strings.Contains(row.Subtitle, "cncf/artwork") {
+			t.Errorf("surface %d: subtitle %q blames cncf/artwork", tc.surface, row.Subtitle)
+		}
+	}
+}

@@ -162,6 +162,8 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
 | Recovery | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`); irreversible actions disabled by default |
 
+Older releases shipped `maintenance_brew_group`, `maintenance_flatpak_group`, and `maintenance_optimization_group`. These retired groups are accepted for backward compatibility and stripped before decoding; see [CONFIG.md](../CONFIG.md#legacy-maintenance-groups-compatibility).
+
 `maintenance_cleanup_group` supports:
 
 - `actions` — list of scripts to offer:

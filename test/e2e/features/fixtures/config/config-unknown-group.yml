@@ -1,0 +1,5 @@
+# Well-formed YAML naming a group the schema does not know. Strict schema
+# validation rejects it (KindSchema) instead of ignoring the typo.
+applications_page:
+  brew_groop:
+    enabled: true

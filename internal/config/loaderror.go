@@ -45,7 +45,13 @@ type LoadError struct {
 //  1. "config <kind> error" when Kind is set, otherwise "config error";
 //  2. ": <Path>" appended when Path is non-empty;
 //  3. ": <Detail>" appended when Detail is non-empty;
-//  4. ": <Err.Error()>" appended when Err is non-nil.
+//  4. ": <Err.Error()>" appended when Err is non-nil and Detail does not
+//     already state it.
+//
+// Parser and decoder failures carry the cause's own text as Detail (so its
+// "line N" fragment is attributed) and keep Err for errors.Is/As; rendering
+// both would print the same cause twice in the toast and the
+// CONFIGURATION ERROR log.
 func (e *LoadError) Error() string {
 	var b strings.Builder
 	if e.Kind != "" {
@@ -63,7 +69,7 @@ func (e *LoadError) Error() string {
 		b.WriteString(": ")
 		b.WriteString(e.Detail)
 	}
-	if e.Err != nil {
+	if e.Err != nil && !strings.Contains(e.Detail, e.Err.Error()) {
 		b.WriteString(": ")
 		b.WriteString(e.Err.Error())
 	}

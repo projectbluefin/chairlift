@@ -49,6 +49,10 @@ func (uh *UserHome) buildHelpPage() {
 			resources := pageview.HelpResources(groupCfg.Website, groupCfg.Issues, groupCfg.Chat)
 			for _, resource := range resources {
 				row := adw.NewActionRow()
+				// Titles and URLs come from configuration and are not Pango
+				// markup: a URL's "&" would otherwise fail to parse and
+				// render the subtitle empty.
+				row.SetUseMarkup(false)
 				row.SetTitle(resource.Title)
 				row.SetSubtitle(resource.URL)
 				row.SetActivatable(true)

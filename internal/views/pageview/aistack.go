@@ -182,9 +182,26 @@ func PeerBusyToast() string {
 }
 
 // PeerKeySavedToast confirms the shared key was sent to llmman's own
-// configuration. The key itself is never echoed back.
-func PeerKeySavedToast() string {
+// configuration. The key itself is never echoed back. A dry run sent
+// nothing, so it must not claim the key was saved.
+func PeerKeySavedToast(dryRun bool) string {
+	if dryRun {
+		return "[DRY-RUN] Preview: the peer key would be saved — no changes made"
+	}
 	return "Peer key saved."
+}
+
+// PeerSwitchLabel is the accessible name and tooltip of a peer row's
+// enable switch. It names the peer, because every row's switch is
+// otherwise indistinguishable to a screen reader.
+func PeerSwitchLabel(address string) string {
+	return "Use " + address
+}
+
+// PeerRemoveLabel is the accessible name and tooltip of a peer row's
+// icon-only remove button.
+func PeerRemoveLabel(address string) string {
+	return "Remove " + address
 }
 
 // PeerKeyFailedToast is the toast for a failed key save.

@@ -1,0 +1,5 @@
+# Features scenarios: the administrator turned the Developer group off while
+# leaving Gaming at its default. Loaded from an untrusted path; no sudo.
+features_page:
+  dx_group:
+    enabled: false

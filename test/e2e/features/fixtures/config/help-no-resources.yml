@@ -1,0 +1,5 @@
+# The administrator turned the resource links off. Help itself is always
+# retained by internal/navigation.
+help_page:
+  help_resources_group:
+    enabled: false

@@ -1,0 +1,4 @@
+# The administrator turned Enhanced Troubleshooting off.
+help_page:
+  troubleshooting_group:
+    enabled: false

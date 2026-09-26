@@ -1,0 +1,13 @@
+# Every group behind the Agents and Maintenance destinations is disabled, so
+# navigation must drop both sidebar rows and compact Alt+number over the
+# five pages that remain.
+agents_page:
+  agents_group:
+    enabled: false
+maintenance_page:
+  maintenance_cleanup_group:
+    enabled: false
+  maintenance_freespace_group:
+    enabled: false
+  reset_group:
+    enabled: false

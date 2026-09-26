@@ -25,12 +25,16 @@ import (
 // headless host — see docs/skills/gtk-headless-testing.md.
 func TestDestructiveActionsRequireConfirmation(t *testing.T) {
 	// runPowerwash and runFactoryReset are the two irreversible maintenance
-	// actions. Everything else reachable from internal/views is either a
+	// actions. runFlatpakUninstall removes an application — system-wide
+	// removals for every account — and once ran straight from its row's
+	// trash button while every Homebrew removal asked first (#353).
+	// Everything else reachable from internal/views is either a
 	// config-driven script (opt-in group, not covered by this invariant) or a
 	// reversible action with its own dialog.
 	destructive := map[string]bool{
-		"runPowerwash":    true,
-		"runFactoryReset": true,
+		"runPowerwash":        true,
+		"runFactoryReset":     true,
+		"runFlatpakUninstall": true,
 	}
 
 	viewsDir := filepath.Join(RepoRoot(), "internal", "views")

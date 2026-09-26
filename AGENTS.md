@@ -46,8 +46,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   test runner's shared session. The drain cleanup is registered *after*
   `t.TempDir()` so it runs before the directory removal. A test that launches
   a private session and lends it a temporary directory owes the same drain.
-  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory and
-  sets `GDK_DEBUG=no-portals`. Never run the GTK binary or dry-run tests directly
+  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory,
+  sets `GDK_DEBUG=no-portals`, and forces `GDK_BACKEND=x11` with
+  `WAYLAND_DISPLAY` cleared — GTK 4 prefers Wayland whenever that variable is
+  set, so a harness started from a desktop session would otherwise open on the
+  live compositor. Never run the GTK binary or dry-run tests directly
   against the developer's live `/run/user/<uid>` or host session bus; ad-hoc runs
   must use an isolated container or `env -u DBUS_SESSION_BUS_ADDRESS dbus-run-session`
   with an isolated runtime directory. When testing in containers, never use
@@ -56,15 +59,7 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   standard Homebrew environment and tooling. Never stop, mask, or unmount host desktop portals.
   The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
-  hosts intentionally do not carry them. When the model preset UI is present,
-  Agent Mode preset verification also needs `at-spi2-core` and
-  `python3-dogtail`; it provisions a fake Homebrew
-  executable, llmman unit, and loopback health endpoint under a private HOME,
-  blocks live catalog lookups to exercise the deterministic offline fallback,
-  then selects a preset through AT-SPI while ChairLift is in dry-run mode.
-  Keep the accessibility bus inside the same private D-Bus/Xvfb session as the
-  application and probe, and never make this scenario contact host systemd or
-  mutate the host's model configuration.
+  hosts intentionally do not carry them.
   With `E2E_COVERDIR` set, the GUI's counters reach it only because
   `cmd/chairlift` handles `SIGTERM`/`SIGINT` by quitting the application on
   the main thread, so `Run` returns and `main` exits normally; a process that
@@ -73,6 +68,28 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
+- **Every destination is driven through AT-SPI, on Dakota.** `make e2e-atspi`
+  runs `TestATSPIBehaveSuite` — the behave + dogtail suite in
+  `test/e2e/features/`, in projectbluefin/testsuite's shape — inside
+  `ghcr.io/projectbluefin/dakota:testing` through `test/e2e/dakota_atspi.sh`,
+  with a private Xvfb and D-Bus session. It runs there, not on the runner's
+  Ubuntu stack, because what the tree announces depends on the GTK/Libadwaita
+  release: Ubuntu's Libadwaita 1.5 publishes preference groups differently
+  from what Bluefin ships, and 63 scenarios failed there that pass on Dakota.
+  `make e2e` therefore skips that one test (it still runs the behave dry-run
+  check for undefined steps). `features/environment.py` launches a fresh
+  `--dry-run` ChairLift per scenario with its own HOME, runtime directory,
+  config fixture (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`,
+  a closed proxy, and an action journal; the page and shortcut inventories
+  come from `internal/navigation`. The test, release, and nightly workflows
+  run `make e2e-atspi` after `make e2e` (Homebrew's `xorg-server` supplies an
+  Xvfb the container can execute), the script sets
+  `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
+  failed scenarios upload their accessibility tree and a screenshot in
+  `atspi-results`. A user-facing feature lands with its scenario; a confirmed
+  defect is written as a scenario tagged `@known_issue.<N>` rather than left
+  untested. Never run the suite on a live session. The `gtk-headless-testing`
+  skill carries the traps.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
@@ -198,6 +215,17 @@ An agent must not break these:
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
+  The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
+  `internal/window`'s `sourcePolicy`, which keeps `Configured`
+  (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
+  their conjunction is `effectiveEnabled`, but a source the host cannot back
+  must read "Not available on this system", never "Disabled by
+  administrator". Do not collapse them back into one boolean map. The rest
+  of the Updates page — automatic updates, system version, per-source groups,
+  unverified sources, and the Advanced channel/driver controls — is
+  `buildUpdatesPage`'s preferences page, which `buildContentArea` mounts
+  beneath the shell's source rows through `UpdateShell.SetSecondaryContent`;
+  without that call none of those controls is reachable.
   The operating-system source must keep going through `internal/bootc`'s
   staging path. Adding a
   `bootc upgrade` route to `chairlift-ublue-helper` would break both the
@@ -341,7 +369,11 @@ An agent must not break these:
   pages. Mouse activation and window navigation actions must both call
   `Window.navigateToPage`, which applies the complete `navigation.Resolve`
   transition (visible-row index, visible child, title, and collapsed-layout
-  content reveal). The app and shortcuts dialog must use the window's same
+  content reveal). Only `navigateToPage` may move the sidebar selection: it
+  records the row in `Window.shownRow`, and one `row-selected` handler,
+  connected at build time, re-selects that row because `GtkListBox` selects
+  whichever row gains focus (Tab, arrow keys) without emitting
+  `row-activated`. The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
   `internal/window` or `internal/app`. **The inventory holds two kinds of
   route.** A *primary* is a sidebar destination with a row, an Alt+number, and
@@ -423,16 +455,28 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  Flatpak uninstall on the same page keeps the same contract: it confirms
+  with an `AdwAlertDialog` worded by `pageview.FlatpakUninstallConfirmation`
+  (a system-scope removal says it affects every account), holds a per-row
+  `actionstate.Gate`, restores on failure or dry-run, and refreshes only after
+  a live success. `runFlatpakUninstall` is in `internal/installcheck`'s
+  `TestDestructiveActionsRequireConfirmation` inventory beside `runPowerwash`
+  and `runFactoryReset`; a destructive `run*` entry point added to
+  `internal/views` belongs in that inventory too.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
-  controls that become permanently unavailable after live success. Update All,
-  driver switching, Powerwash, and Factory Reset restore their buttons after
-  a run, so they reset their gates even after failure or dry-run. Roll Back is
+  controls that become permanently unavailable after live success. Driver
+  switching, Powerwash, and Factory Reset restore their buttons after a run,
+  so they reset their gates even after failure or dry-run. (The unified
+  update run's primary action holds no `Gate`: `updateflow.Coordinator`
+  admits one mutation at a time and the shell re-renders its button from each
+  snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
   failure or preview resets it. `internal/views/actionstate`'s wiring tests
   guard both lifetimes.
-  Both the dedicated bootc stage action and Update All's OS phase refresh
+  Both the dedicated bootc stage action and a live unified update run whose
+  operating-system source completed (`UserHome.OnUpdateFinished`) refresh
   the badge and changelog's Compare references from the new status rather
   than leaving Compare disabled until restart.
   A changed pinned image pair clears old diff rows; an in-flight comparison
@@ -454,10 +498,12 @@ An agent must not break these:
   authoritative: read, YAML, or schema errors must disable every configurable
   group, emit the `CONFIGURATION ERROR` diagnostic, and remain visible in the
   UI as a persistent toast until the file is fixed and ChairLift is restarted.
-  The legacy `system_page` input is a narrow compatibility exception to the
-  current page inventory: validate its four historical groups before moving
-  `bootc_status_group` and `channel_group` into Updates. Current non-null
-  fields win; retired information/health groups have no runtime effect.
+  The legacy `system_page` input and retired `maintenance_page` groups
+  (`maintenance_brew_group`, `maintenance_flatpak_group`,
+  `maintenance_optimization_group`) are narrow compatibility exceptions to
+  the current inventory: validate historical groups before migration/stripping,
+  moving `system_page`'s `bootc_status_group` and `channel_group` into Updates.
+  Current non-null fields win; retired groups have no runtime effect.
   This must not add a navigable page or relax unknown-name or sudo validation.
 - **CI actions are immutable.** Every external `uses:` reference under
   `.github/workflows/` must use a full 40-character commit SHA. Keep the

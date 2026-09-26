@@ -32,6 +32,10 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	group.SetDescription(pageview.TroubleshootSetupNote())
 
 	row := adw.NewActionRow()
+	// The subtitle embeds GOOSE_PROVIDER, which is user-controlled text, and
+	// setup-step names; neither is Pango markup, so an "&" or "<" in either
+	// must not blank the row.
+	row.SetUseMarkup(false)
 	row.SetTitle("Enhanced Troubleshooting")
 	row.SetSubtitle("Checking...")
 
@@ -123,11 +127,15 @@ func (uh *UserHome) onTroubleshootClicked() {
 				return
 			}
 
-			row.SetSubtitle(pageview.TroubleshootSetupSubtitle(after))
 			if dryrun.Enabled() {
+				// A preview changed nothing: applyTroubleshootState(after)
+				// already restored the row to the host's unchanged state, and
+				// the setup-outcome subtitle would claim a result that never
+				// happened.
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made")
 				return
 			}
+			row.SetSubtitle(pageview.TroubleshootSetupSubtitle(after))
 			if !after.Ready() {
 				// Every step reported success and the feature still is not
 				// usable, so this is not an error toast — but it must not

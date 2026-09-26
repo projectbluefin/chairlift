@@ -1,0 +1,10 @@
+# One group disabled per page, beside siblings that stay enabled: only the
+# disabled group's surface may disappear.
+updates_page:
+  flatpak_updates_group:
+    enabled: false
+maintenance_page:
+  maintenance_freespace_group:
+    enabled: false
+  reset_group:
+    enabled: true

@@ -76,12 +76,32 @@ func (uh *UserHome) buildFeaturesPage() {
 		return
 	}
 
-	uh.buildBluefinGroups(page)
+	bluefinGroups := uh.buildBluefinGroups(page)
+
+	// A host that offers nothing here — no ublue-os descriptor and no
+	// optional features — would otherwise show a blank page. The empty
+	// state starts hidden and is revealed only once nothing is known to be
+	// on offer.
+	emptyState := adw.NewStatusPage()
+	emptyState.SetIconName("preferences-other-symbolic")
+	emptyGroup := adw.NewPreferencesGroup()
+	emptyGroup.Add(&emptyState.Widget)
+	emptyGroup.SetVisible(false)
+	showEmptyState := func(optionalFeatures bool) {
+		text, empty := pageview.FeaturesEmptyState(bluefinGroups, optionalFeatures)
+		if empty {
+			emptyState.SetTitle(text.Title)
+			emptyState.SetDescription(text.Subtitle)
+			log.Printf("views: features page offers nothing on this system")
+		}
+		emptyGroup.SetVisible(empty)
+	}
 
 	// Enhanced Troubleshooting was moved to Help (issue #249), and Local AI
 	// moved to Agents (issue #244), so neither is built here.
 
-	if uh.groupEnabled("features_page", "features_group") {
+	featuresEnabled := uh.groupEnabled("features_page", "features_group")
+	if featuresEnabled {
 		// Build the features group (hidden once updex reports none)
 		uh.featuresGroup = adw.NewPreferencesGroup()
 		uh.featuresGroup.SetTitle("Optional features")
@@ -100,14 +120,19 @@ func (uh *UserHome) buildFeaturesPage() {
 
 		page.Add(uh.featuresGroup)
 
-		go uh.loadFeatures(updateBtn)
+		go uh.loadFeatures(updateBtn, showEmptyState)
 	}
+
+	page.Add(emptyGroup)
+	// Until updex answers, a still-checking features group is on offer.
+	showEmptyState(featuresEnabled)
 }
 
 // loadFeatures loads feature information asynchronously. A host that offers
-// no features hides the group rather than rendering an inert one; a failed
-// read is not evidence of that, so it keeps the group and says so.
-func (uh *UserHome) loadFeatures(updateBtn *gtk.Button) {
+// no features hides the group rather than rendering an inert one, and tells
+// onListed so the page can explain itself if nothing else is on offer; a
+// failed read is not evidence of that, so it keeps the group and says so.
+func (uh *UserHome) loadFeatures(updateBtn *gtk.Button, onListed func(optionalFeatures bool)) {
 	ctx, cancel := updex.DefaultContext()
 	defer cancel()
 
@@ -126,6 +151,7 @@ func (uh *UserHome) loadFeatures(updateBtn *gtk.Button) {
 
 		if len(features) == 0 {
 			uh.featuresGroup.SetVisible(false)
+			onListed(false)
 			return
 		}
 
@@ -281,22 +307,23 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 // instead hides itself when internal/ublue reports no ublue-os image
 // descriptor, which is every non-Bluefin host including Snow Linux.
 
-// buildBluefinGroups builds the developer-tools and gaming groups. The
-// release channel and graphics driver live elsewhere: they describe which
-// system this machine runs, where these two are capabilities you switch on.
-func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) {
+// buildBluefinGroups builds the developer-tools and gaming groups and reports
+// whether it built either. The release channel and graphics driver live
+// elsewhere: they describe which system this machine runs, where these two
+// are capabilities you switch on.
+func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 	dxEnabled := uh.groupEnabled("features_page", "dx_group")
 	gamingEnabled := uh.groupEnabled("features_page", "gaming_group")
 
 	if !dxEnabled && !gamingEnabled {
-		return
+		return false
 	}
 
 	// One detection serves both groups. It reads only local files, so
 	// it is cheap, but it is still done off the main thread and cached.
 	status := ublue.StatusCached()
 	if !status.Available {
-		return
+		return false
 	}
 
 	// A single structured readiness marker. The screenshot walkthrough
@@ -323,6 +350,7 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) {
 			uh.buildGamingGroup(page)
 		}
 	}
+	return true
 }
 
 // buildGamingIncludedGroup replaces the gaming switch with a single readonly
@@ -572,6 +600,7 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 // an error.
 func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
 	toggle.widget.SetSensitive(false)
+	before := row.GetSubtitle()
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 
 	go func() {
@@ -586,9 +615,17 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *ad
 		sgtk.RunOnMainThread(func() {
 			toggle.widget.SetSensitive(true)
 
-			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
+			dryRun := dryrun.Enabled()
+			decision := actionmsg.GamingMode(dryRun, enabled, len(changed), len(failures), len(skipped))
 			toggle.set(decision.Confirm == enabled)
-			row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)))
+			if dryRun {
+				// A preview changed nothing, so the row keeps describing
+				// the host as it was rather than a result that never
+				// happened.
+				row.SetSubtitle(before)
+			} else {
+				row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)))
+			}
 
 			if len(failures) > 0 {
 				uh.toastAdder.ShowErrorToast(decision.Toast)

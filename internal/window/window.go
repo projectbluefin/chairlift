@@ -47,6 +47,7 @@ type Window struct {
 
 	splitView    *adw.NavigationSplitView
 	sidebarList  *gtk.ListBox
+	shownRow     int // Sidebar index of the shown page; the only row the selection may rest on
 	contentStack *gtk.Stack
 	contentPage  *adw.NavigationPage // Content navigation page for dynamic title
 	toasts       *adw.ToastOverlay
@@ -119,13 +120,17 @@ func New(app adw.Application) *Window {
 }
 
 // effectiveEnabled is the one policy floor shared by every entry path: the
-// navigation sidebar, the view builders, the updateflow source map, and the
-// first-run assistant all route their group predicate through it. A group is
-// enabled only when its configuration enables it AND the host supports it;
-// the capability set was resolved once during window construction and is
-// immutable for the session. A nil capability set composes to false
-// everywhere, matching the repository's fail-closed rule. See internal/
-// capability.
+// navigation sidebar and the first-run assistant route their group predicate
+// through it, and the view builders compose the same predicate from the same
+// capability set (UserHome.groupEnabled). A group is enabled only when its
+// configuration enables it AND the host supports it; the capability set was
+// resolved once during window construction and is immutable for the session.
+// The update coordinator's source map uses sourcePolicy in buildUI instead,
+// which reports the same two predicates separately so a source the host
+// cannot back reads as unavailable rather than disabled by the administrator;
+// their conjunction is exactly this function. A nil capability set satisfies
+// no group that has a prerequisite, matching the repository's fail-closed
+// rule. See internal/capability.
 func (w *Window) effectiveEnabled(page, group string) bool {
 	return capability.Compose(w.config.IsGroupEnabled, w.capabilities)(page, group)
 }
@@ -159,15 +164,25 @@ func (w *Window) buildUI() {
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
 	store := settings.New()
+	// Each source's policy keeps the administrator's configuration and the
+	// capability floor apart, so the shell can tell "disabled by
+	// administrator" from "not available on this system". Their conjunction
+	// is exactly effectiveEnabled.
+	sourcePolicy := func(page, group string) updateflow.Policy {
+		return updateflow.Policy{
+			Configured: w.config.IsGroupEnabled(page, group),
+			Supported:  w.capabilities.Supports(page, group),
+		}
+	}
 	w.updateShell = views.NewUpdateShell(
 		coordinator,
 		store.Values,
-		func() map[updateflow.SourceID]bool {
-			return map[updateflow.SourceID]bool{
-				updateflow.OperatingSystem:  w.effectiveEnabled("updates_page", "bootc_updates_group"),
-				updateflow.Applications:     w.effectiveEnabled("updates_page", "flatpak_updates_group"),
-				updateflow.DeveloperTools:   w.effectiveEnabled("updates_page", "brew_updates_group"),
-				updateflow.SystemComponents: w.effectiveEnabled("features_page", "features_group"),
+		func() map[updateflow.SourceID]updateflow.Policy {
+			return map[updateflow.SourceID]updateflow.Policy{
+				updateflow.OperatingSystem:  sourcePolicy("updates_page", "bootc_updates_group"),
+				updateflow.Applications:     sourcePolicy("updates_page", "flatpak_updates_group"),
+				updateflow.DeveloperTools:   sourcePolicy("updates_page", "brew_updates_group"),
+				updateflow.SystemComponents: sourcePolicy("features_page", "features_group"),
 			}
 		},
 		w,
@@ -231,6 +246,22 @@ func (w *Window) buildSidebar() *adw.NavigationPage {
 	}
 	w.sidebarList.ConnectRowActivated(&rowActivatedCb)
 
+	// GtkListBox selects every row that receives keyboard focus: Tab and the
+	// arrow keys move the selection row by row without activating anything,
+	// so the highlight would name a page the content does not show. The
+	// selection belongs to navigateToPage alone; any other change is undone
+	// here, which leaves the focus ring where the user moved it and lets
+	// Return (row-activated) navigate as before.
+	rowSelectedCb := func(_ gtk.ListBox, rowPtr uintptr) {
+		if rowPtr != 0 && gtk.ListBoxRowNewFromInternalPtr(rowPtr).GetIndex() == int32(w.shownRow) {
+			return
+		}
+		if row := w.sidebarList.GetRowAtIndex(int32(w.shownRow)); row != nil {
+			w.sidebarList.SelectRow(row)
+		}
+	}
+	w.sidebarList.ConnectRowSelected(&rowSelectedCb)
+
 	scrolled.SetChild(&w.sidebarList.Widget)
 	toolbarView.SetContent(&scrolled.Widget)
 
@@ -282,6 +313,11 @@ func (w *Window) buildContentArea() *adw.NavigationPage {
 			w.pages[item.Name] = page
 		}
 		if item.Name == "updates" && w.updateShell != nil && w.updateShell.Widget() != nil {
+			// The Updates destination is the status-first shell; everything
+			// else the Updates page owns — automatic updates, the system
+			// version, per-source groups, and the Advanced controls — mounts
+			// beneath its sources. See UpdateShell.SetSecondaryContent.
+			w.updateShell.SetSecondaryContent(w.views.UpdatesPreferencesPage())
 			w.contentStack.AddNamed(w.updateShell.Widget(), item.Name)
 			continue
 		}
@@ -446,6 +482,7 @@ func (w *Window) navigateToPage(pageName string) {
 		return
 	}
 
+	w.shownRow = transition.SelectedIndex
 	row := w.sidebarList.GetRowAtIndex(int32(transition.SelectedIndex))
 	if row != nil {
 		w.sidebarList.SelectRow(row)

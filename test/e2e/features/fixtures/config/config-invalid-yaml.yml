@@ -1,0 +1,5 @@
+# Not YAML: an unterminated flow mapping. The first existing candidate is
+# authoritative, so this must fail closed rather than fall through to
+# defaults (internal/config.Load, KindParseType).
+applications_page:
+  brew_group: {enabled: true

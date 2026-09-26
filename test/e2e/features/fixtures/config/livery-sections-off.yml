@@ -1,0 +1,11 @@
+# The Livery page with its Profile Picture and App Grid sections disabled by
+# an administrator. Groups not named here keep their built-in default, which
+# is enabled, so the panel and Files sections still build.
+#
+# Loaded from an untrusted path (config.dev.yml beside a staged binary), so no
+# action may set sudo: true.
+livery_page:
+  account_group:
+    enabled: false
+  livery_app_grid_group:
+    enabled: false

@@ -164,11 +164,27 @@ func LiverySelectedProjectRow(selectedID string) Row {
 }
 
 // LiveryNoResultsRow is shown when a query matches nothing, so the section
-// never renders as an empty box.
-func LiveryNoResultsRow(query string) Row {
-	return Row{
-		Title:    "No matching project",
-		Subtitle: fmt.Sprintf("Nothing in cncf/artwork matches %q", query),
+// never renders as an empty box. It names the catalog the chooser for surface
+// actually searched: the brand chooser searches Simple Icons and the mark
+// chooser the foundation marks, so blaming cncf/artwork there would send the
+// user looking in the wrong place.
+func LiveryNoResultsRow(surface livery.Surface, query string) Row {
+	switch surface {
+	case livery.AppGrid:
+		return Row{
+			Title:    "No matching brand",
+			Subtitle: fmt.Sprintf("Nothing in Simple Icons matches %q", query),
+		}
+	case livery.Panel:
+		return Row{
+			Title:    "No matching mark",
+			Subtitle: fmt.Sprintf("No foundation mark matches %q", query),
+		}
+	default:
+		return Row{
+			Title:    "No matching project",
+			Subtitle: fmt.Sprintf("Nothing in cncf/artwork matches %q", query),
+		}
 	}
 }
 

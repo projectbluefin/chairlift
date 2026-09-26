@@ -59,7 +59,6 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.AgentModeRowTitle())
 	uh.agentModeRow = row
-	uh.showAgentModeState(state)
 
 	// guardedSwitch, not a bare gtk.Switch: GtkSwitch emits ::state-set from
 	// gtk_switch_set_active, so showing the machine's real state here and
@@ -93,6 +92,10 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	presetRow.AddSuffix(&switchBtn.Widget)
 	uh.agentPresetRow = presetRow
 	group.Add(&presetRow.Widget)
+	// Applied only once the model and preset rows exist: showAgentModeState
+	// nil-guards them, so calling it earlier left both visible whatever the
+	// state was.
+	uh.showAgentModeState(state)
 
 	details := adw.NewExpanderRow()
 	details.SetTitle(pageview.AgentModeDetailsTitle())
@@ -179,7 +182,13 @@ func (uh *UserHome) presentModelPresetChooser() {
 			return
 		}
 		fam := aistack.Family(response)
-		go uh.applyModelFamilyPreset(fam)
+		// Read on the main thread so the worker can put back exactly what
+		// the row said if the switch does not happen.
+		previous := ""
+		if uh.agentModelRow != nil {
+			previous = uh.agentModelRow.GetSubtitle()
+		}
+		go uh.applyModelFamilyPreset(fam, previous)
 	}
 	dialog.ConnectResponse(&responseCb)
 	if uh.agentsPrefsPage != nil {
@@ -187,7 +196,11 @@ func (uh *UserHome) presentModelPresetChooser() {
 	}
 }
 
-func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
+// applyModelFamilyPreset resolves, pulls, and activates one family's model.
+// previous is the Active Model subtitle before the attempt; every path that
+// does not switch the model — a failure or a dry-run preview — restores it,
+// so the row never claims a model the server is not serving.
+func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) {
 	// The worker owns the preset gate from here until it returns, so a
 	// second preset cannot start while this one is still pulling.
 	defer uh.agentPresetGate.Reset()
@@ -200,6 +213,11 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 			uh.agentModelRow.SetSubtitle(fmt.Sprintf("Switching to %s…", fam.DisplayName()))
 		}
 	})
+	restore := func() {
+		if uh.agentModelRow != nil {
+			uh.agentModelRow.SetSubtitle(previous)
+		}
+	}
 
 	// Get node status for memory fitting. Without the memory we cannot fit a
 	// model to the machine, so a failure to reach the server aborts rather
@@ -208,6 +226,7 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 	if err != nil {
 		log.Printf("views: fetch node status failed: %v", err)
 		sgtk.RunOnMainThread(func() {
+			restore()
 			uh.toastAdder.ShowErrorToast("Could not reach the model server to check memory")
 		})
 		return
@@ -216,6 +235,7 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 	if err != nil {
 		log.Printf("views: resolve candidate failed: %v", err)
 		sgtk.RunOnMainThread(func() {
+			restore()
 			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not find a matching model for %s", fam.DisplayName()))
 		})
 		return
@@ -225,9 +245,7 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 	if dryRun {
 		log.Printf("[DRY-RUN] would configure alias %s to %s and pull", aistack.ActiveModelAlias, modelRef)
 		sgtk.RunOnMainThread(func() {
-			if uh.agentModelRow != nil {
-				uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-			}
+			restore()
 			uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", modelRef))
 		})
 		return
@@ -239,6 +257,7 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 	if err := aistack.PullModel(ctx, modelRef); err != nil {
 		log.Printf("views: pull model failed: %v", err)
 		sgtk.RunOnMainThread(func() {
+			restore()
 			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to pull model %s", modelRef))
 		})
 		return
@@ -247,6 +266,7 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family) {
 	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
 		log.Printf("views: configure alias failed: %v", err)
 		sgtk.RunOnMainThread(func() {
+			restore()
 			uh.toastAdder.ShowErrorToast("Could not configure active model alias")
 		})
 		return
@@ -347,6 +367,10 @@ func (uh *UserHome) buildPeersGroup(page *adw.PreferencesPage) {
 	keyRow := adw.NewPasswordEntryRow()
 	keyRow.SetTitle(pageview.PeersAPIKeyRowTitle())
 	uh.peersKeyEntry = keyRow
+	// libadwaita emits ::apply only from the apply button, which is shown
+	// only with show-apply-button; Enter then applies too. Without it the
+	// handler below could never run.
+	keyRow.SetShowApplyButton(true)
 	keyApply := func(_ adw.EntryRow) { uh.savePeerAPIKey() }
 	keyRow.ConnectApply(&keyApply)
 	group.Add(&keyRow.Widget)
@@ -411,9 +435,11 @@ func (uh *UserHome) refreshPeersList() {
 		enabledSwitch = newGuardedSwitch(peer.Enabled, func(state bool) {
 			uh.setPeerEnabled(address, state, enabledSwitch)
 		})
+		enabledSwitch.widget.SetTooltipText(pageview.PeerSwitchLabel(address))
+		SetAccessibleLabel(&enabledSwitch.widget.Widget, pageview.PeerSwitchLabel(address))
 		row.AddSuffix(&enabledSwitch.widget.Widget)
 
-		removeBtn := gtk.NewButtonFromIconName("user-trash-symbolic")
+		removeBtn := newIconButton("user-trash-symbolic", pageview.PeerRemoveLabel(address))
 		removeBtn.SetValign(gtk.AlignCenterValue)
 		removeBtn.AddCssClass("flat")
 		removeClicked := func(_ gtk.Button) { uh.confirmRemovePeer(address) }
@@ -584,6 +610,7 @@ func (uh *UserHome) savePeerAPIKey() {
 	if key == "" {
 		return
 	}
+	dryRun := dryrun.Enabled()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -594,7 +621,7 @@ func (uh *UserHome) savePeerAPIKey() {
 				uh.toastAdder.ShowErrorToast(pageview.PeerKeyFailedToast(err.Error()))
 				return
 			}
-			uh.toastAdder.ShowToast(pageview.PeerKeySavedToast())
+			uh.toastAdder.ShowToast(pageview.PeerKeySavedToast(dryRun))
 		})
 	}()
 }

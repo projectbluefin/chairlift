@@ -145,9 +145,9 @@ go func() {
 
 A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Could not read the list", "Could not check for tool updates") while keeping the last known rows and counts.
 
-A group whose gate is a *query* keeps an asynchronous gate: it is built immediately with a "Checking…" description, a goroutine asks, and the main thread either populates it or hides it (`SetVisible(false)`). It never swaps in an inert "not available" group. This applies to `featuresGroup` (hidden when updex lists no features; a failed listing keeps the group and reports it), the Homebrew untrusted-taps group (hidden unless there is something to trust), and the Livery panel section (hidden when the Custom Command Menu extension's schema is absent).
+A group whose gate is a *query* keeps an asynchronous gate: it is built immediately with a "Checking…" description, a goroutine asks, and the main thread either populates it or hides it (`SetVisible(false)`). It never swaps in an inert "not available" group. This applies to `featuresGroup` (hidden when updex lists no features; a failed listing keeps the group and reports it), the Homebrew untrusted-taps group (hidden unless there is something to trust), and the Livery panel section (hidden when the Custom Command Menu extension's schema is absent). Hiding the optional-features group can leave the Features page with nothing on it — a host with no image descriptor, or with `dx_group` and `gaming_group` both disabled, builds neither the Developer nor the Gaming group — so `buildFeaturesPage` adds a hidden `AdwStatusPage` group whose visibility and text come from `pageview.FeaturesEmptyState(bluefinGroups, optionalFeatures)`. It is evaluated at build time (a still-checking optional-features group counts as on offer) and again when `loadFeatures` hides that group; only when neither kind of group is on offer does it show "Nothing to set up here" and log `views: features page offers nothing on this system`. A failed listing keeps the group, which is itself the explanation, so it never produces the empty state.
 
-The Update All group is the one place the *startup* path must not probe providers at all. Its rows are determined by which of bootc, Flatpak, and Homebrew exist on this host, and whether the unattended-update timer is installed — four separate subprocess checks that can each approach a multi-second timeout on a slow or wedged host. `buildUpdateAllGroup` therefore builds only a hidden shell with a "Checking…" description; `loadUpdateAllGroup` runs the availability probes (`hostAvailability()` and `autoupdate.Detect`) in a worker, and `populateUpdateAllGroup` marshals the resulting rows back onto the GTK main thread once every probe has answered. When no provider can update anything, the group simply stays hidden, matching the previous behavior of omitting it entirely.
+The *startup* path must not probe update providers on the main thread. The status-first update shell's initial `Coordinator.Check` runs in a worker (`UpdateShell.StartCheck`), and every provider's `Available` probe — some of which are `sync.Once`-cached subprocess checks, such as `flatpak --version` — is evaluated inside that worker, never while building the page. The automatic-updates group on the Updates page is built as a hidden shell (`buildAutomaticUpdatesGroup`) because its two `systemctl` queries can each approach a multi-second timeout on a slow or wedged host; `loadAutomaticUpdatesGroup` runs `autoupdate.Detect` in a worker under a five-second bound and reveals the switch on the GTK main thread only when the unattended-update timer is installed.
 
 ### bootc boot gate
 
@@ -171,7 +171,7 @@ Per-wrapper mechanics:
 - **bootc**: `StageUpdate` short-circuits before invoking pkexec: it logs the would-be command, emits a synthetic `EventMessage` + `EventComplete` pair on the progress channel, and returns — the stage script is never actually run (see the exception above for the toast/subtitle split).
 - **Homebrew tap trust**: `trustTap` (`internal/views/updates_page.go`) computes `decision := actionmsg.TapTrust(dryrun.Enabled(), tap.Name)` once, after a successful `homebrew.TrustPackages` call, and gates removing the tap's row, hiding the group, and refreshing outdated packages on `decision.MutateUI`.
 - **views (custom maintenance scripts)**: `runMaintenanceAction` (`internal/views/maintenance_page.go`) calls `actionmsg.MaintenanceScript(dryrun.Enabled(), title)` once, before spawning its goroutine, to get a `ScriptDecision{Execute, Toast}`: when `Execute` is false no `exec.Cmd` is ever constructed (no `pkexec`, no direct script exec) — only a `[DRY-RUN] Would execute: ...` log line.
-- **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.SetActive(enabled)`) or reverts to its pre-click state (`toggle.SetActive(!enabled)`).
+- **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.set(enabled)`) or reverts to its pre-click state (`toggle.set(!enabled)`); `set` is `guardedSwitch`'s programmatic move, which marks itself so the resulting `::state-set` is not treated as another user action.
 - **avatar**: `Applier.Dispatch` (`internal/avatar/applier.go`) reads `dryrun.Enabled()` first and returns before constructing a process or opening a file, logging `[DRY-RUN] would set avatar to <id>`. A live dispatch reports which route took effect as an `avatar.Route`: `RouteBusctl` when AccountsService accepted `SetIconFile` over `busctl`, `RouteFaceFile` when that call failed or was unreachable and the icon was written to `~/.face.icon` and `~/.face` instead (picked up at the next session start, not immediately), and no route at all when both failed. A canceled context is reported as an error rather than being treated as an unreachable bus, so an abandoned action never writes into the user's home. The dispatch is deliberately unprivileged — AccountsService authorizes it for the caller's own account — so it takes no `pkexec` route and is classified as an unprivileged `os/exec` site in `internal/installcheck`'s journal contract. Its one caller is the Livery page's Profile Picture section (`account_group`, `internal/views/profile_picture.go`): opening the page only stats `avatar.CurrentPicture`'s candidates (AccountsService's icon, then `~/.face.icon`, then `~/.face`); picking a catalog row downloads and transcodes that one illustration for a preview, and only Apply writes the PNG to `$XDG_CACHE_HOME/chairlift/avatar.png` and dispatches it. Under `--dry-run` Apply writes no file and Dispatch logs the preview. A failed download or dispatch reveals a banner in the chooser and leaves the account's picture and the page row unchanged; the toast text for each route comes from `pageview.AvatarApplied`, so a face-file write never reads as a live change. The chooser is an `AdwDialog` built once with its ten rows and one `row-activated` handler.
 - **Developer onboarding tabs**: `openDeveloperOnboarding` (`internal/views/features_page.go`) is reached only from the success branch of `onDeveloperToggled`, and dispatches through `pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded)`. That pure function is the whole admission rule — a confirmed live enable is the only input combination that yields the three URLs, so `--dry-run` opens no browser processes during `make screenshots`, a disable is a no-op, and a failed promotion opens nothing. The URLs and their order are asserted headlessly in `internal/views/pageview`; the dispatch itself reuses `UserHome.openURL`, the same asynchronous `xdg-open` path the Help page links use, so a browser that fails to start reports its own failure by toast without touching the group promotion or the switch.
 - **Optional developer feed setup**: `startDeveloperFeedSetup` (`internal/views/features_page.go`) is called from that same success branch, and its admission rule is `actionmsg.DeveloperFeedSetupPlan(dryrun.Enabled(), enabled, succeeded, installPulp, stageFeeds)`. Only a confirmed live enable with at least one of `dx_group`'s `install_pulp`/`stage_feeds` set produces non-empty work, so a preview installs nothing during `make screenshots`, a disable is a no-op, and a failed promotion starts no worker. The plan is a value read from config on the main thread before the goroutine starts, so the worker touches no widget and no view state; it calls `internal/developerfeeds`'s `Provision` and `StageOPML` (both of which re-check `dryrun.Enabled()` as defense in depth) and marshals a single `actionmsg.DeveloperFeedFeedback` result back through `sgtk.RunOnMainThread` to one toast. `developerFeedGate` refuses a second setup while an install is in flight, and the toast is nil-guarded. The wording and the failure classification come from the same tested decision struct, which is what keeps a failed optional install from reading as a failed permission change and keeps "staged" from reading as "imported".
@@ -203,8 +203,11 @@ and actions are validated before migration, including retired groups and
 values superseded by current settings. Before decoding, the two surviving
 groups (`bootc_status_group`, `channel_group`) supply omitted/null Updates
 fields; explicit current values take precedence. Information and health groups
-are ignored by runtime decoding. Source files, search precedence, and
-fail-closed handling for invalid inputs remain unchanged.
+are ignored by runtime decoding. Similarly, retired `maintenance_page` groups
+(`maintenance_brew_group`, `maintenance_flatpak_group`, `maintenance_optimization_group`)
+are validated and stripped prior to runtime decoding so existing host files do
+not fail closed. Source files, search precedence, and fail-closed handling for
+invalid inputs remain unchanged.
 
 **Structured load-error vocabulary (`internal/config/loaderror.go`).** A
 stable `ErrorKind` enumerates why loading/validating a config file could
@@ -221,10 +224,17 @@ validator-detected shape failure
 found only after the document parsed successfully — e.g. an unknown key or a
 value of the right YAML kind but the wrong shape — which may legitimately
 carry a nil `Err` since shape inspection alone can detect the problem with
-no underlying cause to wrap. `LoadError.Error()` renders `Path`, the exact
-`Kind` string, `Detail`, and the cause (in that order, each only when
-non-empty/non-nil), so the three `Kind` literals above always appear
-verbatim in the message. `LoadError.Unwrap()` returns `Err` unchanged
+no underlying cause to wrap. `LoadError.Error()` renders `config <Kind>
+error` (or `config error` when `Kind` is empty), then `: Path`, `: Detail`,
+and `: Err.Error()` in that order, each only when non-empty/non-nil, so the
+three `Kind` literals above always appear verbatim in the message. The cause
+is omitted when `Detail` already contains `Err.Error()`: yaml.v3 parser
+failures (`parseFailure` in `source.go`) and decoder failures
+(`validatorDecodeError` in `validate.go`) set `Detail` to the cause's own
+message so its `line N` fragment is attributed, and keep `Err` only for
+`errors.Is`/`errors.As`; appending it again printed the same cause twice in
+the persistent toast and the `CONFIGURATION ERROR` log (issue #348,
+`TestParseErrorNamesItsCauseOnce`). `LoadError.Unwrap()` returns `Err` unchanged
 (nil when there is none), which is what lets `errors.Is`/`errors.As` see
 through a `*LoadError` to a wrapped sentinel or recover the original value
 from a `fmt.Errorf("%w", ...)` wrapper.
@@ -1096,8 +1106,8 @@ than derived.
 back: it answers, per page and group, whether the tool or asset that group
 exists to drive is present. It exists because ChairLift's documented
 degradation policy — a group whose backing tool is absent is hidden rather
-than rendered inert — needs one read-only classification instead of the four
-mutually inconsistent answers the views layer gives it today.
+than rendered inert — needs one read-only classification instead of the
+mutually inconsistent answers the views layer once derived for itself.
 
 A capability is the presence of a backing tool or asset, never a runtime
 state. `Flatpak`, `Homebrew`, and `Distrobox` resolve from one
@@ -1114,10 +1124,11 @@ build hidden shells, and are revealed once the query answers.
 
 `Detect` resolves the host through the package's `Probe` seam, whose production
 value is `exec.LookPath` and `os.Stat`; `SetProbe` replaces it, which is the
-seam the `chairlift_e2e` walkthrough capability stub will use. `DetectWith` is
-the pure core `Detect` wraps and what the tests drive directly. Nothing here
-caches: the caller resolves once per session and keeps the result, so sidebar
-accelerators and items cannot shift under the user's cursor. That immutability
+seam the `chairlift_e2e` walkthrough capability stub (`CHAIRLIFT_CAPABILITIES`)
+uses. `DetectWith` is the pure core `Detect` wraps and what the tests drive
+directly. Nothing here caches: the caller resolves once per session and keeps
+the result, so sidebar accelerators and items cannot shift under the user's
+cursor. That immutability
 is a contract on the caller rather than a package-level cache, which would also
 make a test's probe substitution order-dependent.
 
@@ -1126,11 +1137,10 @@ make a test's probe substitution order-dependent.
 where a group is satisfied by **any one** of the listed capabilities:
 `bootc_updates_group` needs the stage script, `agents_group` needs Homebrew,
 `reset_group` needs Flatpak or Distrobox because powerwash's two steps
-independently skip when their own tool is absent, and `update_all_group` needs
-any one of the four update providers, so a host with none of them constructs
-no empty, inert Update All group. A group with no capabilities requires nothing
-of the host and is listed anyway, so that "no host prerequisite" is a recorded
-decision rather than an omission; three of those are named in the table's own
+independently skip when their own tool is absent. A group with no capabilities
+requires nothing of the host and is listed anyway, so that "no host
+prerequisite" is a recorded decision rather than an omission; two of those
+(`bootc_status_group` and `features_group`) are named in the table's own
 comment because they read like omissions. `Compose(configured, set)` composes
 the administrator's `Config.IsGroupEnabled` with a resolved set and pins the
 floor's direction: configuration may subtract from the capability set and never
@@ -1173,10 +1183,21 @@ capabilities. Running this file is itself the purity check ADR-0007 describes:
 a puregotk import anywhere in the dependency graph would panic at package init,
 before any test function ran.
 
-Nothing consumes the package yet. Threading the composed predicate through
-`views.New`, the `configured` map, and the update coordinator is #205, and
-retiring the inert subtitle branches for `flatpak`, `brew`, and `podman` is
-#206.
+Every entry path consumes the resolved set `Window.buildUI` detects once. The
+sidebar (`navigation.VisibleItems`) and the first-run assistant take
+`Window.effectiveEnabled`, which is `Compose(Config.IsGroupEnabled, set)`, and
+`views.New` receives the same set so each view builder's `groupEnabled` composes
+the identical predicate (#205). The update coordinator is the one consumer that
+keeps the two facts apart: `buildUI`'s `sourcePolicy` hands
+`updateflow.Coordinator.Check` a `map[SourceID]updateflow.Policy` whose
+`Configured` is `Config.IsGroupEnabled` and whose `Supported` is
+`Set.Supports`. A source is checked only when both hold and its provider is
+available, exactly as the composed predicate would allow, but a source the host
+cannot back is reported unavailable ("Not available on this system") rather
+than "Disabled by administrator", which `updatepresent` reserves for
+`Configured` false. The views' own "not installed" placeholder branches that
+the floor made unreachable were removed in #206.
+
 ### Package manager wrapper pattern
 
 Each wrapper in `internal/` follows a consistent shape:
@@ -1352,6 +1373,14 @@ the same shape one level up: a scope that cannot be listed is tolerated, but
 a *kind* that answered in neither scope is fatal, because reporting its
 components missing is exactly the loop that bug was.
 
+Under `--dry-run` the switch still reverts, but the preview toast reports the
+outcome the live run would have (`actionmsg.GamingMode(dryRun, enable,
+changed, failed, skipped)`): nothing could change, nothing to remove because
+every component is installed system-wide, already in the requested state, or
+the components that would change — with any system-wide components that would
+be left in place named separately — and the row keeps its pre-run subtitle,
+because a preview changed nothing.
+
 ### Custom Command Menu developer visibility (`internal/devmenu`)
 
 `internal/devmenu` manages the Custom Command Menu GNOME Shell extension (`org.gnome.shell.extensions.custom-command-list`) visibility for developer tools (Terminal and Containers):
@@ -1361,71 +1390,71 @@ components missing is exactly the loop that bug was.
 - **Distro vs. user layer:** Shipped distro defaults come from `/etc/dconf/db/distro.d/`. Toggling visibility distinguishes enforcing policy from resetting to defaults: when the desired state matches the distro default (e.g. `visible=true` on developer enable), `devmenu.Apply` resets the user key (`dconf reset`) so future distro defaults continue to shine through. When turning Developer Mode off and the distro default has `visible=true`, it explicitly writes `visible=false` to the user layer because a reset would reveal the visible default.
 - **Supported environments and preview:** A missing extension or non-GNOME environment (e.g. Plasma) is a supported no-op (`devmenu.Apply` returns `nil`), whereas operational read/write failures return an error and are not hidden as success. Under preview (`dryrun.Enabled()`), mutations are skipped and logged as `[DRY-RUN] would set Custom Command Menu <key> visible=<bool>` (or `[DRY-RUN] would reset Custom Command Menu <key> to default` for resets). The call site composes no tuple or visibility text of its own.
 
-### Update All
+### Unified update run (`internal/updateflow`)
 
-`internal/updateall` sequences the one-action update that both bluefinctl
-(`bctl update`) and finupdate (the hero button) lead with. It is a pure
-package: `Plan` selects the phases available on this host, `Runner.Run`
-executes them through function seams, and `Summarize` aggregates the outcome.
-Nothing in it executes a command directly, which is why the whole
-ordering/failure/cancellation/restart matrix is table-tested on a host with
-no bootc, Flatpak, or Homebrew.
+The Updates destination is `internal/views.UpdateShell`, a status-first
+surface in three layers that must stay separate:
 
-Each exported function's distinct outcomes:
+- `internal/updateflow` is the pure coordinator. `Coordinator.Check` checks,
+  concurrently, every source that is configured, supported by the host
+  capability floor, available, and enabled in the user's preferences;
+  `Coordinator.UpdateAll` applies pending items serially in the provider order
+  `Window.buildUI` constructs — applications (Flatpak), developer tools
+  (Homebrew), system components (updex), then the operating system (bootc
+  staging). Every published `Snapshot` is immutable and generation-guarded, so
+  a stale worker cannot overwrite a newer state. A failed source does not
+  abort the run; `ActionRetryFailed` re-applies only sources that still carry
+  an apply error. Post-update maintenance (`updateproviders.NewMaintenance`,
+  gated by `maintenance_freespace_group`) runs only after a clean live run and
+  only when the user's `MaintenanceAfterUpdates` preference is set.
+- `internal/updateproviders` holds the production `updateflow.Provider`
+  values, which wrap `internal/flatpak`, `internal/homebrew`, `internal/updex`,
+  and `internal/bootc`; the coordinator executes nothing itself.
+- `internal/views/updatepresent` maps one snapshot to the shell's title,
+  description, banner, and action label, and each source's row subtitle. A
+  source whose policy has `Configured` false reads "Disabled by
+  administrator"; one that is configured but not `Available` — the provider's
+  own `Available` probe says no, or `Policy.Supported` is false because the capability
+  floor cannot back it — reads "Not available on this system".
 
-- `Plan` returns the phases in execution order — OS image, then applications,
-  then Homebrew packages — omitting any whose provider is absent. An empty
-  plan means Update All is not offered at all.
-- `Runner.Run` emits one `EventPhaseStarted` and one `EventPhaseFinished` per
-  planned phase, plus `EventMessage` for each streamed output line, and
-  returns one `Result` per phase. A phase failure does **not** abort the run:
-  applications and packages are independent of the OS image and of each
-  other. Context cancellation is the one exception and marks every remaining
-  phase `OutcomeSkipped`. The phase that was still running when the user
-  cancelled is classified the same way: its error unwraps to
-  `context.Canceled`, so `Run` reports it `OutcomeSkipped` with detail
-  `Cancelled` rather than `OutcomeFailed`, and a user-requested stop never
-  reads as a broken update. Every other provider error is still
-  `OutcomeFailed`. A nil provider seam yields `OutcomeFailed`, never
-  success. Events are dropped rather than blocking when nothing is receiving.
-- `Summarize` produces the counts, the `FailedPhases` list, `RestartRequired`,
-  and one `Headline`. The distinct headlines are: nothing planned, every phase
-  failed, some failed with a staged image, some failed without one, cancelled,
-  a restart is pending, and everything was already current.
+The shell learns each source's policy from `Window.buildUI`'s
+`sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
+`Config.IsGroupEnabled` and `Supported` from `capability.Set.Supports` (see
+"Host capability floor" above). The four sources are keyed to
+`bootc_updates_group`, `flatpak_updates_group`, and `brew_updates_group` on
+`updates_page`, and `features_group` on `features_page`.
 
-`RestartRequired` deserves its own note: the OS phase stages an image rather
-than applying it, and the stage script is idempotent — it exits 0 without
-staging when the system is already current. So the phase's success is not
-evidence that anything changed. The decision comes from the `StagedAfter`
-probe re-reading `bootc status`: a failed read fails the OS phase instead of
-claiming everything is current, while a missing probe does not invent a
-restart prompt.
+Everything else the Updates page owns is built by `buildUpdatesPage` into
+`UserHome.updatesPrefsPage`, and `Window.buildContentArea` mounts that page
+beneath the shell's source rows with
+`UpdateShell.SetSecondaryContent(views.UpdatesPreferencesPage())`. In order,
+and each only when its group is enabled and (where it probes) the probe
+answers: automatic updates, the "Your system" version readout, the Operating
+system group with the System updates stage expander and changelog Compare
+row, the Apps and Developer tools groups, the "Unverified sources" tap-trust
+group, and the "Advanced" release-channel and graphics-driver controls.
+Before `SetSecondaryContent` existed nothing mounted that page, so none of
+those controls were reachable (issue #250). The automatic-updates switch is a
+`guardedSwitch` (`newGuardedSwitch`), because `gtk_switch_set_active` emits
+`::state-set` exactly as a click does: an unmarked revert after a failed or
+previewed helper call would request the opposite change.
 
-The Update All button remains reusable after a completed run: its gate resets
-when the button becomes sensitive again. A completed gate would make every
-subsequent click inert, including a retry after a failed or previewed run.
+Restart is the run's only privileged surface of its own. `PhaseRestartRequired`
+is reached only when a source reports that a restart is required — the OS
+provider reads it from `bootc status`'s staged deployment, because the stage
+script is idempotent and exits 0 on an already-current system — and
+`updatepresent` renders `ActionRestart` as "Restart now", which
+`UpdateShell.StartRestart` sends through `ublue.Restart` to the
+`chairlift-ublue-helper` `restart` subcommand. Its argv is the fixed
+`systemctl reboot` (`ubluehelper.RestartArgs`) with no delay and no target;
+scheduled restarts would each need their own action.
 
-When the plan includes an OS phase, completion also re-reads bootc status on
-the worker and refreshes the bootc badge, System Update subtitle, and Compare
-references on GTK's main thread. A failed re-read preserves the known badge
-and comparison rather than clearing them; an Update All plan without the OS
-phase does not start an unnecessary bootc query.
-
-The Homebrew phase runs `brew update` and then `brew upgrade` under the same
-cancellable context; metadata refresh alone would leave outdated packages in
-place. After a live run, the existing generation-guarded Flatpak and Homebrew
-loaders refresh the rows and badge for every planned provider, even if a
-phase partially failed. Dry-run does not reload unchanged inventories or hide
-an existing restart prompt; its successful phase rows and headline say
-`[DRY-RUN] Preview` rather than claiming packages are current, and it sends no
-completion notification. A disabled provider group is never dereferenced.
-
-The restart itself is the run's only new privileged surface: a `restart`
-subcommand on `chairlift-ublue-helper` running `systemctl reboot`, with a
-fixed argv that takes no delay and no target. Scheduled restarts
-(finupdate's "Restart Tonight", bluefinctl's reboot-on-logout) would each
-need their own action rather than a parameter here, precisely because a time
-argument crossing the boundary is another value the caller would control.
+After a live run, `UserHome.OnUpdateFinished` reloads the Flatpak and
+Homebrew inventories and, when the operating system completed, re-reads bootc
+status to refresh the badge and the changelog's Compare references; a failed
+re-read keeps the last known badge count. A preview run reloads nothing.
+`UpdateShell.notifyUpdateComplete` sends the single desktop notification
+(see below) and skips previews.
 
 ### Action journal and desktop notifications
 
@@ -1455,8 +1484,9 @@ every `os/exec` call site under `internal/` as privileged or unprivileged and
 requires each privileged one to record both suppression states, so a fourth
 executor cannot reopen the hole silently.
 
-`internal/notify` sends exactly one desktop `GNotification`: Update All's
-completion, through `views.ToastAdder.NotifyBackground` (implemented by
+`internal/notify` sends exactly one desktop `GNotification`: the unified update
+run's completion (`notify.UpdateAllComplete`, sent from
+`UpdateShell.notifyUpdateComplete`), through `views.ToastAdder.NotifyBackground` (implemented by
 `internal/window.Window`, the one place holding a `*gtk.Application` handle).
 It is the only ChairLift action long enough that a user plausibly stepped
 away before it finished; every other toggle completes in view and already has
@@ -1478,7 +1508,10 @@ snippet and exits 0 when `~/.config/goose/config.yaml` already exists, so a
 user who has run `goose configure` gets a successful setup that wired up
 nothing. `Detect` therefore reads the file for the `linux-tools` extension,
 and `Setup` returns the state it actually left rather than the one it aimed
-for — `TroubleshootSetupSubtitle` has a case for exactly that outcome.
+for — `TroubleshootSetupSubtitle` has a case for exactly that outcome. A
+`--dry-run` Set Up shows only its preview toast and leaves the row describing
+the host's unchanged state, because a setup-outcome subtitle would claim a
+result that never happened.
 
 `ParseConfig` decodes the file as YAML rather than scanning lines: a
 `linux-tools` key anywhere is not the same fact as an enabled `linux-tools`
@@ -1488,6 +1521,9 @@ ChairLift still neither owns nor rewrites that file — and a malformed or
 extension-less config yields `Wired` false. The provider is read and
 displayed, never written — the default the setup script installs is
 `gemini-cli`, which sends system details to Google, and the row says so.
+Because that subtitle embeds user-controlled `GOOSE_PROVIDER` text, the row
+sets `use-markup` false; the Help page's configured link rows do the same, so
+an `&` in a configured URL cannot fail Pango parsing and blank the row.
 
 Nothing crosses a privilege boundary: every piece is a user-scope Homebrew
 install and linux-mcp-server's access is read-only.
@@ -1639,16 +1675,25 @@ back, logged, or redisplayed. `ProbePeer` performs one bounded (3s) GET of a
 peer's `/llmman/node` carrying that key as a bearer credential; a timeout or
 connection failure is reported unreachable rather than as an empty answer,
 a `401` is reported distinctly, and the key never appears in a returned
-error. The Agents page's "Use another machine" group (`buildPeersGroup` in
-`internal/views/agents_page.go`) lists configured peers with an enable
-switch and remove action, an add-peer dialog, and the shared key field, and
-states that the remote machine must separately turn on a non-loopback,
-authenticated llmman service and open its own firewall.
+error. Under `--dry-run` each peer mutation logs the list it would hand
+llmman — `enabledPeerAddresses`, the same enabled-only subset
+`applyPeerList` sends live, never a disabled address that exists only in
+ChairLift's store — and writes nothing. The Agents page's "Use another
+machine" group (`buildPeersGroup` in `internal/views/agents_page.go`) lists
+configured peers with an enable switch and a remove button whose tooltip and
+accessible name name the peer (`pageview.PeerSwitchLabel` "Use <address>",
+`pageview.PeerRemoveLabel` "Remove <address>"), an add-peer dialog, and the
+shared key field. The key field is an `AdwPasswordEntryRow` with
+`show-apply-button` set, because libadwaita emits `::apply` only from that
+button (Enter then applies too); a dry-run save toasts
+`pageview.PeerKeySavedToast(true)`'s preview wording rather than claiming the
+key was saved. The group states that the remote machine must separately turn
+on a non-loopback, authenticated llmman service and open its own firewall.
 
 ### Powerwash and Factory Reset
 
-`internal/powerwash` is Powerwash's pure sequencer, in the same shape as
-`internal/updateall`: `Runner.Run` executes the two steps (removing every
+`internal/powerwash` is Powerwash's pure sequencer: `Runner.Run` executes the
+two steps (removing every
 user-scope Flatpak, removing every Distrobox container) through function
 seams, and `Summarize` aggregates the outcome. A step whose tool is not
 installed is `OutcomeSkipped`, not a failure — there is nothing for it to
@@ -1869,6 +1914,15 @@ shortcut inventory, the F1 Help binding, and static app/window wiring. No
 `_test.go` is added to the puregotk-importing `internal/window` or `internal/app`
 packages.
 
+The sidebar selection belongs to `navigateToPage` alone. `GtkListBox` selects
+whichever row receives keyboard focus, so Tab and the arrow keys would move the
+highlight onto a page the content does not show without ever emitting
+`row-activated`. `navigateToPage` records the resolved index in
+`Window.shownRow`, and `buildSidebar` connects one `row-selected` handler, once
+at build time, that re-selects that row whenever the selection lands anywhere
+else; the focus ring stays where the user moved it, and Return (or a click)
+still navigates through `row-activated`.
+
 Note: `GtkShortcutsWindow` is not available in puregotk, so a custom `adw.Window` with `adw.PreferencesGroup` rows is used for the shortcuts dialog.
 
 ### URL opening
@@ -1941,7 +1995,7 @@ is handled by the migration described above, not a current System namespace.
 ## Build and Release
 
 - **Build**: `make build` builds three binaries: `build/chairlift` (main app), `build/chairlift-updex-helper` (privileged updex helper), and `build/chairlift-ublue-helper` (privileged Bluefin-family helper), all with `CGO_ENABLED=0`
-- **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. Codecov's remote project status additionally rejects coverage regressions greater than one percentage point, with no fixed project or patch target; it cannot be mirrored locally. The runtime-dependent E2E job is deliberately separate: `make e2e` builds all three binaries, executes the application's `--help` path, boots the dry-run GTK window under a private D-Bus/Xvfb session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then terminates its private process group and waits for every surviving member of it to exit before Go removes the temporary `HOME` those workers write into, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged helper binaries' rejection paths. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md). The same target also runs the AT-SPI accessibility suites (`test/e2e/atspi_navigation_test.go` and `test/e2e/agent_presets_atspi_test.go`, driven by `test/e2e/run_atspi_navigation.sh` and dogtail probes): it enables the accessibility bridge inside the run's own private D-Bus session — the one place the suite departs from the walkthrough's deliberately a11y-free environment — and exercises navigation and Agent Mode preset selection via AT-SPI. When AT-SPI runtime dependencies (`at-spi2-core`, `python3-dogtail`) are missing, the suites skip with a clear message.
+- **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. Codecov's remote project status additionally rejects coverage regressions greater than one percentage point, with no fixed project or patch target; it cannot be mirrored locally. The runtime-dependent E2E job is deliberately separate: `make e2e` builds all three binaries, executes the application's `--help` path, boots the dry-run GTK window under a private D-Bus/Xvfb session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then terminates its private process group and waits for every surviving member of it to exit before Go removes the temporary `HOME` those workers write into, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged helper binaries' rejection paths. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md). `make e2e-atspi` runs the behave AT-SPI suite (`test/e2e/features/`, gated by `TestATSPIBehaveSuite` in `test/e2e/atspi_behave_test.go` and run by `test/e2e/run_atspi.sh`) inside `ghcr.io/projectbluefin/dakota:testing` via `test/e2e/dakota_atspi.sh`; `make e2e` skips that test because what the tree announces depends on the GTK/Libadwaita release (Ubuntu's Libadwaita 1.5 publishes preference groups differently from what Bluefin ships). The suite follows projectbluefin/testsuite's behave + dogtail shape against a private Xvfb display instead of a GNOME Shell VM. `features/environment.py` launches a fresh `--dry-run` ChairLift per scenario with its own HOME, XDG_RUNTIME_DIR, configuration fixture (`@config.<name>`, default `everything`, written as `config.dev.yml` beside a staged copy of the binary) and `$CHAIRLIFT_ACTION_JOURNAL`, so a step can assert which privileged command a click would have run without running it. Readiness still comes from the three log markers (ADR-0008); the accessibility bridge is enabled only inside the run's own private D-Bus session, the one place the suite departs from the walkthrough's deliberately a11y-free environment. The page and shortcut inventories arrive from `internal/navigation` as `CHAIRLIFT_NAVIGATION`/`CHAIRLIFT_SHORTCUTS`, so the suite cannot drift from them. Shared steps live in `features/steps/common.py`, tree helpers in `features/lib/chairlift_atspi.py`, prelaunch stubs in `features/fixtures/stubs*.py`; `TestATSPIFeaturesHaveNoUndefinedSteps` catches an undefined or ambiguous step without a display. The test, release, and nightly workflows install the host runtime through `.github/actions/e2e-runtime` (apt packages plus a venv from `test/e2e/requirements-atspi.txt`, pinned to testsuite's behave, for the dry-run step check), then `brew install xorg-server` for an Xvfb the container can execute and run `make e2e-atspi`; the script sets `CHAIRLIFT_REQUIRE_ATSPI=1`, which turns a missing stack from a skip into a failure, and masks `/usr/share/chairlift`. The E2E job uploads `atspi-results` (JUnit, logs, and accessibility-tree dumps plus screenshots for failed scenarios).
 - **Dev build**: `make dev` builds with `CGO_ENABLED=1` and `-race` flag for race detection
 - **Version**: Set via ldflags by goreleaser (`buildVersion`)
 - **Semantic versioning**: Uses [svu](https://github.com/caarlos0/svu) via `make bump`

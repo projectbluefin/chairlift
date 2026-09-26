@@ -129,8 +129,9 @@ Explicit shared-group rules:
 Legacy `system_page` aliases are migration input, not canonical groups or new
 routes: `bootc_status_group` and `channel_group` migrate into Updates;
 `system_info_group` and `health_group` are retired. The former
-`maintenance_brew_group` and `maintenance_flatpak_group` are not current schema
-groups. Do not resurrect their separate cleanup buttons.
+`maintenance_brew_group`, `maintenance_flatpak_group`, and `maintenance_optimization_group`
+are not current schema groups; they are accepted and stripped for backward compatibility
+without restoring their separate cleanup buttons.
 
 ### Action/route matrix
 

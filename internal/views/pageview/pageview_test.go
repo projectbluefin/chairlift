@@ -428,3 +428,26 @@ func TestStagingLogSubtitleNamesTheCapWhenOneApplied(t *testing.T) {
 		})
 	}
 }
+
+// TestFeaturesEmptyStateOnlyWhenNothingIsOffered holds issue #352: a host
+// with no Developer or Gaming group and no optional features must explain the
+// empty page, and any one offering — including a features group still
+// checking — must suppress the explanation.
+func TestFeaturesEmptyStateOnlyWhenNothingIsOffered(t *testing.T) {
+	for _, tc := range []struct {
+		bluefin, optional, want bool
+	}{
+		{bluefin: false, optional: false, want: true},
+		{bluefin: true, optional: false, want: false},
+		{bluefin: false, optional: true, want: false},
+		{bluefin: true, optional: true, want: false},
+	} {
+		row, empty := FeaturesEmptyState(tc.bluefin, tc.optional)
+		if empty != tc.want {
+			t.Errorf("FeaturesEmptyState(%v, %v) empty = %v, want %v", tc.bluefin, tc.optional, empty, tc.want)
+		}
+		if empty && (row.Title == "" || row.Subtitle == "") {
+			t.Errorf("FeaturesEmptyState(%v, %v) shows an empty state without saying why: %+v", tc.bluefin, tc.optional, row)
+		}
+	}
+}

@@ -135,3 +135,37 @@ func TestLegacySystemPageInvalidInputStillFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestLegacyMaintenanceGroupsIgnoredWithoutSchemaError(t *testing.T) {
+	data := `maintenance_page:
+  maintenance_brew_group:
+    enabled: true
+  maintenance_flatpak_group:
+    enabled: true
+  maintenance_optimization_group:
+    enabled: true
+  maintenance_freespace_group:
+    enabled: false
+`
+	cfg, err := loadFromPath(writeConfigFile(t, data))
+	if err != nil {
+		t.Fatalf("loadFromPath failed: %v", err)
+	}
+	if cfg.MaintenancePage["maintenance_freespace_group"].Enabled {
+		t.Fatal("maintenance_freespace_group was not set to false")
+	}
+}
+
+func TestLegacyMaintenanceGroupTypoStillFailsClosed(t *testing.T) {
+	data := `maintenance_page:
+  maintenance_brew_grup:
+    enabled: true
+`
+	path := writeConfigFile(t, data)
+	withConfigPaths(t, []string{path, "must-not-read.yml"})
+	cfg, err := Load()
+	if err == nil || err.Path != path {
+		t.Fatalf("error = %v, want authoritative failure", err)
+	}
+	assertAllKnownGroupsDisabled(t, cfg)
+}

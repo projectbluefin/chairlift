@@ -107,3 +107,30 @@ func TestAgentModeActiveModelAndPresetStrings(t *testing.T) {
 		t.Error("AgentModeSwitchPresetLabel is empty")
 	}
 }
+
+// A dry run sends no key to llmman, so its feedback must say it previewed
+// rather than claim the key was saved.
+func TestPeerKeySavedToastIsHonestUnderDryRun(t *testing.T) {
+	preview := PeerKeySavedToast(true)
+	if !strings.HasPrefix(preview, "[DRY-RUN]") || strings.Contains(preview, "saved.") {
+		t.Errorf("dry-run toast %q claims a save", preview)
+	}
+	if live := PeerKeySavedToast(false); strings.Contains(live, "DRY-RUN") {
+		t.Errorf("live toast %q reads as a preview", live)
+	}
+}
+
+// Each peer row's controls must be named for their peer, and neither name
+// may equal the bare address the row's title already carries.
+func TestPeerControlLabelsNameTheirPeer(t *testing.T) {
+	const address = "10.0.0.5"
+	sw, rm := PeerSwitchLabel(address), PeerRemoveLabel(address)
+	for _, label := range []string{sw, rm} {
+		if !strings.Contains(label, address) || label == address {
+			t.Errorf("label %q does not name peer %q distinctly", label, address)
+		}
+	}
+	if sw == rm {
+		t.Errorf("switch and remove button share the name %q", sw)
+	}
+}

@@ -17,7 +17,10 @@ The page leads with where you stand: **System is up to date**, or how many
 updates are waiting. Below that, **Update sources** lists the four things
 that can be updated — Applications, Developer tools, System components, and
 Operating system — each with its own state, so you can see which one is
-holding you up without opening anything.
+holding you up without opening anything. A source your administrator turned
+off says **Disabled by administrator**; one this computer has no software for
+says **Not available on this system** instead, so you can tell a choice from
+a missing tool.
 
 One button covers all of them. It reads **Check again** when nothing is
 pending, **Update all** when something is, **Retry failed** if a source
@@ -26,32 +29,38 @@ waiting. It only asks you to restart when something actually needs one, and
 a source that fails doesn't stop the others. A run long enough that you
 wandered off finishes with a desktop notification.
 
+Everything else on the page sits below the sources, each part only where it
+applies (not all of it fits in the shot above).
+
 **Automatic updates** is the one switch for whether this system keeps itself
 up to date in the background. It appears only on systems that ship the
 unattended-update timer, and it's a choice about the future — updating right
 now is the button above.
 
-Further down, each source keeps its own group for when you want to update
-just one thing: **Apps** lists the Flatpak updates waiting, and **Developer
-tools** lists the command-line tools you installed with Homebrew.
+**Your system** is a compact line saying what's installed now and what's
+queued for the next restart; the exact build identifiers sit behind
+**Details** for when you need to quote them in a bug report.
 
-**System Updates** adds **What's Changing**, which lists exactly what software
-a pending update will add, remove, or upgrade. That group only appears on
-systems that update as a whole, so it's not in the shot above. **Roll Back** —
-returning to the previous version if an update went badly — lives under
-**Recovery**, and only appears where a previous deployment actually exists.
+On systems that update as a whole, **Operating system** holds
+**System Updates**, which downloads the next system version by itself, and
+**What's changing**, which lists exactly what software a pending update will
+add, remove, or upgrade once you press **Compare**. **Roll Back** — returning to
+the previous version if an update went badly — lives under **Recovery**, and
+only appears where a previous deployment actually exists.
 
-The same page holds the two choices that replace the operating system itself,
-because both land through an update and both need a restart.
-**Release Channel** switches between the stable version and the early one, and
-**Graphics Driver** switches you to the NVIDIA driver if your card wants it.
-Neither appears unless there is actually something to switch to. Above them,
-a compact line says what's installed now and what's queued for the next
-restart; the exact build identifiers sit behind **Details** for when you need
-to quote them in a bug report.
+Each other source keeps its own group for when you want to update just one
+thing: **Apps** lists the Flatpak updates waiting, and **Developer tools**
+lists the command-line tools you installed with Homebrew, with a button to
+check for new versions. If a Homebrew package came from an unofficial source,
+**Unverified sources** asks you to trust that source before it will keep
+updating it.
 
-If a Homebrew package came from an unofficial source, the page asks you to
-trust that source before it will keep updating it.
+**Advanced** sits last and holds the two choices that replace the operating
+system itself, because both land through an update and both need a restart.
+The Release Channel switch, **Get updates early**, moves between the stable
+version and the early one, and **Graphics driver** switches you to the NVIDIA
+driver if your card wants it. Neither offers a change unless there is
+actually something to switch to.
 
 There is no separate System page. What this computer *is* — its name, memory,
 disk, and hardware — is GNOME Settings' job, and Control Center does not
@@ -69,8 +78,9 @@ Homebrew, a third-party source, and can be a large download — the page says so
 once, at the top, instead of nagging on every row.
 
 Below that sit the apps already installed, the packages Homebrew manages, and
-a search across both. **Export package list** saves what you have installed so
-you can put it back on another machine.
+a search across both. Removing an installed app asks first, and says whether
+it leaves only your account or everyone's. **Export package list** saves what
+you have installed so you can put it back on another machine.
 
 ---
 
@@ -106,14 +116,13 @@ reader, the file, or anything you imported from it.
 **Gaming** is a switch: on installs Steam and the tools that make Windows
 games run, off removes them again. On an image that already ships them, the
 page says so instead of offering a switch that would do nothing.
-**Enhanced Troubleshooting** sets up an AI assistant that can read your logs,
-services, and network to help work out what's wrong, then launches it — the
-row says which AI service answers your questions, since the default one is
-Google's. It is only offered where Homebrew is installed, so it's not in the
-shot above. **Optional features** is the distribution's own feature manager,
-and is empty where the distribution ships none.
+**Optional features** is the distribution's own feature manager; it is hidden
+where the distribution ships none. When a computer offers none of these —
+no Developer tools, no Gaming, no optional features — the page says
+**Nothing to set up here** rather than showing an empty screen.
 
-Agent Mode has its own **Agents** page.
+Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
+**Help**.
 
 ---
 
@@ -199,8 +208,14 @@ list to read, not a control: nothing in it changes your system.
 
 ![Help](screenshots/7-help.png)
 
-Three links, each shown only when it is configured: **Website**, **Report a
-problem** (the `issues` URL, where bug reports go), and **Documentation**.
+**Enhanced Troubleshooting** comes first where Homebrew is installed: it sets
+up an AI assistant that can read your logs, services, and network to help
+work out what's wrong, then launches it. The row says which AI service
+answers your questions, since the default one is Google's.
+
+Three links, each shown only when it is configured: **Visit project
+website**, **Report a problem** (the `issues` URL, where bug reports go), and
+**Browse documentation**.
 
 A **Diagnostics** group offers a *Copy system diagnostics* row that places
 scrubbed system information — OS, image, kernel, desktop, and GPU — onto the

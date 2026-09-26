@@ -14,7 +14,7 @@
 .PHONY: build-linux-amd64 build-linux-arm64
 .PHONY: run dev clean
 .PHONY: test fmt lint
-.PHONY: build-e2e e2e
+.PHONY: build-e2e e2e e2e-atspi
 .PHONY: install uninstall
 .PHONY: bump
 
@@ -141,11 +141,11 @@ screenshots: build-e2e schemas
 SCREENSHOT_DIR=docs/screenshots
 
 # End-to-end smoke tests require GTK4, Libadwaita, dbus-run-session, and Xvfb;
-# the AT-SPI model-preset scenario additionally requires at-spi2-core,
-# python3-dogtail, and a private accessibility bus. The screenshot walkthrough
-# additionally requires Xvfb, xdotool, xdpyinfo, and xwd. They run separately
-# from ci because the ordinary unit-test gate is intentionally usable on hosts
-# without those runtime libraries.
+# the screenshot walkthrough additionally requires Xvfb, xdotool, xdpyinfo,
+# and xwd, and the behave dry-run step check requires behave and dogtail
+# (test/e2e/requirements-atspi.txt). They run separately from ci because the
+# ordinary unit-test gate is intentionally usable on hosts without those
+# runtime libraries.
 #
 # Only the GUI is built with E2E_TAGS. Both privileged helpers are built
 # exactly as they ship, so the boundary assertions in test/e2e exercise the
@@ -155,20 +155,34 @@ SCREENSHOT_DIR=docs/screenshots
 # settings schema is not installed" and renders without its saved state, and
 # the walkthrough captures this target uploads are exactly what ships in
 # docs/screenshots.
+#
+# The behave AT-SPI suite (TestATSPIBehaveSuite) is skipped here and run by
+# e2e-atspi instead: it asserts what the accessibility tree announces, which
+# depends on the GTK/Libadwaita release, so it runs against the Dakota image
+# ChairLift ships on rather than whatever the host carries.
 e2e: build-e2e schemas
 ifeq ($(E2E_COVERDIR),)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
-		$(GOTEST) -v ./test/e2e
+		$(GOTEST) -v -skip '^TestATSPIBehaveSuite$$' ./test/e2e
 else
 	@rm -rf "$(E2E_COVERDIR)" && mkdir -p "$(E2E_COVERDIR)"
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
-		$(GOTEST) -v ./test/e2e
+		$(GOTEST) -v -skip '^TestATSPIBehaveSuite$$' ./test/e2e
 	$(GOCMD) tool covdata textfmt -i=$(abspath $(E2E_COVERDIR)) -o=e2e-coverage.out
 	@echo "==> e2e statement coverage written to e2e-coverage.out"
 endif
+
+# The behave AT-SPI suite (test/e2e/features), inside
+# ghcr.io/projectbluefin/dakota:testing via podman: the GTK, Libadwaita and
+# accessibility stack ChairLift actually ships on. Needs podman, Go, and
+# Homebrew's xorg-server (for Xvfb) on the host. ATSPI_TAGS narrows the run to
+# a behave tag expression, e.g. `make e2e-atspi ATSPI_TAGS=@maintenance`.
+ATSPI_TAGS?=
+e2e-atspi: build-e2e schemas
+	CHAIRLIFT_ATSPI_NO_BUILD=1 test/e2e/dakota_atspi.sh $(ATSPI_TAGS)
 
 # Development build with race detector (requires CGO)
 dev:

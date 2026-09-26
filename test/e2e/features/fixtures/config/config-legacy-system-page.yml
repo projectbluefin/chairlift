@@ -1,0 +1,13 @@
+# A pre-migration configuration: the four historical system_page groups.
+# bootc_status_group and channel_group move to updates_page with their
+# explicit false preserved; system_info_group and health_group are retired
+# and have no runtime effect. Nothing here is a configuration error.
+system_page:
+  system_info_group:
+    enabled: true
+  bootc_status_group:
+    enabled: false
+  channel_group:
+    enabled: false
+  health_group:
+    enabled: true

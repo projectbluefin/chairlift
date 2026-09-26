@@ -152,6 +152,8 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		uh.searchEntry = gtk.NewSearchEntry()
 		uh.searchEntry.SetHexpand(true)
+		uh.searchEntry.SetPlaceholderText(pageview.HomebrewSearchPlaceholder)
+		SetAccessibleLabel(uh.searchEntry, pageview.HomebrewSearchLabel)
 
 		searchActivateCb := func(entry gtk.SearchEntry) {
 			uh.onHomebrewSearch()
@@ -677,32 +679,76 @@ func (uh *UserHome) loadFlatpakApplications() {
 			}
 
 			appID := app.ApplicationID
-			clickedCb := func(btn gtk.Button) {
-				btn.SetSensitive(false)
-				go func() {
-					if err := flatpak.Uninstall(appID, isUser); err != nil {
-						if isUser {
-							log.Printf("Error uninstalling %s for the current user: %v", appID, err)
-						} else {
-							log.Printf("Error uninstalling %s for everyone: %v", appID, err)
-						}
-						sgtk.RunOnMainThread(func() {
-							btn.SetSensitive(true)
-							uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", app.Name))
-						})
-						return
-					}
-					sgtk.RunOnMainThread(func() {
-						uh.toastAdder.ShowToast(actionmsg.Uninstall(dryrun.Enabled(), app.Name))
-						go uh.loadFlatpakApplications()
-					})
-				}()
+			name := presentation.Title
+			gate := &actionstate.Gate{}
+			button := uninstallBtn
+			clickedCb := func(_ gtk.Button) {
+				if !gate.TryStart() {
+					return
+				}
+				uh.confirmFlatpakUninstall(appID, name, isUser, button, gate)
 			}
 			uninstallBtn.ConnectClicked(&clickedCb)
 
 			row.AddSuffix(&uninstallBtn.Widget)
 			uh.flatpakExpander.AddRow(&row.Widget)
 			uh.flatpakRows.Add(row)
+		}
+	})
+}
+
+// confirmFlatpakUninstall asks before removing a Flatpak application, as
+// every Homebrew package removal does. Cancelling releases the row's gate and
+// runs nothing.
+func (uh *UserHome) confirmFlatpakUninstall(appID, name string, userScope bool, button *gtk.Button, gate *actionstate.Gate) {
+	title, body := pageview.FlatpakUninstallConfirmation(name, userScope)
+	dialog := adw.NewAlertDialog(title, body)
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("confirm", "Uninstall")
+	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
+
+	responseCb := func(_ adw.AlertDialog, response string) {
+		if response != "confirm" {
+			gate.Reset()
+			return
+		}
+		button.SetSensitive(false)
+		go uh.runFlatpakUninstall(appID, name, userScope, button, gate)
+	}
+	dialog.ConnectResponse(&responseCb)
+	dialog.Present(&uh.applicationsPrefsPage.Widget)
+}
+
+// runFlatpakUninstall removes one Flatpak application off the main thread.
+// A failure or dry-run preview restores the button and keeps the known rows;
+// only a live success completes the control and refreshes the list.
+func (uh *UserHome) runFlatpakUninstall(appID, name string, userScope bool, button *gtk.Button, gate *actionstate.Gate) {
+	err := flatpak.Uninstall(appID, userScope)
+	dryRun := dryrun.Enabled()
+	decision := actionstate.PackageUninstall(err == nil, dryRun)
+	if err != nil {
+		if userScope {
+			log.Printf("Error uninstalling %s for the current user: %v", appID, err)
+		} else {
+			log.Printf("Error uninstalling %s for everyone: %v", appID, err)
+		}
+	}
+	sgtk.RunOnMainThread(func() {
+		if decision.RestoreControl {
+			gate.Reset()
+			button.SetSensitive(true)
+		}
+		if err != nil {
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not uninstall %s", name))
+			return
+		}
+		if decision.CompleteControl {
+			gate.Complete()
+			button.SetSensitive(false)
+		}
+		uh.toastAdder.ShowToast(actionmsg.Uninstall(dryRun, name))
+		if decision.Refresh {
+			go uh.loadFlatpakApplications()
 		}
 	})
 }

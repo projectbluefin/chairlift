@@ -824,14 +824,15 @@ gate and button without showing a success/preview toast. `TryStart` and
 repeated callbacks cannot overlap an install.
 
 The Applications page's per-result Homebrew install button
-(`onHomebrewSearch`, `internal/views/applications_page.go`) and per-app Flatpak
-uninstall buttons (`loadFlatpakApplications`, both user and system branches)
-show toasts built by `actionmsg.Install(dryRun, result.Name)` and
-`actionmsg.Uninstall(dryrun.Enabled(), appID)`, rather than unconditional
-completion claims. The Homebrew path restores its install control after a
-dry-run and does not refresh, because nothing changed; only a live success
-completes the control and starts the generation-guarded installed-package
-refresh described above.
+(`onHomebrewSearch`, `internal/views/applications_page.go`) shows toasts built
+by `actionmsg.Install(dryRun, result.Name)` rather than unconditional
+completion claims. It restores its install control after a dry-run and does
+not refresh, because nothing changed; only a live success completes the
+control and starts the generation-guarded installed-package refresh described
+above. The search entry itself carries `pageview.HomebrewSearchPlaceholder` as
+its placeholder and `pageview.HomebrewSearchLabel` as its accessible label,
+because the row it sits in is titled only "Search" and assistive technology
+does not associate that title with the entry.
 
 Installed Homebrew formula/cask rows follow the same decision path for
 uninstall, and formula rows add pin/unpin. They confirm before starting,
@@ -842,16 +843,35 @@ success. New Flatpak discovery and install deliberately remain in the
 configured external manager; ChairLift's direct Flatpak UI lists and
 uninstalls installed applications.
 
-The Flatpak list refresh after uninstall remains unconditional because it
-re-queries live state either way. Each successful loader branch first clears
-the prior `flatpakUserRows` or `flatpakSystemRows` tracker and then rebuilds it
-inside one main-thread closure. Homebrew's installed formula/cask loader now
-uses the same separate-tracker clear-before-repopulate pattern, with an
-additional refresh generation because multiple Homebrew actions can request
-overlapping reloads. Not-installed and error branches change the subtitle and
-preserve the last known rows.
+Flatpak uninstall (`loadFlatpakApplications`, both user and system scopes)
+now takes the same shape. Each row's trash button owns one
+`actionstate.Gate`; a click that wins `TryStart` opens
+`confirmFlatpakUninstall`, an `AdwAlertDialog` whose title and body come from
+`pageview.FlatpakUninstallConfirmation(name, userScope)` — the system-scope
+body says the app is removed for everyone who uses the computer and that an
+administrator password may be requested. Cancel resets the gate and runs
+nothing. Confirm makes the button insensitive and runs `runFlatpakUninstall`
+off the main thread, which decides through `actionstate.PackageUninstall`:
+a failure or dry-run preview resets the gate and restores the button while
+keeping the known rows, and only a live success completes the gate and starts
+a list refresh. The toast is `actionmsg.Uninstall(dryRun, name)` on success
+or preview, and an error toast on failure. `runFlatpakUninstall` is in
+`internal/installcheck`'s `TestDestructiveActionsRequireConfirmation`
+inventory beside `runPowerwash` and `runFactoryReset`: any function in
+`internal/views` that calls it must also build an `AdwAlertDialog` and gate on
+the `"confirm"` response, or `make ci` fails (#353).
 
-The Updates page's per-package Homebrew upgrade button, per-app Flatpak update button, and the "Update Homebrew" self-update button (`internal/views/updates_page.go`) follow the same toast pattern: `actionmsg.Upgrade(dryRun, pkgName)`, `actionmsg.Update(dryrun.Enabled(), appID)`, and `actionmsg.SelfUpdate(dryRun, "Homebrew")` replace what were unconditional "upgraded"/"updated"/"updated successfully" toasts, since `upgrade` and `update` are both in their wrappers' `stateChangingCommands` and no-op under dry-run. The Flatpak update button's list refresh (`go uh.loadFlatpakUpdates()`) stays unconditional, same reasoning as the uninstall refresh above.
+The Flatpak loader keeps both scopes in one expander and one
+`uh.flatpakRows` tracker (`rowset.Tracker`), guarded by the
+`flatpakPackagesRefresh` generation; a successful load clears that tracker
+and rebuilds it inside one main-thread closure, and a stale generation's
+result is dropped. Homebrew's installed formula/cask loader uses the same
+clear-before-repopulate pattern with separate `formulaeRows`/`caskRows`
+trackers and its own refresh generation, because multiple Homebrew actions can
+request overlapping reloads. Error branches change the subtitle ("Could not
+read the list") and preserve the last known rows.
+
+The Updates page's per-package Homebrew upgrade button, per-app Flatpak update button, and the "Update Homebrew" self-update button (`internal/views/updates_page.go`) follow the same toast pattern: `actionmsg.Upgrade(dryRun, pkgName)`, `actionmsg.Update(dryrun.Enabled(), appID)`, and `actionmsg.SelfUpdate(dryRun, "Homebrew")` replace what were unconditional "upgraded"/"updated"/"updated successfully" toasts, since `upgrade` and `update` are both in their wrappers' `stateChangingCommands` and no-op under dry-run. The Flatpak update button reloads its list (`uh.loadFlatpakUpdates()`, on the main thread so concurrent completions take generations in finishing order) after every successful call, dry-run included, because the reload re-queries live state either way.
 
 The two Homebrew paths additionally use `actionstate.Gate` before spawning a
 goroutine and immediately make the clicked button insensitive with an

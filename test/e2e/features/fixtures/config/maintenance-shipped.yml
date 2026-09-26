@@ -1,0 +1,17 @@
+# Maintenance exactly as config.yml ships it: the routine free-space action
+# on, the administrator's configured tasks off, and the irreversible
+# Powerwash / Factory Reset group (reset_group) off. Every other page keeps its
+# built-in default.
+#
+# Loaded from an untrusted path (config.dev.yml beside a staged binary), so no
+# action may set sudo: true.
+maintenance_page:
+  maintenance_cleanup_group:
+    enabled: false
+    actions:
+      - title: Clean Up Boot Old Entries
+        script: /usr/libexec/bls-gc
+  maintenance_freespace_group:
+    enabled: true
+  reset_group:
+    enabled: false
