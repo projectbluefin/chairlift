@@ -67,12 +67,19 @@ def _focus_row_by_tab(context, title):
     have neither an action nor screen coordinates, so Tab traversal is the
     only way a keyboard user (or this suite) reaches them.
     """
+    def focused_row():
+        row = atspi.row_containing(_content(context), title, timeout=1)
+        return row if atspi.focused(row) else None
+
     for _ in range(TAB_LIMIT):
-        row = atspi.row_containing(_content(context), title)
-        if atspi.focused(row):
-            return row
+        if focused_row() is not None:
+            return focused_row()
         atspi.press("Tab")
-        time.sleep(0.1)
+        # Poll briefly after each press rather than checking once after a
+        # fixed pause, so slow focus movement is not stepped over.
+        found = atspi.poll(focused_row, timeout=0.5)
+        if found:
+            return found
     raise AssertionError(f"Tab never moved keyboard focus onto the {title!r} row")
 
 

@@ -196,7 +196,7 @@ def step_expand_row(context, title, group):
     for _ in range(80):
         if atspi.focused(header):
             break
-        atspi.press("Tab")
+        atspi.press_and_settle(context.app, "Tab")
     assert atspi.focused(header), f"Tab never reached {title!r} in {group!r}"
     atspi.press("space")
 

@@ -115,7 +115,7 @@ def _focus_row_in_group(context, group_title, title, attempts=40):
         if focused and titles[focused[0]] == title:
             return rows[focused[0]]
         if focused:
-            atspi.press("Down" if titles.index(title) > focused[0] else "Up")
+            atspi.press_and_settle(context.app, "Down" if titles.index(title) > focused[0] else "Up")
         else:
             trace.append(
                 [
@@ -124,7 +124,7 @@ def _focus_row_in_group(context, group_title, title, attempts=40):
                     if atspi.focused(n)
                 ]
             )
-            atspi.press("Tab")
+            atspi.press_and_settle(context.app, "Tab")
     raise AssertionError(f"keyboard focus never reached the {title!r} row in {group_title!r}; focus went {trace}")
 
 

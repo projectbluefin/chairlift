@@ -123,9 +123,17 @@ def step_log_lacks(context, text):
 
 @step('I open the "{title}" page')
 def step_open_page(context, title):
-    """Navigate with the Alt+number accelerator navigation advertises."""
-    index, _ = nav_item(context, title)
-    atspi.press(f"<Alt>{index + 1}")
+    """Navigate with the Alt+number accelerator navigation advertises.
+
+    navigation compacts Alt+number over the visible pages, so the number is
+    the page's position in the sidebar as shown, not in the full inventory: a
+    scenario that hides an earlier page shifts every later accelerator.
+    """
+    nav_item(context, title)
+    titles = [atspi.label_text(r) for r in atspi.sidebar_rows(app(context))]
+    if title not in titles:
+        raise AssertionError(f"{title!r} is not in the sidebar; rows are {titles}")
+    atspi.press(f"<Alt>{titles.index(title) + 1}")
     step_page_shown(context, title)
 
 
@@ -263,6 +271,9 @@ def step_controls_accessible(context):
         content(context),
         lambda n: atspi.role(n) in atspi.BUTTON_ROLES and atspi.focusable(n) and atspi.sensitive(n),
     )
+    # A page with no operable control at all is a failure, not a vacuous
+    # pass: a blank destination is exactly what this check exists to catch.
+    assert controls, "no focusable action controls on the content side"
     nameless = [atspi.role(c) for c in controls if not atspi.label_text(c)]
     inert = [atspi.label_text(c) for c in controls if not atspi.actions(c)]
     assert not nameless, f"{len(nameless)} action controls have no accessible name: {nameless}"
@@ -418,9 +429,11 @@ def menu_items(context):
 
 
 # The main menu's items in model order, as internal/window/window.go's
-# buildMenuButton appends them. Used only while GTK publishes the popover's
-# items without names (see the @known_issue scenario in shell.feature); an
-# item that has a name is always matched by it instead.
+# buildMenuButton appends them. A #347 workaround, to delete when that issue
+# is fixed: GTK publishes the popover's items without names (the
+# @known_issue.347 scenario in shell.feature), so the keyshortcuts attribute
+# and then this order stand in. An item that has a name is always matched by
+# it instead, and a reordered menu with names would never reach this.
 MAIN_MENU_ORDER = ("Preferences", "Setup Assistant…", "Keyboard Shortcuts", "About Control Center")
 MAIN_MENU_SHORTCUTS = {"Keyboard Shortcuts": "Control+?"}
 

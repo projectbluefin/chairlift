@@ -64,14 +64,29 @@ class TreeError(AssertionError):
 
 
 def poll(predicate, timeout=DEFAULT_TIMEOUT, interval=0.1):
-    """Return predicate()'s first truthy value, or its last value at timeout."""
+    """Return predicate()'s first truthy value, or its last value at timeout.
+
+    An exception from predicate is retried, because the tree mutates while it
+    is read and nested lookups raise while a node is still missing. If the
+    final attempt still raises, that exception is raised as a TreeError instead
+    of being reported as a falsy timeout: a step bug or a dropped bus must not
+    read the same as a slow widget.
+    """
     deadline = time.monotonic() + timeout
     while True:
+        last_error = None
         try:
             result = predicate()
-        except Exception:  # the tree mutates under us; retry
+        except Exception as error:  # the tree mutates under us; retry
             result = None
-        if result or time.monotonic() >= deadline:
+            last_error = error
+        if result:
+            return result
+        if time.monotonic() >= deadline:
+            if last_error is not None:
+                raise TreeError(
+                    f"still failing after {timeout}s: {last_error!r}"
+                ) from last_error
             return result
         time.sleep(interval)
 
@@ -398,13 +413,57 @@ def focus_by_tab(app, predicate, what, limit=80, backwards=False):
     keyboard focus on a particular widget.
     """
     key = "<Shift>Tab" if backwards else "Tab"
+
+    def matching():
+        node = focused_node(app)
+        return node if node is not None and predicate(node) else None
+
+    if matching() is not None:
+        return matching()
     for _ in range(limit):
-        for node in descendants(app, only_showing=True):
-            if focused(node) and predicate(node):
-                return node
-        press(key)
-        time.sleep(0.05)
+        press_and_settle(app, key)
+        found = matching()
+        if found is not None:
+            return found
     raise TreeError(f"keyboard focus never reached {what} after {limit} Tab presses")
+
+
+def focused_node(app):
+    """The showing node that holds keyboard focus, or None."""
+    for node in descendants(app, only_showing=True):
+        if focused(node):
+            return node
+    return None
+
+
+def press_and_settle(app, combo, timeout=2.0):
+    """Press a focus-moving key and wait until focus has actually moved.
+
+    Checking once after a fixed pause lets a loop on a slow runner press again
+    before the first press lands, stepping past its target. If focus does not
+    move within timeout (the end of a chain, a key that does not move focus
+    there), the caller's own check decides what that means.
+    """
+    before = focused_node(app)
+    press(combo)
+    poll(lambda: (lambda now: now is not None and not same_node(now, before))(focused_node(app)), timeout=timeout)
+
+
+def same_node(a, b):
+    """Whether two wrappers name the same accessible.
+
+    dogtail builds a fresh wrapper per lookup, so identity never matches;
+    role, name and index in parent together identify a node well enough to
+    tell that focus moved.
+    """
+    if a is None or b is None:
+        return a is b
+    return (
+        role(a) == role(b)
+        and name(a) == name(b)
+        and safe(lambda: a.indexInParent) == safe(lambda: b.indexInParent)
+        and name(safe(lambda: a.parent)) == name(safe(lambda: b.parent))
+    )
 
 
 def set_text(node, value):

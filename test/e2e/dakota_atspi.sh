@@ -31,7 +31,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 IMAGE="${CHAIRLIFT_DAKOTA_IMAGE:-ghcr.io/projectbluefin/dakota:testing}"
 BREW="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
-VENV="$CACHE/chairlift-atspi-venv"
+REQUIREMENTS="$ROOT/test/e2e/requirements-atspi.txt"
 GOROOT="$(go env GOROOT)"
 GOMODCACHE="$(go env GOMODCACHE)"
 GOCACHE="$(go env GOCACHE)"
@@ -41,13 +41,25 @@ TAGS="${1:-}"
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 [ -x "$BREW/bin/Xvfb" ] || { echo "Xvfb not found under $BREW; brew install xorg-server" >&2; exit 1; }
 
+# The venv is keyed on the pinned requirements and the image's interpreter,
+# so a bumped pin or a Python upgrade in the Dakota image gets a fresh venv
+# instead of silently running against the old one.
+IMAGE_PYTHON="$(podman run --rm --pull=missing "$IMAGE" python3 --version)"
+VENV_KEY="$(printf '%s\n%s\n' "$IMAGE_PYTHON" "$(sha256sum "$REQUIREMENTS" | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
+VENV="$CACHE/chairlift-atspi-venv-$VENV_KEY"
 if [ ! -x "$VENV/bin/python" ]; then
-    # The venv is built with the container's interpreter so its site-packages
-    # (PyGObject, pyatspi) are the ones the suite sees.
+    # Built with the container's interpreter so its site-packages (PyGObject,
+    # pyatspi) are the ones the suite sees; into a temporary directory first
+    # so an interrupted build never leaves a half-made venv under the key.
+    rm -rf "$VENV.partial"
     podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
         --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp \
         -v "$CACHE:$CACHE" -v "$ROOT:/workspace:ro" "$IMAGE" \
-        sh -c "python3 -m venv --system-site-packages '$VENV' && '$VENV/bin/pip' install -q -r /workspace/test/e2e/requirements-atspi.txt"
+        sh -c "python3 -m venv --system-site-packages '$VENV.partial' && '$VENV.partial/bin/python' -m pip install -q --require-hashes -r /workspace/test/e2e/requirements-atspi.txt" \
+        || { rm -rf "$VENV.partial"; exit 1; }
+    # The suite only ever runs `python -m behave`, which resolves the venv
+    # from its own location, so the rename is safe.
+    mv "$VENV.partial" "$VENV"
 fi
 
 if [ -z "${CHAIRLIFT_ATSPI_NO_BUILD:-}" ]; then

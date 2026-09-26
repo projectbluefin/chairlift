@@ -110,7 +110,7 @@ def _has_focus(node):
     return any(atspi.focused(n) for n in atspi.descendants(node, only_showing=True))
 
 
-def _keyboard_activate(scope, target_title, what, presses=120):
+def _keyboard_activate(context, scope, target_title, what, presses=120):
     """Reach an action-less activatable row by keyboard and press Return.
 
     GTK 4 does not implement AT-SPI's Component.GrabFocus for these rows, so
@@ -129,7 +129,7 @@ def _keyboard_activate(scope, target_title, what, presses=120):
             return
         current = next((i for i, r in enumerate(rows) if _has_focus(r)), None)
         if current is None:
-            atspi.press("Tab")
+            atspi.press_and_settle(context.app, "Tab")
         elif current == target:
             # Focus is on a control inside the row; Return would operate that
             # control rather than activate the row.
@@ -137,8 +137,7 @@ def _keyboard_activate(scope, target_title, what, presses=120):
             if not atspi.poll(lambda: atspi.focused(rows[target]), timeout=1):
                 raise AssertionError(f"keyboard focus reached a control inside {what}, not the row")
         else:
-            atspi.press("Down" if current < target else "Up")
-        atspi.poll(lambda: False, timeout=0.15)
+            atspi.press_and_settle(context.app, "Down" if current < target else "Up")
     raise AssertionError(f"keyboard focus never reached {what} in {presses} key presses")
 
 
@@ -244,7 +243,7 @@ def step_row_says(context, row, section, text):
 def step_activate_row(context, row, section):
     target = _section_row(context, row, section)
     assert atspi.poll(lambda: atspi.sensitive(target)), f"the {row!r} row in {section!r} is insensitive"
-    _keyboard_activate(lambda: _section(context, section), row, f"the {row!r} row in {section!r}")
+    _keyboard_activate(context, lambda: _section(context, section), row, f"the {row!r} row in {section!r}")
 
 
 # ---------------------------------------------------------------- chooser
@@ -313,7 +312,7 @@ def step_chooser_pick(context, name):
 
     row = atspi.poll(lookup)
     assert row is not None, f"the chooser offers no {name!r}; it offers {_offered(context)}"
-    _keyboard_activate(lambda: _dialog(context), name, f"the {name!r} result")
+    _keyboard_activate(context, lambda: _dialog(context), name, f"the {name!r} result")
 
 
 @then("the Livery chooser is closed")

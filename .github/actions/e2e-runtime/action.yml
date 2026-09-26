@@ -55,5 +55,5 @@ runs:
       run: |
         venv="$RUNNER_TEMP/atspi-venv"
         python3 -m venv --system-site-packages "$venv"
-        "$venv/bin/pip" install --quiet --requirement test/e2e/requirements-atspi.txt
+        "$venv/bin/pip" install --quiet --require-hashes --requirement test/e2e/requirements-atspi.txt
         echo "python=$venv/bin/python" >> "$GITHUB_OUTPUT"
