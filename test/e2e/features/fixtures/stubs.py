@@ -63,3 +63,20 @@ def fake_executable(context, program, script):
         handle.write("#!/bin/sh\n" + script.lstrip())
     os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return path
+
+
+def default_brew(context):
+    """An inert brew: records its argv, prints nothing, exits 0.
+
+    Installed before any @stub runs, so a destination stub named brew
+    replaces it. Pages that read Homebrew see an empty, unparseable answer and
+    report it; nothing from a real Homebrew installation reaches the run.
+    """
+    fake_executable(
+        context,
+        "brew",
+        f"""
+printf '%s\\n' "$*" >> '{context.scenario_dir}/brew-default-calls.log'
+exit 0
+""",
+    )

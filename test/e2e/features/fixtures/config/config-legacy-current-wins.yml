@@ -1,0 +1,8 @@
+# Both inputs name channel_group. The current updates_page field is
+# non-null, so it wins over the legacy system_page value.
+system_page:
+  channel_group:
+    enabled: false
+updates_page:
+  channel_group:
+    enabled: true

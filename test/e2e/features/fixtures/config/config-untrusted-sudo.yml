@@ -1,0 +1,6 @@
+# Enables the boot-entry cleanup group without replacing its built-in action,
+# which carries sudo: true. config.dev.yml is an untrusted candidate, so the
+# effective sudo-provenance check must reject the whole file.
+maintenance_page:
+  maintenance_cleanup_group:
+    enabled: true

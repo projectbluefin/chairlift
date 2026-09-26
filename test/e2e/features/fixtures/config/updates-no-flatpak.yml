@@ -1,0 +1,19 @@
+# The everything fixture with Flatpak updates turned off by the
+# administrator, so the update shell's Applications source is not configured.
+applications_page:
+  applications_installed_group:
+    enabled: true
+  flatpak_user_group:
+    enabled: true
+  flatpak_system_group:
+    enabled: true
+  brew_group:
+    enabled: true
+  brew_search_group:
+    enabled: true
+  brew_bundles_group:
+    enabled: true
+
+updates_page:
+  flatpak_updates_group:
+    enabled: false

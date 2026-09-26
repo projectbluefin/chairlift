@@ -1,0 +1,21 @@
+# The everything fixture, with app collections read only from the scenario's
+# own bundles/ directory (a path relative to the working directory, which is
+# the scenario directory), so no collection the runner happens to ship under
+# /usr/share/ublue-os/homebrew can appear. The apps-collections stub fills
+# that directory; without it the directory is missing, which
+# internal/homebrew.AvailableBundles treats as "nothing offered here".
+applications_page:
+  applications_installed_group:
+    enabled: true
+  flatpak_user_group:
+    enabled: true
+  flatpak_system_group:
+    enabled: true
+  brew_group:
+    enabled: true
+  brew_search_group:
+    enabled: true
+  brew_bundles_group:
+    enabled: true
+    bundles_paths:
+      - bundles

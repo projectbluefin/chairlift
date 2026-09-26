@@ -376,6 +376,45 @@ def attributes(node):
     return safe(lambda: dict(node.get_attributes()), {}) or {}
 
 
+def is_toast(node):
+    """An AdwToast: published as an "alert" holding a "Dismiss" button.
+
+    AdwAlertDialog can share the alert role, so the Dismiss button is what
+    tells a toast from a dialog.
+    """
+    if role(node) != "alert":
+        return False
+    return any(
+        role(child) in BUTTON_ROLES and name(child) == "Dismiss"
+        for child in descendants(node, only_showing=True)
+    )
+
+
+def focus_by_tab(app, predicate, what, limit=80, backwards=False):
+    """Press Tab until a node matching predicate reports focus, and return it.
+
+    GTK 4 does not implement AT-SPI Component.GrabFocus, so grabFocus() never
+    moves focus; walking the focus chain is the only reliable way to put
+    keyboard focus on a particular widget.
+    """
+    key = "<Shift>Tab" if backwards else "Tab"
+    for _ in range(limit):
+        for node in descendants(app, only_showing=True):
+            if focused(node) and predicate(node):
+                return node
+        press(key)
+        time.sleep(0.05)
+    raise TreeError(f"keyboard focus never reached {what} after {limit} Tab presses")
+
+
+def set_text(node, value):
+    """Replace an entry's contents through the EditableText interface."""
+    editable = safe(lambda: node.get_editable_text_iface())
+    if editable is None:
+        raise TreeError(f"{role(node)} {label_text(node)!r} is not editable")
+    editable.set_text_contents(value)
+
+
 def press(combo):
     _rawinput().keyCombo(combo)
 

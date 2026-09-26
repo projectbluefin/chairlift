@@ -1,0 +1,7 @@
+# The legacy input is the only place channel_group and bootc_status_group
+# are named, and it enables them; after migration they are Updates groups.
+system_page:
+  bootc_status_group:
+    enabled: true
+  channel_group:
+    enabled: true

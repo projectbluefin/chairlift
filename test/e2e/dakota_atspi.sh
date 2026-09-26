@@ -6,6 +6,9 @@
 #
 # CHAIRLIFT_ATSPI_NO_BUILD=1 skips `make build-e2e schemas`, for several
 # runs sharing one prebuilt binary (concurrent builds race on one output).
+# CHAIRLIFT_ATSPI_BUILD_DIR (default build) names a build directory holding
+# e2e/chairlift, for testing a binary built elsewhere.
+# CHAIRLIFT_ATSPI_KNOWN_ISSUES=1 also runs @known_issue scenarios.
 #
 # For contributors on a Bluefin/Dakota host. The host itself cannot run the
 # suite directly: /usr/share/chairlift/config.yml outranks every configuration
@@ -47,7 +50,8 @@ if [ -z "${CHAIRLIFT_ATSPI_NO_BUILD:-}" ]; then
     make -C "$ROOT" build-e2e schemas >/dev/null
 fi
 
-RUN="$(printf '%s' "${TAGS:-all}" | tr -c 'A-Za-z0-9' '-')"
+RUN="$(printf '%s' "${TAGS:-all}" | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$//')"
+BUILD_DIR="${CHAIRLIFT_ATSPI_BUILD_DIR:-build}"
 OUT="build/atspi/$RUN"
 rm -rf "${ROOT:?}/$OUT"
 mkdir -p "$ROOT/$OUT"
@@ -63,11 +67,12 @@ exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disabl
     -e PATH="/usr/bin:/usr/sbin:$BREW/bin" \
     -e GOMODCACHE="$GOMODCACHE" -e GOCACHE="$GOCACHE" \
     -e GOTOOLCHAIN=local \
-    -e CHAIRLIFT_E2E_BUILD_DIR=/workspace/build \
+    -e CHAIRLIFT_E2E_BUILD_DIR="/workspace/$BUILD_DIR" \
     -e CHAIRLIFT_SCHEMA_DIR=/workspace/build/schemas \
     -e CHAIRLIFT_ATSPI_PYTHON="$VENV/bin/python" \
     -e CHAIRLIFT_ATSPI_OUT="/workspace/$OUT" \
     -e CHAIRLIFT_ATSPI_TAGS="$TAGS" \
     -e CHAIRLIFT_REQUIRE_ATSPI=1 \
+    -e CHAIRLIFT_ATSPI_KNOWN_ISSUES="${CHAIRLIFT_ATSPI_KNOWN_ISSUES:-}" \
     -w /workspace "$IMAGE" \
     sh -c 'mkdir -p "$HOME" && go test -count=1 -v -timeout 40m -run "TestATSPI" ./test/e2e'

@@ -48,6 +48,7 @@ READY_MARKERS = (
 STARTUP_TIMEOUT = 60.0
 SHUTDOWN_TIMEOUT = 15.0
 DEFAULT_CONFIG = "everything"
+CLOSED_PROXY = "http://127.0.0.1:9"
 
 # The display-side stubs the chairlift_e2e build honors
 # (internal/app/imageinfo_override_e2e.go), set so every Bluefin-family row
@@ -128,7 +129,9 @@ def parse_tags(tags):
 
 
 def before_scenario(context, scenario):
-    tags = list(scenario.effective_tags)
+    # Feature-level tags first so a scenario's own @config/@env wins.
+    feature_tags = list(scenario.feature.tags)
+    tags = feature_tags + [t for t in scenario.effective_tags if t not in feature_tags]
     known = [t for t in tags if t.startswith("known_issue.")]
     if known and not os.environ.get("CHAIRLIFT_ATSPI_KNOWN_ISSUES"):
         issues = ", ".join("#" + t.split(".", 1)[1] for t in known)
@@ -168,6 +171,13 @@ def before_scenario(context, scenario):
             "PATH": stub_bin + os.pathsep + env.get("PATH", ""),
         }
     )
+    # No scenario reaches the internet: every proxy-aware client (Go's
+    # net/http, curl under brew) is pointed at a closed loopback port, while
+    # loopback stubs stay reachable. A scenario that needs a remote answers
+    # it with a loopback stub.
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "ALL_PROXY", "all_proxy"):
+        env[key] = CLOSED_PROXY
+    env["NO_PROXY"] = env["no_proxy"] = "localhost,127.0.0.1,::1"
     env.update(overrides)
     context.launch_env = env
     context.stub_bin = stub_bin
@@ -176,6 +186,11 @@ def before_scenario(context, scenario):
     context.app_process = None
     context.app = None
 
+    # Every scenario gets an inert brew first on PATH, so neither the
+    # runner's Homebrew nor a developer's (reachable through the fallback path
+    # internal/homebrew.ExecutablePath checks) leaks inventory into a run. A
+    # @stub that needs brew behaviour overwrites it.
+    stubs.default_brew(context)
     for stub_name in stub_names:
         stubs.apply(stub_name, context)
 
@@ -215,7 +230,8 @@ def launch_app(context, binary):
 
     # Load from the fixture, or the scenario is testing some other file.
     expected = f"Loaded config from {context.config_path}"
-    if expected not in output and "CONFIGURATION ERROR" not in output:
+    failed_closed = "CONFIGURATION ERROR" in output and context.config_path in output
+    if expected not in output and not failed_closed:
         raise RuntimeError(f"ChairLift did not load {context.config_path}:\n{output}")
 
     # Presenting the window and registering its widgets on the accessibility

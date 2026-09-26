@@ -1,0 +1,13 @@
+# App collections without the Homebrew package lists or search: an
+# administrator may offer curated collections while hiding the per-package
+# groups. brew_bundles_group is independent of brew_group (AGENTS.md), so the
+# collection rows must work without the formulae/casks expanders existing.
+applications_page:
+  brew_group:
+    enabled: false
+  brew_search_group:
+    enabled: false
+  brew_bundles_group:
+    enabled: true
+    bundles_paths:
+      - bundles

@@ -1,0 +1,8 @@
+# Features scenarios: an administrator opted in to both optional developer
+# feed onboarding steps, which may only follow a confirmed live Developer Mode
+# enable. Loaded from an untrusted path; no sudo.
+features_page:
+  dx_group:
+    enabled: true
+    install_pulp: true
+    stage_feeds: true

@@ -1,0 +1,5 @@
+# The legacy system_page input is validated against its four historical
+# groups before migration, so compatibility cannot hide a typo.
+system_page:
+  system_info_grup:
+    enabled: true

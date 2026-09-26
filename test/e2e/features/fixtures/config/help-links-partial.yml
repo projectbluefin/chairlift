@@ -1,0 +1,8 @@
+# The issues link is configured empty: its row is dropped and the remaining
+# links keep their display order.
+help_page:
+  help_resources_group:
+    enabled: true
+    website: https://example.test/site
+    issues: ""
+    chat: https://example.test/docs/

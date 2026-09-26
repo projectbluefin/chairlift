@@ -1,0 +1,8 @@
+# A support URL with more than one query parameter. Its "&" is ordinary URL
+# text, so the row must display the URL exactly as configured.
+help_page:
+  help_resources_group:
+    enabled: true
+    website: https://example.test/site
+    issues: https://example.test/issues?labels=help&state=open
+    chat: https://example.test/docs/

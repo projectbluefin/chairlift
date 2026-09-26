@@ -1,0 +1,10 @@
+# Help resources pointed at distinct URLs, so a scenario proves the rows and
+# the URL each one opens come from configuration rather than the built-in
+# defaults. The issues URL carries a query string and the docs URL a
+# fragment: both must reach xdg-open verbatim, as one argument.
+help_page:
+  help_resources_group:
+    enabled: true
+    website: https://example.test/site
+    issues: https://example.test/issues?labels=help
+    chat: https://example.test/docs/#start

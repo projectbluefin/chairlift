@@ -61,7 +61,7 @@ def current_dialog(context, timeout=atspi.DEFAULT_TIMEOUT):
     def lookup():
         found = None
         for node in atspi.descendants(app(context), only_showing=True):
-            if atspi.role(node) in ("dialog", "alert"):
+            if atspi.role(node) in ("dialog", "alert") and not atspi.is_toast(node):
                 found = node
         if found is not None:
             return found
@@ -144,10 +144,13 @@ def step_select_sidebar(context, title):
     target = titles.index(title)
     focused = [i for i, r in enumerate(rows) if atspi.focused(r)]
     if not focused:
-        selected = [i for i, r in enumerate(rows) if atspi.selected(r)]
-        if not selected or not atspi.safe(lambda: rows[selected[0]].grabFocus() or True, False):
-            raise AssertionError("no sidebar row has keyboard focus to start from")
-        focused = selected
+        atspi.focus_by_tab(
+            app(context),
+            lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.label_text(n) in titles,
+            "a sidebar row",
+        )
+        rows = atspi.sidebar_rows(app(context))
+        focused = [i for i, r in enumerate(rows) if atspi.focused(r)]
     delta = target - focused[0]
     for _ in range(abs(delta)):
         atspi.press("Down" if delta > 0 else "Up")
@@ -331,14 +334,31 @@ def step_row_says(context, row, text):
 
 @step('I type "{value}" into the "{field}" field')
 def step_type_into(context, value, field):
-    entry = atspi.find(
-        content(context),
-        lambda n: atspi.role(n) in atspi.TEXT_ROLES
-        and (atspi.name(n) == field or atspi.description(n) == field),
-        f"a text field named {field!r}",
-    )
-    entry.grabFocus()
+    """Focus the named field from the keyboard and type into it.
+
+    Typing, not EditableText, so the widget sees real key events and emits
+    ::changed/::search-changed exactly as it would for a user.
+    """
+    def is_field(n):
+        return atspi.role(n) in atspi.TEXT_ROLES and (
+            atspi.name(n) == field or atspi.description(n) == field
+        )
+
+    atspi.find(content(context), is_field, f"a text field named {field!r}")
+    atspi.focus_by_tab(app(context), is_field, f"the {field!r} field")
     atspi.type_text(value)
+
+
+@then('a toast says "{text}"')
+def step_toast_says(context, text):
+    def check():
+        return any(
+            text_present(n, text)
+            for n in atspi.descendants(app(context), only_showing=True)
+            if atspi.is_toast(n)
+        )
+
+    assert atspi.poll(check), f"no toast said {text!r}"
 
 
 # ---------------------------------------------------------------- dialogs
