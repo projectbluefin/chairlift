@@ -65,6 +65,11 @@ xdpyinfo >/dev/null 2>&1 || { echo "Xvfb on $DISPLAY_NUM never became ready" >&2
 # The same environment the dry-run startup smoke test uses, so the two agree
 # on what a clean headless launch looks like.
 export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory G_DEBUG=fatal-criticals GDK_DEBUG=no-portals
+# GTK 4 prefers Wayland whenever WAYLAND_DISPLAY is set. A developer running
+# this from a desktop session would otherwise open the window on the live
+# compositor instead of the private Xvfb display above.
+unset WAYLAND_DISPLAY || true
+export GDK_BACKEND=x11
 # The Livery page reads its selections through `gsettings`, which needs
 # ChairLift's schema on the search path. A source build has not run
 # `make install`, so without this the page would capture its

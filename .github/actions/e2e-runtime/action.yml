@@ -1,0 +1,55 @@
+name: E2E runtime
+description: >
+  Install the headless GTK, X11 and accessibility runtime `make e2e` needs,
+  plus a venv holding the behave AT-SPI suite's pinned Python dependencies.
+  Shared by every workflow that runs `make e2e` so the three cannot drift.
+outputs:
+  python:
+    description: Interpreter with behave and dogtail, for CHAIRLIFT_ATSPI_PYTHON.
+    value: ${{ steps.venv.outputs.python }}
+runs:
+  using: composite
+  steps:
+    # adwaita-icon-theme, libgtk-4-1, libadwaita-1-0: the GUI itself.
+    # dbus-x11, xvfb, xauth: the private display and session bus.
+    # imagemagick, x11-utils (xdpyinfo), x11-apps (xwd), xdotool: the
+    #   screenshot walkthrough; xwd also captures failed AT-SPI scenarios.
+    # flatpak: the Updates shell renders "No update sources are available."
+    #   when none of its sources can be reached; ubuntu-latest ships Homebrew
+    #   but not on PATH and never ships bootc, so flatpak is the source that
+    #   makes the Updates page representative.
+    # at-spi2-core, gir1.2-atspi-2.0, python3-gi, python3-pyatspi,
+    #   python3-venv: the accessibility bus and the Python bindings the behave
+    #   suite reaches it through.
+    - name: Install headless GTK and accessibility runtime
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          adwaita-icon-theme \
+          at-spi2-core \
+          dbus-x11 \
+          flatpak \
+          gir1.2-atspi-2.0 \
+          imagemagick \
+          libadwaita-1-0 \
+          libgtk-4-1 \
+          python3-gi \
+          python3-pyatspi \
+          python3-venv \
+          x11-apps \
+          x11-utils \
+          xauth \
+          xdotool \
+          xvfb
+
+    # --system-site-packages so the venv sees the distribution's PyGObject
+    # and pyatspi, which are not installable from PyPI.
+    - name: Create AT-SPI suite venv
+      id: venv
+      shell: bash
+      run: |
+        venv="$RUNNER_TEMP/atspi-venv"
+        python3 -m venv --system-site-packages "$venv"
+        "$venv/bin/pip" install --quiet --requirement test/e2e/requirements-atspi.txt
+        echo "python=$venv/bin/python" >> "$GITHUB_OUTPUT"

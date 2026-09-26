@@ -153,17 +153,21 @@ SCREENSHOT_DIR=docs/screenshots
 # settings schema is not installed" and renders without its saved state, and
 # the walkthrough captures this target uploads are exactly what ships in
 # docs/screenshots.
+#
+# E2E_TIMEOUT overrides go test's 10-minute default: the behave AT-SPI suite
+# (test/e2e/features) launches the application once per scenario.
+E2E_TIMEOUT?=40m
 e2e: build-e2e schemas
 ifeq ($(E2E_COVERDIR),)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
-		$(GOTEST) -v ./test/e2e
+		$(GOTEST) -v -timeout $(E2E_TIMEOUT) ./test/e2e
 else
 	@rm -rf "$(E2E_COVERDIR)" && mkdir -p "$(E2E_COVERDIR)"
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
-		$(GOTEST) -v ./test/e2e
+		$(GOTEST) -v -timeout $(E2E_TIMEOUT) ./test/e2e
 	$(GOCMD) tool covdata textfmt -i=$(abspath $(E2E_COVERDIR)) -o=e2e-coverage.out
 	@echo "==> e2e statement coverage written to e2e-coverage.out"
 endif

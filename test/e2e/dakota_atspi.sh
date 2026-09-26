@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Run the behave AT-SPI suite inside the native Dakota environment.
+#
+# Usage: test/e2e/dakota_atspi.sh [behave tag expression]
+#   e.g. test/e2e/dakota_atspi.sh @maintenance
+#
+# CHAIRLIFT_ATSPI_NO_BUILD=1 skips `make build-e2e schemas`, for several
+# runs sharing one prebuilt binary (concurrent builds race on one output).
+#
+# For contributors on a Bluefin/Dakota host. The host itself cannot run the
+# suite directly: /usr/share/chairlift/config.yml outranks every configuration
+# fixture, and the suite must never touch the live desktop session. This runs
+# the same Go gate CI runs (TestATSPIBehaveSuite) in
+# ghcr.io/projectbluefin/dakota:testing with:
+#   - the checkout at /workspace,
+#   - /usr/share/chairlift masked by an empty tmpfs,
+#   - Homebrew mounted read-only for go and Xvfb (brew install go xorg-server),
+#   - a venv from test/e2e/requirements-atspi.txt (created on first use),
+#   - no host session bus, display, Wayland socket, or runtime directory.
+#
+# Artifacts land in build/atspi/<tags>/ (JUnit, behave.log, per-scenario
+# logs, and tree.txt/screen.xwd for failed scenarios), one directory per tag
+# expression so concurrent runs do not collide.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+IMAGE="${CHAIRLIFT_DAKOTA_IMAGE:-ghcr.io/projectbluefin/dakota:testing}"
+BREW="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
+VENV="$CACHE/chairlift-atspi-venv"
+GOMODCACHE="$(go env GOMODCACHE)"
+GOCACHE="$(go env GOCACHE)"
+TAGS="${1:-}"
+
+command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
+[ -x "$BREW/bin/Xvfb" ] || { echo "Xvfb not found under $BREW; brew install xorg-server" >&2; exit 1; }
+
+if [ ! -x "$VENV/bin/python" ]; then
+    # The venv is built with the container's interpreter so its site-packages
+    # (PyGObject, pyatspi) are the ones the suite sees.
+    podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
+        -v "$CACHE:$CACHE" -v "$ROOT:/workspace:ro" "$IMAGE" \
+        sh -c "python3 -m venv --system-site-packages '$VENV' && '$VENV/bin/pip' install -q -r /workspace/test/e2e/requirements-atspi.txt"
+fi
+
+if [ -z "${CHAIRLIFT_ATSPI_NO_BUILD:-}" ]; then
+    make -C "$ROOT" build-e2e schemas >/dev/null
+fi
+
+RUN="$(printf '%s' "${TAGS:-all}" | tr -c 'A-Za-z0-9' '-')"
+OUT="build/atspi/$RUN"
+rm -rf "${ROOT:?}/$OUT"
+mkdir -p "$ROOT/$OUT"
+
+exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
+    --tmpfs /tmp:rw,mode=1777 \
+    --tmpfs /usr/share/chairlift:ro,notmpcopyup \
+    -v "$ROOT:/workspace" \
+    -v "$BREW:$BREW:ro" \
+    -v "$CACHE:$CACHE" \
+    -v "$GOMODCACHE:$GOMODCACHE" \
+    -e HOME=/tmp/home \
+    -e PATH="/usr/bin:/usr/sbin:$BREW/bin" \
+    -e GOMODCACHE="$GOMODCACHE" -e GOCACHE="$GOCACHE" \
+    -e GOTOOLCHAIN=local \
+    -e CHAIRLIFT_E2E_BUILD_DIR=/workspace/build \
+    -e CHAIRLIFT_SCHEMA_DIR=/workspace/build/schemas \
+    -e CHAIRLIFT_ATSPI_PYTHON="$VENV/bin/python" \
+    -e CHAIRLIFT_ATSPI_OUT="/workspace/$OUT" \
+    -e CHAIRLIFT_ATSPI_TAGS="$TAGS" \
+    -e CHAIRLIFT_REQUIRE_ATSPI=1 \
+    -w /workspace "$IMAGE" \
+    sh -c 'mkdir -p "$HOME" && go test -count=1 -v -timeout 40m -run "TestATSPI" ./test/e2e'

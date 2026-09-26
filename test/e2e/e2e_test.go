@@ -90,6 +90,11 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		"GSETTINGS_BACKEND=memory",
 		"G_DEBUG=fatal-criticals",
 		"GDK_DEBUG=no-portals",
+		// GTK 4 prefers Wayland whenever WAYLAND_DISPLAY is set; without
+		// these a developer's run opens on the live compositor instead of
+		// xvfb-run's private display.
+		"GDK_BACKEND=x11",
+		"WAYLAND_DISPLAY=",
 		"HOME="+home,
 		"XDG_RUNTIME_DIR="+runtimeDir,
 	)

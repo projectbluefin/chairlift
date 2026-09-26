@@ -1,0 +1,7 @@
+# Python dependencies of the behave AT-SPI suite (test/e2e/features).
+# Pinned to projectbluefin/testsuite's runner (container/Containerfile.runner,
+# behave) so steps written here run unchanged there. Install into a venv
+# created with --system-site-packages: PyGObject and pyatspi come from the
+# distribution (python3-gi, python3-pyatspi, gir1.2-atspi-2.0).
+behave==1.3.3
+dogtail==2.1.0
