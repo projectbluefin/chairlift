@@ -71,7 +71,12 @@ case "$1" in
 remote-ls)
     scope=system
     for arg in "$@"; do [ "$arg" = "--user" ] && scope=user; done
-    if [ -f "$state/flatpak-remote-ls-$scope.delay" ]; then sleep "$(cat "$state/flatpak-remote-ls-$scope.delay")"; fi
+    if [ -f "$state/flatpak-remote-ls-$scope.hold" ]; then
+        # Held until a step releases it (bounded, so a broken scenario
+        # cannot hang the run), not for a fixed time: a fixed delay raced
+        # application startup on a slow runner.
+        for _ in $(seq 1 600); do [ -f "$state/flatpak-remote-ls-$scope.release" ] && break; sleep 0.1; done
+    fi
     if [ -f "$state/flatpak-remote-ls-$scope.fail" ]; then
         cat "$state/flatpak-remote-ls-$scope.fail" >&2
         exit 1
@@ -124,11 +129,12 @@ def flatpak_current(context):
 
 @stub("updates-flatpak-slow-check")
 def flatpak_slow_check(context):
-    """Flatpak whose user update query takes four seconds, then finds Firefox.
+    """Flatpak whose user update query waits for a step to release it, then finds Firefox.
 
-    Holds the shell in its checking phase long enough to observe it."""
+    Holds the shell in its checking phase until `the Flatpak update check is
+    allowed to finish`, so the phase is observed however slow startup is."""
     write_state(context, "flatpak-remote-ls-user", FIREFOX_UPDATE)
-    write_state(context, "flatpak-remote-ls-user.delay", "4")
+    write_state(context, "flatpak-remote-ls-user.hold", "")
     _install_flatpak(context)
 
 

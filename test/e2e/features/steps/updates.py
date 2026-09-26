@@ -199,3 +199,9 @@ def step_expand_row(context, title, group):
         atspi.press("Tab")
     assert atspi.focused(header), f"Tab never reached {title!r} in {group!r}"
     atspi.press("space")
+
+
+@step("the Flatpak update check is allowed to finish")
+def step_release_flatpak_check(context):
+    with open(_state(context, "flatpak-remote-ls-user.release"), "w", encoding="utf-8"):
+        pass
