@@ -314,7 +314,7 @@ func (a *FirstRunAssistant) recordSkip() {
 // leaving a bare gsettings failure behind.
 func logDispositionError(state string, err error) {
 	if errors.Is(err, firstrun.ErrSchemaMissing) {
-		log.Printf("firstrun: not recording %s disposition: %v; run `make schemas` or install the application to compile the settings schema", state, err)
+		log.Printf("firstrun: not recording %s disposition: %v; reinstall the application so its settings schema is compiled (in a source checkout, run `make schemas`)", state, err)
 		return
 	}
 	log.Printf("firstrun: saving %s disposition: %v", state, err)

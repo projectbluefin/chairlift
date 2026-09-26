@@ -144,7 +144,11 @@ schema, one of the two ChairLift ships (the other,
 `io.projectbluefin.chairlift.updates`, holds the user update preferences). A
 source build has no installed schema — run `make schemas` and export the
 `GSETTINGS_SCHEMA_DIR` it prints, or the page reports its settings
-unavailable.
+unavailable. An install hits the same condition when it ships the schema XML
+without compiling it where GSettings searches (`/usr/share/glib-2.0/schemas`,
+the `glib-2.0/schemas` directory of any `$XDG_DATA_DIRS` entry, or the user's
+`~/.local/share/glib-2.0/schemas`); the packages' postinstall recompiles the
+system cache, and a Homebrew cask has to compile the user directory itself.
 
 A failed bundle install reports the cause rather than the progress that
 preceded it: ChairLift reads both of brew's output streams, because
