@@ -59,7 +59,9 @@ var Keys = []string{
 }
 
 // ErrSchemaMissing reports that the Livery settings schema is not installed.
-// It happens when running from a source build without `make schemas`, and the
+// It happens when running from a source build without `make schemas`, or from
+// an install that shipped the schema XML without compiling it into a directory
+// GSettings searches (the Homebrew cask did), and the
 // page degrades to a diagnostic rather than failing.
 var ErrSchemaMissing = errors.New("livery: the Livery settings schema is not installed")
 

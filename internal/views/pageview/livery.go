@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/livery"
 )
 
@@ -315,6 +316,14 @@ const LiveryCustomRowTitle = "Custom SVG…"
 // surprised by it.
 const LiveryCustomRowSubtitle = "Use your own file instead of the list above"
 
-// LiverySchemaMissingMessage is the diagnostic for a source build whose
-// GSettings schema has not been compiled.
-const LiverySchemaMissingMessage = "Livery settings are unavailable: run `make schemas`, or install the package, so the settings schema is present"
+// LiverySchemaMissingMessage is shown when ChairLift's GSettings schemas are
+// not on the schema search path. Most people who see it did not build from
+// source: a Homebrew cask install that copied the binary but never compiled
+// the schemas produces the same condition. So it names what is missing and
+// tells an installed user to reinstall first; `make schemas` is only the
+// source-checkout remedy. It is deliberately not phrased as a configuration
+// error — config.yml is fine, and saying otherwise sends people to the wrong
+// file.
+const LiverySchemaMissingMessage = "Livery settings are unavailable because " + branding.AppName +
+	"'s settings schema is not installed. Reinstall " + branding.AppName +
+	" to restore it; in a source checkout, run `make schemas`."
