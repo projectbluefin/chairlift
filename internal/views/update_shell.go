@@ -141,8 +141,29 @@ func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
 	if parent := widget.GetParent(); parent != nil {
 		gtk.ViewportNewFromInternalPtr(parent.GoPointer()).SetChild(nil)
 	}
+	growWithContent(widget)
 	s.content.Append(widget)
 	s.secondary = widget
+}
+
+// growWithContent stops a widget that scrolls internally from doing so, so
+// it reports its content's full height instead of a scroller's small minimum.
+//
+// AdwStatusPage and AdwPreferencesPage are each built around a GtkScrolledWindow
+// as their only child. Nested in this shell's own scroller, both were
+// allocated that scroller-sized minimum once the preferences page was mounted
+// below the sources: the status page's title and description were clipped
+// away while its icon was cut in half, and the page scrolled inside the page.
+// The outer scroller alone scrolls the destination. Any other child shape is
+// left untouched.
+func growWithContent(widget *gtk.Widget) {
+	child := widget.GetFirstChild()
+	if child == nil || child.GetCssName() != "scrolledwindow" {
+		return
+	}
+	scroller := gtk.ScrolledWindowNewFromInternalPtr(child.GoPointer())
+	scroller.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyNeverValue)
+	scroller.SetPropagateNaturalHeight(true)
 }
 
 // StartCheck starts a generation-guarded check away from the GTK thread.
@@ -417,6 +438,7 @@ func (s *UpdateShell) build() {
 	s.progress.SetHexpand(true)
 	controls.Append(&s.progress.Widget)
 	s.statusPage.SetChild(&controls.Widget)
+	growWithContent(&s.statusPage.Widget)
 	content.Append(&s.statusPage.Widget)
 
 	s.banner = adw.NewBanner("")
