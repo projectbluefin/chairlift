@@ -3,7 +3,7 @@
 # what the AT-SPI tree reported.
 #
 # Usage: run_atspi_navigation.sh <chairlift-binary> <output-dir> \
-#            <page-name> <page-title> [<page-name> <page-title>...]
+#            [<page-name> <page-title>... | --probe <probe-script> [args...]]
 #
 # Writes <output-dir>/atspi-results.txt (the probe's records),
 # chairlift.log (the application's output) and probe.log (the probe's
@@ -26,12 +26,25 @@
 # gets, never on the developer's or runner's own session.
 set -euo pipefail
 
-APP="${1:?usage: run_atspi_navigation.sh <chairlift-binary> <output-dir> <page> <title>...}"
-OUTDIR="${2:?usage: run_atspi_navigation.sh <chairlift-binary> <output-dir> <page> <title>...}"
+APP="${1:?usage: run_atspi_navigation.sh <chairlift-binary> <output-dir> [<page> <title>... | --probe <probe-script> [args...]]}"
+OUTDIR="${2:?usage: run_atspi_navigation.sh <chairlift-binary> <output-dir> [<page> <title>... | --probe <probe-script> [args...]]}"
 shift 2
-PAIRS=("$@")
-[ ${#PAIRS[@]} -gt 0 ] || { echo "no pages requested" >&2; exit 2; }
-[ $((${#PAIRS[@]} % 2)) -eq 0 ] || { echo "pages must be <name> <title> pairs" >&2; exit 2; }
+
+PROBE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/atspi_probe.py"
+PROBE_ARGS=()
+
+if [ "${1:-}" = "--probe" ]; then
+    shift
+    [ $# -gt 0 ] || { echo "--probe requires a script path" >&2; exit 2; }
+    PROBE="$1"
+    shift
+    PROBE_ARGS=("$@")
+else
+    PAIRS=("$@")
+    [ ${#PAIRS[@]} -gt 0 ] || { echo "no pages requested" >&2; exit 2; }
+    [ $((${#PAIRS[@]} % 2)) -eq 0 ] || { echo "pages must be <name> <title> pairs" >&2; exit 2; }
+    PROBE_ARGS=("${PAIRS[@]}")
+fi
 
 mkdir -p "$OUTDIR"
 OUTDIR="$(cd "$OUTDIR" && pwd)"
@@ -89,7 +102,6 @@ mkdir -p "$HOME"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
-PROBE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/atspi_probe.py"
 [ -r "$PROBE" ] || { echo "probe $PROBE is missing" >&2; exit 1; }
 
 # The application and the probe must share one accessibility bus, which is
@@ -101,12 +113,29 @@ export CHAIRLIFT_ATSPI_LOG="$LOG"
 export CHAIRLIFT_ATSPI_PROBE="$PROBE"
 export CHAIRLIFT_ATSPI_PROBE_LOG="$PROBE_LOG"
 export CHAIRLIFT_ATSPI_RESULTS="$RESULTS"
+export CHAIRLIFT_ATSPI_OUTDIR="$OUTDIR"
 
 dbus-run-session -- bash -eu -o pipefail -c '
+    PRELAUNCH_PID=
+    if [ -n "${CHAIRLIFT_ATSPI_PRELAUNCH_HOOK:-}" ]; then
+        if [ -f "$CHAIRLIFT_ATSPI_PRELAUNCH_HOOK" ]; then
+            # shellcheck disable=SC1090
+            source "$CHAIRLIFT_ATSPI_PRELAUNCH_HOOK"
+        else
+            echo "pre-launch hook $CHAIRLIFT_ATSPI_PRELAUNCH_HOOK not found" >&2
+            exit 1
+        fi
+    fi
+
+    cd "$CHAIRLIFT_ATSPI_OUTDIR"
     "$CHAIRLIFT_ATSPI_APP" --dry-run >>"$CHAIRLIFT_ATSPI_LOG" 2>&1 &
     APP_PID=$!
 
     finish() {
+        if [ -n "${PRELAUNCH_PID:-}" ]; then
+            kill -TERM "$PRELAUNCH_PID" 2>/dev/null || true
+            wait "$PRELAUNCH_PID" 2>/dev/null || true
+        fi
         kill -TERM "$APP_PID" 2>/dev/null || true
         wait "$APP_PID" 2>/dev/null || true
     }
@@ -119,7 +148,8 @@ dbus-run-session -- bash -eu -o pipefail -c '
     for _ in $(seq 1 300); do
         if grep -q "Running in dry-run mode" "$CHAIRLIFT_ATSPI_LOG" \
             && grep -q "ChairLift activated" "$CHAIRLIFT_ATSPI_LOG" \
-            && grep -q "app: window presented" "$CHAIRLIFT_ATSPI_LOG"; then
+            && grep -q "app: window presented" "$CHAIRLIFT_ATSPI_LOG" \
+            && { [ -z "${CHAIRLIFT_ATSPI_EXTRA_READY_MARKER:-}" ] || grep -q "$CHAIRLIFT_ATSPI_EXTRA_READY_MARKER" "$CHAIRLIFT_ATSPI_LOG"; }; then
             ready=1
             break
         fi
@@ -140,6 +170,6 @@ dbus-run-session -- bash -eu -o pipefail -c '
 
     python3 "$CHAIRLIFT_ATSPI_PROBE" "$@" \
         >"$CHAIRLIFT_ATSPI_RESULTS" 2>"$CHAIRLIFT_ATSPI_PROBE_LOG"
-' probe "${PAIRS[@]}"
+' probe "${PROBE_ARGS[@]}"
 
 echo "atspi navigation probe complete"

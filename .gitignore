@@ -53,3 +53,4 @@ Thumbs.db
 
 # Python bytecode from running test/e2e/atspi_probe.py
 __pycache__/
+*.pyc
