@@ -45,6 +45,7 @@ if [ ! -x "$VENV/bin/python" ]; then
     # The venv is built with the container's interpreter so its site-packages
     # (PyGObject, pyatspi) are the ones the suite sees.
     podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
+        --tmpfs /tmp:rw,mode=1777 -e HOME=/tmp \
         -v "$CACHE:$CACHE" -v "$ROOT:/workspace:ro" "$IMAGE" \
         sh -c "python3 -m venv --system-site-packages '$VENV' && '$VENV/bin/pip' install -q -r /workspace/test/e2e/requirements-atspi.txt"
 fi
