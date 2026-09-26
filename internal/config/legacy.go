@@ -17,6 +17,37 @@ func validateLegacySystemPage(src configSource, value *yaml.Node) *LoadError {
 	}, value)
 }
 
+// validateLegacyMaintenanceGroups allows retired maintenance groups from older
+// releases to be parsed and validated for typos/shape without causing an unknown
+// group schema error or activating dead runtime features.
+var legacyMaintenanceGroups = []string{
+	"maintenance_brew_group",
+	"maintenance_flatpak_group",
+	"maintenance_optimization_group",
+}
+
+// stripRetiredMaintenanceGroups removes retired groups from the AST prior to
+// decoding so they never reach runtime Config.
+func stripRetiredMaintenanceGroups(top *yaml.Node) {
+	maint := mappingValue(top, "maintenance_page")
+	if maint == nil || maint.Kind != yaml.MappingNode {
+		return
+	}
+	retired := make(map[string]bool, len(legacyMaintenanceGroups))
+	for _, g := range legacyMaintenanceGroups {
+		retired[g] = true
+	}
+	newContent := make([]*yaml.Node, 0, len(maint.Content))
+	for i := 0; i+1 < len(maint.Content); i += 2 {
+		key := maint.Content[i]
+		val := maint.Content[i+1]
+		if !retired[key.Value] {
+			newContent = append(newContent, key, val)
+		}
+	}
+	maint.Content = newContent
+}
+
 // migrateLegacySystemPage runs only after source-graph and schema validation.
 // The effective tree is alias-free and privately owned. Move surviving groups
 // to Updates, preserving explicit false values. Current non-null fields win;

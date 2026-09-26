@@ -167,3 +167,10 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Given ChairLift is running
     Then the application log does not contain "CONFIGURATION ERROR"
     And I see "Get updates early"
+
+  @config.config-legacy-maintenance
+  Scenario: A configuration with retired maintenance groups loads without error
+    Given ChairLift is running
+    Then the application log does not contain "CONFIGURATION ERROR"
+    When I select "Maintenance" in the sidebar
+    Then I see "Free up space"

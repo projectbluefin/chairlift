@@ -69,6 +69,16 @@ compatibility rule for `system_page`, not general acceptance of obsolete keys
 elsewhere in an old file. No file is rewritten: administrators can move the
 two surviving groups to `updates_page` and remove `system_page` when convenient.
 
+## Legacy Maintenance groups compatibility
+
+Older configurations (such as maintainer defaults shipping with previous
+Bluefin releases) may specify `maintenance_brew_group`,
+`maintenance_flatpak_group`, or `maintenance_optimization_group`. These retired
+groups undergo ordinary validation (preventing syntax errors or unknown keys)
+and are stripped prior to runtime decoding so they have no runtime effect and
+do not cause a fail-closed schema error. Routine cleanup is handled by
+`maintenance_freespace_group`.
+
 ## Available Pages and Groups
 
 ### Agents Page (`agents_page`)

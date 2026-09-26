@@ -203,8 +203,11 @@ and actions are validated before migration, including retired groups and
 values superseded by current settings. Before decoding, the two surviving
 groups (`bootc_status_group`, `channel_group`) supply omitted/null Updates
 fields; explicit current values take precedence. Information and health groups
-are ignored by runtime decoding. Source files, search precedence, and
-fail-closed handling for invalid inputs remain unchanged.
+are ignored by runtime decoding. Similarly, retired `maintenance_page` groups
+(`maintenance_brew_group`, `maintenance_flatpak_group`, `maintenance_optimization_group`)
+are validated and stripped prior to runtime decoding so existing host files do
+not fail closed. Source files, search precedence, and fail-closed handling for
+invalid inputs remain unchanged.
 
 **Structured load-error vocabulary (`internal/config/loaderror.go`).** A
 stable `ErrorKind` enumerates why loading/validating a config file could
