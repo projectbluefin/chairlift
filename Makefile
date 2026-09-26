@@ -141,9 +141,11 @@ screenshots: build-e2e schemas
 SCREENSHOT_DIR=docs/screenshots
 
 # End-to-end smoke tests require GTK4, Libadwaita, dbus-run-session, and Xvfb;
-# the screenshot walkthrough additionally requires Xvfb, xdotool, xdpyinfo,
-# and xwd. They run separately from ci because the ordinary unit-test gate is
-# intentionally usable on hosts without those runtime libraries.
+# the AT-SPI model-preset scenario additionally requires at-spi2-core,
+# python3-dogtail, and a private accessibility bus. The screenshot walkthrough
+# additionally requires Xvfb, xdotool, xdpyinfo, and xwd. They run separately
+# from ci because the ordinary unit-test gate is intentionally usable on hosts
+# without those runtime libraries.
 #
 # Only the GUI is built with E2E_TAGS. Both privileged helpers are built
 # exactly as they ship, so the boundary assertions in test/e2e exercise the

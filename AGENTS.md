@@ -56,7 +56,15 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   standard Homebrew environment and tooling. Never stop, mask, or unmount host desktop portals.
   The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
   installs those runtime dependencies explicitly because ordinary unit-test
-  hosts intentionally do not carry them.
+  hosts intentionally do not carry them. When the model preset UI is present,
+  Agent Mode preset verification also needs `at-spi2-core` and
+  `python3-dogtail`; it provisions a fake Homebrew
+  executable, llmman unit, and loopback health endpoint under a private HOME,
+  blocks live catalog lookups to exercise the deterministic offline fallback,
+  then selects a preset through AT-SPI while ChairLift is in dry-run mode.
+  Keep the accessibility bus inside the same private D-Bus/Xvfb session as the
+  application and probe, and never make this scenario contact host systemd or
+  mutate the host's model configuration.
   With `E2E_COVERDIR` set, the GUI's counters reach it only because
   `cmd/chairlift` handles `SIGTERM`/`SIGINT` by quitting the application on
   the main thread, so `Run` returns and `main` exits normally; a process that

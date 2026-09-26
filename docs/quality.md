@@ -39,7 +39,8 @@ provide these independent signals:
 - **Unit Tests** — headless tests under `internal/...`, with atomic coverage.
 - **Race Detection** — the same internal test scope under the race detector.
 - **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
-  screenshots uploaded as an artifact.
+  screenshots uploaded as an artifact and (when the preset UI is present) an
+  AT-SPI Agent Mode model-selection scenario using dogtail on a private bus.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.
 - **Tests Passed** — an aggregating job that succeeds only when every job
