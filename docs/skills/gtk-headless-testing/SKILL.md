@@ -129,5 +129,12 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 ## Container Testing Environment for ChairLift
 
 **The rule:** When testing ChairLift locally in containers, **NEVER** use Ubuntu or generic Debian containers. Always use the official native Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the standard Homebrew tooling and environment.
-
 **Why:** ChairLift is specifically built for the Project Bluefin ecosystem. Generic Debian/Ubuntu container environments do not reproduce the Bluefin/Dakota filesystem layout, configuration paths, packaged tooling, system integration, or Homebrew setup. Testing or generating captures in generic Debian/Ubuntu containers produces inaccurate results, missing icons or themes, and incorrect capability evaluations.
+
+### Generating Walkthrough Screenshots with Lima + Dakota
+
+When host runtime libraries or session portals cannot run the GTK capture harness directly:
+1. Launch the `dakota-fedora` Lima VM (`limactl start dakota-fedora`).
+2. Ensure VM Homebrew has the required tools: `brew install go xdotool xdpyinfo xorg-server libxmu libxkbfile pkgconf` (Homebrew lacks `xwd`, so build `xwd-1.0.9` into `~/xtools`).
+3. Run `make screenshots` inside `ghcr.io/projectbluefin/dakota:testing` via Podman with `--userns=keep-id`, mapping `--tmpfs /tmp:rw,mode=1777`, mounting the source tree to `/workspace`, and masking `/usr/share/chairlift` with an empty directory so the packaged config does not override the test suite's `config.dev.yml`.
+4. Copy the resulting PNGs out via `limactl copy`.

@@ -380,7 +380,8 @@ An agent must not break these:
   `features_group`. Nil fails closed, empty tasks disappear, and returned
   snapshots do not expose mutable model state. Next/Back emit no settings or
   feature operation; Skip and intentional Dismiss emit the same disposition,
-  preserving an existing completion. The welcome entry is not a decision step.
+  preserving an existing completion. The welcome entry is a clean hero screen
+  displaying the adaptive Project Bluefin vector wordmark, not a decision step.
   Dedicated controls and dismissal persistence wiring belong to issue #225;
   do not claim the pure model implements those GTK behaviors.
 - **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`

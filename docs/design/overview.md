@@ -2021,8 +2021,12 @@ transitions persists or executes anything. The dialog must apply emitted decisio
 through the existing store, respecting dry-run and reporting persistence errors.
 
 Issue #224 owns this model; issue #225 owns dedicated control instances, async
-readiness, action admission, and GTK Skip/dismissal callbacks. The current GTK
-adapter displays task descriptions and has not yet implemented those controls.
+readiness, action admission, and GTK Skip/dismissal callbacks. The GTK
+onboarding dialog (`internal/views/firstrun.go`) presents the opening hero
+screen with the official Project Bluefin adaptive vector wordmark
+(`bluefin-wordmark-light.svg` / `bluefin-wordmark-dark.svg`, without redundant
+stacked brand graphics) followed by the Adwaita title and flow options
+("Configure Everything" and "Get Moving").
 A capability floor is necessary but is not permission to expose a control whose
 own desktop/async readiness or implementation is missing. See the
 [setup model contract](../specs/setup-model.md) for the exact boundary and tests.
