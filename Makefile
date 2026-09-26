@@ -142,8 +142,10 @@ SCREENSHOT_DIR=docs/screenshots
 
 # End-to-end smoke tests require GTK4, Libadwaita, dbus-run-session, and Xvfb;
 # the screenshot walkthrough additionally requires Xvfb, xdotool, xdpyinfo,
-# and xwd. They run separately from ci because the ordinary unit-test gate is
-# intentionally usable on hosts without those runtime libraries.
+# and xwd, and the behave dry-run step check requires behave and dogtail
+# (test/e2e/requirements-atspi.txt). They run separately from ci because the
+# ordinary unit-test gate is intentionally usable on hosts without those
+# runtime libraries.
 #
 # Only the GUI is built with E2E_TAGS. Both privileged helpers are built
 # exactly as they ship, so the boundary assertions in test/e2e exercise the
