@@ -208,7 +208,7 @@ def step_enter_key(context, value):
 
 @step('I press the remove button in the Agents peer "{address}" row')
 def step_remove_peer(context, address):
-    """The row's only push button is its trash icon (published nameless, #355)."""
+    """The row's only push button is its trash icon, named "Remove <address>"."""
     row = peer_row(context, address)
     button = atspi.find(
         row,

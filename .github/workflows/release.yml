@@ -69,6 +69,15 @@ jobs:
           CHAIRLIFT_REQUIRE_ATSPI: "1"
         run: make e2e
 
+      - name: Run AT-SPI suite on Dakota
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          HOMEBREW_NO_ENV_HINTS: "1"
+        run: |
+          /home/linuxbrew/.linuxbrew/bin/brew install --quiet xorg-server
+          make e2e-atspi
+
   goreleaser:
     name: Release with GoReleaser
     needs: [gate, e2e]

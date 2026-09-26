@@ -106,7 +106,7 @@ Feature: Features page — Developer tools, Gaming, and the Custom Command Menu
     And the application log does not contain "flatpak uninstall"
     And the fake flatpak was never asked to "uninstall"
 
-  @known_issue.352 @stub.features-gaming-system
+  @stub.features-gaming-system
   Scenario: The Gaming preview does not promise to remove system-wide components
     Given ChairLift is running
     When I open the "Features" page
@@ -162,7 +162,10 @@ Feature: Features page — Developer tools, Gaming, and the Custom Command Menu
     And I do not see "Developer tools"
     And the application log contains "dx_group=false gaming_group=true"
 
-  @known_issue.352 @stub.features-no-descriptor @stub.features-gaming-none
+  @stub.features-no-descriptor @stub.features-gaming-none
   Scenario: A host with nothing to offer does not advertise a blank Features page
     Given ChairLift is running
     Then the Features destination is hidden or says why it offers nothing
+    And I see "Nothing to set up here"
+    And I see "This system does not offer developer tools, gaming apps, or optional features that can be set up from this page."
+    And the application log contains "views: features page offers nothing on this system"

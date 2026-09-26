@@ -73,6 +73,12 @@ func (uh *UserHome) buildAccountGroup(page *adw.PreferencesPage) {
 	choose.SetValign(gtk.AlignCenterValue)
 	p.row.AddSuffix(&choose.Widget)
 	p.row.SetActivatableWidget(&choose.Widget)
+	// AdwActionRow labels its activatable widget by the row title, which
+	// here describes the current picture ("No picture set"), not what the
+	// button does. Drop that relation so the button is announced by its own
+	// label.
+	choose.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	SetAccessibleLabel(choose, pageview.AvatarChooseLabel)
 	clicked := func(_ gtk.Button) { uh.presentAvatarPicker() }
 	choose.ConnectClicked(&clicked)
 

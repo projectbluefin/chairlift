@@ -493,7 +493,7 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 		uh.liveryDockVisible = nil
 		empty := adw.NewActionRow()
 		empty.SetUseMarkup(false)
-		row := pageview.LiveryNoResultsRow(query)
+		row := pageview.LiveryNoResultsRow(uh.liveryPickerMode.surface(), query)
 		empty.SetTitle(row.Title)
 		empty.SetSubtitle(row.Subtitle)
 		list.Append(&empty.Widget)

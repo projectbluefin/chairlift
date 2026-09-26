@@ -17,17 +17,17 @@ import (
 )
 
 // createRecoveryPage builds the Recovery detail page: a ToolbarView whose
-// header bar carries a back button (this is a detail, reached from System),
+// header bar carries a back button (this is a detail, reached from Maintenance),
 // hosting the Recovery preferences page.
 func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 	toolbarView := adw.NewToolbarView()
 
 	// Header bar with a back button: Recovery is a detail, so the user
-	// returns to System. The back button only fires once the window has
+	// returns to Maintenance. The back button only fires once the window has
 	// wired closeRecoveryDetail, which it does right after New.
 	headerBar := adw.NewHeaderBar()
 	backButton := gtk.NewButtonFromIconName("go-previous-symbolic")
-	backButton.SetTooltipText("Back to System")
+	backButton.SetTooltipText("Back to Maintenance")
 	backClickedCb := func(gtk.Button) {
 		if uh.closeRecoveryDetail != nil {
 			uh.closeRecoveryDetail()
@@ -52,7 +52,7 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 
 // Recovery is the single named detail view a user opens deliberately to return
 // to a previous system version or perform an explicitly scoped reset. It is
-// reached from System, never from routine Free Up Space.
+// reached from Maintenance, never from routine Free Up Space.
 //
 // The rollback controls stay gated by bootc_updates_group; the reset controls
 // stay gated by reset_group (disabled by shipped default). Nothing here
@@ -65,14 +65,14 @@ func (uh *UserHome) RecoveryPage() *adw.ToolbarView {
 	return uh.recoveryPage
 }
 
-// SetOpenRecoveryDetail wires the callback the System page calls to open the
+// SetOpenRecoveryDetail wires the callback the Maintenance page calls to open the
 // Recovery detail view.
 func (uh *UserHome) SetOpenRecoveryDetail(fn func()) {
 	uh.openRecoveryDetail = fn
 }
 
 // SetCloseRecoveryDetail wires the callback the Recovery back button calls to
-// return to System.
+// return to Maintenance.
 func (uh *UserHome) SetCloseRecoveryDetail(fn func()) {
 	uh.closeRecoveryDetail = fn
 }
@@ -160,9 +160,9 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 
 // recoveryProvidersAvailable reports whether the Recovery detail view has
 // anything to show: a reset (reset_group) or the bootc rollback provider
-// (bootc_updates_group) is enabled. The System page uses it to decide
+// (bootc_updates_group) is enabled. The Maintenance page uses it to decide
 // whether to show its Recovery entry, so the entry's gate lives in one place
-// and does not reach across pages from system_page.go.
+// and does not reach across pages from maintenance_page.go.
 func (uh *UserHome) recoveryProvidersAvailable() bool {
 	return uh.groupEnabled("maintenance_page", "reset_group") ||
 		uh.groupEnabled("updates_page", "bootc_updates_group")

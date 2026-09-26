@@ -1,3 +1,4 @@
+@shell
 Feature: Main menu, shortcuts and About
   The header's main menu is the only pointer route to the keyboard shortcuts
   and the About dialog, so both must be reachable through AT-SPI.
@@ -9,6 +10,10 @@ Feature: Main menu, shortcuts and About
     And the menu offers "Keyboard Shortcuts"
     And the menu offers "About Control Center"
 
+  # Upstream GTK (reproduced on 4.24.0 with a bare GtkMenuButton + GMenu, no
+  # ChairLift code): GtkModelButton builds its label with accessible-role
+  # PRESENTATION, whose naming is PROHIBITED, so GtkLabel never sets its
+  # LABEL property and the item's labelled-by relation resolves to "".
   @known_issue.347
   Scenario: Every main menu item has an accessible name
     Given ChairLift is running

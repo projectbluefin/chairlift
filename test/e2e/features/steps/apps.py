@@ -222,6 +222,18 @@ def step_remove_named(context, row):
     assert not nameless, f"row {row!r} has icon buttons with no accessible name (descriptions: {nameless})"
 
 
+@then('the remove button in the "{row}" row is sensitive')
+def step_remove_sensitive(context, row):
+    """A cancelled, failed, or previewed removal hands the button back."""
+
+    def check():
+        target = atspi.row_containing(content(context), row, timeout=1)
+        buttons = atspi.find_all(target, lambda n: atspi.role(n) in atspi.BUTTON_ROLES and atspi.actions(n))
+        return len(buttons) == 1 and atspi.sensitive(buttons[0])
+
+    assert atspi.poll(check), f"the remove button in the {row!r} row never became sensitive"
+
+
 # ---------------------------------------------------------------- toasts
 
 

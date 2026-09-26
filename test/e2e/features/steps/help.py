@@ -240,4 +240,3 @@ def step_availability_reason(context, feature, reason):
 def step_availability_absent(context, feature):
     listed = _availability(context) or {}
     assert feature not in listed, f"{feature!r} is explained as missing: {listed}"
-

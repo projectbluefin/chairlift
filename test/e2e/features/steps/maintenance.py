@@ -151,4 +151,3 @@ def step_tool_never_ran(context, tool, subcommand):
     prefix = f"{tool} {subcommand}"
     ran = [line for line in _tool_calls(context) if line == prefix or line.startswith(prefix + " ")]
     assert not ran, f"the stubbed {tool!r} was asked to {subcommand!r}: {ran}"
-

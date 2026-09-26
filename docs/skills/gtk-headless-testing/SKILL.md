@@ -101,11 +101,16 @@ tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
 `@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
 only one destination needs goes in `steps/<destination>.py`.
 
-**Run it.** CI: `make e2e` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a missing stack
-fails instead of skipping; the runtime comes from `.github/actions/e2e-runtime`).
-On a Bluefin/Dakota host: `test/e2e/dakota_atspi.sh [@tag]`, which runs the
-same Go gate in `ghcr.io/projectbluefin/dakota:testing`. Artifacts:
-`build/atspi/<tag>/` locally, the `atspi-results` artifact in CI —
+**Run it.** `make e2e-atspi [ATSPI_TAGS=@tag]` locally and in CI; both run
+`test/e2e/dakota_atspi.sh`, which runs the Go gate in
+`ghcr.io/projectbluefin/dakota:testing` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a
+missing stack fails instead of skipping). Not on the runner's Ubuntu: its
+Libadwaita 1.5 publishes an AdwPreferencesGroup as an unnamed panel (only the
+inner list carries the title), where Dakota publishes a `grouping` named by
+the title — 63 scenarios passed on Dakota and failed on Ubuntu for that and
+similar version drift. `make e2e` skips `TestATSPIBehaveSuite` but keeps the
+behave dry-run check. Artifacts:
+`build/atspi/<tag|all>/` locally, the `atspi-results` artifact in CI —
 `behave.log`, JUnit XML, and per scenario `chairlift.log`, `journal.jsonl`,
 and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
 (`ffmpeg -i screen.xwd x.png`). Read `tree.txt` before guessing at a lookup.
@@ -173,9 +178,11 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 
 ### Running the AT-SPI suite with Dakota
 
-`test/e2e/dakota_atspi.sh [@tag]` (see "The behave AT-SPI suite" above).
-It needs Homebrew's `go` and `xorg-server` on the host and creates its venv
-from `test/e2e/requirements-atspi.txt` with the container's interpreter.
+`make e2e-atspi` (see "The behave AT-SPI suite" above). It needs podman, Go,
+and Homebrew's `xorg-server` on the host, mounts the host's Go toolchain and
+Homebrew read-only, and creates its venv from `test/e2e/requirements-atspi.txt`
+with the container's interpreter. `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs
+`@known_issue` scenarios.
 
 ### Generating Walkthrough Screenshots with Lima + Dakota
 

@@ -25,7 +25,7 @@ import (
 type UpdateShell struct {
 	coordinator   *updateflow.Coordinator
 	preferences   func() userprefs.Values
-	configured    func() map[updateflow.SourceID]bool
+	policy        func() map[updateflow.SourceID]updateflow.Policy
 	toasts        ToastAdder
 	snapshot      updateflow.Snapshot
 	sources       []updateflow.SourceState
@@ -68,18 +68,20 @@ func (s *UpdateShell) SetOnUpdateFinished(fn func(updateflow.Snapshot)) {
 }
 
 // NewUpdateShell builds a status-first update surface and starts its initial
-// check before returning.
+// check before returning. policy reports, per source, the administrator's
+// configuration and the host capability floor as separate facts, so a source
+// the host cannot back is not reported as disabled by the administrator.
 func NewUpdateShell(
 	coordinator *updateflow.Coordinator,
 	preferences func() userprefs.Values,
-	configured func() map[updateflow.SourceID]bool,
+	policy func() map[updateflow.SourceID]updateflow.Policy,
 	toasts ToastAdder,
 ) *UpdateShell {
 	lifecycle, cancel := context.WithCancel(context.Background())
 	s := &UpdateShell{
 		coordinator: coordinator,
 		preferences: preferences,
-		configured:  configured,
+		policy:      policy,
 		toasts:      toasts,
 		sourceRows:  make(map[updateflow.SourceID]*sourceRow),
 		lifecycle:   lifecycle,
@@ -162,10 +164,10 @@ func (s *UpdateShell) StartCheck() {
 	}
 	s.sourcesReady = false
 	preferences := s.currentPreferences()
-	configured := s.currentConfiguration()
+	policy := s.currentPolicy()
 	go func() {
 		defer cancel()
-		s.coordinator.Check(ctx, preferences, configured, s.publish)
+		s.coordinator.Check(ctx, preferences, policy, s.publish)
 	}()
 }
 
@@ -549,17 +551,17 @@ func (s *UpdateShell) currentPreferences() userprefs.Values {
 	return s.preferences()
 }
 
-func (s *UpdateShell) currentConfiguration() map[updateflow.SourceID]bool {
-	if s.configured == nil {
+func (s *UpdateShell) currentPolicy() map[updateflow.SourceID]updateflow.Policy {
+	if s.policy == nil {
 		return nil
 	}
-	values := s.configured()
+	values := s.policy()
 	if values == nil {
 		return nil
 	}
-	cloned := make(map[updateflow.SourceID]bool, len(values))
-	for id, enabled := range values {
-		cloned[id] = enabled
+	cloned := make(map[updateflow.SourceID]updateflow.Policy, len(values))
+	for id, policy := range values {
+		cloned[id] = policy
 	}
 	return cloned
 }

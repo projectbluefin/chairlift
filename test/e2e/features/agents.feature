@@ -29,7 +29,6 @@ Feature: Agents page
     And the "Run AI models on this computer" row says "Turning this on installs llmman from Homebrew"
     And I see "No peers configured"
 
-  @known_issue.355
   Scenario: Model preset controls stay hidden until Agent Mode is ready
     Given ChairLift is running
     When I open the "Agents" page
@@ -129,7 +128,6 @@ Feature: Agents page
     And llmman was never asked to "pull"
     And llmman was never asked to "config set"
 
-  @known_issue.355
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
   Scenario: A dry-run preset leaves the Active Model row showing the model actually configured
     Given ChairLift is running
@@ -191,7 +189,7 @@ Feature: Agents page
     When I open the "Agents" page
     And I note the Agents files on disk
     And I toggle the switch in the "localhost:17434" row
-    Then the application log contains "[DRY-RUN] would configure llmman peers [localhost:17434 127.0.0.1:9 10.0.0.5] (setting localhost:17434 enabled=false) and persist the peer store"
+    Then the application log contains "[DRY-RUN] would configure llmman peers [127.0.0.1:9] (setting localhost:17434 enabled=false) and persist the peer store"
     And the Agents peer "localhost:17434" switch is on
     When I toggle the switch in the "10.0.0.5" row
     Then the application log contains "(setting 10.0.0.5 enabled=true) and persist the peer store"
@@ -218,7 +216,6 @@ Feature: Agents page
     And the Agents files on disk are unchanged
     And llmman was never asked to "config set"
 
-  @known_issue.355
   @stub.agents.llmman @stub.agents.node @stub.agents.peers
   Scenario: A dry-run peer toggle previews the enabled peers llmman would be given
     Given ChairLift is running
@@ -226,7 +223,6 @@ Feature: Agents page
     And I toggle the switch in the "localhost:17434" row
     Then the application log contains "[DRY-RUN] would configure llmman peers [127.0.0.1:9] (setting localhost:17434 enabled=false)"
 
-  @known_issue.355
   @stub.agents.llmman
   Scenario: Pressing Return in the peer key field previews saving it without logging the key
     Given ChairLift is running
@@ -235,7 +231,6 @@ Feature: Agents page
     Then the application log shows the peer key would be set without revealing "s3cret-peer-key"
     And llmman was never asked to "config set"
 
-  @known_issue.355
   @stub.agents.llmman @stub.agents.peers
   Scenario: Every Agents control has an accessible name
     Given ChairLift is running

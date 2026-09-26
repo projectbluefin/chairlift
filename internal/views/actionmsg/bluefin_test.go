@@ -71,7 +71,14 @@ func TestGamingModeConfirmsOnlyWhenSomethingChanged(t *testing.T) {
 		wantConfirm bool
 		wantToast   string
 	}{
-		{name: "dry run", dryRun: true, enable: true, wantToast: "[DRY-RUN]"},
+		{name: "dry run", dryRun: true, enable: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be installed"},
+		{name: "dry run removal", dryRun: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be removed"},
+		// Issue #352: every component is system-wide, so a preview must not
+		// promise a removal the live run would not make.
+		{name: "dry run with only system-wide components", dryRun: true, skipped: 6, wantToast: "[DRY-RUN] Preview: nothing to remove — 6 component(s) installed system-wide would be left in place"},
+		{name: "dry run partial removal names the skipped ones", dryRun: true, changed: 3, skipped: 1, wantToast: "1 component(s) installed system-wide would be left in place"},
+		{name: "dry run with nothing to do", dryRun: true, enable: true, wantToast: "already in the requested state"},
+		{name: "dry run that could not read the inventory", dryRun: true, enable: true, failed: 1, wantToast: "could be installed (1 failed)"},
 		{name: "full install", enable: true, changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) installed"},
 		{name: "full removal", changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) removed"},
 		{name: "partial install still confirms", enable: true, changed: 4, failed: 2, wantConfirm: true, wantToast: "2 failed"},

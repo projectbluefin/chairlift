@@ -24,7 +24,7 @@ Feature: Help destination
       | Report a problem      | https://example.test/issues?labels=help |
       | Browse documentation  | https://example.test/docs/#start        |
 
-  @config.help-links-markup @known_issue.354
+  @config.help-links-markup
   Scenario: A support URL containing "&" is shown exactly as configured
     Given ChairLift is running
     When I press "F1"
@@ -180,7 +180,7 @@ Feature: Help destination
     And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
     And the action journal is empty
 
-  @stub.help-no-goose @known_issue.354
+  @stub.help-no-goose
   Scenario Outline: A dry-run Set Up leaves the row describing the host as it was
     Given ChairLift is running
     When I press "F1"
@@ -239,4 +239,3 @@ Feature: Help destination
     Then I see "System diagnostics copied to clipboard"
     And the "Copy" button in the "System diagnostics" row is sensitive
     And the action journal is empty
-

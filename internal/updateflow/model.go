@@ -67,6 +67,16 @@ type SourceState struct {
 	RestartRequired bool
 }
 
+// Policy is the static stance on one source for this session, as two
+// independent facts: whether configuration enables it, and whether the host
+// capability floor can back it. They stay separate because they are reported
+// differently — an administrator's choice is not a missing tool — and a
+// source is checked only when both hold and its provider is available.
+type Policy struct {
+	Configured bool
+	Supported  bool
+}
+
 // Snapshot is an immutable value published by Coordinator.
 type Snapshot struct {
 	Generation       uint64

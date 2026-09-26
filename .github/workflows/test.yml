@@ -114,9 +114,21 @@ jobs:
           CHAIRLIFT_SCHEMA_DIR: ${{ github.workspace }}/build/schemas
           E2E_COVERDIR: ${{ github.workspace }}/covdata-e2e
           CHAIRLIFT_ATSPI_PYTHON: ${{ steps.runtime.outputs.python }}
-          CHAIRLIFT_ATSPI_OUT: ${{ github.workspace }}/atspi
           CHAIRLIFT_REQUIRE_ATSPI: "1"
         run: make e2e
+
+      # The behave AT-SPI suite asserts what the accessibility tree announces,
+      # which depends on the GTK/Libadwaita release, so it runs in the Dakota
+      # image ChairLift ships on (podman), not on the runner's Ubuntu stack.
+      # Homebrew provides an Xvfb the container can execute.
+      - name: Run AT-SPI suite on Dakota
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+          HOMEBREW_NO_ENV_HINTS: "1"
+        run: |
+          /home/linuxbrew/.linuxbrew/bin/brew install --quiet xorg-server
+          make e2e-atspi
 
       - name: Upload E2E coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
@@ -145,13 +157,13 @@ jobs:
         with:
           name: atspi-results
           path: |
-            atspi/
-            !atspi/bin/
-            !atspi/home/
-            !atspi/runtime/
-            !atspi/scenarios/*/home/
-            !atspi/scenarios/*/runtime/
-            !atspi/scenarios/*/bin/
+            build/atspi/
+            !build/atspi/*/bin/
+            !build/atspi/*/home/
+            !build/atspi/*/runtime/
+            !build/atspi/*/scenarios/*/home/
+            !build/atspi/*/scenarios/*/runtime/
+            !build/atspi/*/scenarios/*/bin/
           if-no-files-found: warn
 
   verify:

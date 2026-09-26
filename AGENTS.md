@@ -68,22 +68,28 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
-- **Every destination is driven through AT-SPI.** `make e2e` also runs
-  `TestATSPIBehaveSuite`: the behave + dogtail suite in `test/e2e/features/`,
-  in projectbluefin/testsuite's shape but against a private Xvfb and D-Bus
-  session so it gates every pull request on a stock runner.
-  `features/environment.py` launches a fresh `--dry-run` ChairLift per
-  scenario with its own HOME, runtime directory, config fixture
-  (`@config.<name>`), stubs (`@stub.<name>`), and action journal; the page and
-  shortcut inventories come from `internal/navigation`. The workflows install
-  the runtime through `.github/actions/e2e-runtime` and set
-  `CHAIRLIFT_REQUIRE_ATSPI=1`, so a missing accessibility stack fails rather
-  than skips; failed scenarios upload their accessibility tree and a
-  screenshot in `atspi-results`. A user-facing feature lands with its
-  scenario; a confirmed defect is written as a scenario tagged
-  `@known_issue.<N>` rather than left untested. On a Bluefin host, run it with
-  `test/e2e/dakota_atspi.sh [@tag]` — never on the live session. The
-  `gtk-headless-testing` skill carries the traps.
+- **Every destination is driven through AT-SPI, on Dakota.** `make e2e-atspi`
+  runs `TestATSPIBehaveSuite` — the behave + dogtail suite in
+  `test/e2e/features/`, in projectbluefin/testsuite's shape — inside
+  `ghcr.io/projectbluefin/dakota:testing` through `test/e2e/dakota_atspi.sh`,
+  with a private Xvfb and D-Bus session. It runs there, not on the runner's
+  Ubuntu stack, because what the tree announces depends on the GTK/Libadwaita
+  release: Ubuntu's Libadwaita 1.5 publishes preference groups differently
+  from what Bluefin ships, and 63 scenarios failed there that pass on Dakota.
+  `make e2e` therefore skips that one test (it still runs the behave dry-run
+  check for undefined steps). `features/environment.py` launches a fresh
+  `--dry-run` ChairLift per scenario with its own HOME, runtime directory,
+  config fixture (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`,
+  a closed proxy, and an action journal; the page and shortcut inventories
+  come from `internal/navigation`. The test, release, and nightly workflows
+  run `make e2e-atspi` after `make e2e` (Homebrew's `xorg-server` supplies an
+  Xvfb the container can execute), the script sets
+  `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
+  failed scenarios upload their accessibility tree and a screenshot in
+  `atspi-results`. A user-facing feature lands with its scenario; a confirmed
+  defect is written as a scenario tagged `@known_issue.<N>` rather than left
+  untested. Never run the suite on a live session. The `gtk-headless-testing`
+  skill carries the traps.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
@@ -209,6 +215,17 @@ An agent must not break these:
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
+  The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
+  `internal/window`'s `sourcePolicy`, which keeps `Configured`
+  (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
+  their conjunction is `effectiveEnabled`, but a source the host cannot back
+  must read "Not available on this system", never "Disabled by
+  administrator". Do not collapse them back into one boolean map. The rest
+  of the Updates page — automatic updates, system version, per-source groups,
+  unverified sources, and the Advanced channel/driver controls — is
+  `buildUpdatesPage`'s preferences page, which `buildContentArea` mounts
+  beneath the shell's source rows through `UpdateShell.SetSecondaryContent`;
+  without that call none of those controls is reachable.
   The operating-system source must keep going through `internal/bootc`'s
   staging path. Adding a
   `bootc upgrade` route to `chairlift-ublue-helper` would break both the
@@ -352,7 +369,11 @@ An agent must not break these:
   pages. Mouse activation and window navigation actions must both call
   `Window.navigateToPage`, which applies the complete `navigation.Resolve`
   transition (visible-row index, visible child, title, and collapsed-layout
-  content reveal). The app and shortcuts dialog must use the window's same
+  content reveal). Only `navigateToPage` may move the sidebar selection: it
+  records the row in `Window.shownRow`, and one `row-selected` handler,
+  connected at build time, re-selects that row because `GtkListBox` selects
+  whichever row gains focus (Tab, arrow keys) without emitting
+  `row-activated`. The app and shortcuts dialog must use the window's same
   visible inventory. Do not reintroduce a second page or shortcut inventory in
   `internal/window` or `internal/app`. **The inventory holds two kinds of
   route.** A *primary* is a sidebar destination with a row, an Alt+number, and
@@ -434,16 +455,28 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  Flatpak uninstall on the same page keeps the same contract: it confirms
+  with an `AdwAlertDialog` worded by `pageview.FlatpakUninstallConfirmation`
+  (a system-scope removal says it affects every account), holds a per-row
+  `actionstate.Gate`, restores on failure or dry-run, and refreshes only after
+  a live success. `runFlatpakUninstall` is in `internal/installcheck`'s
+  `TestDestructiveActionsRequireConfirmation` inventory beside `runPowerwash`
+  and `runFactoryReset`; a destructive `run*` entry point added to
+  `internal/views` belongs in that inventory too.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
-  controls that become permanently unavailable after live success. Update All,
-  driver switching, Powerwash, and Factory Reset restore their buttons after
-  a run, so they reset their gates even after failure or dry-run. Roll Back is
+  controls that become permanently unavailable after live success. Driver
+  switching, Powerwash, and Factory Reset restore their buttons after a run,
+  so they reset their gates even after failure or dry-run. (The unified
+  update run's primary action holds no `Gate`: `updateflow.Coordinator`
+  admits one mutation at a time and the shell re-renders its button from each
+  snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
   failure or preview resets it. `internal/views/actionstate`'s wiring tests
   guard both lifetimes.
-  Both the dedicated bootc stage action and Update All's OS phase refresh
+  Both the dedicated bootc stage action and a live unified update run whose
+  operating-system source completed (`UserHome.OnUpdateFinished`) refresh
   the badge and changelog's Compare references from the new status rather
   than leaving Compare disabled until restart.
   A changed pinned image pair clears old diff rows; an in-flight comparison

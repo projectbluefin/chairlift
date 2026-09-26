@@ -17,7 +17,8 @@
 # ghcr.io/projectbluefin/dakota:testing with:
 #   - the checkout at /workspace,
 #   - /usr/share/chairlift masked by an empty tmpfs,
-#   - Homebrew mounted read-only for go and Xvfb (brew install go xorg-server),
+#   - Homebrew mounted read-only for Xvfb (brew install xorg-server),
+#   - the host's Go toolchain mounted read-only,
 #   - a venv from test/e2e/requirements-atspi.txt (created on first use),
 #   - no host session bus, display, Wayland socket, or runtime directory.
 #
@@ -31,8 +32,10 @@ IMAGE="${CHAIRLIFT_DAKOTA_IMAGE:-ghcr.io/projectbluefin/dakota:testing}"
 BREW="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
 VENV="$CACHE/chairlift-atspi-venv"
+GOROOT="$(go env GOROOT)"
 GOMODCACHE="$(go env GOMODCACHE)"
 GOCACHE="$(go env GOCACHE)"
+mkdir -p "$GOMODCACHE" "$GOCACHE"
 TAGS="${1:-}"
 
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
@@ -63,8 +66,10 @@ exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disabl
     -v "$BREW:$BREW:ro" \
     -v "$CACHE:$CACHE" \
     -v "$GOMODCACHE:$GOMODCACHE" \
+    -v "$GOCACHE:$GOCACHE" \
+    -v "$GOROOT:$GOROOT:ro" \
     -e HOME=/tmp/home \
-    -e PATH="/usr/bin:/usr/sbin:$BREW/bin" \
+    -e PATH="$GOROOT/bin:/usr/bin:/usr/sbin:$BREW/bin" \
     -e GOMODCACHE="$GOMODCACHE" -e GOCACHE="$GOCACHE" \
     -e GOTOOLCHAIN=local \
     -e CHAIRLIFT_E2E_BUILD_DIR="/workspace/$BUILD_DIR" \

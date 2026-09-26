@@ -218,14 +218,17 @@ Feature: Apps destination
     And the "Text Editor" row says "org.gnome.TextEditor (48.0) • Installed for everyone"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario Outline: Removing a Flatpak app installed <scope> is previewed in that installation
+  Scenario Outline: A confirmed removal of a Flatpak app installed <scope> is previewed in that installation
     Given ChairLift is running
     When I open the "Apps" page
     And I expand the "Applications" list under "Installed applications"
     And I click the remove button in the "<name>" row
+    Then a dialog titled "Uninstall <name>?" is shown
+    When I choose "Uninstall" in the dialog
     Then the application log previews "<command>" exactly once
     And a toast on the Apps page says "[DRY-RUN] Preview: <name> would be uninstalled — no changes made"
     And the "Applications" list under "Installed applications" says "2 installed"
+    And the remove button in the "<name>" row is sensitive
     And Flatpak was never asked to "uninstall"
 
     Examples:
@@ -258,7 +261,7 @@ Feature: Apps destination
     And the home directory has no "Brewfile"
     And Homebrew was never asked to "bundle"
 
-  @config.apps-bundles @known_issue.353 @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
   Scenario: The Homebrew search field has an accessible name
     Given ChairLift is running
     When I open the "Apps" page
@@ -279,7 +282,7 @@ Feature: Apps destination
     And the remove button in the "Text Editor" row has an accessible name
     And every visible action control has an accessible name and an action
 
-  @config.apps-bundles @known_issue.353 @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
   Scenario: Removing a Flatpak app asks for confirmation first, like a Homebrew package
     Given ChairLift is running
     When I open the "Apps" page
@@ -288,4 +291,11 @@ Feature: Apps destination
     Then a dialog titled "Uninstall Firefox?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
+    And the remove button in the "Firefox" row is sensitive
     And the application log previews no "flatpak uninstall"
+    When I click the remove button in the "Firefox" row
+    Then a dialog titled "Uninstall Firefox?" is shown
+    When I choose "Cancel" in the dialog
+    Then no dialog is shown
+    And the application log previews no "flatpak uninstall"
+    And Flatpak was never asked to "uninstall"

@@ -340,6 +340,17 @@ func (uh *UserHome) updateBadgeCount() {
 	})
 }
 
+// UpdatesPreferencesPage returns the preferences page buildUpdatesPage
+// filled, for the window to mount as the update shell's secondary content.
+// It is always constructed by New; a group configuration or the capability
+// floor disables leaves it without that group, never nil.
+func (uh *UserHome) UpdatesPreferencesPage() *adw.PreferencesPage {
+	if uh == nil {
+		return nil
+	}
+	return uh.updatesPrefsPage
+}
+
 // GetPage returns a page by name
 func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 	switch name {

@@ -62,7 +62,7 @@ Feature: Maintenance and its Recovery detail
     And I see "Free up space"
     And I do not see "Reset the system"
 
-  @known_issue.351 @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
+  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
   Scenario: The Recovery back button names the page it returns to
     Given ChairLift is running
     When I open the "Maintenance" page

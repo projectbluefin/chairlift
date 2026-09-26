@@ -130,3 +130,34 @@ func TestLoadErrorErrorsAs(t *testing.T) {
 		t.Errorf("target.Kind = %q, want %q", target.Kind, original.Kind)
 	}
 }
+
+// TestParseErrorNamesItsCauseOnce holds issue #348: a parser or decoder
+// failure keeps the cause's own text as Detail (for its line attribution) and
+// the cause itself as Err (for errors.Is/As). The rendered diagnostic — and so
+// the persistent toast and the CONFIGURATION ERROR log — must state it once.
+func TestParseErrorNamesItsCauseOnce(t *testing.T) {
+	const path = "/etc/chairlift/config.yml"
+	for name, data := range map[string]string{
+		"unterminated flow mapping": "applications_page:\n  brew_group: {enabled: true\n",
+		"wrong value type":          "applications_page:\n  brew_group:\n    enabled: [1]\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := parseAndValidate(configSourceForPath(path), []byte(data))
+			if err == nil || err.Err == nil {
+				t.Fatalf("parseAndValidate(%q) error = %+v, want a failure carrying its cause", data, err)
+			}
+			cause := err.Err.Error()
+			for _, rendered := range []string{err.Error(), err.ToastMessage()} {
+				if got := strings.Count(rendered, cause); got != 1 {
+					t.Errorf("%q states its cause %q %d times, want once", rendered, cause, got)
+				}
+			}
+		})
+	}
+
+	// A detail that only gives context still renders the cause after it.
+	contextOnly := &LoadError{Path: path, Kind: KindRead, Detail: "reading configuration file", Err: os.ErrPermission}
+	if got := contextOnly.Error(); !strings.HasSuffix(got, ": reading configuration file: "+os.ErrPermission.Error()) {
+		t.Errorf("Error() = %q, want the context detail followed by the cause", got)
+	}
+}

@@ -68,7 +68,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     And the sidebar lists exactly "Help"
     And I do not see "Help & Resources"
 
-  @known_issue.348 @config.config-invalid-yaml
+  @config.config-invalid-yaml
   Scenario: A YAML parse error names its cause once
     Given ChairLift is running
     Then the configuration error toast states "did not find expected ','" once
@@ -123,7 +123,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     And the "App updates" row says "Needs Flatpak"
     And the "Recovery" row says "Needs Flatpak or Distrobox"
 
-  @known_issue.348 @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
+  @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: An update source the host cannot back is not blamed on the administrator
     Given ChairLift is running
     Then the "Applications" row says "Not available on this system"
@@ -162,7 +162,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
       | verdict  |
       | includes |
 
-  @known_issue.348 @config.config-legacy-enables-channel
+  @config.config-legacy-enables-channel
   Scenario: The legacy system_page release-channel group surfaces on Updates
     Given ChairLift is running
     Then the application log does not contain "CONFIGURATION ERROR"

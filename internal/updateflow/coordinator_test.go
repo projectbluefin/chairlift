@@ -393,16 +393,27 @@ func TestCoordinatorCheckKeepsSourceRolesDistinct(t *testing.T) {
 			return CheckResult{Items: []Item{{Name: "component"}}}, nil
 		},
 	}
-	c := New(providerInterfaces([]*testProvider{disabled, unavailable, enabled}), nil)
-	values := userprefs.Values{SystemComponents: true}
-	got := c.Check(context.Background(), values, map[SourceID]bool{
-		Applications:     false,
-		DeveloperTools:   true,
-		SystemComponents: true,
+	// The provider's own probe succeeds, but the host capability floor
+	// cannot back the source: it is unavailable, not administrator-disabled,
+	// and it is never checked.
+	unsupported := &testProvider{
+		id:        OperatingSystem,
+		available: true,
+		check: func(context.Context) (CheckResult, error) {
+			return CheckResult{Items: []Item{{Name: "image"}}}, nil
+		},
+	}
+	c := New(providerInterfaces([]*testProvider{disabled, unavailable, enabled, unsupported}), nil)
+	values := userprefs.Values{SystemComponents: true, OperatingSystem: true}
+	got := c.Check(context.Background(), values, map[SourceID]Policy{
+		Applications:     {Configured: false, Supported: true},
+		DeveloperTools:   {Configured: true, Supported: true},
+		SystemComponents: {Configured: true, Supported: true},
+		OperatingSystem:  {Configured: true, Supported: false},
 	}, nil)
 
-	if len(got.Sources) != 3 {
-		t.Fatalf("sources = %d, want 3", len(got.Sources))
+	if len(got.Sources) != 4 {
+		t.Fatalf("sources = %d, want 4", len(got.Sources))
 	}
 	if got.Sources[0].Configured || !got.Sources[0].Available || got.Sources[0].Enabled {
 		t.Fatalf("administrator-disabled source = %#v", got.Sources[0])
@@ -412,6 +423,9 @@ func TestCoordinatorCheckKeepsSourceRolesDistinct(t *testing.T) {
 	}
 	if !got.Sources[2].Configured || !got.Sources[2].Available || !got.Sources[2].Enabled {
 		t.Fatalf("enabled source = %#v", got.Sources[2])
+	}
+	if !got.Sources[3].Configured || got.Sources[3].Available || got.Sources[3].Enabled || len(got.Sources[3].Items) != 0 {
+		t.Fatalf("capability-unsupported source = %#v", got.Sources[3])
 	}
 	if got.TotalUpdates != 1 {
 		t.Fatalf("total updates = %d, want 1", got.TotalUpdates)
@@ -878,12 +892,12 @@ func allPreferences() userprefs.Values {
 	}
 }
 
-func enabledConfiguration() map[SourceID]bool {
-	return map[SourceID]bool{
-		OperatingSystem:  true,
-		Applications:     true,
-		DeveloperTools:   true,
-		SystemComponents: true,
+func enabledConfiguration() map[SourceID]Policy {
+	return map[SourceID]Policy{
+		OperatingSystem:  {Configured: true, Supported: true},
+		Applications:     {Configured: true, Supported: true},
+		DeveloperTools:   {Configured: true, Supported: true},
+		SystemComponents: {Configured: true, Supported: true},
 	}
 }
 

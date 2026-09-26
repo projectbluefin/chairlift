@@ -15,7 +15,6 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
-	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 // autoUpdateProbeTimeout bounds the two unprivileged systemctl queries that
@@ -85,30 +84,28 @@ func (uh *UserHome) buildAutomaticUpdatesRow(group *adw.PreferencesGroup, state 
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 
-	toggle := gtk.NewSwitch()
-	toggle.SetActive(enabled)
-	toggle.SetValign(gtk.AlignCenterValue)
-
-	sw := toggle
+	// guardedSwitch, because gtk_switch_set_active emits ::state-set by the
+	// same path a person's click does: an unmarked revert after a failure or
+	// a dry run would ask the helper for the opposite change, whose revert
+	// would ask again, forever.
 	autoRow := row
-	stateSetCb := func(_ gtk.Switch, wanted bool) bool {
-		uh.onAutomaticUpdatesToggled(wanted, sw, autoRow)
-		return true // block the visual change until the switch is confirmed
-	}
-	toggle.ConnectStateSet(&stateSetCb)
+	var toggle *guardedSwitch
+	toggle = newGuardedSwitch(enabled, func(wanted bool) {
+		uh.onAutomaticUpdatesToggled(wanted, toggle, autoRow)
+	})
 
-	row.AddSuffix(&toggle.Widget)
-	row.SetActivatableWidget(&toggle.Widget)
+	row.AddSuffix(&toggle.widget.Widget)
+	row.SetActivatableWidget(&toggle.widget.Widget)
 	group.Add(&row.Widget)
 
 	uh.autoUpdatesRow = row
-	uh.autoUpdatesSwitch = toggle
+	uh.autoUpdatesSwitch = toggle.widget
 	log.Printf("views: automatic updates row built state=%s", state)
 }
 
 // onAutomaticUpdatesToggled turns unattended updates on or off.
-func (uh *UserHome) onAutomaticUpdatesToggled(enabled bool, toggle *gtk.Switch, row *adw.ActionRow) {
-	toggle.SetSensitive(false)
+func (uh *UserHome) onAutomaticUpdatesToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	toggle.widget.SetSensitive(false)
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -117,16 +114,16 @@ func (uh *UserHome) onAutomaticUpdatesToggled(enabled bool, toggle *gtk.Switch, 
 		err := ublue.SetAutomaticUpdates(ctx, enabled)
 
 		sgtk.RunOnMainThread(func() {
-			toggle.SetSensitive(true)
+			toggle.widget.SetSensitive(true)
 
 			if err != nil {
-				toggle.SetActive(!enabled)
+				toggle.set(!enabled)
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Automatic updates: %v", err))
 				return
 			}
 
 			decision := actionmsg.AutomaticUpdates(dryrun.Enabled(), enabled)
-			toggle.SetActive(decision.Confirm == enabled)
+			toggle.set(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.AutomaticUpdatesResultSubtitle(enabled))
 			}

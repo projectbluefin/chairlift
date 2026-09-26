@@ -44,11 +44,13 @@ func New(providers []Provider, maintenance Maintenance) *Coordinator {
 	}
 }
 
-// Check concurrently checks every configured, available, user-enabled source.
+// Check concurrently checks every configured, supported, available,
+// user-enabled source. A source the host capability floor cannot back is
+// reported unavailable even when its provider's own probe succeeds.
 func (c *Coordinator) Check(
 	ctx context.Context,
 	preferences userprefs.Values,
-	configured map[SourceID]bool,
+	policy map[SourceID]Policy,
 	publish func(Snapshot),
 ) Snapshot {
 	c.operationStartMu.Lock()
@@ -58,7 +60,7 @@ func (c *Coordinator) Check(
 
 	generation := c.beginGeneration()
 	previous := c.snapshot()
-	sources := c.checkSources(previous, preferences, configured)
+	sources := c.checkSources(previous, preferences, policy)
 	state := Snapshot{
 		Generation:     generation,
 		Sources:        sources,
@@ -318,7 +320,7 @@ func (c *Coordinator) Busy() bool {
 func (c *Coordinator) checkSources(
 	previous Snapshot,
 	preferences userprefs.Values,
-	configured map[SourceID]bool,
+	policy map[SourceID]Policy,
 ) []SourceState {
 	previousByID := make(map[SourceID]SourceState, len(previous.Sources))
 	for _, source := range previous.Sources {
@@ -329,15 +331,17 @@ func (c *Coordinator) checkSources(
 	for index, provider := range c.providers {
 		id := provider.ID()
 		previousSource := previousByID[id]
-		available := provider.Available()
+		configured := policy[id].Configured
+		available := policy[id].Supported && provider.Available()
+		enabled := configured && available && preferenceEnabled(preferences, id)
 		sources[index] = SourceState{
 			ID:              id,
-			Configured:      configured[id],
+			Configured:      configured,
 			Available:       available,
-			Enabled:         configured[id] && available && preferenceEnabled(preferences, id),
+			Enabled:         enabled,
 			Items:           append([]Item(nil), previousSource.Items...),
 			RestartRequired: previousSource.RestartRequired,
-			Checking:        configured[id] && available && preferenceEnabled(preferences, id),
+			Checking:        enabled,
 		}
 	}
 	return sources

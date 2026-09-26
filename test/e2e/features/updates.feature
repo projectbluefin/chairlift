@@ -18,7 +18,7 @@ Feature: Updates
     And the "Firefox" row says "Available: 131.0"
     And the "Developer tools" row says "Up to date"
     And the "System components" row says "Not available on this system"
-    And the "Operating system" row says "Disabled by administrator"
+    And the "Operating system" row says "Not available on this system"
     And the Updates sidebar badge shows "1"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -113,20 +113,15 @@ Feature: Updates
     And the Updates sidebar row shows no badge
     And the flatpak tool was never asked to "remote-ls"
 
-  # Issue #349: the Updates preferences page (internal/views/updates_page.go,
-  # buildUpdatesPage) is built on every launch but never mounted —
-  # UpdateShell.SetSecondaryContent has no caller, so automatic updates, the
-  # system version, the per-source groups, and the Advanced group are absent
-  # from the Updates destination. These scenarios assert the documented
-  # behaviour (docs/walkthrough.md, "Updates").
+  # Issue #349 regressions: the Updates preferences page (buildUpdatesPage)
+  # mounts beneath the update shell's sources, so automatic updates, the
+  # system version, the per-source groups, and the Advanced group are part
+  # of the Updates destination (docs/walkthrough.md, "Updates").
 
-  # Also #349 once mounted: the automatic-updates switch reverts with a raw
-  # gtk_switch_set_active (internal/views/automatic_updates.go:123,129),
-  # which re-emits ::state-set, so one dry-run toggle journals
-  # auto-updates-disable/-enable in an endless loop (and a failed live toggle
-  # would request the opposite change). The Features page's guardedSwitch
-  # is the pattern it skips.
-  @known_issue.349 @stub.updates-flatpak-current @stub.updates-brew-current
+  # The automatic-updates switch reverts through guardedSwitch: a raw
+  # gtk_switch_set_active re-emits ::state-set, which once journalled
+  # auto-updates-disable/-enable in an endless loop from one dry-run toggle.
+  @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Turning automatic updates off in a dry run asks the helper once and keeps them on
     Given ChairLift is running
     Then the switch in the "Automatic updates" row is on
@@ -138,7 +133,7 @@ Feature: Updates
     And the switch in the "Automatic updates" row is on
     And the action journal holds exactly 1 entry
 
-  @known_issue.349 @stub.updates-flatpak-current @stub.updates-brew-current
+  @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Asking for early updates in a dry run journals the channel word only and stays on stable
     Given ChairLift is running
     Then the switch in the "Get updates early" row is off
@@ -150,7 +145,7 @@ Feature: Updates
     And the switch in the "Get updates early" row is off
     And the action journal holds exactly 1 entry
 
-  @known_issue.349 @stub.updates-image-dakota-stable @stub.updates-flatpak-current @stub.updates-brew-current
+  @stub.updates-image-dakota-stable @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Switching to the recommended graphics driver in a dry run journals the driver word and restores the button
     Given ChairLift is running
     Then the "Graphics driver" row says "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics"
@@ -160,18 +155,18 @@ Feature: Updates
     And I see "[DRY-RUN] Preview: would switch to the NVIDIA (proprietary) image — no changes made"
     And the "Switch" button in the "Graphics driver" row is sensitive
 
-  @known_issue.349 @stub.updates-flatpak-current @stub.updates-brew-current
+  @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: A stream that publishes no NVIDIA variant offers no driver switch
     Given ChairLift is running
     Then the "Graphics driver" row says "Using the Standard driver for your NVIDIA + Intel graphics"
     And the "Switch" button is not shown
 
-  @known_issue.349 @stub.updates-bootc-booted @stub.updates-flatpak-current @stub.updates-brew-current
+  @stub.updates-bootc-booted @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: The system version is read from the booted deployment
     Given ChairLift is running
     Then the "System version" row says "You are running version 42.20260920.0, released 20 September 2026"
 
-  @known_issue.349 @stub.updates-flatpak-one-update @stub.updates-brew-current
+  @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Updating one app from its row in a dry run previews that app only and restores the row
     Given ChairLift is running
     When I expand the "Available updates" row in the "Apps" group
@@ -182,7 +177,7 @@ Feature: Updates
     And the "Update" button in the "Firefox" row is sensitive
     And the flatpak tool was never asked to "update"
 
-  @known_issue.349 @stub.updates-flatpak-current @stub.updates-brew-one-outdated
+  @stub.updates-flatpak-current @stub.updates-brew-one-outdated
   Scenario: Checking Homebrew for new versions in a dry run previews the refresh and restores the button
     Given ChairLift is running
     When I click the "Check" button in the "Check for new versions" row

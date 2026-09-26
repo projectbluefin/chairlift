@@ -108,7 +108,7 @@ Feature: Livery
     And the Livery dry run would not set dock-foundation
     And the "Project" row in the Livery "Dock Livery" section says "Certified Kubernetes"
 
-  @known_issue.350 @stub.livery-tools
+  @stub.livery-tools
   Scenario: The brand chooser's empty result does not blame cncf/artwork
     Given ChairLift is running
     When I open the "Livery" page
@@ -181,7 +181,7 @@ Feature: Livery
     And no profile picture was staged under the home directory
     And the action journal is empty
 
-  @known_issue.350 @stub.livery-tools
+  @stub.livery-tools
   Scenario: The profile picture button is announced by what it does
     Given ChairLift is running
     When I open the "Livery" page
