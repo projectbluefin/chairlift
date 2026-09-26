@@ -64,10 +64,11 @@ are accepted but have no runtime effect. The System page is not restored.
 
 All four legacy groups still undergo ordinary field, type, and action
 validation, including trusted-path restrictions on `sudo: true`, even for
-retired or superseded values. Unknown names still fail closed. This is a
-compatibility rule for `system_page`, not general acceptance of obsolete keys
-elsewhere in an old file. No file is rewritten: administrators can move the
-two surviving groups to `updates_page` and remove `system_page` when convenient.
+retired or superseded values. Unknown names still fail closed. This compatibility
+handling is limited to `system_page` and the retired `maintenance_page` groups
+described below, not general acceptance of obsolete keys elsewhere in an old
+file. No file is rewritten: administrators can update their configuration when
+convenient.
 
 ## Legacy Maintenance groups compatibility
 
