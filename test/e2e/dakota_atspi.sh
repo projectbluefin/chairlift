@@ -36,7 +36,7 @@ GOROOT="$(go env GOROOT)"
 GOMODCACHE="$(go env GOMODCACHE)"
 GOCACHE="$(go env GOCACHE)"
 mkdir -p "$GOMODCACHE" "$GOCACHE"
-TAGS="${1:-}"
+TAGS="${*:-}"
 
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 [ -x "$BREW/bin/Xvfb" ] || { echo "Xvfb not found under $BREW; brew install xorg-server" >&2; exit 1; }

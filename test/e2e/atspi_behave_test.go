@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"os"
@@ -130,6 +131,8 @@ func TestATSPIBehaveSuite(t *testing.T) {
 	if runErr != nil {
 		t.Fatalf("AT-SPI behave suite failed: %v\nartifacts: %s\n%s", runErr, outDir, tailFile(filepath.Join(outDir, "behave.log"), 20000))
 	}
+
+	assertATSPIExecutedScenarios(t, outDir)
 }
 
 // TestATSPIFeaturesHaveNoUndefinedSteps parses every feature with behave's
@@ -253,4 +256,41 @@ func reportMissing(t *testing.T, missing []string) {
 		t.Fatal(message)
 	}
 	t.Skip(message)
+}
+
+type junitTestSuite struct {
+	Name     string `xml:"name,attr"`
+	Tests    int    `xml:"tests,attr"`
+	Errors   int    `xml:"errors,attr"`
+	Failures int    `xml:"failures,attr"`
+	Skipped  int    `xml:"skipped,attr"`
+}
+
+func assertATSPIExecutedScenarios(t *testing.T, outDir string) {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(outDir, "junit", "*.xml"))
+	if err != nil {
+		t.Fatalf("finding junit XML files: %v", err)
+	}
+	if len(files) == 0 {
+		t.Fatalf("AT-SPI suite produced no JUnit XML files under %s/junit", outDir)
+	}
+	totalExecuted := 0
+	for _, file := range files {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("reading %s: %v", file, err)
+		}
+		var suite junitTestSuite
+		if err := xml.Unmarshal(data, &suite); err != nil {
+			t.Fatalf("parsing %s: %v", file, err)
+		}
+		executed := suite.Tests - suite.Skipped
+		if executed > 0 {
+			totalExecuted += executed
+		}
+	}
+	if totalExecuted == 0 {
+		t.Fatalf("AT-SPI suite executed 0 scenarios across %d testsuites (all skipped or empty); a run with no executed tests cannot pass", len(files))
+	}
 }
