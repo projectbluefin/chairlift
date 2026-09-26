@@ -31,6 +31,7 @@ runs:
           dbus-x11 \
           flatpak \
           gir1.2-atspi-2.0 \
+          gir1.2-gtk-4.0 \
           imagemagick \
           libadwaita-1-0 \
           libgtk-4-1 \
