@@ -112,7 +112,10 @@ predicate cannot be met and no launcher is wired; #255 and #261 complete it.
   `Authorization: Bearer` header over a scheme-less peer, which NodeURL
   defaults to http and so carries the key cleartext unless the peer uses
   https://. Both are llmman's transport, not ChairLift's; the argv-free fix
-  lives upstream.
+  lives upstream. Neither channel is closed by documenting it: #416 stays open
+  as the tracking issue for the upstream argv-free input and for an add-peer
+  warning when a peer resolves to http with a key set (#260, which owned peer
+  management, is closed).
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user
