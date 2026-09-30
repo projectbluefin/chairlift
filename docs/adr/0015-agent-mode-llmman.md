@@ -105,19 +105,29 @@ predicate cannot be met and no launcher is wired; #255 and #261 complete it.
 - *Secrets:* ChairLift stores and logs no API key, provider credential, or
   prompt. The one peer key still reaches llmman over two channels, which
   ChairLift neither stores nor logs, and which have different owners.
-  The first is llmman's: `config set` takes the value only as a command-line
-  argument, so the key is world-readable through /proc/<pid>/cmdline for that
-  one process's life. llmman's grammar documents no stdin or
-  environment-variable input form, so the argv-free fix lives upstream.
-  The second is ChairLift's: `NodeURL` defaults a scheme-less peer address to
+  The first is argv: `llmman config set` takes the value only as a
+  command-line argument, so the key is world-readable through
+  /proc/<pid>/cmdline for that one process's life. That grammar is llmman's,
+  but the argv channel is a ChairLift choice, not an upstream constraint:
+  `LLMMAN_PEER_API_KEY` overrides `[aggregation] api_key` for `llmman
+  serve`, and ChairLift already owns the unit and
+  `~/.config/environment.d/10-chairlift-llmman.conf` that could carry it.
+  That route is not taken because it trades a brief world-readable argv
+  window for a key held at rest in a file ChairLift writes — departing from
+  both the *Configuration ownership* rule above (auth goes through `llmman
+  config set/get`, ChairLift writes no llmman configuration of its own) and
+  from this bullet's "stores no API key". A third form, stdin, would cost
+  neither and does not exist upstream.
+  The second is transport: `NodeURL` defaults a scheme-less peer address to
   http, so the `Authorization: Bearer` header travels cleartext unless the
   peer was added as https://. Nothing upstream forces that default —
   ChairLift could default to https or refuse a scheme-less peer while a key
   is set — so this one is ours to change, and until it does, use https://
   when the peer serves TLS. Neither channel is closed by documenting it:
-  #416 stays open as the tracking issue for the upstream argv-free input and
-  for an add-peer warning when a peer resolves to http with a key set (#260,
-  which owned peer management, is closed).
+  #416 stays open as the tracking issue for an argv-free input path
+  (upstream stdin support, or the `LLMMAN_PEER_API_KEY` trade-off decided
+  here) and for an add-peer warning when a peer resolves to http with a key
+  set (#260, which owned peer management, is closed).
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user

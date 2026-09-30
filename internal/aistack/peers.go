@@ -324,9 +324,12 @@ func defaultRunConfigSet(ctx context.Context, exe, key, value string) error {
 // (`config set <key> <value>`), which is world-readable through
 // /proc/<pid>/cmdline for the lifetime of that one process. That is
 // inherent to llmman's `config set` grammar, which accepts the value only
-// as an argument — no stdin or environment-variable form is documented in
-// llmman — so ChairLift cannot drop argv without an upstream change; see
-// ADR-0015. The window is the brief life of the `config set` process, and
+// as an argument: it has no stdin form. It is not the only way to give
+// llmman a peer key — `LLMMAN_PEER_API_KEY` overrides `aggregation.api_key`
+// for `llmman serve`, and ChairLift owns both the unit and the
+// environment.d fragment that could carry it — but taking that route means
+// ChairLift holds the key at rest, which ADR-0015 weighs and #416 tracks.
+// The window here is the brief life of the `config set` process, and
 // ChairLift stores, logs, and shows the key at no other time.
 func defaultRunSecretConfigSet(ctx context.Context, exe, key, value string) error {
 	if err := exec.CommandContext(ctx, exe, "config", "set", key, value).Run(); err != nil {
@@ -518,7 +521,8 @@ func indexOfPeer(peers []Peer, address string) int {
 // shown by ChairLift after this call returns.
 //
 // It reaches llmman over argv; defaultRunSecretConfigSet documents that
-// exposure and its bound, and ADR-0015 records why it cannot be closed here.
+// exposure, its bound, and the environment-variable alternative ChairLift
+// has not taken. ADR-0015 records why this call still uses `config set`.
 func SetPeerAPIKey(ctx context.Context, apiKey string) error {
 	exe := Executable()
 	if exe == "" {
