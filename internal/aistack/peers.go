@@ -204,13 +204,14 @@ func validPeerHost(host string) bool {
 
 // NodeURL returns the full URL of a peer's status endpoint. It applies the
 // same grammar as ParsePeerAddress and defaults a scheme-less address to
-// llmman's own default scheme, http, and to defaultPeerPort when address
-// carries none.
+// http, and to defaultPeerPort when address carries none.
 //
-// The http default is intentional — llmman serves http unless explicitly
-// given TLS (see ADR-0015) — but it means a peer added without https:// is
-// probed over an unencrypted channel. The bearer key ProbePeer then travels
-// cleartext to that peer, so use https:// when the peer serves TLS.
+// The http default is ChairLift's own choice, not a constraint llmman
+// imposes: llmman serves http unless explicitly given TLS, so defaulting to
+// it keeps a bare `host:port` working. The cost is that a peer added without
+// https:// is probed over an unencrypted channel, and the bearer key
+// ProbePeer sends then travels cleartext to that peer. Use https:// when the
+// peer serves TLS; see ADR-0015 for why the default has not yet changed.
 func NodeURL(address string) (string, error) {
 	scheme, host, port, err := parsePeerParts(address)
 	if err != nil {
@@ -516,12 +517,8 @@ func indexOfPeer(peers []Peer, address string) int {
 // enforces secure permissions. The key is never read back, logged, or
 // shown by ChairLift after this call returns.
 //
-// It reaches llmman over argv: `config set aggregation.api_key <key>` puts
-// the key in /proc/<pid>/cmdline for the life of that process, and llmman's
-// grammar takes the value only as an argument (no argv-free input form is
-// documented in llmman). That residual exposure is documented in ADR-0015;
-// the key is written only into llmman's own configuration, never stored,
-// logged, or shown by ChairLift at any other time.
+// It reaches llmman over argv; defaultRunSecretConfigSet documents that
+// exposure and its bound, and ADR-0015 records why it cannot be closed here.
 func SetPeerAPIKey(ctx context.Context, apiKey string) error {
 	exe := Executable()
 	if exe == "" {
