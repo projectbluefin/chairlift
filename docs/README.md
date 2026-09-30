@@ -120,6 +120,9 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Plans
 
+- [plans/2026-09-30-goose-config.md](plans/2026-09-30-goose-config.md)
+  — ship Common's premade Goose configuration through the existing setup path
+
 Historical plan/design artifacts from past automated runs (per
 [documentation-consistency.md](documentation-consistency.md), not sources of
 current behavior):

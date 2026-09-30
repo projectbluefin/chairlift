@@ -1494,38 +1494,19 @@ constraint rules out.
 
 ### Enhanced Troubleshooting
 
-`internal/troubleshoot` is ChairLift's port of Bluefin's `ujust probe`
-recipe (`projectbluefin/dakota`, `files/just-overrides/default.just`): tap
-`ublue-os/tap`, install `linux-mcp-server`, wire its `linux-tools` extension
-into Goose, launch a session. The formula depends on `block-goose-cli`, so
-one install brings the agent too; the `goose-linux` cask from the same tap
-provides the desktop app, which is what ChairLift launches rather than
-guessing at a terminal emulator.
+`internal/troubleshoot` is the Homebrew-backed setup row on Help. It installs
+`linux-mcp-server` (including the Goose CLI) and the Goose desktop cask, then
+copies Common's `/usr/share/ublue-os/goose/config.yaml` into the user's XDG
+configuration directory with exclusive creation. Existing configuration is
+never overwritten; missing or invalid shipped configuration is an error.
 
-The load-bearing detail is state detection. `goose-mcp-setup` prints a
-snippet and exits 0 when `~/.config/goose/config.yaml` already exists, so a
-user who has run `goose configure` gets a successful setup that wired up
-nothing. `Detect` therefore reads the file for the `linux-tools` extension,
-and `Setup` returns the state it actually left rather than the one it aimed
-for — `TroubleshootSetupSubtitle` has a case for exactly that outcome. A
-`--dry-run` Set Up shows only its preview toast and leaves the row describing
-the host's unchanged state, because a setup-outcome subtitle would claim a
-result that never happened.
-
-`ParseConfig` decodes the file as YAML rather than scanning lines: a
-`linux-tools` key anywhere is not the same fact as an enabled `linux-tools`
-extension under `extensions:` carrying a type and a command, and only the
-second one means the feature can actually run. The decode is read-only —
-ChairLift still neither owns nor rewrites that file — and a malformed or
-extension-less config yields `Wired` false. The provider is read and
-displayed, never written — the default the setup script installs is
-`gemini-cli`, which sends system details to Google, and the row says so.
-Because that subtitle embeds user-controlled `GOOSE_PROVIDER` text, the row
-sets `use-markup` false; the Help page's configured link rows do the same, so
-an `&` in a configured URL cannot fail Pango parsing and blank the row.
-
-Nothing crosses a privilege boundary: every piece is a user-scope Homebrew
-install and linux-mcp-server's access is read-only.
+The premade extension uses the stable absolute Linuxbrew bin path and explicit
+`--toolset FIXED --no-search-for-ssh-key --verify-host-keys`. Provider selection
+is left to Goose. `ParseConfig` recognizes both `linux-mcp-server` and legacy
+`linux-tools`, and `Detect` also checks command availability. Failed setup and
+dry-run preserve the observed state. Desktop launch remains `gtk-launch Goose`.
+Nothing crosses a privilege boundary. No additional launcher, model service,
+or configuration merger is introduced.
 
 ### Staged-update changelog
 

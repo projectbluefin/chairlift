@@ -181,7 +181,8 @@ def step_setup_previewed(context):
     candidates = (
         "[DRY-RUN] Would execute: brew tap ",
         "[DRY-RUN] Would execute: brew install ",
-        "[DRY-RUN] would execute: goose-mcp-setup",
+        "[DRY-RUN] would copy Goose configuration from ",
+        "[DRY-RUN] would keep existing Goose configuration",
     )
 
     def previews():
@@ -190,7 +191,8 @@ def step_setup_previewed(context):
             for prefix in candidates:
                 at = line.find(prefix)
                 if at != -1:
-                    got.append(line[at + len("[DRY-RUN] "):].split(": ", 1)[1])
+                    payload = line[at + len("[DRY-RUN] "):]
+                    got.append(payload if prefix.startswith("[DRY-RUN] would ") else payload.split(": ", 1)[1])
         return got
 
     ok = atspi.poll(lambda: previews() == want)

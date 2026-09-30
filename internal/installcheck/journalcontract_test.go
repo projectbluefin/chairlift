@@ -99,7 +99,6 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},              // brew --version
 	{File: "internal/livery/apply.go", Func: "execCommand"},                   // gsettings / dconf / gtk-update-icon-cache / systemctl --user
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},  // systemctl --user
-	{File: "internal/troubleshoot/troubleshoot.go", Func: "defaultRunSetup"},  // user-scope setup
 	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"}, // gtk-launch
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},           // xdg-open
 }

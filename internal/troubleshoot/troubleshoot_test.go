@@ -3,11 +3,12 @@ package troubleshoot
 import (
 	"errors"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// The configuration goose-mcp-setup writes on a fresh system.
+// A configured user may retain their own provider alongside fixed diagnostics.
 const freshConfig = `GEMINI_CLI_COMMAND: gemini
 GOOSE_PROVIDER: gemini-cli
 GOOSE_MODEL: gemini-3-flash-preview
@@ -18,6 +19,25 @@ extensions:
     name: linux-tools
     description: Linux system administration and diagnostics
     cmd: /home/linuxbrew/.linuxbrew/bin/linux-mcp-server
+    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]
+`
+
+const premadeConfig = `# Bluefin default Goose configuration; select a model provider in Goose.
+# Keep the prefix/bin symlink; a resolved Cellar path expires after an upgrade.
+extensions:
+  linux-mcp-server:
+    args:
+      - --toolset
+      - FIXED
+      - --no-search-for-ssh-key
+      - --verify-host-keys
+    bundled: false
+    cmd: /home/linuxbrew/.linuxbrew/bin/linux-mcp-server
+    enabled: true
+    envs: {}
+    name: linux-mcp-server
+    timeout: 300
+    type: stdio
 `
 
 func TestParseConfig(t *testing.T) {
@@ -28,10 +48,38 @@ func TestParseConfig(t *testing.T) {
 		wantProvider string
 	}{
 		{
-			name:         "what the setup script writes",
+			name:         "configured user with legacy extension key",
 			data:         freshConfig,
 			wantWired:    true,
 			wantProvider: "gemini-cli",
+		},
+		{
+			name:      "Common premade configuration",
+			data:      premadeConfig,
+			wantWired: true,
+		},
+		{
+			name:         "unrestricted extension is not ready",
+			data:         strings.Replace(freshConfig, "    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]\n", "", 1),
+			wantWired:    false,
+			wantProvider: "gemini-cli",
+		},
+		{
+			name:         "script toolset is not ready",
+			data:         strings.Replace(freshConfig, "FIXED", "BOTH", 1),
+			wantWired:    false,
+			wantProvider: "gemini-cli",
+		},
+		{
+			name:         "wrong transport is not ready",
+			data:         strings.Replace(freshConfig, "type: stdio", "type: http", 1),
+			wantWired:    false,
+			wantProvider: "gemini-cli",
+		},
+		{
+			name:      "partial YAML type failure is not ready",
+			data:      strings.Replace(freshConfig, "GOOSE_PROVIDER: gemini-cli", "GOOSE_PROVIDER: [invalid]", 1),
+			wantWired: false,
 		},
 		{
 			// The common case the setup script refuses to touch: a user who
@@ -104,8 +152,7 @@ func TestReadyNeedsEveryPiece(t *testing.T) {
 			want:  true,
 		},
 		{
-			// The state goose-mcp-setup leaves behind when a config already
-			// existed: packages installed, nothing connected.
+			// Installed tools are not usable without a diagnostic extension.
 			name:  "installed but not connected",
 			state: State{ServerInstalled: true, AgentInstalled: true},
 		},
@@ -148,12 +195,12 @@ func stubEnvironment(t *testing.T, config string, present map[string]bool) *[]st
 	tapPackage = func(string) error { return nil }
 	installPackage = func(string, bool) error { return nil }
 
-	lookPath = func(name string) bool { return present[name] }
+	lookPath = func(name string) bool { return present[filepath.Base(name)] }
 	readConfig = func() ([]byte, error) { return []byte(config), nil }
 
 	ran := []string{}
 	runSetup = func() error {
-		ran = append(ran, setupCommand)
+		ran = append(ran, defaultConfigPath)
 		present["linux-mcp-server"] = true
 		return nil
 	}
@@ -234,9 +281,7 @@ func TestSetupNamesTheStepThatFailed(t *testing.T) {
 	}
 }
 
-// Setup must report the state it actually left behind, not the one it was
-// aiming for: goose-mcp-setup exits 0 without writing anything when a
-// configuration already exists.
+// Setup reports the observed result, not success inferred from a setup callback.
 func TestSetupReturnsTheStateItActuallyLeft(t *testing.T) {
 	present := map[string]bool{"linux-mcp-server": true, "goose": true, "goose-desktop": true}
 	stubEnvironment(t, "GOOSE_PROVIDER: anthropic\n", present)
@@ -251,13 +296,17 @@ func TestSetupReturnsTheStateItActuallyLeft(t *testing.T) {
 	}
 }
 
-func TestDryRunRunsNothing(t *testing.T) {
-	previousSetup := runSetup
-	t.Cleanup(func() { runSetup = previousSetup; dryrun.Set(false) })
-	runSetup = defaultRunSetup
-	dryrun.Set(true)
-
-	if err := runSetup(); err != nil {
-		t.Fatalf("dry-run setup: %v", err)
+func TestDetectRejectsAnUnavailableConfiguredCommand(t *testing.T) {
+	config := freshConfig + `
+  linux-mcp-server:
+    enabled: true
+    type: stdio
+    cmd: /missing/linux-mcp-server
+    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]
+`
+	stubEnvironment(t, config, map[string]bool{"linux-mcp-server": true, "goose": true})
+	lookPath = func(name string) bool { return name != "/missing/linux-mcp-server" }
+	if state := Detect(); state.Wired || state.Ready() {
+		t.Fatalf("missing enabled extension was ignored: %+v", state)
 	}
 }

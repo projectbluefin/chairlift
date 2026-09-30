@@ -3,28 +3,12 @@ package troubleshoot
 import (
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
-
-// fakeSetupScript puts an executable named after setupCommand on $PATH, so
-// defaultRunSetup can be exercised without goose-mcp-setup being installed.
-func fakeSetupScript(t *testing.T, body string) {
-	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("shell stub requires a POSIX shell")
-	}
-	dir := t.TempDir()
-	script := filepath.Join(dir, setupCommand)
-	if err := os.WriteFile(script, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
-		t.Fatalf("writing stub: %v", err)
-	}
-	t.Setenv("PATH", dir)
-}
 
 func TestConfigPathUsesUserConfigDir(t *testing.T) {
 	base := t.TempDir()
@@ -93,127 +77,105 @@ func TestDefaultReadConfigPropagatesConfigPathError(t *testing.T) {
 	}
 }
 
-func TestDefaultRunSetupDryRunSkipsTheCommand(t *testing.T) {
-	// No stub on $PATH: if dry-run did not short-circuit, the exec would fail.
-	t.Setenv("PATH", t.TempDir())
-	dryrun.Set(true)
+func TestSetupPreservesExistingConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("GOOSE_PROVIDER: anthropic\nGOOSE_MODEL: existing\n")
+	if err := os.WriteFile(path, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { dryrun.Set(false) })
-
-	if err := defaultRunSetup(); err != nil {
-		t.Errorf("defaultRunSetup in dry-run = %v, want nil", err)
+	for _, preview := range []bool{false, true} {
+		dryrun.Set(preview)
+		err := defaultRunSetup()
+		if preview && err != nil {
+			t.Fatalf("preservation preview failed: %v", err)
+		}
+		if !preview && !errors.Is(err, os.ErrExist) {
+			t.Fatalf("existing config: %v", err)
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != string(want) {
+			t.Fatalf("existing configuration changed: %q, %v", got, err)
+		}
 	}
 }
 
-func TestDefaultRunSetupSucceeds(t *testing.T) {
-	dryrun.Set(false)
-	fakeSetupScript(t, "exit 0")
-
-	if err := defaultRunSetup(); err != nil {
-		t.Errorf("defaultRunSetup = %v, want nil", err)
+func TestSetupUsesExistingConfigAfterInstallingMissingTools(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestDefaultRunSetupWrapsFailureOutput(t *testing.T) {
-	dryrun.Set(false)
-	fakeSetupScript(t, "echo 'no provider configured' >&2\nexit 3")
-
-	err := defaultRunSetup()
-	if err == nil {
-		t.Fatal("defaultRunSetup succeeded on a failing command")
+	if err := os.WriteFile(path, []byte(freshConfig), 0o600); err != nil {
+		t.Fatal(err)
 	}
-
-	var setupErr *Error
-	if !errors.As(err, &setupErr) {
-		t.Fatalf("error type = %T, want *troubleshoot.Error", err)
-	}
-	if setupErr.Message != "no provider configured" {
-		t.Errorf("Message = %q, want the command's combined output", setupErr.Message)
-	}
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
-		t.Errorf("wrapped error = %v, want an *exec.ExitError to remain unwrappable", err)
-	}
-}
-
-func TestDefaultRunSetupErrorsWhenCommandMissing(t *testing.T) {
-	dryrun.Set(false)
-	t.Setenv("PATH", t.TempDir())
-
-	if err := defaultRunSetup(); err == nil {
-		t.Fatal("defaultRunSetup succeeded with goose-mcp-setup absent")
-	}
-}
-
-// TestStepsDispatchTheRightPackages pins the arguments each step hands to
-// Homebrew. Detect cannot catch a wrong name here: a step that tapped or
-// installed the wrong thing would simply leave the feature undetected.
-func TestStepsDispatchTheRightPackages(t *testing.T) {
-	previousTap, previousInstall, previousSetup := tapPackage, installPackage, runSetup
-	t.Cleanup(func() {
-		tapPackage, installPackage, runSetup = previousTap, previousInstall, previousSetup
-	})
-
-	var taps []string
-	type install struct {
-		name string
-		cask bool
-	}
-	var installs []install
-	setupRuns := 0
-
-	tapPackage = func(name string) error { taps = append(taps, name); return nil }
-	installPackage = func(name string, cask bool) error {
-		installs = append(installs, install{name, cask})
+	present := map[string]bool{"goose-desktop": true}
+	stubEnvironment(t, freshConfig, present)
+	runSetup = defaultRunSetup
+	installPackage = func(string, bool) error {
+		present["linux-mcp-server"], present["goose"] = true, true
 		return nil
 	}
-	runSetup = func() error { setupRuns++; return nil }
-
-	steps := Steps()
-	if len(steps) != 4 {
-		t.Fatalf("Steps() returned %d steps, want 4", len(steps))
+	after, err := Setup(State{DesktopInstalled: true}, nil)
+	if err != nil || !after.Ready() {
+		t.Fatalf("restored configuration: %+v, %v", after, err)
 	}
-	for _, step := range steps {
-		if err := step.Run(); err != nil {
-			t.Fatalf("%s: %v", step.Name, err)
-		}
-	}
-
-	if len(taps) != 1 || taps[0] != Tap {
-		t.Errorf("taps = %v, want [%s]", taps, Tap)
-	}
-	want := []install{{ServerFormula, false}, {DesktopCask, true}}
-	if len(installs) != len(want) {
-		t.Fatalf("installs = %v, want %v", installs, want)
-	}
-	for i, w := range want {
-		if installs[i] != w {
-			t.Errorf("install %d = %v, want %v", i, installs[i], w)
-		}
-	}
-	if setupRuns != 1 {
-		t.Errorf("setup script ran %d times, want 1", setupRuns)
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != freshConfig {
+		t.Fatal("existing configuration was modified")
 	}
 }
 
-// TestStepsAlwaysTap guards the one step with no Needed shortcut: brew
-// requires the tap before either qualified name resolves, and re-tapping is
-// cheap, so it must run on every attempt.
-func TestStepsAlwaysTap(t *testing.T) {
-	fullyInstalled := State{
-		ServerInstalled:  true,
-		AgentInstalled:   true,
-		DesktopInstalled: true,
-		Wired:            true,
+func TestSetupCopiesTheShippedConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous; dryrun.Set(false) })
+	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	want := []byte(freshConfig)
+	if err := os.WriteFile(defaultConfigPath, want, 0o644); err != nil {
+		t.Fatal(err)
 	}
+	if err := defaultRunSetup(); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ConfigPath()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("premade configuration: %q, %v", got, err)
+	}
+}
 
-	steps := Steps()
-	if !steps[0].Needed(fullyInstalled) {
-		t.Error("tap step reported not needed on a fully installed host")
+func TestSetupPreviewDoesNotWriteConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+	if err := defaultRunSetup(); err != nil {
+		t.Fatal(err)
 	}
-	for _, step := range steps[1:] {
-		if step.Needed(fullyInstalled) {
-			t.Errorf("%s reported needed on a fully installed host", step.Name)
-		}
+	path, _ := ConfigPath()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("preview wrote configuration: %v", err)
+	}
+}
+
+func TestSetupRejectsInvalidPremadeConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(defaultConfigPath, []byte("extensions: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := defaultRunSetup(); err == nil {
+		t.Fatal("invalid shipped configuration was accepted")
+	}
+	path, _ := ConfigPath()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid configuration was installed: %v", err)
 	}
 }
 
