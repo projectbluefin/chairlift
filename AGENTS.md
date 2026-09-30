@@ -711,10 +711,10 @@ An agent must not break these:
   `/proc/<pid>/cmdline` for the life of that one short-lived process;
   `LLMMAN_PEER_API_KEY` would avoid argv but trades that brief window for
   a key ChairLift holds at rest in the environment.d fragment it owns, so
-  ADR-0015 keeps argv rather than writing a credential to disk. And
-  `NodeURL` defaults a scheme-less peer address to http, so the
-  `Authorization: Bearer` header travels cleartext unless the peer was
-  added as `https://`. #416 tracks both.
+  ADR-0015 keeps argv rather than holding the key in a file ChairLift
+  itself writes and must protect. And `NodeURL` defaults a scheme-less
+  peer address to http, so the `Authorization: Bearer` header travels
+  cleartext unless the peer was added as `https://`. #416 tracks both.
 - **Printer applications are rootless quadlets, locked until their
   administration is authenticated, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
