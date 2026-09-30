@@ -705,10 +705,16 @@ An agent must not break these:
   stopped; removing the unit while the service is still active makes the
   switch lie and removes the user's management handle. Do not give it a
   pkexec route, and do not reintroduce a container-image or vendor/stack
-  matrix. Known limitation: the peer key is passed to `llmman config set`
-  as an argv token, so any local user can read it from `/proc/<pid>/cmdline`
-  for the life of that one short-lived process; switching to stdin needs
-  llmman support first.
+  matrix. Known limitations: the one peer key reaches llmman over two
+  channels ChairLift neither stores nor logs. It is passed to `llmman
+  config set` as an argv token, so any local user can read it from
+  `/proc/<pid>/cmdline` for the life of that one short-lived process;
+  `LLMMAN_PEER_API_KEY` would avoid argv but trades that brief window for
+  a key ChairLift holds at rest in the environment.d fragment it owns, so
+  ADR-0015 keeps argv rather than writing a credential to disk. And
+  `NodeURL` defaults a scheme-less peer address to http, so the
+  `Authorization: Bearer` header travels cleartext unless the peer was
+  added as `https://`. #416 tracks both.
 - **Printer applications are rootless quadlets, locked until their
   administration is authenticated, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family

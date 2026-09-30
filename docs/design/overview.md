@@ -1670,7 +1670,14 @@ persisting, apply the enabled subset to llmman itself via
 both sides unchanged. The one shared client credential used to authenticate
 outgoing requests to a peer is written only through
 `llmman config set aggregation.api_key` (`SetPeerAPIKey`) and is never read
-back, logged, or redisplayed. `ProbePeer` performs one bounded (3s) GET of a
+back, logged, or redisplayed by ChairLift. Two exposures remain outside that
+boundary: `config set` accepts the value only as an argv token, so the key is
+world-readable through `/proc/<pid>/cmdline` for that one process's life
+(`LLMMAN_PEER_API_KEY` would avoid argv but puts the key at rest in a file
+ChairLift writes), and `NodeURL` defaults a scheme-less peer address to http,
+so the bearer header travels cleartext unless the peer was added as
+`https://`. ADR-0015 weighs both and #416 tracks them.
+`ProbePeer` performs one bounded (3s) GET of a
 peer's `/llmman/node` carrying that key as a bearer credential; a timeout or
 connection failure is reported unreachable rather than as an empty answer,
 a `401` is reported distinctly, and the key never appears in a returned
