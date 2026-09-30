@@ -41,8 +41,7 @@ func TestTroubleshootRowStates(t *testing.T) {
 	}
 }
 
-// The default configuration sends system details to Google. A row that only
-// said "AI assistant" would let a user assume it runs locally.
+// A user-selected provider must remain visible; the preset chooses none.
 func TestTroubleshootRowNamesWhoAnswersTheQuestions(t *testing.T) {
 	ready := troubleshoot.State{ServerInstalled: true, AgentInstalled: true, Wired: true}
 
@@ -52,8 +51,8 @@ func TestTroubleshootRowNamesWhoAnswersTheQuestions(t *testing.T) {
 	}
 
 	ready.Provider = "ollama"
-	if got := TroubleshootRow(ready).Subtitle; !strings.Contains(got, "stay on this machine") {
-		t.Errorf("local subtitle does not say questions stay local: %q", got)
+	if got := TroubleshootRow(ready).Subtitle; !strings.Contains(got, "Ollama") || strings.Contains(got, "stay on this machine") {
+		t.Errorf("Ollama subtitle misrepresents the selected service: %q", got)
 	}
 
 	ready.Provider = "anthropic"
@@ -64,16 +63,6 @@ func TestTroubleshootRowNamesWhoAnswersTheQuestions(t *testing.T) {
 	ready.Provider = ""
 	if got := TroubleshootRow(ready).Subtitle; !strings.Contains(got, "no AI service") {
 		t.Errorf("subtitle claims a provider when none is set: %q", got)
-	}
-}
-
-// Every step can succeed while the feature stays unusable, because
-// goose-mcp-setup exits 0 without writing when a configuration exists.
-func TestTroubleshootSetupSubtitleReportsASilentNoOp(t *testing.T) {
-	got := TroubleshootSetupSubtitle(troubleshoot.State{ServerInstalled: true, AgentInstalled: true})
-
-	if !strings.Contains(got, "by hand") {
-		t.Errorf("subtitle = %q, want it to say what the user must do", got)
 	}
 }
 

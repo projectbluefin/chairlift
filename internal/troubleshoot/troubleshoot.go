@@ -263,7 +263,7 @@ func defaultRunSetup() error {
 		if data, err := os.ReadFile(path); err == nil && ParseConfig(data).Wired {
 			return nil
 		}
-		return &Error{Message: "Goose already has a configuration; it was kept unchanged", Err: os.ErrExist}
+		return &Error{Message: fmt.Sprintf("Goose configuration was kept unchanged; review Linux diagnostics in %s", defaultConfigPath), Err: os.ErrExist}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}

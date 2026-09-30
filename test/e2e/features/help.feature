@@ -106,9 +106,9 @@ Feature: Help destination
     Then the Enhanced Troubleshooting status is "Ready — <note>"
 
     @stub.help-goose-wired-ollama
-    Examples: Local provider
+    Examples: Configured Ollama service
       | note                           |
-      | questions stay on this machine |
+      | uses your configured Ollama service |
 
     @stub.help-goose-wired-anthropic
     Examples: Other provider

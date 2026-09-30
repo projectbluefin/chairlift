@@ -614,6 +614,9 @@ An agent must not break these:
   readiness requires enabled stdio, explicit FIXED tools, SSH-key search off,
   and a command that exists. Keep the stable prefix/bin path, not a versioned
   Cellar target. No pkexec route is involved, and dry-run writes nothing.
+  Keep `brew tap` in Homebrew's `stateChangingCommands` so previews never tap
+  for real. Provider subtitles contain user-controlled text: keep the row's
+  `use-markup` false rather than interpreting provider names as Pango markup.
 - **The staged-update changelog never fetches on its own.** `internal/sbom`
   is pure — parse, diff, version ordering — with the registry round-trip
   behind the `FetchFunc` seam, so no gated test makes an outbound request

@@ -15,8 +15,7 @@ func TroubleshootRow(state troubleshoot.State) Row {
 	case state.Ready():
 		row.Subtitle = "Ready — " + TroubleshootProviderNote(state.Provider)
 	case state.ServerInstalled && state.AgentInstalled:
-		// Everything is installed but the agent cannot see the system: the
-		// state goose-mcp-setup leaves behind when a config already exists.
+		// The packages exist, but their diagnostic configuration is not ready.
 		row.Subtitle = "Installed, but not connected to this system yet"
 	default:
 		row.Subtitle = "Ask an AI assistant about your logs, services, and network"
@@ -24,9 +23,8 @@ func TroubleshootRow(state troubleshoot.State) Row {
 	return row
 }
 
-// TroubleshootProviderNote says which service answers the questions. The setup script
-// configures Google's Gemini by default, so the row names it rather than
-// implying the work happens locally.
+// TroubleshootProviderNote names the user's selected service. The premade
+// configuration chooses no provider, and a provider name alone proves no locality.
 func TroubleshootProviderNote(provider string) string {
 	switch provider {
 	case "":
@@ -34,7 +32,7 @@ func TroubleshootProviderNote(provider string) string {
 	case "gemini-cli":
 		return "questions go to Google Gemini"
 	case "ollama":
-		return "questions stay on this machine"
+		return "uses your configured Ollama service"
 	default:
 		return fmt.Sprintf("questions go to %s", provider)
 	}
@@ -48,7 +46,7 @@ func TroubleshootSetupSubtitle(state troubleshoot.State) string {
 		return "Ready — " + TroubleshootProviderNote(state.Provider)
 	}
 	if state.ServerInstalled && state.AgentInstalled {
-		return "Installed, but Goose already had a configuration — add the linux-tools extension to it by hand"
+		return "Installed, but Linux diagnostics are not ready — review /usr/share/ublue-os/goose/config.yaml"
 	}
 	return "Setup did not complete"
 }

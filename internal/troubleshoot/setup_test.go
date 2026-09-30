@@ -2,12 +2,14 @@ package troubleshoot
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 func TestConfigPathUsesUserConfigDir(t *testing.T) {
@@ -203,5 +205,79 @@ func TestErrorUnwrap(t *testing.T) {
 
 	if !errors.Is(err, wrapped) {
 		t.Errorf("errors.Is did not find the wrapped error through Unwrap")
+	}
+}
+
+// setupPipeline uses actual process execution and filesystem effects. Its brew
+// fixture cannot install anything until the required tap has been added.
+func setupPipeline(t *testing.T) string {
+	t.Helper()
+	prefix := t.TempDir()
+	bin := filepath.Join(prefix, "bin")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(prefix, "config"))
+	t.Setenv("HOME", prefix)
+	t.Setenv("GOOSE_TEST_PREFIX", prefix)
+	stub := filepath.Join(prefix, "tool")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brew := `#!/bin/sh
+case "$*" in
+  "tap ublue-os/tap") /usr/bin/touch "$GOOSE_TEST_PREFIX/tapped" ;;
+  "install ublue-os/tap/linux-mcp-server")
+    test -f "$GOOSE_TEST_PREFIX/tapped" || exit 2
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/linux-mcp-server"
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/goose" ;;
+  "install --cask ublue-os/tap/goose-linux")
+    test -f "$GOOSE_TEST_PREFIX/tapped" || exit 2
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/goose-desktop" ;;
+  *) exit 3 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldLook, oldRead, oldTap, oldInstall, oldSetup, oldDefault := lookPath, readConfig, tapPackage, installPackage, runSetup, defaultConfigPath
+	t.Cleanup(func() {
+		lookPath, readConfig, tapPackage, installPackage, runSetup, defaultConfigPath = oldLook, oldRead, oldTap, oldInstall, oldSetup, oldDefault
+		dryrun.Set(false)
+	})
+	lookPath, readConfig, tapPackage, installPackage, runSetup = defaultLookPath, defaultReadConfig, homebrew.Tap, homebrew.Install, defaultRunSetup
+	dryrun.Set(false)
+	defaultConfigPath = filepath.Join(prefix, "preset.yaml")
+	preset := fmt.Sprintf("extensions:\n  linux-mcp-server:\n    type: stdio\n    cmd: %q\n    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]\n", filepath.Join(bin, "linux-mcp-server"))
+	if err := os.WriteFile(defaultConfigPath, []byte(preset), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return prefix
+}
+
+func TestStepsDispatchTheRightPackages(t *testing.T) {
+	setupPipeline(t)
+	after, err := Setup(State{}, nil)
+	if err != nil || !after.Ready() || !after.DesktopInstalled {
+		t.Fatalf("fresh package setup: %+v, %v", after, err)
+	}
+}
+
+func TestStepsAlwaysTap(t *testing.T) {
+	prefix := setupPipeline(t)
+	after, err := Setup(State{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(prefix, "tapped")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Setup(after, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("repeat setup did not restore the tap: %v", err)
 	}
 }

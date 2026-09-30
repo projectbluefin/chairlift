@@ -1508,6 +1508,10 @@ dry-run preserve the observed state. Desktop launch remains `gtk-launch Goose`.
 Nothing crosses a privilege boundary. No additional launcher, model service,
 or configuration merger is introduced.
 
+Homebrew's `stateChangingCommands` includes `tap`, so dry-run never changes
+package sources. The provider subtitle stays `use-markup` false because its
+text comes from user configuration, not trusted Pango markup.
+
 ### Staged-update changelog
 
 `internal/sbom` answers "what actually changes if I take this update?" from

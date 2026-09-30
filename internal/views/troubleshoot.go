@@ -24,8 +24,7 @@ const gooseDesktopID = "Goose"
 // It is an action row rather than a switch because there is no clean "off".
 // Turning it off would mean either leaving Goose configured to call a
 // binary ChairLift had removed — an error on every session — or rewriting a
-// YAML file that another tool owns and whose own setup script refuses to
-// touch when it already exists.
+// YAML file that belongs to the user.
 func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Enhanced Troubleshooting")
@@ -135,12 +134,13 @@ func (uh *UserHome) onTroubleshootClicked() {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made")
 				return
 			}
-			row.SetSubtitle(pageview.TroubleshootSetupSubtitle(after))
+			subtitle := pageview.TroubleshootSetupSubtitle(after)
+			row.SetSubtitle(subtitle)
 			if !after.Ready() {
 				// Every step reported success and the feature still is not
 				// usable, so this is not an error toast — but it must not
 				// read as done either.
-				uh.toastAdder.ShowToast("Packages installed, but Goose already had a configuration — see the row for what to add")
+				uh.toastAdder.ShowToast(subtitle)
 				return
 			}
 			uh.toastAdder.ShowToast("Enhanced Troubleshooting is ready — " +

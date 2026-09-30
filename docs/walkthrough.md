@@ -244,8 +244,8 @@ list to read, not a control: nothing in it changes your system.
 
 **Enhanced Troubleshooting** comes first where Homebrew is installed: it sets
 up an AI assistant that can read your logs, services, and network to help
-work out what's wrong, then launches it. The row says which AI service
-answers your questions, since the default one is Google's.
+work out what's wrong, then launches it. The premade configuration chooses no
+AI service; select one in Goose, and the row names the service you configured.
 
 Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and
