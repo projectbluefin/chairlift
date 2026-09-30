@@ -101,6 +101,9 @@ tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
 `@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
 only one destination needs goes in `steps/<destination>.py`.
 
+Intentional malformed-input fixtures must stay malformed. Exclude their exact
+paths from syntax-lint hooks, not the entire fixture directory or hook.
+
 **Run it.** `make e2e-atspi [ATSPI_TAGS=@tag]` locally and in CI; both run
 `test/e2e/dakota_atspi.sh`, which runs the Go gate in
 `ghcr.io/projectbluefin/dakota:testing` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a

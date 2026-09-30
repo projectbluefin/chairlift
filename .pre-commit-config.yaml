@@ -5,6 +5,8 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-yaml
+        # This negative-test input must remain malformed.
+        exclude: '^test/e2e/features/fixtures/config/config-invalid-yaml\.yml$'
       - id: end-of-file-fixer
       - id: trailing-whitespace
       - id: check-merge-conflict
