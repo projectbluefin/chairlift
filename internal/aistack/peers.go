@@ -203,8 +203,14 @@ func validPeerHost(host string) bool {
 }
 
 // NodeURL returns the full URL of a peer's status endpoint. It applies the
-// same grammar as ParsePeerAddress and defaults to llmman's own default
-// port when address carries none.
+// same grammar as ParsePeerAddress and defaults a scheme-less address to
+// llmman's own default scheme, http, and to defaultPeerPort when address
+// carries none.
+//
+// The http default is intentional — llmman serves http unless explicitly
+// given TLS (see ADR-0015) — but it means a peer added without https:// is
+// probed over an unencrypted channel. The bearer key ProbePeer then travels
+// cleartext to that peer, so use https:// when the peer serves TLS.
 func NodeURL(address string) (string, error) {
 	scheme, host, port, err := parsePeerParts(address)
 	if err != nil {
@@ -235,7 +241,10 @@ var httpClient = http.DefaultClient
 // apiKey as a bearer credential when set, and reports what it learned.
 //
 // apiKey is never logged, never placed in PeerStatus.Error, and is sent
-// only in the Authorization header of this one request.
+// only in the Authorization header of this one request. Over an http (not
+// https) peer that header travels cleartext; NodeURL defaults scheme-less
+// addresses to http, so a key set before the peer was given https:// is
+// exposed to a network observer on that path. See ADR-0015.
 func ProbePeer(ctx context.Context, address, apiKey string) PeerStatus {
 	status := PeerStatus{Address: address}
 
@@ -309,6 +318,15 @@ func defaultRunConfigSet(ctx context.Context, exe, key, value string) error {
 // defaultRunSecretConfigSet sets a credential-carrying key. It never joins
 // value into the returned error — only defaultRunConfigSet's non-secret
 // callers may do that — so a rejected key cannot end up in a log line.
+//
+// value still reaches llmman as a command-line argument
+// (`config set <key> <value>`), which is world-readable through
+// /proc/<pid>/cmdline for the lifetime of that one process. That is
+// inherent to llmman's `config set` grammar, which accepts the value only
+// as an argument — no stdin or environment-variable form is documented in
+// llmman — so ChairLift cannot drop argv without an upstream change; see
+// ADR-0015. The window is the brief life of the `config set` process, and
+// ChairLift stores, logs, and shows the key at no other time.
 func defaultRunSecretConfigSet(ctx context.Context, exe, key, value string) error {
 	if err := exec.CommandContext(ctx, exe, "config", "set", key, value).Run(); err != nil {
 		return fmt.Errorf("llmman config set %s: %w", key, err)
@@ -497,6 +515,13 @@ func indexOfPeer(peers []Peer, address string) int {
 // `config set`, which validates the key, preserves the file layout, and
 // enforces secure permissions. The key is never read back, logged, or
 // shown by ChairLift after this call returns.
+//
+// It reaches llmman over argv: `config set aggregation.api_key <key>` puts
+// the key in /proc/<pid>/cmdline for the life of that process, and llmman's
+// grammar takes the value only as an argument (no argv-free input form is
+// documented in llmman). That residual exposure is documented in ADR-0015;
+// the key is written only into llmman's own configuration, never stored,
+// logged, or shown by ChairLift at any other time.
 func SetPeerAPIKey(ctx context.Context, apiKey string) error {
 	exe := Executable()
 	if exe == "" {

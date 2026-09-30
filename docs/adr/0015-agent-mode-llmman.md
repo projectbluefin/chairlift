@@ -98,12 +98,21 @@ predicate cannot be met and no launcher is wired; #255 and #261 complete it.
   tracked locally in `~/.local/share/chairlift/agent-mode-peers.json`; the peer
   key is passed to `llmman config set` on argv (a known limitation until stdin
   support lands).
+  A peer added without https:// is probed over http, so the bearer key then
+  travels cleartext to that peer — use https:// when the peer serves TLS.
 - *Configuration ownership:* ChairLift writes no llmman TOML; aliases, peers,
   and auth go through `llmman config set/get`. Goose provider choice stays
   invocation-scoped (`llmman launch goose`); OMP uses a named, isolated
   profile.
 - *Secrets:* ChairLift stores and logs no API key, provider credential, or
-  prompt.
+  prompt. The one peer key reaches llmman over two channels ChairLift does
+  not itself store or log: as a `config set` command-line argument,
+  world-readable through /proc/<pid>/cmdline for that process's life —
+  inherent to llmman's grammar, which has no argv-free input form — and as an
+  `Authorization: Bearer` header over a scheme-less peer, which NodeURL
+  defaults to http and so carries the key cleartext unless the peer uses
+  https://. Both are llmman's transport, not ChairLift's; the argv-free fix
+  lives upstream.
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user
