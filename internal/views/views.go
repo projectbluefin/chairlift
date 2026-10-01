@@ -111,6 +111,17 @@ type UserHome struct {
 	// pages present, one response each.
 	confirmations dialogRoute
 
+	// Native activity indicators; operation state remains in the existing gates.
+	liveryAppGridSpinner     *gtk.Spinner
+	liveryPanelSpinner       *gtk.Spinner
+	liveryPanelRotateSpinner *gtk.Spinner
+	liveryDockSpinner        *gtk.Spinner
+	liveryDockRotateSpinner  *gtk.Spinner
+	developerSpinner         *gtk.Spinner
+	gamingSpinner            *gtk.Spinner
+	troubleshootSpinner      *gtk.Spinner
+	agentModeSpinner         *gtk.Spinner
+
 	// Livery references. liveryState is the last state the page loaded and
 	// is what every handler compares against, so a programmatic widget
 	// update during restore is recognized as "no change" instead of being

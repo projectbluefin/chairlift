@@ -16,6 +16,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/maintenanceexec"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/cleanupview"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
@@ -96,11 +97,13 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 	button := gtk.NewButtonWithLabel(cleanupview.ButtonLabel)
 	button.SetValign(gtk.AlignCenterValue)
 	button.AddCssClass("suggested-action")
+	spinner := newActivitySpinner()
+	row.AddSuffix(&spinner.Widget)
 
 	// Connected once, at build time: this row is never rebuilt, so the
 	// callback table keeps exactly one slot for it.
 	clickedCb := func(gtk.Button) {
-		uh.onFreeUpSpaceClicked(button, row)
+		uh.onFreeUpSpaceClicked(button, row, spinner)
 	}
 	button.ConnectClicked(&clickedCb)
 
@@ -117,9 +120,10 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 // total in a form worth trusting, so when either read fails, or the
 // difference is small enough to be ordinary system noise, the result says
 // the cleanup finished and names no number at all.
-func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow) {
+func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow, spinner *gtk.Spinner) {
 	button.SetSensitive(false)
 	button.SetLabel(cleanupview.BusyLabel)
+	setActivitySpinner(spinner, true)
 
 	cleanup := updateproviders.NewCleanup(uh.config)
 	previewOnly := dryrun.Enabled()
@@ -145,6 +149,7 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow)
 		})
 
 		sgtk.RunOnMainThread(func() {
+			setActivitySpinner(spinner, false)
 			button.SetSensitive(true)
 			button.SetLabel(cleanupview.ButtonLabel)
 
@@ -207,18 +212,30 @@ func (uh *UserHome) buildConfiguredTasksGroup(page *adw.PreferencesPage) {
 
 // onBrewBundleDumpClicked exports the user's package list. The row that
 // triggers it lives on the Applications page; only the handler sits here.
-func (uh *UserHome) onBrewBundleDumpClicked() {
+func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spinner, gate *actionstate.Gate) {
+	if !gate.TryStart() {
+		return
+	}
+	button.SetSensitive(false)
+	button.SetLabel("Exporting…")
+	spinner.SetVisible(true)
+	spinner.Start()
 	go func() {
-		homeDir, _ := os.UserHomeDir()
-		path := homeDir + "/Brewfile"
-		if err := homebrew.BundleDump(path, true); err != nil {
-			log.Printf("Package list export failed: %v", err)
-			sgtk.RunOnMainThread(func() {
-				uh.toastAdder.ShowErrorToast("Could not export your package list")
-			})
-			return
+		homeDir, err := os.UserHomeDir()
+		if err == nil {
+			err = homebrew.BundleDump(homeDir+"/Brewfile", true)
 		}
 		sgtk.RunOnMainThread(func() {
+			gate.Reset()
+			spinner.Stop()
+			spinner.SetVisible(false)
+			button.SetSensitive(true)
+			button.SetLabel("Export")
+			if err != nil {
+				log.Printf("Package list export failed: %v", err)
+				uh.toastAdder.ShowErrorToast("Could not export your package list")
+				return
+			}
 			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled()))
 		})
 	}()

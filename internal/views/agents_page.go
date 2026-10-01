@@ -59,6 +59,8 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.AgentModeRowTitle())
 	uh.agentModeRow = row
+	uh.agentModeSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.agentModeSpinner.Widget)
 
 	// guardedSwitch, not a bare gtk.Switch: GtkSwitch emits ::state-set from
 	// gtk_switch_set_active, so showing the machine's real state here and
@@ -295,6 +297,7 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	}
 	toggle.widget.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
+	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
 
 	go func() {
@@ -315,6 +318,7 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 		}
 
 		sgtk.RunOnMainThread(func() {
+			setActivitySpinner(uh.agentModeSpinner, false)
 			toggle.widget.SetSensitive(true)
 
 			if err != nil {

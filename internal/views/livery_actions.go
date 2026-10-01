@@ -37,6 +37,7 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	if !uh.liveryAppGridGate.TryStart() {
 		return
 	}
+	setActivitySpinner(uh.liveryAppGridSpinner, true)
 	if uh.liveryAppGridSwitch != nil {
 		uh.liveryAppGridSwitch.SetSensitive(false)
 	}
@@ -138,10 +139,11 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		return
 	}
 
-	gate, toggle := uh.liveryToggleGate(surface)
+	gate, toggle, spinner := uh.liveryToggleGate(surface)
 	if !gate.TryStart() {
 		return
 	}
+	setActivitySpinner(spinner, true)
 	if toggle != nil {
 		toggle.SetSensitive(false)
 	}
@@ -352,6 +354,14 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 	generation := uh.liveryRotateWork.Claim()
 	go func() {
 		uh.liveryRotateWork.Run(generation, func() {
+			sgtk.RunOnMainThread(func() {
+				setActivitySpinner(uh.liveryPanelRotateSpinner, true)
+				setActivitySpinner(uh.liveryDockRotateSpinner, true)
+			})
+			defer sgtk.RunOnMainThread(func() {
+				setActivitySpinner(uh.liveryPanelRotateSpinner, false)
+				setActivitySpinner(uh.liveryDockRotateSpinner, false)
+			})
 			ctx, cancel := livery.DefaultContext()
 			defer cancel()
 
@@ -471,14 +481,14 @@ func (uh *UserHome) reportLiveryFailure(what string, err error) {
 // leaving the switch showing enabled with the mark gone. The gate makes the
 // second click a no-op until the first one lands, and the insensitive switch
 // says so.
-func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.Switch) {
+func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.Switch, *gtk.Spinner) {
 	switch s {
 	case livery.AppGrid:
-		return &uh.liveryAppGridGate, uh.liveryAppGridSwitch
+		return &uh.liveryAppGridGate, uh.liveryAppGridSwitch, uh.liveryAppGridSpinner
 	case livery.Panel:
-		return &uh.liveryPanelGate, uh.liveryPanelSwitch
+		return &uh.liveryPanelGate, uh.liveryPanelSwitch, uh.liveryPanelSpinner
 	default:
-		return &uh.liveryDockGate, uh.liveryDockSwitch
+		return &uh.liveryDockGate, uh.liveryDockSwitch, uh.liveryDockSpinner
 	}
 }
 
@@ -517,7 +527,8 @@ func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func()) {
 // thread, so the widget touch happens where GTK requires it.
 func (uh *UserHome) releaseLiveryToggle(s livery.Surface) {
 	sgtk.RunOnMainThread(func() {
-		gate, toggle := uh.liveryToggleGate(s)
+		gate, toggle, spinner := uh.liveryToggleGate(s)
+		setActivitySpinner(spinner, false)
 		gate.Reset()
 		if toggle != nil {
 			toggle.SetSensitive(true)

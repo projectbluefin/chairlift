@@ -184,6 +184,7 @@ Feature: Apps destination
     And the application log contains "/bundles/fonts-dev.Brewfile"
     And a toast on the Apps page says "[DRY-RUN] Preview: Coding fonts would be installed — no changes made"
     And the "Install" button in the "Coding fonts" row is sensitive
+    And I do not see "Installing collection"
     And Homebrew was never asked to "bundle"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
@@ -202,6 +203,7 @@ Feature: Apps destination
     When I click the "Install" button in the "Team tools" row
     Then the application log contains "/bundles/team-tools.Brewfile"
     And the "Install" button in the "Team tools" row is sensitive
+    And I do not see "Installing collection"
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
@@ -258,6 +260,7 @@ Feature: Apps destination
     And I click the "Export" button in the "Export package list" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle dump --file="
     And the application log contains "/home/Brewfile --force"
+    And the "Export" button in the "Export package list" row is sensitive
     And the home directory has no "Brewfile"
     And Homebrew was never asked to "bundle"
 

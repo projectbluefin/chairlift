@@ -38,6 +38,8 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	row.SetUseMarkup(false)
 	row.SetTitle("Enhanced Troubleshooting")
 	row.SetSubtitle("Checking...")
+	uh.troubleshootSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.troubleshootSpinner.Widget)
 
 	button := gtk.NewButtonWithLabel("Set Up")
 	button.SetValign(gtk.AlignCenterValue)
@@ -111,6 +113,7 @@ func (uh *UserHome) onTroubleshootClicked() {
 
 	button.SetSensitive(false)
 	button.SetLabel("Setting up...")
+	setActivitySpinner(uh.troubleshootSpinner, true)
 
 	go func() {
 		defer uh.troubleshootGate.Reset()
@@ -120,6 +123,7 @@ func (uh *UserHome) onTroubleshootClicked() {
 		})
 
 		sgtk.RunOnMainThread(func() {
+			setActivitySpinner(uh.troubleshootSpinner, false)
 			uh.applyTroubleshootState(after)
 
 			if err != nil {

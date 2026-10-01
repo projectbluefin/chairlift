@@ -56,9 +56,10 @@ func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryAppGridTitle)
 	group.SetDescription(pageview.LiveryAppGridFragment)
 
+	uh.liveryAppGridSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryAppGridRow(), func(state bool) {
 		uh.onLiveryAppGridToggled(state)
-	})
+	}, uh.liveryAppGridSpinner)
 	group.Add(&enableRow.Widget)
 
 	// The same chooser the dock uses. Typing a slug blind into a text field
@@ -93,9 +94,10 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryPanelTitle)
 	group.SetDescription(pageview.LiveryPanelFragment)
 
+	uh.liveryPanelSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryPanelRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Panel, state)
-	})
+	}, uh.liveryPanelSpinner)
 	group.Add(&enableRow.Widget)
 
 	markRow := adw.NewActionRow()
@@ -112,9 +114,10 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	markRow.ConnectActivated(&openMarks)
 	uh.liveryPanelMarkRow = markRow
 
+	uh.liveryPanelRotateSpinner = newActivitySpinner()
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Panel, state)
-	})
+	}, uh.liveryPanelRotateSpinner)
 	group.Add(&rotateRow.Widget)
 
 	page.Add(group)
@@ -130,9 +133,10 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryDockTitle)
 	group.SetDescription(pageview.LiveryDockFragment)
 
+	uh.liveryDockSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryDockRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Dock, state)
-	})
+	}, uh.liveryDockSpinner)
 	group.Add(&enableRow.Widget)
 
 	// One row that opens a picker, not a search box wired into the page.
@@ -158,9 +162,10 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 
 	uh.liveryDockSelectedRow = projectRow
 
+	uh.liveryDockRotateSpinner = newActivitySpinner()
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Dock, state)
-	})
+	}, uh.liveryDockRotateSpinner)
 	group.Add(&rotateRow.Widget)
 
 	// Where the artwork comes from.
@@ -191,10 +196,13 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 // switch, and the page wrote to dconf on load. GtkSwitch::state-set fires
 // only when the active state actually changes, and gtk_switch_set_active is a
 // no-op when the value is unchanged, so programmatic restore is silent.
-func newSwitchRow(presentation pageview.Row, onToggle func(bool)) (*adw.ActionRow, *gtk.Switch) {
+func newSwitchRow(presentation pageview.Row, onToggle func(bool), spinner *gtk.Spinner) (*adw.ActionRow, *gtk.Switch) {
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
+	if spinner != nil {
+		row.AddSuffix(&spinner.Widget)
+	}
 
 	toggle := gtk.NewSwitch()
 	toggle.SetValign(gtk.AlignCenterValue)

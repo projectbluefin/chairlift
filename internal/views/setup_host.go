@@ -118,7 +118,7 @@ func (uh *UserHome) SetLiveryEnabled(surface livery.Surface, enabled bool) bool 
 	if uh == nil || !uh.liveryLoaded || uh.liverySuppress {
 		return false
 	}
-	_, toggle := uh.liveryToggleGate(surface)
+	_, toggle, _ := uh.liveryToggleGate(surface)
 	if toggle == nil || !toggle.GetSensitive() {
 		return false
 	}
@@ -198,15 +198,25 @@ func (uh *UserHome) UpdatePreferences() *settings.Store {
 // buttons that must all show the same phase.
 type bundleInstall struct {
 	gate    bundleview.InstallGate
-	buttons []*gtk.Button
+	buttons []bundleInstallButton
+}
+
+type bundleInstallButton struct {
+	button  *gtk.Button
+	label   *gtk.Label
+	spinner *gtk.Spinner
 }
 
 // show applies the label and sensitivity every bound button shows
 // for a phase of the shared install.
 func (b *bundleInstall) show(label string, sensitive bool) {
-	for _, button := range b.buttons {
-		button.SetLabel(label)
-		button.SetSensitive(sensitive)
+	for _, control := range b.buttons {
+		control.label.SetLabel(label)
+		SetAccessibleLabel(control.button, label)
+		control.button.SetSensitive(sensitive)
+		busy := label == bundleview.InstallLabelRunning
+		control.spinner.SetVisible(busy)
+		control.spinner.SetSpinning(busy)
 	}
 }
 
@@ -225,13 +235,19 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 		shared = &bundleInstall{}
 		uh.bundleInstalls[bundle.Path] = shared
 	}
-	shared.buttons = append(shared.buttons, button)
+	content := gtk.NewBox(gtk.OrientationHorizontalValue, 6)
+	spinner := gtk.NewSpinner()
+	SetAccessibleLabel(spinner, "Installing collection")
+	labelWidget := gtk.NewLabel("")
+	content.Append(&labelWidget.Widget)
+	content.Append(&spinner.Widget)
+	button.SetChild(&content.Widget)
+	shared.buttons = append(shared.buttons, bundleInstallButton{button, labelWidget, spinner})
 	// A button connected while a run is in progress, or after one completed,
 	// joins at the phase the others already show; a fresh "Install" here
 	// would be a button that does nothing when clicked.
 	label, sensitive := shared.gate.InstallPhase()
-	button.SetLabel(label)
-	button.SetSensitive(sensitive)
+	shared.show(label, sensitive)
 	uh.bundleButtons.connect(button, func(gtk.Button) {
 		uh.runBundleInstall(bundle, shared)
 	})

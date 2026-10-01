@@ -393,6 +393,8 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
+	uh.developerSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.developerSpinner.Widget)
 
 	dxRow := row
 	var toggle *guardedSwitch
@@ -422,6 +424,8 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
+	uh.gamingSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.gamingSpinner.Widget)
 
 	gamingRow := row
 	var toggle *guardedSwitch
@@ -469,6 +473,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 		return
 	}
 	toggle.widget.SetSensitive(false)
+	setActivitySpinner(uh.developerSpinner, true)
 
 	go func() {
 		dispatched := false
@@ -495,6 +500,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 		dispatched = true
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
+			setActivitySpinner(uh.developerSpinner, false)
 			toggle.widget.SetSensitive(true)
 
 			if err != nil {
@@ -613,6 +619,7 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *ad
 	toggle.widget.SetSensitive(false)
 	before := row.GetSubtitle()
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
+	setActivitySpinner(uh.gamingSpinner, true)
 
 	go func() {
 		var changed, skipped []string
@@ -624,6 +631,7 @@ func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *ad
 		}
 
 		sgtk.RunOnMainThread(func() {
+			setActivitySpinner(uh.gamingSpinner, false)
 			toggle.widget.SetSensitive(true)
 
 			dryRun := dryrun.Enabled()

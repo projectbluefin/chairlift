@@ -367,7 +367,7 @@ func (a *FirstRunAssistant) buildLiveryChoice(group *adw.PreferencesGroup, surfa
 	entry := &setupSwitchRow{subtitle: presentation.Subtitle}
 	entry.row, entry.toggle = newSwitchRow(presentation, func(state bool) {
 		a.onLiveryChoiceToggled(surface, state)
-	})
+	}, nil)
 	SetAccessibleLabel(entry.toggle, presentation.Title)
 	entry.row.SetSubtitle(pageview.SetupChoicesLoadingSubtitle)
 	group.Add(&entry.row.Widget)
@@ -482,7 +482,7 @@ func (a *FirstRunAssistant) buildUpdateChoice(group *adw.PreferencesGroup, choic
 		if dryrun.Enabled() {
 			log.Printf("[DRY-RUN] would set %s %s=%t", settings.SchemaID, preference.Key, state)
 		}
-	})
+	}, nil)
 	SetAccessibleLabel(entry.toggle, presentation.Title)
 	group.Add(&entry.row.Widget)
 	a.updateRows[preference.ID] = entry
