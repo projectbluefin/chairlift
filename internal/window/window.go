@@ -638,6 +638,7 @@ func (w *Window) ShowToast(message string) {
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(3)
+	toast.SetPriority(adw.ToastPriorityHighValue)
 	w.AddToast(toast)
 }
 
@@ -650,9 +651,9 @@ func (w *Window) ShowToast(message string) {
 // and the message itself is length-bounded at the source.
 const errorToastWidthChars = 48
 
-// ShowErrorToast shows an error toast. It persists until dismissed and, unlike
-// ShowToast, wraps: an error message carries the failing command's own
-// diagnosis and routinely exceeds one line.
+// ShowErrorToast shows an error toast immediately, keeping older errors queued
+// until dismissed. It wraps the failing command's diagnosis instead of hiding
+// subsequent failures behind an indefinitely displayed earlier toast.
 //
 // The toast is still constructed with the message as its plain title.
 // adw_toast_set_custom_title clears that title itself, so this costs nothing,
@@ -662,6 +663,7 @@ func (w *Window) ShowErrorToast(message string) {
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(0) // Persist until dismissed
+	toast.SetPriority(adw.ToastPriorityHighValue)
 	title := gtk.NewLabel(message)
 	title.SetWrap(true)
 	title.SetMaxWidthChars(errorToastWidthChars)

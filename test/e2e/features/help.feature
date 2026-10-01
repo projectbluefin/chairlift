@@ -76,6 +76,16 @@ Feature: Help destination
     And I see "Failed to open URL: https://github.com/projectbluefin/dakota/issues"
     And the Help page is still responsive
 
+  @config.help-links @stub.help-xdg-open-fails
+  Scenario: A new failure is visible without dismissing the previous error
+    Given ChairLift is running
+    When I press "F1"
+    And I open the "Visit project website" Help link
+    Then a toast says "Failed to open URL: https://example.test/site"
+    When I open the "Browse documentation" Help link
+    Then a toast says "Failed to open URL: https://example.test/docs/#start"
+    And the Help page is still responsive
+
   @config.help-no-resources
   Scenario: Disabling the resources group removes the links but keeps Help
     Given ChairLift is running
