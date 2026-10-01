@@ -244,7 +244,7 @@ func Steps() []Step {
 		{
 			Name:   "Connecting it to this system",
 			Needed: func(s State) bool { return !s.Wired },
-			Run:    runSetupScript,
+			Run:    func() error { return runSetup() },
 		},
 	}
 }
@@ -260,7 +260,6 @@ func defaultRunSetup() error {
 	if _, err := os.Lstat(path); err == nil {
 		if dryrun.Enabled() {
 			log.Print("[DRY-RUN] would keep existing Goose configuration")
-			return nil
 		}
 		if data, err := os.ReadFile(path); err == nil && ParseConfig(data).Wired {
 			return nil
@@ -329,8 +328,6 @@ func prepareNewConfig(data []byte) ([]byte, error) {
 	return prepared, nil
 }
 
-func runSetupScript() error { return runSetup() }
-
 // Setup runs every step that still has work to do, reporting progress as it
 // goes. It returns the state afterwards so a caller can tell whether the run
 // actually left the feature usable.
@@ -349,7 +346,7 @@ func Setup(state State, progress func(string)) (State, error) {
 	return Detect(), nil
 }
 
-// Error wraps a failed setup command, carrying its output.
+// Error describes a refused setup while preserving the user's configuration.
 type Error struct {
 	Message string
 	Err     error

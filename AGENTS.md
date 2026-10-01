@@ -614,6 +614,8 @@ An agent must not break these:
   unsafe policy is rejected, not silently replaced. Other extensions, model,
   and provider settings are preserved. Never overwrite an existing Goose
   config or select a provider for the user.
+  Preview and live setup make the same readiness decision for existing files:
+  an unwired file is kept and reports its actual user path in both modes.
   Both `linux-mcp-server` and legacy `linux-tools` entries are recognized;
   readiness requires enabled stdio, explicit FIXED tools, SSH-key search off,
   and a command that exists. Keep the stable prefix/bin path, not a versioned

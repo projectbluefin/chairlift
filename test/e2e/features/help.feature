@@ -196,7 +196,7 @@ Feature: Help destination
     @stub.help-goose-cli @stub.help-goose-unwired-other-extension
     Examples: Installed but not connected
       | before                                          | feedback |
-      | Installed, but not connected to this system yet | [DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made |
+      | Installed, but not connected to this system yet | Goose configuration was kept unchanged; review Linux diagnostics in |
 
   @stub.help-goose-cli @stub.help-goose-unwired-other-extension
   Scenario: Set Up resumes a half-done install instead of repeating it
@@ -204,7 +204,7 @@ Feature: Help destination
     When I press "F1"
     Then the Enhanced Troubleshooting status is "Installed, but not connected to this system yet"
     When I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
+    Then I see "Goose configuration was kept unchanged; review Linux diagnostics in"
     And the troubleshooting setup previewed exactly
       | command                                      |
       | brew tap ublue-os/tap                        |

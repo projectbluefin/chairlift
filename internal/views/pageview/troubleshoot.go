@@ -46,7 +46,7 @@ func TroubleshootSetupSubtitle(state troubleshoot.State) string {
 		return "Ready — " + TroubleshootProviderNote(state.Provider)
 	}
 	if state.ServerInstalled && state.AgentInstalled {
-		return "Installed, but Linux diagnostics are not ready — review /usr/share/ublue-os/goose/config.yaml"
+		return "Installed, but the Linux diagnostic command in your Goose configuration is unavailable"
 	}
 	return "Setup did not complete"
 }

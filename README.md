@@ -277,15 +277,14 @@ chairlift
    manager
 3. **Agents**: Run a language model on this computer
 4. **Features**: Enable, disable, and update configured system features, plus
-   Developer Mode and Gaming Mode
+   Developer Mode, Gaming Mode, and Enhanced Troubleshooting
 5. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
    and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
    project's artwork, optionally advancing at each login
 6. **Maintenance**: Free up space, run administrator-configured maintenance
    scripts, and — where an administrator has opted in — Powerwash or Factory
    Reset
-7. **Help**: Goose troubleshooting with the shipped Bluefin configuration,
-   plus documentation and support resources
+7. **Help**: Documentation and support resources
 
 ### Keyboard Shortcuts
 

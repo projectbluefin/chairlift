@@ -94,11 +94,8 @@ func TestSetupPreservesExistingConfiguration(t *testing.T) {
 	for _, preview := range []bool{false, true} {
 		dryrun.Set(preview)
 		err := defaultRunSetup()
-		if preview && err != nil {
-			t.Fatalf("preservation preview failed: %v", err)
-		}
-		if !preview && !errors.Is(err, os.ErrExist) {
-			t.Fatalf("existing config: %v", err)
+		if !errors.Is(err, os.ErrExist) {
+			t.Fatalf("preview=%v existing config: %v", preview, err)
 		}
 		got, err := os.ReadFile(path)
 		if err != nil || string(got) != string(want) {

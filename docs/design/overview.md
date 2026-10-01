@@ -1509,6 +1509,11 @@ unsafe policies still fail validation. Both recognized keys share
 coverage. `ParseConfig` keeps requiring explicit safe policy for existing
 user files, and `Detect` checks command availability through the shared
 Homebrew resolution. Failed setup and dry-run preserve observed state.
+Preview and live setup inspect the same existing-file policy; an unwired file
+is preserved and refused in either mode, not previewed as a future success.
+When the file is wired but its diagnostic command cannot resolve, the row
+directs attention to that command in the user's configuration, not the
+read-only shipped preset.
 Desktop launch remains `gtk-launch Goose`. Nothing crosses a privilege
 boundary; no provider is selected and no extra launcher or model service is
 introduced.
