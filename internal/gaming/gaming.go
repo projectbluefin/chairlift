@@ -1,6 +1,5 @@
-// Package gaming implements ChairLift's gaming mode for the Bluefin family
-// (Bluefin, Bluefin LTS, and Dakota): a one-switch install of the gaming
-// stack those images do not ship by default.
+// Package gaming implements selective user-scope gaming application management
+// for the Bluefin family (Bluefin, Bluefin LTS, and Dakota).
 //
 // Unlike the release-channel switch and developer mode, gaming mode crosses
 // no privilege boundary. Every component is a user-scope Flatpak, installed
@@ -129,6 +128,20 @@ func kinds() []flatpak.Kind {
 // ComponentCount returns the total number of components in the gaming stack.
 func ComponentCount() int {
 	return len(components)
+}
+
+// Components returns the ordered inventory without exposing mutable state.
+func Components() []Component {
+	return slices.Clone(components)
+}
+
+func validSelection(selected []string) error {
+	for _, id := range selected {
+		if !slices.ContainsFunc(components, func(c Component) bool { return c.ID == id }) {
+			return fmt.Errorf("unknown gaming component %q", id)
+		}
+	}
+	return nil
 }
 
 // Scope records where each installed component lives. ChairLift installs
@@ -268,7 +281,6 @@ var inventoryQueries = []inventoryQuery{
 func installedComponents() (Scope, error) {
 	scope := Scope{Installed: map[Ref]bool{}, User: map[Ref]bool{}}
 
-	answered := map[flatpak.Kind]bool{}
 	failures := map[flatpak.Kind][]error{}
 	for _, query := range inventoryQueries {
 		refs, err := query.list()
@@ -276,7 +288,8 @@ func installedComponents() (Scope, error) {
 			failures[query.kind] = append(failures[query.kind], err)
 			continue
 		}
-		answered[query.kind] = true
+		// Both scopes must answer; otherwise absent/user/system classification
+		// could claim missing for an installed component or conceal a user copy.
 		for _, installed := range refs {
 			ref := Ref{Kind: query.kind, ID: installed.ApplicationID}
 			scope.Installed[ref] = true
@@ -286,19 +299,11 @@ func installedComponents() (Scope, error) {
 		}
 	}
 
-	// One scope being unavailable (no system remote configured, for
-	// instance) still yields a usable answer. A kind that answered in
-	// neither scope does not: its components would be reported missing on
-	// every refresh, which is Enable reinstalling them forever and Disable
-	// never removing what ChairLift installed. Only the kinds the stack
-	// actually contains are required.
 	for _, kind := range kinds() {
-		if answered[kind] {
-			continue
+		if len(failures[kind]) != 0 {
+			return Scope{}, fmt.Errorf("listing installed Flatpak %s refs: %w", kind, errors.Join(failures[kind]...))
 		}
-		return Scope{}, fmt.Errorf("listing installed Flatpak %s refs: %w", kind, errors.Join(failures[kind]...))
 	}
-
 	return scope, nil
 }
 
@@ -311,16 +316,21 @@ func Status() (State, error) {
 	return Derive(scope), nil
 }
 
-// Enable installs every missing component into the user scope. It reports
-// the components it installed and, separately, the ones that failed, so a
-// single unavailable Flathub app does not abort the rest of the stack.
-func Enable() (installed []string, failures []error) {
+// Enable installs only selected missing components into the user scope.
+// A component failure does not abort the remaining selected entries.
+func Enable(selected []string) (installed []string, failures []error) {
+	if err := validSelection(selected); err != nil {
+		return nil, []error{err}
+	}
 	state, err := Status()
 	if err != nil {
 		return nil, []error{err}
 	}
 
 	for _, id := range state.Missing {
+		if !slices.Contains(selected, id) {
+			continue
+		}
 		if err := flatpak.Install(id, true); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", id, err))
 			continue
@@ -330,23 +340,30 @@ func Enable() (installed []string, failures []error) {
 	return installed, failures
 }
 
-// Disable removes every user-scope component. Components the image
-// preinstalled system-wide are reported as skipped, not attempted: ChairLift
-// did not install them, and removing them would need privilege gaming mode
-// deliberately does not take. Attempting them anyway would fail and report
-// as an error for something that was never ChairLift's to remove.
-func Disable() (removed []string, skipped []string, failures []error) {
+// Disable removes only selected user-scope components. System copies stay.
+func Disable(selected []string) (removed []string, skipped []string, failures []error) {
+	if err := validSelection(selected); err != nil {
+		return nil, nil, []error{err}
+	}
 	state, err := Status()
 	if err != nil {
 		return nil, nil, []error{err}
 	}
 
 	for _, id := range state.UserInstalled {
+		if !slices.Contains(selected, id) {
+			continue
+		}
 		if err := flatpak.Uninstall(id, true); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", id, err))
 			continue
 		}
 		removed = append(removed, id)
 	}
-	return removed, state.SystemOnly, failures
+	for _, id := range state.SystemOnly {
+		if slices.Contains(selected, id) {
+			skipped = append(skipped, id)
+		}
+	}
+	return removed, skipped, failures
 }

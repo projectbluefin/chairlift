@@ -1,6 +1,9 @@
 package pageview
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -46,10 +49,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.HomebrewPackage(",
 				"pageview.FlatpakApplication",
 				"pageview.SearchResult(",
-				// Collection installs run through the one shared runner the
-				// setup assistant also uses (setup_host.go), never a
-				// page-private copy.
-				"uh.ConnectBundleInstall(",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
@@ -63,18 +62,9 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
-			file: "setup_host.go",
-			required: []string{
-				"bundleview.Describe(",
-				"trustmsg.BundleMessage(",
-				"actionmsg.BundleInstall(",
-			},
-		},
-		{
 			file: "updates_page.go",
 			required: []string{
 				"pageview.UntrustedTap(",
-				"pageview.FlatpakUpdate(",
 				"pageview.BootcUpdateSubtitle(",
 				"pageview.BootcStageResultSubtitle(",
 				// Moved here with the release channel and the graphics
@@ -155,51 +145,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
-			file: "firstrun.go",
-			required: []string{
-				"pageview.GetMovingDescription(",
-				"pageview.ConfigStepInfoSubtitle(",
-				// Advance owns the "is there a step left to display" answer.
-				"a.model.Advance(",
-				// The forward button's label depends on whether a step
-				// follows; pageview owns which word describes the click.
-				"pageview.StepForwardAction(",
-				"pageview.SetupCompletedMessage",
-				// A skip must not overwrite a recorded completion; the
-				// read-decide-write lives in firstrun where it is tested.
-				"firstrun.RecordSkip(",
-				// A dismissal without a decision records a skip.
-				"if !a.decided {",
-				// Each choice row's copy comes from pageview, keyed on the
-				// model's choice ID, and every choice acts through the host.
-				"pageview.SetupChoiceRow(",
-				"a.host.SetLiveryEnabled(",
-				"a.host.ConnectBundleInstall(",
-				"pageview.UpdateSourcePreferenceByKey(",
-				"pageview.UpdateSourcePreferenceSubtitle(",
-				"pageview.UpdateSourcePreferenceSensitive(",
-			},
-			retired: []string{
-				// Asking HasNext after Next skipped the final step: the move
-				// onto it already made HasNext false, so the dialog closed
-				// and recorded completion without ever showing it.
-				"a.model.HasNext()",
-				`"Control Center"`,
-				`infoRow.SetSubtitle("`,
-				// Completion copy belongs in pageview with the rest.
-				`"Setup completed!"`,
-				// A forward button hard-labeled Finish misdescribes every
-				// intermediate step it advances through.
-				`gtk.NewButtonWithLabel("Finish")`,
-				// The assistant never applies a mark, installs a collection
-				// or writes a preference itself; the pages do.
-				"livery.Apply(",
-				"livery.SetBool(",
-				"homebrew.BundleInstall(",
-				"exec.Command",
-			},
-		},
-		{
 			file:     "help_page.go",
 			required: []string{"pageview.HelpResources(", "pageview.UnavailableFeatures(", "pageview.SystemDiagnosticsRow("},
 			retired:  []string{`row.SetTitle("Website")`, `row.SetTitle("Report Issues")`},
@@ -208,7 +153,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			file: "agents_page.go",
 			required: []string{
 				"pageview.AgentModeSubtitle(",
-				"pageview.AgentModeDetails(",
 				"pageview.AgentModeGroupDescription(",
 				"actionmsg.AgentMode(",
 				"pageview.AgentModeActiveModelTitle()",
@@ -255,40 +199,47 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 	}
 }
 
-// Staging changes the pair of images Compare uses. Startup's status refresh
-// alone is insufficient: the same window must enable Compare after staging.
+// Both staging entry points refresh Compare; the shell owns the aggregate badge.
 func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
-	path := filepath.Join(filepath.Dir(filename), "..", "updates_page.go")
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	viewsDir := filepath.Join(filepath.Dir(filename), "..")
+	functionBody := func(file, name string) string {
+		t.Helper()
+		path := filepath.Join(viewsDir, file)
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, path, source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range parsed.Decls {
+			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
+				return string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+			}
+		}
+		t.Fatalf("%s: function %s not found", file, name)
+		return ""
 	}
-	stage := strings.SplitN(string(source), "func (uh *UserHome) onBootcStageClicked()", 2)
-	if len(stage) != 2 {
-		t.Fatal("bootc staging handler not found")
-	}
-	body := strings.SplitN(stage[1], "func (uh *UserHome) updateHomebrew(", 2)[0]
-	if !strings.Contains(body, "uh.refreshChangelogAvailability(status)") {
-		t.Error("successful bootc staging never refreshes the Compare references and button")
-	}
-	// A successful stage with an unreadable status is not evidence that the
-	// image is current. Refuse the success toast when the re-read failed.
-	if !strings.Contains(body, "if statusErr != nil {") || !strings.Contains(body, "Could not verify staged update") {
-		t.Error("bootc staging claims a known result after its status re-read failed")
-	}
-	viewsPath := filepath.Join(filepath.Dir(filename), "..", "views.go")
-	viewsSource, err := os.ReadFile(viewsPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	viewsBody := string(viewsSource)
-	for _, required := range []string{"updateflow.OperatingSystem", "bootc.GetStatus(", "uh.updateCounts.SetObserved(badgestate.Bootc,", "uh.refreshChangelogAvailability(status)"} {
-		if !strings.Contains(viewsBody, required) {
-			t.Errorf("Update All OS staging never applies %q to the Compare row and badge", required)
+	for _, check := range []struct {
+		file, function string
+		required       []string
+	}{
+		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
+		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)"}},
+		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
+		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},
+	} {
+		body := functionBody(check.file, check.function)
+		for _, assertion := range check.required {
+			if !strings.Contains(body, assertion) {
+				t.Errorf("%s.%s no longer preserves staged Compare/badge refresh: %s", check.file, check.function, assertion)
+			}
 		}
 	}
 }
@@ -298,14 +249,13 @@ func TestUpdateAllRefreshesProviderInventories(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "views.go"))
+	source, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "views.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := string(data)
-	for _, call := range []string{"uh.loadFlatpakUpdates()", "uh.loadOutdatedPackages()"} {
-		if !strings.Contains(body, call) {
-			t.Errorf("Update All leaves stale inventory without %s", call)
+	for _, call := range []string{"if final.Preview {", "range final.CompletedSources", "uh.loadFlatpakApplications()", "uh.loadHomebrewPackages()"} {
+		if !strings.Contains(string(source), call) {
+			t.Errorf("live Update All leaves installed inventory stale without %s", call)
 		}
 	}
 }

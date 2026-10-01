@@ -31,7 +31,7 @@ func TestApplicationsPageWiresTypedSearchInstallState(t *testing.T) {
 		`uh.searchResultRows.Clear(func(row *adw.ActionRow)`,
 		`pageview.SearchResult(result.Name, result.Kind.DisplayName())`,
 		`if !gate.TryStart()`,
-		`uh.confirmHomebrewInstall(result, button, gate)`,
+		`uh.confirmHomebrewInstall(result, button, gate, progress)`,
 		`dialog.AddResponse("install", "Install")`,
 		`button.SetLabel("Installing…")`,
 		`homebrew.Install(result.Name, result.Kind == homebrew.Cask)`,

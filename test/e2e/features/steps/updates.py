@@ -79,6 +79,15 @@ def step_only_primary(context, label):
     assert ok, f"primary actions offered are {offered()}, want only {label!r}"
 
 
+@then("the Updates progress bar is {visibility:w}")
+def step_progress_visibility(context, visibility):
+    assert visibility in ("shown", "hidden")
+    assert atspi.poll(
+        lambda: bool(atspi.find_all(content(context), lambda n: atspi.role(n) == "progress bar"))
+        == (visibility == "shown")
+    ), f"Updates progress bar is not {visibility}"
+
+
 # ---------------------------------------------------------------- sidebar badge
 
 
@@ -169,36 +178,24 @@ def step_journal_count(context, count):
     assert len(entries) == count, f"journal holds {len(entries)} entries, want {count}: {entries[:6]}"
 
 
-# ---------------------------------------------------------------- expanders
+@then('the update for "{title}" is listed once with an accessible action')
+def step_single_visible_update(context, title):
+    def check():
+        rows = atspi.find_all(
+            content(context),
+            lambda node: atspi.role(node) in atspi.ROW_ROLES and any(
+                atspi.name(child) == title for child in atspi.descendants(node, only_showing=True)
+            ),
+        )
+        return len(rows) == 1 and any(
+            atspi.is_button(node, "Update") for node in atspi.descendants(rows[0], only_showing=True)
+        )
+    assert atspi.poll(check), f"{title!r} is duplicated or its Update action is hidden"
 
 
-@step('I expand the "{title}" row in the "{group}" group')
-def step_expand_row(context, title, group):
-    """Open an AdwExpanderRow from the keyboard.
-
-    Expander headers publish no AT-SPI action and no coordinates, so the row
-    is reached with Tab (GTK 4 does not implement AT-SPI GrabFocus) and
-    toggled with space, as a keyboard user would. The group title disambiguates rows that share a
-    title, such as the two "Available updates" expanders."""
-    section = atspi.find(
-        content(context),
-        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == group,
-        f"a group titled {group!r}",
-    )
-    header = atspi.find(
-        section,
-        lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.name(n) == title and atspi.focusable(n),
-        f"a focusable {title!r} row in {group!r}",
-    )
-    # The expander only expands once its inventory has loaded.
-    loaded = atspi.poll(lambda: not text_present(header, "Checking…"))
-    assert loaded, f"{title!r} in {group!r} is still checking"
-    for _ in range(80):
-        if atspi.focused(header):
-            break
-        atspi.press_and_settle(context.app, "Tab")
-    assert atspi.focused(header), f"Tab never reached {title!r} in {group!r}"
-    atspi.press("space")
+@step("software source discovery is reachable again")
+def step_sources_reachable(context):
+    os.unlink(_state(context, "brew-sources.fail"))
 
 
 @step("the Flatpak update check is allowed to finish")

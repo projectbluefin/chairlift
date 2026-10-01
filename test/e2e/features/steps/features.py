@@ -1,6 +1,6 @@
-"""Features destination steps: Developer tools, Gaming, Printers, Custom Command Menu.
+"""Features destination steps: Developer Mode, selective Gaming and Printers.
 
-The Developer tools switch shows the invoking account's real developer-group
+The Developer Mode switch shows the invoking account's real developer-group
 membership (internal/ublue reads it from the OS, and no stub can change it),
 so a CI runner in `docker` starts with the switch on while the Dakota
 container user starts with it off. Steps record the state the page restored
@@ -14,6 +14,7 @@ import os
 from behave import step, then
 
 import chairlift_atspi as atspi
+from apps import expander_header, expander_rows, focus_by_tab
 from stubs_features import CALLS_LOG, GAMING_COMPONENTS, account_is_developer
 from stubs_printers import quadlet_dir
 
@@ -21,14 +22,6 @@ UBLUE_HELPER = "/usr/bin/chairlift-helper"
 PULP_ID = "org.gnome.gitlab.cheywood.Pulp"
 OPML_PATH = os.path.join(".local", "share", "chairlift", "developer-feeds.opml")
 
-# pageview.DeveloperRow subtitles, keyed by the restored state.
-DEVELOPER_SUBTITLE = {
-    True: "On. You can run containers and virtual machines, and use USB and serial hardware.",
-    False: (
-        "Lets you run containers and virtual machines, and use USB and serial hardware, "
-        "without asking for permission each time. Needs your administrator password."
-    ),
-}
 
 NEGATIVE_WINDOW = 3.0
 
@@ -75,14 +68,10 @@ def _switch(context, row):
     return atspi.find(target, lambda n: atspi.role(n) == "switch", f"a switch in the {row!r} row")
 
 
-def _gaming_ids(exclude=()):
-    return [app_id for name, app_id, _ in GAMING_COMPONENTS if name not in exclude]
-
-
 def _developer_initial(context):
     initial = getattr(context, "features_developer_initial", None)
     if initial is None:
-        raise AssertionError("record the Developer tools state first")
+        raise AssertionError("record the Developer Mode state first")
     return initial
 
 
@@ -102,20 +91,22 @@ def _never(predicate, what, window=NEGATIVE_WINDOW):
     assert not hit, f"unexpectedly observed {what}: {hit!r}"
 
 
-# ---------------------------------------------------------------- Developer tools
+# ---------------------------------------------------------------- Developer Mode
 
 
-@step("the Developer tools switch shows this account's developer-group membership")
+@step("the Developer Mode switch shows this account's developer-group membership")
 def step_developer_restored(context):
     expected = account_is_developer()
-    ok = atspi.poll(lambda: bool(atspi.checked(_switch(context, "Developer tools"))) == expected)
-    assert ok, f"Developer tools switch never showed {'on' if expected else 'off'}"
-    wanted = DEVELOPER_SUBTITLE[expected]
-    assert atspi.poll(lambda: wanted in _texts(context)), f"Developer tools row never said {wanted!r}"
+    def restored():
+        switch = _switch(context, "Developer Mode")
+        return atspi.sensitive(switch) and bool(atspi.checked(switch)) == expected
+    assert atspi.poll(restored), "Developer Mode never became ready with the real account state"
+    row = atspi.row_containing(_content(context), "Developer Mode")
+    context.features_developer_text = atspi.all_text_under(row)
     context.features_developer_initial = expected
 
 
-@then("the Developer tools change is journalled as a dry run of the fixed helper")
+@then("the Developer Mode change is journalled as a dry run of the fixed helper")
 def step_developer_journal(context):
     action = _developer_action(context)
     entries = atspi.poll(lambda: [e for e in _journal(context) if e.get("action") == action])
@@ -129,22 +120,18 @@ def step_developer_journal(context):
     assert not entry.get("args"), f"{action} passed arguments across the pkexec boundary: {entry}"
 
 
-@then("the Developer tools switch returns to its restored state")
+@then("the Developer Mode switch returns to its restored state")
 def step_developer_reverted(context):
     initial = _developer_initial(context)
-
     def settled():
-        switch = _switch(context, "Developer tools")
+        switch = _switch(context, "Developer Mode")
         return bool(atspi.checked(switch)) == initial and atspi.sensitive(switch)
-
-    assert atspi.poll(settled), f"Developer tools switch never returned to {'on' if initial else 'off'} and sensitive"
-    texts = _texts(context)
-    assert DEVELOPER_SUBTITLE[initial] in texts, "a dry run changed the Developer tools row's subtitle"
-    claimed = [t for t in texts if t.startswith("Turned on") or t.startswith("Turned off")]
-    assert not claimed, f"a dry run claimed the change happened: {claimed}"
+    assert atspi.poll(settled), "Developer Mode never restored its observed state"
+    row = atspi.row_containing(_content(context), "Developer Mode")
+    assert atspi.all_text_under(row) == context.features_developer_text, "dry run changed observed Developer Mode presentation"
 
 
-@then("the Developer tools preview toast is shown")
+@then("the Developer Mode preview toast is shown")
 def step_developer_toast(context):
     verb = "disabled" if _developer_initial(context) else "enabled"
     wanted = f"[DRY-RUN] Preview: developer mode would be {verb} — no changes made"
@@ -201,24 +188,61 @@ def step_fake_never(context, tool, subcommand):
 # ---------------------------------------------------------------- Gaming
 
 
-@then('the application log previews "flatpak {verb}" for every gaming component')
-def step_gaming_preview_all(context, verb):
-    step_gaming_preview_except(context, verb, None)
+def _gaming_checkbox(context, name):
+    row = atspi.row_containing(_content(context), name)
+    return atspi.find(row, lambda n: atspi.role(n) == "check box", "gaming selection for " + name)
 
 
-@then('the application log previews "flatpak {verb}" for every gaming component but "{name}"')
-def step_gaming_preview_except(context, verb, name):
-    exclude = (name,) if name else ()
-    for app_id in _gaming_ids(exclude):
-        line = f"[DRY-RUN] Would execute: flatpak {verb} -y --user {app_id}"
-        assert atspi.poll(lambda: line in _log(context)), f"chairlift.log never contained {line!r}"
-    for app_id in set(_gaming_ids()) - set(_gaming_ids(exclude)):
-        assert f"flatpak {verb} -y --user {app_id}" not in _log(context), f"{app_id} was {verb}ed although present"
+@step('I select the "{name}" gaming component')
+def step_select_gaming(context, name):
+    assert atspi.poll(lambda: atspi.sensitive(_gaming_checkbox(context, name))), "gaming inventory never settled"
+    choice = _gaming_checkbox(context, name)
+    if not atspi.checked(choice):
+        # Dakota's GtkCheckButton is focusable but exposes no AT-SPI action.
+        # Use the same bounded keyboard traversal as the editor expander.
+        focus_by_tab(context, choice, f"the {name!r} gaming selection")
+        atspi.press("space")
+    assert atspi.poll(lambda: atspi.checked(_gaming_checkbox(context, name))), "gaming selection was not applied"
 
 
-@then('the Gaming toast says "{text}"')
-def step_gaming_toast(context, text):
-    _wait_for_text(context, lambda t: t == text, repr(text))
+@then("no gaming component is selected")
+def step_no_gaming_selection(context):
+    assert atspi.poll(lambda: atspi.sensitive(_gaming_checkbox(context, "Steam"))), "gaming inventory never settled"
+    for name, _, _ in GAMING_COMPONENTS:
+        assert not atspi.checked(_gaming_checkbox(context, name)), "hidden default selection: " + name
+
+
+@then('each gaming component says "{status}"')
+def step_gaming_component_status(context, status):
+    for name, _, _ in GAMING_COMPONENTS:
+        def observed():
+            row = atspi.row_containing(_content(context), name)
+            return any(text.endswith(status) for text in atspi.all_text_under(row))
+        assert atspi.poll(observed), name + " never reported " + status
+
+
+@then('the gaming preview {operation:w} only "{name}"')
+def step_gaming_selected_preview(context, operation, name):
+    verb = {"installs": "install", "removes": "uninstall"}[operation]
+    chosen = next(app_id for title, app_id, _ in GAMING_COMPONENTS if title == name)
+    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --user {chosen}"
+    assert atspi.poll(lambda: expected in _log(context)), "chosen app was not previewed"
+    for _, app_id, _ in GAMING_COMPONENTS:
+        if app_id != chosen:
+            assert f"flatpak {verb} -y --user {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
+
+
+@then("the developer editor choices match the documented catalog")
+def step_developer_editors(context):
+    expected = ["Dev Container CLI", "VSCode Stable", "VSCode Insiders", "VSCodium", "Antigravity", "JetBrains Toolbox", "Neovim", "Helix", "Vim", "Micro"]
+    for title in expected:
+        assert atspi.poll(lambda: atspi.row_containing(_content(context), title)), "missing tool choice: " + title
+    # A row and its label both publish the title. Count catalog rows, not
+    # every text-bearing accessibility node, and reject extra IDE choices.
+    titles = expander_rows(expander_header(context, "IDEs and terminal editors", "Developer"))
+    assert titles == expected, f"developer editor rows {titles} != {expected}"
+
+
 
 
 @then("the Gaming inventory is read again after the change")

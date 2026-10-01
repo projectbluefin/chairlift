@@ -281,6 +281,23 @@ func SetDeveloperMode(ctx context.Context, enabled bool) error {
 	return err
 }
 
+// EnableKVMAccess grants this account access to hardware virtualization.
+func EnableKVMAccess(ctx context.Context) error {
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandKVMEnable)
+	return err
+}
+
+// SetDocker controls only the image's fixed Docker daemon and this account's
+// access. CLI installation stays unprivileged in Homebrew.
+func SetDocker(ctx context.Context, enabled bool) error {
+	command := ubluehelper.CommandDockerDisable
+	if enabled {
+		command = ubluehelper.CommandDockerEnable
+	}
+	_, _, err := runHelper(ctx, pkexec.Command, command)
+	return err
+}
+
 // Restart restarts the machine. It is the only ChairLift action that ends the
 // user's session, so callers must confirm before reaching it.
 func Restart(ctx context.Context) error {
@@ -293,6 +310,23 @@ func Restart(ctx context.Context) error {
 // action.
 func Rollback(ctx context.Context) error {
 	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandRollback)
+	return err
+}
+
+// Pin stages a dated build of the booted stream. Only the day crosses pkexec;
+// the helper derives and verifies the target. Callers must confirm first.
+func Pin(ctx context.Context, day string) error {
+	if err := ubluehelper.ValidateDay(day, time.Now()); err != nil {
+		return &Error{Message: err.Error()}
+	}
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandPin, day)
+	return err
+}
+
+// Unpin stages the stream recovered from the booted dated tag. Callers must
+// confirm first; no target crosses the privilege boundary.
+func Unpin(ctx context.Context) error {
+	_, _, err := runHelper(ctx, pkexec.Command, ubluehelper.CommandUnpin)
 	return err
 }
 

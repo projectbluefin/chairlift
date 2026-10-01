@@ -28,19 +28,21 @@ func TestFlatpakCheckMapsUserAndSystemUpdatesInScopeOrder(t *testing.T) {
 	var calls []bool
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return true },
-		ListUpdates: func(user bool) ([]flatpak.UpdateInfo, error) {
+		ListUpdates: func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error) {
 			calls = append(calls, user)
 			if user {
 				return []flatpak.UpdateInfo{{
-					Name:         "Firefox",
-					NewVersion:   "121",
-					Installation: "user",
+					Name:          "Firefox",
+					ApplicationID: "org.mozilla.firefox",
+					NewVersion:    "121",
+					Installation:  "user",
 				}}, nil
 			}
 			return []flatpak.UpdateInfo{{
-				Name:         "Runtime",
-				NewVersion:   "42",
-				Installation: "system",
+				Name:          "Runtime",
+				ApplicationID: "org.example.Runtime",
+				NewVersion:    "42",
+				Installation:  "system",
 			}}, nil
 		},
 	})
@@ -50,8 +52,8 @@ func TestFlatpakCheckMapsUserAndSystemUpdatesInScopeOrder(t *testing.T) {
 		t.Fatalf("Check() error = %v", err)
 	}
 	want := updateflow.CheckResult{Items: []updateflow.Item{
-		{Name: "Firefox", AvailableVersion: "121", Scope: "user"},
-		{Name: "Runtime", AvailableVersion: "42", Scope: "system"},
+		{ID: "org.mozilla.firefox", Name: "Firefox", AvailableVersion: "121", Scope: "user"},
+		{ID: "org.example.Runtime", Name: "Runtime", AvailableVersion: "42", Scope: "system"},
 	}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Check() = %#v, want %#v", got, want)
@@ -99,7 +101,7 @@ func TestFlatpakCheckPreservesSuccessfulScopeWhenOtherScopeFails(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			provider := newFlatpak(FlatpakDeps{
 				Installed: func() bool { return true },
-				ListUpdates: func(user bool) ([]flatpak.UpdateInfo, error) {
+				ListUpdates: func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error) {
 					if user {
 						return test.user, test.userError
 					}
@@ -159,9 +161,13 @@ func TestFlatpakApplyUpdatesOnlyScopesInCheckedSnapshot(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var calls []bool
+			applied := false
 			provider := newFlatpak(FlatpakDeps{
 				Installed: func() bool { return true },
-				ListUpdates: func(user bool) ([]flatpak.UpdateInfo, error) {
+				ListUpdates: func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error) {
+					if applied {
+						return nil, nil
+					}
 					if user {
 						return test.userItems, nil
 					}
@@ -169,6 +175,7 @@ func TestFlatpakApplyUpdatesOnlyScopesInCheckedSnapshot(t *testing.T) {
 				},
 				Update: func(_ context.Context, _ string, user bool) error {
 					calls = append(calls, user)
+					applied = true
 					return nil
 				},
 			})
@@ -194,16 +201,21 @@ func TestFlatpakApplyUpdatesOnlyScopesInCheckedSnapshot(t *testing.T) {
 func TestFlatpakApplyUsesSuccessfulScopeAfterPartialCheck(t *testing.T) {
 	userErr := errors.New("user query failed")
 	var calls []bool
+	applied := false
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return true },
-		ListUpdates: func(user bool) ([]flatpak.UpdateInfo, error) {
+		ListUpdates: func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error) {
 			if user {
 				return nil, userErr
+			}
+			if applied {
+				return nil, nil
 			}
 			return []flatpak.UpdateInfo{{Name: "System App", Installation: "system"}}, nil
 		},
 		Update: func(_ context.Context, _ string, user bool) error {
 			calls = append(calls, user)
+			applied = true
 			return nil
 		},
 	})
@@ -220,6 +232,81 @@ func TestFlatpakApplyUsesSuccessfulScopeAfterPartialCheck(t *testing.T) {
 	}
 }
 
+func TestFlatpakApplyReportsUnchangedWhenUpdatesRemain(t *testing.T) {
+	// `flatpak update` exits 0 and prints "Nothing to update." on a path
+	// that applies nothing. The re-list after the command still shows the
+	// pending entry, so the provider must not claim the inventory landed.
+	var updateCalls int
+	provider := newFlatpak(FlatpakDeps{
+		Installed: func() bool { return true },
+		ListUpdates: func(context.Context, bool) ([]flatpak.UpdateInfo, error) {
+			return []flatpak.UpdateInfo{{Name: "Compass", Installation: "user"}}, nil
+		},
+		Update: func(context.Context, string, bool) error {
+			updateCalls++
+			return nil
+		},
+	})
+
+	result, err := provider.Apply(context.Background(), []updateflow.Item{{
+		Name:  "Compass",
+		Scope: "user",
+	}}, nil)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if updateCalls != 1 {
+		t.Fatalf("Update calls = %d, want 1", updateCalls)
+	}
+	if result.Changed || result.Preview {
+		t.Fatalf("Apply() result = %#v, want unchanged live result", result)
+	}
+}
+
+func TestFlatpakApplyReportsUnchangedWhenEitherScopeRemains(t *testing.T) {
+	// One scope applied and the other did not: the source as a whole is not
+	// complete, so the coordinator must keep its entries pending.
+	provider := newFlatpak(FlatpakDeps{
+		Installed: func() bool { return true },
+		ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
+			if user {
+				return nil, nil
+			}
+			return []flatpak.UpdateInfo{{Name: "System App", Installation: "system"}}, nil
+		},
+		Update: func(context.Context, string, bool) error { return nil },
+	})
+
+	result, err := provider.Apply(context.Background(), []updateflow.Item{
+		{Name: "User App", Scope: "user"},
+		{Name: "System App", Scope: "system"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if result.Changed {
+		t.Fatalf("Apply() result = %#v, want unchanged when a scope remains", result)
+	}
+}
+
+func TestFlatpakApplyPropagatesReconcileFailure(t *testing.T) {
+	listErr := errors.New("remote-ls failed")
+	provider := newFlatpak(FlatpakDeps{
+		Installed: func() bool { return true },
+		ListUpdates: func(context.Context, bool) ([]flatpak.UpdateInfo, error) {
+			return nil, listErr
+		},
+		Update: func(context.Context, string, bool) error { return nil },
+	})
+
+	_, err := provider.Apply(context.Background(), []updateflow.Item{
+		{Name: "User App", Scope: "user"},
+	}, nil)
+	if !errors.Is(err, listErr) {
+		t.Fatalf("Apply() error = %v, want it to wrap %v", err, listErr)
+	}
+}
+
 func TestFlatpakApplyUsesSystemScopeFromNewerCheckAfterOlderCheckCompletes(t *testing.T) {
 	var userCalls atomic.Int32
 	var systemCalls atomic.Int32
@@ -229,7 +316,7 @@ func TestFlatpakApplyUsesSystemScopeFromNewerCheckAfterOlderCheckCompletes(t *te
 
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return true },
-		ListUpdates: func(user bool) ([]flatpak.UpdateInfo, error) {
+		ListUpdates: func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error) {
 			if user {
 				if userCalls.Add(1) == 1 {
 					return []flatpak.UpdateInfo{{Name: "Older User App", Installation: "user"}}, nil

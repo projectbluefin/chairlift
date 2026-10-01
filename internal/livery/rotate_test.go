@@ -39,6 +39,45 @@ func rotateState(t *testing.T, values map[string]string) *fakeCommands {
 	return f
 }
 
+func TestRotationSchedulingFailurePreservesPreferencesAndUnit(t *testing.T) {
+	for _, failed := range []string{"systemctl --user daemon-reload", "systemctl --user enable " + UnitName} {
+		for _, existing := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/existing=%t", failed, existing), func(t *testing.T) {
+				f := rotateState(t, map[string]string{KeyPanelRotate: "false", KeyDockRotate: "true"})
+				t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+				path, err := UnitPath()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if existing {
+					if err := writeFileAtomically(path, []byte("previous unit")); err != nil {
+						t.Fatal(err)
+					}
+				}
+				f.fail[failed] = errors.New("user manager rejected request")
+				observed, err := ConfigureRotation(context.Background(), State{PanelRotate: true, DockRotate: true})
+				if err == nil {
+					t.Fatal("rejected schedule reported success")
+				}
+				if observed.PanelRotate || !observed.DockRotate {
+					t.Fatalf("lost known settings: %+v", observed)
+				}
+				if f.sawPrefix("gsettings set") {
+					t.Fatalf("preferences changed despite rejected schedule: %v", f.calls)
+				}
+				data, err := os.ReadFile(path)
+				if existing {
+					if err != nil || string(data) != "previous unit" {
+						t.Fatalf("lost previous unit: %q, %v", data, err)
+					}
+				} else if !os.IsNotExist(err) {
+					t.Fatalf("failed schedule left a unit: %q, %v", data, err)
+				}
+			})
+		}
+	}
+}
+
 // useLoopbackCNCFFetch answers the artwork fetch from a loopback server, so a
 // dock rotation never leaves the machine.
 func useLoopbackCNCFFetch(t *testing.T) {

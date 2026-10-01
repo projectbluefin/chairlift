@@ -106,7 +106,14 @@ case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
 --prefix) echo "$state/brew-prefix"; exit 0 ;;
 outdated) cat "$state/brew-outdated.json"; exit 0 ;;
-tap-info) echo "[]"; exit 0 ;;
+tap-info)
+    if [ -f "$state/brew-tap-info.fail" ]; then
+        cat "$state/brew-tap-info.fail" >&2
+        exit 1
+    fi
+    if [ -f "$state/brew-sources.fail" ]; then cat "$state/brew-sources.fail" >&2; exit 1; fi
+    if [ -f "$state/brew-taps.json" ]; then cat "$state/brew-taps.json"; else echo "[]"; fi
+    exit 0 ;;
 info) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
 esac
 exit 0
@@ -158,6 +165,26 @@ def brew_current(context):
     _install_brew(context, NOTHING_OUTDATED)
 
 
+@stub("updates-brew-trust-check-fails")
+def brew_trust_check_fails(context):
+    write_state(context, "brew-tap-info.fail", "Error: Broken pipe\n")
+    _install_brew(context, NOTHING_OUTDATED)
+
+
+@stub("updates-brew-sources-fail")
+def brew_sources_fail(context):
+    _install_brew(context, NOTHING_OUTDATED)
+    write_state(context, "brew-sources.fail", "source list unavailable\n")
+
+
+@stub("updates-brew-untrusted")
+def brew_untrusted(context):
+    _install_brew(context, NOTHING_OUTDATED)
+    write_state(context, "brew-taps.json", json.dumps([{"name": "vendor/tap", "trusted": False}]))
+    receipt_dir = os.path.join(state_dir(context), "brew-prefix", "Cellar", "example", "1.0")
+    os.makedirs(receipt_dir, exist_ok=True)
+    with open(os.path.join(receipt_dir, "INSTALL_RECEIPT.json"), "w", encoding="utf-8") as handle:
+        json.dump({"source": {"tap": "vendor/tap"}}, handle)
 @stub("updates-bootc-booted")
 def bootc_booted(context):
     """A bootc host booted from dakota 42.20260920.0 with nothing staged."""

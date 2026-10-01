@@ -77,10 +77,10 @@ are listed in [org-adrs.md](org-adrs.md).
   page-level availability is synchronous and non-blocking, while group-level probes
   can run asynchronously without creating inert placeholders
 - [adr/0015-agent-mode-llmman.md](adr/0015-agent-mode-llmman.md)
-  — Agent Mode runs llmman (installed via a Homebrew Brewfile, Jan Flatpak on
-  x86_64) as the ChairLift-owned user unit `chairlift-llmman.service` on
+  — Agent Mode runs llmman (installed via a Homebrew Brewfile) as the
+  ChairLift-owned user unit `chairlift-llmman.service` on
   loopback with the web shell and prompt history off; defines the six Agent
-  Mode states, the Ask Bluefin readiness predicate, and artifact ownership
+  Mode states, local model/preset readiness, and artifact ownership
 - [adr/0016-printer-app-admin-denied-until-authenticated.md](adr/0016-printer-app-admin-denied-until-authenticated.md)
   — printer application administration is denied until authenticated: PAPPL
   serves web admin and IPP on one listener, so the boundary is authorization
@@ -119,6 +119,9 @@ are listed in [org-adrs.md](org-adrs.md).
   re-verification recipe
 
 ### Plans
+
+- [plans/2026-09-30-goose-config.md](plans/2026-09-30-goose-config.md)
+  — ship Common's premade Goose configuration through the existing setup path
 
 Historical plan/design artifacts from past automated runs (per
 [documentation-consistency.md](documentation-consistency.md), not sources of

@@ -1,8 +1,8 @@
 ---
 name: evolving-test-contracts
 description: Use when a later chunk changes behavior asserted by an earlier test.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.0.1
+last_updated: 2026-09-30
 tags:
   - testing
   - contracts
@@ -40,3 +40,15 @@ gap recurred across earlier rounds too (rounds 1-3 each found a similar
 "later chunk invalidates something the plan didn't track" issue), and the
 plan exhausted its 4-round revision limit and the run terminated as FAILED
 without ever reaching implementation.
+
+## Privileged command inventories
+
+Adding a helper command changes more than its parser. Update
+`SupportedCommands`, `UsesChannelTable` when target derivation reads that
+configuration, the executable dispatch, the PolicyKit action inventory, and
+both accepted and rejected installed-helper cases together. A target-derived
+command can legitimately refuse a dry run on a host with no descriptor or an
+unsupported booted stream; assert that specific refusal instead of accepting
+any nonzero exit. Keep the resolver seam offline in unit tests and prohibit
+registry access during accepted-command dry runs. Pin/unpin's implementation
+of ADR-0017 is the concrete example.

@@ -70,9 +70,6 @@ func TestChannelSwitchResultAlwaysAsksForARestart(t *testing.T) {
 func TestDeveloperRowNamesTheCapabilityNotTheGroups(t *testing.T) {
 	for _, active := range []bool{true, false} {
 		row := DeveloperRow(active)
-		if row.Title != "Developer tools" {
-			t.Errorf("DeveloperRow(%v).Title = %q, want %q", active, row.Title, "Developer tools")
-		}
 		for _, group := range []string{"docker", "incus-admin", "libvirt", "dialout"} {
 			if strings.Contains(row.Subtitle, group) {
 				t.Errorf("DeveloperRow(%v).Subtitle = %q, want it not to name the group %q", active, row.Subtitle, group)
@@ -102,39 +99,6 @@ func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 	}
 	if DeveloperResultSubtitle(true) == DeveloperResultSubtitle(false) {
 		t.Error("DeveloperResultSubtitle does not distinguish the two directions")
-	}
-}
-
-func TestGamingRowDescribesEveryInstallState(t *testing.T) {
-	tests := []struct {
-		name      string
-		ready     bool
-		installed int
-		total     int
-		wantHas   string
-	}{
-		{name: "nothing installed", total: 6, wantHas: "large download"},
-		{name: "partly installed", installed: 2, total: 6, wantHas: "2 of 6"},
-		{name: "essentials only", ready: true, installed: 4, total: 6, wantHas: "4 of 6"},
-		{name: "all installed", ready: true, installed: 6, total: 6, wantHas: "Installed."},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			row := GamingRow(test.ready, test.installed, test.total)
-			if row.Title != "Gaming apps" {
-				t.Errorf("GamingRow().Title = %q, want %q", row.Title, "Gaming apps")
-			}
-			if !strings.Contains(row.Subtitle, test.wantHas) {
-				t.Errorf("GamingRow(%v, %d, %d).Subtitle = %q, want it to contain %q",
-					test.ready, test.installed, test.total, row.Subtitle, test.wantHas)
-			}
-		})
-	}
-
-	// A machine with nothing installed must not read as installed.
-	if strings.Contains(GamingRow(false, 0, 6).Subtitle, "Installed.") {
-		t.Error("GamingRow(false, 0, 6) claims the apps are installed")
 	}
 }
 

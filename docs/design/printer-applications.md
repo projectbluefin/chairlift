@@ -14,14 +14,16 @@ This document covers ChairLift's support for the
 rootless Podman quadlets, one unit per printer, for the Ghostscript,
 PostScript, HPLIP, and Gutenprint driver families.
 
-**Current state (2026-09-25):** the quadlet lifecycle
-([#329](https://github.com/projectbluefin/chairlift/issues/329)) is in review
-and not on `main`; ChairLift ships no printer UI today. Only the Ghostscript
-family has a published image, and that image cannot yet receive the
-administration settings ADR-0016 requires, so nothing can be enabled on a
-LAN-facing surface. This page records the contracted network and access
-surface so the lifecycle lands against a verified boundary instead of
-inventing one.
+**Current state (2026-09-30):** the quadlet lifecycle
+([#334](https://github.com/projectbluefin/chairlift/pull/334)) has merged and
+the Features page renders the locked **Printers** group
+([#397](https://github.com/projectbluefin/chairlift/pull/397)). Three of the
+four driver families — Ghostscript, HPLIP, and Gutenprint — have a published,
+digest-pinned image, but no image can yet receive the administration settings
+ADR-0016 requires, so `CanEnable` refuses every family and every switch is off
+and insensitive; PostScript has no published image. This page records the
+contracted network and access surface, the family inventory, and the verified
+image state.
 
 ## Overview
 
@@ -54,9 +56,9 @@ IPP — PAPPL serves both on one set of listeners and cannot bind administration
 to loopback separately. The boundary is therefore authorization, not binding:
 IPP-transport administration already refuses remote clients without an
 authentication service, and web administration must be authenticated or
-disabled before ChairLift enables the unit (ADR-0016). Today's Ghostscript
-image forwards only `PORT` and a log file from its entrypoint, so it cannot be
-configured to meet that condition — the image must change first.
+disabled before ChairLift enables the unit (ADR-0016). Today's published
+images forward only `PORT` and a log file from their entrypoints, so none can
+be configured to meet that condition — the images must change first.
 
 ## Family inventory
 
@@ -80,22 +82,60 @@ is surfaced rather than silently retrying
 
 ## Image state
 
-Verified against GHCR on 2026-09-25:
+Verified against GHCR on 2026-10-01.
 
-- `ghcr.io/projectbluefin/ghostscript-printer-app:10.07.1-1` — published,
-  multi-architecture OCI index (amd64 `sha256:9f647903…`, arm64
-  `sha256:fef69f82…`). Runs as user 65532 with entrypoint
-  `catatonit -- bash /usr/libexec/ghostscript-printer-app/container-entrypoint`.
-- `projectbluefin/ps-printer-app`, `projectbluefin/hplip-printer-app`,
-  `projectbluefin/gutenprint-printer-app` — no published GHCR repository
-  (`tags/list` returns `NAME_UNKNOWN`).
+Each family is a multi-architecture OCI index pinned by both its
+application-version tag and its index digest; the digest is what the quadlet
+`Image=` line carries, so a re-pushed tag cannot change the image under a
+running unit.
 
-The Ghostscript image's entrypoint honors one environment knob, `PORT` (passed
-to PAPPL as `server-port`), and forwards no other options: extra arguments are
-ignored, and there is no env path to `server-options`, `auth-service`, or
-`admin-group` — the three settings pappl-retrofit itself supports. Until an
-image publishes a way to receive those, enabling it on a LAN-facing surface
-would expose unauthenticated web administration, which ADR-0016 forbids.
+| Family | Tag | Index digest |
+| --- | --- | --- |
+| Ghostscript | `10.07.1-2` | `sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc` |
+| HPLIP | `3.26.4` | `sha256:1f81f507ce603f19eebb83fdcdc5b7de7bc7f52f728e9626c2c1224ea7477de8` |
+| Gutenprint | `5.3.6-4.1` | `sha256:3ca46b65bba16e258d7f93582beb9ccdf71a8b4e450b9d01f8cb545a945b93a1` |
+| PostScript | — | unpublished |
+
+- **Ghostscript `10.07.1-2`** — supersedes `10.07.1-1`; the index builds on
+  FSDK `26.08.1` (tag `v10.07.1-2`, commit `f667ca71…`, source
+  `registry-actions.yml`) with per-arch amd64 `sha256:50164e6a…` and arm64
+  `sha256:080cf267…`. Its signature and SLSA provenance verify with `cosign`,
+  and the attached SPDX-2.3 SBOM lists 855 packages.
+- **HPLIP `3.26.4`** — per-arch amd64 `sha256:da6db24b…`, arm64
+  `sha256:bdb91c52…`, also FSDK `26.08.1`.
+- **Gutenprint `5.3.6-4.1`** — per-arch amd64 `sha256:82e062ac…`, arm64
+  `sha256:0ce3849d…`, FSDK `26.08.1`. The multi-architecture index is the
+  current tag; do not use the orphan `5.3.6-4-aarch64` tag.
+- **PostScript** — `projectbluefin/ps-printer-app` still has no published
+  GHCR repository, so there is no image to pin.
+
+Every published image is **one monolithic layer** (177–223 MB) plus a 34-byte
+metadata layer. There is no shared base separate from the application, so
+enabling N families costs N full pulls until
+[fsdk-containers#342](https://github.com/projectbluefin/fsdk-containers/issues/342)
+lands; a host with several families enabled repeats the bulk of each pull.
+
+All three images run as user 65532 with
+`catatonit -- bash /usr/libexec/<family>-printer-app/container-entrypoint` and
+an environment of `PATH`, `container=podman`, and `HOME` only. Their
+entrypoints honor one knob, `PORT` (passed to PAPPL as `server-port`), and
+forward no other options: extra arguments are ignored, and there is no env
+path to `server-options`, `auth-service`, or `admin-group` — the three
+settings pappl-retrofit itself supports. The upstream source changes are not
+evidence that these immutable pins contain them. Runtime checks on 2026-10-01
+started all three pinned images on `--network none`, with no published ports,
+and `PRINTER_APP_SERVER_OPTIONS=no-web-interface`. Every application's local
+HTTP listener returned **200**, not the required 404: these pins ignore the
+option, so `CanEnable` continues to refuse every family. The test containers
+were removed after observation; no unauthenticated listener reached the LAN.
+
+Ghostscript's index and its attached SBOM were independently verified against
+the exact keyless signing identity
+`https://github.com/projectbluefin/ghostscript-printer-app/.github/workflows/registry-actions.yml@refs/tags/v10.07.1-2`
+and the GitHub Actions OIDC issuer. Transparency-log and SLSA provenance checks
+passed, both amd64 and arm64 were present, and the signed SPDX SBOM contained
+855 packages. Supply-chain verification does not override the administration
+lock or establish physical printing, USB, or mDNS interoperability.
 
 ## Operational notes
 
@@ -122,7 +162,7 @@ would expose unauthenticated web administration, which ADR-0016 forbids.
 - Rationale: [ADR-0016](../adr/0016-printer-app-admin-denied-until-authenticated.md)
 - Related: [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md)
 - Built in: lifecycle PR
-  [#334](https://github.com/projectbluefin/chairlift/pull/334) (in review)
+  [#334](https://github.com/projectbluefin/chairlift/pull/334) (merged)
 - Upstream: [pappl](https://github.com/michaelrsweet/pappl),
   [pappl-retrofit](https://github.com/OpenPrinting/pappl-retrofit),
   [ghostscript-printer-app](https://github.com/projectbluefin/ghostscript-printer-app)

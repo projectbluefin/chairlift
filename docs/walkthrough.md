@@ -1,7 +1,8 @@
 # Control Center walkthrough
 
-Every screen in Control Center, captured from the real app by `make
-screenshots` (see [below](#how-these-are-made)) — not mockups.
+Every screen below was captured from the real application in an isolated
+Dakota Wayland session on 2026-10-01 — not mockups. The regular release
+capture command remains documented [below](#how-these-are-made).
 
 One app for the Bluefin family (Bluefin, Bluefin LTS, Dakota).
 Everything here is one control per decision — no strategy pickers, no
@@ -13,23 +14,13 @@ schedule choosers, no feature grids.
 
 ![Setup Assistant](screenshots/0-setup.png)
 
-The first time Control Center opens it behaves like a short wizard, over the
-ordinary window. The welcome screen offers two ways in: **Get Moving** closes
-it and leaves you on the control panel, and **Configure Everything** walks
-through at most three optional steps — **Appearance**, **Apps**, and
-**Update Preferences** — each a page's own controls, so a switch you flip
-here is the same switch on that page, already set when you get there.
-Appearance offers the three icon marks from the Livery page; Apps lists the
-app collections this system offers, each with its own **Install** button;
-Update Preferences has the same four source switches as **Preferences**. A
-choice this computer cannot apply stays locked and says why, and a step with
-nothing to offer is simply not shown.
-
-Every way out is remembered: **Get Moving**, closing the dialog, and
-**Finish** all mean the assistant does not return on its own, and finishing
-setup is never undone by opening it again. It is always one menu item away
-afterwards — **Setup Assistant…** in the main menu, or `chairlift --setup` —
-and after that the app is the control panel below.
+Setup Assistant never opens automatically. Choose **Setup Assistant…** from
+the menu, `chairlift --setup`, or its `--first-run` alias to walk the existing
+**Features**, **Apps**, **Agents**, and **Livery** pages in that order. The
+first screenshot shows Features, not a welcome dialog. Pages unavailable on
+this computer are skipped. The ordinary page controls perform every action;
+**Back** and **Next** only navigate. **Finish** remembers completion, and
+**Dismiss** remembers a skip without undoing a previous completion.
 
 ---
 
@@ -52,6 +43,8 @@ didn't finish, and **Restart now** once a new system version is staged and
 waiting. It only asks you to restart when something actually needs one, and
 a source that fails doesn't stop the others. A run long enough that you
 wandered off finishes with a desktop notification.
+While checking or installing, an animated activity bar stays moving even
+when the underlying tool has no new output. It does not claim a percentage.
 
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
@@ -96,15 +89,19 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**App collections** lead the page: install a set of apps and tools together in
-one step, rather than hunting them down one at a time. Collections come from
-Homebrew, a third-party source, and can be a large download — the page says so
-once, at the top, instead of nagging on every row.
+**Browse** and **Search** lead the page; search across both Homebrew formulae
+and casks. Apps already installed follow, then **App collections**, then
+explicit command-line tools (the packages Homebrew manages) and export controls.
+Dependency runtimes do not crowd the app inventory. Collections identify
+Homebrew as a third-party source. Installs show native activity and streamed command progress
+while they run, using the same controls in the explicit setup flow.
 
-Below that sit the apps already installed, the packages Homebrew manages, and
-a search across both. Removing an installed app asks first, and says whether
-it leaves only your account or everyone's. **Export package list** saves what
+Removing an installed app asks first, and says whether
+it leaves only your account or everyone's.
+**Export package list** saves what
 you have installed so you can put it back on another machine.
+Export shows **Exporting…** and an activity spinner until it finishes, then
+becomes available again, including after a failed export.
 
 ---
 
@@ -114,15 +111,18 @@ you have installed so you can put it back on another machine.
 
 **Agent Mode** is one switch that runs AI models on this computer. Answers are
 generated locally — nothing you type is sent to a cloud service — and prompts
-are not saved. Turning it on installs the llmman model server from Homebrew
-(and, on x86_64 PCs, the Jan chat app), downloads the engine that suits your
-hardware, and starts it on this computer only. Turning it off stops the
+are not saved. Turning it on installs the llmman model server from Homebrew,
+downloads the engine that suits your hardware, and starts it on this computer
+only. Goose is the client setup path on Help. Turning it off stops the
 server and keeps the software and any models you downloaded.
+The row shows an activity spinner throughout setup and shutdown, then
+restores the switch if the operation fails.
 
-**Details** gives the address other apps can reach it on. Apps and terminals
-opened after Agent Mode is on find it automatically through `OLLAMA_HOST`;
-ones already open need restarting. Everything here runs in your own account,
-so it never asks for an administrator password.
+**Active Model** and **Recommended Presets** remain visible, becoming usable
+only when the local server is ready. The connection address is directly
+selectable, not hidden in Details. Apps and terminals opened after Agent Mode
+is on receive `OLLAMA_HOST`; already-open ones need restarting. Everything
+here runs in your own account, without an administrator password.
 
 ---
 
@@ -137,9 +137,17 @@ A distribution may also configure it to install the Pulp feed reader and stage
 a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the
 reader, the file, or anything you imported from it.
-**Gaming** is a switch: on installs Steam and the tools that make Windows
-games run, off removes them again. On an image that already ships them, the
-page says so instead of offering a switch that would do nothing.
+Developer options also offer **WSL Mode** (Ubuntu LTS in Lima), **Enable
+Docker**, and individually selected IDEs and terminal editors, including one
+JetBrains Toolbox entry. WSL needs hardware virtualization and access to
+`/dev/kvm`; permission grants require a new login. Docker needs the base
+image's daemon and a socket this session can actually access; installing CLI
+tools is not readiness. Missing installed helper actions leave the affected
+switch visible but locked with its prerequisite explained.
+**Gaming** lets you select individual applications and tools. Installed states
+distinguish applications from runtime extensions and user from system scope.
+Only selected user-scope entries can be removed. Partial failures stay visible
+instead of being reported as an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — for printers that need more than built-in
 driverless printing. Each runs as a small container in your own account,
@@ -157,6 +165,9 @@ says **Nothing to set up here** rather than showing an empty screen.
 
 Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
 **Help**.
+Developer and Gaming actions show an activity spinner while their changes
+are running, and errors are shown immediately rather than hidden behind an
+older message.
 
 ---
 
@@ -165,6 +176,12 @@ Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
 ![Livery](screenshots/5-livery.png)
 
 Who you are, who you stand with, and what you roll with.
+Every foundation, Files/dock, profile-picture, and app-grid choice has a visual
+preview. Search results fetch artwork for at most twelve visible catalog entries;
+searching the rest does not download the whole catalog. Rotation changes the real
+login schedule with its preferences, and a failed save restores confirmed state.
+
+
 
 **Profile Picture** is the picture on your login and lock screens. Pick one of
 Project Bluefin's dinosaurs and Control Center downloads that one illustration
@@ -190,6 +207,8 @@ Blue, Bazzite, Aurora, or the Open Gaming Collective. This section is omitted
 on Plasma, which has no corresponding top-bar surface. On a gaming image the
 collective's mark is the one you start with, since that is whose work the
 image ships — pick any other and it stays picked.
+Apache uses the foundation's current official oak-leaf mark, shown in monochrome
+like the other symbolic choices.
 
 **Dock Livery** marks the Files icon on GNOME or Dolphin on KDE Plasma with
 the project you actually work on. Every CNCF project that publishes artwork
@@ -225,8 +244,9 @@ app-grid reset behavior is being completed separately.
 
 One button. **Free up space** removes old downloads and supporting software
 nothing uses any more, and leaves your apps, files, and containers alone. It
-tells you how much it reclaimed only when it could measure it. Below it sit
-any **Maintenance tasks** whoever set up this computer added. **Recovery**
+tells you how much it reclaimed only when it could measure it. An activity
+spinner remains visible while cleanup is running. Below it sit any
+**Maintenance tasks** whoever set up this computer added. **Recovery**
 holds the actions you can't undo (under **Maintenance → Recovery**): one returns
 to a previous system version, one removes the apps you installed and your
 development containers, and the other reinstalls the system from scratch.
@@ -244,8 +264,13 @@ list to read, not a control: nothing in it changes your system.
 
 **Enhanced Troubleshooting** comes first where Homebrew is installed: it sets
 up an AI assistant that can read your logs, services, and network to help
-work out what's wrong, then launches it. The row says which AI service
-answers your questions, since the default one is Google's.
+work out what's wrong, then launches it. The premade configuration chooses no
+AI service; select one in Goose, and the row names the service you configured.
+Setup shows activity while it runs and wires the recognized diagnostic entry
+to fixed tools with SSH-key discovery disabled. It can repair that entry in
+your existing Goose configuration while preserving provider, model and unrelated
+settings. Already-usable configuration is left alone; unsafe or ambiguous
+policies are refused rather than silently replaced.
 
 Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and
@@ -272,6 +297,13 @@ Builds the app, runs it headless under Xvfb, and writes one cropped PNG per
 page to `docs/screenshots/`. Always `--dry-run`, so nothing on the capture
 machine changes. Hardware the runner doesn't have is stubbed, and `make ci`
 checks no released binary can read those stubs.
+
+The images in this revision use GNOME Shell's Wayland Screenshot interface,
+cropped to the actual 900×700 window bounds. The live target has no Docker
+daemon and is not a booted OS-update target, so those controls disclose their
+unavailability instead of pretending an operation was tested. Dark appearance
+was checked with Libadwaita's test override because the isolated session lacks
+the desktop settings portal. The Xvfb capture runner additionally needs `xwd`.
 
 Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme

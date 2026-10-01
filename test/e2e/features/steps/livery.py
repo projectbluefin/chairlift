@@ -76,6 +76,17 @@ def _switch(context, row, section):
         f"a switch in the {row!r} row of {section!r}",
     )
 
+@then("the Livery sections put foundations before Dock and App Grid last")
+def livery_section_order(context):
+    expected = ["Foundational Livery", "Dock Livery", "App Grid Livery"]
+    def observed():
+        names = [atspi.name(node) for node in atspi.descendants(_app(context), only_showing=True)
+                 if atspi.role(node) == "grouping" and atspi.name(node) in expected]
+        return names if names == expected else None
+    if atspi.poll(observed) is None:
+        raise AssertionError("Livery sections do not follow foundation, Dock, App Grid order")
+
+
 
 def _dialog(context, timeout=atspi.DEFAULT_TIMEOUT):
     """The in-window AdwDialog, which GTK publishes with the dialog role.

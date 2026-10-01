@@ -47,6 +47,8 @@ const (
 
 // Item is one pending update.
 type Item struct {
+	// ID is the provider's execution identity, distinct from the display name.
+	ID               string
 	Name             string
 	CurrentVersion   string
 	AvailableVersion string
@@ -107,7 +109,12 @@ type CheckResult struct {
 	RestartRequired bool
 }
 
-// ApplyResult is the normalized result of a provider mutation.
+// ApplyResult is the normalized result of a provider mutation. Changed is
+// true only when the mutation is verified to have applied the pending
+// inventory. A provider that ran to a zero exit but left items pending —
+// flatpak update's "Nothing to update." no-op, for example — reports false,
+// and the coordinator keeps those items pending rather than claiming the
+// source completed.
 type ApplyResult struct {
 	Changed         bool
 	Preview         bool

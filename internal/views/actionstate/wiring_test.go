@@ -8,48 +8,6 @@ import (
 	"testing"
 )
 
-func TestUpdatesPageUsesGuardedRefreshDecisions(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
-	path := filepath.Join(repoRoot, "internal", "views", "updates_page.go")
-	source, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
-	}
-	text := string(source)
-
-	// The guard here is the gate/generation/row bookkeeping, not the button
-	// copy: label text and its typography belong to the HIG pass, so the
-	// control-state assertions below are deliberately copy-agnostic.
-	for _, required := range []string{
-		`if !updateGate.TryStart()`,
-		`go uh.updateHomebrew(btn, updateGate)`,
-		`if !upgradeGate.TryStart()`,
-		`dryRun := dryrun.Enabled()`,
-		`actionstate.PackageUpgrade(err == nil, dryRun)`,
-		`actionstate.OutdatedRefresh(err == nil, currentCount, len(packages))`,
-		`actionstate.OutdatedPresentation(refresh.Count)`,
-		`uh.outdatedRows.Remove(row`,
-		`uh.updateCounts.Add(badgestate.Homebrew, -1)`,
-		`actionstate.OutdatedPresentation(remaining)`,
-		`uh.loadOutdatedPackages()`,
-		`actionstate.MetadataUpdate(err == nil, dryRun)`,
-		`uh.loadOutdatedPackagesWithDone(func(bool)`,
-		`generation := uh.brewRefresh.Begin()`,
-		`go uh.loadOutdatedPackagesGeneration(generation, done)`,
-		`!uh.brewRefresh.IsCurrent(generation)`,
-		`uh.outdatedRows.Clear(func(row *adw.ActionRow)`,
-		`uh.outdatedRows.Add(row)`,
-	} {
-		if !strings.Contains(text, required) {
-			t.Errorf("updates-page wiring does not contain %q", required)
-		}
-	}
-}
-
 func TestFeaturesPageDeveloperModeUsesGate(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -163,53 +121,33 @@ func TestLiveryPanelToggleDoesNotMutateInMemoryStateUnderDryRun(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
-	path := filepath.Join(filepath.Dir(filename), "..", "livery_actions.go")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
 	if err != nil {
-		t.Fatalf("read %s: %v", path, err)
+		t.Fatal(err)
 	}
 	text := string(data)
-
 	for _, required := range []string{
-		`import (`,
-		`"github.com/projectbluefin/chairlift/internal/dryrun"`,
+		`actionmsg.LiveryToggle(dryrun.Enabled(), enabled, pageview.LiverySectionName(surface))`,
 		`if enabled && surface == livery.Panel && savedIcon == "" && savedMode == "" {`,
 		`if err := livery.SetString(ctx, livery.KeySavedPanelIcon, icon); err != nil {`,
 		`if err := livery.SetString(ctx, livery.KeySavedPanelMode, mode); err != nil {`,
 		`if err := livery.ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {`,
 	} {
 		if !strings.Contains(text, required) {
-			t.Errorf("livery_actions.go wiring does not contain %q", required)
+			t.Errorf("panel capture/revert omits %q", required)
 		}
 	}
-
-	// gofmt keeps both blocks at the same indentation, so the snippets are
-	// matched verbatim: the gate, the main-thread hop and the two
-	// assignments have to stay one contiguous block per path.
-	captureMirror := "\t\t\tif !dryrun.Enabled() {\n" +
-		"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
-		"\t\t\t\t\tuh.liveryState.SavedPanelIcon = icon\n" +
-		"\t\t\t\t\tuh.liveryState.SavedPanelMode = mode\n" +
-		"\t\t\t\t})\n" +
-		"\t\t\t}\n"
-	resetMirror := "\t\t\tif !dryrun.Enabled() {\n" +
-		"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
-		"\t\t\t\t\tuh.liveryState.SavedPanelIcon = \"\"\n" +
-		"\t\t\t\t\tuh.liveryState.SavedPanelMode = \"\"\n" +
-		"\t\t\t\t})\n" +
-		"\t\t\t}\n"
-	for name, snippet := range map[string]string{
-		"enable/capture": captureMirror,
-		"disable/reset":  resetMirror,
+	for name, values := range map[string][2]string{
+		"capture": {"icon", "mode"},
+		"reset":   {`""`, `""`},
 	} {
+		snippet := "\t\t\tif decision.MutateUI {\n" +
+			"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
+			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = " + values[0] + "\n" +
+			"\t\t\t\t\tuh.liveryState.SavedPanelMode = " + values[1] + "\n" +
+			"\t\t\t\t})\n\t\t\t}\n"
 		if !strings.Contains(text, snippet) {
-			t.Errorf("livery_actions.go %s path does not guard the in-memory mirror with dryrun.Enabled(); expected the contiguous block:\n%s", name, snippet)
+			t.Errorf("panel %s mirror bypasses its dry-run mutation decision", name)
 		}
-	}
-
-	// Guards the count as well as the shapes: two independent paths mutate
-	// the mirror, so two gates have to be present.
-	if got := strings.Count(text, "if !dryrun.Enabled() {"); got < 2 {
-		t.Errorf("livery_actions.go has %d dry-run gates, want at least 2 (enable capture and disable reset)", got)
 	}
 }

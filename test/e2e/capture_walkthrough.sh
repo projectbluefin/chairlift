@@ -134,11 +134,9 @@ export CHAIRLIFT_AUTO_UPDATES
 export CHAIRLIFT_CAPABILITIES
 
 
-# --setup: the setup assistant presents over the window on a first run, but
-# --dry-run suppresses the automatic presentation (it can persist nothing),
-# so the explicit request is how the walkthrough shows the assistant. It is
-# captured first, then dismissed with Escape — which records a dry-run skip,
-# a log line only — before the page walk begins.
+# Setup is explicit, including on a new account. The existing-page wizard
+# starts at Features with its navigation footer; Escape dismisses it before
+# the ordinary sidebar walk. Disposition writes are previews only.
 dbus-run-session -- "$APP" --dry-run --setup >>"$LOG" 2>&1 &
 APP_PID=$!
 
@@ -176,9 +174,8 @@ xdotool windowactivate --sync "$WINDOW" 2>/dev/null || true
 # ever changes.
 xdotool getwindowgeometry --shell "$WINDOW" > "$OUTDIR/window-geometry.env"
 
-# The assistant's welcome screen, presented by --setup at startup. The frame
-# is captured under the same name regardless of the page list, so
-# walkthrough_test.go and installcheck's referential gate can name it.
+# Capture the Features step and wizard footer under the stable setup name,
+# which the walkthrough and installcheck referential gate both reference.
 xwd -root -silent -display "$DISPLAY" -out "$OUTDIR/0-setup.xwd"
 echo "captured 0-setup.xwd"
 xdotool key --window "$WINDOW" --clearmodifiers Escape

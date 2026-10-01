@@ -4,8 +4,8 @@
 # page is omitted when all of its groups are disabled; Help is always retained.
 
 # Agent Mode: llmman served as a systemd user unit on 127.0.0.1:17434,
-# installed with Homebrew (plus the Jan chat app on x86_64). Shown where
-# Homebrew exists; nothing is installed until the switch is turned on.
+# installed with Homebrew. Shown where Homebrew exists; nothing is installed
+# until the switch is turned on. Goose setup is a separate Help action.
 agents_page:
   agents_group:
     enabled: true

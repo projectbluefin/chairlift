@@ -210,9 +210,9 @@ def find_application(timeout=30.0):
 
 
 def main_window(app):
-    """The top-level window that holds the navigation sidebar."""
+    """The main frame; its sidebar can be absent during explicit setup."""
     for window in children(app):
-        if sidebar_path(window) is not None:
+        if name(window) in APPLICATION_NAMES or sidebar_path(window) is not None:
             return window
     raise TreeError(f"no main window; top-level children are {describe(children(app))}")
 
@@ -235,15 +235,12 @@ def top_level(app, title, timeout=DEFAULT_TIMEOUT):
 
 
 def is_sidebar(node):
-    """A list whose children are rows is a sidebar candidate.
+    """The semantically labelled navigation list, even while setup hides it.
 
-    Identified by shape because the list itself is unnamed. Content pages
-    also contain row lists, so only the first such list in tree order is the
-    sidebar; see sidebar_path.
+    A page's first content list is not a sidebar. Shape-only detection hid
+    feature controls from setup assertions when the real sidebar collapsed.
     """
-    if role(node) not in LIST_ROLES:
-        return False
-    return any(role(child) in ROW_ROLES for child in children(node))
+    return role(node) in LIST_ROLES and name(node) == "Navigation"
 
 
 def sidebar_path(window):
@@ -255,8 +252,6 @@ def sidebar_path(window):
     stack = [(window, ())]
     while stack:
         node, path = stack.pop()
-        if path and not showing(node):
-            continue
         if is_sidebar(node):
             return path
         kids = children(node)

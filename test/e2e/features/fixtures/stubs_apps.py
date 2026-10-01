@@ -24,6 +24,8 @@ from stubs import fake_executable, stub
 FORMULAE = [
     {"name": "jq", "installed": [{"version": "1.7.1", "installed_on_request": True}], "pinned": False},
     {"name": "ripgrep", "installed": [{"version": "14.1.1", "installed_on_request": True}], "pinned": True},
+    # Installed dependency is real inventory, but not a requested tool.
+    {"name": "libunistring", "installed": [{"version": "1.3", "installed_on_request": False}], "pinned": False},
     # A formula brew knows about but has no installed keg for is skipped.
     {"name": "not-installed", "installed": [], "pinned": False},
 ]

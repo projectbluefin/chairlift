@@ -608,3 +608,10 @@ func (i Info) SwitchTarget(channel Channel) (string, bool) {
 	}
 	return ref + ":" + tag, true
 }
+
+// KnownStream reports whether stream belongs to this image's authoritative
+// channel table. Dated tags must recover their stream before calling it.
+func KnownStream(cleanRef, stream string) bool {
+	channels, ok := channelsFor(cleanRef)
+	return ok && (slices.Contains(channels.stableTags, stream) || slices.Contains(channels.testingTags, stream))
+}

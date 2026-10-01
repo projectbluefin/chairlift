@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"log"
+	"slices"
 
 	"github.com/projectbluefin/chairlift/internal/developerfeeds"
 	"github.com/projectbluefin/chairlift/internal/devmenu"
@@ -343,43 +344,15 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 		status.CanSwitchTo != imageinfo.ChannelUnknown, status.Developer,
 		dxEnabled, gamingEnabled)
 
-	// The developer switch runs the helper; an image that does not provide
-	// both commands gets no switch rather than one that fails after
-	// authentication.
-	if dxEnabled && status.Supports(ubluehelper.CommandDXEnable, ubluehelper.CommandDXDisable) {
+	// Optional user tools remain discoverable even without installed access
+	// actions; the privileged switch stays insensitive and explains why.
+	if dxEnabled {
 		uh.buildDeveloperGroup(page, status)
 	}
 	if gamingEnabled {
-		// A system that already ships the gaming apps gets a readonly
-		// note instead of the switch. Gaming installs them for the
-		// current account only, which here would shadow the copies the
-		// system already provides. See ublue.Status.Gaming.
-		if status.Gaming {
-			uh.buildGamingIncludedGroup(page)
-			log.Printf("views: gaming group suppressed, this system already ships the gaming apps ref=%s", status.Ref)
-		} else {
-			uh.buildGamingGroup(page)
-		}
+		uh.buildGamingGroup(page)
 	}
 	return true
-}
-
-// buildGamingIncludedGroup replaces the gaming switch with a single readonly
-// row on systems that ship the gaming apps themselves. The group is still
-// rendered so the feature does not simply vanish on the systems most likely
-// to be looking for it.
-func (uh *UserHome) buildGamingIncludedGroup(page *adw.PreferencesPage) {
-	group := adw.NewPreferencesGroup()
-	group.SetTitle("Gaming")
-	group.SetDescription("Steam and the tools that go with it are already part of this system.")
-
-	presentation := pageview.GamingIncludedRow()
-	row := adw.NewActionRow()
-	row.SetTitle(presentation.Title)
-	row.SetSubtitle(presentation.Subtitle)
-	group.Add(&row.Widget)
-
-	page.Add(group)
 }
 
 // buildDeveloperGroup builds the developer-tools switch.
@@ -393,12 +366,19 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
+	uh.developerSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.developerSpinner.Widget)
 
 	dxRow := row
 	var toggle *guardedSwitch
 	toggle = newGuardedSwitch(status.Developer, func(state bool) {
 		uh.onDeveloperToggled(state, toggle, dxRow)
 	})
+	uh.developerCanToggle = status.Supports(ubluehelper.CommandDXEnable, ubluehelper.CommandDXDisable)
+	if !uh.developerCanToggle {
+		toggle.widget.SetSensitive(false)
+		row.SetSubtitle("Needs the installed Developer Mode actions in the system helper. Optional tools can still be selected below.")
+	}
 
 	row.AddSuffix(&toggle.widget.Widget)
 	row.SetActivatableWidget(&toggle.widget.Widget)
@@ -408,67 +388,131 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	uh.developerGroup = group
 	uh.developerRow = row
 	uh.developerSwitch = toggle.widget
+	uh.buildDeveloperOptions(group, status)
 }
 
-// buildGamingGroup builds the gaming switch. What is installed is unknown
-// until the query returns, so the switch starts insensitive and is populated
-// asynchronously — through guardedSwitch, so showing the machine's real state
-// cannot be mistaken for the user asking for it.
+// gamingComponentRow is built once; refresh changes only its observed subtitle.
+type gamingComponentRow struct {
+	component gaming.Component
+	row       *adw.ActionRow
+	choice    *gtk.CheckButton
+}
+
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Steam and the tools that go with it, installed for your account only.")
-
+	group.SetDescription("Choose the apps to install for your account. System-managed copies are left alone.")
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
-
-	gamingRow := row
-	var toggle *guardedSwitch
-	toggle = newGuardedSwitch(false, func(state bool) {
-		uh.onGamingToggled(state, toggle, gamingRow)
-	})
-	toggle.widget.SetSensitive(false)
-
-	row.AddSuffix(&toggle.widget.Widget)
-	row.SetActivatableWidget(&toggle.widget.Widget)
+	uh.gamingSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.gamingSpinner.Widget)
+	uh.gamingInstall = gtk.NewButtonWithLabel("Install Selected")
+	uh.gamingRemove = gtk.NewButtonWithLabel("Remove Selected")
+	for _, button := range []*gtk.Button{uh.gamingInstall, uh.gamingRemove} {
+		button.SetValign(gtk.AlignCenterValue)
+		button.SetSensitive(false)
+		row.AddSuffix(&button.Widget)
+	}
+	uh.gamingButtons.connect(uh.gamingInstall, func(gtk.Button) { uh.onGamingSelected(true) })
+	uh.gamingButtons.connect(uh.gamingRemove, func(gtk.Button) { uh.confirmGamingRemoval() })
 	group.Add(&row.Widget)
-
+	for _, component := range gaming.Components() {
+		item := &gamingComponentRow{component: component, row: adw.NewActionRow(), choice: gtk.NewCheckButton()}
+		item.row.SetTitle(component.Name)
+		item.row.SetSubtitle(component.Description + " — checking installation…")
+		item.choice.SetValign(gtk.AlignCenterValue)
+		item.choice.SetSensitive(false)
+		SetAccessibleLabel(item.choice, "Select "+component.Name)
+		item.row.AddPrefix(&item.choice.Widget)
+		item.row.SetActivatableWidget(&item.choice.Widget)
+		group.Add(&item.row.Widget)
+		uh.gamingComponents = append(uh.gamingComponents, item)
+	}
 	page.Add(group)
-	uh.gamingGroup = group
-	uh.gamingRow = row
-	uh.gamingSwitch = toggle.widget
-
-	go uh.refreshGamingState(toggle, row)
+	uh.gamingGroup, uh.gamingRow = group, row
+	go func() {
+		state, err := gaming.Status()
+		sgtk.RunOnMainThread(func() {
+			if err != nil {
+				log.Printf("views: gaming status unavailable: %v", err)
+				row.SetSubtitle(pageview.GamingUnavailableSubtitle)
+				for _, item := range uh.gamingComponents {
+					item.row.SetSubtitle(item.component.Description + " — installed state unavailable")
+				}
+				return
+			}
+			uh.applyGamingState(state)
+			row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), gaming.ComponentCount()).Subtitle)
+			uh.setGamingSensitive(true)
+		})
+	}()
 }
 
-// refreshGamingState queries the installed applications off the main thread
-// and applies the result to the gaming row.
-func (uh *UserHome) refreshGamingState(toggle *guardedSwitch, row *adw.ActionRow) {
-	state, err := gaming.Status()
-	total := gaming.ComponentCount()
+func (uh *UserHome) applyGamingState(state gaming.State) {
+	for _, item := range uh.gamingComponents {
+		status := "Not installed"
+		if slices.Contains(state.UserInstalled, item.component.ID) {
+			status = "Installed for your account"
+		} else if slices.Contains(state.SystemOnly, item.component.ID) {
+			status = "Installed system-wide; left in place"
+		}
+		item.row.SetSubtitle(item.component.Description + " — " + status)
+	}
+}
 
-	sgtk.RunOnMainThread(func() {
-		if toggle == nil || row == nil {
-			return
+func (uh *UserHome) setGamingSensitive(sensitive bool) {
+	uh.gamingInstall.SetSensitive(sensitive)
+	uh.gamingRemove.SetSensitive(sensitive)
+	for _, item := range uh.gamingComponents {
+		item.choice.SetSensitive(sensitive)
+	}
+}
+
+func (uh *UserHome) gamingSelection() []string {
+	var selected []string
+	for _, item := range uh.gamingComponents {
+		if item.choice.GetActive() {
+			selected = append(selected, item.component.ID)
 		}
-		if err != nil {
-			log.Printf("views: gaming status unavailable: %v", err)
-			row.SetSubtitle(pageview.GamingUnavailableSubtitle)
-			return
+	}
+	return selected
+}
+
+func (uh *UserHome) confirmGamingRemoval() {
+	selected := uh.gamingSelection()
+	if len(selected) == 0 {
+		uh.toastAdder.ShowToast("Select the gaming apps to remove first.")
+		return
+	}
+	if !uh.gamingGate.TryStart() {
+		return
+	}
+	uh.setGamingSensitive(false)
+	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "Only the selected apps installed for your account will be removed. System-managed copies and game data are kept.")
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("remove", "Remove")
+	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
+	uh.gamingDialogs.connect(dialog, func(response string) {
+		if response == "remove" {
+			uh.runGamingSelected(false, selected)
+		} else {
+			uh.gamingGate.Reset()
+			uh.setGamingSensitive(true)
 		}
-		toggle.widget.SetSensitive(true)
-		toggle.set(state.Enabled)
-		row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), total).Subtitle)
 	})
+	dialog.Present(&uh.featuresPage.Widget)
 }
 
 // onDeveloperToggled grants or withdraws this account's developer access.
 func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
-	if !uh.developerGate.TryStart() {
+	if !uh.developerCanToggle || !uh.developerGate.TryStart() {
 		return
 	}
-	toggle.widget.SetSensitive(false)
+	uh.setDeveloperSensitive(false)
+	setActivitySpinner(uh.developerSpinner, true)
 
 	go func() {
 		dispatched := false
@@ -495,7 +539,8 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 		dispatched = true
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
-			toggle.widget.SetSensitive(true)
+			setActivitySpinner(uh.developerSpinner, false)
+			uh.setDeveloperSensitive(true)
 
 			if err != nil {
 				toggle.set(!enabled)
@@ -605,46 +650,72 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 	}()
 }
 
-// onGamingToggled installs or removes the gaming applications. Unlike the
-// developer switch this one can partly succeed, so the decision to confirm
-// the switch comes from actionmsg.GamingMode rather than from the absence of
-// an error.
-func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
-	toggle.widget.SetSensitive(false)
+func (uh *UserHome) onGamingSelected(enabled bool) {
+	selected := uh.gamingSelection()
+	if len(selected) == 0 {
+		uh.toastAdder.ShowToast("Select the gaming apps to install first.")
+		return
+	}
+	if !uh.gamingGate.TryStart() {
+		return
+	}
+	uh.setGamingSensitive(false)
+	uh.runGamingSelected(enabled, selected)
+}
+
+// A single gate owns the selection, both actions and the finishing refresh.
+// The summary is retained separately from per-component observed state.
+func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
+	row := uh.gamingRow
 	before := row.GetSubtitle()
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
-
+	setActivitySpinner(uh.gamingSpinner, true)
 	go func() {
 		var changed, skipped []string
 		var failures []error
 		if enabled {
-			changed, failures = gaming.Enable()
+			changed, failures = gaming.Enable(selected)
 		} else {
-			changed, skipped, failures = gaming.Disable()
+			changed, skipped, failures = gaming.Disable(selected)
 		}
-
+		for _, failure := range failures {
+			log.Printf("views: gaming component failed: %v", failure)
+		}
+		state, refreshErr := gaming.Status()
+		if refreshErr != nil {
+			log.Printf("views: gaming refresh failed: %v", refreshErr)
+		}
 		sgtk.RunOnMainThread(func() {
-			toggle.widget.SetSensitive(true)
-
-			dryRun := dryrun.Enabled()
-			decision := actionmsg.GamingMode(dryRun, enabled, len(changed), len(failures), len(skipped))
-			toggle.set(decision.Confirm == enabled)
-			if dryRun {
-				// A preview changed nothing, so the row keeps describing
-				// the host as it was rather than a result that never
-				// happened.
+			defer uh.gamingGate.Reset()
+			setActivitySpinner(uh.gamingSpinner, false)
+			uh.setGamingSensitive(true)
+			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
+			if dryrun.Enabled() {
 				row.SetSubtitle(before)
 			} else {
-				row.SetSubtitle(pageview.GamingResultSubtitle(enabled, len(changed), len(failures)))
+				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
+				if len(skipped) > 0 {
+					result += fmt.Sprintf(" %d system-managed app(s) left in place.", len(skipped))
+				}
+				if len(failures) > 0 {
+					result += " Details are in the application log."
+				}
+				if refreshErr != nil {
+					result += " Installed state could not be refreshed; previous observations are kept."
+				}
+				row.SetSubtitle(result)
 			}
-
+			if refreshErr == nil {
+				uh.applyGamingState(state)
+			}
+			if !dryrun.Enabled() && len(changed) > 0 {
+				go uh.loadFlatpakApplications()
+			}
 			if len(failures) > 0 {
 				uh.toastAdder.ShowErrorToast(decision.Toast)
 			} else {
 				uh.toastAdder.ShowToast(decision.Toast)
 			}
-
-			go uh.refreshGamingState(toggle, row)
 		})
 	}()
 }

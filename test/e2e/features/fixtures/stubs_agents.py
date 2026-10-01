@@ -7,7 +7,7 @@ controls one of them inside the scenario, so the page renders a chosen state
 regardless of what the host or container ships.
 
 Every fake executable records its argv to <scenario>/calls/<program>, which
-is how scenarios prove a dry-run never reached llmman, systemctl, or brew.
+is how scenarios prove a dry-run never reached llmman, systemctl mutations, or brew bundle.
 
 The loopback node endpoint follows community PR #372's approach (mendezr): a
 small Python HTTP server answering /llmman/node with a fixed memory figure.
@@ -15,7 +15,6 @@ It is spawned with the scenario's launch environment, so environment.py's
 journal-path sweep kills it with the application's other descendants.
 """
 
-import json
 import os
 import socket
 import subprocess
@@ -65,10 +64,6 @@ def unit_path(context):
 
 def fragment_path(context):
     return os.path.join(context.home, ".config", "environment.d", "10-chairlift-llmman.conf")
-
-
-def peer_store_path(context):
-    return os.path.join(context.home, ".local", "share", "chairlift", "agent-mode-peers.json")
 
 
 def alias_path(context):
@@ -143,9 +138,10 @@ def unit(context):
 
 NODE_SERVER = r'''
 import json, sys
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-log_path, memory = sys.argv[1], int(sys.argv[2])
+log_path, memory, alias_path = sys.argv[1], int(sys.argv[2]), Path(sys.argv[3])
 
 
 class Node(BaseHTTPRequestHandler):
@@ -155,7 +151,14 @@ class Node(BaseHTTPRequestHandler):
         if self.path != "/llmman/node":
             self.send_error(404)
             return
-        body = json.dumps({"memory": memory, "loaded": {}, "stored": {}}).encode()
+        stored = {}
+        if alias_path.exists():
+            alias = alias_path.read_text(encoding="utf-8").strip()
+            if alias:
+                # llmman keeps the supplied alias but canonicalizes node keys.
+                canonical = alias if alias.startswith("hf.co/") else "hf.co/" + alias
+                stored[canonical] = {}
+        body = json.dumps({"memory": memory, "loaded": {}, "stored": stored}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -195,7 +198,8 @@ def node(context):
         handle.write(NODE_SERVER)
     log = open(os.path.join(context.scenario_dir, "llmman-node.log"), "wb")
     process = subprocess.Popen(
-        [sys.executable, script, os.path.join(calls_dir(context), "node-requests"), str(NODE_MEMORY)],
+        [sys.executable, script, os.path.join(calls_dir(context), "node-requests"),
+         str(NODE_MEMORY), alias_path(context)],
         env=context.launch_env,
         stdout=log,
         stderr=subprocess.STDOUT,
@@ -208,17 +212,3 @@ def node(context):
             process.kill()
             raise RuntimeError(f"the llmman node stub never listened on {NODE_HOST}:{NODE_PORT}")
         time.sleep(0.05)
-
-
-# One reachable peer (the node stub), one refused address, one disabled.
-SEEDED_PEERS = [
-    {"address": "localhost:17434", "enabled": True},
-    {"address": "127.0.0.1:9", "enabled": True},
-    {"address": "10.0.0.5", "enabled": False},
-]
-
-
-@stub("agents.peers")
-def peers(context):
-    """ChairLift's peer store already lists three machines."""
-    write_file(peer_store_path(context), json.dumps({"peers": SEEDED_PEERS}, indent=2) + "\n")

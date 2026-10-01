@@ -1,7 +1,9 @@
 package views
 
 import (
+	"codeberg.org/puregotk/puregotk/v4/glib"
 	"log"
+	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
@@ -16,11 +18,7 @@ import (
 
 // buildLiveryPage builds the Livery page.
 //
-// The three sections are the sentence in pageview.LiveryPageDescription, in
-// order: who you are (the app-grid mark), who you stand with (the panel
-// mark), what you roll with (the Files mark). The two that rotate are
-// adjacent at the bottom so their shared behaviour reads as one idea; the
-// personal mark sits alone at the top because it is set once.
+// Foundation and Files marks come first; the personal app-grid mark comes last.
 //
 // Every control starts insensitive. Reading the current state means calling
 // `gsettings`, which is a subprocess and must not run on the GTK main thread,
@@ -32,17 +30,17 @@ func (uh *UserHome) buildLiveryPage() {
 	}
 	page.SetDescription(pageview.LiveryPageDescription)
 
-	if uh.groupEnabled("livery_page", "account_group") {
-		uh.buildAccountGroup(page)
-	}
-	if uh.groupEnabled("livery_page", "livery_app_grid_group") {
-		uh.buildLiveryAppGridGroup(page)
-	}
 	if uh.groupEnabled("livery_page", "livery_foundation_group") {
 		uh.buildLiveryPanelGroup(page)
 	}
 	if uh.groupEnabled("livery_page", "livery_dock_group") {
 		uh.buildLiveryDockGroup(page)
+	}
+	if uh.groupEnabled("livery_page", "account_group") {
+		uh.buildAccountGroup(page)
+	}
+	if uh.groupEnabled("livery_page", "livery_app_grid_group") {
+		uh.buildLiveryAppGridGroup(page)
 	}
 
 	go uh.refreshLiveryState()
@@ -56,9 +54,10 @@ func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryAppGridTitle)
 	group.SetDescription(pageview.LiveryAppGridFragment)
 
+	uh.liveryAppGridSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryAppGridRow(), func(state bool) {
 		uh.onLiveryAppGridToggled(state)
-	})
+	}, uh.liveryAppGridSpinner)
 	group.Add(&enableRow.Widget)
 
 	// The same chooser the dock uses. Typing a slug blind into a text field
@@ -93,9 +92,10 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryPanelTitle)
 	group.SetDescription(pageview.LiveryPanelFragment)
 
+	uh.liveryPanelSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryPanelRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Panel, state)
-	})
+	}, uh.liveryPanelSpinner)
 	group.Add(&enableRow.Widget)
 
 	markRow := adw.NewActionRow()
@@ -111,10 +111,12 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	openMarks := func(_ adw.ActionRow) { uh.presentLiveryPicker(liveryPickerFoundation) }
 	markRow.ConnectActivated(&openMarks)
 	uh.liveryPanelMarkRow = markRow
+	uh.buildLiveryFoundationGrid(group)
 
+	uh.liveryPanelRotateSpinner = newActivitySpinner()
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Panel, state)
-	})
+	}, uh.liveryPanelRotateSpinner)
 	group.Add(&rotateRow.Widget)
 
 	page.Add(group)
@@ -130,9 +132,10 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	group.SetTitle(pageview.LiveryDockTitle)
 	group.SetDescription(pageview.LiveryDockFragment)
 
+	uh.liveryDockSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryDockRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Dock, state)
-	})
+	}, uh.liveryDockSpinner)
 	group.Add(&enableRow.Widget)
 
 	// One row that opens a picker, not a search box wired into the page.
@@ -158,9 +161,10 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 
 	uh.liveryDockSelectedRow = projectRow
 
+	uh.liveryDockRotateSpinner = newActivitySpinner()
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Dock, state)
-	})
+	}, uh.liveryDockRotateSpinner)
 	group.Add(&rotateRow.Widget)
 
 	// Where the artwork comes from.
@@ -191,10 +195,13 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 // switch, and the page wrote to dconf on load. GtkSwitch::state-set fires
 // only when the active state actually changes, and gtk_switch_set_active is a
 // no-op when the value is unchanged, so programmatic restore is silent.
-func newSwitchRow(presentation pageview.Row, onToggle func(bool)) (*adw.ActionRow, *gtk.Switch) {
+func newSwitchRow(presentation pageview.Row, onToggle func(bool), spinner *gtk.Spinner) (*adw.ActionRow, *gtk.Switch) {
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
+	if spinner != nil {
+		row.AddSuffix(&spinner.Widget)
+	}
 
 	toggle := gtk.NewSwitch()
 	toggle.SetValign(gtk.AlignCenterValue)
@@ -239,11 +246,9 @@ func (uh *UserHome) refreshLiveryState() {
 			uh.liveryLoaded = true
 			uh.liverySchemaMissing = true
 			uh.toastAdder.ShowErrorToast(pageview.LiverySchemaMissingMessage)
-			uh.notifyLiveryLoaded()
 			return
 		}
 		uh.applyLiveryState(state, panelAvailable, appGridAvailable)
-		uh.notifyLiveryLoaded()
 	})
 }
 
@@ -318,6 +323,9 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 		uh.liveryPanelMarkRow.SetSubtitle(pageview.LiverySelectedFoundationRow(state.PanelID, state.PanelCustom).Subtitle)
 		uh.liveryPanelMarkRow.SetSensitive(panelAvailable && state.PanelEnabled)
 	}
+	if uh.liveryFoundationGrid != nil {
+		uh.liveryFoundationGrid.SetSensitive(panelAvailable && state.PanelEnabled)
+	}
 	if uh.liveryPanelRotate != nil {
 		uh.liveryPanelRotate.SetSensitive(
 			pageview.LiveryRotationAvailable(panelAvailable && state.PanelEnabled, uh.liveryState.PanelID))
@@ -341,6 +349,67 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 			pageview.LiveryRotationAvailable(state.DockEnabled, uh.liveryState.DockID))
 		uh.liveryDockRotate.SetActive(state.DockRotate)
 	}
+}
+
+// The finite embedded catalog needs no network and one activation handler.
+func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
+	grid := gtk.NewFlowBox()
+	grid.SetSelectionMode(gtk.SelectionNoneValue)
+	grid.SetMinChildrenPerLine(2)
+	grid.SetMaxChildrenPerLine(5)
+	grid.SetSensitive(false)
+	uh.liveryFoundationGrid = grid
+	uh.liveryFoundationImages = make(map[string]*gtk.Image)
+	for _, foundation := range livery.Foundations() {
+		box := gtk.NewBox(gtk.OrientationVerticalValue, 6)
+		box.SetMarginTop(12)
+		box.SetMarginBottom(12)
+		image := gtk.NewImage()
+		image.SetPixelSize(40)
+		box.Append(&image.Widget)
+		label := gtk.NewLabel(foundation.Name)
+		label.SetWrap(true)
+		box.Append(&label.Widget)
+		grid.Insert(&box.Widget, -1)
+		uh.liveryFoundationImages[foundation.ID] = image
+	}
+	activated := func(_ gtk.FlowBox, ptr uintptr) {
+		child := gtk.FlowBoxChildNewFromInternalPtr(ptr)
+		index := int(child.GetIndex())
+		catalog := livery.Foundations()
+		if index >= 0 && index < len(catalog) {
+			uh.onLiverySelectionChangedByID(livery.Panel, catalog[index].ID)
+		}
+	}
+	grid.ConnectChildActivated(&activated)
+	style := adw.StyleManagerGetDefault()
+	changed := func(_ gobject.Object, _ uintptr) { uh.refreshLiveryFoundationPreviews() }
+	style.ConnectNotify(&changed)
+	uh.refreshLiveryFoundationPreviews()
+	group.Add(&grid.Widget)
+}
+
+func (uh *UserHome) refreshLiveryFoundationPreviews() {
+	color := "#2e3436"
+	if adw.StyleManagerGetDefault().GetDark() {
+		color = "#eeeeec"
+	}
+	for id, image := range uh.liveryFoundationImages {
+		data, err := livery.Asset(id)
+		if err != nil {
+			continue
+		}
+		data = []byte(strings.ReplaceAll(string(data), "currentColor", color))
+		setLiveryPreview(image, data)
+	}
+}
+
+func setLiveryPreview(image *gtk.Image, data []byte) {
+	bytes := glib.NewBytes(data, uint(len(data)))
+	defer bytes.Unref()
+	icon := gio.NewBytesIcon(bytes)
+	defer icon.Unref()
+	image.SetFromGicon(icon)
 }
 
 // presentLiveryProjectPicker opens the project chooser, building it once.
@@ -467,6 +536,11 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 	if list == nil {
 		return
 	}
+	if uh.liveryPickerCancel != nil {
+		uh.liveryPickerCancel()
+	}
+	uh.liveryPickerGeneration++
+	generation := uh.liveryPickerGeneration
 	for {
 		child := list.GetRowAtIndex(0)
 		if child == nil {
@@ -487,6 +561,10 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 	default:
 		selected = uh.liveryState.DockID
 		results = pageview.LiveryProjectResults(query, selected)
+	}
+	// Only a small visible page is fetched; searching resolves the rest locally.
+	if len(results) > 12 {
+		results = results[:12]
 	}
 	// A query that matches nothing says so. The custom escape hatch is
 	// appended below, after this check, because appending it first would make
@@ -509,6 +587,7 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 	// fourth row in every section.
 	results = append(results, pageview.LiveryCustomResult(selected == livery.CustomID))
 	uh.liveryDockVisible = results
+	images := make(map[string]*gtk.Image, len(results))
 
 	for _, result := range results {
 		row := adw.NewActionRow()
@@ -520,11 +599,56 @@ func (uh *UserHome) refreshLiveryPickerRows(query string) {
 		row.SetUseMarkup(false)
 		row.SetTitle(result.Name)
 		row.SetActivatable(true)
+		if result.ID != pageview.LiveryCustomResultID {
+			image := gtk.NewImageFromIconName("image-loading-symbolic")
+			image.SetPixelSize(40)
+			row.AddPrefix(&image.Widget)
+			images[result.ID] = image
+		}
 		if result.Selected {
 			row.AddSuffix(&gtk.NewImageFromIconName("object-select-symbolic").Widget)
 		}
 		list.Append(&row.Widget)
 	}
+	ctx, cancel := livery.DefaultContext()
+	uh.liveryPickerCancel = cancel
+	mode := uh.liveryPickerMode
+	color := "#2e3436"
+	if adw.StyleManagerGetDefault().GetDark() {
+		color = "#eeeeec"
+	}
+	go func() {
+		defer cancel()
+		for _, result := range results {
+			image := images[result.ID]
+			if image == nil || ctx.Err() != nil {
+				continue
+			}
+			var data []byte
+			var err error
+			switch mode {
+			case liveryPickerBrand:
+				data, err = livery.FetchSimpleIcon(ctx, result.ID)
+			case liveryPickerFoundation:
+				data, err = livery.Asset(result.ID)
+			default:
+				data, err = livery.FetchCNCFIcon(ctx, result.ID)
+			}
+			if err == nil && mode != liveryPickerProject {
+				data = []byte(strings.ReplaceAll(string(data), "currentColor", color))
+			}
+			sgtk.RunOnMainThread(func() {
+				if generation != uh.liveryPickerGeneration {
+					return
+				}
+				if err != nil {
+					image.SetFromIconName("image-missing-symbolic")
+					return
+				}
+				setLiveryPreview(image, data)
+			})
+		}
+	}()
 }
 
 // onLiveryPickerRowActivated applies the chosen project and closes the dialog.
@@ -542,6 +666,10 @@ func (uh *UserHome) onLiveryPickerRowActivated(rowPtr uintptr) {
 	if uh.liveryPickerDialog != nil {
 		uh.liveryPickerDialog.Close()
 	}
+	if uh.liveryPickerCancel != nil {
+		uh.liveryPickerCancel()
+	}
+	uh.liveryPickerGeneration++
 	if id == pageview.LiveryCustomResultID {
 		uh.presentLiveryFileChooser(mode.surface())
 		return

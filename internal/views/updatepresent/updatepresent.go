@@ -9,7 +9,6 @@ import (
 
 // Presentation is the aggregate status shown by the update shell.
 type Presentation struct {
-	Icon        string
 	Title       string
 	Description string
 	ActionLabel string
@@ -23,56 +22,38 @@ type Presentation struct {
 func Snapshot(state updateflow.Snapshot) Presentation {
 	switch state.Phase {
 	case updateflow.PhaseChecking:
-		return Presentation{
-			Icon:        "view-refresh-symbolic",
-			Title:       gotext.Get("Checking for updates"),
-			Description: checkingDescription(state),
-		}
+		return Presentation{Title: gotext.Get("Checking for updates"),
+			Description: checkingDescription(state)}
 	case updateflow.PhaseReady:
 		return readyPresentation(state)
 	case updateflow.PhaseCheckFailed:
-		presentation := Presentation{
-			Icon:        "network-error-symbolic",
-			Title:       gotext.Get("Unable to check for updates"),
+		presentation := Presentation{Title: gotext.Get("Unable to check for updates"),
 			Description: checkErrorDescription(state),
-			Banner:      gotext.Get("Unable to check for updates"),
-		}
+			Banner:      gotext.Get("Unable to check for updates")}
 		addAction(&presentation, state.Action, gotext.Get("Try again"))
 		return presentation
 	case updateflow.PhaseUpdating:
-		return Presentation{
-			Icon:        "content-loading-symbolic",
-			Title:       gotext.Get("Installing updates"),
-			Description: updatingDescription(state),
-		}
+		return Presentation{Title: gotext.Get("Installing updates"),
+			Description: updatingDescription(state)}
 	case updateflow.PhasePartialFailure:
 		banner := gotext.Get("Some updates could not be installed")
 		if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
 			banner = gotext.Get("Maintenance failed")
 		}
-		presentation := Presentation{
-			Icon:        "dialog-warning-symbolic",
-			Title:       gotext.Get("Some updates could not be installed"),
+		presentation := Presentation{Title: gotext.Get("Some updates could not be installed"),
 			Description: partialFailureDescription(state),
-			Banner:      banner,
-		}
+			Banner:      banner}
 		addAction(&presentation, state.Action, gotext.Get("Retry failed"))
 		return presentation
 	case updateflow.PhaseRestartRequired:
-		presentation := Presentation{
-			Icon:        "system-reboot-symbolic",
-			Title:       gotext.Get("Restart required"),
+		presentation := Presentation{Title: gotext.Get("Restart required"),
 			Description: gotext.Get("Restart to finish installing updates."),
-			Banner:      gotext.Get("Restart required"),
-		}
+			Banner:      gotext.Get("Restart required")}
 		addAction(&presentation, state.Action, gotext.Get("Restart now"))
 		return presentation
 	default:
-		return Presentation{
-			Icon:        "view-refresh-symbolic",
-			Title:       gotext.Get("Checking for updates"),
-			Description: gotext.Get("Preparing to check for updates…"),
-		}
+		return Presentation{Title: gotext.Get("Checking for updates"),
+			Description: gotext.Get("Preparing to check for updates…")}
 	}
 }
 
@@ -122,28 +103,39 @@ func SourceIcon(id updateflow.SourceID) string {
 	}
 }
 
+// ItemTitle falls back to the execution identity when a provider has no name.
+func ItemTitle(item updateflow.Item) string {
+	if item.Name != "" {
+		return item.Name
+	}
+	return item.ID
+}
+
 // ItemSubtitle returns the version detail shown beneath one pending item.
 func ItemSubtitle(item updateflow.Item) string {
+	var subtitle string
 	switch {
 	case item.CurrentVersion != "" && item.AvailableVersion != "":
-		return gotext.Get("%s → %s", item.CurrentVersion, item.AvailableVersion)
+		subtitle = gotext.Get("%s → %s", item.CurrentVersion, item.AvailableVersion)
 	case item.AvailableVersion != "":
-		return gotext.Get("Available: %s", item.AvailableVersion)
+		subtitle = gotext.Get("Available: %s", item.AvailableVersion)
 	case item.CurrentVersion != "":
-		return gotext.Get("Installed: %s", item.CurrentVersion)
+		subtitle = gotext.Get("Installed: %s", item.CurrentVersion)
 	default:
-		return gotext.Get("Update available")
+		subtitle = gotext.Get("Update available")
 	}
+	switch item.Scope {
+	case "user":
+		subtitle += gotext.Get(", for you only")
+	case "system":
+		subtitle += gotext.Get(", for everyone")
+	}
+	return subtitle
 }
 
 // ShowProgress reports whether the aggregate progress bar belongs on screen.
 func ShowProgress(phase updateflow.Phase) bool {
 	return phase == updateflow.PhaseChecking || phase == updateflow.PhaseUpdating
-}
-
-// SourceHasDetails reports whether a source row should expose its detail rows.
-func SourceHasDetails(state updateflow.SourceState) bool {
-	return len(state.Items) > 0
 }
 
 // CanStartOperation reports whether a shell operation may be launched.
@@ -165,15 +157,12 @@ func SourceSubtitleLines(compact bool) int32 {
 }
 
 func readyPresentation(state updateflow.Snapshot) Presentation {
-	presentation := Presentation{
-		Icon:  "emblem-system-symbolic",
-		Title: gotext.Get("System is up to date"),
-	}
+	presentation := Presentation{Title: gotext.Get("System is up to date")}
 	switch {
 	case state.Action == updateflow.ActionNone && state.TotalUpdates == 0:
 		presentation.Description = gotext.Get("No update sources are available.")
 	case state.TotalUpdates > 0:
-		presentation.Icon = "software-update-available-symbolic"
+
 		presentation.Title = gotext.Get("Updates available")
 		presentation.Description = gotext.GetN(
 			"%d update is available.",

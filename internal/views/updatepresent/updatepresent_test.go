@@ -20,11 +20,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			state: updateflow.Snapshot{
 				Phase: updateflow.PhaseIdle,
 			},
-			want: Presentation{
-				Icon:        "view-refresh-symbolic",
-				Title:       "Checking for updates",
-				Description: "Preparing to check for updates…",
-			},
+			want: Presentation{Title: "Checking for updates",
+				Description: "Preparing to check for updates…"},
 		},
 		{
 			name: "checking",
@@ -33,11 +30,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Current:  updateflow.Applications,
 				Progress: "Loading application updates…",
 			},
-			want: Presentation{
-				Icon:        "view-refresh-symbolic",
-				Title:       "Checking for updates",
-				Description: "Applications: Loading application updates…",
-			},
+			want: Presentation{Title: "Checking for updates",
+				Description: "Applications: Loading application updates…"},
 		},
 		{
 			name: "up to date",
@@ -45,14 +39,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionCheck,
 			},
-			want: Presentation{
-				Icon:        "emblem-system-symbolic",
-				Title:       "System is up to date",
+			want: Presentation{Title: "System is up to date",
 				Description: "No updates are available.",
 				ActionLabel: "Check again",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-			},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "no configured sources",
@@ -60,11 +51,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionNone,
 			},
-			want: Presentation{
-				Icon:        "emblem-system-symbolic",
-				Title:       "System is up to date",
-				Description: "No update sources are available.",
-			},
+			want: Presentation{Title: "System is up to date",
+				Description: "No update sources are available."},
 		},
 		{
 			name: "updates available",
@@ -85,14 +73,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				TotalUpdates: 2,
 			},
-			want: Presentation{
-				Icon:        "software-update-available-symbolic",
-				Title:       "Updates available",
+			want: Presentation{Title: "Updates available",
 				Description: "2 updates are available.",
 				ActionLabel: "Update all",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-			},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "check failed",
@@ -106,15 +91,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			want: Presentation{
-				Icon:        "network-error-symbolic",
-				Title:       "Unable to check for updates",
+			want: Presentation{Title: "Unable to check for updates",
 				Description: "Developer tools: network unavailable",
 				ActionLabel: "Try again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Unable to check for updates",
-			},
+				Banner:      "Unable to check for updates"},
 		},
 		{
 			name: "updating",
@@ -123,11 +105,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Current:  updateflow.DeveloperTools,
 				Progress: "Installing packages…",
 			},
-			want: Presentation{
-				Icon:        "content-loading-symbolic",
-				Title:       "Installing updates",
-				Description: "Developer tools: Installing packages…",
-			},
+			want: Presentation{Title: "Installing updates",
+				Description: "Developer tools: Installing packages…"},
 		},
 		{
 			name: "partial failure",
@@ -147,15 +126,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					{ID: updateflow.OperatingSystem, ApplyErr: errors.New("staging failed")},
 				},
 			},
-			want: Presentation{
-				Icon:        "dialog-warning-symbolic",
-				Title:       "Some updates could not be installed",
+			want: Presentation{Title: "Some updates could not be installed",
 				Description: "1 source completed; 2 sources failed.",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Some updates could not be installed",
-			},
+				Banner:      "Some updates could not be installed"},
 		},
 		{
 			name: "maintenance failure",
@@ -167,15 +143,12 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				MaintenanceErr: errors.New("cleanup failed"),
 			},
-			want: Presentation{
-				Icon:        "dialog-warning-symbolic",
-				Title:       "Some updates could not be installed",
+			want: Presentation{Title: "Some updates could not be installed",
 				Description: "Updates completed, but maintenance failed: cleanup failed",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action",
-				Banner:      "Maintenance failed",
-			},
+				Banner:      "Maintenance failed"},
 		},
 		{
 			name: "restart required",
@@ -188,12 +161,9 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			want: Presentation{
-				Icon:        "system-reboot-symbolic",
-				Title:       "Restart required",
+			want: Presentation{Title: "Restart required",
 				Description: "Restart to finish installing updates.",
-				Banner:      "Restart required",
-			},
+				Banner:      "Restart required"},
 		},
 	}
 
@@ -406,15 +376,6 @@ func TestShowProgressOnlyDuringOperations(t *testing.T) {
 	}
 }
 
-func TestSourceHasDetailsFollowsPendingItems(t *testing.T) {
-	if SourceHasDetails(updateflow.SourceState{}) {
-		t.Fatal("SourceHasDetails(empty) = true, want false")
-	}
-	if !SourceHasDetails(updateflow.SourceState{Items: []updateflow.Item{{Name: "update"}}}) {
-		t.Fatal("SourceHasDetails(with item) = false, want true")
-	}
-}
-
 func TestCanStartOperationRejectsBusyOrClosedShell(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -452,5 +413,14 @@ func TestSourceSubtitleLinesTracksCompactMode(t *testing.T) {
 	}
 	if got := SourceSubtitleLines(true); got != 1 {
 		t.Fatalf("SourceSubtitleLines(true) = %d, want 1", got)
+	}
+}
+
+func TestSourceItemTitleUsesIdentityOnlyWhenNameIsMissing(t *testing.T) {
+	if got := ItemTitle(updateflow.Item{ID: "org.mozilla.firefox", Name: "Firefox"}); got != "Firefox" {
+		t.Fatalf("named app title = %q, want its display name", got)
+	}
+	if got := ItemTitle(updateflow.Item{ID: "org.mozilla.firefox"}); got != "org.mozilla.firefox" {
+		t.Fatalf("nameless app title = %q, want its identity", got)
 	}
 }

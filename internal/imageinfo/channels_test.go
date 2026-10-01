@@ -540,3 +540,26 @@ func TestDriverOverrideRejectsBadEntries(t *testing.T) {
 		})
 	}
 }
+
+func TestKnownStreamUsesThePerImageTable(t *testing.T) {
+	for _, tc := range []struct {
+		ref, stream string
+		want        bool
+	}{
+		{"ghcr.io/ublue-os/bluefin", "stable", true},
+		{"ghcr.io/ublue-os/bluefin", "lts-testing", true},
+		{"ghcr.io/ublue-os/bluefin", "testing", false},
+		{"ghcr.io/projectbluefin/bluefin-lts", "testing", true},
+		{"ghcr.io/projectbluefin/bluefin-lts", "lts-testing", false},
+		{"ghcr.io/ublue-os/bluefin", "stable-20240229", false},
+		{"ghcr.io/evil/image", "stable", false},
+	} {
+		if got := KnownStream(tc.ref, tc.stream); got != tc.want {
+			t.Errorf("KnownStream(%q,%q) = %t", tc.ref, tc.stream, got)
+		}
+	}
+	applyTable(t, tunaOSTable)
+	if !KnownStream("ghcr.io/tuna-os/tromso", "latest") || KnownStream("ghcr.io/tuna-os/tromso", "lts") {
+		t.Fatal("administrator table not respected")
+	}
+}

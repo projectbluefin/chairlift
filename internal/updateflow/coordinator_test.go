@@ -253,7 +253,7 @@ func TestCoordinatorUpdateWaitsForBlockedCheck(t *testing.T) {
 			}
 			close(applyEntered)
 			<-releaseApply
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	c := New([]Provider{provider}, nil)
@@ -327,7 +327,7 @@ func TestCoordinatorCheckWaitsForBlockedMutation(t *testing.T) {
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
 			close(applyStarted)
 			<-releaseApply
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	c := New([]Provider{provider}, nil)
@@ -444,7 +444,7 @@ func TestCoordinatorAppliesInConstructorOrder(t *testing.T) {
 				mu.Lock()
 				order = append(order, SystemComponents)
 				mu.Unlock()
-				return ApplyResult{}, nil
+				return ApplyResult{Changed: true}, nil
 			},
 		},
 		{
@@ -454,7 +454,7 @@ func TestCoordinatorAppliesInConstructorOrder(t *testing.T) {
 				mu.Lock()
 				order = append(order, Applications)
 				mu.Unlock()
-				return ApplyResult{}, nil
+				return ApplyResult{Changed: true}, nil
 			},
 		},
 		{
@@ -464,7 +464,7 @@ func TestCoordinatorAppliesInConstructorOrder(t *testing.T) {
 				mu.Lock()
 				order = append(order, OperatingSystem)
 				mu.Unlock()
-				return ApplyResult{}, nil
+				return ApplyResult{Changed: true}, nil
 			},
 		},
 	}
@@ -487,6 +487,76 @@ func TestCoordinatorAppliesInConstructorOrder(t *testing.T) {
 	}
 }
 
+func TestCoordinatorKeepsPendingItemsWhenApplyReportsUnchanged(t *testing.T) {
+	provider := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
+			// A provider whose command exited 0 without applying anything:
+			// no error, but no verified mutation either.
+			return ApplyResult{Changed: false}, nil
+		},
+	}
+	current := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "Compass"}}},
+	}}
+
+	got := New([]Provider{provider}, nil).UpdateAll(
+		context.Background(), current, allPreferences(), nil,
+	)
+	source := got.Sources[0]
+	if source.Completed {
+		t.Fatal("unchanged source was marked completed")
+	}
+	if len(source.Items) != 1 {
+		t.Fatalf("unchanged source items = %#v, want the pending item retained", source.Items)
+	}
+	if len(got.CompletedSources) != 0 {
+		t.Fatalf("completed sources = %#v, want none", got.CompletedSources)
+	}
+	if got.TotalUpdates != 1 {
+		t.Fatalf("total updates = %d, want the pending item still counted", got.TotalUpdates)
+	}
+	if source.ApplyErr == nil || !sameIDs(got.FailedSources, []SourceID{Applications}) {
+		t.Fatalf("unapplied source has no failure: error=%v failed=%v", source.ApplyErr, got.FailedSources)
+	}
+	if got.Phase != PhasePartialFailure || got.Action != ActionRetryFailed {
+		t.Fatalf("phase/action = %v/%v, want partial-failure/retry-failed", got.Phase, got.Action)
+	}
+}
+
+func TestCoordinatorSkipsMaintenanceWhenNothingChanged(t *testing.T) {
+	var runs atomic.Int32
+	maintenance := &testMaintenance{
+		run: func(context.Context, func(Progress)) error {
+			runs.Add(1)
+			return nil
+		},
+	}
+	provider := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
+			return ApplyResult{Changed: false}, nil
+		},
+	}
+	current := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+	}}
+
+	got := New([]Provider{provider}, maintenance).UpdateAll(
+		context.Background(), current,
+		userprefs.Values{Applications: true, MaintenanceAfterUpdates: true},
+		nil,
+	)
+	if runs.Load() != 0 {
+		t.Fatal("maintenance ran although the source changed nothing")
+	}
+	if got.MaintenanceRan {
+		t.Fatal("maintenance marked as run although the source changed nothing")
+	}
+}
+
 func TestCoordinatorContinuesAfterApplyFailure(t *testing.T) {
 	applyErr := errors.New("first provider failed")
 	var secondCalled atomic.Bool
@@ -502,7 +572,7 @@ func TestCoordinatorContinuesAfterApplyFailure(t *testing.T) {
 		available: true,
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
 			secondCalled.Store(true)
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -538,7 +608,7 @@ func TestCoordinatorRetryIncludesOnlyApplyFailures(t *testing.T) {
 			if firstCalls.Load() == 1 {
 				return ApplyResult{}, errors.New("retry me")
 			}
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	second := &testProvider{
@@ -546,7 +616,7 @@ func TestCoordinatorRetryIncludesOnlyApplyFailures(t *testing.T) {
 		available: true,
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
 			secondCalls.Add(1)
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -621,7 +691,7 @@ func TestCoordinatorRetriesMaintenanceWithoutReapplyingSuccessfulSources(t *test
 		available: true,
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
 			applyCalls.Add(1)
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -742,7 +812,7 @@ func TestCoordinatorRetryPreservesPreviewPendingBeforeMaintenance(t *testing.T) 
 			if secondCalls.Add(1) == 1 {
 				return ApplyResult{}, errors.New("retry me")
 			}
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -788,7 +858,7 @@ func TestCoordinatorBusyRejectsOverlappingMutations(t *testing.T) {
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
 			close(started)
 			<-release
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -865,7 +935,7 @@ func TestCoordinatorMaintenanceFailureIsRetained(t *testing.T) {
 		id:        Applications,
 		available: true,
 		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
-			return ApplyResult{}, nil
+			return ApplyResult{Changed: true}, nil
 		},
 	}
 	current := Snapshot{Sources: []SourceState{
@@ -922,7 +992,7 @@ func (p *testProvider) Check(ctx context.Context) (CheckResult, error) {
 
 func (p *testProvider) Apply(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
 	if p.apply == nil {
-		return ApplyResult{}, nil
+		return ApplyResult{Changed: true}, nil
 	}
 	return p.apply(ctx, items, progress)
 }

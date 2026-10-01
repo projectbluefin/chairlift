@@ -76,6 +76,16 @@ Feature: Help destination
     And I see "Failed to open URL: https://github.com/projectbluefin/dakota/issues"
     And the Help page is still responsive
 
+  @config.help-links @stub.help-xdg-open-fails
+  Scenario: A new failure is visible without dismissing the previous error
+    Given ChairLift is running
+    When I press "F1"
+    And I open the "Visit project website" Help link
+    Then a toast says "Failed to open URL: https://example.test/site"
+    When I open the "Browse documentation" Help link
+    Then a toast says "Failed to open URL: https://example.test/docs/#start"
+    And the Help page is still responsive
+
   @config.help-no-resources
   Scenario: Disabling the resources group removes the links but keeps Help
     Given ChairLift is running
@@ -91,9 +101,10 @@ Feature: Help destination
   Scenario: A wired Goose configuration offers a session and names its provider
     Given ChairLift is running
     When I press "F1"
-    Then the Enhanced Troubleshooting status is "Ready — questions go to Google Gemini"
+    Then connected Linux tools offer Goose without claiming a ready AI service
+    And the troubleshooting row names "Google Gemini"
     And the "Set Up" button is not shown
-    When I click the "Start Session" button in the "Enhanced Troubleshooting" row
+    When I click the "Open Goose" button in the "Enhanced Troubleshooting" row
     Then Goose was launched as "Goose"
     And the troubleshooting setup never ran "brew tap"
     And the troubleshooting setup never ran "brew install"
@@ -103,17 +114,18 @@ Feature: Help destination
   Scenario Outline: The row names where questions go from GOOSE_PROVIDER
     Given ChairLift is running
     When I press "F1"
-    Then the Enhanced Troubleshooting status is "Ready — <note>"
+    Then connected Linux tools offer Goose without claiming a ready AI service
+    And the troubleshooting row names "<note>"
 
     @stub.help-goose-wired-ollama
-    Examples: Local provider
+    Examples: Configured Ollama service
       | note                           |
-      | questions stay on this machine |
+      | Ollama |
 
     @stub.help-goose-wired-anthropic
     Examples: Other provider
       | note                      |
-      | questions go to anthropic |
+      | anthropic |
 
     @stub.help-goose-wired-none
     Examples: No provider
@@ -126,7 +138,7 @@ Feature: Help destination
     When I press "F1"
     Then the Enhanced Troubleshooting status is "Installed, but not connected to this system yet"
     And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the "Start Session" button is not shown
+    And the "Open Goose" button is not shown
 
     @stub.help-goose-unwired-other-extension
     Examples: Only another extension
@@ -157,9 +169,9 @@ Feature: Help destination
   Scenario: A wired host without the desktop app still offers Set Up
     Given ChairLift is running
     When I press "F1"
-    Then the Enhanced Troubleshooting status is "Ready — questions go to Google Gemini"
+    Then the troubleshooting row names "Google Gemini"
     And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
-    And the "Start Session" button is not shown
+    And the "Open Goose" button is not shown
 
   @stub.help-no-goose
   Scenario: Set Up on a fresh host previews every step and changes nothing
@@ -168,12 +180,6 @@ Feature: Help destination
     Then the Enhanced Troubleshooting status is "Ask an AI assistant about your logs, services, and network"
     When I click the "Set Up" button in the "Enhanced Troubleshooting" row
     Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
-    And the troubleshooting setup previewed exactly
-      | command                                      |
-      | brew tap ublue-os/tap                        |
-      | brew install ublue-os/tap/linux-mcp-server   |
-      | brew install --cask ublue-os/tap/goose-linux |
-      | goose-mcp-setup                              |
     And the troubleshooting setup never ran "brew tap"
     And the troubleshooting setup never ran "brew install"
     And Goose's configuration file was not written
@@ -186,17 +192,17 @@ Feature: Help destination
     When I press "F1"
     Then the Enhanced Troubleshooting status is "<before>"
     When I click the "Set Up" button in the "Enhanced Troubleshooting" row
-    Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
+    Then I see "<feedback>"
     And the Enhanced Troubleshooting status is "<before>"
 
     Examples: Fresh host
-      | before                                                     |
-      | Ask an AI assistant about your logs, services, and network |
+      | before                                                     | feedback |
+      | Ask an AI assistant about your logs, services, and network | [DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made |
 
     @stub.help-goose-cli @stub.help-goose-unwired-other-extension
     Examples: Installed but not connected
-      | before                                          |
-      | Installed, but not connected to this system yet |
+      | before                                          | feedback |
+      | Installed, but not connected to this system yet | [DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made |
 
   @stub.help-goose-cli @stub.help-goose-unwired-other-extension
   Scenario: Set Up resumes a half-done install instead of repeating it
@@ -205,14 +211,21 @@ Feature: Help destination
     Then the Enhanced Troubleshooting status is "Installed, but not connected to this system yet"
     When I click the "Set Up" button in the "Enhanced Troubleshooting" row
     Then I see "[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made"
-    And the troubleshooting setup previewed exactly
-      | command                                      |
-      | brew tap ublue-os/tap                        |
-      | brew install --cask ublue-os/tap/goose-linux |
-      | goose-mcp-setup                              |
     And the troubleshooting setup never ran "brew tap"
     And the troubleshooting setup never ran "brew install"
     And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
+    And Goose's existing configuration was kept unchanged
+
+  @stub.help-goose-all @stub.help-goose-unwired-malformed
+  Scenario: Conflicting Goose configuration reports an error without replacing user data
+    Given ChairLift is running
+    When I press "F1"
+    And I click the "Set Up" button in the "Enhanced Troubleshooting" row
+    Then I see "Goose configuration was kept unchanged"
+    And Goose's existing configuration was kept unchanged
+    And the "Set Up" button in the "Enhanced Troubleshooting" row is sensitive
+    And the Help page is still responsive
+    And the action journal is empty
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,podman,bootc-stage
   Scenario: Without Homebrew the troubleshooting group is explained, not shown

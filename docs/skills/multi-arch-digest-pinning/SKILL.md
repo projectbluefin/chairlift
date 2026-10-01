@@ -13,11 +13,12 @@ metadata:
 # A digest pin must name the manifest index; pinning a child manifest silently narrows the image to one architecture
 
 **When it applies:** Replacing a floating tag with an `@sha256:` reference, or
-rolling an existing digest, anywhere a container image is named. ChairLift
-currently pins none: the former local-AI container stack that carried four
-such pins was replaced by Agent Mode (ADR-0015), where llmman chooses and
-fetches its own engine. The rule applies the next time an image reference is
-pinned here.
+rolling an existing digest, anywhere a container image is named. ChairLift's
+`internal/printerapp` pins printer application indexes; every roll must also
+verify the exact keyless workflow identity, provenance and signed SBOM before
+changing a pin. Agent Mode delegates engine fetching to llmman and has no
+ChairLift-owned container pin. Printer enablement remains independently locked
+until the published image's administration boundary is verified.
 
 **What to do:** Resolve the *index* (manifest list) digest, never an
 architecture's child entry. A registry answers a bare

@@ -3,54 +3,33 @@ package views
 import (
 	"context"
 	"fmt"
-	"github.com/projectbluefin/chairlift/internal/aistack"
-	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
-	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"log"
-	"runtime"
 	"time"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
+	"github.com/projectbluefin/chairlift/internal/aistack"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
-// buildAgentsPage builds the Agents page: one switch that turns Agent Mode —
-// the llmman model server — on or off. It is a destination of its own
-// because what it turns on is a service a person then points other
-// applications at, not a system preference.
-//
-// Nothing here is privileged. The service is a systemd user unit in the
-// invoking account, so there is no pkexec route on this page and there must
-// not become one — see internal/aistack's package comment.
+// Agent Mode is a loopback model server managed by a systemd user unit.
+// No operation on this page is privileged.
 func (uh *UserHome) buildAgentsPage() {
-	page := uh.agentsPrefsPage
-	if page == nil {
-		return
-	}
-
-	if uh.groupEnabled("agents_page", "agents_group") {
-		uh.buildAgentModeGroup(page)
+	if uh.agentsPrefsPage != nil && uh.groupEnabled("agents_page", "agents_group") {
+		uh.buildAgentModeGroup(uh.agentsPrefsPage)
 	}
 }
 
-// buildAgentModeGroup builds the Agent Mode switch and its Details expander.
-// Every signal is connected here, once, for the page's lifetime: puregotk's
-// callback table is fixed and never releases a slot, so a handler created in
-// a path that reruns is a slow walk to a panic.
-//
-// The group is only built when the capability floor found Homebrew, so the
-// facts start capable. Readiness is an HTTP probe and never runs on the GTK
-// main thread; until it answers an installed unit reads as provisioning.
+// Signals are connected once; readiness and model reads run off the GTK thread.
 func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	facts := aistack.Observe(true)
 	state := aistack.Resolve(facts)
-	jan := runtime.GOARCH == "amd64"
-
-	log.Printf("views: agents page built runtime=llmman address=%s state=%d llmman=%v unit=%v jan=%v",
-		aistack.Address, state, facts.Installed, facts.UnitPresent, jan)
+	log.Printf("views: agents page built runtime=llmman address=%s state=%d llmman=%v unit=%v",
+		aistack.Address, state, facts.Installed, facts.UnitPresent)
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle(pageview.AgentModeGroupTitle())
@@ -59,250 +38,230 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.AgentModeRowTitle())
 	uh.agentModeRow = row
-
-	// guardedSwitch, not a bare gtk.Switch: GtkSwitch emits ::state-set from
-	// gtk_switch_set_active, so showing the machine's real state here and
-	// reverting after a failure are both indistinguishable from a click
-	// unless they are marked. Unmarked, a failed stop would revert the switch
-	// to on and immediately start the service again for real.
-	var toggle *guardedSwitch
-	toggle = newGuardedSwitch(state.On(), func(on bool) {
-		uh.onAgentModeToggled(on, toggle)
+	uh.agentModeSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.agentModeSpinner.Widget)
+	// Do not present an installed file as a running service while checking.
+	uh.agentModeToggle = newGuardedSwitch(false, func(on bool) {
+		uh.onAgentModeToggled(on, uh.agentModeToggle)
 	})
-	row.AddSuffix(&toggle.widget.Widget)
-	row.SetActivatableWidget(&toggle.widget.Widget)
+	row.AddSuffix(&uh.agentModeToggle.widget.Widget)
+	row.SetActivatableWidget(&uh.agentModeToggle.widget.Widget)
 	group.Add(&row.Widget)
 
 	modelRow := adw.NewActionRow()
 	modelRow.SetTitle(pageview.AgentModeActiveModelTitle())
-	modelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(""))
+	modelRow.SetUseMarkup(false)
 	uh.agentModelRow = modelRow
 	group.Add(&modelRow.Widget)
 
 	presetRow := adw.NewActionRow()
 	presetRow.SetTitle(pageview.AgentModePresetsTitle())
-	presetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
-	switchBtn := gtk.NewButtonWithLabel(pageview.AgentModeSwitchPresetLabel())
-	switchBtn.SetValign(gtk.AlignCenterValue)
-	switchBtn.AddCssClass("suggested-action")
-	switchClicked := func(_ gtk.Button) {
-		uh.presentModelPresetChooser()
-	}
-	switchBtn.ConnectClicked(&switchClicked)
-	presetRow.AddSuffix(&switchBtn.Widget)
+	uh.agentPresetSpinner = newActivitySpinner()
+	presetRow.AddSuffix(&uh.agentPresetSpinner.Widget)
+	choose := gtk.NewButtonWithLabel(pageview.AgentModeSwitchPresetLabel())
+	choose.SetValign(gtk.AlignCenterValue)
+	clicked := func(_ gtk.Button) { uh.presentModelPresetChooser() }
+	choose.ConnectClicked(&clicked)
+	presetRow.AddSuffix(&choose.Widget)
 	uh.agentPresetRow = presetRow
 	group.Add(&presetRow.Widget)
-	// Applied only once the model and preset rows exist: showAgentModeState
-	// nil-guards them, so calling it earlier left both visible whatever the
-	// state was.
+
+	address := adw.NewActionRow()
+	address.SetTitle("Local connection")
+	address.SetSubtitle("http://" + aistack.Address + "/v1")
+	address.SetSubtitleSelectable(true)
+	group.Add(&address.Widget)
+	page.Add(group)
 	uh.showAgentModeState(state)
 
-	details := adw.NewExpanderRow()
-	details.SetTitle(pageview.AgentModeDetailsTitle())
-	for _, detail := range pageview.AgentModeDetails(jan) {
-		detailRow := adw.NewActionRow()
-		detailRow.SetTitle(detail.Title)
-		detailRow.SetSubtitle(detail.Subtitle)
-		details.AddRow(&detailRow.Widget)
+	if !facts.UnitPresent {
+		uh.agentModeToggle.set(state.On())
+		return
 	}
-	group.Add(&details.Widget)
-	page.Add(group)
-
-	uh.buildPeersGroup(page)
-
-	if facts.UnitPresent {
-		go func() {
-			facts.Checked, facts.Healthy = true, aistack.Healthy(context.Background())
-			sgtk.RunOnMainThread(func() {
-				// A toggle that started, or already finished, meanwhile owns
-				// the row; this probe's facts are stale then.
-				if !toggle.widget.GetActive() || !uh.agentModeGate.TryStart() {
-					return
-				}
-				uh.showAgentModeState(aistack.Resolve(facts))
-				uh.agentModeGate.Reset()
-			})
-		}()
-	}
+	uh.agentModeToggle.widget.SetSensitive(false)
+	setActivitySpinner(uh.agentModeSpinner, true)
+	generation := uh.agentRefresh.Begin()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		migrationErr := aistack.ReconcileService(ctx)
+		facts.Checked = true
+		if migrationErr == nil {
+			if dryrun.Enabled() {
+				facts.Healthy = aistack.Healthy(ctx)
+			} else {
+				facts.Healthy = aistack.WaitHealthy(ctx, 10*time.Second)
+			}
+		}
+		sgtk.RunOnMainThread(func() {
+			if !uh.agentRefresh.IsCurrent(generation) {
+				return
+			}
+			state := aistack.Resolve(facts)
+			uh.agentModeToggle.set(state.On())
+			uh.agentModeToggle.widget.SetSensitive(true)
+			setActivitySpinner(uh.agentModeSpinner, false)
+			uh.showAgentModeState(state)
+			if migrationErr != nil {
+				log.Printf("views: local-only model service migration failed: %v", migrationErr)
+				uh.agentModeRow.SetSubtitle("Local-only setup could not be updated. Turn Agent Mode off and on to retry.")
+				uh.toastAdder.ShowErrorToast("Agent Mode could not update its local-only service.")
+			}
+		})
+	}()
 }
 
 func (uh *UserHome) showAgentModeState(state aistack.State) {
 	uh.agentModeState = state
-	if uh.agentModeRow != nil {
-		uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
+	generation := uh.agentRefresh.Begin()
+	uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
+	ready := state == aistack.StateReady
+	uh.agentModelRow.SetSensitive(ready)
+	uh.agentPresetRow.SetSensitive(ready)
+	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	uh.agentPresetRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	if !ready {
+		return
 	}
-	running := state == aistack.StateReady
-	if uh.agentModelRow != nil {
-		uh.agentModelRow.SetVisible(running)
-		// The row shows the model the server is actually serving, read from
-		// the configured alias, not the catalog default. Read off the main
-		// thread: it shells out to llmman.
-		if running {
-			go func() {
-				ctx, cancel := aistack.DefaultContext()
-				defer cancel()
-				modelRef, err := aistack.ReadActiveModel(ctx)
-				if err != nil {
-					return
-				}
-				sgtk.RunOnMainThread(func() {
-					if uh.agentModelRow != nil {
-						uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-					}
-				})
-			}()
-		}
-	}
-	if uh.agentPresetRow != nil {
-		uh.agentPresetRow.SetVisible(running)
-	}
+	uh.agentPresetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
+	uh.agentModelRow.SetSubtitle("Checking the selected model…")
+	go func() {
+		ctx, cancel := aistack.DefaultContext()
+		defer cancel()
+		modelRef, err := aistack.ReadActiveModel(ctx)
+		sgtk.RunOnMainThread(func() {
+			if !uh.agentRefresh.IsCurrent(generation) {
+				return
+			}
+			if err != nil {
+				log.Printf("views: read active model failed: %v", err)
+				uh.agentModelRow.SetSubtitle("Could not read the selected model. Choose a preset to set one.")
+				return
+			}
+			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
+		})
+	}()
 }
 
 func (uh *UserHome) presentModelPresetChooser() {
-	if !uh.agentPresetGate.TryStart() {
+	if uh.agentModeState != aistack.StateReady || !uh.agentPresetGate.TryStart() {
 		return
 	}
-
-	dialog := adw.NewAlertDialog(
-		"Switch Model Preset",
-		"Select a recommended model family. The model will be verified against system memory and downloaded via llmman.",
-	)
+	dialog := adw.NewAlertDialog("Choose a Model", "Choose a model family. A model that fits this computer's memory will be downloaded.")
 	dialog.AddResponse("cancel", "Cancel")
+	dialog.SetCloseResponse("cancel")
 	for _, fam := range aistack.Families() {
 		dialog.AddResponse(string(fam), fam.DisplayName())
 	}
-
-	responseCb := func(_ adw.AlertDialog, response string) {
-		// Reset only for the non-worker path: cancel, or any response that is
-		// not a family. A family response hands the gate to the worker, whose
-		// defer owns the reset once a pull actually starts, so a second preset
-		// cannot begin while the first is still pulling.
-		if response == "cancel" {
+	uh.agentPresetDialogs.connect(dialog, func(response string) {
+		fam := aistack.Family(response)
+		valid := false
+		for _, available := range aistack.Families() {
+			valid = valid || fam == available
+		}
+		if !valid {
 			uh.agentPresetGate.Reset()
 			return
 		}
-		fam := aistack.Family(response)
-		// Read on the main thread so the worker can put back exactly what
-		// the row said if the switch does not happen.
-		previous := ""
-		if uh.agentModelRow != nil {
-			previous = uh.agentModelRow.GetSubtitle()
+		// The chooser may have remained open while a toggle changed readiness.
+		// One mutation gate protects the service and model configuration together.
+		if uh.agentModeState != aistack.StateReady || !uh.agentModeGate.TryStart() {
+			uh.agentPresetGate.Reset()
+			uh.toastAdder.ShowErrorToast("Wait until Agent Mode is ready before choosing a model.")
+			return
 		}
+		uh.agentRefresh.Begin()
+		previous := uh.agentModelRow.GetSubtitle()
+		uh.agentModeToggle.widget.SetSensitive(false)
+		uh.agentPresetRow.SetSensitive(false)
+		uh.agentModelRow.SetSubtitle(fmt.Sprintf("Downloading a %s model…", fam.DisplayName()))
+		setActivitySpinner(uh.agentPresetSpinner, true)
 		go uh.applyModelFamilyPreset(fam, previous)
-	}
-	dialog.ConnectResponse(&responseCb)
-	if uh.agentsPrefsPage != nil {
-		dialog.Present(&uh.agentsPrefsPage.Widget)
-	}
+	})
+	dialog.Present(&uh.agentsPrefsPage.Widget)
 }
 
-// applyModelFamilyPreset resolves, pulls, and activates one family's model.
-// previous is the Active Model subtitle before the attempt; every path that
-// does not switch the model — a failure or a dry-run preview — restores it,
-// so the row never claims a model the server is not serving.
+// Pull first, then configure the alias. Failed pulls and previews keep the
+// previous model; controls and gates are restored together on the GTK thread.
 func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) {
-	// The worker owns the preset gate from here until it returns, so a
-	// second preset cannot start while this one is still pulling.
-	defer uh.agentPresetGate.Reset()
-
 	ctx, cancel := aistack.DefaultContext()
 	defer cancel()
-
-	sgtk.RunOnMainThread(func() {
-		if uh.agentModelRow != nil {
-			uh.agentModelRow.SetSubtitle(fmt.Sprintf("Switching to %s…", fam.DisplayName()))
+	finish := func(modelRef, message string, failed bool) {
+		facts := aistack.Observe(true)
+		if facts.UnitPresent {
+			facts.Checked, facts.Healthy = true, aistack.Healthy(context.Background())
 		}
-	})
-	restore := func() {
-		if uh.agentModelRow != nil {
-			uh.agentModelRow.SetSubtitle(previous)
-		}
+		sgtk.RunOnMainThread(func() {
+			uh.agentModeGate.Reset()
+			uh.agentPresetGate.Reset()
+			uh.agentModeToggle.widget.SetSensitive(true)
+			setActivitySpinner(uh.agentPresetSpinner, false)
+			state := aistack.Resolve(facts)
+			uh.agentModeToggle.set(state.On())
+			uh.showAgentModeState(state)
+			if state == aistack.StateReady {
+				if modelRef == "" {
+					uh.agentModelRow.SetSubtitle(previous)
+				} else {
+					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
+				}
+			}
+			if failed {
+				uh.toastAdder.ShowErrorToast(message)
+			} else {
+				uh.toastAdder.ShowToast(message)
+			}
+		})
 	}
-
-	// Get node status for memory fitting. Without the memory we cannot fit a
-	// model to the machine, so a failure to reach the server aborts rather
-	// than silently picking the largest model.
 	status, err := aistack.FetchNodeStatus(ctx)
 	if err != nil {
 		log.Printf("views: fetch node status failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			restore()
-			uh.toastAdder.ShowErrorToast("Could not reach the model server to check memory")
-		})
+		finish("", "Could not reach the model server to check memory.", true)
 		return
 	}
 	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
 	if err != nil {
 		log.Printf("views: resolve candidate failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			restore()
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not find a matching model for %s", fam.DisplayName()))
-		})
+		finish("", fmt.Sprintf("Could not find a model that fits for %s.", fam.DisplayName()), true)
 		return
 	}
 	modelRef := candidate.ModelRef()
-	dryRun := dryrun.Enabled()
-	if dryRun {
+	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would configure alias %s to %s and pull", aistack.ActiveModelAlias, modelRef)
-		sgtk.RunOnMainThread(func() {
-			restore()
-			uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", modelRef))
-		})
+		finish("", fmt.Sprintf("[DRY-RUN] Would switch to %s", modelRef), false)
 		return
 	}
-
-	// Pull first, then set the alias. If the pull fails the alias is left
-	// untouched, so Agent Mode keeps serving the previously working model
-	// instead of pointing at something that is not there.
 	if err := aistack.PullModel(ctx, modelRef); err != nil {
 		log.Printf("views: pull model failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			restore()
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to pull model %s", modelRef))
-		})
+		finish("", fmt.Sprintf("Could not download %s. The previous model was kept.", modelRef), true)
 		return
 	}
-
 	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
 		log.Printf("views: configure alias failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			restore()
-			uh.toastAdder.ShowErrorToast("Could not configure active model alias")
-		})
+		finish("", "Could not select the downloaded model.", true)
 		return
 	}
-
-	sgtk.RunOnMainThread(func() {
-		if uh.agentModelRow != nil {
-			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-		}
-		uh.toastAdder.ShowToast(fmt.Sprintf("Active model switched to %s", fam.DisplayName()))
-	})
+	finish(modelRef, fmt.Sprintf("Selected %s.", fam.DisplayName()), false)
 }
 
-// onAgentModeToggled sets Agent Mode up or tears it down off the main thread.
-// Enabling waits, bounded, for /llmman/node before calling the result ready;
-// a service that started but does not answer is shown as degraded rather
-// than as working.
-//
-// Turning it off can fail in a way that leaves the service running — the
-// stop failed and a follow-up check could not prove otherwise — and
-// internal/aistack deliberately preserves the unit in that case. The failure
-// path here matches it: the switch goes back on and the text says so.
 func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	if !uh.agentModeGate.TryStart() {
+		toggle.set(uh.agentModeState.On())
 		return
 	}
+	previous := uh.agentModeState
+	uh.agentRefresh.Begin()
 	toggle.widget.SetSensitive(false)
+	uh.agentPresetRow.SetSensitive(false)
+	uh.agentModelRow.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
+	uh.agentModelRow.SetSubtitle("Waiting for the model server…")
+	uh.agentPresetRow.SetSubtitle("Waiting for the model server…")
+	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
-
 	go func() {
-		defer uh.agentModeGate.Reset()
-
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
-
 		var err error
 		if enabled {
 			err = aistack.Enable(ctx)
@@ -310,318 +269,36 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 			err = aistack.Disable(ctx)
 		}
 		facts := aistack.Observe(true)
-		if err == nil && !dryRun && facts.UnitPresent {
-			facts.Checked, facts.Healthy = true, aistack.WaitHealthy(ctx, agentModeReadyWait)
+		if !dryRun && facts.UnitPresent {
+			facts.Checked = true
+			if enabled && err == nil {
+				facts.Healthy = aistack.WaitHealthy(ctx, agentModeReadyWait)
+			} else {
+				facts.Healthy = aistack.Healthy(context.Background())
+			}
 		}
-
 		sgtk.RunOnMainThread(func() {
+			uh.agentModeGate.Reset()
+			setActivitySpinner(uh.agentModeSpinner, false)
 			toggle.widget.SetSensitive(true)
-
+			state := aistack.Resolve(facts)
+			if dryRun {
+				state = previous
+			}
+			toggle.set(state.On())
+			uh.showAgentModeState(state)
 			if err != nil {
-				// The error names commands and unit files; it is logged,
-				// and the toast says what actually happened.
 				log.Printf("views: agent mode toggle to %v failed: %v", enabled, err)
-				toggle.set(!enabled)
-				uh.agentModeRow.SetSubtitle(pageview.AgentModeFailureSubtitle(enabled))
 				uh.toastAdder.ShowErrorToast(pageview.AgentModeFailureToast(enabled))
 				return
 			}
-
-			decision := actionmsg.AgentMode(dryRun, enabled)
-			toggle.set(decision.Confirm == enabled)
-			if decision.Confirm {
-				uh.showAgentModeState(aistack.Resolve(facts))
-			} else {
-				uh.showAgentModeState(uh.agentModeState)
+			if enabled && !dryRun && state != aistack.StateReady {
+				uh.toastAdder.ShowErrorToast("The model server did not become ready. Turn Agent Mode off and on to retry.")
+				return
 			}
-			uh.toastAdder.ShowToast(decision.Toast)
+			uh.toastAdder.ShowToast(actionmsg.AgentMode(dryRun, enabled).Toast)
 		})
 	}()
 }
 
-// agentModeReadyWait bounds how long an enable waits for the daemon to
-// answer before reporting it degraded.
 const agentModeReadyWait = time.Minute
-
-// buildPeersGroup builds "Use another machine": the list of already-
-// configured llmman peers this host may route requests to, plus the shared
-// key sent to an authenticated one. It is built unconditionally alongside
-// the Agent Mode switch — offload is configured independently of whether
-// this host's own daemon is currently on, since a disabled local daemon can
-// still forward through llmman once turned on.
-func (uh *UserHome) buildPeersGroup(page *adw.PreferencesPage) {
-	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.PeersGroupTitle())
-	group.SetDescription(pageview.PeersGroupDescription())
-	uh.peersGroup = group
-
-	addRow := adw.NewActionRow()
-	addRow.SetTitle(pageview.PeersAddRowTitle())
-	addRow.SetActivatable(true)
-	addIcon := gtk.NewImageFromIconName("list-add-symbolic")
-	addRow.AddSuffix(&addIcon.Widget)
-	addActivated := func(_ adw.ActionRow) { uh.presentAddPeerDialog() }
-	addRow.ConnectActivated(&addActivated)
-	group.Add(&addRow.Widget)
-
-	keyRow := adw.NewPasswordEntryRow()
-	keyRow.SetTitle(pageview.PeersAPIKeyRowTitle())
-	uh.peersKeyEntry = keyRow
-	// libadwaita emits ::apply only from the apply button, which is shown
-	// only with show-apply-button; Enter then applies too. Without it the
-	// handler below could never run.
-	keyRow.SetShowApplyButton(true)
-	keyApply := func(_ adw.EntryRow) { uh.savePeerAPIKey() }
-	keyRow.ConnectApply(&keyApply)
-	group.Add(&keyRow.Widget)
-
-	empty := adw.NewActionRow()
-	empty.SetTitle(pageview.PeersEmptyRowTitle())
-	empty.SetSensitive(false)
-	uh.peersEmptyRow = empty
-	uh.peersEmptyRowShown = false
-
-	page.Add(group)
-	uh.refreshPeersList()
-}
-
-// refreshPeersList rebuilds the peer rows from disk and kicks off a status
-// probe for each. Safe to call repeatedly; it removes every row it
-// previously added before re-adding the current set. Main thread only.
-func (uh *UserHome) refreshPeersList() {
-	group := uh.peersGroup
-	if group == nil {
-		return
-	}
-	for _, row := range uh.peersListRows {
-		group.Remove(&row.Widget)
-	}
-	uh.peersListRows = nil
-	if uh.peersEmptyRowShown {
-		group.Remove(&uh.peersEmptyRow.Widget)
-		uh.peersEmptyRowShown = false
-	}
-
-	peers, err := aistack.Peers()
-	if err != nil {
-		log.Printf("views: listing agent mode peers: %v", err)
-	}
-	if len(peers) == 0 {
-		group.Add(&uh.peersEmptyRow.Widget)
-		uh.peersEmptyRowShown = true
-		return
-	}
-
-	// Read on the main thread: puregotk widgets, including this entry, must
-	// never be touched from the probe goroutines started below.
-	apiKey := uh.peerAPIKeyForProbe()
-
-	for _, peer := range peers {
-		address := peer.Address
-		enabled := peer.Enabled
-		row := adw.NewActionRow()
-		row.SetTitle(address)
-		if enabled {
-			row.SetSubtitle(pageview.PeerStatusSubtitle(false, aistack.PeerStatus{}))
-		} else {
-			row.SetSubtitle(pageview.PeerDisabledSubtitle())
-		}
-
-		// newGuardedSwitch, not a bare gtk.Switch: without it, a revert of
-		// this row's own optimistic state (refreshPeersList rebuilding from
-		// the store after a failed toggle) would re-enter ::state-set and
-		// fire setPeerEnabled a second time for the same click.
-		var enabledSwitch *guardedSwitch
-		enabledSwitch = newGuardedSwitch(peer.Enabled, func(state bool) {
-			uh.setPeerEnabled(address, state, enabledSwitch)
-		})
-		enabledSwitch.widget.SetTooltipText(pageview.PeerSwitchLabel(address))
-		SetAccessibleLabel(&enabledSwitch.widget.Widget, pageview.PeerSwitchLabel(address))
-		row.AddSuffix(&enabledSwitch.widget.Widget)
-
-		removeBtn := newIconButton("user-trash-symbolic", pageview.PeerRemoveLabel(address))
-		removeBtn.SetValign(gtk.AlignCenterValue)
-		removeBtn.AddCssClass("flat")
-		removeClicked := func(_ gtk.Button) { uh.confirmRemovePeer(address) }
-		removeBtn.ConnectClicked(&removeClicked)
-		row.AddSuffix(&removeBtn.Widget)
-
-		group.Add(&row.Widget)
-		uh.peersListRows = append(uh.peersListRows, row)
-
-		// Only an enabled peer is currently sent prompts by llmman, and
-		// probing it still sends the shared key in the clear over plain
-		// http:// unless the address is https://. A disabled peer is left
-		// showing "Not checked" rather than being probed for no operational
-		// reason.
-		if !enabled {
-			continue
-		}
-		go func(address string, row *adw.ActionRow) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			status := aistack.ProbePeer(ctx, address, apiKey)
-			sgtk.RunOnMainThread(func() {
-				row.SetSubtitle(pageview.PeerStatusSubtitle(true, status))
-			})
-		}(address, row)
-	}
-}
-
-// peerAPIKeyForProbe returns the key most recently entered in this session,
-// if any. ChairLift never reads a stored key back from llmman, so a probe
-// after restart is unauthenticated unless the key is re-entered; that
-// matches ADR-0015's "never read back" rule for this one credential.
-func (uh *UserHome) peerAPIKeyForProbe() string {
-	if uh.peersKeyEntry == nil {
-		return ""
-	}
-	return uh.peersKeyEntry.GetText()
-}
-
-// presentAddPeerDialog opens the add-peer prompt. Built fresh each time:
-// unlike the Agent Mode switch, this dialog carries no long-lived state
-// that a rebuilt callback slot would orphan mid-flight, and rebuilding
-// avoids stale text left over from a previous, cancelled attempt.
-func (uh *UserHome) presentAddPeerDialog() {
-	dialog := adw.NewAlertDialog(pageview.PeerAddDialogTitle(), pageview.PeerAddDialogBody())
-	entry := adw.NewEntryRow()
-	entry.SetTitle(pageview.PeerAddDialogPlaceholder())
-	dialog.SetExtraChild(&entry.Widget)
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("add", "Add")
-	dialog.SetResponseAppearance("add", adw.ResponseSuggestedValue)
-	responseCb := func(_ adw.AlertDialog, response string) {
-		if response != "add" {
-			return
-		}
-		uh.addPeer(entry.GetText())
-	}
-	dialog.ConnectResponse(&responseCb)
-	dialog.Present(&uh.agentsPrefsPage.Widget)
-}
-
-// addPeer validates and adds one peer off the main thread, then refreshes
-// the list. A rejected address or a failed llmman config command surfaces
-// as a toast naming the reason; neither leaves a partial row behind.
-func (uh *UserHome) addPeer(address string) {
-	if !uh.peersMutateGate.TryStart() {
-		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
-		return
-	}
-	go func() {
-		defer uh.peersMutateGate.Reset()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := aistack.AddPeer(ctx, address)
-		sgtk.RunOnMainThread(func() {
-			if err != nil {
-				log.Printf("views: adding agent mode peer: %v", err)
-				uh.toastAdder.ShowErrorToast(pageview.PeerAddFailedToast(err.Error()))
-				return
-			}
-			uh.refreshPeersList()
-		})
-	}()
-}
-
-// confirmRemovePeer asks before removing a configured peer; removal is
-// reversible only by re-adding the address, so it is treated like the
-// destructive actions elsewhere in the app.
-func (uh *UserHome) confirmRemovePeer(address string) {
-	dialog := adw.NewAlertDialog(pageview.PeerRemoveConfirmTitle(address), pageview.PeerRemoveConfirmBody())
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("remove", "Remove")
-	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
-	responseCb := func(_ adw.AlertDialog, response string) {
-		if response != "remove" {
-			return
-		}
-		uh.removePeer(address)
-	}
-	dialog.ConnectResponse(&responseCb)
-	dialog.Present(&uh.agentsPrefsPage.Widget)
-}
-
-func (uh *UserHome) removePeer(address string) {
-	if !uh.peersMutateGate.TryStart() {
-		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
-		return
-	}
-	go func() {
-		defer uh.peersMutateGate.Reset()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := aistack.RemovePeer(ctx, address)
-		sgtk.RunOnMainThread(func() {
-			if err != nil {
-				log.Printf("views: removing agent mode peer: %v", err)
-				uh.toastAdder.ShowErrorToast(pageview.PeerRemoveFailedToast(err.Error()))
-				return
-			}
-			uh.refreshPeersList()
-		})
-	}()
-}
-
-// setPeerEnabled turns one peer on or off. The switch already shows the
-// requested state optimistically via GTK's own state-set handling; a
-// failure here is corrected by refreshPeersList rebuilding from the store's
-// real contents.
-func (uh *UserHome) setPeerEnabled(address string, enabled bool, sw *guardedSwitch) {
-	if !uh.peersMutateGate.TryStart() {
-		// Another peer mutation is already in flight. The switch has
-		// already rendered the requested state via GTK's own
-		// gtk_switch_set_active; revert it and say why, rather than
-		// leaving it showing a state nothing is applying.
-		sw.set(!enabled)
-		uh.toastAdder.ShowErrorToast(pageview.PeerBusyToast())
-		return
-	}
-	go func() {
-		defer uh.peersMutateGate.Reset()
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := aistack.SetPeerEnabled(ctx, address, enabled)
-		sgtk.RunOnMainThread(func() {
-			if err != nil {
-				log.Printf("views: setting agent mode peer %s enabled=%v: %v", address, enabled, err)
-				if enabled {
-					uh.toastAdder.ShowErrorToast(pageview.PeerEnableFailedToast(err.Error()))
-				} else {
-					uh.toastAdder.ShowErrorToast(pageview.PeerDisableFailedToast(err.Error()))
-				}
-			}
-			uh.refreshPeersList()
-		})
-	}()
-}
-
-// savePeerAPIKey sends the shared credential to llmman's own configuration.
-// The key is never stored by ChairLift and never logged; only success or
-// failure is reported. The field is left as typed — ChairLift never reads a
-// stored key back, so clearing it here would make a later probe look
-// unauthenticated even though the key was accepted.
-func (uh *UserHome) savePeerAPIKey() {
-	if uh.peersKeyEntry == nil {
-		return
-	}
-	key := uh.peersKeyEntry.GetText()
-	if key == "" {
-		return
-	}
-	dryRun := dryrun.Enabled()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err := aistack.SetPeerAPIKey(ctx, key)
-		sgtk.RunOnMainThread(func() {
-			if err != nil {
-				log.Printf("views: saving agent mode peer key: %v", err)
-				uh.toastAdder.ShowErrorToast(pageview.PeerKeyFailedToast(err.Error()))
-				return
-			}
-			uh.toastAdder.ShowToast(pageview.PeerKeySavedToast(dryRun))
-		})
-	}()
-}

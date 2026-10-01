@@ -30,6 +30,11 @@ the constraint. Either inline the needed value directly in each `_test.go`
 file that uses it (accepting some duplication) or flag the scope conflict
 back to the spec rather than planning around it.
 
+When a user narrows an implementation to shipped configuration and existing
+wiring, cancel workers building excluded components and remove only your own
+abandoned scaffolding before continuing. The current request overrides an older
+plan; do not keep building the old scope under a new name.
+
 **Learned from:** issue #76's mill run, plan round 1 — a plan chunk for a
 five-test rename added `internal/testnames/testnames.go` plus two new tests
 to centralize the old/new name mapping. The reviewer rejected it (high

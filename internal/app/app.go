@@ -26,6 +26,7 @@ const appID = "io.projectbluefin.chairlift"
 // GLib uses for the option in the command-line dictionary it forwards to the
 // primary instance.
 const optionSetup = "setup"
+const optionFirstRun = "first-run"
 
 // optionAgentMode is the long name of the --agent-mode option, and with it the
 // key GLib uses for the option in the command-line dictionary it forwards to
@@ -128,6 +129,7 @@ func New() *Application {
 
 	// Register command line options
 	app.registerOptions()
+	app.AddMainOption(optionFirstRun, 0, glib.GOptionFlagNoneValue, glib.GOptionArgNoneValue, "Open the first-run software wizard", "")
 
 	return app
 }
@@ -177,7 +179,7 @@ func commandLineRequestsSetup(cl *gio.ApplicationCommandLine) bool {
 	if opts == nil {
 		return false
 	}
-	return opts.Contains(optionSetup)
+	return opts.Contains(optionSetup) || opts.Contains(optionFirstRun)
 }
 
 // commandLineRequestsAgentMode reports whether the invocation carried

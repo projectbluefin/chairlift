@@ -5,7 +5,6 @@
 package actionstate
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -73,6 +72,11 @@ func (s *Serializer) Run(generation uint64, fn func()) bool {
 	return true
 }
 
+// IsCurrent protects a queued completion from a newer request.
+func (s *Serializer) IsCurrent(generation uint64) bool {
+	return generation != 0 && generation == s.generation.Load()
+}
+
 // TryStart moves an idle action to running. It reports false while the action
 // is already running or after it has completed permanently.
 func (g *Gate) TryStart() bool {
@@ -93,57 +97,8 @@ func (g *Gate) Complete() {
 // Decision describes the UI work following one command attempt.
 type Decision struct {
 	Refresh         bool
-	RemoveRow       bool
 	RestoreControl  bool
 	CompleteControl bool
-}
-
-// RefreshDecision describes whether a completed outdated-package query has
-// authoritative replacement rows and which count must accompany them.
-type RefreshDecision struct {
-	ReplaceRows bool
-	Count       int
-}
-
-// Presentation is the outdated-packages expander state for a known count.
-type Presentation struct {
-	Subtitle   string
-	Expandable bool
-}
-
-// OutdatedPresentation derives singular/plural text and expansion state from
-// the current authoritative outdated-package count.
-func OutdatedPresentation(count int) Presentation {
-	noun := "packages"
-	if count == 1 {
-		noun = "package"
-	}
-	return Presentation{
-		Subtitle:   fmt.Sprintf("%d %s available", count, noun),
-		Expandable: count > 0,
-	}
-}
-
-// OutdatedRefresh preserves the last known count when a query fails and
-// replaces it with the discovered count only after a successful query.
-func OutdatedRefresh(succeeded bool, currentCount, discoveredCount int) RefreshDecision {
-	if !succeeded {
-		return RefreshDecision{Count: currentCount}
-	}
-	return RefreshDecision{ReplaceRows: true, Count: discoveredCount}
-}
-
-// PackageUpgrade distinguishes a command failure, a successful dry-run
-// preview, and a successful live package upgrade.
-func PackageUpgrade(succeeded, dryRun bool) Decision {
-	switch {
-	case !succeeded:
-		return Decision{RestoreControl: true}
-	case dryRun:
-		return Decision{RestoreControl: true}
-	default:
-		return Decision{Refresh: true, RemoveRow: true}
-	}
 }
 
 // PackageInstall distinguishes a command failure, a successful dry-run
@@ -174,19 +129,5 @@ func completedPackageMutation(succeeded, dryRun bool) Decision {
 		return Decision{RestoreControl: true}
 	default:
 		return Decision{Refresh: true, CompleteControl: true}
-	}
-}
-
-// MetadataUpdate distinguishes a command failure, a successful dry-run
-// preview, and a successful live Homebrew metadata update. A live success
-// keeps its control busy until the requested refresh finishes.
-func MetadataUpdate(succeeded, dryRun bool) Decision {
-	switch {
-	case !succeeded:
-		return Decision{RestoreControl: true}
-	case dryRun:
-		return Decision{RestoreControl: true}
-	default:
-		return Decision{Refresh: true}
 	}
 }

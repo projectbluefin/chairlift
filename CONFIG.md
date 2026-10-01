@@ -124,8 +124,14 @@ two surviving groups to `updates_page` and remove `system_page` when convenient.
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
   - `install_pulp`: After a confirmed enable, install the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a user-scope Flatpak. Defaults to `false`. Unprivileged and opt-in: it installs for the invoking account only, and a failure here is reported as its own failure rather than rolling back developer access
   - `stage_feeds`: After a confirmed enable, write the curated developer feed catalog to `~/.local/share/chairlift/developer-feeds.opml` so the user can import it into their reader. Defaults to `false`. ChairLift writes the file and stops — nothing is imported automatically, and Pulp's own database is never touched. Disabling Developer Mode never removes Pulp, the staged file, or anything already imported from it
-- `gaming_group`: Gaming Mode; toggles gaming optimizations (shown only when `/usr/share/ublue-os/image-info.json` is present)
+- `gaming_group`: Selective Gaming applications and runtime extensions, with installed user/system states, preserved system entries and visible partial failures (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). A family can be turned on only when its image's web administration can be authenticated or disabled ([ADR-0016](docs/adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting, every switch is shown locked and says so
+
+The Developer group also offers WSL Mode (Lima), Docker, and individually
+selected IDEs and terminal editors, with one JetBrains Toolbox entry. Missing
+fixed helper actions disable only affected switches, not their discoverability.
+KVM permission changes require a new login; Docker needs an accessible daemon
+socket for this session. No user-configurable privileged argv is accepted.
 
 
 ### Livery Page (`livery_page`)

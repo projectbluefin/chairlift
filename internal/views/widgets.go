@@ -66,3 +66,18 @@ func SetAccessibleLabel(widget interface {
 }, label string) {
 	widget.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
 }
+
+func newActivitySpinner() *gtk.Spinner {
+	spinner := gtk.NewSpinner()
+	spinner.SetValign(gtk.AlignCenterValue)
+	spinner.SetVisible(false)
+	SetAccessibleLabel(spinner, "Working…")
+	return spinner
+}
+
+func setActivitySpinner(spinner *gtk.Spinner, busy bool) {
+	if spinner != nil {
+		spinner.SetVisible(busy)
+		spinner.SetSpinning(busy)
+	}
+}

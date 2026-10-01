@@ -9,9 +9,11 @@ import (
 	"syscall"
 	"time"
 
+	"codeberg.org/puregotk/puregotk/v4/glib"
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"github.com/projectbluefin/chairlift/internal/app"
+	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/version"
@@ -26,6 +28,14 @@ func main() {
 	log.Println("main: process start")
 
 	version.Version = buildVersion
+	if err := deskenv.ConfigureSettingsModules(); err != nil {
+		log.Printf("main: configuring native settings backend: %v", err)
+	}
+	// CGO-disabled os.Setenv updates child commands, not libc's environment.
+	// Native GSettings must discover the same modules as those commands.
+	if modules := os.Getenv("GIO_EXTRA_MODULES"); modules != "" && !glib.Setenv("GIO_EXTRA_MODULES", modules, true) {
+		log.Fatal("main: could not configure native settings modules")
+	}
 
 	// Rotation runs headless, from the systemd user unit the Livery page
 	// installs. It must short-circuit before app.New(), which brings up GTK
@@ -61,8 +71,8 @@ func main() {
 	code := application.Run(int32(len(os.Args)), os.Args)
 	log.Printf("main: application exited with status %d", code)
 
-	// The first-run assistant extracts its embedded SVGs into a
-	// process-scoped temp directory; removing it here keeps a run from
+	// The Updates wordmark extracts embedded SVGs into a process-scoped temp
+	// directory; removing it here keeps a run from
 	// leaving one behind. os.Exit below skips deferred calls, so this
 	// cannot be a defer.
 	if err := firstrun.CleanupAssets(); err != nil {

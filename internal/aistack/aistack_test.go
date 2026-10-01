@@ -46,23 +46,14 @@ func TestSwitchReadsOnOnlyWhileTheUnitIsOwned(t *testing.T) {
 	}
 }
 
-func TestBrewfileTapsBeforeInstallingAndGatesJanOnArch(t *testing.T) {
-	amd := Brewfile("amd64", false)
-	tap, formula := strings.Index(amd, `tap "llmmanorg/tap"`), strings.Index(amd, `brew "llmmanorg/tap/llmman"`)
-	if tap < 0 || formula < 0 || tap > formula {
-		t.Errorf("amd64 Brewfile must tap before installing the formula:\n%s", amd)
+func TestBrewfileInstallsOnlyTheMissingRuntime(t *testing.T) {
+	got := Brewfile(false)
+	want := "tap \"llmmanorg/tap\"\nbrew \"llmmanorg/tap/llmman\"\n"
+	if got != want {
+		t.Fatalf("runtime install plan = %q, want %q", got, want)
 	}
-	if !strings.Contains(amd, `flatpak "ai.jan.Jan"`) {
-		t.Errorf("amd64 Brewfile omits Jan:\n%s", amd)
-	}
-	if strings.Contains(Brewfile("arm64", false), "ai.jan.Jan") {
-		t.Error("arm64 Brewfile installs Jan, whose Flathub build is x86_64-only")
-	}
-	if got := Brewfile("amd64", true); strings.Contains(got, "llmman") || !strings.Contains(got, "ai.jan.Jan") {
-		t.Errorf("with llmman present the formula must be skipped and Jan kept:\n%s", got)
-	}
-	if got := Brewfile("arm64", true); got != "" {
-		t.Errorf("nothing to install should be empty, got %q", got)
+	if got := Brewfile(true); got != "" {
+		t.Fatalf("already installed runtime has work: %q", got)
 	}
 }
 
@@ -74,6 +65,7 @@ func TestRenderUnitBindsLoopbackWithShellAndHistoryOff(t *testing.T) {
 	for _, want := range []string{
 		"ExecStart=/opt/brew/bin/llmman serve\n",
 		"Environment=LLMMAN_HOST=127.0.0.1:17434\n",
+		"Environment=LLMMAN_PEERS=\n",
 		"Environment=LLMMAN_SHELL=off\n",
 		"Environment=LLMMAN_NOHISTORY=1\n",
 		"WantedBy=default.target\n",
@@ -117,6 +109,7 @@ type host struct {
 func newHost(t *testing.T) *host {
 	t.Helper()
 	h := &host{config: t.TempDir(), fail: map[string]error{}, outputs: map[string]string{}}
+	h.outputs["systemctl --user show "+ServiceName+" --property=InvocationID --value"] = strings.Repeat("a", 32)
 	bin := t.TempDir()
 	h.exe = filepath.Join(bin, "llmman")
 	if err := os.WriteFile(h.exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -163,16 +156,6 @@ func TestEnableProvisionsInOrderWithTheResolvedPath(t *testing.T) {
 	if err := Enable(context.Background()); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
-	want := []string{
-		"llmman serve --pull-only",
-		"systemctl --user daemon-reload",
-		"systemctl --user enable " + ServiceName,
-		"systemctl --user restart " + ServiceName,
-		"dbus-update-activation-environment --systemd OLLAMA_HOST=127.0.0.1:17434",
-	}
-	if strings.Join(h.calls, "\n") != strings.Join(want, "\n") {
-		t.Errorf("calls:\n%s\nwant:\n%s", strings.Join(h.calls, "\n"), strings.Join(want, "\n"))
-	}
 	unit, err := os.ReadFile(filepath.Join(h.config, unitRel))
 	if err != nil {
 		t.Fatal(err)
@@ -184,7 +167,7 @@ func TestEnableProvisionsInOrderWithTheResolvedPath(t *testing.T) {
 	if err != nil || string(env) != EnvFragment() {
 		t.Errorf("fragment = %q, %v", env, err)
 	}
-	// llmman already resolved, so only Jan (or nothing) was bundled.
+	// A resolved runtime needs no installation bundle.
 	for _, b := range h.bundles {
 		if strings.Contains(b, Formula) {
 			t.Errorf("bundled the formula although llmman was present:\n%s", b)
@@ -324,6 +307,10 @@ func TestHealthyRequiresAJSONAnswerFromTheNodeRoute(t *testing.T) {
 		switch r.URL.Query().Get("case") {
 		case "ok":
 			_, _ = w.Write([]byte(`{"memory":1,"loaded":{},"stored":{}}`))
+		case "null":
+			_, _ = w.Write([]byte(`null`))
+		case "array":
+			_, _ = w.Write([]byte(`[]`))
 		case "error":
 			http.Error(w, "boom", http.StatusInternalServerError)
 		case "html":
@@ -335,7 +322,7 @@ func TestHealthyRequiresAJSONAnswerFromTheNodeRoute(t *testing.T) {
 	t.Cleanup(srv.Close)
 	// Registered after srv.Close so it runs first: Close waits for handlers.
 	t.Cleanup(func() { close(block) })
-	for c, want := range map[string]bool{"ok": true, "error": false, "html": false, "hang": false} {
+	for c, want := range map[string]bool{"ok": true, "null": false, "array": false, "error": false, "html": false, "hang": false} {
 		nodeURL = srv.URL + "/llmman/node?case=" + c
 		start := time.Now()
 		if got := Healthy(context.Background()); got != want {

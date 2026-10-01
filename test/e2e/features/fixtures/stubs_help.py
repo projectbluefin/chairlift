@@ -3,7 +3,7 @@
 Everything the Help page reads from the host is stubbed here so its
 assertions do not depend on what the runner happens to have installed:
 
-* xdg-open and gtk-launch, which the resource rows and the Start Session
+* xdg-open and gtk-launch, which the resource rows and the Open Goose
   button spawn, record their argv into the scenario directory instead of
   opening a browser or an application.
 * brew records every invocation, so a scenario can prove Enhanced
@@ -23,9 +23,8 @@ URL_RECORD = "xdg-open.calls"
 LAUNCH_RECORD = "gtk-launch.calls"
 BREW_RECORD = "brew.calls"
 
-# The programs internal/troubleshoot.Detect looks up on $PATH, plus the
-# setup script, so a stripped PATH cannot let a host copy leak in.
-TROUBLESHOOT_PROGRAMS = ("linux-mcp-server", "goose", "goose-desktop", "goose-mcp-setup")
+# Programs inspected by the existing troubleshooting row.
+TROUBLESHOOT_PROGRAMS = ("linux-mcp-server", "goose", "goose-desktop")
 
 
 def _recorder(context, program, record, exit_code=0):
@@ -115,6 +114,7 @@ def _write_goose_config(context, body):
     os.makedirs(directory, exist_ok=True)
     with open(os.path.join(directory, "config.yaml"), "w", encoding="utf-8") as handle:
         handle.write(body)
+    context.goose_config_before = body
 
 
 LINUX_TOOLS = """\
@@ -123,14 +123,14 @@ extensions:
     enabled: true
     type: stdio
     cmd: linux-mcp-server
+    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]
     name: linux-tools
 """
 
 # Goose configuration files that are present but do not wire the
 # linux-tools extension, each the way a real file can fail to.
 UNWIRED_CONFIGS = {
-    # goose-mcp-setup exits 0 without touching an existing configuration,
-    # leaving only whatever extensions were there before.
+    # Existing provider-only configurations have no diagnostic extension.
     "other-extension": """\
 GOOSE_PROVIDER: gemini-cli
 extensions:

@@ -2,7 +2,7 @@
 name: leaf-package-documentation
 description: Use when documentation enumerates outcomes of a leaf package.
 version: 1.0.0
-last_updated: 2026-09-08
+last_updated: 2026-10-01
 tags:
   - documentation
   - packages
@@ -16,8 +16,8 @@ metadata:
 `docs/design/package-managers.md` (formerly `yeti/`) prose that describes
 what a new puregotk-free leaf
 package's exported functions decide (following the
-`flatpakstatus`/`featurestatus`/`actionmsg` pattern from
-`docs/agents/skills/gtk-headless-tests.md`), when that package has more than
+`updatepresent`/`featurestatus`/`actionmsg` pattern from
+`docs/skills/gtk-headless-testing/SKILL.md`), when that package has more than
 one distinct branch or outcome — success/zero/failure, singular/plural,
 expandable/not.
 
@@ -46,3 +46,10 @@ control. For setup (#224/#225), name the model's zero-step exit, intermediate
 navigation, terminal completion, skip and intentional-dismissal outcomes, then
 state which callbacks remain owned by the adapter ticket. This prevents model
 tests from being reported as desktop interaction coverage.
+
+When consolidating several update surfaces, trace every inventory and badge
+writer before preserving the old adapters. A secondary status reader must not
+overwrite a coordinator's aggregate with its own subset. Document one live
+owner for counts, the preservation rule on failed reads, and which actions
+request that owner's refresh; remove obsolete leaf-package catalog entries
+alongside the readers they served.

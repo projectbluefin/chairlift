@@ -1,8 +1,8 @@
 @updates @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman
 Feature: Updates
-  The Updates destination is the status-first update shell: one status line,
-  one primary action, and a row per update source. Flatpak and Homebrew are
-  faked (fixtures/stubs_updates.py) so every source reports a known state.
+  The Updates destination has one status and primary action, with visible
+  updates grouped by system consequences and apps/tools. Flatpak and Homebrew
+  are faked (fixtures/stubs_updates.py) so every source reports a known state.
   The capability set omits bootc-stage so the Operating system source is
   floored identically on every host; its staging path needs the fixed
   /usr/libexec/bootc-update-stage, which a hosted runner cannot provide.
@@ -16,6 +16,7 @@ Feature: Updates
     And the "Update all" button is sensitive
     And the "Applications" row says "1 update available"
     And the "Firefox" row says "Available: 131.0"
+    And the update for "Firefox" is listed once with an accessible action
     And the "Developer tools" row says "Up to date"
     And the "System components" row says "Not available on this system"
     And the "Operating system" row says "Not available on this system"
@@ -36,11 +37,13 @@ Feature: Updates
   Scenario: The shell reports the check while it runs, then its result
     Given ChairLift is running
     Then the Updates status reads "Checking for updates"
+    And the Updates progress bar is shown
     And the "Applications" row says "Checking for updates…"
     And the Updates page offers no primary action
     When the Flatpak update check is allowed to finish
     Then the Updates status reads "Updates available"
     And the "Applications" row says "1 update available"
+    And the Updates progress bar is hidden
     And the "Update all" button is sensitive
 
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
@@ -55,6 +58,14 @@ Feature: Updates
     Then the Updates status reads "System is up to date"
     And the "Applications" row says "Up to date"
     And the Updates page offers only the "Check again" action
+
+  @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
+  Scenario: A failed source-trust check is not hidden as if every source were trusted
+    Given ChairLift is running
+    Then I see "Unverified sources"
+    And the "Could not check software sources" row says "Broken pipe"
+    And the "Retry" button in the "Could not check software sources" row is sensitive
+    And the application log contains "untrusted tap check failed"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario Outline: <control> discovers an update that appeared after the first check
@@ -170,8 +181,8 @@ Feature: Updates
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Updating one app from its row in a dry run previews that app only and restores the row
     Given ChairLift is running
-    When I expand the "Available updates" row in the "Apps" group
-    Then the "Firefox" row says "Updates to version 131.0, for you only"
+    Then the "Firefox" row says "Available: 131.0, for you only"
+    And the update for "Firefox" is listed once with an accessible action
     When I click the "Update" button in the "Firefox" row
     Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox"
     And I see "[DRY-RUN] Preview: Firefox would be updated — no changes made"
@@ -181,9 +192,29 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-one-outdated
   Scenario: Checking Homebrew for new versions in a dry run previews the refresh and restores the button
     Given ChairLift is running
-    When I click the "Check" button in the "Check for new versions" row
+    When I click the "Check" button in the "Developer tools" row
     Then the application log contains "[DRY-RUN] Would execute: brew update"
-    And the "Check" button in the "Check for new versions" row is sensitive
-    When I expand the "Available updates" row in the "Developer tools" group
-    Then the "jq" row says "Version 1.7.1"
+    And the "Check" button in the "Developer tools" row is sensitive
+    And the "jq" row says "Installed: 1.7.1"
+    And the update for "jq" is listed once with an accessible action
     And the brew tool was never asked to "update"
+
+  @stub.updates-flatpak-current @stub.updates-brew-sources-fail
+  Scenario: A failed source discovery remains visible and can be retried
+    Given ChairLift is running
+    Then the "Could not check software sources" row says "source list unavailable"
+    When software source discovery is reachable again
+    And I click the "Retry" button in the "Could not check software sources" row
+    Then I do not see "Could not check software sources"
+
+  @stub.updates-flatpak-current @stub.updates-brew-untrusted
+  Scenario: Trust remains reachable without opening an update disclosure
+    Given ChairLift is running
+    Then the "vendor/tap" row says "Updates are paused for 1 program"
+    When I click the "Trust…" button in the "vendor/tap" row
+    Then a dialog titled "Trust software from vendor/tap?" is shown
+    When I choose "Trust" in the dialog
+    Then the application log contains "[DRY-RUN] Would execute: brew trust --formula vendor/tap/example"
+    And the "Trust…" button in the "vendor/tap" row is sensitive
+    And the "vendor/tap" row says "Updates are paused"
+    And the brew tool was never asked to "trust"

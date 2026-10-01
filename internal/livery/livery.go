@@ -34,9 +34,10 @@ import (
 // installed so the feature has no missing-asset failure mode and no packaging
 // step: a mark cannot go missing from a binary that contains it.
 //
-// Marks are derived from Simple Icons (CC0), except Universal Blue's, which
-// is the logo Bluefin already ships. They carry fill="currentColor" so GTK
-// and GNOME Shell recolor them to the theme foreground, per GNOME's
+// Most marks derive from Simple Icons (CC0); Universal Blue is the mark
+// Bluefin ships. Apache uses the ASF's current official oak-leaf geometry
+// from https://www.apache.org/images/oakleaf.svg, adapted to monochrome.
+// All carry fill="currentColor" for the theme foreground, per GNOME's
 // symbolic-icon guidance.
 //
 //go:embed assets/*-symbolic.svg

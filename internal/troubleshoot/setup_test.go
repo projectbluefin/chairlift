@@ -2,29 +2,17 @@ package troubleshoot
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"gopkg.in/yaml.v3"
 )
-
-// fakeSetupScript puts an executable named after setupCommand on $PATH, so
-// defaultRunSetup can be exercised without goose-mcp-setup being installed.
-func fakeSetupScript(t *testing.T, body string) {
-	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("shell stub requires a POSIX shell")
-	}
-	dir := t.TempDir()
-	script := filepath.Join(dir, setupCommand)
-	if err := os.WriteFile(script, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
-		t.Fatalf("writing stub: %v", err)
-	}
-	t.Setenv("PATH", dir)
-}
 
 func TestConfigPathUsesUserConfigDir(t *testing.T) {
 	base := t.TempDir()
@@ -93,153 +81,461 @@ func TestDefaultReadConfigPropagatesConfigPathError(t *testing.T) {
 	}
 }
 
-func TestDefaultRunSetupDryRunSkipsTheCommand(t *testing.T) {
-	// No stub on $PATH: if dry-run did not short-circuit, the exec would fail.
-	t.Setenv("PATH", t.TempDir())
-	dryrun.Set(true)
+func TestSetupConnectsExistingConfigurationWithoutChangingUserSettings(t *testing.T) {
 	t.Cleanup(func() { dryrun.Set(false) })
-
-	if err := defaultRunSetup(); err != nil {
-		t.Errorf("defaultRunSetup in dry-run = %v, want nil", err)
+	for _, key := range []string{"", "linux-tools", "linux-mcp-server"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			path, _ := ConfigPath()
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			original := "# User preferences\nGOOSE_PROVIDER: anthropic\nGOOSE_MODEL: existing\nCUSTOM_SETTING: keep-me\nextensions:\n  other:\n    type: builtin\n    enabled: true\n    name: developer\n"
+			if key != "" {
+				original += fmt.Sprintf("  %s:\n    type: stdio\n    cmd: linux-mcp-server\n    enabled: false\n    args: []\n    timeout: 123\n", key)
+			}
+			if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			dryrun.Set(true)
+			if err := defaultRunSetup(); err != nil {
+				t.Fatalf("preview: %v", err)
+			}
+			preview, _ := os.ReadFile(path)
+			if string(preview) != original {
+				t.Fatal("preview changed user settings")
+			}
+			dryrun.Set(false)
+			if err := defaultRunSetup(); err != nil {
+				t.Fatalf("connect existing config: %v", err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || !ParseConfig(got).Wired {
+				t.Fatalf("Linux tools still disconnected: %v", err)
+			}
+			var before, after map[string]any
+			if err := yaml.Unmarshal([]byte(original), &before); err != nil {
+				t.Fatal(err)
+			}
+			if err := yaml.Unmarshal(got, &after); err != nil {
+				t.Fatal(err)
+			}
+			for _, field := range []string{"GOOSE_PROVIDER", "GOOSE_MODEL", "CUSTOM_SETTING"} {
+				if after[field] != before[field] {
+					t.Fatalf("setup replaced %s", field)
+				}
+			}
+			if !reflect.DeepEqual(after["extensions"].(map[string]any)["other"], before["extensions"].(map[string]any)["other"]) {
+				t.Fatal("setup changed another extension")
+			}
+			info, _ := os.Stat(path)
+			if info.Mode().Perm() != 0o600 {
+				t.Fatalf("configuration permissions = %o", info.Mode().Perm())
+			}
+			if err := defaultRunSetup(); err != nil {
+				t.Fatalf("repeat connection: %v", err)
+			}
+			repeated, _ := os.ReadFile(path)
+			if string(repeated) != string(got) {
+				t.Fatal("repeat setup rewrote the connected file")
+			}
+		})
 	}
 }
 
-func TestDefaultRunSetupSucceeds(t *testing.T) {
-	dryrun.Set(false)
-	fakeSetupScript(t, "exit 0")
-
-	if err := defaultRunSetup(); err != nil {
-		t.Errorf("defaultRunSetup = %v, want nil", err)
+func TestSetupRefusesConflictingConfigurationWithoutDataLoss(t *testing.T) {
+	for _, config := range []string{
+		"extensions: [broken",
+		"extensions: {}\nextensions: {}\n",
+		"extensions: {}\n---\nGOOSE_PROVIDER: other\n",
+		"extensions: [linux-tools]\n",
+		"defaults: &defaults\n  extensions:\n    developer:\n      type: builtin\n<<: *defaults\nGOOSE_PROVIDER: existing\n",
+		"defaults: &defaults\n  developer:\n    type: builtin\nextensions:\n  <<: *defaults\n",
+		"extensions:\n  linux-tools:\n    type: http\n    uri: https://example.test\n",
+		"extensions:\n  linux-tools:\n    type: stdio\n    cmd: another-server\n",
+		"extensions:\n  linux-tools:\n    type: stdio\n    cmd: linux-mcp-server\n    args: [--toolset, BOTH]\n",
+		"extensions:\n  linux-tools:\n    type: stdio\n    cmd: linux-mcp-server\n    envs: {LINUX_MCP_SSH_KEY_PATH: /private/key}\n",
+	} {
+		t.Run(config, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			path, _ := ConfigPath()
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err == nil {
+				t.Fatal("conflicting configuration was replaced")
+			}
+			got, _ := os.ReadFile(path)
+			if string(got) != config {
+				t.Fatal("refused setup changed user data")
+			}
+		})
 	}
 }
 
-func TestDefaultRunSetupWrapsFailureOutput(t *testing.T) {
-	dryrun.Set(false)
-	fakeSetupScript(t, "echo 'no provider configured' >&2\nexit 3")
-
-	err := defaultRunSetup()
-	if err == nil {
-		t.Fatal("defaultRunSetup succeeded on a failing command")
+func TestSetupRefusesConfigurationSymlinks(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
 	}
-
-	var setupErr *Error
-	if !errors.As(err, &setupErr) {
-		t.Fatalf("error type = %T, want *troubleshoot.Error", err)
+	target := filepath.Join(t.TempDir(), "config.yaml")
+	original := "GOOSE_PROVIDER: existing\n"
+	if err := os.WriteFile(target, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
 	}
-	if setupErr.Message != "no provider configured" {
-		t.Errorf("Message = %q, want the command's combined output", setupErr.Message)
+	if err := os.Symlink(target, path); err != nil {
+		t.Fatal(err)
 	}
-	var exitErr *exec.ExitError
-	if !errors.As(err, &exitErr) {
-		t.Errorf("wrapped error = %v, want an *exec.ExitError to remain unwrappable", err)
-	}
-}
-
-func TestDefaultRunSetupErrorsWhenCommandMissing(t *testing.T) {
-	dryrun.Set(false)
-	t.Setenv("PATH", t.TempDir())
-
 	if err := defaultRunSetup(); err == nil {
-		t.Fatal("defaultRunSetup succeeded with goose-mcp-setup absent")
+		t.Fatal("setup followed a configuration symlink")
+	}
+	got, _ := os.ReadFile(target)
+	if string(got) != original {
+		t.Fatal("setup changed the link target")
 	}
 }
 
-// TestStepsDispatchTheRightPackages pins the arguments each step hands to
-// Homebrew. Detect cannot catch a wrong name here: a step that tapped or
-// installed the wrong thing would simply leave the feature undetected.
-func TestStepsDispatchTheRightPackages(t *testing.T) {
-	previousTap, previousInstall, previousSetup := tapPackage, installPackage, runSetup
-	t.Cleanup(func() {
-		tapPackage, installPackage, runSetup = previousTap, previousInstall, previousSetup
-	})
-
-	var taps []string
-	type install struct {
-		name string
-		cask bool
+func TestSetupUsesExistingConfigAfterInstallingMissingTools(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
 	}
-	var installs []install
-	setupRuns := 0
-
-	tapPackage = func(name string) error { taps = append(taps, name); return nil }
-	installPackage = func(name string, cask bool) error {
-		installs = append(installs, install{name, cask})
+	if err := os.WriteFile(path, []byte(freshConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	present := map[string]bool{"goose-desktop": true}
+	stubEnvironment(t, freshConfig, present)
+	runSetup = defaultRunSetup
+	installPackage = func(string, bool) error {
+		present["linux-mcp-server"], present["goose"] = true, true
 		return nil
 	}
-	runSetup = func() error { setupRuns++; return nil }
-
-	steps := Steps()
-	if len(steps) != 4 {
-		t.Fatalf("Steps() returned %d steps, want 4", len(steps))
+	after, err := Setup(State{DesktopInstalled: true}, nil)
+	if err != nil || !after.Ready() {
+		t.Fatalf("restored configuration: %+v, %v", after, err)
 	}
-	for _, step := range steps {
-		if err := step.Run(); err != nil {
-			t.Fatalf("%s: %v", step.Name, err)
-		}
-	}
-
-	if len(taps) != 1 || taps[0] != Tap {
-		t.Errorf("taps = %v, want [%s]", taps, Tap)
-	}
-	want := []install{{ServerFormula, false}, {DesktopCask, true}}
-	if len(installs) != len(want) {
-		t.Fatalf("installs = %v, want %v", installs, want)
-	}
-	for i, w := range want {
-		if installs[i] != w {
-			t.Errorf("install %d = %v, want %v", i, installs[i], w)
-		}
-	}
-	if setupRuns != 1 {
-		t.Errorf("setup script ran %d times, want 1", setupRuns)
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != freshConfig {
+		t.Fatal("existing configuration was modified")
 	}
 }
 
-// TestStepsAlwaysTap guards the one step with no Needed shortcut: brew
-// requires the tap before either qualified name resolves, and re-tapping is
-// cheap, so it must run on every attempt.
+func TestSetupCopiesTheShippedConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous; dryrun.Set(false) })
+	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	want := []byte(freshConfig)
+	if err := os.WriteFile(defaultConfigPath, want, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := defaultRunSetup(); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ConfigPath()
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("premade configuration: %q, %v", got, err)
+	}
+}
+
+func TestSetupPinsDiagnosticPolicyInNewPremadeConfig(t *testing.T) {
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	for _, key := range []string{"linux-mcp-server", "linux-tools"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+			data := []byte(fmt.Sprintf("GOOSE_PROVIDER: existing-provider\nGOOSE_MODEL: existing-model\nextensions:\n  %s:\n    cmd: linux-mcp-server\n    type: stdio\n    enabled: true\n    args: []\n    envs: {}\n  other:\n    cmd: other-server\n    type: stdio\n    enabled: false\n", key))
+			if err := os.WriteFile(defaultConfigPath, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err != nil {
+				t.Fatalf("shipped default preset could not be set up: %v", err)
+			}
+			path, _ := ConfigPath()
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state := ParseConfig(got); !state.Wired || state.Provider != "existing-provider" {
+				t.Fatalf("new preset = %+v, want fixed diagnostics without changing provider", state)
+			}
+			var document map[string]any
+			if err := yaml.Unmarshal(got, &document); err != nil {
+				t.Fatal(err)
+			}
+			if document["GOOSE_MODEL"] != "existing-model" || document["extensions"].(map[string]any)["other"] == nil {
+				t.Fatal("setup dropped the model or an unrelated extension")
+			}
+		})
+	}
+}
+
+func TestSetupDoesNotReplaceExplicitUnsafePremadePolicy(t *testing.T) {
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	for _, key := range []string{"linux-mcp-server", "linux-tools"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+			data := []byte(fmt.Sprintf("extensions:\n  %s:\n    cmd: linux-mcp-server\n    type: stdio\n    args: [--toolset, BOTH]\n", key))
+			if err := os.WriteFile(defaultConfigPath, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err == nil {
+				t.Fatal("unsafe explicit policy was silently replaced")
+			}
+			path, _ := ConfigPath()
+			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("unsafe preset was written: %v", err)
+			}
+		})
+	}
+}
+
+func TestSetupPreviewDoesNotWriteConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+	if err := defaultRunSetup(); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ConfigPath()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("preview wrote configuration: %v", err)
+	}
+}
+
+func TestSetupRejectsInvalidPremadeConfiguration(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(defaultConfigPath, []byte("extensions: {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := defaultRunSetup(); err == nil {
+		t.Fatal("invalid shipped configuration was accepted")
+	}
+	path, _ := ConfigPath()
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid configuration was installed: %v", err)
+	}
+}
+
+// setupPipeline uses actual process execution and filesystem effects. Its brew
+// fixture cannot install anything until the required tap has been added.
+func setupPipeline(t *testing.T) string {
+	t.Helper()
+	prefix := t.TempDir()
+	bin := filepath.Join(prefix, "bin")
+	if err := os.Mkdir(bin, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(prefix, "config"))
+	t.Setenv("HOME", prefix)
+	t.Setenv("GOOSE_TEST_PREFIX", prefix)
+	stub := filepath.Join(prefix, "tool")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brew := `#!/bin/sh
+case "$*" in
+  "tap ublue-os/tap") /usr/bin/touch "$GOOSE_TEST_PREFIX/tapped" ;;
+  "install ublue-os/tap/linux-mcp-server")
+    test -f "$GOOSE_TEST_PREFIX/tapped" || exit 2
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/linux-mcp-server"
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/goose" ;;
+  "install --cask ublue-os/tap/goose-linux")
+    test -f "$GOOSE_TEST_PREFIX/tapped" || exit 2
+    /usr/bin/cp "$GOOSE_TEST_PREFIX/tool" "$GOOSE_TEST_PREFIX/bin/goose-desktop" ;;
+  *) exit 3 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(bin, "brew"), []byte(brew), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	oldLook, oldRead, oldTap, oldInstall, oldSetup, oldDefault := lookPath, readConfig, tapPackage, installPackage, runSetup, defaultConfigPath
+	t.Cleanup(func() {
+		lookPath, readConfig, tapPackage, installPackage, runSetup, defaultConfigPath = oldLook, oldRead, oldTap, oldInstall, oldSetup, oldDefault
+		dryrun.Set(false)
+	})
+	lookPath, readConfig, tapPackage, installPackage, runSetup = defaultLookPath, defaultReadConfig, homebrew.Tap, homebrew.Install, defaultRunSetup
+	dryrun.Set(false)
+	defaultConfigPath = filepath.Join(prefix, "preset.yaml")
+	preset := fmt.Sprintf("extensions:\n  linux-mcp-server:\n    type: stdio\n    cmd: %q\n    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]\n", filepath.Join(bin, "linux-mcp-server"))
+	if err := os.WriteFile(defaultConfigPath, []byte(preset), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return prefix
+}
+
+func TestStepsDispatchTheRightPackages(t *testing.T) {
+	setupPipeline(t)
+	after, err := Setup(State{}, nil)
+	if err != nil || !after.Ready() || !after.DesktopInstalled {
+		t.Fatalf("fresh package setup: %+v, %v", after, err)
+	}
+}
+
 func TestStepsAlwaysTap(t *testing.T) {
-	fullyInstalled := State{
-		ServerInstalled:  true,
-		AgentInstalled:   true,
-		DesktopInstalled: true,
-		Wired:            true,
+	prefix := setupPipeline(t)
+	after, err := Setup(State{}, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	steps := Steps()
-	if !steps[0].Needed(fullyInstalled) {
-		t.Error("tap step reported not needed on a fully installed host")
+	marker := filepath.Join(prefix, "tapped")
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
 	}
-	for _, step := range steps[1:] {
-		if step.Needed(fullyInstalled) {
-			t.Errorf("%s reported needed on a fully installed host", step.Name)
-		}
+	if _, err := Setup(after, nil); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestErrorPrefersCommandOutput(t *testing.T) {
-	err := &Error{Message: "no provider configured", Err: errors.New("exit status 3")}
-
-	if got := err.Error(); got != "no provider configured" {
-		t.Errorf("Error() = %q, want the command output", got)
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("repeat setup did not restore the tap: %v", err)
 	}
 }
 
-func TestErrorFallsBackToWrappedError(t *testing.T) {
-	// A command that fails silently leaves Message empty; the user must still
-	// see something.
-	err := &Error{Err: errors.New("exit status 3")}
-
-	if got := err.Error(); got != "exit status 3" {
-		t.Errorf("Error() = %q, want the wrapped error", got)
+func TestSetupSkipsStepsThatAreAlreadyDone(t *testing.T) {
+	stubEnvironment(t, "", map[string]bool{"linux-mcp-server": true, "goose": true, "goose-desktop": true})
+	installs, connections := 0, 0
+	installPackage = func(string, bool) error {
+		installs++
+		return nil
+	}
+	runSetup = func() error {
+		connections++
+		readConfig = func() ([]byte, error) { return []byte(freshConfig), nil }
+		return nil
+	}
+	state := State{ServerInstalled: true, AgentInstalled: true, DesktopInstalled: true}
+	after, err := Setup(state, nil)
+	if err != nil || !after.Ready() {
+		t.Fatalf("connecting installed tools: %+v, %v", after, err)
+	}
+	if installs != 0 || connections != 1 {
+		t.Fatalf("setup performed %d installs and %d connections; want no installs and one connection", installs, connections)
+	}
+	if _, err := Setup(after, nil); err != nil {
+		t.Fatal(err)
+	}
+	if installs != 0 || connections != 1 {
+		t.Fatalf("ready tools were reinstalled or reconnected: installs=%d connections=%d", installs, connections)
 	}
 }
 
-func TestErrorUnwrap(t *testing.T) {
-	wrapped := errors.New("exit status 3")
-	err := &Error{Message: "output", Err: wrapped}
+func TestConfigUpdateRefusesConcurrentUserEdits(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	original := []byte("GOOSE_PROVIDER: existing\n")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, snapshot, err := readUserConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := []byte("GOOSE_PROVIDER: changed-by-goose\n")
+	if err := os.WriteFile(path, changed, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeUserConfig(path, original, snapshot, []byte(premadeConfig)); err == nil {
+		t.Fatal("setup replaced a concurrent user edit")
+	}
+	got, _ := os.ReadFile(path)
+	if !reflect.DeepEqual(got, changed) {
+		t.Fatal("setup lost the new user settings")
+	}
+}
 
-	if !errors.Is(err, wrapped) {
-		t.Errorf("errors.Is did not find the wrapped error through Unwrap")
+func TestFreshConfigWriteDoesNotReplaceANewUserFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	original := []byte("GOOSE_PROVIDER: created-by-goose\n")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeUserConfig(path, nil, nil, []byte(premadeConfig)); !errors.Is(err, os.ErrExist) {
+		t.Fatalf("concurrent creation error = %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	if !reflect.DeepEqual(got, original) {
+		t.Fatal("setup replaced the newly created file")
+	}
+}
+
+func TestExistingSetupPipelineActuallyConnectsLinuxTools(t *testing.T) {
+	setupPipeline(t)
+	installed, err := Setup(State{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ConfigPath()
+	user := []byte("GOOSE_PROVIDER: existing-provider\nGOOSE_MODEL: existing-model\nextensions:\n  developer:\n    type: builtin\n    enabled: true\n")
+	if err := os.WriteFile(path, user, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	installed.Wired = false
+	after, err := Setup(installed, nil)
+	if err != nil || !after.Ready() || after.Provider != "existing-provider" || !after.ModelSelected {
+		t.Fatalf("installed-but-unwired pipeline: %+v, %v", after, err)
+	}
+	got, _ := os.ReadFile(path)
+	var document map[string]any
+	if err := yaml.Unmarshal(got, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document["GOOSE_MODEL"] != "existing-model" || document["extensions"].(map[string]any)["developer"] == nil {
+		t.Fatal("connecting diagnostics lost the user's Goose settings")
+	}
+}
+
+func TestSetupRefusesSharedDiagnosticMappings(t *testing.T) {
+	for _, key := range diagnosticExtensionKeys {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			path, _ := ConfigPath()
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			original := []byte(fmt.Sprintf("extensions:\n  %s: &diagnostics\n    cmd: linux-mcp-server\n    type: stdio\n    enabled: false\n    args: []\n  other: *diagnostics\n", key))
+			if err := os.WriteFile(path, original, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err == nil {
+				t.Fatal("repair changed an extension shared with unrelated settings")
+			}
+			got, _ := os.ReadFile(path)
+			if !reflect.DeepEqual(got, original) {
+				t.Fatal("refused shared mapping changed the user's file")
+			}
+		})
+	}
+}
+
+func TestSetupRepairsStaleDiagnosticExecutable(t *testing.T) {
+	setupPipeline(t)
+	if _, err := Setup(State{}, nil); err != nil {
+		t.Fatal(err)
+	}
+	path, _ := ConfigPath()
+	data := []byte("GOOSE_PROVIDER: existing-provider\nextensions:\n  linux-tools:\n    type: stdio\n    cmd: /missing/old-cellar/bin/linux-mcp-server\n    args: [--toolset, FIXED, --no-search-for-ssh-key, --verify-host-keys]\n")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if Detect().Wired {
+		t.Fatal("missing executable was reported connected")
+	}
+	if err := defaultRunSetup(); err != nil {
+		t.Fatal(err)
+	}
+	after := Detect()
+	if !after.Wired || after.Provider != "existing-provider" {
+		t.Fatalf("stale diagnostic repair: %+v", after)
 	}
 }

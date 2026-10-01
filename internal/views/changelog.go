@@ -25,11 +25,9 @@ const changelogTimeout = 3 * time.Minute
 // to the registry; the pure diff it feeds is covered by fixtures.
 var fetchSBOM sbom.FetchFunc = (&sbom.RegistryClient{}).Fetch
 
-// buildChangelogRow adds the "What's Changing" drill-down inside the
-// staged-update expander. It is a row rather than a page: the diff only
-// means anything relative to a specific staged update, and a top-level page
-// would have to invent an answer for a system with nothing staged.
-func (uh *UserHome) buildChangelogRow(expander *adw.ExpanderRow) {
+// buildChangelogRow keeps Compare visible beside the optional download details.
+// Its result sections remain expandable, but the action needs no disclosure.
+func (uh *UserHome) buildChangelogRow(group *adw.PreferencesGroup) {
 	row := adw.NewActionRow()
 	presentation := pageview.ChangelogRow(false)
 	row.SetTitle(presentation.Title)
@@ -46,7 +44,8 @@ func (uh *UserHome) buildChangelogRow(expander *adw.ExpanderRow) {
 	button.ConnectClicked(&clickedCb)
 	row.AddSuffix(&button.Widget)
 
-	expander.AddRow(&row.Widget)
+	group.Add(&row.Widget)
+	uh.changelogGroup = group
 	uh.changelogRow = row
 	uh.changelogButton = button
 }
@@ -65,9 +64,9 @@ func (uh *UserHome) refreshChangelogAvailability(status *bootc.Status) {
 	}
 	changed := booted != uh.changelogBooted || staged != uh.changelogStaged
 	if changed {
-		if uh.bootcStageExpander != nil {
+		if uh.changelogGroup != nil {
 			for _, section := range uh.changelogSections {
-				uh.bootcStageExpander.Remove(&section.Widget)
+				uh.changelogGroup.Remove(&section.Widget)
 			}
 		}
 		uh.changelogSections = nil
@@ -132,7 +131,7 @@ func (uh *UserHome) onChangelogClicked() {
 // changelog row. A repeat comparison must replace them rather than stack a
 // second copy underneath the first.
 func (uh *UserHome) renderChangelogSections(result sbom.Result) {
-	parent := uh.bootcStageExpander
+	parent := uh.changelogGroup
 	if parent == nil {
 		return
 	}
@@ -154,7 +153,7 @@ func (uh *UserHome) renderChangelogSections(result sbom.Result) {
 			expander.AddRow(&row.Widget)
 		}
 
-		parent.AddRow(&expander.Widget)
+		parent.Add(&expander.Widget)
 		uh.changelogSections = append(uh.changelogSections, expander)
 	}
 }

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Print the next ChairLift calendar version tag.
 #
-# Scheme: vYY.MM.N[-PRERELEASE]
+# Scheme: vYY.MM.N
 #
 #   YY  two-digit year, MM zero-padded month — the release's calendar slot,
 #       matching how the Bluefin images are dated (stable-YYYYMMDD).
-#   N   sequence within that month, starting at 0.
+#   N   stable point-release sequence within that month, starting at 1.
 #
 # The leading zero in MM is deliberate and is why this is not svu: it reads
 # as a date. GoReleaser's semver parser accepts it and normalises 26.09.0 to
@@ -14,12 +14,13 @@
 # `{{ .Tag }}`, not `{{ .Version }}`.
 #
 # Usage:
-#   scripts/next-version.sh            -> v26.09.0   (or v26.09.1 if 0 exists)
-#   scripts/next-version.sh alpha.1    -> v26.09.0-alpha.1
-#   scripts/next-version.sh alpha.3    -> v26.09.0-alpha.3 (after alpha.2)
+#   scripts/next-version.sh            -> v26.10.1   (or v26.10.2 if 1 exists)
 set -euo pipefail
 
-prerelease="${1:-}"
+if [ "$#" -ne 0 ]; then
+	echo "next-version: stable releases only; no arguments accepted" >&2
+	exit 1
+fi
 
 # NEXT_VERSION_SLOT pins the calendar slot (YY.MM); tests use it so the
 # answer does not depend on today's date.
@@ -29,32 +30,19 @@ slot="${NEXT_VERSION_SLOT:-$(date +%y.%m)}"
 # be literal: unescaped, `26.09` also matches `26x09`.
 slot_pattern="${slot//./\\.}"
 
-# Highest N already tagged in this calendar slot. Release and prerelease tags
-# share the sequence, so an alpha does not silently reuse a released number.
+# Only stable tags advance the monthly sequence; historical alpha tags remain
+# available but never influence a new stable release.
 highest="$(
 	git tag --list "v${slot}.*" |
-		sed -E "s/^v${slot_pattern}\.([0-9]+).*$/\1/" |
-		grep -E '^[0-9]+$' |
+		grep -E "^v${slot_pattern}\.[0-9]+$" |
+		sed -E "s/^v${slot_pattern}\.([0-9]+)$/\1/" |
 		sort -n |
 		tail -1 ||
 		true
 )"
 
-# A prerelease belongs to the version it precedes: while vSLOT.N has only
-# prerelease tags, N is unreleased, so its next prerelease and its final
-# release both stay on N. Only a final vSLOT.N moves the sequence on.
-if [ -z "${highest}" ]; then
-	next=0
-elif git rev-parse -q --verify "refs/tags/v${slot}.${highest}" >/dev/null; then
-	next=$((highest + 1))
-else
-	next="${highest}"
-fi
-
+next=$((${highest:-0} + 1))
 version="v${slot}.${next}"
-if [ -n "${prerelease}" ]; then
-	version="${version}-${prerelease}"
-fi
 
 if git rev-parse -q --verify "refs/tags/${version}" >/dev/null; then
 	echo "next-version: ${version} is already tagged" >&2

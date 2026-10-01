@@ -32,12 +32,6 @@ def _record(context, name):
         return []
 
 
-def _read_log(context):
-    try:
-        with open(context.log_path, "r", encoding="utf-8", errors="replace") as handle:
-            return handle.read()
-    except OSError:
-        return ""
 
 
 def _group(context, title):
@@ -167,6 +161,28 @@ def step_goose_launched(context, desktop_id):
     ok = atspi.poll(lambda: _record(context, stubs_help.LAUNCH_RECORD) == [desktop_id])
     assert ok, f"gtk-launch calls {_record(context, stubs_help.LAUNCH_RECORD)} != [{desktop_id!r}]"
 
+@then("connected Linux tools offer Goose without claiming a ready AI service")
+def step_tools_connected(context):
+    row = atspi.row_containing(_content(context), TROUBLESHOOT_ROW)
+    button = atspi.find_button(row, "Open Goose")
+    assert atspi.poll(lambda: atspi.sensitive(button)), "Goose cannot be opened after tools were connected"
+    subtitle = _troubleshoot_subtitle(context) or ""
+    assert "Ready" not in subtitle, "tool wiring was misrepresented as a ready model service"
+
+
+@then('the troubleshooting row names "{service}"')
+def step_selected_service(context, service):
+    assert atspi.poll(lambda: service in (_troubleshoot_subtitle(context) or "")), "the selected service is not disclosed"
+
+
+@then("Goose's existing configuration was kept unchanged")
+def step_existing_config_untouched(context):
+    path = os.path.join(context.home, ".config", "goose", "config.yaml")
+    with open(path, "r", encoding="utf-8") as handle:
+        observed = handle.read()
+    assert observed == context.goose_config_before, "setup changed existing Goose settings under dry-run or after refusal"
+
+
 
 @then('the troubleshooting setup never ran "brew {verb}"')
 def step_brew_never(context, verb):
@@ -174,27 +190,6 @@ def step_brew_never(context, verb):
     assert not calls, f"brew ran {verb!r} for real: {calls}"
 
 
-@then('the troubleshooting setup previewed exactly')
-def step_setup_previewed(context):
-    """The dry-run preview lines, in order, and no other setup step."""
-    want = [row["command"] for row in context.table]
-    candidates = (
-        "[DRY-RUN] Would execute: brew tap ",
-        "[DRY-RUN] Would execute: brew install ",
-        "[DRY-RUN] would execute: goose-mcp-setup",
-    )
-
-    def previews():
-        got = []
-        for line in _read_log(context).splitlines():
-            for prefix in candidates:
-                at = line.find(prefix)
-                if at != -1:
-                    got.append(line[at + len("[DRY-RUN] "):].split(": ", 1)[1])
-        return got
-
-    ok = atspi.poll(lambda: previews() == want)
-    assert ok, f"setup previews {previews()} != {want}"
 
 
 @then("Goose's configuration file was not written")

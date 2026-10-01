@@ -3,6 +3,7 @@ package aistack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -288,6 +289,11 @@ func TestFetchNodeStatus(t *testing.T) {
 
 func TestConfigureActiveModelAndPull(t *testing.T) {
 	h := newHost(t)
+	unit, _ := RenderUnit(h.exe)
+	path, _ := UnitPath()
+	if err := writeAtomic(path, unit); err != nil {
+		t.Fatal(err)
+	}
 
 	// VerifyModelStored (via PullModel) reads /llmman/node, so point the
 	// node server at a mock that reports the model stored.
@@ -306,7 +312,7 @@ func TestConfigureActiveModelAndPull(t *testing.T) {
 		t.Fatalf("ConfigureActiveModel failed: %v", err)
 	}
 
-	wantCall := "llmman config set aliases.bluefin-active unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
+	wantCall := "llmman config set aliases.bluefin-active hf.co/unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"
 	var foundConfig bool
 	for _, call := range h.calls {
 		if call == wantCall {
@@ -334,5 +340,53 @@ func TestConfigureActiveModelAndPull(t *testing.T) {
 	}
 	if !foundPull {
 		t.Errorf("expected call %q in %v", wantPull, h.calls)
+	}
+}
+
+func TestReadActiveModelDistinguishesUnsetAliasFromFailure(t *testing.T) {
+	newHost(t)
+	failure := errors.New("command failed")
+	for _, test := range []struct {
+		name, output, model string
+		err                 error
+		wantError           bool
+	}{
+		{name: "fresh runtime", output: "Error: aliases.bluefin-active: not set", err: failure},
+		{name: "configured", output: "unsloth/example:Q4_K_M\n", model: "unsloth/example:Q4_K_M"},
+		{name: "config read failed", output: "Error: permission denied", err: failure, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			run = func(context.Context, string, ...string) (string, error) { return test.output, test.err }
+			model, err := ReadActiveModel(context.Background())
+			if model != test.model || (err != nil) != test.wantError {
+				t.Fatalf("ReadActiveModel = %q, %v", model, err)
+			}
+		})
+	}
+}
+
+func TestStoredModelIdentityUsesCanonicalRepository(t *testing.T) {
+	for _, test := range []struct {
+		name, stored string
+		wantError    bool
+	}{
+		{name: "canonical Hugging Face identity", stored: "hf.co/unsloth/Qwen3-8B-GGUF:Q4_K_M"},
+		{name: "bare accepted identity", stored: "unsloth/Qwen3-8B-GGUF:Q4_K_M"},
+		{name: "different publisher", stored: "hf.co/other/Qwen3-8B-GGUF:Q4_K_M", wantError: true},
+		{name: "ambiguous basename", stored: "Qwen3-8B-GGUF:Q4_K_M", wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(NodeStatus{Stored: map[string]json.RawMessage{test.stored: json.RawMessage("1")}})
+			}))
+			defer server.Close()
+			previous := nodeURL
+			nodeURL = server.URL
+			defer func() { nodeURL = previous }()
+			err := VerifyModelStored(context.Background(), "unsloth/Qwen3-8B-GGUF:Q4_K_M")
+			if (err != nil) != test.wantError {
+				t.Fatalf("stored identity %q: %v", test.stored, err)
+			}
+		})
 	}
 }

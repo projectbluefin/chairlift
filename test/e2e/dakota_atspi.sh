@@ -74,6 +74,7 @@ mkdir -p "$ROOT/$OUT"
 
 exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
     --tmpfs /tmp:rw,mode=1777 \
+    --mount type=bind,source=/dev/null,destination=/proc/cmdline,ro \
     --tmpfs /usr/share/chairlift:ro,notmpcopyup \
     -v "$ROOT:/workspace" \
     -v "$BREW:$BREW:ro" \

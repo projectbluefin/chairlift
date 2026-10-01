@@ -32,6 +32,15 @@ func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
 		if strings.HasSuffix(f.Repo, ":latest") || strings.HasSuffix(f.Image(), ":build") {
 			t.Errorf("family %q pins a mutable image tag: %q", f.ID, f.Image())
 		}
+		// A family is pinned by digest, so a re-pushed tag cannot change the
+		// image under a running unit; the digest is what the readiness gate and
+		// the enable path both trust.
+		if !isSHA256Digest(f.Digest) {
+			t.Errorf("family %q is not pinned by a sha256 digest: %q", f.ID, f.Digest)
+		}
+		if !strings.Contains(f.Image(), "@"+f.Digest) {
+			t.Errorf("family %q Image() does not carry its pinned digest: %q", f.ID, f.Image())
+		}
 	}
 	for _, id := range wantIDs {
 		if !seen[id] {
@@ -457,4 +466,23 @@ func TestApplyOverridesRejectsBadInput(t *testing.T) {
 			}
 		})
 	}
+}
+
+// isSHA256Digest reports whether d is a well-formed "sha256:<64 hex>" OCI
+// manifest index digest.
+func isSHA256Digest(d string) bool {
+	const prefix = "sha256:"
+	if !strings.HasPrefix(d, prefix) {
+		return false
+	}
+	hex := d[len(prefix):]
+	if len(hex) != 64 {
+		return false
+	}
+	for _, r := range hex {
+		if !strings.ContainsRune("0123456789abcdef", r) {
+			return false
+		}
+	}
+	return true
 }

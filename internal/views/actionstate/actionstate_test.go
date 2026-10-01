@@ -7,40 +7,6 @@ import (
 	"time"
 )
 
-func TestPackageUpgradeEnumeratesEveryOutcome(t *testing.T) {
-	tests := []struct {
-		name      string
-		succeeded bool
-		dryRun    bool
-		want      Decision
-	}{
-		{
-			name: "failure restores the action without changing rows",
-			want: Decision{RestoreControl: true},
-		},
-		{
-			name:      "dry-run success restores the action without refreshing",
-			succeeded: true,
-			dryRun:    true,
-			want:      Decision{RestoreControl: true},
-		},
-		{
-			name:      "live success removes the row and refreshes metadata",
-			succeeded: true,
-			want:      Decision{Refresh: true, RemoveRow: true},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := PackageUpgrade(tt.succeeded, tt.dryRun)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("PackageUpgrade(%v, %v) = %#v, want %#v", tt.succeeded, tt.dryRun, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestPackageInstallEnumeratesEveryOutcome(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -112,118 +78,6 @@ func TestPackageMutationsEnumerateEveryInstalledOutcome(t *testing.T) {
 						t.Fatalf("%s decision(%v, %v) = %#v, want %#v", operation, tt.succeeded, tt.dryRun, got, tt.want)
 					}
 				})
-			}
-		})
-	}
-}
-
-func TestMetadataUpdateEnumeratesEveryOutcome(t *testing.T) {
-	tests := []struct {
-		name      string
-		succeeded bool
-		dryRun    bool
-		want      Decision
-	}{
-		{
-			name: "failure restores the action without refreshing",
-			want: Decision{RestoreControl: true},
-		},
-		{
-			name:      "dry-run success restores the action without refreshing",
-			succeeded: true,
-			dryRun:    true,
-			want:      Decision{RestoreControl: true},
-		},
-		{
-			name:      "live success refreshes before restoring the action",
-			succeeded: true,
-			want:      Decision{Refresh: true},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := MetadataUpdate(tt.succeeded, tt.dryRun)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("MetadataUpdate(%v, %v) = %#v, want %#v", tt.succeeded, tt.dryRun, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestOutdatedRefreshPreservesLastKnownStateOnFailure(t *testing.T) {
-	tests := []struct {
-		name            string
-		succeeded       bool
-		currentCount    int
-		discoveredCount int
-		want            RefreshDecision
-	}{
-		{
-			name:            "failed query preserves current count and rows",
-			currentCount:    4,
-			discoveredCount: 0,
-			want:            RefreshDecision{Count: 4},
-		},
-		{
-			name:            "successful query replaces count and rows",
-			succeeded:       true,
-			currentCount:    4,
-			discoveredCount: 2,
-			want:            RefreshDecision{ReplaceRows: true, Count: 2},
-		},
-		{
-			name:         "successful empty query clears count and rows",
-			succeeded:    true,
-			currentCount: 4,
-			want:         RefreshDecision{ReplaceRows: true},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := OutdatedRefresh(tt.succeeded, tt.currentCount, tt.discoveredCount)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf(
-					"OutdatedRefresh(%v, %d, %d) = %#v, want %#v",
-					tt.succeeded,
-					tt.currentCount,
-					tt.discoveredCount,
-					got,
-					tt.want,
-				)
-			}
-		})
-	}
-}
-
-func TestOutdatedPresentationCoversCountStates(t *testing.T) {
-	tests := []struct {
-		name  string
-		count int
-		want  Presentation
-	}{
-		{
-			name: "zero",
-			want: Presentation{Subtitle: "0 packages available"},
-		},
-		{
-			name:  "singular",
-			count: 1,
-			want:  Presentation{Subtitle: "1 package available", Expandable: true},
-		},
-		{
-			name:  "plural",
-			count: 2,
-			want:  Presentation{Subtitle: "2 packages available", Expandable: true},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := OutdatedPresentation(tt.count)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("OutdatedPresentation(%d) = %#v, want %#v", tt.count, got, tt.want)
 			}
 		})
 	}
@@ -399,5 +253,20 @@ func TestSerializerRefusesAnUnclaimedGeneration(t *testing.T) {
 	var s Serializer
 	if s.Run(0, func() { t.Error("unclaimed work ran") }) {
 		t.Error("Run accepted generation 0")
+	}
+}
+
+func TestSerializerIsCurrentFollowsLaterClaims(t *testing.T) {
+	var s Serializer
+	if s.IsCurrent(0) {
+		t.Fatal("unclaimed completion is current")
+	}
+	first := s.Claim()
+	if !s.IsCurrent(first) {
+		t.Fatal("new completion is stale")
+	}
+	second := s.Claim()
+	if s.IsCurrent(first) || !s.IsCurrent(second) {
+		t.Fatal("new request did not supersede first completion")
 	}
 }

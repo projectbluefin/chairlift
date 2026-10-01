@@ -14,7 +14,9 @@
 // for display and for comparison against what is booted, not for handing to
 // `bootc switch`, which resolves its target from internal/imageinfo's tables
 // behind the pkexec boundary. ADR-0013 records where the network call lives
-// and why pinning to a dated tag is not part of this package.
+// and why pinning to a dated tag is not part of this package. The privileged
+// helper uses only Client.Tag to verify its own derived pin/unpin candidates
+// (ADR-0017), discarding all returned registry strings.
 //
 // Every request goes through Client.HTTP, the seam internal/sbom already
 // uses, so no gated test reaches the network.
@@ -37,7 +39,7 @@ import (
 // maxDocumentBytes caps every JSON document this package decodes. The tag
 // list for ghcr.io/ublue-os/bluefin is 1907 tags across 20 pages and one
 // manifest is a few kilobytes, so the cap is generous — but it is present
-// because these are unauthenticated responses read into a GUI process.
+// because these are unauthenticated responses, including in the helper.
 const maxDocumentBytes = 8 << 20
 
 // maxPages bounds pagination. It exists so a registry that answers every

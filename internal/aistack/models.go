@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
 // ActiveModelAlias is the llmman alias configured for the selected model.
@@ -600,16 +602,30 @@ func FetchNodeStatus(ctx context.Context) (NodeStatus, error) {
 	return node, nil
 }
 
-// ConfigureActiveModel sets the active model alias `bluefin-active` via `llmman config set`.
+// ConfigureActiveModel selects the alias and reloads the owned daemon, which
+// reads aliases only at startup. A saved alias alone is not a serving model.
 func ConfigureActiveModel(ctx context.Context, modelRef string) error {
+	if dryrun.Enabled() {
+		return nil
+	}
 	exe := Executable()
 	if exe == "" {
 		return errors.New("llmman executable not found")
 	}
-	// Execute: llmman config set aliases.bluefin-active <modelRef>
+	if _, err := updateServiceUnit(ctx); err != nil {
+		return fmt.Errorf("updating the local-only model service: %w", err)
+	}
+	// Pull accepts owner/repo shorthand; serving a saved alias requires its host.
+	modelRef = "hf.co/" + strings.TrimPrefix(modelRef, "hf.co/")
 	_, err := run(ctx, exe, "config", "set", "aliases."+ActiveModelAlias, modelRef)
 	if err != nil {
 		return fmt.Errorf("llmman config set alias: %w", err)
+	}
+	if err := restartService(ctx); err != nil {
+		return fmt.Errorf("restarting the model server for the selected alias: %w", err)
+	}
+	if !WaitHealthy(ctx, time.Minute) {
+		return errors.New("the model server did not become ready after selecting the model")
 	}
 	return nil
 }
@@ -624,6 +640,9 @@ func ReadActiveModel(ctx context.Context) (string, error) {
 	}
 	out, err := run(ctx, exe, "config", "get", "aliases."+ActiveModelAlias)
 	if err != nil {
+		if strings.TrimSpace(out) == "Error: aliases."+ActiveModelAlias+": not set" {
+			return "", nil
+		}
 		return "", fmt.Errorf("llmman config get alias: %w", err)
 	}
 	return strings.TrimSpace(out), nil
@@ -631,6 +650,9 @@ func ReadActiveModel(ctx context.Context) (string, error) {
 
 // PullModel pulls the model using `llmman pull <modelRef>` and verifies it was stored in daemon.
 func PullModel(ctx context.Context, modelRef string) error {
+	if dryrun.Enabled() {
+		return nil
+	}
 	exe := Executable()
 	if exe == "" {
 		return errors.New("llmman executable not found")
@@ -649,10 +671,7 @@ func PullModel(ctx context.Context, modelRef string) error {
 // pull or a daemon that never stored the model is reported rather than silently
 // accepted.
 func VerifyModelStored(ctx context.Context, modelRef string) error {
-	baseRef := modelRef
-	if idx := strings.LastIndex(modelRef, "/"); idx >= 0 {
-		baseRef = modelRef[idx+1:]
-	}
+	canonical := strings.TrimPrefix(modelRef, "hf.co/")
 
 	// Retry shortly to avoid racing the daemon's stored models refresh
 	var lastErr error
@@ -673,10 +692,10 @@ func VerifyModelStored(ctx context.Context, modelRef string) error {
 			lastErr = errors.New("daemon reported no stored models")
 			continue
 		}
-		if _, ok := node.Stored[modelRef]; ok {
+		if _, ok := node.Stored[canonical]; ok {
 			return nil
 		}
-		if _, ok := node.Stored[baseRef]; ok {
+		if _, ok := node.Stored["hf.co/"+canonical]; ok {
 			return nil
 		}
 		lastErr = fmt.Errorf("%s not found in daemon stored models", modelRef)

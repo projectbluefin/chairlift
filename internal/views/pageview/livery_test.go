@@ -7,33 +7,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/livery"
 )
 
-// TestPageDescriptionContainsEveryFragment holds the three group subtitles to
-// the page-level sentence they are drawn from, so editing one without the
-// other cannot pass.
-func TestPageDescriptionContainsEveryFragment(t *testing.T) {
-	fragments := []string{LiveryAppGridFragment, LiveryPanelFragment, LiveryDockFragment}
-	lowered := strings.ToLower(LiveryPageDescription)
-	for _, fragment := range fragments {
-		if !strings.Contains(lowered, strings.ToLower(fragment)) {
-			t.Errorf("page description %q does not contain fragment %q", LiveryPageDescription, fragment)
-		}
-	}
-}
-
-// TestFragmentsAppearInPresentationOrder asserts the sentence reads in the
-// same order the page lays the sections out.
-func TestFragmentsAppearInPresentationOrder(t *testing.T) {
-	lowered := strings.ToLower(LiveryPageDescription)
-	previous := -1
-	for _, fragment := range []string{LiveryAppGridFragment, LiveryPanelFragment, LiveryDockFragment} {
-		at := strings.Index(lowered, strings.ToLower(fragment))
-		if at <= previous {
-			t.Fatalf("fragment %q appears out of order in %q", fragment, LiveryPageDescription)
-		}
-		previous = at
-	}
-}
-
 // TestChoicesRoundTripForEveryFoundation covers the whole catalog plus the
 // custom sentinel, so an entry whose index did not survive the round trip
 // could not pass.

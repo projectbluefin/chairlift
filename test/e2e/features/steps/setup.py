@@ -1,201 +1,61 @@
-"""Steps for the setup assistant (features/setup.feature).
-
-The assistant is an in-window AdwDialog: a hero screen, then one step at a
-time, each an AdwPreferencesGroup titled by the step. Every lookup here is
-scoped to the showing dialog, so a row the Livery page also carries (the
-Appearance step reuses the Livery page's own switch rows) cannot satisfy an
-assertion about the assistant.
-"""
-
+"""Explicit setup uses the main window's existing destinations and controls."""
 from behave import step, then
-
 import chairlift_atspi as atspi
 
 FIRSTRUN_SCHEMA = "io.projectbluefin.chairlift.firstrun"
-UPDATES_SCHEMA = "io.projectbluefin.chairlift.updates"
-
-
-# ---------------------------------------------------------------- lookups
-
-
-# behave executes every steps module itself, so importing steps/common.py
-# would register its steps a second time; these lookups are repeated.
-def _app(context):
-    if context.app is None:
-        raise AssertionError("ChairLift is not running in this scenario (@no-app?)")
-    return context.app
 
 
 def read_log(context):
-    try:
-        with open(context.log_path, "r", encoding="utf-8", errors="replace") as handle:
-            return handle.read()
-    except (AttributeError, OSError):
-        return ""
+    with open(context.log_path, "r", encoding="utf-8", errors="replace") as handle:
+        return handle.read()
 
 
-def text_present(root, wanted, exact=False):
-    return any((value == wanted) if exact else (wanted in value) for value in atspi.all_text_under(root))
+@then('the setup wizard shows "{title}"')
+def wizard_page(context, title):
+    def visible():
+        root = atspi.page_root(context.app)
+        texts = atspi.all_text_under(root)
+        return (
+            title in texts
+            and (title != "Features" or "Developer Mode" in texts)
+            and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss setup"))
+        )
+    assert atspi.poll(visible), f"wizard never showed {title!r}"
 
 
-def current_dialog(context, timeout=atspi.DEFAULT_TIMEOUT):
-    """The most recently presented in-window dialog (toasts are alerts, not
-    dialogs, and are skipped)."""
-    def lookup():
-        found = None
-        for node in atspi.descendants(_app(context), only_showing=True):
-            if atspi.role(node) in ("dialog", "alert") and not atspi.is_toast(node):
-                found = node
-        return found
-
-    dialog = atspi.poll(lookup, timeout=timeout)
-    if dialog is None:
-        raise AssertionError(f"no dialog is showing after {timeout}s")
-    return dialog
+@step('I use the setup "{label}" button')
+def wizard_button(context, label):
+    atspi.activate(atspi.find_button(context.app, label))
 
 
-def _assistant(context, timeout=atspi.DEFAULT_TIMEOUT):
-    return current_dialog(context, timeout=timeout)
+@then('the setup "{label}" button is {state:w}')
+def wizard_button_state(context, label, state):
+    button = atspi.find_button(context.app, label)
+    assert atspi.sensitive(button) == (state == "sensitive")
 
 
-def _row(context, title):
-    return atspi.row_containing(_assistant(context), title)
+@then('the setup has only one "Back" button')
+def wizard_single_back(context):
+    buttons = atspi.find_all(context.app, lambda node: atspi.is_button(node, "Back"))
+    assert len(buttons) == 1, "native sidebar Back must not compete with setup navigation"
 
 
-def _switch(context, row):
-    return atspi.find(
-        _row(context, row),
-        lambda n: atspi.role(n) == "switch",
-        f"a switch in the {row!r} row of the setup assistant",
-    )
-
-
-def _texts(root):
-    return [v for n in atspi.descendants(root, only_showing=True) for v in (atspi.name(n), atspi.text(n)) if v]
-
-
-# ---------------------------------------------------------------- steps and buttons
-
-
-@then('the setup assistant shows the "{title}" step')
-def step_shows_step(context, title):
-    """The step's heading and the dialog's title both read the step's name,
-    and the Back button that only a step carries is on screen."""
-    def check():
-        dialog = _assistant(context, timeout=1)
-        headings = [
-            n for n in atspi.descendants(dialog, only_showing=True)
-            if atspi.role(n) == "label" and atspi.name(n) == title
-        ]
-        return len(headings) >= 2 and atspi.find_all(dialog, lambda n: atspi.is_button(n, "Back"))
-
-    assert atspi.poll(check), f"the setup assistant never showed the {title!r} step"
-
-
-@then('the setup assistant offers the "{label}" button')
-def step_offers_button(context, label):
-    button = atspi.find_button(_assistant(context), label)
-    assert atspi.sensitive(button), f"the {label!r} button is insensitive"
-
-
-@then('the setup assistant does not offer the "{label}" button')
-def step_lacks_button(context, label):
-    gone = atspi.poll(
-        lambda: not atspi.find_all(_assistant(context), lambda n: atspi.is_button(n, label))
-    )
-    assert gone, f"the setup assistant still offers a {label!r} button"
-
-
-@step('I click the "{label}" button in the "{row}" row of the setup assistant')
-def step_click_row_button(context, label, row):
-    atspi.activate(atspi.find_button(_row(context, row), label))
-
-
-@then('the "{label}" button in the "{row}" row of the setup assistant is {state:w}')
-def step_row_button_state(context, label, row, state):
-    if state not in ("sensitive", "insensitive"):
-        raise NotImplementedError(f"unknown button state {state!r}")
-    want = state == "sensitive"
-
-    def check():
-        return atspi.sensitive(atspi.find_button(_row(context, row), label, timeout=1)) == want
-
-    assert atspi.poll(check), f"the {label!r} button in the {row!r} row never became {state}"
-
-
-# ---------------------------------------------------------------- switches and rows
-
-
-@step('I toggle the "{row}" switch in the setup assistant')
-def step_toggle(context, row):
-    switch = _switch(context, row)
-    assert atspi.poll(lambda: atspi.sensitive(switch)), f"the {row!r} switch in the setup assistant is insensitive"
-    atspi.activate(switch)
-
-
-@then('the "{row}" switch in the setup assistant is {state:w}')
-def step_switch_state(context, row, state):
-    checks = {
-        "on": lambda s: bool(atspi.checked(s)),
-        "off": lambda s: not atspi.checked(s),
-        "sensitive": atspi.sensitive,
-        "insensitive": lambda s: not atspi.sensitive(s),
-    }
-    if state not in checks:
-        raise NotImplementedError(f"unknown switch state {state!r}")
-    ok = atspi.poll(lambda: checks[state](_switch(context, row)))
-    assert ok, f"the {row!r} switch in the setup assistant never became {state}"
-
-
-@then('the "{row}" row in the setup assistant says "{text}"')
-def step_row_says(context, row, text):
-    ok = atspi.poll(lambda: text in _texts(_row(context, row)))
-    assert ok, f"the {row!r} row never said {text!r}; it says {_texts(_row(context, row))}"
-
-
-@then('the setup assistant says "{text}"')
-def step_assistant_says(context, text):
-    ok = atspi.poll(lambda: text_present(_assistant(context), text))
-    assert ok, f"the setup assistant never said {text!r}"
-
-
-@then('every switch in the setup assistant has an accessible name')
-def step_switches_named(context):
-    switches = atspi.find_all(_assistant(context), lambda n: atspi.role(n) == "switch")
-    assert switches, "the setup assistant shows no switches"
-    nameless = [atspi.role(s) for s in switches if not atspi.label_text(s)]
-    assert not nameless, f"{len(nameless)} switches have no accessible name"
-
-
-# ---------------------------------------------------------------- persistence
-
-
-def _would_set(schema, key, value):
-    return f"[DRY-RUN] would set {schema} {key}={value}"
+@then("the setup wizard is not shown")
+def wizard_absent(context):
+    assert atspi.poll(lambda: not atspi.find_all(context.app, lambda n: atspi.is_button(n, "Dismiss setup")))
 
 
 @then("the setup dry run would record disposition {value:w}")
 def step_would_record(context, value):
-    line = _would_set(FIRSTRUN_SCHEMA, "disposition", value)
-    ok = atspi.poll(lambda: line in read_log(context))
-    assert ok, f"chairlift.log never contained {line!r}"
+    line = f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} disposition={value}"
+    assert atspi.poll(lambda: line in read_log(context)), f"missing {line!r}"
 
 
 @then("the setup dry run would record no disposition")
 def step_would_record_nothing(context):
-    prefix = _would_set(FIRSTRUN_SCHEMA, "disposition", "")
-    assert prefix not in read_log(context), f"chairlift.log unexpectedly contains {prefix!r}"
+    assert f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} disposition=" not in read_log(context)
 
 
 @then("the setup dry run would record the completed version")
 def step_would_record_version(context):
-    prefix = _would_set(FIRSTRUN_SCHEMA, "completed-version", "")
-    ok = atspi.poll(lambda: prefix in read_log(context))
-    assert ok, f"chairlift.log never contained {prefix!r}"
-
-
-@then("the setup dry run would set the {key:S} update preference to {value:w}")
-def step_would_set_preference(context, key, value):
-    line = _would_set(UPDATES_SCHEMA, key, value)
-    ok = atspi.poll(lambda: line in read_log(context))
-    assert ok, f"chairlift.log never contained {line!r}"
+    assert atspi.poll(lambda: f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} completed-version=" in read_log(context))

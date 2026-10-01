@@ -129,6 +129,8 @@ func TestValidatedCommandsNeedChannelTableOnlyForSwitches(t *testing.T) {
 	for _, command := range SupportedCommands() {
 		invocation, err := ParseInvocation([]string{command})
 		switch command {
+		case CommandPin:
+			invocation, err = ParseInvocation([]string{command, "20240229"})
 		case CommandChannelSwitch:
 			invocation, err = ParseInvocation([]string{command, ChannelTesting})
 		case CommandDriverSwitch:
@@ -138,7 +140,7 @@ func TestValidatedCommandsNeedChannelTableOnlyForSwitches(t *testing.T) {
 			t.Fatalf("ParseInvocation(%q) error = %v, want nil", command, err)
 		}
 
-		want := command == CommandChannelSwitch || command == CommandDriverSwitch
+		want := command == CommandChannelSwitch || command == CommandDriverSwitch || command == CommandPin || command == CommandUnpin
 		if got := invocation.UsesChannelTable(); got != want {
 			t.Errorf("%s UsesChannelTable() = %t, want %t", command, got, want)
 		}
@@ -219,6 +221,11 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 		CommandAutoDisable,
 		CommandDriverSwitch,
 		CommandFactoryReset,
+		CommandPin,
+		CommandUnpin,
+		CommandKVMEnable,
+		CommandDockerEnable,
+		CommandDockerDisable,
 	}
 	if !reflect.DeepEqual(commands, want) {
 		t.Fatalf("SupportedCommands() = %v, want %v", commands, want)
@@ -229,6 +236,8 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 	for _, command := range commands {
 		args := []string{command}
 		switch command {
+		case CommandPin:
+			args = append(args, "20240229")
 		case CommandChannelSwitch:
 			args = append(args, ChannelTesting)
 		case CommandDriverSwitch:

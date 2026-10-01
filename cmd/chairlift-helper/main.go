@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
@@ -63,8 +64,17 @@ func main() {
 		runAutoUpdates(ctx, invocation)
 	case ubluehelper.CommandDriverSwitch:
 		runDriverSwitch(ctx, invocation)
+	case ubluehelper.CommandPin, ubluehelper.CommandUnpin:
+		runPin(ctx, invocation)
 	case ubluehelper.CommandFactoryReset:
 		runFactoryReset(ctx, invocation)
+	case ubluehelper.CommandKVMEnable:
+		runDeveloperAccess(ctx, invocation)
+	case ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable:
+		if invocation.Command == ubluehelper.CommandDockerEnable {
+			runDeveloperAccess(ctx, invocation)
+		}
+		runDocker(ctx, invocation)
 	default:
 		// Unreachable: ParseInvocation accepts only the commands above. The
 		// arm exists so a command added to the parser without a dispatch arm
@@ -123,6 +133,28 @@ func runDriverSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 
 	if err := run(ctx, "bootc", args...); err != nil {
 		fatal(fmt.Sprintf("driver switch failed: %v", err))
+	}
+	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+}
+
+// runPin supplies only the system descriptor and single-tag registry resolver;
+// the gated helper package owns all target derivation and refusal decisions.
+func runPin(ctx context.Context, invocation ubluehelper.Invocation) {
+	info, err := imageinfo.Detect()
+	if err != nil {
+		fatal(fmt.Sprintf("reading %s: %v", imageinfo.DescriptorPath, err))
+	}
+	client := &registrytags.Client{}
+	args, err := ubluehelper.PinArgs(ctx, info, invocation, client.Tag)
+	if err != nil {
+		fatal(err.Error())
+	}
+	if invocation.DryRun {
+		fmt.Printf("[DRY-RUN] would execute: bootc %v\n", args)
+		return
+	}
+	if err := run(ctx, "bootc", args...); err != nil {
+		fatal(fmt.Sprintf("bootc switch failed: %v", err))
 	}
 	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
 }
@@ -239,6 +271,42 @@ func runAutoUpdates(ctx context.Context, invocation ubluehelper.Invocation) {
 		if err := run(ctx, "systemctl", args...); err != nil {
 			fatal(fmt.Sprintf("systemctl %v failed: %v", args, err))
 		}
+	}
+}
+
+func runDeveloperAccess(ctx context.Context, invocation ubluehelper.Invocation) {
+	uid, err := ubluehelper.TargetUID(os.Getenv("PKEXEC_UID"))
+	if err != nil {
+		fatal(err.Error())
+	}
+	account, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil {
+		fatal(fmt.Sprintf("resolving uid %d: %v", uid, err))
+	}
+	name, args, ok := ubluehelper.AccessArgs(invocation.Command, account.Username)
+	if !ok {
+		fatal("unsupported developer access command")
+	}
+	if invocation.DryRun {
+		fmt.Printf("[DRY-RUN] would execute: %s %v\n", name, args)
+		return
+	}
+	if err := run(ctx, name, args...); err != nil {
+		fatal(fmt.Sprintf("granting developer access: %v", err))
+	}
+}
+
+func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
+	args, ok := ubluehelper.DockerArgs(invocation.Command)
+	if !ok {
+		fatal("unsupported Docker command")
+	}
+	if invocation.DryRun {
+		fmt.Printf("[DRY-RUN] would execute: systemctl %v\n", args)
+		return
+	}
+	if err := run(ctx, "systemctl", args...); err != nil {
+		fatal(fmt.Sprintf("changing Docker daemon: %v", err))
 	}
 }
 

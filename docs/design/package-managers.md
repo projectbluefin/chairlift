@@ -68,20 +68,50 @@ The outcomes are deliberately lossless and deterministic:
 `loadBrewBundles` on the Applications page calls discovery from a worker
 goroutine and applies every widget change through one
 `sgtk.RunOnMainThread` closure. `brew_bundles_group` is independent of
-`brew_group`, so this path never assumes the formulae/casks expanders exist.
+`brew_group`, so this path never assumes the formulae/casks lists exist.
 A successful live `BundleInstall` leaves the clicked row labelled `Installed`
 and permanently insensitive, then requests `loadHomebrewPackages()` because a
 bundle can install formulae and casks the current inventory snapshot predates.
 That refresh is safe in both configurations: `loadHomebrewPackages` nil-guards
-each expander, so it does nothing visible when `brew_group` is disabled, and
+each list, so it does nothing visible when `brew_group` is disabled, and
 it takes a `brewPackagesRefresh` generation, so a slower bundle-triggered
 refresh cannot overwrite newer rows. A failed install restores the `Install`
 action. A successful dry-run uses
 `actionmsg.BundleInstall(...).Complete == false`, shows an explicit preview,
 and restores the action because nothing was installed — and for the same
-reason it does not refresh the inventory. Each row owns a
-`bundleview.InstallGate`, so a second callback cannot overlap a running
-install even if invoked independently of GTK's insensitive-button guard.
+reason it does not refresh the inventory. `ConnectBundleInstall` owns one
+`bundleview.InstallGate` per collection path on Apps, so a second callback
+cannot overlap a running install even if
+invoked independently of GTK's insensitive-button guard. Each bound button
+has a native spinner built once; the shared phase starts it only while
+`Installing…` and stops it on success, failure, or preview completion.
+
+Collection and search installs also display an inline native `GtkProgressBar`
+beside the action. Homebrew returns no progress fraction, so the meter pulses
+with operation text instead of displaying a made-up percentage. One reusable
+GTK-thread timer serves every active install; completion, failure, and dry-run
+remove each meter, and the last completion removes the timer. Destroying the
+Apps page removes the timer too. No command-output line creates a GTK callback.
+
+Installed Flatpak applications, Homebrew formulae/casks, and search results are
+ordinary visible preference-group rows rather than collapsed expanders. Their
+per-row actions use neutral styling; collection Install and Export buttons do
+not compete as blue primary actions. The Homebrew search field is insensitive
+while result installs run, and confirmation invalidates older search workers so
+they cannot replace the row currently showing installation progress.
+
+Discovery controls lead the Apps page: Browse all apps and Homebrew search,
+then installed Flatpak and Homebrew applications, then app collections. The
+command-line tool inventory and export action come last. The tool list includes
+only formulae whose observed `Package.InstalledOnRequest` is true; Homebrew's
+dependency-only formulae remain managed by Homebrew and do not obscure apps.
+The export still includes the complete Homebrew inventory.
+
+
+The Apps page's package-list export holds its own `actionstate.Gate`. It
+disables Export and shows `Exporting…` with a native spinner until the worker
+returns; every outcome stops the spinner and restores the action. A failed
+home-directory lookup is an export error, not permission to write `/Brewfile`.
 
 ### Typed search and install
 
@@ -209,11 +239,16 @@ Because `brew trust --formula/--cask ...` has `args[0] == "trust"`, and `trust` 
 
 **Anything read out of stdout is gated on argv.** A state-changing command's diagnostic is the join of both streams, and for `brew bundle install` the stdout half is a third-party installer's own replayed output — text an attacker-authored formula controls. Two things are therefore derived from it only when `isBundleInstall(args)` is true, which is decided from the argument vector no command output can influence: the `Error: ... from untrusted tap <user>/<tap>` line that fills `UntrustedTapError.Tap`, and the stdout-only reclassification of a failure whose stderr never mentions trust at all (real, because `brew bundle install` prints only its dependency-failure summary on stderr). Without that gate a formula could print a forged untrusted-tap line during an ordinary `brew install`/`upgrade`, turn an unrelated failure into a trust problem, and make the toast tell the user to run `brew trust` on a tap it chose; with it, a non-bundle command is classified only when brew's own stderr says so and takes its tap name only from stderr. `isBundleInstall` shares `bundleSubcommand` with `isStateChanging`, so both read the subcommand the same way (flags skipped, bare `brew bundle` meaning `install`). As second-line defence the tap capture is restricted to the characters GitHub allows in an owner/repository pair (`[A-Za-z0-9_-]+/[A-Za-z0-9._-]+`, with brew's sentence-ending period trimmed afterwards so a tap such as `foo/bar.baz` is not truncated), because the captured text ends up in a suggested `brew trust <tap>` command. `runner_test.go` holds both halves: the forged stdout line on `brew install`, and the stderr-corroborated `brew upgrade` whose stdout tap name is ignored.
 
-The type is unwrapped by the classification, so the one type-based dependency in the whole UI — `errors.As(err, &trustErr)` at `internal/views/updates_page.go:298-300` — keeps working and redirects users to the Untrusted Taps UI rather than showing raw brew output.
+The shell unwraps individual-update errors with `errors.As(err, &trustErr)`.
+`trustmsg.UpgradeMessage` points at **Unverified sources** only when that
+configuration-gated group exists; otherwise it explains the trust requirement
+without referring to a hidden control. Bundle failures keep using the
+self-contained `trustmsg.BundleMessage`.
 
-The upgrade-failure toast text adapts to whether that UI is actually available: `trustmsg.UpgradeMessage(pkgName, trustGroupAvailable bool)` (`internal/views/trustmsg`, see "View-layer toast and decision helpers" below) is called from the outdated-packages row's upgrade click handler as `trustmsg.UpgradeMessage(pkgName, uh.brewTrustGroup != nil)`. `uh.brewTrustGroup` is only ever assigned once, in `buildUpdatesPage` on the main thread before any goroutine that could read it starts, so reading it from the upgrade goroutine is race-free. When the Untrusted Homebrew Taps group exists (`brew_trust_group` enabled and built), the message points there ("see Untrusted Homebrew Taps below"); when it doesn't (group disabled, or not yet built), the message is self-contained — it states the package can't be upgraded until its tap is trusted, with no reference to "below" or the section name, since there is nothing to point to. For bundle install failures blocked by untrusted taps, `trustmsg.BundleMessage(bundleName, tap string)` provides the toast directing the user to `brew trust <tap>`, remaining self-contained without pointing at sections that may be hidden or irrelevant for uninstalled packages.
-
-**Cross-group nil-safety** — `trustTap` (`internal/views/updates_page.go`) refreshes the outdated-packages list after a successful trust, since newly-trusted packages may now show as outdated. That refresh (`loadOutdatedPackages`) is gated only on `brew_trust_group`, not `brew_updates_group`, so it must tolerate `brew_updates_group` being disabled — in which case `uh.outdatedExpander` was never built and is nil. `loadOutdatedPackages` guards on `uh.outdatedExpander == nil` as its first statement, before any homebrew call or `sgtk.RunOnMainThread`, consistent with the config-driven-visibility invariant: a disabled group's widget fields stay nil, and any code reachable from another group's async callback must nil-guard before touching them.
+Source discovery failures stay visible with a Retry action. A successful live
+trust removes only that source row and starts the coordinator's shared check;
+dry-run restores the Trust action without removing the source. The shell is
+nil-guarded because source discovery and provider availability are independent.
 
 ### View-layer page presentation (`internal/views/pageview`)
 
@@ -232,11 +267,8 @@ Its exported outcomes are:
   alone or appends the pinned marker; `BrewBundle` returns the path alone or
   `description — path`; and `SearchResult` preserves the result's typed
   Formula/Cask label.
-- `UntrustedTap` combines formulae and casks in that order, strips each
-  tap-qualified package prefix for display, and includes the installed count.
-  `FlatpakUpdate` always includes the application ID, adds the version arrow
-  only when a new version exists, and adds the user-installation suffix only
-  for user updates.
+- `UntrustedTap` names the source and combines its formula/cask count. Update
+  item identity, versions and installation scope belong to `updatepresent`.
 - `BootcUpdateSubtitle` distinguishes not staged, staged without a version,
   and staged with a version. `BootcStageResultSubtitle` returns that staged
   text after a staged action, otherwise preserves the stage script's final
@@ -270,7 +302,10 @@ test binary to the puregotk-importing parent package.
 
 ### View-layer toast and decision helpers (`internal/views/actionmsg`, `internal/views/trustmsg`)
 
-Two of the nine small, puregotk-free packages under `internal/views/` (the others are `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/rowset`, `internal/views/flatpakstatus`, `internal/views/featurestatus` and `internal/views/pageview`, each documented in its own subsection) hold the text and, at four call sites, the accompanying UI decision that view handlers use once a wrapper call returns. Both follow `docs/skills/gtk-headless-testing/SKILL.md`'s prescribed fix: `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs), so the decidable logic is extracted into a pure package and table-tested there instead. Decision records: [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md) (the leaf-package layout) and [ADR-0009](../adr/0009-dry-run-output-convention-and-single-decision-structs.md) (the decision-struct rule these packages implement).
+`internal/views/actionmsg` and `internal/views/trustmsg` hold completion and
+trust feedback without importing GTK, following
+`docs/skills/gtk-headless-testing/SKILL.md`. State decisions stay in the pure
+coordinator or the action owner, rather than being inferred from toast text.
 
 - **`internal/views/trustmsg`** (added for issue #57, extended for #266) — `UpgradeMessage(pkgName string, trustGroupAvailable bool) string` (toast shown when a Homebrew upgrade fails with an `*homebrew.UntrustedTapError`) and `BundleMessage(bundleName, tap string) string` (toast shown when bundle installation fails due to an untrusted tap); see "Tap trust" above.
 - **`internal/views/actionmsg`** (added for issue #56, extended for issue #8 and issue #238) — builds the toast text for every state-changing view action across the maintenance, applications, updates, and features pages, and, where the view also has a second effect to gate, the decision itself: the execute/complete/mutate/confirm decision at the four call sites that mutate a row, group, or switch on success, and the developer feed setup's start/no-start admission and feedback classification (issue #238), so the same table-driven test in `actionmsg_test.go` that checks the toast also checks the gate (see "Dry-run mode" in [overview.md](./overview.md#dry-run-mode) for the general rule this implements). Exported surface:
@@ -295,9 +330,8 @@ Two of the nine small, puregotk-free packages under `internal/views/` (the other
 
 ### View-layer update action state (`internal/views/actionstate`)
 
-`internal/views/actionstate` is one of the puregotk-free leaf packages
-under `internal/views`. It owns the state machines and complete outcome tables
-for the Applications and Updates pages' Homebrew mutation controls:
+`internal/views/actionstate` owns the pure state machines for installed-package
+controls, refresh ordering, and other repeatable view actions:
 
 - `Gate.TryStart` atomically moves idle to running and rejects every repeated
   callback while running; `Reset` makes a failed, previewed, or fully-refreshed
@@ -305,53 +339,47 @@ for the Applications and Updates pages' Homebrew mutation controls:
 - `RefreshGate.Begin` assigns an increasing generation to each metadata
   refresh and `IsCurrent` accepts only the newest, preventing a slower old
   query from publishing after a newer one.
-- `PackageUpgrade(succeeded, dryRun)` returns exactly three outcomes: failure
-  restores the control without changing rows; dry-run success also restores
-  it without a refresh; live success requests both immediate row removal and
-  a full outdated-metadata refresh.
 - `PackageInstall`, `PackageUninstall`, and `PackagePin` share the installed
   inventory mutation outcomes: failure and dry-run success restore the row
   controls without a refresh; live success completes the old controls and
   requests a generation-guarded installed-package refresh.
-- `MetadataUpdate(succeeded, dryRun)` returns exactly three outcomes: failure
-  and dry-run success restore the top-level control without refreshing; live
-  success requests a refresh and deliberately does not restore the control
-  until that refresh completes.
-- `OutdatedRefresh(succeeded, currentCount, discoveredCount)` returns exactly
-  two outcomes: failure keeps `currentCount` and does not authorize row
-  replacement; success authorizes replacement and adopts `discoveredCount`,
-  including zero.
-- `OutdatedPresentation(count)` returns `0 packages available` with expansion
-  disabled for zero, `1 package available` with expansion enabled for one,
-  and `%d packages available` with expansion enabled for larger counts.
 
 `actionstate_test.go` table-tests every outcome, races 64 callers against one
 action gate (requiring exactly one acquisition), and proves 64 concurrent
 refresh requests receive unique generations with exactly one current.
-`wiring_test.go` and `applications_wiring_test.go` statically check the
-puregotk-importing views use those decisions, confirmation/progress states,
-shared gates, row removal, count decrement, versioned refresh callbacks, and
-clear/add bookkeeping; no `_test.go` is added to `internal/views`.
+The remaining wiring guards cover confirmation and action lifetimes; native
+surface behavior is exercised by the AT-SPI scenarios. No `_test.go` is added
+to `internal/views`.
 
-### View-layer update badge state (`internal/views/badgestate`)
+### Unified update surface (`internal/views/updatepresent`)
 
-`internal/views/badgestate` is one of the puregotk-free leaf packages
-under `internal/views`. `Counts` replaces the three independent integer fields
-that previously lived on `UserHome` with one mutex-protected owner for Bootc,
-Flatpak, and Homebrew update counts. `Set(source, count)` models a completed
-provider refresh and replaces that provider's prior value; `Add(source,
-delta)` models an immediate row-level change such as a successful Homebrew
-upgrade. Both clamp negative results to zero and return an atomic
-`Snapshot{Count, Total}`. `Get` and `Total` provide locked reads.
+Updates has one summary and primary action beneath the small adaptive Bluefin
+wordmark shared with `internal/firstrun`. System sources are grouped separately
+from apps and tools. Source states and every pending item are visible action
+rows, not provider-specific duplicate lists or nested essential controls.
+`updatepresent` maps the immutable coordinator snapshot to text; disabled by
+administrator, disabled in preferences, unavailable, check failure and apply
+failure remain distinct.
 
-The view still performs widget mutation through `sgtk.RunOnMainThread`; the
-leaf package owns only integers and synchronization. `badgestate_test.go`
-proves the zero value, multi-provider totals, replacement rather than
-accumulation across repeated refreshes, decrement/clamping behavior, unknown
-source rejection, and concurrent changes under the race detector.
-`wiring_test.go` verifies `views.go` and `updates_page.go` route all three
-providers and the displayed total through this owner, and rejects the retired
-independent count fields.
+The coordinator owns inventory and the sidebar count (`Snapshot.TotalUpdates`).
+No secondary status reader writes a competing badge. A failed check preserves
+known inventory and restart state. Restart is offered only for a source that
+reports it, never inferred from a successful command.
+
+`UpdateShell.beginMutation` admits Update All, individual app/tool updates,
+metadata refresh and dedicated OS staging through one owner. Individual actions
+call `updateproviders.UpdateItem`, retaining the provider execution identity in
+`updateflow.Item.ID`, the display name, and installation scope. A zero exit is
+not enough: the adapter rechecks the requested item before reporting Changed.
+An unchanged result keeps the row pending, errors remain visible and retryable,
+and a preview restores controls without modifying inventory. Verified live
+completion requests the coordinator's generation-guarded check.
+
+The primary action alone is suggested; individual actions are neutral. One
+reusable GLib pulse callback runs while work is active, independently of provider
+output. Idle and disposal remove its timer. The wordmark changes with Libadwaita
+appearance and disconnects its theme observer on disposal.
+
 
 ### View-layer Brew bundle state (`internal/views/bundleview`)
 
@@ -379,7 +407,9 @@ button mutation on the main thread.
 
 ### View-layer row bookkeeping (`internal/views/rowset`)
 
-`internal/views/rowset` is one of the puregotk-free leaf packages under `internal/views/` (its siblings are `internal/views/actionmsg`, `internal/views/actionstate`, `internal/views/badgestate`, `internal/views/bundleview`, `internal/views/trustmsg`, `internal/views/flatpakstatus`, `internal/views/featurestatus`, `internal/views/progresslog` and `internal/views/pageview`). It holds single-row removal, clear-then-repopulate bookkeeping, and rolling-window eviction for rows a view adds to an expander, so a successful action can remove exactly its row, a later list reload does not accumulate stale rows, and a streamed log does not grow without bound. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview` and `trustmsg`, it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); unlike them it imports nothing at all outside the standard library.
+`internal/views/rowset` is a puregotk-free leaf for row removal,
+clear/repopulate bookkeeping and bounded rolling-window eviction. It imports
+only the standard library and never names a widget type.
 
 Exported surface:
 
@@ -398,7 +428,12 @@ Exported surface:
 
 `internal/views/signalroute` is one of the puregotk-free leaf packages under `internal/views/`. It exists because puregotk turns each `Connect*` callback into a purego trampoline from a fixed 2000-slot table, reuses a slot only when the same func variable address is connected again, and never frees one when a widget is destroyed; a list that connected a fresh closure per row on every refresh leaked slots until the process panicked. `Table[A]` maps an emitting object's address to its action: `Bind` (replacing a reused address), `Unbind`, `Clear`, `Dispatch`, and `DispatchOnce` for single-shot emitters such as a dialog response. It imports nothing outside the standard library and names no widget type; the argument type is generic.
 
-The GTK half is in `internal/views/widgets.go`. `buttonRoute` holds one `func(gtk.Button)` in a `UserHome` field and connects that same address to every button of one list — installed formulae, installed casks, installed Flatpaks, Homebrew search results, unverified taps, outdated Homebrew tools, and Flatpak updates — so each list costs one trampoline for the process lifetime. Its `clear()` runs beside the row tracker's `Clear`, and a row removed on its own calls `forget`. `dialogRoute` does the same for every confirmation dialog on the Apps and Updates pages; each binding runs once and is forgotten when the dialog responds.
+The GTK half is `buttonRoute` in `internal/views/widgets.go`: one retained
+callback per rebuilt list, with an address-to-action table cleared beside its
+rows. Apps inventories and unverified sources use it on `UserHome`; the single
+update item list uses it on `UpdateShell`. Rebuilding a list must never connect
+new callback identities per item. `dialogRoute` likewise dispatches each
+confirmation once.
 
 ### View-layer bounded staging output (`internal/views/progresslog`)
 
@@ -418,31 +453,19 @@ Exported surface:
 
 `Coalescer` is the one leaf package that *does* take a mutex, because unlike the others it is touched from both sides of the main-thread boundary by design: `Append` runs on the worker goroutine and `Drain` on the GTK main thread. The view half is `stageProgressSink` in `internal/views/updates_page.go`, which the bootc staging handler uses (`bootc.ProgressEvent` is `stageexec.ProgressEvent`): `consume` runs on the worker goroutine and touches no widget, `flush` runs on the main thread, renders one batch, calls `rowset.Tracker.TrimTo` to evict older rows from the expander, and sets the Details subtitle from `pageview.StagingLogSubtitle(shown, total)` so a window that hid older lines says so rather than reading like a complete log. `progresslog`'s own tests cover the batching, retention, arrival stamping, and concurrent append/drain; `wiring_test.go` reads `updates_page.go`'s source and fails if the handler goes back to the unbounded per-event shape.
 
-### View-layer Flatpak update status (`internal/views/flatpakstatus`)
-
-`internal/views/flatpakstatus` is one of the puregotk-free leaf packages under `internal/views/`. It turns the outcome of the two Flatpak update queries — how many updates are known, and which of the user/system installations could not be checked — into the Flatpak updates expander's subtitle text plus whether the expander should be expandable. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`); like `rowset` it imports nothing at all outside the standard library (`fmt`).
-
-Exported surface:
-
-- `Result{Subtitle string; Expandable bool}` — the expander state for one update load.
-- `Subtitle(count int, userFailed, systemFailed bool) Result` — derives that state. Both halves come from a single call so the wording and the expansion decision cannot drift apart, the same reason `actionmsg` returns `ScriptDecision`/`TapTrustDecision`/`FeatureToggleDecision` structs. Failure is taken as two `bool`s rather than `error` values, which is what keeps the package free of any dependency on `internal/flatpak`.
-
-`Expandable` is `count > 0` in every case: a failed query never invents updates, so there is nothing to expand that the count does not already reflect, while the rows that *were* found in a partially failed load are real and stay reachable. The five distinguishable outcomes are: both queries ok with no updates → `All applications are up to date` (the only case that makes the up-to-date claim); both ok with updates → `1 update available` / `%d updates available`; exactly one query failed with no updates → `No updates found in the <ok> installation; the <failed> installation could not be checked`; exactly one failed with updates → the count followed by `; the <failed> installation could not be checked`; both failed → `Could not check for updates`, which makes no claim about update state at all. `<ok>`/`<failed>` are the literal words `user` and `system`. `flatpakstatus_test.go` has one subtest per row (with both the user-failed and system-failed variants of the one-failed rows), and additionally asserts that all the subtitles are pairwise distinct, that "up to date" appears in the first case and no other, and that singular and plural both read correctly.
-
-The package is pure and holds no state, so it is safe to call from a worker goroutine or from inside an `sgtk.RunOnMainThread` closure.
-
-`loadFlatpakUpdates` (`internal/views/updates_page.go`) is its only call site. It keeps both `flatpak.ListUpdates` errors as values — `userErr` and `systemErr`, still logged exactly as before via the two `log.Printf("Error loading {user,system} flatpak updates: %v", …)` lines — instead of dropping them once logged, and then calls `flatpakstatus.Subtitle(len(allUpdates), userErr != nil, systemErr != nil)` once on the worker goroutine, before entering `sgtk.RunOnMainThread`. Inside that closure (past the `if uh.flatpakUpdatesExpander == nil { return }` guard, which stays because `flatpak_updates_group` can be disabled and the expander then never gets built) the result is applied unconditionally: `SetSubtitle(result.Subtitle)` and `SetEnableExpansion(result.Expandable)` run on *every* path, including the zero-update path, and only the building of the per-update rows is skipped when there are none. The view holds no subtitle text and makes no decision of its own; the old hard-coded `"All applications are up to date"` and `fmt.Sprintf("%d updates available", …)` strings are gone from it.
-
-The practical consequence is that a total failure — both installations unqueryable — no longer renders as an all-up-to-date message: `allUpdates` is empty for the same reason it is empty when everything really is current, and only the retained errors distinguish the two, so the expander reads `Could not check for updates`. A partial failure is identified as partial rather than silently under-reported: the rows that were found are shown and expandable, with the subtitle naming the installation that could not be checked. The badge deliberately remains a plain count — `uh.updateCounts.Set(badgestate.Flatpak, len(allUpdates))` carries no error state — so a total failure shows a badge contribution of `0` next to an honest subtitle rather than an invented number.
 
 ### View-layer feature update status (`internal/views/featurestatus`)
 
-`internal/views/featurestatus` is one of the puregotk-free leaf packages under `internal/views/`. It owns every string and every decision the Features page's updex update check needs: a feature row's subtitle, whether that feature has an update, and the features group's description. Like `actionmsg`, `actionstate`, `badgestate`, `bundleview`, `trustmsg`, `rowset`, `flatpakstatus` and `pageview` it exists because `internal/views` itself cannot host a `_test.go` (puregotk panics resolving GTK/Libadwaita/GLib/graphene shared libraries at package init, before any test runs — `docs/skills/gtk-headless-testing/SKILL.md`). Unlike them it imports one non-standard-library package, `internal/updex`, for the `CheckResult` type; that is safe because `internal/updex` is itself puregotk-free (`go list -deps ./internal/updex | grep -c puregotk` prints `0`), and `go list -deps ./internal/views/featurestatus | grep -c puregotk` prints `0` too.
+`internal/views/featurestatus` is puregotk-free and owns feature subtitles,
+update decisions and the Features group's description. It imports
+`internal/updex` for the pure `CheckResult` type, never GTK.
 
 Exported surface:
 
 - `Status{Subtitle string; HasUpdate bool; Incomplete bool}` — the row state for one feature.
-- `Feature(name string, results []updex.CheckResult) (Status, bool)` — derives that state from *all* of the feature's components. Both halves come from a single call so the wording and the update decision cannot drift apart, the same reason `flatpakstatus.Subtitle` returns a `Result`. When `len(results) == 0` (e.g. per-component manifest/version lookup failed in updex), it returns a `Status` with subtitle `<name> — update check failed` and `Incomplete: true`.
+- `Feature(name string, results []updex.CheckResult) (Status, bool)` derives
+  subtitle, availability and completeness from every component. Empty results
+  are an incomplete check, not evidence that a feature is current.
 - `GroupDescription(totalFeatures, featuresWithUpdates int) string` — the group description after a check that completed with all components checked.
 - `GroupDescriptionIncomplete(totalFeatures, featuresWithUpdates int) string` — the group description when the check was incomplete (one or more enabled components could not be checked or partial warnings were emitted); it presents an incomplete state instead of claiming current.
 - `GroupDescriptionCheckFailed(totalFeatures int) string` — the group description when the check itself failed; it makes no claim about update state.
@@ -466,7 +489,10 @@ No branch emits a bare `v` with nothing after it, and no branch presents one com
 
 The package is pure and holds no state, so it is safe to call from a worker goroutine or from inside an `sgtk.RunOnMainThread` closure.
 
-`checkFeatureUpdates` (`internal/views/features_page.go`) is its only call site, and — as with `loadFlatpakUpdates` and `flatpakstatus` — the view holds no text of its own: every string in the update-check path now comes from `featurestatus`. `updex.CheckFeatures` still runs on the worker goroutine and returns any retained warnings alongside results, and all widget access still happens inside the single existing `sgtk.RunOnMainThread` closure. Inside it, warnings are logged first — `CheckFeatures` retains them even when it returns an error, so the failure path must not return before them — and then the features group's description is set on **every** outcome. When the check failed, the existing `log.Printf("Feature update check failed: %v", err)` is kept and the description becomes `featurestatus.GroupDescriptionCheckFailed(totalFeatures)` before returning, so the group no longer keeps reading `%d features available` — which looked like a completed check that found nothing. When partial-check warnings or empty results occur, the group description becomes `featurestatus.GroupDescriptionIncomplete(totalFeatures, updateCount)` instead of claiming all features are up to date. When the check succeeded without issues, the description is set unconditionally from `featurestatus.GroupDescription(totalFeatures, updateCount)`, including when `updateCount` is `0`, so "all up to date" is actually reported rather than the pre-check string being left in place. Per feature the view calls `featurestatus.Feature(check.Feature, check.Results)` over the whole `Results` slice — `check.Results[0]` is gone from the file, and with it the bug that a feature whose second component was outdated read as up to date — and counts one per feature with `status.HasUpdate`, so the description's two numbers are both feature counts. Both guards that config-driven visibility requires stay: `features_group` can be disabled, so every `SetDescription` (the failure one included) sits behind `uh.featuresGroup != nil` and the `uh.featureRows` lookup keeps its `!ok { continue }`.
+`checkFeatureUpdates` uses this presentation from a worker and publishes through
+`sgtk.RunOnMainThread`. Warnings and errors produce an incomplete or failed
+description; only a complete successful read may claim all features are current.
+It nil-guards the configuration-driven group and missing feature rows.
 
 ## Flatpak (`internal/flatpak/flatpak.go`)
 
@@ -497,7 +523,7 @@ classified.
 | `ListSystemApplications()` | `flatpak list --system --app --columns=name,application,version` | 30s | Tabular parsed; `--app` excludes runtimes and runtime extensions |
 | `ListUserRuntimes()` | `flatpak list --user --runtime --columns=name,application,version` | 30s | Runtimes, SDKs, and runtime extensions only |
 | `ListSystemRuntimes()` | `flatpak list --system --runtime --columns=name,application,version` | 30s | Runtimes, SDKs, and runtime extensions only |
-| `ListUpdates(user)` | `flatpak remote-ls --updates --app --columns=name,application,version [--user\|--system]` | 30s | Separate calls for user/system; `--app` excludes runtimes |
+| `ListUpdates(ctx, user)` | `flatpak remote-ls --updates --app --columns=name,application,version [--user\|--system]` | 30s, bounded by caller context | Separate calls for user/system; `--app` excludes runtimes; reconciliation is cancellable |
 | `Install(appID, user)` | `flatpak install -y [--user\|--system] <appID>` | 30m | State-changing |
 | `Uninstall(appID, user)` | `flatpak uninstall -y [--user\|--system] <appID>` | 30m | State-changing |
 | `Update(ctx, appID, user)` | `flatpak update -y [--user\|--system] [<appID>]` | 30m (or the caller's, whichever is nearer) | State-changing; empty appID updates all; runs under the caller's context so Update All's cancellation stops it |
@@ -539,6 +565,69 @@ spelled. It passes `--app` — matching the precedent set by `listApplications` 
 so runtimes and extensions are deliberately excluded from the results. Update
 rows and the sidebar update badge therefore only ever describe applications,
 which is what the user can act on from the applications page.
+
+## Developer workstation options (`internal/devtools`)
+
+Features keeps the **Developer Mode** access switch and presents **WSL Mode**,
+**Enable Docker**, and an explicit IDE/terminal-editor chooser beneath it,
+under the same `features_page` / `dx_group` policy. This is an in-place Bluefin
+workstation setup, not a switch to a retired `-dx` image. No editor is installed
+by flipping Developer Mode; each optional tool has its own Install action.
+
+`devtools.Tools` follows Common's `ide.Brewfile`: VSCode Stable/Insiders,
+VSCodium, Antigravity, one JetBrains Toolbox, Dev Container CLI, Neovim,
+Helix and Micro; Vim is also offered by Common's `devmode` wizard. Toolbox's
+current cask carries only an x86_64 archive and is unavailable on ARM64.
+Installs use the existing typed Homebrew wrapper, tap only `ublue-os/tap`, and
+trust only the chosen cask. Formula and cask inventories determine Installed;
+a failed inventory is not treated as an absent package.
+
+WSL Mode follows Common's `setup-lima` recipe: check actual `/dev/kvm`
+read/write access, install `lima` (Homebrew supplies QEMU), prepend the Lima SSH
+Include to the user's SSH config, create `ubuntu` with writable home mounts
+from `template:ubuntu-lts`, enable its autostart and probe `limactl shell ubuntu
+true`. Running alone never claims shell readiness. The only access mutation
+is the fixed `kvm-enable` helper word, invoked only on an explicit enable;
+after a group grant the row asks for a new login and remains off. Disable
+attempts both autostart removal and stop, never deletes the VM or its data.
+A failed stop is followed by a real state read, so a still-running VM stays on.
+Lima's `list --json` is a JSON-object stream, not an array, and a successful
+empty inventory emits a warning on stderr. Parse stdout only; merging that
+warning into JSON would block first-time VM creation. The regression covers
+that empty-inventory case. Mutation output retains a bounded diagnostic tail.
+
+Enable Docker installs the CLI, Compose, LazyDocker and Dive in user Homebrew.
+It refuses to enable without the base image's Docker daemon. The fixed
+`docker-enable` helper grants only the invoking account's Docker group and
+enables `docker.socket` and `docker.service`; `docker-disable` stops/disables
+both, keeps tools/data and does not remove the user's group. Both fixed unit
+names and every argument are helper-owned. Readiness additionally requires
+Docker's local socket to answer `/_ping`; CLI presence never counts as ready.
+No read asks for a password. Authentication or disable failure is followed by
+an unprivileged state read and cannot flip a still-active daemon to off.
+
+All developer controls share `developerGate`, including the initial read and
+the finishing state read. Native activity spinners and stage subtitles are
+restored on every outcome; widget updates and callbacks remain main-thread.
+The editor rows and all signals are built once, with the existing button router.
+
+## Selected gaming components (`internal/gaming`)
+
+**Gaming Mode** lists `gaming.Components()` with unchecked selection controls
+and verified per-component user/system installed state. Install Selected only
+installs selected missing entries; Remove Selected is confirmed and removes
+only selected user-scope entries. Unknown selections fail before any mutation,
+duplicates run once, and system copies are never shadowed or removed. Gaming
+images use the same verified inventory rather than assuming every optional
+component ships. MangoHud is inventoried as a runtime extension, not an app.
+Both kinds in both installation scopes must answer before classifying absence.
+
+One `gamingGate` serializes selection, both actions and the finishing refresh.
+Per-item failures do not abort other selected entries and each actual failure
+is logged. The action summary retains partial success/failure after observed
+component subtitles refresh; a failed refresh preserves the last observations
+and says so. Dry runs mutate nothing and restore the original summary. No
+gaming path adds privilege or removes game data.
 
 ## Shared OS stage executor (`internal/stageexec`)
 
@@ -679,7 +768,12 @@ for event := range progressCh {
 
 ### Progress UI (`internal/views/updates_page.go`)
 
-`onBootcStageClicked()` drives the updates page's "System Update" expander directly (there is a single staging operation, so no shared cross-operation helper is needed) — it disables the button, spawns `bootc.StageUpdate` in a goroutine, and processes events on a second goroutine through the shared `stageProgressSink` (see [`internal/views/progresslog`](#view-layer-bounded-staging-output-internalviewsprogresslog)), restoring button state and showing a toast on completion. The system page's `loadBootcStatus()` is a separate, read-only path: it calls `bootc.GetStatus` to display the booted/staged/rollback deployment images, versions, and digests, with no staging controls — staging only happens from the Updates page.
+`onBootcStageClicked` is the dedicated **Download system update** secondary
+action, admitted by the same shell mutation owner as Update All. It runs the
+fixed stage helper away from GTK and renders its bounded output through
+`stageProgressSink`. Compare stays visible outside the download disclosure;
+only optional output/diff details expand. Completion re-reads status before
+claiming a staged update and requests the unified check after a live success.
 
 ## Dated-build registry catalog (`internal/registrytags`)
 
@@ -758,10 +852,32 @@ network: `registrytags_test.go` drives a loopback `httptest` registry that
 models GHCR's Link-header pagination, its Content-Type-only manifest media
 type, and its 404 `MANIFEST_UNKNOWN` body.
 
-Pinning to a dated tag is not implemented here and is not unblocked by this
-package. `chairlift-helper` accepts no image reference (ADR-0001), so a
-pin has to be a new privileged operation whose target the helper derives from
-a validated grammar, as `channel-switch` already does for its own target.
+### Privileged pin and unpin
+
+`ublue.Pin(ctx, day)` and `ublue.Unpin(ctx)` dispatch through `runHelper`,
+including its unconditional journal and dry-run handling. The fixed
+`/usr/bin/chairlift-helper` accepts `pin <YYYYMMDD> [--dry-run]` and
+`unpin [--dry-run]`. The day must be eight ASCII digits naming a real date
+no later than today UTC. No image reference crosses pkexec (ADR-0001).
+Recovery's selection UI is separate work in #360.
+
+`ubluehelper.PinArgs` owns the derivation and resolver seam required by
+[ADR-0017](../adr/0017-pin-through-a-validated-day-word.md). It recovers the
+stream from the booted tag with `registrytags.ParseBuild`, or uses a plain
+stream tag as-is, and requires `imageinfo.KnownStream` for the descriptor's
+`CleanRef()`. Pin tries `<stream>-<day>` before `<stream>.<day>`; only
+`ErrUnknownTag` permits the second lookup. Unpin requires a dated booted tag
+and verifies `<stream>`. Both call only `Client.Tag`, never a listing or
+catalog cache, and discard all returned registry strings. Missing builds,
+registry failures, and timeouts return no command argv. Successful targets
+retain `bootc switch --enforce-container-sigpolicy`.
+
+Dry runs derive and print the first candidate without contacting the registry;
+the preview is not evidence that the tag exists. Both commands fail closed
+when the system channel table cannot load. Their two PolicyKit actions use
+`auth_admin` / `auth_admin` / `auth_admin_keep` and the existing fixed helper
+path. They ship in the existing ublue policy through `make install` and the
+Homebrew release archive; there are no nFPM packages.
 
 ## Updex (`internal/updex/updex.go`)
 
@@ -888,36 +1004,18 @@ trackers and its own refresh generation, because multiple Homebrew actions can
 request overlapping reloads. Error branches change the subtitle ("Could not
 read the list") and preserve the last known rows.
 
-The Updates page's per-package Homebrew upgrade button, per-app Flatpak update button, and the "Update Homebrew" self-update button (`internal/views/updates_page.go`) follow the same toast pattern: `actionmsg.Upgrade(dryRun, pkgName)`, `actionmsg.Update(dryrun.Enabled(), appID)`, and `actionmsg.SelfUpdate(dryRun, "Homebrew")` replace what were unconditional "upgraded"/"updated"/"updated successfully" toasts, since `upgrade` and `update` are both in their wrappers' `stateChangingCommands` and no-op under dry-run. The Flatpak update button reloads its list (`uh.loadFlatpakUpdates()`, on the main thread so concurrent completions take generations in finishing order) after every successful call, dry-run included, because the reload re-queries live state either way.
+Individual updates and tool metadata refresh now live in the unified shell's
+visible rows. They share the shell's mutation admission with Update All and
+dedicated staging rather than each maintaining an independent gate, inventory
+and badge. Preview feedback still comes from `actionmsg.Update`, `Upgrade` and
+`SelfUpdate`, but inventory changes follow verified provider outcomes only.
+Errors and unchanged outcomes leave controls retryable and known items/counts
+intact; successful live actions request the coordinator's shared refresh.
+An Update All provider that returns `Changed=false` without a preview retains
+its pending items and records a retryable apply failure. It is counted in
+`FailedSources`, so the page and desktop notification never report an
+unapplied run as complete or the system as current.
 
-The two Homebrew paths additionally use `actionstate.Gate` before spawning a
-goroutine and immediately make the clicked button insensitive with an
-`Updating...` or `Upgrading...` label, so a repeated callback cannot overlap
-the operation even if it bypasses GTK's insensitive-button guard. A command
-failure restores the original label/sensitivity and leaves
-the Homebrew value in `updateCounts`, the tracked rows, and the sidebar badge
-unchanged. A dry-run wrapper success shows the preview toast and restores the same control
-without refreshing because no metadata or package state changed.
-
-A live per-package success completes its gate, removes exactly its tracked row
-through `rowset.Tracker.Remove`, decrements the Homebrew count (and therefore
-the aggregate sidebar badge) through `updateCounts.Add(badgestate.Homebrew,
--1)`, and starts a full `ListOutdated` refresh. A live top-level `brew update`
-keeps its button busy while that refresh runs and
-restores it from the refresh's main-thread completion callback. Each request
-takes a generation from `actionstate.RefreshGate`; its main-thread result
-first proves that generation is still current, so a slower older query cannot
-overwrite rows or counts produced by a newer request. A superseded request
-still invokes its completion callback with failure, ensuring the control that
-requested it is not stranded.
-
-The refresh uses `actionstate.OutdatedRefresh`: only a successful current
-query clears/rebuilds rows and adopts `len(packages)` as the count; a failed
-current query changes the expander subtitle to
-`Error refreshing updates: ...` but retains the last known rows/count. All
-external Homebrew calls remain on worker goroutines and all widget mutations,
-including row removal and control restoration, remain inside
-`sgtk.RunOnMainThread`.
 
 The Updates page's bootc "Check for Updates" stage button (`onBootcStageClicked`, `internal/views/updates_page.go`) follows the same `actionmsg` pattern, with one difference from the buttons above: unlike `Install`/`Upgrade`/etc., whose completion text is selected purely by `dryrun.Enabled()`, `SystemStage(dryrun.Enabled(), staged)` also takes the live `staged` result from the post-`wg.Wait()` `bootc.GetStatus()` re-read, because the non-dry-run branch still needs to pick between the "staged" and "up to date" strings. Under dry-run, `staged` is ignored entirely and a single preview string is returned instead — see "Dry-run behavior" under bootc above for why. The expander's `SetSubtitle` calls in the same code block are *not* routed through `actionmsg`; they keep reading live `GetStatus()` output unconditionally, since the subtitle is a persistent status display rather than a per-click completion claim.
 

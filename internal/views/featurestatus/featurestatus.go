@@ -7,8 +7,7 @@
 // A feature has an update when ANY of its components reports one — not the
 // first component, not all of them. Status.HasUpdate is therefore an OR across
 // every element of the results slice, and both halves of the answer come from
-// the single Feature call so the subtitle and the update decision cannot drift
-// apart (the same reason flatpakstatus.Subtitle returns a Result struct).
+// the single Feature call so the subtitle and the update decision cannot drift.
 //
 // The update count in the group description is a count of FEATURES, not of
 // components: a feature with three outdated components counts once. The
@@ -21,9 +20,8 @@
 // test binary for any package that imports them panics before a single test
 // function runs. Decidable logic must live in a binding-free package to be
 // testable at all, which is the same reason internal/views/actionmsg,
-// internal/views/trustmsg, internal/views/rowset and
-// internal/views/flatpakstatus are separate. See
-// docs/agents/skills/gtk-headless-tests.md. Importing internal/updex for the
+// internal/views/trustmsg and internal/views/rowset are separate. See
+// docs/skills/gtk-headless-testing/SKILL.md. Importing internal/updex for the
 // CheckResult type is safe here because internal/updex is itself puregotk-free
 // (`go list -deps ./internal/updex | grep -c puregotk` prints 0).
 //

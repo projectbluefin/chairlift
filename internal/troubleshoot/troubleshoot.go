@@ -10,28 +10,22 @@
 // desktop app ChairLift launches.
 //
 // Nothing here is privileged. Every package is a user-scope Homebrew
-// install, the agent runs as the invoking user, and linux-mcp-server's
-// access is read-only — the same reasoning that keeps Homebrew tap trust and
-// gaming mode off the pkexec path.
+// install and the agent runs as the invoking user. The shipped configuration
+// explicitly selects fixed Linux diagnostic tools without SSH-key discovery.
 package troubleshoot
 
 import (
-	"context"
+	"bytes"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
-	"gopkg.in/yaml.v3"
 )
-
-// setupTimeout bounds goose-mcp-setup, which only writes a file.
-const setupTimeout = 30 * time.Second
 
 // The packages the feature is assembled from. Both live in ublue-os/tap,
 // which brew requires be tapped explicitly before either can be installed
@@ -48,9 +42,10 @@ const (
 	DesktopFile = "Goose.desktop"
 )
 
-// setupCommand writes the linux-tools extension into Goose's configuration.
-// It ships with linux-mcp-server rather than being ChairLift's own script.
-const setupCommand = "goose-mcp-setup"
+// defaultConfigPath is the premade configuration shipped by Common.
+var defaultConfigPath = "/usr/share/ublue-os/goose/config.yaml"
+
+var diagnosticExtensionKeys = [...]string{"linux-mcp-server", "linux-tools"}
 
 // State is what ChairLift knows about the feature on this host.
 type State struct {
@@ -60,19 +55,19 @@ type State struct {
 	AgentInstalled bool
 	// DesktopInstalled reports whether the Goose desktop app is available.
 	DesktopInstalled bool
-	// Wired reports whether Goose's configuration actually references the
-	// linux-tools extension. This is the load-bearing check: goose-mcp-setup
-	// exits 0 without changing anything when a configuration already
-	// exists, so treating its success as "configured" would report a
-	// feature that was never wired up.
-	Wired bool
+	// Wired reports whether an enabled Linux diagnostic extension uses the
+	// explicit fixed-tool policy. Detect also checks its command availability.
+	Wired    bool
+	commands [len(diagnosticExtensionKeys)]string
 	// Provider is the LLM provider Goose is configured to use, empty when
-	// none is set. ChairLift reads it and does not write it — the setup
-	// script owns that file, and refuses to touch an existing one.
+	// none is set. ChairLift does not select or replace the user's provider.
 	Provider string
+	// ModelSelected reports a model name, not credentials or service readiness.
+	ModelSelected bool
 }
 
-// Ready reports whether a session can be started.
+// Ready reports whether the installed diagnostic tools are connected. It does
+// not verify a model provider, credentials, or the provider's reachability.
 func (s State) Ready() bool {
 	return s.ServerInstalled && s.AgentInstalled && s.Wired
 }
@@ -86,40 +81,47 @@ func ConfigPath() (string, error) {
 	return filepath.Join(config, "goose", "config.yaml"), nil
 }
 
-// ParseConfig reads Goose's configuration for the two facts ChairLift needs.
-//
-// It decodes the file as YAML so it can require the linux-tools extension to
-// actually be present under `extensions:`, enabled, and able to run — rather
-// than trusting any line that merely looks like a linux-tools reference. A
-// file that is not valid YAML, or that is missing a usable extension, yields a
-// State with Wired false, which is the safe outcome for a feature that must
-// not claim readiness it does not have.
+// ParseConfig recognizes the shipped and legacy diagnostic extension keys.
+// Malformed YAML and extensions without explicit fixed tools are not wired.
 func ParseConfig(data []byte) State {
+	document, err := decodeConfig(data)
+	if err != nil {
+		return State{}
+	}
 	var cfg gooseConfig
-	// A malformed config is treated as not wired, never as wired.
-	_ = yaml.Unmarshal(data, &cfg)
+	if err := document.Decode(&cfg); err != nil {
+		return State{}
+	}
 
-	state := State{Provider: cfg.Provider}
-	if ext, ok := cfg.Extensions["linux-tools"]; ok && ext.enabled() && ext.valid() {
-		state.Wired = true
+	state := State{Provider: cfg.Provider, ModelSelected: strings.TrimSpace(cfg.Model) != ""}
+	for i, key := range diagnosticExtensionKeys {
+		ext, ok := cfg.Extensions[key]
+		if !ok || !ext.enabled() {
+			continue
+		}
+		if !ext.valid() {
+			state.Wired = false
+			return state
+		}
+		state.Wired, state.commands[i] = true, ext.Cmd
 	}
 	return state
 }
 
-// gooseConfig is Goose's configuration file. ChairLift only reads the provider
-// and the linux-tools extension; every other key (GOOSE_MODEL, and any env
-// var goose-mcp-setup or the user wrote) is ignored.
+// gooseConfig reads only the provider and diagnostic extension definitions.
 type gooseConfig struct {
 	Provider   string              `yaml:"GOOSE_PROVIDER"`
+	Model      string              `yaml:"GOOSE_MODEL"`
 	Extensions map[string]gooseExt `yaml:"extensions"`
 }
 
-// gooseExt is one extension entry. ChairLift only cares that the linux-tools
-// extension is enabled and can actually launch, so it reads just those fields.
+// gooseExt contains the fields needed to verify the diagnostic tool policy.
 type gooseExt struct {
-	Enabled *bool  `yaml:"enabled"`
-	Type    string `yaml:"type"`
-	Cmd     string `yaml:"cmd"`
+	Enabled *bool             `yaml:"enabled"`
+	Type    string            `yaml:"type"`
+	Cmd     string            `yaml:"cmd"`
+	Args    []string          `yaml:"args"`
+	Envs    map[string]string `yaml:"envs"`
 }
 
 // enabled reports whether the extension is active. Goose enables an extension
@@ -128,22 +130,57 @@ func (e gooseExt) enabled() bool {
 	return e.Enabled == nil || *e.Enabled
 }
 
-// valid reports whether the extension can run: a stdio extension needs a type
-// and a command, the same two things the buggy line scan ignored.
+// valid requires the fixed diagnostic tools and explicit SSH-key opt-out.
 func (e gooseExt) valid() bool {
-	return e.Type != "" && e.Cmd != ""
+	if e.Type != "stdio" || filepath.Base(e.Cmd) != "linux-mcp-server" || e.Envs["LINUX_MCP_SSH_KEY_PATH"] != "" {
+		return false
+	}
+	fixed, noSearch := false, false
+	for i := 0; i < len(e.Args); i++ {
+		switch e.Args[i] {
+		case "--toolset":
+			if fixed || i+1 == len(e.Args) || e.Args[i+1] != "FIXED" {
+				return false
+			}
+			fixed = true
+			i++
+		case "--no-search-for-ssh-key":
+			noSearch = true
+		case "--search-for-ssh-key", "--no-verify-host-keys", "--ssh-key-path":
+			return false
+		default:
+			if strings.HasPrefix(e.Args[i], "--toolset=") || strings.HasPrefix(e.Args[i], "--ssh-key-path=") {
+				return false
+			}
+		}
+	}
+	return fixed && noSearch
 }
 
-// lookPath is an injection seam for binary detection, so Detect is testable
-// without installing anything. Bare names are resolved on $PATH. Homebrew is
-// deliberately not detected this way: internal/homebrew.ExecutablePath is the
-// one resolution for `brew`, and it falls back to the Linuxbrew install path
-// when $PATH has none.
+// lookPath is the binary-detection seam. Homebrew's existing resolution
+// supplies its bin directory when a desktop launch has no brew on PATH.
 var lookPath = defaultLookPath
 
 func defaultLookPath(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
+	return resolveTool(name) != ""
+}
+
+func resolveTool(name string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	if filepath.IsAbs(name) {
+		return ""
+	}
+	brew := homebrew.ExecutablePath()
+	if brew == "" {
+		return ""
+	}
+	path, err := exec.LookPath(filepath.Join(filepath.Dir(brew), name))
+	if err != nil {
+		return ""
+	}
+	return path
 }
 
 // readConfig is an injection seam for the configuration read.
@@ -167,6 +204,14 @@ func Detect() State {
 	state.ServerInstalled = lookPath("linux-mcp-server")
 	state.AgentInstalled = lookPath("goose")
 	state.DesktopInstalled = lookPath("goose-desktop")
+	if state.Wired {
+		for _, command := range state.commands {
+			if command != "" && !lookPath(command) {
+				state.Wired = false
+				break
+			}
+		}
+	}
 	return state
 }
 
@@ -213,31 +258,56 @@ func Steps() []Step {
 		{
 			Name:   "Connecting it to this system",
 			Needed: func(s State) bool { return !s.Wired },
-			Run:    runSetupScript,
+			Run:    func() error { return runSetup() },
 		},
 	}
 }
 
-// runSetup is an injection seam for the configuration script.
+// runSetup is an injection seam for connecting the diagnostic extension.
 var runSetup = defaultRunSetup
 
 func defaultRunSetup() error {
-	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would execute: %s", setupCommand)
+	path, err := ConfigPath()
+	if err != nil {
+		return err
+	}
+	data, info, err := readUserConfig(path)
+	if err != nil {
+		return fmt.Errorf("reading Goose configuration: %w", err)
+	}
+	if dryrun.Enabled() && info == nil {
+		log.Printf("[DRY-RUN] would copy Goose configuration from %s", defaultConfigPath)
 		return nil
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
-	defer cancel()
-
-	output, err := exec.CommandContext(ctx, setupCommand).CombinedOutput()
+	if info == nil {
+		data, err = os.ReadFile(defaultConfigPath)
+		if err != nil {
+			return fmt.Errorf("reading the shipped Goose configuration: %w", err)
+		}
+	}
+	prepared, err := prepareDiagnostics(data, info != nil)
 	if err != nil {
-		return &Error{Message: strings.TrimSpace(string(output)), Err: err}
+		return fmt.Errorf("the Goose configuration was kept unchanged: %w", err)
+	}
+	if info != nil && bytes.Equal(data, prepared) {
+		return nil
+	}
+	if dryrun.Enabled() {
+		log.Print("[DRY-RUN] would connect read-only Linux tools in existing Goose configuration")
+		return nil
+	}
+	if err := writeUserConfig(path, data, info, prepared); err != nil {
+		return fmt.Errorf("saving Goose configuration: %w", err)
+	}
+	observed, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !ParseConfig(observed).Wired {
+		return fmt.Errorf("linux tools could not be verified in Goose; check its configuration")
 	}
 	return nil
 }
-
-func runSetupScript() error { return runSetup() }
 
 // Setup runs every step that still has work to do, reporting progress as it
 // goes. It returns the state afterwards so a caller can tell whether the run
@@ -254,20 +324,9 @@ func Setup(state State, progress func(string)) (State, error) {
 			return Detect(), fmt.Errorf("%s: %w", strings.ToLower(step.Name), err)
 		}
 	}
-	return Detect(), nil
-}
-
-// Error wraps a failed setup command, carrying its output.
-type Error struct {
-	Message string
-	Err     error
-}
-
-func (e *Error) Error() string {
-	if e.Message != "" {
-		return e.Message
+	after := Detect()
+	if !dryrun.Enabled() && (!after.Ready() || !after.DesktopInstalled) {
+		return after, fmt.Errorf("setup finished, but Goose or its Linux tools are still unavailable")
 	}
-	return e.Err.Error()
+	return after, nil
 }
-
-func (e *Error) Unwrap() error { return e.Err }

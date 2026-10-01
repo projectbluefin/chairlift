@@ -13,10 +13,9 @@ func TroubleshootRow(state troubleshoot.State) Row {
 
 	switch {
 	case state.Ready():
-		row.Subtitle = "Ready — " + TroubleshootProviderNote(state.Provider)
+		row.Subtitle = TroubleshootSetupSubtitle(state)
 	case state.ServerInstalled && state.AgentInstalled:
-		// Everything is installed but the agent cannot see the system: the
-		// state goose-mcp-setup leaves behind when a config already exists.
+		// The packages exist, but their diagnostic configuration is not ready.
 		row.Subtitle = "Installed, but not connected to this system yet"
 	default:
 		row.Subtitle = "Ask an AI assistant about your logs, services, and network"
@@ -24,19 +23,18 @@ func TroubleshootRow(state troubleshoot.State) Row {
 	return row
 }
 
-// TroubleshootProviderNote says which service answers the questions. The setup script
-// configures Google's Gemini by default, so the row names it rather than
-// implying the work happens locally.
+// TroubleshootProviderNote names the user's selected service. The premade
+// configuration chooses no provider, and a provider name alone proves no locality.
 func TroubleshootProviderNote(provider string) string {
 	switch provider {
 	case "":
 		return "no AI service configured yet"
 	case "gemini-cli":
-		return "questions go to Google Gemini"
+		return "Google Gemini selected"
 	case "ollama":
-		return "questions stay on this machine"
+		return "Ollama service selected"
 	default:
-		return fmt.Sprintf("questions go to %s", provider)
+		return fmt.Sprintf("%s selected", provider)
 	}
 }
 
@@ -45,10 +43,14 @@ func TroubleshootProviderNote(provider string) string {
 // which the row has to say rather than reporting a bare success.
 func TroubleshootSetupSubtitle(state troubleshoot.State) string {
 	if state.Ready() {
-		return "Ready — " + TroubleshootProviderNote(state.Provider)
+		note := TroubleshootProviderNote(state.Provider)
+		if state.Provider != "" && !state.ModelSelected {
+			note += "; choose a model in Goose"
+		}
+		return "Tools connected — " + note
 	}
 	if state.ServerInstalled && state.AgentInstalled {
-		return "Installed, but Goose already had a configuration — add the linux-tools extension to it by hand"
+		return "Installed, but not connected to this system yet"
 	}
 	return "Setup did not complete"
 }

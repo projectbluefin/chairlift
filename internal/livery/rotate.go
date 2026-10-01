@@ -107,7 +107,7 @@ func UnitPath() (string, error) {
 // InstallRotation writes and enables the rotation unit. It is idempotent:
 // rewriting an identical unit and re-enabling an enabled unit are both no-ops
 // as far as the user can observe.
-func InstallRotation(ctx context.Context) error {
+func InstallRotation(ctx context.Context) (result error) {
 	exe, err := executablePath()
 	if err != nil {
 		return fmt.Errorf("livery: locating the application executable: %w", err)
@@ -139,6 +139,20 @@ func InstallRotation(ctx context.Context) error {
 		_ = unit
 		return nil
 	}
+	previous, readErr := os.ReadFile(path)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
+	defer func() {
+		if result == nil {
+			return
+		}
+		if readErr == nil {
+			result = errors.Join(result, writeFileAtomically(path, previous))
+		} else if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			result = errors.Join(result, err)
+		}
+	}()
 	if err := writeFileAtomically(path, []byte(unit)); err != nil {
 		return fmt.Errorf("livery: installing rotation unit: %w", err)
 	}
@@ -171,13 +185,17 @@ func systemdQuote(value string) (string, error) {
 }
 
 // RemoveRotation disables and deletes the rotation unit.
-func RemoveRotation(ctx context.Context) error {
+func RemoveRotation(ctx context.Context) (result error) {
 	path, err := UnitPath()
 	if err != nil {
 		return err
 	}
-	if _, statErr := os.Stat(path); statErr != nil {
+	previous, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
 		return nil
+	}
+	if err != nil {
+		return err
 	}
 	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would disable and remove %s", path)
@@ -186,6 +204,15 @@ func RemoveRotation(ctx context.Context) error {
 	if out, err := runCommand(ctx, "systemctl", "--user", "disable", UnitName); err != nil {
 		return fmt.Errorf("livery: disabling rotation: %w: %s", err, strings.TrimSpace(out))
 	}
+	defer func() {
+		if result == nil {
+			return
+		}
+		result = errors.Join(result, writeFileAtomically(path, previous))
+		_, reloadErr := runCommand(ctx, "systemctl", "--user", "daemon-reload")
+		_, enableErr := runCommand(ctx, "systemctl", "--user", "enable", UnitName)
+		result = errors.Join(result, reloadErr, enableErr)
+	}()
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("livery: removing rotation unit: %w", err)
 	}
@@ -202,6 +229,25 @@ func SyncRotationUnit(ctx context.Context, s State) error {
 		return InstallRotation(ctx)
 	}
 	return RemoveRotation(ctx)
+}
+
+// ConfigureRotation commits preferences only after the user manager accepted
+// the schedule. A failed operation preserves the last persisted choices.
+func ConfigureRotation(ctx context.Context, desired State) (State, error) {
+	previous, err := Load(ctx)
+	if err != nil {
+		return State{}, err
+	}
+	if err := SyncRotationUnit(ctx, desired); err != nil {
+		return previous, err
+	}
+	if err := SetBool(ctx, KeyPanelRotate, desired.PanelRotate); err != nil {
+		return previous, errors.Join(err, SyncRotationUnit(ctx, previous))
+	}
+	if err := SetBool(ctx, KeyDockRotate, desired.DockRotate); err != nil {
+		return previous, errors.Join(err, SetBool(ctx, KeyPanelRotate, previous.PanelRotate), SyncRotationUnit(ctx, previous))
+	}
+	return desired, nil
 }
 
 // sessionToken identifies the current graphical session.

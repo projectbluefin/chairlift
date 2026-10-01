@@ -11,7 +11,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
-	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/settings"
@@ -24,6 +23,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gdk"
 	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -52,18 +52,24 @@ type Window struct {
 	contentPage  *adw.NavigationPage // Content navigation page for dynamic title
 	toasts       *adw.ToastOverlay
 
-	pages        map[string]*adw.ToolbarView
-	navRows      map[string]*adw.ActionRow // Store references to nav rows for badges
-	config       *config.Config
-	capabilities capability.Set // Resolved once; the policy floor for every entry path
-	configError  *config.LoadError
-	views        *views.UserHome
-	updateShell  *views.UpdateShell
-	firstRun     *views.FirstRunAssistant
-	updateBadge  *gtk.Label        // Noninteractive badge for the updates count
-	navItems     []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
-	navRoutes    []navigation.Item // navItems plus the details they offer; the Resolve inventory
-	backRoute    string            // The primary the shown detail's Back returns to; "" on a primary
+	pages             map[string]*adw.ToolbarView
+	navRows           map[string]*adw.ActionRow // Store references to nav rows for badges
+	config            *config.Config
+	capabilities      capability.Set // Resolved once; the policy floor for every entry path
+	configError       *config.LoadError
+	views             *views.UserHome
+	updateShell       *views.UpdateShell
+	firstRunSteps     []string
+	firstRunIndex     int
+	firstRunActive    bool
+	firstRunCollapsed bool
+	firstRunFooter    *gtk.Box
+	firstRunBack      *gtk.Button
+	firstRunNext      *gtk.Button
+	updateBadge       *gtk.Label        // Noninteractive badge for the updates count
+	navItems          []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
+	navRoutes         []navigation.Item // navItems plus the details they offer; the Resolve inventory
+	backRoute         string            // The primary the shown detail's Back returns to; "" on a primary
 }
 
 func init() {
@@ -193,9 +199,7 @@ func (w *Window) buildUI() {
 		w,
 	)
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
-	// The setup assistant's Update Preferences step reads source
-	// availability and binds its switches through these.
-	w.views.AttachUpdateSources(w.updateShell, store)
+	w.views.AttachUpdateShell(w.updateShell)
 	// Create the navigation split view
 	w.splitView = adw.NewNavigationSplitView()
 
@@ -209,7 +213,11 @@ func (w *Window) buildUI() {
 
 	// Create toast overlay for notifications
 	w.toasts = adw.NewToastOverlay()
-	w.toasts.SetChild(&w.splitView.Widget)
+	root := gtk.NewBox(gtk.OrientationVerticalValue, 0)
+	w.splitView.SetVexpand(true)
+	root.Append(&w.splitView.Widget)
+	w.buildFirstRunFooter(root)
+	w.toasts.SetChild(&root.Widget)
 
 	// Set window content
 	w.SetContent(&w.toasts.Widget)
@@ -237,6 +245,7 @@ func (w *Window) buildSidebar() *adw.NavigationPage {
 
 	// Create list box for navigation
 	w.sidebarList = gtk.NewListBox()
+	views.SetAccessibleLabel(w.sidebarList, "Navigation")
 	w.sidebarList.SetSelectionMode(gtk.SelectionSingleValue)
 	w.sidebarList.AddCssClass("navigation-sidebar")
 
@@ -489,6 +498,9 @@ func (w *Window) setupActions() {
 // selection, and the only one that shows a detail: a detail keeps its
 // ancestor's row selected and records the primary its Back control returns to.
 func (w *Window) navigateToPage(pageName string) {
+	if w.firstRunActive && pageName != w.firstRunSteps[w.firstRunIndex] {
+		return
+	}
 	transition, ok := navigation.Resolve(pageName, w.navRoutes, func(name string) bool {
 		_, exists := w.pages[name]
 		return exists
@@ -638,6 +650,7 @@ func (w *Window) ShowToast(message string) {
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(3)
+	toast.SetPriority(adw.ToastPriorityHighValue)
 	w.AddToast(toast)
 }
 
@@ -650,9 +663,9 @@ func (w *Window) ShowToast(message string) {
 // and the message itself is length-bounded at the source.
 const errorToastWidthChars = 48
 
-// ShowErrorToast shows an error toast. It persists until dismissed and, unlike
-// ShowToast, wraps: an error message carries the failing command's own
-// diagnosis and routinely exceeds one line.
+// ShowErrorToast shows an error toast immediately, keeping older errors queued
+// until dismissed. It wraps the failing command's diagnosis instead of hiding
+// subsequent failures behind an indefinitely displayed earlier toast.
 //
 // The toast is still constructed with the message as its plain title.
 // adw_toast_set_custom_title clears that title itself, so this costs nothing,
@@ -662,6 +675,7 @@ func (w *Window) ShowErrorToast(message string) {
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(0) // Persist until dismissed
+	toast.SetPriority(adw.ToastPriorityHighValue)
 	title := gtk.NewLabel(message)
 	title.SetWrap(true)
 	title.SetMaxWidthChars(errorToastWidthChars)
@@ -708,16 +722,33 @@ func (w *Window) SetUpdateBadge(count int) {
 	}
 }
 
-// PresentFirstRun opens the first-run onboarding assistant dialog.
-//
-// The assistant is built once, over the views as its SetupHost: every
-// control it offers acts through the page that owns the setting, so the
-// two surfaces share one admission and one state.
+// PresentFirstRun starts the explicit wizard on the existing page controls.
+// A second request presents the current step without resetting its progress.
 func (w *Window) PresentFirstRun() {
-	if w.firstRun == nil {
-		w.firstRun = views.NewFirstRunAssistant(w.effectiveEnabled, w, w.views)
+	w.Present()
+	if w.firstRunActive {
+		return
 	}
-	w.firstRun.Present(&w.Widget)
+	w.firstRunSteps = nil
+	for _, name := range firstrun.Pages(w.navItems) {
+		if w.pages[name] != nil {
+			w.firstRunSteps = append(w.firstRunSteps, name)
+		}
+	}
+	if len(w.firstRunSteps) == 0 {
+		return
+	}
+	w.firstRunIndex = 0
+	w.firstRunActive = true
+	w.firstRunCollapsed = w.splitView.GetCollapsed()
+	w.sidebarList.SetSensitive(false)
+	// The collapsed split view's native Back goes to the sidebar, not the
+	// previous setup step. Disable that route while the wizard owns navigation.
+	w.contentPage.SetCanPop(false)
+	w.splitView.SetCollapsed(true)
+	w.splitView.SetShowContent(true)
+	w.firstRunFooter.SetVisible(true)
+	w.showFirstRunStep()
 }
 
 // NavigateToAgentsPage opens the Agent Mode page. It is the GTK half of the
@@ -729,29 +760,103 @@ func (w *Window) NavigateToAgentsPage() {
 	w.navigateToPage(navigation.AgentModeRoute)
 }
 
-// CheckFirstRun presents the onboarding assistant if required on startup.
-//
-// The disposition probe spawns `gsettings`, so it must not run inline here:
-// onActivate is the GTK startup path, and internal/livery documents why
-// subprocess probes were moved off it. An explicit request needs no probe at
-// all, and under --dry-run automated presentation is suppressed outright
-// (ADR-0014), so neither shape pays for a spawn.
+// CheckFirstRun never probes disposition or presents on ordinary activation.
 func (w *Window) CheckFirstRun(explicitSetup bool) {
-	if explicitSetup {
+	if firstrun.ShouldPresent(explicitSetup) {
 		w.PresentFirstRun()
-		return
 	}
-	if dryrun.Enabled() {
-		return
-	}
+}
 
-	go func() {
-		store := firstrun.NewGSettingsStore()
-		if !firstrun.ShouldPresent(context.Background(), false, false, store) {
+func (w *Window) buildFirstRunFooter(root *gtk.Box) {
+	w.firstRunFooter = gtk.NewBox(gtk.OrientationHorizontalValue, 12)
+	w.firstRunFooter.SetMarginTop(12)
+	w.firstRunFooter.SetMarginBottom(12)
+	w.firstRunFooter.SetMarginStart(12)
+	w.firstRunFooter.SetMarginEnd(12)
+	cancel := gtk.NewButtonWithLabel("Dismiss setup")
+	w.firstRunBack = gtk.NewButtonWithLabel("Back")
+	w.firstRunNext = gtk.NewButtonWithLabel("Next")
+	w.firstRunNext.AddCssClass("suggested-action")
+	spacer := gtk.NewBox(gtk.OrientationHorizontalValue, 0)
+	spacer.SetHexpand(true)
+	w.firstRunFooter.Append(&cancel.Widget)
+	w.firstRunFooter.Append(&spacer.Widget)
+	w.firstRunFooter.Append(&w.firstRunBack.Widget)
+	w.firstRunFooter.Append(&w.firstRunNext.Widget)
+	back := func(gtk.Button) {
+		if w.firstRunActive && w.firstRunIndex > 0 {
+			w.firstRunIndex--
+			w.showFirstRunStep()
+		}
+	}
+	next := func(gtk.Button) {
+		if !w.firstRunActive {
 			return
 		}
-		sgtk.RunOnMainThread(func() {
-			w.PresentFirstRun()
-		})
+		if w.firstRunIndex+1 == len(w.firstRunSteps) {
+			w.finishFirstRun(true)
+			return
+		}
+		w.firstRunIndex++
+		w.showFirstRunStep()
+	}
+	dismiss := func(gtk.Button) { w.finishFirstRun(false) }
+	closeRequest := func(gtk.Window) bool {
+		if w.firstRunActive {
+			w.finishFirstRun(false)
+			return true
+		}
+		return false
+	}
+	w.firstRunBack.ConnectClicked(&back)
+	w.firstRunNext.ConnectClicked(&next)
+	cancel.ConnectClicked(&dismiss)
+	w.ConnectCloseRequest(&closeRequest)
+	keys := gtk.NewEventControllerKey()
+	keyPressed := func(_ gtk.EventControllerKey, keyval, _ uint32, _ gdk.ModifierType) bool {
+		if w.firstRunActive && keyval == uint32(gdk.KEY_Escape) {
+			w.finishFirstRun(false)
+			return true
+		}
+		return false
+	}
+	keys.ConnectKeyPressed(&keyPressed)
+	w.AddController(&keys.EventController)
+	w.firstRunFooter.SetVisible(false)
+	root.Append(&w.firstRunFooter.Widget)
+}
+
+func (w *Window) showFirstRunStep() {
+	w.navigateToPage(w.firstRunSteps[w.firstRunIndex])
+	w.firstRunBack.SetSensitive(w.firstRunIndex > 0)
+	if w.firstRunIndex+1 == len(w.firstRunSteps) {
+		w.firstRunNext.SetLabel("Finish")
+	} else {
+		w.firstRunNext.SetLabel("Next")
+	}
+}
+
+func (w *Window) finishFirstRun(completed bool) {
+	if !w.firstRunActive {
+		return
+	}
+	w.firstRunActive = false
+	w.firstRunFooter.SetVisible(false)
+	w.sidebarList.SetSensitive(true)
+	w.contentPage.SetCanPop(true)
+	w.splitView.SetCollapsed(w.firstRunCollapsed)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
+		defer cancel()
+		store := firstrun.NewGSettingsStore()
+		var err error
+		if completed {
+			err = store.SetDisposition(ctx, firstrun.DispositionCompleted)
+		} else {
+			_, _, err = firstrun.RecordSkip(ctx, store)
+		}
+		if err != nil {
+			sgtk.RunOnMainThread(func() { w.ShowErrorToast(err.Error()) })
+		}
 	}()
 }

@@ -11,14 +11,10 @@ import (
 // LiveryPageDescription is the page's one-line statement of what the three
 // sections are for.
 //
-// It lands once, at page level, and each group's subtitle is the fragment
-// that belongs to it — so the sentence is readable as a whole at the top and
-// as a label beside each control. It lives here rather than inline in the
-// builder so it is tested and so the fragments cannot drift out of step with
-// the sentence they come from.
-const LiveryPageDescription = "Who you are, who you stand with, and what you roll with."
+// Each group's subtitle names its part of the page-level description.
+const LiveryPageDescription = "Who you stand with, what you roll with, and who you are."
 
-// The three fragments, in the page's presentation order.
+// The three surface descriptions.
 const (
 	LiveryAppGridFragment = "Who you are"
 	LiveryPanelFragment   = "Who you stand with"
@@ -343,3 +339,15 @@ const LiveryCustomRowSubtitle = "Use your own file instead of the list above"
 const LiverySchemaMissingMessage = "Livery settings are unavailable because " + branding.AppName +
 	"'s settings schema is not installed. Reinstall " + branding.AppName +
 	" to restore it; in a source checkout, run `make schemas`."
+
+// LiverySectionName is the object of a preview toggle's consequence.
+func LiverySectionName(surface livery.Surface) string {
+	switch surface {
+	case livery.AppGrid:
+		return "the app grid icon"
+	case livery.Panel:
+		return "the panel icon"
+	default:
+		return "the Files icon"
+	}
+}

@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
-description: Use when starting or resuming a Project Bluefin factory-assigned change in ChairLift.
-version: 1.1.0
-last_updated: 2026-09-20
+description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release.
+version: 1.2.0
+last_updated: 2026-10-01
 tags:
   - factory
   - onboarding
@@ -106,3 +106,39 @@ attempt also recorded the wrong lesson at first: `gh pr merge 127
 in the GraphQL schema — and the real reason the call failed is that the merge
 had already completed. Reaching for the wrong tool and then generalising from
 its error message is the mistake worth remembering here.
+
+## Stable release cutover
+
+ChairLift's release name is `vYY.MM.N`, starting at `N=1` each month. Run
+`./scripts/next-version.sh` to inspect the next tag without creating it;
+historical alpha tags do not advance the stable sequence, and the script
+rejects prerelease arguments. `make bump` no longer accepts a prerelease
+suffix. Do not delete or rewrite historical releases to change naming.
+
+After an externally approved pull request completes the merge queue, fetch
+`origin/main`, verify its exact head has green CI, and release only from that
+clean head. Never tag the feature branch while waiting for approval.
+`goreleaser check` validates the publication configuration without publishing;
+`release.prerelease: false` publishes a full release and GoReleaser's default
+`make_latest: true` marks it latest. The existing tag workflow owns builds,
+SBOMs, signatures, and publication; use it rather than uploading local builds.
+
+Source: Context7 `/goreleaser/goreleaser`,
+[`release` configuration](https://goreleaser.com/customization/release/)
+and [`goreleaser check`](https://goreleaser.com/cmd/goreleaser_check/).
+
+### Verification
+
+- The next-version regression exercises fresh and existing stable tags,
+  monthly reset, and historical prerelease tags in temporary repositories.
+- The final PR head passed CI and a human reviewer approved it; its merge
+  queue candidate passed `Tests Passed` before the release tag was created.
+- The release workflow succeeded and the published release is neither a
+  draft nor a prerelease; signed archives and checksums exist for both arches.
+
+### Red flags
+
+- A tag points at an unmerged feature branch, or an agent approval substitutes
+  for the human gate.
+- A stable tag is created to conceal failed or incomplete required CI.
+- Local archives replace the workflow's signed publication path.

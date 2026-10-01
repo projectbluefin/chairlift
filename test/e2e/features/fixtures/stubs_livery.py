@@ -178,6 +178,12 @@ def livery_dock_on(context):
     _seed(context, {"dock-enabled": "true"})
 
 
+@stub("livery-app-grid-on")
+def livery_app_grid_on(context):
+    """The app-grid surface was enabled before the current preview."""
+    _seed(context, {"app-grid-enabled": "true"})
+
+
 @stub("livery-offline")
 def livery_offline(context):
     """No artwork service is reachable: every HTTPS fetch is refused.

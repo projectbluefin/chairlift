@@ -5,41 +5,80 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 type sourceRow struct {
-	row         *adw.ExpanderRow
+	row         *adw.ActionRow
 	detailRows  []*adw.ActionRow
+	group       *adw.PreferencesGroup
 	compactMode bool
+	buttons     []*gtk.Button
+	items       []updateflow.Item
+	enabled     bool
 }
 
-func newSourceRow(state updateflow.SourceState) *sourceRow {
-	row := &sourceRow{row: adw.NewExpanderRow()}
-	row.render(state)
-	return row
-}
-
-func (r *sourceRow) render(state updateflow.SourceState) {
+func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, shell *UpdateShell) *sourceRow {
+	r := &sourceRow{
+		row: adw.NewActionRow(), group: group, compactMode: shell.compactMode,
+		items: state.Items, enabled: state.Configured && state.Available && state.Enabled,
+	}
 	title, subtitle := updatepresent.Source(state)
 	r.row.SetTitle(title)
 	r.row.SetSubtitle(subtitle)
 	r.row.SetIconName(updatepresent.SourceIcon(state.ID))
-	r.row.SetEnableExpansion(updatepresent.SourceHasDetails(state))
 	r.row.SetSubtitleLines(r.subtitleLines())
-
-	for _, detail := range r.detailRows {
-		r.row.Remove(&detail.Widget)
+	group.Add(&r.row.Widget)
+	if state.ID == updateflow.DeveloperTools && r.enabled {
+		button := gtk.NewButtonWithLabel("Check")
+		button.SetValign(gtk.AlignCenterValue)
+		button.SetTooltipText("Check for new tool versions")
+		button.SetSensitive(updatepresent.CanStartOperation(shell.Busy(), shell.closed.Load()) && !updatepresent.ShowProgress(shell.snapshot.Phase))
+		shell.updateButtons.connect(button, func(gtk.Button) { shell.startToolRefresh() })
+		r.row.AddSuffix(&button.Widget)
+		r.buttons = append(r.buttons, button)
 	}
-	r.detailRows = r.detailRows[:0]
-
 	for _, item := range state.Items {
 		detail := adw.NewActionRow()
-		detail.SetTitle(item.Name)
+		detail.SetTitle(updatepresent.ItemTitle(item))
 		detail.SetSubtitle(updatepresent.ItemSubtitle(item))
-		detail.SetTitleLines(1)
 		detail.SetSubtitleLines(r.subtitleLines())
-		r.row.AddRow(&detail.Widget)
+		if (state.ID == updateflow.Applications || state.ID == updateflow.DeveloperTools) && r.enabled {
+			button := gtk.NewButtonWithLabel("Update")
+			button.SetValign(gtk.AlignCenterValue)
+			button.SetSensitive(state.Configured && state.Available && state.Enabled &&
+				updatepresent.CanStartOperation(shell.Busy(), shell.closed.Load()) && !updatepresent.ShowProgress(shell.snapshot.Phase))
+			pending := item
+			shell.updateButtons.connect(button, func(gtk.Button) { shell.startItemUpdate(state.ID, pending, detail) })
+			detail.AddSuffix(&button.Widget)
+			r.buttons = append(r.buttons, button)
+		}
+		group.Add(&detail.Widget)
 		r.detailRows = append(r.detailRows, detail)
+	}
+	return r
+}
+
+func (r *sourceRow) render(state updateflow.SourceState, sensitive bool) {
+	title, subtitle := updatepresent.Source(state)
+	r.row.SetTitle(title)
+	r.row.SetSubtitle(subtitle)
+	for index, row := range r.detailRows {
+		row.SetSubtitle(updatepresent.ItemSubtitle(r.items[index]))
+	}
+	r.setSensitive(sensitive)
+}
+
+func (r *sourceRow) setSensitive(sensitive bool) {
+	for _, button := range r.buttons {
+		button.SetSensitive(sensitive)
+	}
+}
+
+func (r *sourceRow) remove() {
+	r.group.Remove(&r.row.Widget)
+	for _, detail := range r.detailRows {
+		r.group.Remove(&detail.Widget)
 	}
 }
 

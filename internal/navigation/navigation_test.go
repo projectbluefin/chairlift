@@ -284,6 +284,21 @@ func TestPageMetadataMatchesViewBuilders(t *testing.T) {
 			for _, match := range groupCall.FindAllStringSubmatch(string(source), -1) {
 				found[Ref{Page: match[1], Group: match[2]}] = true
 			}
+			if item.Name == "updates" {
+				windowPath := filepath.Join(viewsDir, "..", "window", "window.go")
+				windowSource, err := os.ReadFile(windowPath)
+				if err != nil {
+					t.Fatalf("read %s: %v", windowPath, err)
+				}
+				providerPolicy := regexp.MustCompile(`sourcePolicy\("([^"]+)",\s*"([^"]+)"\)`)
+				for _, match := range providerPolicy.FindAllStringSubmatch(string(windowSource), -1) {
+					// These moved groups retain the Updates configuration identity;
+					// system-component controls are still built by Features.
+					if match[1] == "updates_page" {
+						found[Ref{Page: match[1], Group: match[2]}] = true
+					}
+				}
+			}
 			if len(found) != len(item.Refs) {
 				t.Fatalf("builder guards = %v, navigation metadata = %v", found, item.Refs)
 			}

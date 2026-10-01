@@ -7,9 +7,8 @@ const (
 	// DispositionNotAddressed indicates setup has never been presented or decided.
 	DispositionNotAddressed Disposition = "not-addressed"
 
-	// DispositionSkipped records an explicit skip. AssistantModel.Dismiss
-	// emits the same decision for intentional dismissal; the dialog adapter
-	// owns wiring and persistence. A crash does not emit a decision.
+	// DispositionSkipped records an explicit skip or intentional dismissal.
+	// The window owns wiring and persistence. A crash emits no decision.
 	DispositionSkipped Disposition = "skipped"
 
 	// DispositionCompleted indicates the user stepped through to completion.

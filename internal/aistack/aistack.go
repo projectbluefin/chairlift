@@ -5,7 +5,7 @@
 // to `brew bundle`, the user unit ServiceName, and the environment.d fragment
 // EnvFragmentName that publishes OLLAMA_HOST to future sessions. llmman owns
 // model storage, engine selection and inference; Homebrew owns the binary.
-// Disabling removes only the unit and the fragment — the binary, Jan, and
+// Disabling removes only the unit and the fragment — the binary and
 // every downloaded model stay, because deleting gigabytes is a disk-space
 // decision nobody made by turning a switch off.
 //
@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -50,10 +49,6 @@ const EnvFragmentName = "10-chairlift-llmman.conf"
 
 // Formula is the Homebrew formula that provides llmman.
 const Formula = "llmmanorg/tap/llmman"
-
-// JanFlatpak is the chat client installed alongside llmman. Its Flathub
-// build is x86_64-only, so Brewfile omits it elsewhere.
-const JanFlatpak = "ai.jan.Jan"
 
 // State is Agent Mode's lifecycle state, as ADR-0015 defines it.
 type State int
@@ -117,19 +112,13 @@ func (s State) On() bool {
 	return s == StateProvisioning || s == StateReady || s == StateDegraded
 }
 
-// Brewfile returns the bundle ChairLift installs for goarch. The tap comes
-// first so the formula resolves. The formula is omitted when an llmman is
-// already present however it was installed; `brew bundle` itself skips
-// anything it already manages. An empty result means nothing to install.
-func Brewfile(goarch string, haveLLMMan bool) string {
-	var b string
-	if !haveLLMMan {
-		b = "tap \"llmmanorg/tap\"\nbrew \"" + Formula + "\"\n"
+// Brewfile installs only the missing local model runtime. Client setup is
+// separate; enabling the runtime never installs a chat application.
+func Brewfile(haveLLMMan bool) string {
+	if haveLLMMan {
+		return ""
 	}
-	if goarch == "amd64" {
-		b += "flatpak \"" + JanFlatpak + "\"\n"
-	}
-	return b
+	return "tap \"llmmanorg/tap\"\nbrew \"" + Formula + "\"\n"
 }
 
 // RenderUnit returns the systemd user unit for the llmman executable at exe.
@@ -145,6 +134,8 @@ func RenderUnit(exe string) (string, error) {
 		"[Service]\n" +
 		"ExecStart=" + exe + " serve\n" +
 		"Environment=LLMMAN_HOST=" + Address + "\n" +
+		// No hidden legacy offload survives removal of the peer controls.
+		"Environment=LLMMAN_PEERS=\n" +
 		// The web UI's Shell tab is a terminal as this user; never serve it.
 		"Environment=LLMMAN_SHELL=off\n" +
 		// Troubleshooting prompts carry system details; do not keep them.
@@ -252,7 +243,7 @@ func Healthy(ctx context.Context) bool {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	var node map[string]json.RawMessage
-	return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&node) == nil
+	return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&node) == nil && node != nil
 }
 
 // WaitHealthy polls Healthy until it succeeds or within elapses.
@@ -271,7 +262,7 @@ func WaitHealthy(ctx context.Context, within time.Duration) bool {
 	}
 }
 
-// Enable installs llmman (and Jan on x86_64) through `brew bundle`,
+// Enable installs llmman through `brew bundle`,
 // validates the runtime with `llmman serve --pull-only`, writes the unit and
 // the environment fragment atomically, and starts the service. A failure
 // after the files were written removes what this call created, unless the
@@ -328,11 +319,17 @@ func Enable(ctx context.Context) error {
 		rollback()
 		return err
 	}
-	for _, args := range [][]string{{"daemon-reload"}, {"enable", ServiceName}, {"restart", ServiceName}} {
-		if _, err := systemctl(ctx, args...); err != nil {
-			rollback()
-			return err
+	if _, err := systemctl(ctx, "enable", "--no-reload", ServiceName); err != nil {
+		rollback()
+		return err
+	}
+	if err := restartService(ctx); err != nil {
+		if !existed {
+			// A post-start policy probe/write may fail with the daemon alive.
+			// Reuse disable's stopped-state proof before removing its handle.
+			return errors.Join(err, Disable(ctx))
 		}
+		return err
 	}
 	// Best effort: processes started from now on in this session see it.
 	// Nothing already running changes, and the UI says so.
@@ -343,7 +340,7 @@ func Enable(ctx context.Context) error {
 }
 
 func installRuntime() error {
-	bundle := Brewfile(runtime.GOARCH, Executable() != "")
+	bundle := Brewfile(Executable() != "")
 	if bundle == "" {
 		return nil
 	}

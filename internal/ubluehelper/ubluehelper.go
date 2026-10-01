@@ -14,7 +14,7 @@
 //   - The target image reference. The helper derives it from
 //     /usr/share/ublue-os/image-info.json via internal/imageinfo, so an
 //     authenticated caller cannot direct `bootc switch` at an arbitrary
-//     registry. Only a channel word crosses the boundary.
+//     registry. Only validated channel, driver, or day words cross the boundary.
 //   - The username. The helper resolves it from the PKEXEC_UID pkexec sets
 //     on the invoking session, so an authenticated caller cannot add an
 //     unrelated account to the privileged developer groups.
@@ -26,6 +26,7 @@ package ubluehelper
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
@@ -45,6 +46,11 @@ const (
 	CommandAutoDisable   = "auto-updates-disable"
 	CommandDriverSwitch  = "driver-switch"
 	CommandFactoryReset  = "factory-reset"
+	CommandPin           = "pin"
+	CommandUnpin         = "unpin"
+	CommandKVMEnable     = "kvm-enable"
+	CommandDockerEnable  = "docker-enable"
+	CommandDockerDisable = "docker-disable"
 )
 
 // The channel words accepted as channel-switch's second argument. They are
@@ -70,6 +76,7 @@ type Invocation struct {
 	Command string
 	Channel imageinfo.Channel
 	Driver  imageinfo.Driver
+	Day     string
 	DryRun  bool
 }
 
@@ -78,7 +85,8 @@ type Invocation struct {
 // command uses fixed argv and must remain available if that optional table is
 // malformed.
 func (i Invocation) UsesChannelTable() bool {
-	return i.Command == CommandChannelSwitch || i.Command == CommandDriverSwitch
+	return i.Command == CommandChannelSwitch || i.Command == CommandDriverSwitch ||
+		i.Command == CommandPin || i.Command == CommandUnpin
 }
 
 // SupportedCommands returns the complete first-argument set accepted by the
@@ -96,10 +104,15 @@ func SupportedCommands() []string {
 		CommandAutoDisable,
 		CommandDriverSwitch,
 		CommandFactoryReset,
+		CommandPin,
+		CommandUnpin,
+		CommandKVMEnable,
+		CommandDockerEnable,
+		CommandDockerDisable,
 	}
 }
 
-// ParseInvocation accepts only the nine argv shapes ChairLift emits:
+// ParseInvocation accepts only the fixed argv shapes ChairLift emits:
 //
 //	channel-switch <stable|testing> [--dry-run]
 //	dx-enable [--dry-run]
@@ -110,6 +123,11 @@ func SupportedCommands() []string {
 //	auto-updates-disable [--dry-run]
 //	driver-switch <standard|nvidia|nvidia-open> [--dry-run]
 //	factory-reset [--dry-run]
+//	pin <YYYYMMDD> [--dry-run]
+//	unpin [--dry-run]
+//	kvm-enable [--dry-run]
+//	docker-enable [--dry-run]
+//	docker-disable [--dry-run]
 //
 // Everything else — extra arguments, a misplaced flag, an unknown channel
 // word, an unknown command — is rejected.
@@ -135,6 +153,19 @@ func ParseInvocation(args []string) (Invocation, error) {
 		}
 		return Invocation{Command: CommandChannelSwitch, Channel: channel, DryRun: dryRun}, nil
 
+	case CommandPin:
+		usage := fmt.Errorf("usage: chairlift-helper pin <YYYYMMDD> [--dry-run]")
+		if len(args) != 2 && len(args) != 3 {
+			return Invocation{}, usage
+		}
+		if len(args) == 3 && args[2] != "--dry-run" {
+			return Invocation{}, usage
+		}
+		if err := ValidateDay(args[1], time.Now()); err != nil {
+			return Invocation{}, fmt.Errorf("%w: %v", usage, err)
+		}
+		return Invocation{Command: CommandPin, Day: args[1], DryRun: len(args) == 3}, nil
+
 	case CommandDriverSwitch:
 		usage := fmt.Errorf("usage: chairlift-helper %s <%s|%s|%s> [--dry-run]",
 			CommandDriverSwitch, imageinfo.DriverStandard, imageinfo.DriverNVIDIA, imageinfo.DriverNVIDIAOpen)
@@ -152,7 +183,8 @@ func ParseInvocation(args []string) (Invocation, error) {
 		return Invocation{Command: CommandDriverSwitch, Driver: driver, DryRun: dryRun}, nil
 
 	case CommandDXEnable, CommandDXDisable, CommandRestart, CommandRollback,
-		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset:
+		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset, CommandUnpin,
+		CommandKVMEnable, CommandDockerEnable, CommandDockerDisable:
 		if len(args) > 2 || (len(args) == 2 && args[1] != "--dry-run") {
 			return Invocation{}, fmt.Errorf("usage: chairlift-helper %s [--dry-run]", args[0])
 		}
@@ -230,7 +262,7 @@ func DriverSwitchArgs(info imageinfo.Info, driver imageinfo.Driver) ([]string, b
 // operates on the rollback deployment the host already records, so there is
 // no target for a caller to influence. Rolling back to an arbitrary earlier
 // image is a different operation — it is a switch to a pinned reference, and
-// belongs to the channel-switch action's validation, not here.
+// belongs to the pin action's validation, not here.
 func RollbackArgs() []string {
 	return []string{"rollback"}
 }
@@ -340,5 +372,34 @@ func GroupArgs(command, username, group string) (string, []string, bool) {
 		return "gpasswd", []string{"-d", username, group}, true
 	default:
 		return "", nil, false
+	}
+}
+
+// AccessArgs grants only the one group authorized by each developer option.
+// The username comes from PKEXEC_UID; no group or account arrives in argv.
+func AccessArgs(command, username string) (string, []string, bool) {
+	if username == "" {
+		return "", nil, false
+	}
+	switch command {
+	case CommandKVMEnable:
+		return "usermod", []string{"-aG", "kvm", username}, true
+	case CommandDockerEnable:
+		return "usermod", []string{"-aG", "docker", username}, true
+	default:
+		return "", nil, false
+	}
+}
+
+// DockerArgs contains the entire daemon lifecycle surface. Stopping both
+// socket and service prevents socket activation from undoing Disable.
+func DockerArgs(command string) ([]string, bool) {
+	switch command {
+	case CommandDockerEnable:
+		return []string{"enable", "--now", "docker.socket", "docker.service"}, true
+	case CommandDockerDisable:
+		return []string{"disable", "--now", "docker.socket", "docker.service"}, true
+	default:
+		return nil, false
 	}
 }

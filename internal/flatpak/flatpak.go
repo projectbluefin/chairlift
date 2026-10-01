@@ -420,9 +420,18 @@ func updateListArgs(user bool) []string {
 	return args
 }
 
-// ListUpdates returns available updates for Flatpak applications
-func ListUpdates(user bool) ([]UpdateInfo, error) {
-	output, err := runFlatpakCommand(updateListArgs(user)...)
+// ListUpdates returns available updates for Flatpak applications. The caller's
+// ctx governs the remote-ls network call so a cancellation on the mutation or
+// reconciliation path aborts the query instead of leaving an orphaned flatpak
+// download running; the read timeout still bounds a healthy call.
+func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	runCtx, cancel := context.WithTimeout(ctx, readTimeout)
+	defer cancel()
+
+	output, err := runFlatpakCommandCtx(runCtx, updateListArgs(user)...)
 	if err != nil {
 		return nil, err
 	}

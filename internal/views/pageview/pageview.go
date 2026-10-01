@@ -83,25 +83,6 @@ func UntrustedTap(name string, formulae, casks []string) Row {
 	return row
 }
 
-// FlatpakUpdate returns the row text for an app with an update waiting. The
-// title is the app's name, never its identifier: the identifier is how the
-// system files the app, not how a person recognizes it, so it appears only
-// when there is no name to show.
-func FlatpakUpdate(name, applicationID, newVersion, installation string) Row {
-	title := name
-	if title == "" {
-		title = applicationID
-	}
-	subtitle := "An update is available"
-	if newVersion != "" {
-		subtitle = fmt.Sprintf("Updates to version %s", newVersion)
-	}
-	if installation == "user" {
-		return Row{Title: title, Subtitle: subtitle + ", for you only"}
-	}
-	return Row{Title: title, Subtitle: subtitle + ", for everyone who uses this computer"}
-}
-
 // BootcUpdateSubtitle returns the system-update expander subtitle. A
 // downloaded update changes nothing until the machine restarts, so the
 // waiting state says when it takes effect rather than that it is "staged".
@@ -304,12 +285,12 @@ func ChannelSwitchResultSubtitle(toTesting bool) string {
 // where what a person deciding needs is the consequence — an administrator
 // password now, and a new login before anything works.
 func DeveloperRow(active bool) Row {
-	row := Row{Title: "Developer tools"}
+	row := Row{Title: "Developer Mode"}
 	if active {
-		row.Subtitle = "On. You can run containers and virtual machines, and use USB and serial hardware."
+		row.Subtitle = "Build projects with containers and virtual machines on your Bluefin workstation. Choose optional tools below."
 		return row
 	}
-	row.Subtitle = "Lets you run containers and virtual machines, and use USB and serial hardware, without asking for permission each time. Needs your administrator password."
+	row.Subtitle = "Set up this Bluefin workstation for project development, containers and virtual machines. Needs your administrator password; choose optional tools below."
 	return row
 }
 
@@ -336,16 +317,16 @@ const GamingUnavailableSubtitle = "Could not check which gaming apps are install
 // apps gaming needs are all present (internal/gaming.State.Enabled), and
 // installed of total counts the whole set.
 func GamingRow(ready bool, installed, total int) Row {
-	row := Row{Title: "Gaming apps"}
+	row := Row{Title: "Gaming Mode"}
 	switch {
 	case ready && installed >= total:
-		row.Subtitle = "Installed. Steam and everything that goes with it are ready to use."
+		row.Subtitle = fmt.Sprintf("All %d gaming components are installed. Select apps to manage below.", total)
 	case ready:
-		row.Subtitle = fmt.Sprintf("Installed. %d of %d gaming apps are set up.", installed, total)
+		row.Subtitle = fmt.Sprintf("%d of %d gaming components installed. Select apps to manage below.", installed, total)
 	case installed > 0:
-		row.Subtitle = fmt.Sprintf("Partly set up — %d of %d gaming apps are installed. Turn this on to finish.", installed, total)
+		row.Subtitle = fmt.Sprintf("%d of %d gaming components installed. Choose which apps to add or remove.", installed, total)
 	default:
-		row.Subtitle = "Installs Steam and the tools that make Windows games run. This is a large download."
+		row.Subtitle = "Choose the gaming apps to install. Downloads can be large."
 	}
 	return row
 }
@@ -357,15 +338,6 @@ func GamingWorkingSubtitle(enabled bool) string {
 		return "Installing…"
 	}
 	return "Removing…"
-}
-
-// GamingIncludedRow returns the readonly row shown in place of the switch on
-// systems that already ship the gaming apps.
-func GamingIncludedRow() Row {
-	return Row{
-		Title:    "Already set up",
-		Subtitle: "Steam and the tools that go with it came with this system, so there is nothing to turn on here.",
-	}
 }
 
 // GamingResultSubtitle returns the subtitle after a gaming toggle completes.

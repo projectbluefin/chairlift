@@ -9,9 +9,9 @@ import (
 )
 
 // nextVersion runs scripts/next-version.sh inside a throwaway git repository
-// holding exactly tags, with the calendar slot pinned to 26.09 so the answer
+// holding exactly tags, with the calendar slot pinned to 26.10 so the answer
 // does not depend on today's date.
-func nextVersion(t *testing.T, tags []string, prerelease string) (string, error) {
+func nextVersion(t *testing.T, tags []string, extraArgs ...string) (string, error) {
 	t.Helper()
 	for _, tool := range []string{"git", "bash"} {
 		if _, err := exec.LookPath(tool); err != nil {
@@ -38,12 +38,10 @@ func nextVersion(t *testing.T, tags []string, prerelease string) (string, error)
 	}
 
 	args := []string{filepath.Join(RepoRoot(), "scripts", "next-version.sh")}
-	if prerelease != "" {
-		args = append(args, prerelease)
-	}
+	args = append(args, extraArgs...)
 	cmd := exec.Command("bash", args...)
 	cmd.Dir = dir
-	cmd.Env = append(cmd.Environ(), "NEXT_VERSION_SLOT=26.09")
+	cmd.Env = append(cmd.Environ(), "NEXT_VERSION_SLOT=26.10")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -54,45 +52,35 @@ func nextVersion(t *testing.T, tags []string, prerelease string) (string, error)
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// A prerelease belongs to the version it precedes: while vYY.MM.N has only
-// prerelease tags, the next prerelease and the final release both stay on N.
-// The script once bumped N past any existing tag, so `make bump PRE=alpha.3`
-// after v26.09.0-alpha.2 tagged v26.09.1-alpha.3.
-func TestNextVersionKeepsAnUnreleasedVersionNumber(t *testing.T) {
+func TestNextVersionStableMonthlySequence(t *testing.T) {
 	cases := []struct {
-		name       string
-		tags       []string
-		prerelease string
-		want       string
+		name string
+		tags []string
+		want string
 	}{
-		{"first release of the month", nil, "", "v26.09.0"},
-		{"first prerelease of the month", nil, "alpha.1", "v26.09.0-alpha.1"},
-		{"next prerelease of an unreleased version", []string{"v26.09.0-alpha.1", "v26.09.0-alpha.2"}, "alpha.3", "v26.09.0-alpha.3"},
-		{"final release after its prereleases", []string{"v26.09.0-alpha.1", "v26.09.0-alpha.2"}, "", "v26.09.0"},
-		{"prerelease after a final release", []string{"v26.09.0-alpha.1", "v26.09.0"}, "alpha.1", "v26.09.1-alpha.1"},
-		{"release after a final release", []string{"v26.09.0"}, "", "v26.09.1"},
-		{"other months do not count", []string{"v26.08.4", "v0.12.2"}, "", "v26.09.0"},
-		{"next prerelease of an unreleased second version", []string{"v26.09.0", "v26.09.1-alpha.1"}, "alpha.2", "v26.09.1-alpha.2"},
-		{"final release of the second version after its prerelease", []string{"v26.09.0", "v26.09.1-alpha.1"}, "", "v26.09.1"},
-		{"sequence numbers compare numerically", []string{"v26.09.9", "v26.09.10"}, "", "v26.09.11"},
+		{"first release of the month", nil, "v26.10.1"},
+		{"next point release", []string{"v26.10.1"}, "v26.10.2"},
+		{"other months do not count", []string{"v26.09.12", "v0.12.2"}, "v26.10.1"},
+		{"legacy zero advances to one", []string{"v26.10.0"}, "v26.10.1"},
+		{"prereleases do not advance stable sequence", []string{"v26.10.1-alpha.1", "v26.10.2-alpha.1"}, "v26.10.1"},
+		{"prereleases after a stable release are ignored", []string{"v26.10.1", "v26.10.2-alpha.1"}, "v26.10.2"},
+		{"sequence numbers compare numerically", []string{"v26.10.9", "v26.10.10"}, "v26.10.11"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := nextVersion(t, tc.tags, tc.prerelease)
+			got, err := nextVersion(t, tc.tags)
 			if err != nil {
 				t.Fatalf("next-version.sh failed: %v\n%s", err, got)
 			}
 			if got != tc.want {
-				t.Errorf("tags %v, prerelease %q: got %s, want %s", tc.tags, tc.prerelease, got, tc.want)
+				t.Errorf("tags %v: got %s, want %s", tc.tags, got, tc.want)
 			}
 		})
 	}
 }
 
-// Re-running the bump with a prerelease name already used must fail rather
-// than print a tag that exists.
-func TestNextVersionRefusesAnExistingTag(t *testing.T) {
-	if got, err := nextVersion(t, []string{"v26.09.0-alpha.1", "v26.09.0-alpha.2"}, "alpha.2"); err == nil {
-		t.Fatalf("next-version.sh printed %q for a prerelease that is already tagged", got)
+func TestNextVersionRejectsPrereleaseArguments(t *testing.T) {
+	if got, err := nextVersion(t, nil, "alpha.1"); err == nil {
+		t.Fatalf("next-version.sh accepted a prerelease argument: %q", got)
 	}
 }

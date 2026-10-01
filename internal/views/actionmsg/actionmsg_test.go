@@ -614,3 +614,20 @@ func TestFeatureUpdate(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveryToggleGatesMirrorsAndPreviewFeedback(t *testing.T) {
+	for _, preview := range []bool{false, true} {
+		for _, enabled := range []bool{false, true} {
+			decision := LiveryToggle(preview, enabled, "the panel icon")
+			if decision.MutateUI == preview {
+				t.Fatalf("preview=%t allowed wrong mirror decision", preview)
+			}
+			if preview && decision.Toast == "" {
+				t.Fatal("restored preview lacks feedback")
+			}
+			if !preview && decision.Toast != "" {
+				t.Fatal("live switch emits redundant preview feedback")
+			}
+		}
+	}
+}

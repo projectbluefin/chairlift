@@ -148,8 +148,8 @@ var families = []Family{
 		ID:          "ghostscript",
 		DisplayName: "Ghostscript",
 		Repo:        "ghcr.io/projectbluefin/ghostscript-printer-app",
-		Version:     "10.07.1-1",
-		Digest:      "sha256:ac51eddead62b0567d14c78d2a65267403b2ff3ab1942f25efaf80e8261f7929",
+		Version:     "10.07.1-2",
+		Digest:      "sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc",
 		DefaultPort: 18010,
 	},
 	{

@@ -24,8 +24,7 @@ const gooseDesktopID = "Goose"
 // It is an action row rather than a switch because there is no clean "off".
 // Turning it off would mean either leaving Goose configured to call a
 // binary ChairLift had removed — an error on every session — or rewriting a
-// YAML file that another tool owns and whose own setup script refuses to
-// touch when it already exists.
+// YAML file that belongs to the user.
 func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Enhanced Troubleshooting")
@@ -38,6 +37,8 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	row.SetUseMarkup(false)
 	row.SetTitle("Enhanced Troubleshooting")
 	row.SetSubtitle("Checking...")
+	uh.troubleshootSpinner = newActivitySpinner()
+	row.AddSuffix(&uh.troubleshootSpinner.Widget)
 
 	button := gtk.NewButtonWithLabel("Set Up")
 	button.SetValign(gtk.AlignCenterValue)
@@ -65,8 +66,8 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 func (uh *UserHome) refreshTroubleshootState() {
 	state := troubleshoot.Detect()
 
-	log.Printf("views: troubleshoot group built server=%v agent=%v desktop=%v wired=%v provider=%q",
-		state.ServerInstalled, state.AgentInstalled, state.DesktopInstalled, state.Wired, state.Provider)
+	log.Printf("views: troubleshoot group built server=%v agent=%v desktop=%v wired=%v",
+		state.ServerInstalled, state.AgentInstalled, state.DesktopInstalled, state.Wired)
 
 	sgtk.RunOnMainThread(func() {
 		uh.applyTroubleshootState(state)
@@ -87,7 +88,7 @@ func (uh *UserHome) applyTroubleshootState(state troubleshoot.State) {
 	// The desktop app is what the button launches, so a host that is
 	// otherwise ready but lacks it still needs the setup run.
 	if state.Ready() && state.DesktopInstalled {
-		uh.troubleshootButton.SetLabel("Start Session")
+		uh.troubleshootButton.SetLabel("Open Goose")
 		return
 	}
 	uh.troubleshootButton.SetLabel("Set Up")
@@ -96,6 +97,9 @@ func (uh *UserHome) applyTroubleshootState(state troubleshoot.State) {
 // onTroubleshootClicked either launches the session or runs the setup,
 // depending on which the row is currently offering.
 func (uh *UserHome) onTroubleshootClicked() {
+	if uh.troubleshootRow == nil || uh.troubleshootButton == nil || uh.troubleshootSpinner == nil {
+		return
+	}
 	if uh.troubleshootState.Ready() && uh.troubleshootState.DesktopInstalled {
 		uh.launchApp(gooseDesktopID)
 		return
@@ -110,16 +114,17 @@ func (uh *UserHome) onTroubleshootClicked() {
 	state := uh.troubleshootState
 
 	button.SetSensitive(false)
-	button.SetLabel("Setting up...")
+	button.SetLabel("Setting up…")
+	setActivitySpinner(uh.troubleshootSpinner, true)
 
 	go func() {
-		defer uh.troubleshootGate.Reset()
-
 		after, err := troubleshoot.Setup(state, func(step string) {
 			sgtk.RunOnMainThread(func() { row.SetSubtitle(step + "...") })
 		})
 
 		sgtk.RunOnMainThread(func() {
+			uh.troubleshootGate.Reset()
+			setActivitySpinner(uh.troubleshootSpinner, false)
 			uh.applyTroubleshootState(after)
 
 			if err != nil {
@@ -135,16 +140,9 @@ func (uh *UserHome) onTroubleshootClicked() {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: Enhanced Troubleshooting would be set up — no changes made")
 				return
 			}
-			row.SetSubtitle(pageview.TroubleshootSetupSubtitle(after))
-			if !after.Ready() {
-				// Every step reported success and the feature still is not
-				// usable, so this is not an error toast — but it must not
-				// read as done either.
-				uh.toastAdder.ShowToast("Packages installed, but Goose already had a configuration — see the row for what to add")
-				return
-			}
-			uh.toastAdder.ShowToast("Enhanced Troubleshooting is ready — " +
-				pageview.TroubleshootProviderNote(after.Provider))
+			subtitle := pageview.TroubleshootSetupSubtitle(after)
+			row.SetSubtitle(subtitle)
+			uh.toastAdder.ShowToast(subtitle)
 		})
 	}()
 }

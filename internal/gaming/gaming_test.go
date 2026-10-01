@@ -248,10 +248,10 @@ func TestStatusPropagatesQueryFailure(t *testing.T) {
 func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 	stubInstalled(t, nil, errors.New("flatpak not installed"))
 
-	if installed, failures := Enable(); installed != nil || len(failures) != 1 {
+	if installed, failures := Enable(allComponentIDs()); installed != nil || len(failures) != 1 {
 		t.Errorf("Enable() = (%v, %v), want (nil, one error)", installed, failures)
 	}
-	if removed, skipped, failures := Disable(); removed != nil || skipped != nil || len(failures) != 1 {
+	if removed, skipped, failures := Disable(allComponentIDs()); removed != nil || skipped != nil || len(failures) != 1 {
 		t.Errorf("Disable() = (%v, %v, %v), want (nil, nil, one error)", removed, skipped, failures)
 	}
 }
@@ -290,7 +290,7 @@ func TestDisableSkipsSystemScopeComponentsInsteadOfFailingOnThem(t *testing.T) {
 		User:      refsOf(),
 	}, nil)
 
-	removed, skipped, failures := Disable()
+	removed, skipped, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Errorf("Disable() failures = %v, want none for components installed system-wide", failures)
 	}

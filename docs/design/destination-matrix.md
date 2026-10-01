@@ -148,9 +148,9 @@ are not new routes. A target route never creates a second copy of the owner.
 | U2 | Enable/disable automatic updates | Updates / Settings | `onAutomaticUpdatesToggled` | `ublue.SetAutomaticUpdates`; state reads via `internal/autoupdate` |
 | U3 | Stage OS update and show progress | Updates / Sources | `onBootcStageClicked` | `internal/bootc` via `internal/stageexec`; same stage path used by U1 |
 | U4 | Compare running/staged SBOM; expand diff | Updates / Changes | `onChangelogClicked` and its pinned comparison state | `internal/sbom`; explicit read, no background fetch on navigation |
-| U5 | Read pending Flatpak updates; update each app | Updates / Sources | `loadFlatpakUpdatesGeneration` row action | `internal/flatpak`; scope retained |
-| U6 | Read outdated formulae/casks; upgrade each | Updates / Sources | `loadOutdatedPackagesGeneration` row action | `internal/homebrew` |
-| U7 | Refresh Homebrew metadata | Updates / Sources | `updateHomebrew` | `homebrew.Update` |
+| U5 | Read pending app updates; update each app | Updates / Apps and tools | `UpdateShell.startItemUpdate` | `updateproviders.UpdateItem`; application identity and scope retained |
+| U6 | Read outdated tools; upgrade each | Updates / Apps and tools | `UpdateShell.startItemUpdate` | `updateproviders.UpdateItem` using Homebrew |
+| U7 | Refresh tool metadata | Updates / Apps and tools | `UpdateShell.startToolRefresh` | `updateproviders.RefreshDeveloperTools` |
 | U8 | Discover untrusted taps; confirm trust | Updates / Sources | `trustTap` (confirmation in `confirmTrustTap`) | `homebrew.TrustPackages`; per-user, no pkexec |
 | U9 | Change release channel | Updates / Settings | `onChannelToggled` | `ublue.SwitchChannel`; helper resolves image from channel word |
 | U10 | Restart after update | Updates | `UpdateShell.StartRestart` | `ublue.Restart`; separate from staging/rollback |
@@ -163,9 +163,9 @@ are not new routes. A target route never creates a second copy of the owner.
 | A6 | Export package list (replaces `~/Brewfile`) | Apps / Developer Tools | `onBrewBundleDumpClicked` | `homebrew.BundleDump`; handler is currently in `maintenance_page.go`, control is in Apps |
 | A7 | Search formulae/casks; confirm install | Apps / Developer Tools | `onHomebrewSearch` / `installHomebrewSearchResult` search controller | `homebrew.Search` / `Install`; independent search generation, shared installed loader |
 | A8 | Discover/check collections; install Brewfile | Apps / Collections and gaming | `loadBrewBundles` row install gate | `homebrew.AvailableBundles`, `BundleCheck`, `BundleInstall` |
-| A9 | Enable/disable Developer Mode; update command-menu visibility | Apps / Developer Tools | `onDeveloperToggled` | `internal/ublue` group promotion; `internal/devmenu` user-session integration |
+| A9 | Enable/disable Developer Mode; choose WSL, Docker and individual IDE/editor tools; update command-menu visibility | Apps / Developer Tools | `onDeveloperToggled` / `onDeveloperOption` | `internal/ublue` fixed helper access/daemon commands; `internal/devtools` user Homebrew/Lima; one developer gate, real VM/socket readiness |
 | A10 | Open developer onboarding; optional Pulp install and OPML staging after successful enable | Apps / Developer Tools | `startDeveloperFeedSetup` (onboarding launch via `openDeveloperOnboarding`) | `internal/developerfeeds`; `install_pulp` / `stage_feeds` opt in, no rollback of successful enable |
-| A11 | Enable/disable Gaming Mode; show image-included gaming state | Apps / Collections and gaming | `onGamingToggled` / `refreshGamingState` gaming controller | `internal/gaming`; user Flatpaks, preserve system-installed components |
+| A11 | Install/remove selected gaming components; show verified per-component user/system state | Apps / Collections and gaming | `onGamingSelected` / `runGamingSelected` | `internal/gaming`; one gate, confirmed selected user Flatpak removals, preserve system copies and partial-failure summary |
 | A12 | Enable/disable Agent Mode; inspect readiness/details | Apps / Local AI tools | `onAgentModeToggled` / `showAgentModeState` Agent Mode controller | `internal/aistack`; user unit and environment fragment, llmman owns models |
 | P1 | Open avatar chooser, preview, Apply | Appearance / Profile picture | `avatarPicker` controller in `profile_picture.go` | `internal/avatar.Applier`; AccountsService or face-file fallback, no pkexec |
 | P2 | Search/select app-grid brand; enable/revert | Appearance / Icons | `onLiveryAppGridToggled` / `onLiveryBrandChosen` app-grid controller | `internal/livery`; user theme |
@@ -186,11 +186,20 @@ are not new routes. A target route never creates a second copy of the owner.
 | H3 | Open configured website, issues, chat | Help / Troubleshooting and support | `openURL` | `xdg-open` through `internal/launcher` |
 | H4 | Expand “Why is something missing?” | Help / Capability explanations | `pageview.UnavailableFeatures` | Read-only capability/config snapshot; no separate group |
 
-Update counts remain owned by `internal/views/badgestate`; moving sources does
-not introduce per-destination counters. The manual provider controls above and
-the aggregate coordinator are distinct existing entry points, not a claim that
-they already share a global concurrency gate. Relocation must preserve their
-existing gates and provider calls, not create additional entry points.
+The pure `updateflow.Coordinator` owns update inventory and aggregate counts.
+Manual item updates, tool metadata refresh, dedicated staging and the unified
+run share `UpdateShell.beginMutation`; no separate provider-list state or badge
+counter remains. All external work stays off GTK, with results marshalled back
+before touching controls or starting a new coordinator check.
+
+Livery orders Foundational Livery, Dock Livery, Profile picture, then App Grid
+Livery. Foundations use an embedded, theme-adaptive FlowBox preview grid with
+one activation signal. The shared catalog chooser renders at most twelve
+search matches plus Custom SVG; artwork is fetched sequentially through the
+existing livery fetch seams only for those matches. New searches cancel old
+fetches and generation checks discard stale images. Rotation scheduling is
+serialized and commits both preference keys only after systemd accepts the
+unit change; rejected changes restore the last known switches and unit file.
 
 Global actions have no invented configuration group:
 
@@ -199,7 +208,7 @@ Global actions have no invented configuration group:
 | Sidebar/Alt+number/F1 Help; Recovery entry/Back | Primary or detail navigation only | `Window.navigateToPage`; the Recovery callbacks in `internal/window/window.go` (`showRecoveryDetail`, `navigateBack`) resolve the `recovery` route and the transition's `Back` primary through it, so entry keeps the Maintenance row selected and Back returns there without re-running anything (#343). A known primary the caller cannot enter resolves to Help. |
 | Preferences menu aliases; Check action | Opens Updates settings / invokes U1 | `Window.setupActions`, delegating to U11 / U1 rather than owning mutations |
 | Help action | Opens configured website through GIO when present | `Window.setupActions` |
-| Setup Assistant, `--setup`, Configure, Get moving, Back, Next/Finish, dismissal | Global onboarding; not an additional primary destination | `FirstRunAssistant` and its `internal/firstrun` model/store; disposition only, no replay of page mutations |
+| Setup Assistant, `--first-run`, `--setup`/`-s`, Back, Next/Finish, Dismiss/Escape | Explicit existing-page tour; no additional primary destination | `Window.PresentFirstRun` routes `firstrun.Pages` through `navigateToPage`; page controls own mutations and the store records only completion/dismissal |
 | Keyboard Shortcuts | Global dialog | `Window.onShowShortcuts`, inventory from `internal/navigation` |
 | About Control Center | Global application About dialog | `Window.onShowAbout`; distinct from System / About |
 | Quit / close while updates run | Application lifecycle | `internal/app` quit action; window close guard consults `UpdateShell.Busy` |

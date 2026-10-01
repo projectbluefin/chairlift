@@ -3,6 +3,7 @@ package updateproviders
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
@@ -12,7 +13,7 @@ import (
 // FlatpakDeps contains the Flatpak operations used by the update provider.
 type FlatpakDeps struct {
 	Installed   func() bool
-	ListUpdates func(user bool) ([]flatpak.UpdateInfo, error)
+	ListUpdates func(ctx context.Context, user bool) ([]flatpak.UpdateInfo, error)
 	Update      func(ctx context.Context, appID string, user bool) error
 	DryRun      func() bool
 }
@@ -42,9 +43,9 @@ func (p *flatpakProvider) Available() bool {
 	return p.deps.Installed != nil && p.deps.Installed()
 }
 
-func (p *flatpakProvider) Check(context.Context) (updateflow.CheckResult, error) {
-	userUpdates, userErr := p.deps.ListUpdates(true)
-	systemUpdates, systemErr := p.deps.ListUpdates(false)
+func (p *flatpakProvider) Check(ctx context.Context) (updateflow.CheckResult, error) {
+	userUpdates, userErr := p.deps.ListUpdates(ctx, true)
+	systemUpdates, systemErr := p.deps.ListUpdates(ctx, false)
 
 	var items []updateflow.Item
 	items = append(items, flatpakItems(userUpdates)...)
@@ -55,7 +56,7 @@ func (p *flatpakProvider) Check(context.Context) (updateflow.CheckResult, error)
 
 func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, _ func(updateflow.Progress)) (updateflow.ApplyResult, error) {
 	scopes := scopesFromItems(items)
-	changed := false
+	ran := false
 
 	for _, user := range []bool{true, false} {
 		scope := "system"
@@ -66,16 +67,60 @@ func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, _ 
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			return updateflow.ApplyResult{Changed: changed}, err
+			return updateflow.ApplyResult{}, err
 		}
 		if err := p.deps.Update(ctx, "", user); err != nil {
-			return updateflow.ApplyResult{Changed: changed}, err
+			return updateflow.ApplyResult{}, err
 		}
-		changed = true
+		ran = true
 	}
 
-	preview := changed && p.isDryRun()
-	return updateflow.ApplyResult{Changed: changed && !preview, Preview: preview}, nil
+	if ran && p.isDryRun() {
+		return updateflow.ApplyResult{Preview: true}, nil
+	}
+	if !ran {
+		return updateflow.ApplyResult{}, nil
+	}
+
+	// `flatpak update` exits 0 on paths that pull nothing — it prints
+	// "Nothing to update." and returns success when it has no work. A zero
+	// exit is therefore not evidence that the pending inventory was applied,
+	// and reporting a completed update here would be a claim the command
+	// cannot support. Re-list the scopes the run was asked to apply and claim
+	// the mutation only when those entries are gone; otherwise the source
+	// stays pending and the coordinator reports it as unchanged.
+	changed, err := p.updatesCleared(ctx, scopes)
+	if err != nil {
+		return updateflow.ApplyResult{}, err
+	}
+	return updateflow.ApplyResult{Changed: changed}, nil
+}
+
+// updatesCleared reports whether the scopes that ran an update no longer
+// list any available updates. It is the post-hoc reconciliation flatpak
+// requires: the tool has no dry-run, so the only proof that a zero exit
+// applied the inventory is that the inventory is gone.
+func (p *flatpakProvider) updatesCleared(ctx context.Context, scopes map[string]bool) (bool, error) {
+	for _, user := range []bool{true, false} {
+		scope := "system"
+		if user {
+			scope = "user"
+		}
+		if !scopes[scope] {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		updates, err := p.deps.ListUpdates(ctx, user)
+		if err != nil {
+			return false, fmt.Errorf("verify Flatpak updates after apply: %w", err)
+		}
+		if len(updates) > 0 {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (p *flatpakProvider) isDryRun() bool {
@@ -89,6 +134,7 @@ func flatpakItems(updates []flatpak.UpdateInfo) []updateflow.Item {
 	items := make([]updateflow.Item, 0, len(updates))
 	for _, update := range updates {
 		items = append(items, updateflow.Item{
+			ID:               update.ApplicationID,
 			Name:             update.Name,
 			AvailableVersion: update.NewVersion,
 			Scope:            update.Installation,

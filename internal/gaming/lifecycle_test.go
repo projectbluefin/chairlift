@@ -204,36 +204,12 @@ func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
 	}
 }
 
-func TestGamingInventorySurvivesOneUnavailableScope(t *testing.T) {
-	tests := []struct {
-		name     string
-		listing  listing
-		wantUser bool
-	}{
-		{
-			name:     "system scope unavailable",
-			listing:  listing{userApps: []string{steam}, fail: []string{"--system"}},
-			wantUser: true,
-		},
-		{
-			name:    "user scope unavailable",
-			listing: listing{systemApps: []string{steam}, fail: []string{"--user"}},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			fakeFlatpak(t, listingScript(test.listing))
-
-			scope, err := installedComponents()
-			if err != nil {
-				t.Fatalf("installedComponents() error = %v, want nil — one usable scope still yields an answer", err)
-			}
-			if !scope.Installed[refOf(steam)] {
-				t.Errorf("scope.Installed[%q] = false, want the component from the scope that answered", steam)
-			}
-			if scope.User[refOf(steam)] != test.wantUser {
-				t.Errorf("scope.User[%q] = %v, want %v", steam, scope.User[refOf(steam)], test.wantUser)
+func TestGamingInventoryFailsClosedWhenEitherScopeIsUnreadable(t *testing.T) {
+	for _, scope := range []string{"--system", "--user"} {
+		t.Run(scope, func(t *testing.T) {
+			fakeFlatpak(t, listingScript(listing{userApps: []string{steam}, fail: []string{scope}}))
+			if _, err := installedComponents(); err == nil {
+				t.Fatal("an unreadable scope must not classify missing or system-only components")
 			}
 		})
 	}
@@ -299,7 +275,7 @@ func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 		userRuntimes: []string{mangohud},
 	}))
 
-	removed, skipped, failures := Disable()
+	removed, skipped, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
@@ -322,7 +298,7 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheUserScope(t *testing.T) {
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	installed, failures := Enable()
+	installed, failures := Enable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Enable() failures = %v, want none", failures)
 	}
@@ -354,7 +330,7 @@ func TestEnableIsolatesAPerComponentInstallFailure(t *testing.T) {
 	}, nil)
 	fakeFlatpak(t, "echo 'error: app not found' >&2\nexit 1\n")
 
-	installed, failures := Enable()
+	installed, failures := Enable(allComponentIDs())
 	if len(installed) != 0 {
 		t.Errorf("Enable() installed = %v, want none", installed)
 	}
@@ -370,7 +346,7 @@ func TestEnableReportsNothingWhenEveryComponentIsPresent(t *testing.T) {
 	stubInstalled(t, allComponentIDs(), nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	installed, failures := Enable()
+	installed, failures := Enable(allComponentIDs())
 	if len(installed) != 0 || len(failures) != 0 {
 		t.Errorf("Enable() = (%v, %v), want (none, none)", installed, failures)
 	}
@@ -386,7 +362,7 @@ func TestDisableRemovesUserScopeComponentsUnprivileged(t *testing.T) {
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, skipped, failures := Disable()
+	removed, skipped, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
@@ -415,7 +391,7 @@ func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 	}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")
 
-	removed, skipped, failures := Disable()
+	removed, skipped, failures := Disable(allComponentIDs())
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none", removed)
 	}
@@ -435,5 +411,44 @@ func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 		if !found {
 			t.Errorf("Disable() failures = %v, want one naming %q", failures, id)
 		}
+	}
+}
+
+func TestGamingSelectionMutatesOnlyChosenComponents(t *testing.T) {
+	for _, component := range components {
+		t.Run(component.ID, func(t *testing.T) {
+			stubInstalled(t, nil, nil)
+			log := fakeFlatpak(t, "exit 0")
+			installed, failures := Enable([]string{component.ID, component.ID})
+			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{component.ID}) {
+				t.Fatalf("selection result = %v %v", installed, failures)
+			}
+			if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"install -y --user " + component.ID}) {
+				t.Fatalf("selection installed unchosen or duplicate components: %v", calls)
+			}
+		})
+	}
+}
+
+func TestGamingSelectionRejectsUnknownBeforeAnyMutation(t *testing.T) {
+	stubInstalled(t, nil, nil)
+	log := fakeFlatpak(t, "exit 0")
+	if _, failures := Enable([]string{steam, "org.example.Unknown"}); len(failures) != 1 {
+		t.Fatal("unknown selection must fail")
+	}
+	if calls := invocations(t, log); len(calls) != 0 {
+		t.Fatalf("unknown selection partially installed: %v", calls)
+	}
+}
+
+func TestGamingRemovalLeavesUnselectedUserComponents(t *testing.T) {
+	stubInstalled(t, []string{steam, protonUp}, nil)
+	log := fakeFlatpak(t, "exit 0")
+	removed, _, failures := Disable([]string{protonUp})
+	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{protonUp}) {
+		t.Fatalf("removal = %v %v", removed, failures)
+	}
+	if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"uninstall -y --user " + protonUp}) {
+		t.Fatalf("removed unselected component: %v", calls)
 	}
 }

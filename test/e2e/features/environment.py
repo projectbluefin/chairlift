@@ -243,9 +243,25 @@ def launch_app(context, binary):
         raise RuntimeError(f"ChairLift did not load {context.config_path}:\n{output}")
 
     # Presenting the window and registering its widgets on the accessibility
-    # bus are separate events; wait for the sidebar rather than sleeping.
+    # bus are separate events. Explicit setup hides the sidebar, so require
+    # its existing Features controls and the complete wizard footer instead.
     context.app = atspi.find_application(timeout=STARTUP_TIMEOUT)
-    if not atspi.poll(lambda: atspi.sidebar_rows(context.app), timeout=STARTUP_TIMEOUT):
+    if {"--first-run", "--setup"}.intersection(getattr(context, "launch_args", [])):
+        def setup_ready():
+            root = atspi.page_root(context.app)
+            texts = atspi.all_text_under(root)
+            return (
+                "Features" in texts
+                and "Developer Mode" in texts
+                and all(
+                    atspi.find_all(root, lambda node: atspi.is_button(node, label))
+                    for label in ("Dismiss setup", "Back", "Next")
+                )
+            )
+
+        if not atspi.poll(setup_ready, timeout=STARTUP_TIMEOUT):
+            raise RuntimeError("the main window never published its setup content and footer")
+    elif not atspi.poll(lambda: atspi.sidebar_rows(context.app), timeout=STARTUP_TIMEOUT):
         raise RuntimeError("the main window never published its navigation sidebar")
 
 

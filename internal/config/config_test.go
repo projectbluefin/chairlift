@@ -525,42 +525,28 @@ func groupKeys(page PageConfig) []string {
 	return keys
 }
 
-// groupEnabledCallPattern matches groupEnabled("updates_page", "<name>")
-// calls in Go source text, capturing the group-name argument. The view now
-// routes through the composed capability floor (uh.groupEnabled) rather than
-// config.IsGroupEnabled directly, so the lock matches that canonical
-// predicate instead of the old config call.
-var groupEnabledCallPattern = regexp.MustCompile(`groupEnabled\(\s*"updates_page"\s*,\s*"([^"]+)"\s*\)`)
+// Both provider policies and secondary widget groups gate Updates controls.
+// The unified shell's policies live in the window; remaining rows are in views.
+var groupEnabledCallPattern = regexp.MustCompile(`(?:groupEnabled|sourcePolicy)\(\s*"updates_page"\s*,\s*"([^"]+)"\s*\)`)
 
-// TestUpdatesPageDefaultGroupsHaveBuilders reads internal/views/updates_page.go
-// as plain text (internal/config must never import internal/views or the
-// GTK bindings package, directly or transitively, per
-// docs/agents/skills/gtk-headless-tests.md) and asserts every group
-// defaultConfig() defines for updates_page is gated by a real
-// groupEnabled("updates_page", ...) call in that view file. This is the
-// regression test that would have caught a group being
-// declared/defaulted/shipped/documented with no view ever checking it: a
-// group with no matching groupEnabled call fails this test.
+// TestUpdatesPageDefaultGroupsHaveBuilders checks every shipped group against
+// the complete page composition without importing GTK bindings.
 func TestUpdatesPageDefaultGroupsHaveBuilders(t *testing.T) {
-	path := filepath.Join(repoRoot(), "internal", "views", "updates_page.go")
-	src, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading %s: %v", path, err)
-	}
-
-	matches := groupEnabledCallPattern.FindAllStringSubmatch(string(src), -1)
-	if len(matches) == 0 {
-		t.Fatalf("found zero groupEnabled(\"updates_page\", ...) calls in %s; regex may no longer match the source", path)
-	}
-
-	gated := make(map[string]bool, len(matches))
-	for _, m := range matches {
-		gated[m[1]] = true
+	gated := make(map[string]bool)
+	for _, relative := range []string{"internal/views/updates_page.go", "internal/window/window.go"} {
+		path := filepath.Join(repoRoot(), relative)
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		for _, match := range groupEnabledCallPattern.FindAllStringSubmatch(string(src), -1) {
+			gated[match[1]] = true
+		}
 	}
 
 	for name := range defaultConfig().UpdatesPage {
 		if !gated[name] {
-			t.Errorf("defaultConfig().UpdatesPage group %q has no matching groupEnabled(\"updates_page\", ...) call in %s", name, path)
+			t.Errorf("defaultConfig().UpdatesPage group %q has no page composition policy", name)
 		}
 	}
 }

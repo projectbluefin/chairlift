@@ -171,6 +171,11 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
 		ubluehelper.CommandFactoryReset,
+		ubluehelper.CommandPin,
+		ubluehelper.CommandUnpin,
+		ubluehelper.CommandKVMEnable,
+		ubluehelper.CommandDockerEnable,
+		ubluehelper.CommandDockerDisable,
 	}
 	if !reflect.DeepEqual(ublueCommands, expectedUblueCommands) {
 		t.Fatalf("ubluehelper.SupportedCommands() = %v, want %v", ublueCommands, expectedUblueCommands)
@@ -239,6 +244,41 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Message:     "Authentication is required to factory reset the system",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandFactoryReset,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.pin",
+			Description: "Pin the system to a dated build",
+			Message:     "Authentication is required to pin the system to a dated build",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandPin,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.unpin",
+			Description: "Return the system to its release stream",
+			Message:     "Authentication is required to return the system to its release stream",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandUnpin,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.kvm-enable",
+			Description: "Grant hardware virtualization access",
+			Message:     "Authentication is required to grant hardware virtualization access",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandKVMEnable,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.docker-enable",
+			Description: "Enable the Docker daemon and account access",
+			Message:     "Authentication is required to enable the Docker daemon and account access",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandDockerEnable,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.docker-disable",
+			Description: "Stop and disable the Docker daemon",
+			Message:     "Authentication is required to stop and disable the Docker daemon",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandDockerDisable,
 		},
 	})
 

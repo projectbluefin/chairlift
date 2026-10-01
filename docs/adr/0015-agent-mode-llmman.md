@@ -23,17 +23,16 @@ a first-class **Agent Mode** built on
   whose Shell tab is a terminal as the daemon's user unless `LLMMAN_SHELL` is
   off; records prompts for `llmman log` unless `LLMMAN_NOHISTORY` is set.
 
-Maintainer decisions for the alpha: llmman comes from Homebrew
-(`llmmanorg/tap/llmman`); the Jan chat client is the Flatpak `ai.jan.Jan`,
-installed through the same Brewfile; ChairLift owns a systemd **user** unit
-rather than delegating to `brew services`. Goose, Oh My Pi, peers, the model
-picker, Ask Bluefin, and the contributor flow are later children of #252.
+The local model runtime comes from Homebrew (`llmmanorg/tap/llmman`);
+ChairLift owns a systemd **user** unit rather than delegating to `brew services`.
+The owner's 2026-10-01 client cutover selects Goose, with its separate
+diagnostic setup on Help. Enabling Agent Mode installs no chat client.
 
 ## Decision
 
 **Ownership.** llmman owns model storage and inference; Homebrew owns the
-`llmman` binary; Flatpak owns Jan. `internal/aistack` owns exactly the
-following, each with one cleanup policy:
+`llmman` binary. `internal/aistack` owns exactly the following, each with one
+cleanup policy:
 
 | Artifact | Owner | Written | Removed |
 |---|---|---|---|
@@ -41,17 +40,16 @@ following, each with one cleanup policy:
 | `~/.config/systemd/user/chairlift-llmman.service` | `aistack` | enable | disable, only after the service is proven stopped |
 | `~/.config/environment.d/10-chairlift-llmman.conf` | `aistack` | enable | disable, together with the unit |
 | `OLLAMA_HOST` in the session activation environment | `aistack` | enable (best effort) | disable (`systemctl --user unset-environment`) |
-| `llmman` binary, Jan, llmman's model store | Homebrew / Flatpak / llmman | enable (install only) | never by ChairLift |
+| `llmman` binary and model store | Homebrew / llmman | enable (install only) | never by ChairLift |
 
 No RamaLama migration or cleanup is performed; units and caches the former
 stack wrote are left to the user. Lemonade is out of scope.
 
 **Provisioning.** Enable renders the Brewfile (`tap "llmmanorg/tap"` then
-`brew "llmmanorg/tap/llmman"` unless an `llmman` already resolves;
-`flatpak "ai.jan.Jan"` on x86_64 only, because its Flathub build is
-x86_64-only) and runs it through `internal/homebrew`'s single dry-run-gated
-runner. It resolves `llmman`'s absolute path (`$PATH`, then beside
-`homebrew.ExecutablePath()`), runs `llmman serve --pull-only`, writes the unit
+`brew "llmmanorg/tap/llmman"` unless an executable already resolves) and runs
+it through `internal/homebrew`'s single dry-run-gated runner. No Flatpak or
+chat client is part of runtime provisioning. It resolves the absolute path
+(`$PATH`, then beside `homebrew.ExecutablePath()`), runs `llmman serve --pull-only`, writes the unit
 and fragment atomically, and runs `daemon-reload`, `enable`, `restart`. A
 failure after writing removes what that call created, unless the unit already
 existed. Every mutation is behind `dryrun.Enabled()`.
@@ -67,74 +65,61 @@ existed. Every mutation is behind `dryrun.Enabled()`.
 | degraded | the unit exists and `/llmman/node` does not answer |
 | disabled | `llmman` resolves but no unit — turned off, software and models kept |
 
-The switch reads on in provisioning, ready, and degraded. `systemctl
-is-active` is never readiness on its own.
+The switch reflects the configured service after its first readiness probe;
+while that probe runs it is off and insensitive. `systemctl is-active` is
+never readiness on its own. The model and preset rows remain visible but
+insensitive until ready, with the unmet prerequisite shown. An empty alias
+means no model is selected, never an invented Qwen default. Readiness and
+model reads are generation-guarded; selecting a preset and toggling the
+service share one mutation gate. A failed operation re-observes the unit and
+endpoint rather than assuming nothing changed.
+Selecting a model writes its canonical `hf.co/...` target to the
+`bluefin-active` alias, restarts the owned user unit, and waits for readiness
+before reporting selection. llmman reads aliases at startup: a saved alias
+alone does not prove that the running daemon can serve it. A missing alias is
+the ordinary no-selection state.
 
-**Readiness predicate for Ask Bluefin and its shortcut.** Both dispatch the
-same predicate: Agent Mode is *ready* (above) **and** an active model is
-available on the endpoint **and** the Jan integration is configured for this
-architecture. Otherwise they open the Agents page with the unmet prerequisite
-visible. In this alpha no model picker or Jan integration exists yet, so the
-predicate cannot be met and no launcher is wired; #255 and #261 complete it.
+
+**Current Control Center surface (2026-10-01).** At the owner's request,
+the page focuses on this computer: one **Agent Mode** switch, visible
+**Active Model** and **Recommended Presets** rows, and the selectable local
+OpenAI-compatible connection address `http://127.0.0.1:17434/v1`.
+Connection instructions are not hidden behind an
+expander. The remote-machine administration surface and its backend are
+removed, avoiding a second configuration workflow on this local-mode page.
+ChairLift leaves unrelated llmman configuration intact; it changes only its
+selected-model alias through llmman's CLI and overrides aggregation in the unit.
+
 
 **Security boundaries.**
 
 - *Binding:* `LLMMAN_HOST=127.0.0.1:17434`. llmman refuses a reachable bind
   without keys; ChairLift provisions no keys and never sets `LLMMAN_AUTH=off`.
+- *Local-only inference:* fixed `Environment=LLMMAN_PEERS=` overrides legacy
+  aggregation settings, so removed controls cannot leave hidden offload active.
+  Migration proves application with the live systemd `InvocationID`, stamped
+  in the owned unit only after reload/restart succeeds. A matching file alone
+  cannot bless a legacy daemon after an interrupted upgrade.
 - *Web shell:* the unit carries the literal `LLMMAN_SHELL=off`.
 - *Prompt history:* `LLMMAN_NOHISTORY=1`, because troubleshooting prompts carry
   system details.
-- *CORS:* no `LLMMAN_ORIGINS`. If Jan needs its Tauri origin, only that exact,
-  verified origin may be added; wildcard CORS is forbidden.
+- *CORS:* no `LLMMAN_ORIGINS`; wildcard CORS is forbidden.
 - *Discovery:* only `OLLAMA_HOST` is published session-wide. `OPENAI_BASE_URL`
   and `OPENAI_API_KEY` are never set by default; running processes are never
   claimed to have changed.
 - *MCP:* later clients run `linux-mcp-server` only with `--toolset FIXED`;
   SSH-key discovery and remote-host tools stay off unless separately opted in.
-- *Peers:* client-side consumption only, configured through `llmman config
-  set`, authenticated with llmman's own peer key; this host is never
-  advertised as a peer, and no firewall, key distribution, folder sync, or
-  sharding is performed. Known peer addresses and their enabled states are
-  tracked locally in `~/.local/share/chairlift/agent-mode-peers.json`. The two
-  channels that expose the peer key, and who owns each, are described once
-  under *Secrets* below.
-- *Configuration ownership:* ChairLift writes no llmman TOML; aliases, peers,
-  and auth go through `llmman config set/get`. Goose provider choice stays
-  invocation-scoped (`llmman launch goose`); OMP uses a named, isolated
-  profile.
+- *Configuration ownership:* ChairLift writes no llmman TOML. Its selected
+  model alias is read and written through `llmman config get/set`.
 - *Secrets:* ChairLift stores and logs no API key, provider credential, or
-  prompt. The one peer key still reaches llmman over two channels, which
-  ChairLift neither stores nor logs, and which have different owners.
-  The first is argv: `llmman config set` takes the value only as a
-  command-line argument, so the key is world-readable through
-  /proc/<pid>/cmdline for that one process's life. That grammar is llmman's,
-  but the argv channel is a ChairLift choice, not an upstream constraint:
-  `LLMMAN_PEER_API_KEY` overrides `[aggregation] api_key` for `llmman
-  serve`, and ChairLift already owns the unit and
-  `~/.config/environment.d/10-chairlift-llmman.conf` that could carry it.
-  That route is not taken because it trades a brief world-readable argv
-  window for a key held at rest in a file ChairLift writes — departing from
-  both the *Configuration ownership* rule above (auth goes through `llmman
-  config set/get`, ChairLift writes no llmman configuration of its own) and
-  from this bullet's "stores no API key". A third form, stdin, would cost
-  neither and does not exist upstream.
-  The second is transport: `NodeURL` defaults a scheme-less peer address to
-  http, so the `Authorization: Bearer` header travels cleartext unless the
-  peer was added as https://. Nothing upstream forces that default —
-  ChairLift could default to https or refuse a scheme-less peer while a key
-  is set — so this one is ours to change, and until it does, use https://
-  when the peer serves TLS. Neither channel is closed by documenting it:
-  #416 stays open as the tracking issue for an argv-free input path
-  (upstream stdin support, or the `LLMMAN_PEER_API_KEY` trade-off decided
-  here) and for an add-peer warning when a peer resolves to http with a key
-  set (#260, which owned peer management, is closed).
+  prompt, and this surface accepts no credentials.
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user
 unit), #262 (`OLLAMA_HOST` discovery) land with it. #255 model picker, #256
-control surface and launch intents, #257 Goose, #258/#259 Oh My Pi, #260
-peers, #261 Ask Bluefin dispatcher and Jan launch policy, #263 contributor
-flow, and #264 acceptance build on this contract.
+control surface and launch intents, #257 Goose, #258/#259 Oh My Pi, #261
+Ask Bluefin dispatcher, #263 contributor flow, and
+#264 acceptance build on this contract.
 
 ## Consequences
 

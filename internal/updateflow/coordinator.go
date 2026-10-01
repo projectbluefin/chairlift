@@ -244,10 +244,21 @@ func (c *Coordinator) UpdateAll(
 				hadFailure = true
 			} else {
 				source.ApplyErr = nil
-				if result.Preview {
+				switch {
+				case result.Preview:
 					source.Completed = false
 					hadPreview = true
-				} else {
+				case !result.Changed:
+					// The provider ran but verified it changed nothing:
+					// the pending items are still pending. Keep them and do
+					// not claim the source completed. This is flatpak's
+					// "Nothing to update." exit-0 no-op, and any provider
+					// that cannot prove its mutation landed.
+					source.Completed = false
+					source.ApplyErr = errors.New("no update was applied; updates are still available")
+					hadFailure = true
+					removeSourceID(&state.CompletedSources, id)
+				default:
 					source.RestartRequired = source.RestartRequired || result.RestartRequired
 					source.Completed = true
 					source.Items = nil

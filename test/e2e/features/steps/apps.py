@@ -1,14 +1,8 @@
 """Steps for the Apps destination (applications_page).
 
-The page is built from AdwPreferencesGroups holding AdwExpanderRows. Two of
-those expanders share the title "Applications" (Flatpak apps and Homebrew
-casks), so every lookup here is scoped to its group's title first.
-
-GTK 4 does not implement AT-SPI Component.GrabFocus (it returns false and
-focus stays put) and publishes list rows without an action, so an expander
-is opened the way a keyboard user opens it: Tab until its header row has
-focus, then Return. Text is entered through the EditableText interface and
-committed with Return once Tab has reached the entry.
+Installed apps and search results are ordinary AdwPreferencesGroup lists.
+Text is entered through EditableText and committed with Return once Tab
+has reached the search entry.
 """
 
 import os
@@ -18,8 +12,7 @@ from behave import step, then
 import chairlift_atspi as atspi
 from common import content, read_log, text_present
 
-# Tab presses allowed while walking focus to a control. The Apps page has
-# fewer than 40 focus stops even with every expander open.
+# Bound keyboard traversal so an inaccessible search control fails clearly.
 MAX_TABS = 80
 
 
@@ -36,6 +29,7 @@ def group(context, title, timeout=atspi.DEFAULT_TIMEOUT):
     )
 
 
+# Shared with Features: its IDE catalog remains an expander.
 def expander_header(context, title, group_title, timeout=atspi.DEFAULT_TIMEOUT):
     """The header row of the expander titled title inside group_title.
 
@@ -64,6 +58,25 @@ def expander_rows(header):
         if atspi.name(node) and atspi.name(node) != atspi.name(header):
             titles.append(atspi.name(node))
     return titles
+
+@step('I expand the "{title}" list under "{group_title}"')
+def step_expand(context, title, group_title):
+    """Focus the expander's header and press Return until its rows show.
+
+    An expander whose inventory is still loading (a search in flight, a
+    list still counting) has expansion disabled and ignores Return, so the
+    key is pressed again for as long as no row has appeared. Revealing rows
+    is synchronous, so a press that did expand is never undone by a retry.
+    """
+    for _ in range(10):
+        header = expander_header(context, title, group_title)
+        focus_by_tab(context, header, f"the {title!r} list under {group_title!r}")
+        atspi.press("Return")
+        if atspi.poll(lambda: expander_rows(expander_header(context, title, group_title, timeout=1)), timeout=1.5):
+            return
+    raise AssertionError(f"the {title!r} list under {group_title!r} showed no rows after expanding")
+
+
 
 
 def search_entry(context):
@@ -121,46 +134,26 @@ def step_group_absent(context, title):
     assert gone, f"the Apps page still shows a group titled {title!r}"
 
 
-# ---------------------------------------------------------------- expanders
+# ---------------------------------------------------------------- visible lists
 
 
-@step('I expand the "{title}" list under "{group_title}"')
-def step_expand(context, title, group_title):
-    """Focus the expander's header and press Return until its rows show.
-
-    An expander whose inventory is still loading (a search in flight, a
-    list still counting) has expansion disabled and ignores Return, so the
-    key is pressed again for as long as no row has appeared. Revealing rows
-    is synchronous, so a press that did expand is never undone by a retry.
-    """
-    for _ in range(10):
-        header = expander_header(context, title, group_title)
-        focus_by_tab(context, header, f"the {title!r} list under {group_title!r}")
-        atspi.press("Return")
-        if atspi.poll(lambda: expander_rows(expander_header(context, title, group_title, timeout=1)), timeout=1.5):
-            return
-    raise AssertionError(f"the {title!r} list under {group_title!r} showed no rows after expanding")
+def group_rows(context, title):
+    root = group(context, title, timeout=1)
+    return [atspi.name(node) for node in atspi.descendants(root, only_showing=True)
+            if atspi.role(node) in atspi.ROW_ROLES and atspi.name(node)]
 
 
-@then('the "{title}" list under "{group_title}" says "{text}"')
-def step_expander_says(context, title, group_title, text):
-    def check():
-        header = expander_header(context, title, group_title, timeout=1)
-        return text_present(header, text, exact=True)
-
-    assert atspi.poll(check), f"the {title!r} list under {group_title!r} never said {text!r}"
+@then('the "{title}" apps group says "{text}"')
+def step_group_says(context, title, text):
+    assert atspi.poll(lambda: text_present(group(context, title, timeout=1), text, exact=True)), \
+        f"the {title!r} group never said {text!r}"
 
 
-@then('the "{title}" list under "{group_title}" shows exactly')
-def step_expander_rows(context, title, group_title):
+@then('the "{title}" apps group shows exactly')
+def step_group_rows(context, title):
     want = [row["title"] for row in context.table]
-
-    def check():
-        return expander_rows(expander_header(context, title, group_title, timeout=1)) == want
-
-    if not atspi.poll(check):
-        got = expander_rows(expander_header(context, title, group_title))
-        raise AssertionError(f"the {title!r} list under {group_title!r} shows {got}, want {want}")
+    assert atspi.poll(lambda: group_rows(context, title) == want), \
+        f"the {title!r} group shows {group_rows(context, title)}, want {want}"
 
 
 # ---------------------------------------------------------------- search

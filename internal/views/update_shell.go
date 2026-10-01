@@ -2,7 +2,10 @@ package views
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -10,46 +13,61 @@ import (
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/commands"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/firstrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/notify"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gio"
+	"codeberg.org/puregotk/puregotk/v4/glib"
+	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 // UpdateShell is the reusable status-first view for unified updates.
 type UpdateShell struct {
-	coordinator   *updateflow.Coordinator
-	preferences   func() userprefs.Values
-	policy        func() map[updateflow.SourceID]updateflow.Policy
-	toasts        ToastAdder
-	snapshot      updateflow.Snapshot
-	sources       []updateflow.SourceState
-	lastPhase     updateflow.Phase
-	havePhase     bool
-	sourceRows    map[updateflow.SourceID]*sourceRow
-	compactMode   bool
-	lifecycle     context.Context
-	cancel        context.CancelFunc
-	closed        atomic.Bool
-	operationMu   sync.Mutex
-	mutation      atomic.Bool
-	sourcesReady  bool
-	closeBlocked  bool
-	toolbarView   *adw.ToolbarView
-	toastOverlay  *adw.ToastOverlay
-	statusPage    *adw.StatusPage
-	refresh       *gtk.Button
-	primary       *gtk.Button
-	progress      *gtk.ProgressBar
-	banner        *adw.Banner
-	sourceGroup   *adw.PreferencesGroup
-	breakpointBin *adw.BreakpointBin
+	coordinator         *updateflow.Coordinator
+	preferences         func() userprefs.Values
+	policy              func() map[updateflow.SourceID]updateflow.Policy
+	toasts              ToastAdder
+	snapshot            updateflow.Snapshot
+	sources             []updateflow.SourceState
+	lastPhase           updateflow.Phase
+	havePhase           bool
+	sourceRows          map[updateflow.SourceID]*sourceRow
+	compactMode         bool
+	lifecycle           context.Context
+	cancel              context.CancelFunc
+	closed              atomic.Bool
+	operationMu         sync.Mutex
+	mutation            atomic.Bool
+	sourcesReady        bool
+	closeBlocked        bool
+	toolbarView         *adw.ToolbarView
+	toastOverlay        *adw.ToastOverlay
+	statusPage          *adw.StatusPage
+	refresh             *gtk.Button
+	primary             *gtk.Button
+	progress            *gtk.ProgressBar
+	progressPulse       glib.SourceFunc
+	progressTimer       uint32
+	wordmark            *gtk.Picture
+	styleManager        *adw.StyleManager
+	themeHandler        uint32
+	updateButtons       buttonRoute
+	trustGroupAvailable bool
+	banner              *adw.Banner
+	systemGroup         *adw.PreferencesGroup
+	appsGroup           *adw.PreferencesGroup
+	breakpointBin       *adw.BreakpointBin
 	// content is the vertical box inside the shell's clamp and scroller.
 	// SetSecondaryContent appends to it rather than building a second
 	// scroller, so the whole page scrolls as one.
@@ -58,18 +76,6 @@ type UpdateShell struct {
 	// repeat call replaces it instead of adding a second copy.
 	secondary        *gtk.Widget
 	onUpdateFinished func(updateflow.Snapshot)
-	// onSourcesRendered runs after every Render, on the main thread. The
-	// setup assistant's Update Preferences step refreshes its rows from it,
-	// so a source whose availability the first check settles after the step
-	// opened does not stay locked as "Checking availability…".
-	onSourcesRendered func()
-}
-
-// SetOnSourcesRendered registers the one callback run after each Render.
-func (s *UpdateShell) SetOnSourcesRendered(fn func()) {
-	if s != nil {
-		s.onSourcesRendered = fn
-	}
 }
 
 // SetOnUpdateFinished registers a callback invoked on the GTK main thread
@@ -208,36 +214,19 @@ func (s *UpdateShell) StartCheck() {
 // StartUpdate starts the current snapshot's serial mutation away from the GTK
 // thread.
 func (s *UpdateShell) StartUpdate() {
-	if s == nil {
-		return
-	}
-	s.operationMu.Lock()
-	defer s.operationMu.Unlock()
-	if s.coordinator == nil || !updatepresent.CanStartOperation(s.Busy(), s.closed.Load()) {
-		if !s.closed.Load() && s.refresh != nil && s.Busy() {
-			s.refresh.SetSensitive(false)
-		}
-		return
-	}
-	if !s.mutation.CompareAndSwap(false, true) {
+	if !s.beginMutation() {
 		return
 	}
 	ctx, cancel, ok := s.operationContext()
 	if !ok {
-		s.mutation.Store(false)
+		s.finishMutation()
 		return
 	}
 	current := cloneSnapshot(s.snapshot)
 	preferences := s.currentPreferences()
-	if s.refresh != nil {
-		s.refresh.SetSensitive(false)
-	}
-	if s.primary != nil {
-		s.primary.SetSensitive(false)
-	}
 	go func() {
 		defer cancel()
-		defer s.mutation.Store(false)
+		defer sgtk.RunOnMainThread(s.finishMutation)
 		// The coordinator publishes synchronously from this goroutine, so
 		// recording the last snapshot here needs no additional lock.
 		var final updateflow.Snapshot
@@ -253,6 +242,108 @@ func (s *UpdateShell) StartUpdate() {
 				}
 			})
 		}
+	}()
+}
+
+// beginMutation is the common admission point for unified, individual and
+// dedicated staging actions. Every caller runs on GTK's main thread.
+func (s *UpdateShell) beginMutation() bool {
+	if s == nil {
+		return false
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.coordinator == nil || !updatepresent.CanStartOperation(s.Busy(), s.closed.Load()) ||
+		!s.sourcesReady || updatepresent.ShowProgress(s.snapshot.Phase) || !s.mutation.CompareAndSwap(false, true) {
+		return false
+	}
+	s.primary.SetSensitive(false)
+	s.refresh.SetSensitive(false)
+	for _, row := range s.sourceRows {
+		row.setSensitive(false)
+	}
+	return true
+}
+
+func (s *UpdateShell) finishMutation() {
+	s.mutation.Store(false)
+	if s.closed.Load() {
+		return
+	}
+	s.renderPrimaryAction(updatepresent.Snapshot(s.snapshot))
+	s.refresh.SetSensitive(true)
+	s.renderProgress(s.snapshot)
+	for _, row := range s.sourceRows {
+		row.setSensitive(!updatepresent.ShowProgress(s.snapshot.Phase))
+	}
+}
+
+func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflow.Item, row *adw.ActionRow) {
+	message := actionmsg.Update(dryrun.Enabled(), updatepresent.ItemTitle(item))
+	if source == updateflow.DeveloperTools {
+		message = actionmsg.Upgrade(dryrun.Enabled(), item.Name)
+	}
+	s.startIndividualUpdate(row, func(ctx context.Context) (updateflow.ApplyResult, error) {
+		result, err := updateproviders.UpdateItem(ctx, source, item)
+		var trustErr *homebrew.UntrustedTapError
+		if errors.As(err, &trustErr) {
+			return result, fmt.Errorf("%s", trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable))
+		}
+		return result, err
+	}, message)
+}
+
+func (s *UpdateShell) startToolRefresh() {
+	row := s.sourceRows[updateflow.DeveloperTools]
+	if row == nil {
+		return
+	}
+	s.startIndividualUpdate(row.row, updateproviders.RefreshDeveloperTools,
+		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"))
+}
+
+func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string) {
+	if !s.beginMutation() {
+		return
+	}
+	ctx, cancel, ok := s.operationContext()
+	if !ok {
+		s.finishMutation()
+		return
+	}
+	row.SetSubtitle("Working…")
+	s.renderProgress(updateflow.Snapshot{Phase: updateflow.PhaseUpdating})
+	go func() {
+		defer cancel()
+		outcome, err := run(ctx)
+		sgtk.RunOnMainThread(func() {
+			s.finishMutation()
+			if s.closed.Load() {
+				return
+			}
+			if err != nil {
+				row.SetSubtitle(fmt.Sprintf("Update failed: %v", err))
+				if s.toasts != nil {
+					s.toasts.ShowErrorToast(fmt.Sprintf("Update failed: %v", err))
+				}
+				return
+			}
+			if !outcome.Changed && !outcome.Preview {
+				row.SetSubtitle("No update was applied; the update is still available")
+				if s.toasts != nil {
+					s.toasts.ShowToast("No update was applied")
+				}
+				return
+			}
+			if s.toasts != nil {
+				s.toasts.ShowToast(result)
+			}
+			if outcome.Preview {
+				s.renderSources(s.snapshot.Sources)
+			} else {
+				s.StartCheck()
+			}
+		})
 	}()
 }
 
@@ -370,7 +461,6 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 	}
 
 	presentation := updatepresent.Snapshot(snapshot)
-	s.statusPage.SetIconName(presentation.Icon)
 	s.statusPage.SetTitle(presentation.Title)
 	s.statusPage.SetDescription(presentation.Description)
 	s.renderPrimaryAction(presentation)
@@ -387,9 +477,6 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 		s.banner.SetRevealed(presentation.Banner != "")
 	}
 	s.renderSources(snapshot.Sources)
-	if s.onSourcesRendered != nil {
-		s.onSourcesRendered()
-	}
 	if s.toasts != nil {
 		s.toasts.SetUpdateBadge(snapshot.TotalUpdates)
 	}
@@ -441,8 +528,46 @@ func (s *UpdateShell) build() {
 	content.SetMarginEnd(12)
 	s.content = content
 
+	s.wordmark = gtk.NewPicture()
+	s.wordmark.SetCanShrink(true)
+	s.wordmark.SetKeepAspectRatio(true)
+	s.wordmark.SetContentFit(gtk.ContentFitContainValue)
+	s.wordmark.SetHalign(gtk.AlignCenterValue)
+	s.wordmark.SetSizeRequest(200, 82)
+	SetAccessibleLabel(s.wordmark, "Bluefin")
+	wordmarkClamp := adw.NewClamp()
+	wordmarkClamp.SetMaximumSize(200)
+	wordmarkClamp.SetTighteningThreshold(200)
+	wordmarkClamp.SetHalign(gtk.AlignCenterValue)
+	wordmarkClamp.SetChild(&s.wordmark.Widget)
+	content.Append(&wordmarkClamp.Widget)
+	s.styleManager = adw.StyleManagerGetDefault()
+	lightPath, lightErr := firstrun.AssetPath(firstrun.AssetWordmarkLight)
+	darkPath, darkErr := firstrun.AssetPath(firstrun.AssetWordmarkDark)
+	if lightErr != nil || darkErr != nil {
+		log.Printf("updates: loading wordmark: %v, %v", lightErr, darkErr)
+	}
+	currentWordmark := ""
+	applyWordmark := func() {
+		path := lightPath
+		if s.styleManager != nil && s.styleManager.GetDark() {
+			path = darkPath
+		}
+		if path == currentWordmark {
+			return
+		}
+		currentWordmark = path
+		s.wordmark.SetFilename(path)
+	}
+	applyWordmark()
+	if s.styleManager != nil {
+		changed := func(gobject.Object, uintptr) { applyWordmark() }
+		s.themeHandler = s.styleManager.ConnectNotify(&changed)
+	}
+
 	s.statusPage = adw.NewStatusPage()
 	s.statusPage.SetVexpand(false)
+	s.statusPage.AddCssClass("compact")
 	controls := gtk.NewBox(gtk.OrientationVerticalValue, 12)
 	controls.SetHalign(gtk.AlignCenterValue)
 
@@ -475,10 +600,14 @@ func (s *UpdateShell) build() {
 	s.banner.SetRevealed(false)
 	content.Append(&s.banner.Widget)
 
-	s.sourceGroup = adw.NewPreferencesGroup()
-	s.sourceGroup.SetTitle("Update sources")
-	s.sourceGroup.SetVisible(false)
-	content.Append(&s.sourceGroup.Widget)
+	s.systemGroup = adw.NewPreferencesGroup()
+	s.systemGroup.SetTitle("System updates")
+	s.systemGroup.SetDescription("Operating system updates take effect after a restart.")
+	content.Append(&s.systemGroup.Widget)
+	s.appsGroup = adw.NewPreferencesGroup()
+	s.appsGroup.SetTitle("Apps and tools")
+	s.appsGroup.SetDescription("Updates to the software you use.")
+	content.Append(&s.appsGroup.Widget)
 
 	s.breakpointBin = adw.NewBreakpointBin()
 	// AdwBreakpointBin requires a minimum size: without one libadwaita warns
@@ -551,32 +680,51 @@ func (s *UpdateShell) renderPrimaryAction(presentation updatepresent.Presentatio
 func (s *UpdateShell) renderProgress(snapshot updateflow.Snapshot) {
 	visible := updatepresent.ShowProgress(snapshot.Phase)
 	s.progress.SetVisible(visible)
-	if visible {
+	if visible && s.progressTimer == 0 {
+		// Keep one callback identity across checks; provider snapshots can be
+		// silent for minutes while a command runs. GLib dispatches on GTK's thread.
+		if s.progressPulse == nil {
+			s.progressPulse = func(uintptr) bool {
+				s.progress.Pulse()
+				return true
+			}
+		}
 		s.progress.Pulse()
+		s.progressTimer = glib.TimeoutAdd(100, &s.progressPulse, 0)
+	} else if !visible && s.progressTimer != 0 {
+		glib.SourceRemove(s.progressTimer)
+		s.progressTimer = 0
 	}
 }
 
 func (s *UpdateShell) renderSources(states []updateflow.SourceState) {
-	seen := make(map[updateflow.SourceID]bool, len(states))
+	rebuild := len(states) != len(s.sourceRows)
 	for _, state := range states {
-		seen[state.ID] = true
-		row, ok := s.sourceRows[state.ID]
-		if !ok {
-			row = newSourceRow(state)
-			row.setCompact(s.compactMode)
-			s.sourceRows[state.ID] = row
-			s.sourceGroup.Add(&row.row.Widget)
-		} else {
-			row.render(state)
+		row := s.sourceRows[state.ID]
+		if row == nil || !slices.Equal(row.items, state.Items) ||
+			row.enabled != (state.Configured && state.Available && state.Enabled) {
+			rebuild = true
+			break
 		}
 	}
-	for id, row := range s.sourceRows {
-		if !seen[id] {
-			s.sourceGroup.Remove(&row.row.Widget)
-			delete(s.sourceRows, id)
+	if !rebuild {
+		for _, state := range states {
+			s.sourceRows[state.ID].render(state, !s.Busy() && !updatepresent.ShowProgress(s.snapshot.Phase))
 		}
+		return
 	}
-	s.sourceGroup.SetVisible(len(s.sourceRows) > 0)
+	for _, row := range s.sourceRows {
+		row.remove()
+	}
+	s.updateButtons.clear()
+	clear(s.sourceRows)
+	for _, state := range states {
+		group := s.appsGroup
+		if state.ID == updateflow.OperatingSystem || state.ID == updateflow.SystemComponents {
+			group = s.systemGroup
+		}
+		s.sourceRows[state.ID] = newSourceRow(state, group, s)
+	}
 }
 
 func (s *UpdateShell) setCompactRows(compact bool) {
@@ -597,6 +745,14 @@ func (s *UpdateShell) operationContext() (context.Context, context.CancelFunc, b
 func (s *UpdateShell) dispose() {
 	if s == nil || s.closed.Swap(true) {
 		return
+	}
+	if s.progressTimer != 0 {
+		glib.SourceRemove(s.progressTimer)
+		s.progressTimer = 0
+	}
+	if s.styleManager != nil && s.themeHandler != 0 {
+		gobject.SignalHandlerDisconnect(&s.styleManager.Object, s.themeHandler)
+		s.themeHandler = 0
 	}
 	if s.cancel != nil {
 		s.cancel()

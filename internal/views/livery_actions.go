@@ -6,7 +6,9 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/liverystate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -17,13 +19,12 @@ import (
 // against the last state the page loaded, do nothing when they agree, and
 // otherwise persist and apply off the main thread.
 //
-// The comparison is not an optimization, it is what makes the handlers
-// correct. AdwSwitchRow and AdwComboRow have no change-specific signal in
-// these bindings, so the page listens to `notify`, which fires for every
-// property — sensitivity, subtitle, title — not only the one that matters.
-// Acting on each notify would write settings when refreshLiveryState merely
-// made a row sensitive, and would loop when applyLiveryState set a switch to
-// the value it just read. Comparing against known state makes both harmless.
+// Switches use state-set, never notify. Programmatic restores are suppressed
+// and all worker completions publish only confirmed state on the main thread.
+//
+// A failed save or preview keeps confirmed state. A persisted selection can
+// be shown even if artwork failed, with a failure toast; rotation requires
+// both its preference pair and real schedule to land.
 
 // onLiveryAppGridToggled turns the personal mark on or off.
 func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
@@ -40,25 +41,27 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	if uh.liveryAppGridSwitch != nil {
 		uh.liveryAppGridSwitch.SetSensitive(false)
 	}
-	uh.liveryState.AppGridEnabled = enabled
-
-	if uh.liveryAppGridRow != nil {
-		uh.liveryAppGridRow.SetSensitive(enabled)
-	}
+	setActivitySpinner(uh.liveryAppGridSpinner, true)
 
 	slug := uh.liveryState.AppGridSlug
-	source := uh.liverySource(livery.AppGrid)
-	go func() {
-		defer uh.releaseLiveryToggle(livery.AppGrid)
+	source := uh.liveryState.AppGridSource()
+	decision := actionmsg.LiveryToggle(dryrun.Enabled(), enabled, pageview.LiverySectionName(livery.AppGrid))
+	preview := !decision.MutateUI
+	saved := false
 
+	go func() {
+		defer func() {
+			uh.finishLiveryToggle(livery.AppGrid, liverystate.Toggle(liverystate.Result{Saved: saved}, preview), enabled, decision)
+		}()
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
-		if err := livery.SetBool(ctx, livery.KeyAppGridEnabled, enabled); err != nil {
-			uh.reportLiveryFailure("saving the app grid setting", err)
-			return
-		}
 		if !enabled {
+			if err := livery.SetBool(ctx, livery.KeyAppGridEnabled, false); err != nil {
+				uh.reportLiveryFailure("saving the app grid setting", err)
+				return
+			}
+			saved = true
 			if err := livery.Clear(ctx, livery.AppGrid); err != nil {
 				uh.reportLiveryFailure("removing the app grid mark", err)
 			}
@@ -67,6 +70,12 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 			}
 			return
 		}
+
+		if err := livery.SetBool(ctx, livery.KeyAppGridEnabled, true); err != nil {
+			uh.reportLiveryFailure("saving the app grid setting", err)
+			return
+		}
+		saved = true
 		// Turning the section on with nothing chosen is not a failure; the
 		// entry row is now sensitive and says what to type.
 		if slug == "" {
@@ -93,33 +102,35 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 	if !uh.liveryLoaded || slug == uh.liveryState.AppGridSlug {
 		return
 	}
-	uh.liveryState.AppGridSlug = slug
-
-	if uh.liveryAppGridRow != nil {
-		uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug).Subtitle)
-	}
 
 	enabled := uh.liveryState.AppGridEnabled
-	uh.runLiverySelectionWork(livery.AppGrid, func() {
+	preview := dryrun.Enabled()
+	uh.runLiverySelectionWork(livery.AppGrid, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
-		// The choice is saved whether or not the section is on, so switching
-		// it on later applies what the user already picked.
+		saved := false
 		if err := livery.SetString(ctx, livery.KeyAppGridSlug, slug); err != nil {
 			uh.reportLiveryFailure("saving the brand", err)
-			return
+		} else {
+			saved = true
+			// The choice is saved whether or not the section is on, so
+			// switching it on later applies what the user already picked.
+			if enabled {
+				if err := livery.Apply(ctx, livery.AppGrid, livery.Source{Kind: livery.FromSimpleIcons, Value: slug}); err != nil {
+					uh.reportLiveryFailure("fetching that brand mark", err)
+				} else if err := livery.RefreshShellIcons(); err != nil {
+					uh.reportLiveryFailure("refreshing the shell's icons", err)
+				}
+			}
 		}
-		if !enabled {
-			return
-		}
-		if err := livery.Apply(ctx, livery.AppGrid, livery.Source{Kind: livery.FromSimpleIcons, Value: slug}); err != nil {
-			uh.reportLiveryFailure("fetching that brand mark", err)
-			return
-		}
-		if err := livery.RefreshShellIcons(); err != nil {
-			uh.reportLiveryFailure("refreshing the shell's icons", err)
-		}
+
+		uh.publishLiverySelection(livery.AppGrid, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+			uh.liveryState.AppGridSlug = slug
+			if uh.liveryAppGridRow != nil {
+				uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug).Subtitle)
+			}
+		})
 	})
 }
 
@@ -138,23 +149,25 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		return
 	}
 
-	gate, toggle := uh.liveryToggleGate(surface)
+	gate, toggle, spinner := uh.liveryToggleGate(surface)
 	if !gate.TryStart() {
 		return
 	}
 	if toggle != nil {
 		toggle.SetSensitive(false)
 	}
-
-	uh.setLiveryToggleState(surface, enabled)
-	uh.setLiverySectionSensitive(surface, enabled)
+	setActivitySpinner(spinner, true)
 
 	source := uh.liverySource(surface)
 	savedIcon, savedMode := uh.liveryState.SavedPanelIcon, uh.liveryState.SavedPanelMode
+	decision := actionmsg.LiveryToggle(dryrun.Enabled(), enabled, pageview.LiverySectionName(surface))
+	preview := !decision.MutateUI
+	saved := false
 
 	go func() {
-		defer uh.releaseLiveryToggle(surface)
-
+		defer func() {
+			uh.finishLiveryToggle(surface, liverystate.Toggle(liverystate.Result{Saved: saved}, preview), enabled, decision)
+		}()
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
@@ -175,12 +188,7 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 				uh.reportLiveryFailure("recording the previous panel mode", err)
 				return
 			}
-			// Under --dry-run the SetString calls above are no-ops, so the
-			// persisted capture is unchanged. Skipping the in-memory mirror
-			// keeps the page's view of state aligned with what was actually
-			// written — otherwise the next enable would see non-empty saved
-			// values in memory and skip the capture the user asked for.
-			if !dryrun.Enabled() {
+			if decision.MutateUI {
 				sgtk.RunOnMainThread(func() {
 					uh.liveryState.SavedPanelIcon = icon
 					uh.liveryState.SavedPanelMode = mode
@@ -192,6 +200,7 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 			uh.reportLiveryFailure("saving that setting", err)
 			return
 		}
+		saved = true
 
 		if enabled {
 			if err := livery.Apply(ctx, surface, source); err != nil {
@@ -224,15 +233,12 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 				uh.reportLiveryFailure("restoring the previous panel icon", err)
 				return
 			}
-			// The capture is only taken when both saved keys are empty, and
+			// The capture is only taken when both saved values are empty, and
 			// ClearPanelSettings has just emptied the stored keys, so the
 			// in-memory copy has to follow or the next enable would keep
 			// reusing the first capture instead of reading what the user has
-			// now. Under --dry-run ClearPanelSettings is a no-op, so the
-			// stored keys are still what they were; mirroring that into the
-			// page's view of state would diverge from what was actually
-			// written, so skip the reset.
-			if !dryrun.Enabled() {
+			// now.
+			if decision.MutateUI {
 				sgtk.RunOnMainThread(func() {
 					uh.liveryState.SavedPanelIcon = ""
 					uh.liveryState.SavedPanelMode = ""
@@ -250,37 +256,40 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 	if !uh.liveryLoaded || id == uh.liveryState.DockID {
 		return
 	}
-	uh.liveryState.DockID = id
-
-	if uh.liveryDockSelectedRow != nil {
-		selected := pageview.LiverySelectedProjectRow(id)
-		uh.liveryDockSelectedRow.SetTitle(selected.Title)
-		uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
-	}
-	uh.syncLiveryRotateSensitive(livery.Dock, uh.liveryState.DockEnabled)
 
 	enabled := uh.liveryState.DockEnabled
-	uh.runLiverySelectionWork(livery.Dock, func() {
+	preview := dryrun.Enabled()
+	uh.runLiverySelectionWork(livery.Dock, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
+		saved := false
 		if err := livery.SetString(ctx, livery.KeyDockID, id); err != nil {
 			uh.reportLiveryFailure("saving the project", err)
-			return
+		} else {
+			saved = true
+			if enabled {
+				if err := livery.Apply(ctx, livery.Dock, livery.Source{Kind: livery.FromCNCF, Value: id}); err != nil {
+					uh.reportLiveryFailure("fetching that project's icon", err)
+				} else if err := livery.RefreshShellIcons(); err != nil {
+					// GNOME applies a choice when you make it, and the shell
+					// caches icon textures by name — so without nudging it the
+					// new mark would not appear until the next login, which is
+					// not "applied".
+					uh.reportLiveryFailure("refreshing the shell's icons", err)
+				}
+			}
 		}
-		if !enabled {
-			return
-		}
-		if err := livery.Apply(ctx, livery.Dock, livery.Source{Kind: livery.FromCNCF, Value: id}); err != nil {
-			uh.reportLiveryFailure("fetching that project's icon", err)
-			return
-		}
-		// GNOME applies a choice when you make it, and the shell caches icon
-		// textures by name — so without nudging it the new mark would not
-		// appear until the next login, which is not "applied".
-		if err := livery.RefreshShellIcons(); err != nil {
-			uh.reportLiveryFailure("refreshing the shell's icons", err)
-		}
+
+		uh.publishLiverySelection(livery.Dock, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+			uh.liveryState.DockID = id
+			if uh.liveryDockSelectedRow != nil {
+				selected := pageview.LiverySelectedProjectRow(id)
+				uh.liveryDockSelectedRow.SetTitle(selected.Title)
+				uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
+			}
+			uh.syncLiveryRotateSensitive(livery.Dock, uh.liveryState.DockEnabled)
+		})
 	})
 }
 
@@ -293,37 +302,38 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 	if id == current {
 		return
 	}
-	uh.setLiverySelectionState(surface, id)
-
-	if surface == livery.Panel && uh.liveryPanelMarkRow != nil {
-		uh.liveryPanelMarkRow.SetSubtitle(
-			pageview.LiverySelectedFoundationRow(id, uh.liveryState.PanelCustom).Subtitle)
-	}
 
 	enabled, _ := uh.liveryToggleState(surface)
-	uh.syncLiveryRotateSensitive(surface, enabled)
-	source := uh.liverySource(surface)
-
-	uh.runLiverySelectionWork(surface, func() {
+	source := liverySelectionSource(surface, id)
+	preview := dryrun.Enabled()
+	uh.runLiverySelectionWork(surface, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
+		saved := false
 		if err := livery.SetString(ctx, key, id); err != nil {
 			uh.reportLiveryFailure("saving the selection", err)
-			return
-		}
-		if !enabled {
-			return
-		}
-		if err := livery.Apply(ctx, surface, source); err != nil {
-			uh.reportLiveryFailure("setting the mark", err)
-			return
-		}
-		if surface != livery.Panel {
-			if err := livery.RefreshShellIcons(); err != nil {
-				uh.reportLiveryFailure("refreshing the shell's icons", err)
+		} else {
+			saved = true
+			if enabled {
+				if err := livery.Apply(ctx, surface, source); err != nil {
+					uh.reportLiveryFailure("setting the mark", err)
+				} else if surface != livery.Panel {
+					if err := livery.RefreshShellIcons(); err != nil {
+						uh.reportLiveryFailure("refreshing the shell's icons", err)
+					}
+				}
 			}
 		}
+
+		uh.publishLiverySelection(surface, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+			uh.setLiverySelectionState(surface, id)
+			if surface == livery.Panel && uh.liveryPanelMarkRow != nil {
+				uh.liveryPanelMarkRow.SetSubtitle(
+					pageview.LiverySelectedFoundationRow(id, uh.liveryState.PanelCustom).Subtitle)
+			}
+			uh.syncLiveryRotateSensitive(surface, enabled)
+		})
 	})
 }
 
@@ -334,38 +344,67 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 // unit. An unordered goroutine per click lets a fast on-then-off flip run
 // RemoveRotation before the earlier InstallRotation finishes, leaving the
 // unit installed while the keys say nothing rotates. Claiming on the main
-// thread fixes the order the user flipped the switches in, and an attempt a
-// newer one has overtaken drops out — which is only safe because the work
-// writes both rotate keys from the snapshot it was claimed with, so the
-// surviving attempt persists every choice made before it.
+// thread fixes the order the user flipped the switches in.
+//
+// The two switches also share one persisted pair of keys, so every attempt
+// snapshots the confirmed state with the in-flight candidates overlaid and
+// writes both. The newest attempt to publish owns the whole pair; a
+// superseded one leaves its optimistic switch in place rather than reverting
+// it to a value the newer attempt is about to replace.
 func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) {
 	if uh.liverySuppress || !uh.liveryLoaded {
 		return
 	}
 
-	if enabled == uh.liveryRotateState(surface) {
+	candidate := uh.liveryRotatePending.Overlay(uh.liveryState)
+	current := candidate.DockRotate
+	if surface == livery.Panel {
+		current = candidate.PanelRotate
+	}
+	if enabled == current {
 		return
 	}
-	uh.setLiveryRotateState(surface, enabled)
-	state := uh.liveryState
-
+	// Record this candidate before snapshotting so the snapshot carries it,
+	// then overlay every candidate already in flight. Taking the snapshot from
+	// confirmed state alone would write the other section's older confirmed
+	// value back over a rotation that already landed.
 	generation := uh.liveryRotateWork.Claim()
+	uh.liveryRotatePending.Set(surface, enabled)
+	state := uh.liveryRotatePending.Overlay(uh.liveryState)
+	preview := dryrun.Enabled()
+
 	go func() {
 		uh.liveryRotateWork.Run(generation, func() {
+			sgtk.RunOnMainThread(func() {
+				setActivitySpinner(uh.liveryPanelRotateSpinner, true)
+				setActivitySpinner(uh.liveryDockRotateSpinner, true)
+			})
 			ctx, cancel := livery.DefaultContext()
 			defer cancel()
 
-			if err := livery.SetBool(ctx, livery.KeyPanelRotate, state.PanelRotate); err != nil {
-				uh.reportLiveryFailure("saving the rotation setting", err)
-				return
-			}
-			if err := livery.SetBool(ctx, livery.KeyDockRotate, state.DockRotate); err != nil {
-				uh.reportLiveryFailure("saving the rotation setting", err)
-				return
-			}
-			if err := livery.SyncRotationUnit(ctx, state); err != nil {
+			observed, err := livery.ConfigureRotation(ctx, state)
+			if err != nil {
 				uh.reportLiveryFailure("scheduling rotation", err)
 			}
+
+			outcome := liverystate.Rotation(liverystate.Result{Saved: err == nil}, preview)
+			sgtk.RunOnMainThread(func() {
+				if !uh.liveryRotateWork.IsCurrent(generation) {
+					// A newer flip owns the whole pair and will publish it,
+					// carrying this candidate in its snapshot. Leave this
+					// attempt's optimistic switch alone; reverting it here
+					// would show off a rotation the newer attempt persists.
+					return
+				}
+				uh.liveryRotatePending.Clear()
+				setActivitySpinner(uh.liveryPanelRotateSpinner, false)
+				setActivitySpinner(uh.liveryDockRotateSpinner, false)
+				if outcome.Commit {
+					uh.liveryState.PanelRotate = observed.PanelRotate
+					uh.liveryState.DockRotate = observed.DockRotate
+				}
+				uh.applyLiveryRotateSwitches()
+			})
 		})
 	}()
 }
@@ -386,46 +425,52 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 	case livery.AppGrid:
 		pathKey, idKey = livery.KeyAppGridCustom, livery.KeyAppGridSlug
 		enabled = uh.liveryState.AppGridEnabled
-		uh.liveryState.AppGridCustom, uh.liveryState.AppGridSlug = path, livery.CustomID
 	case livery.Panel:
 		pathKey, idKey = livery.KeyPanelCustom, livery.KeyPanelID
 		enabled = uh.liveryState.PanelEnabled
-		uh.liveryState.PanelCustom, uh.liveryState.PanelID = path, livery.CustomID
 	default:
 		pathKey, idKey = livery.KeyDockCustom, livery.KeyDockID
 		enabled = uh.liveryState.DockEnabled
-		uh.liveryState.DockCustom, uh.liveryState.DockID = path, livery.CustomID
 	}
-	uh.showLiveryCustomPath(surface, path)
-	if surface != livery.AppGrid {
-		uh.syncLiveryRotateSensitive(surface, enabled)
-	}
+	source := livery.Source{Kind: livery.FromFile, Value: path}
+	preview := dryrun.Enabled()
 
-	source := uh.liverySource(surface)
-	uh.runLiverySelectionWork(surface, func() {
+	uh.runLiverySelectionWork(surface, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
 
+		saved := false
 		if err := livery.SetString(ctx, pathKey, path); err != nil {
 			uh.reportLiveryFailure("saving the file", err)
-			return
-		}
-		if err := livery.SetString(ctx, idKey, livery.CustomID); err != nil {
+		} else if err := livery.SetString(ctx, idKey, livery.CustomID); err != nil {
 			uh.reportLiveryFailure("saving the selection", err)
-			return
-		}
-		if !enabled {
-			return
-		}
-		if err := livery.Apply(ctx, surface, source); err != nil {
-			uh.reportLiveryFailure("using that file", err)
-			return
-		}
-		if surface != livery.Panel {
-			if err := livery.RefreshShellIcons(); err != nil {
-				uh.reportLiveryFailure("refreshing the shell's icons", err)
+		} else {
+			saved = true
+			if enabled {
+				if err := livery.Apply(ctx, surface, source); err != nil {
+					uh.reportLiveryFailure("using that file", err)
+				} else if surface != livery.Panel {
+					if err := livery.RefreshShellIcons(); err != nil {
+						uh.reportLiveryFailure("refreshing the shell's icons", err)
+					}
+				}
 			}
 		}
+
+		uh.publishLiverySelection(surface, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+			switch surface {
+			case livery.AppGrid:
+				uh.liveryState.AppGridCustom, uh.liveryState.AppGridSlug = path, livery.CustomID
+			case livery.Panel:
+				uh.liveryState.PanelCustom, uh.liveryState.PanelID = path, livery.CustomID
+			default:
+				uh.liveryState.DockCustom, uh.liveryState.DockID = path, livery.CustomID
+			}
+			uh.showLiveryCustomPath(surface, path)
+			if surface != livery.AppGrid {
+				uh.syncLiveryRotateSensitive(surface, enabled)
+			}
+		})
 	})
 }
 
@@ -471,14 +516,14 @@ func (uh *UserHome) reportLiveryFailure(what string, err error) {
 // leaving the switch showing enabled with the mark gone. The gate makes the
 // second click a no-op until the first one lands, and the insensitive switch
 // says so.
-func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.Switch) {
+func (uh *UserHome) liveryToggleGate(s livery.Surface) (*actionstate.Gate, *gtk.Switch, *gtk.Spinner) {
 	switch s {
 	case livery.AppGrid:
-		return &uh.liveryAppGridGate, uh.liveryAppGridSwitch
+		return &uh.liveryAppGridGate, uh.liveryAppGridSwitch, uh.liveryAppGridSpinner
 	case livery.Panel:
-		return &uh.liveryPanelGate, uh.liveryPanelSwitch
+		return &uh.liveryPanelGate, uh.liveryPanelSwitch, uh.liveryPanelSpinner
 	default:
-		return &uh.liveryDockGate, uh.liveryDockSwitch
+		return &uh.liveryDockGate, uh.liveryDockSwitch, uh.liveryDockSpinner
 	}
 }
 
@@ -505,39 +550,114 @@ func (uh *UserHome) liverySelectionWork(s livery.Surface) *actionstate.Serialize
 // installed icon naming different marks. Claiming on the main thread fixes
 // the order the user made the picks in; a pick already overtaken by a newer
 // one does no work at all, because the newer one writes both halves.
-func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func()) {
+//
+// The work receives its generation so its completion can publish to the UI
+// only while it is still the newest; see publishLiverySelection.
+func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func(generation uint64)) {
 	serializer := uh.liverySelectionWork(s)
 	generation := serializer.Claim()
 	go func() {
-		serializer.Run(generation, work)
+		serializer.Run(generation, func() {
+			work(generation)
+		})
 	}()
 }
 
-// releaseLiveryToggle reopens a section's gate and its switch on the main
-// thread, so the widget touch happens where GTK requires it.
-func (uh *UserHome) releaseLiveryToggle(s livery.Surface) {
+// publishLiverySelection runs commit on the main thread, but only while this
+// attempt is still the section's newest.
+//
+// Run already guarantees currency when the work starts; a newer pick can be
+// claimed while it is still running, and this callback is queued rather than
+// inline. The re-check is what stops a stale completion from replacing the
+// newer confirmed row and selection with an older result.
+func (uh *UserHome) publishLiverySelection(s livery.Surface, generation uint64, outcome liverystate.Outcome, commit func()) {
+	serializer := uh.liverySelectionWork(s)
 	sgtk.RunOnMainThread(func() {
-		gate, toggle := uh.liveryToggleGate(s)
-		gate.Reset()
-		if toggle != nil {
-			toggle.SetSensitive(true)
+		if !serializer.IsCurrent(generation) {
+			return
+		}
+		if outcome.Commit {
+			commit()
 		}
 	})
 }
 
-func (uh *UserHome) liveryToggleState(s livery.Surface) (bool, string) {
+// finishLiveryToggle releases a section's gate on the main thread.
+//
+// When the attempt committed, it records the new switch state and updates the
+// section's dependent rows. Otherwise it restores the switch the user flipped,
+// so a failed or previewed toggle never shows a state that did not land. The
+// programmatic restore re-enters the handler, which compares against the
+// unchanged confirmed state and does nothing.
+func (uh *UserHome) finishLiveryToggle(s livery.Surface, outcome liverystate.Outcome, enabled bool, decision actionmsg.LiveryToggleDecision) {
+	sgtk.RunOnMainThread(func() {
+		gate, toggle, spinner := uh.liveryToggleGate(s)
+		setActivitySpinner(spinner, false)
+		if outcome.Commit {
+			uh.setLiveryToggleState(s, enabled)
+			uh.setLiverySectionSensitive(s, enabled)
+		} else if toggle != nil {
+			// Revert while the gate still holds, so the re-entrant handler
+			// cannot start a second run even if the value comparison missed.
+			previous := uh.liverySuppress
+			uh.liverySuppress = true
+			confirmed, _ := uh.liveryToggleState(s)
+			toggle.SetActive(confirmed)
+			toggle.SetState(confirmed)
+			uh.liverySuppress = previous
+		}
+		gate.Reset()
+		if toggle != nil {
+			toggle.SetSensitive(true)
+		}
+		if decision.Toast != "" {
+			uh.toastAdder.ShowToast(decision.Toast)
+		}
+	})
+}
+
+// restoreLiveryRotateSensitive recomputes a rotate switch's sensitivity from
+// the confirmed state once its attempt finishes.
+//
+// A rotation attempt can outlive the section it belongs to: turning the
+// section off while the attempt is in flight leaves the switch insensitive,
+// so the completion must not blindly make it sensitive again.
+func (uh *UserHome) restoreLiveryRotateSensitive(s livery.Surface) {
 	if s == livery.Panel {
-		return uh.liveryState.PanelEnabled, livery.KeyPanelEnabled
+		uh.syncLiveryRotateSensitive(s, uh.liveryPanelAvailable && uh.liveryState.PanelEnabled)
+		return
 	}
-	return uh.liveryState.DockEnabled, livery.KeyDockEnabled
+	uh.syncLiveryRotateSensitive(s, uh.liveryState.DockEnabled)
+}
+
+// applyLiveryRotateSwitches puts both rotate switches back to the confirmed
+// state and recomputes their sensitivity.
+//
+// Both keys are written and published as one pair, so the completion that
+// owns the pair updates both switches; a section's switch may have been
+// optimistically flipped and left alone by a superseded attempt. The
+// programmatic set re-enters the handler, which compares against the
+// confirmed state just written and does nothing.
+func (uh *UserHome) applyLiveryRotateSwitches() {
+	previous := uh.liverySuppress
+	uh.liverySuppress = true
+	defer func() { uh.liverySuppress = previous }()
+	if uh.liveryPanelRotate != nil {
+		uh.liveryPanelRotate.SetActive(uh.liveryState.PanelRotate)
+	}
+	if uh.liveryDockRotate != nil {
+		uh.liveryDockRotate.SetActive(uh.liveryState.DockRotate)
+	}
+	uh.restoreLiveryRotateSensitive(livery.Panel)
+	uh.restoreLiveryRotateSensitive(livery.Dock)
+}
+
+func (uh *UserHome) liveryToggleState(s livery.Surface) (bool, string) {
+	return liverystate.ToggleState(uh.liveryState, s)
 }
 
 func (uh *UserHome) setLiveryToggleState(s livery.Surface, v bool) {
-	if s == livery.Panel {
-		uh.liveryState.PanelEnabled = v
-		return
-	}
-	uh.liveryState.DockEnabled = v
+	liverystate.SetToggleState(&uh.liveryState, s, v)
 }
 
 func (uh *UserHome) liverySelectionState(s livery.Surface) (string, string) {
@@ -555,21 +675,6 @@ func (uh *UserHome) setLiverySelectionState(s livery.Surface, id string) {
 	uh.liveryState.DockID = id
 }
 
-func (uh *UserHome) liveryRotateState(s livery.Surface) bool {
-	if s == livery.Panel {
-		return uh.liveryState.PanelRotate
-	}
-	return uh.liveryState.DockRotate
-}
-
-func (uh *UserHome) setLiveryRotateState(s livery.Surface, v bool) {
-	if s == livery.Panel {
-		uh.liveryState.PanelRotate = v
-		return
-	}
-	uh.liveryState.DockRotate = v
-}
-
 func (uh *UserHome) liverySource(s livery.Surface) livery.Source {
 	switch s {
 	case livery.AppGrid:
@@ -581,20 +686,41 @@ func (uh *UserHome) liverySource(s livery.Surface) livery.Source {
 	}
 }
 
+// liverySelectionSource builds the artwork source for a candidate id, before
+// that id has been committed to the confirmed state.
+//
+// liverySource reads the confirmed selection, which is exactly what the
+// selection handlers must not do: their candidate is not confirmed until the
+// work lands.
+func liverySelectionSource(surface livery.Surface, id string) livery.Source {
+	if surface == livery.Panel {
+		return livery.Source{Kind: livery.FromCatalog, Value: id}
+	}
+	return livery.Source{Kind: livery.FromCNCF, Value: id}
+}
+
 // setLiverySectionSensitive follows the section's master switch, so a
 // selection cannot be changed for a mark that is not being set.
 func (uh *UserHome) setLiverySectionSensitive(s livery.Surface, enabled bool) {
-	if s == livery.Panel {
+	switch s {
+	case livery.AppGrid:
+		if uh.liveryAppGridRow != nil {
+			uh.liveryAppGridRow.SetSensitive(enabled)
+		}
+	case livery.Panel:
 		if uh.liveryPanelMarkRow != nil {
 			uh.liveryPanelMarkRow.SetSensitive(enabled)
 		}
+		if uh.liveryFoundationGrid != nil {
+			uh.liveryFoundationGrid.SetSensitive(enabled)
+		}
 		uh.syncLiveryRotateSensitive(s, enabled)
-		return
+	default:
+		if uh.liveryDockSelectedRow != nil {
+			uh.liveryDockSelectedRow.SetSensitive(enabled)
+		}
+		uh.syncLiveryRotateSensitive(s, enabled)
 	}
-	if uh.liveryDockSelectedRow != nil {
-		uh.liveryDockSelectedRow.SetSensitive(enabled)
-	}
-	uh.syncLiveryRotateSensitive(s, enabled)
 }
 
 // syncLiveryRotateSensitive follows the section switch *and* the selection.

@@ -219,3 +219,28 @@ def gaming_image(context):
 def no_descriptor(context):
     """A host with no ublue-os image descriptor (every non-Bluefin system)."""
     context.launch_env["CHAIRLIFT_IMAGE_INFO"] = os.path.join(context.scenario_dir, "absent-image-info.json")
+
+
+@stub("features-developer")
+def developer_options(context):
+    """A running Ubuntu guest and Docker CLI with no system daemon."""
+    fake_executable(context, "limactl", _recorder(context) + """
+case "$1" in
+  list) echo '{"name":"ubuntu","status":"Running"}' ;;
+  shell) exit 0 ;;
+esac
+exit 0
+""")
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1" in
+  show) printf '%s\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
+esac
+exit 0
+""")
+    fake_executable(context, "brew", _recorder(context) + """
+case "$1" in
+  --version) echo 'Homebrew 5.0.0' ;;
+  info) echo '{"formulae":[{"name":"docker","installed":[{"version":"29.0"}]}],"casks":[]}' ;;
+esac
+exit 0
+""")

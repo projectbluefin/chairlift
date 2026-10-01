@@ -1,47 +1,37 @@
 @features
-Feature: Features page — Developer tools, Gaming, Printers, and the Custom Command Menu
-  The Features page switches on capabilities of a Bluefin-family system.
-  Developer tools is a privileged change through the fixed ublue helper;
-  Gaming installs user-scope Flatpaks with no privilege at all; Developer
-  Mode also drives the Custom Command Menu's developer entries; Printers is
-  one rootless quadlet per driver family, driven with systemctl --user and
-  equally unprivileged. The application always runs with --dry-run here, so
-  every switch must preview its change, run nothing, and come back to the
-  state it restored on load.
-
-  Updex's "Optional features" group is not covered: updex reads feature
-  definitions only from root-owned sysupdate.d directories, which neither the
-  Dakota container nor a CI runner has, so the group is hidden in every run.
+Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, and Printers
+  Optional tools are explicit choices. Gaming mutations are user-scope only;
+  the fixed helper grants only the access each developer option needs.
+  Dry runs restore every control and preserve observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
-  Scenario: Showing the machine's state on load runs nothing
+  Scenario: Showing installed gaming components and Developer Mode runs no mutation
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming apps" row is on
-    And the "Gaming apps" row says "Installed. Steam and everything that goes with it are ready to use."
-    And the Developer tools switch shows this account's developer-group membership
+    Then the Developer Mode switch shows this account's developer-group membership
+    And each gaming component says "Installed for your account"
+    And no gaming component is selected
     And the action journal is empty
     And the fake flatpak was never asked to "install"
     And the fake flatpak was never asked to "uninstall"
     And the fake dconf was never asked to "dump"
-    And the application log does not contain "Custom Command Menu"
 
   @stub.features-gaming-none @stub.features-devmenu
-  Scenario: Toggling Developer tools previews the fixed helper command and restores the switch
+  Scenario: Developer Mode previews the fixed helper and restores the switch
     Given ChairLift is running
     When I open the "Features" page
-    Then the Developer tools switch shows this account's developer-group membership
-    When I toggle the switch in the "Developer tools" row
-    Then the Developer tools change is journalled as a dry run of the fixed helper
-    And the Developer tools preview toast is shown
-    And the Developer tools switch returns to its restored state
+    Then the Developer Mode switch shows this account's developer-group membership
+    When I toggle the switch in the "Developer Mode" row
+    Then the Developer Mode change is journalled as a dry run of the fixed helper
+    And the Developer Mode preview toast is shown
+    And the Developer Mode switch returns to its restored state
 
   @stub.features-gaming-none @stub.features-devmenu
-  Scenario: Developer Mode previews the Custom Command Menu change without writing dconf
+  Scenario: Developer Mode previews only the two Custom Command Menu entries
     Given ChairLift is running
     When I open the "Features" page
-    Then the Developer tools switch shows this account's developer-group membership
-    When I toggle the switch in the "Developer tools" row
+    Then the Developer Mode switch shows this account's developer-group membership
+    When I toggle the switch in the "Developer Mode" row
     Then the Custom Command Menu change is previewed for the two developer entries only
     And the fake dconf was never asked to "write"
     And the fake dconf was never asked to "reset"
@@ -50,119 +40,145 @@ Feature: Features page — Developer tools, Gaming, Printers, and the Custom Com
   Scenario: A dry-run Developer Mode change starts no feed onboarding
     Given ChairLift is running
     When I open the "Features" page
-    Then the Developer tools switch shows this account's developer-group membership
-    When I toggle the switch in the "Developer tools" row
-    Then the Developer tools preview toast is shown
+    Then the Developer Mode switch shows this account's developer-group membership
+    When I toggle the switch in the "Developer Mode" row
+    Then the Developer Mode preview toast is shown
     And the Developer feed onboarding never starts
 
-  @stub.features-gaming-none
-  Scenario: Turning Gaming on previews installing every component and restores the switch
+  @stub.features-gaming-none @stub.features-developer
+  Scenario: Developer options expose one Toolbox and individually chosen editor installs
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming apps" row is off
-    And the "Gaming apps" row says "Installs Steam and the tools that make Windows games run. This is a large download."
-    When I toggle the switch in the "Gaming apps" row
-    Then the application log previews "flatpak install" for every gaming component
-    And the Gaming toast says "[DRY-RUN] Preview: gaming components would be installed — no changes made"
-    And the switch in the "Gaming apps" row is off
-    And the switch in the "Gaming apps" row accepts input
-    And the Gaming inventory is read again after the change
-    And the "Gaming apps" row says "Installs Steam and the tools that make Windows games run. This is a large download."
+    Then I see "Developer Mode"
+    And I see "WSL Mode"
+    And I see "Enable Docker"
+    When I expand the "IDEs and terminal editors" list under "Developer"
+    Then the developer editor choices match the documented catalog
+    And the "Install" button in the "VSCodium" row is sensitive
+    When I click the "Install" button in the "VSCodium" row
+    Then the application log contains "Would execute: brew install --cask ublue-os/tap/vscodium-linux"
+    And the application log does not contain "Would execute: brew install --cask ublue-os/tap/jetbrains-toolbox-linux"
+    And the "Install" button in the "VSCodium" row is sensitive
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer
+  Scenario: Disabling a running WSL machine previews stop without deleting data
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "WSL Mode" row is on
+    When I toggle the switch in the "WSL Mode" row
+    Then the application log contains "would disable Ubuntu autostart and stop the VM without deleting data"
+    And the switch in the "WSL Mode" row is on
+    And the switch in the "WSL Mode" row accepts input
+    And the fake limactl was never asked to "stop"
+    And the fake limactl was never asked to "delete"
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer
+  Scenario: Docker CLI presence never claims a daemon is available
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row refuses input
+    And the "Enable Docker" row says "This base image has no Docker daemon. Installing CLI tools alone cannot run containers."
+    And the action journal is empty
+
+  @stub.features-gaming-none
+  Scenario: Gaming install requires explicit selection
+    Given ChairLift is running
+    When I open the "Features" page
+    Then no gaming component is selected
+    When I click the "Install Selected" button
+    Then the application log does not contain "flatpak install"
+    And the fake flatpak was never asked to "install"
+
+  @stub.features-gaming-none
+  Scenario: Installing one selected gaming app never installs the other components
+    Given ChairLift is running
+    When I open the "Features" page
+    And I select the "Steam" gaming component
+    And I click the "Install Selected" button
+    Then the gaming preview installs only "Steam"
+    And the "Install Selected" button is sensitive
+    And each gaming component says "Not installed"
     And the fake flatpak was never asked to "install"
     And the action journal is empty
 
   @stub.features-gaming-partial
-  Scenario: Finishing a partial Gaming install previews only the missing components
+  Scenario: A selected already-installed component is not reinstalled
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming apps" row is off
-    And the "Gaming apps" row says "Partly set up — 1 of 6 gaming apps are installed. Turn this on to finish."
-    When I toggle the switch in the "Gaming apps" row
-    Then the application log previews "flatpak install" for every gaming component but "Steam"
-    And the Gaming toast says "[DRY-RUN] Preview: gaming components would be installed — no changes made"
-    And the switch in the "Gaming apps" row is off
-    And the fake flatpak was never asked to "install"
+    And I select the "Steam" gaming component
+    And I click the "Install Selected" button
+    Then the Gaming inventory is read again after the change
+    And the application log does not contain "flatpak install"
 
   @stub.features-gaming-installed
-  Scenario: Turning Gaming off previews removing every user-installed component and keeps it on
+  Scenario: Removing one selected app is confirmed and restores its installed state under dry run
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming apps" row is on
-    When I toggle the switch in the "Gaming apps" row
-    Then the application log previews "flatpak uninstall" for every gaming component
-    And the Gaming toast says "[DRY-RUN] Preview: gaming components would be removed — no changes made"
-    And the switch in the "Gaming apps" row is on
-    And the switch in the "Gaming apps" row accepts input
-    And the "Gaming apps" row says "Installed. Steam and everything that goes with it are ready to use."
+    And I select the "ProtonUp-Qt" gaming component
+    And I click the "Remove Selected" button
+    Then a dialog titled "Remove selected gaming apps?" is shown
+    When I choose "Remove" in the dialog
+    Then the gaming preview removes only "ProtonUp-Qt"
+    And each gaming component says "Installed for your account"
+    And the "Remove Selected" button is sensitive
     And the fake flatpak was never asked to "uninstall"
-    And the action journal is empty
 
   @stub.features-gaming-system
-  Scenario: Turning Gaming off leaves components the image installed system-wide
+  Scenario: Selected system gaming apps are left in place
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming apps" row is on
-    When I toggle the switch in the "Gaming apps" row
+    Then each gaming component says "Installed system-wide; left in place"
+    When I select the "Steam" gaming component
+    And I click the "Remove Selected" button
+    And I choose "Remove" in the dialog
     Then the Gaming inventory is read again after the change
-    And the switch in the "Gaming apps" row is on
     And the application log does not contain "flatpak uninstall"
-    And the fake flatpak was never asked to "uninstall"
-
-  @stub.features-gaming-system
-  Scenario: The Gaming preview does not promise to remove system-wide components
-    Given ChairLift is running
-    When I open the "Features" page
-    Then the switch in the "Gaming apps" row is on
-    When I toggle the switch in the "Gaming apps" row
-    Then the Gaming toast says "[DRY-RUN] Preview: nothing to remove — 6 component(s) installed system-wide would be left in place"
+    And each gaming component says "Installed system-wide; left in place"
 
   @stub.features-gaming-unlistable
-  Scenario: Gaming fails closed when the installed apps cannot be listed
+  Scenario: Gaming fails closed when installed components cannot be listed
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Gaming apps" row says "Could not check which gaming apps are installed."
-    And the switch in the "Gaming apps" row refuses input
+    Then the "Gaming Mode" row says "Could not check which gaming apps are installed."
+    And the "Install Selected" button is insensitive
+    And the "Remove Selected" button is insensitive
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
-  @stub.features-gaming-image @stub.features-gaming-none
-  Scenario: An image that ships the gaming apps shows a note instead of the switch
+  @stub.features-gaming-image @stub.features-gaming-system
+  Scenario: A gaming image still lists verified system-managed components
     Given ChairLift is running
     When I open the "Features" page
-    Then the Features page shows a "Gaming" group
-    And I see "Steam and the tools that go with it are already part of this system."
-    And the "Already set up" row offers no switch
-    And I do not see "Gaming apps"
-    And the Developer tools switch shows this account's developer-group membership
-    And the application log contains "views: gaming group suppressed"
+    Then each gaming component says "Installed system-wide; left in place"
+    And I see "Gaming Mode"
 
   @stub.features-no-descriptor @stub.features-gaming-none
-  Scenario: A host without a ublue-os image descriptor offers neither Developer nor Gaming
+  Scenario: Without a Bluefin descriptor Developer and Gaming are not offered
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows no "Developer" group
     And the Features page shows no "Gaming" group
-    And I do not see "Developer tools"
-    And I do not see "Gaming apps"
-    And the application log does not contain "views: bluefin groups built"
+    And I do not see "Developer Mode"
+    And I do not see "Gaming Mode"
 
   @env.CHAIRLIFT_CAPABILITIES=flatpak,brew,podman,bootc-stage @stub.features-gaming-none
-  Scenario: The image-descriptor capability floors the Developer and Gaming groups
+  Scenario: The image-descriptor capability floors Developer and Gaming
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows no "Developer" group
     And the Features page shows no "Gaming" group
-    And the application log does not contain "views: bluefin groups built"
 
   @config.features-no-dx @stub.features-gaming-none
-  Scenario: Disabling dx_group in configuration removes only the Developer group
+  Scenario: Disabling dx_group removes all developer supporting options and keeps Gaming
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows a "Gaming" group
-    And the switch in the "Gaming apps" row accepts input
     And the Features page shows no "Developer" group
-    And I do not see "Developer tools"
-    And the application log contains "dx_group=false gaming_group=true"
+    And I do not see "WSL Mode"
+    And I do not see "Enable Docker"
 
   @stub.features-no-descriptor @stub.features-gaming-none
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,bootc-stage
@@ -170,7 +186,6 @@ Feature: Features page — Developer tools, Gaming, Printers, and the Custom Com
     Given ChairLift is running
     Then the Features destination is hidden or says why it offers nothing
     And I see "Nothing to set up here"
-    And I see "This system does not offer developer tools, gaming apps, printers, or optional features that can be set up from this page."
     And the application log contains "views: features page offers nothing on this system"
 
   # ------------------------------------------------------------ Printers
@@ -192,7 +207,7 @@ Feature: Features page — Developer tools, Gaming, Printers, and the Custom Com
       | HP printers (HPLIP)  |
       | Gutenprint printers  |
     And the application log contains "views: printers group built families=3 blocked=3"
-    And systemctl was never run
+    And the systemctl tool was never asked to mutate
     And no printer quadlet was written
     And the action journal is empty
 

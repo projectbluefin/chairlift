@@ -29,6 +29,12 @@ or overwritten by ChairLift's install paths.
 The repository root includes `config.dev.yml` so source checkouts load
 unprivileged development defaults before the package default `config.yml`.
 
+Appearance preferences share the desktop's native dconf store. Before GUI
+startup or headless `--rotate-livery`, ChairLift discovers the installed native
+GIO dconf module and appends its directory to `GIO_EXTRA_MODULES`, preserving
+existing module entries and any explicit `GSETTINGS_BACKEND`. This avoids
+Homebrew GLib using a separate keyfile store from the desktop or rotation unit.
+
 ## Format
 
 ```yaml
@@ -113,7 +119,7 @@ to ChairLift's log, which is where to look when filing a bug report.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Agent Mode | `agents_group` | llmman installed with Homebrew (plus the Jan Flatpak on x86_64) and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
+| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Installs no chat client; Goose setup is on Help. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
 
 ### Features Page (`features_page`)
 
@@ -121,8 +127,16 @@ to ChairLift's log, which is where to look when filing a bug report.
 |-------|-----|-------------|
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming Mode | `gaming_group` | Toggles gaming optimizations; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Gaming Mode | `gaming_group` | Selectively installs/removes chosen user-scope Flatpak applications and runtime extensions, reports installed scopes and persistent partial failures, and preserves system-scope entries; shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting every switch is locked and the row says what is needed |
+
+Developer options include Ubuntu LTS in Lima (**WSL Mode**), the base image's
+Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
+entry. Missing fixed helper actions keep affected switches discoverable but
+insensitive. KVM permission requires a new login; Docker readiness requires
+the real daemon socket to be accessible, not just installed CLI tools. These
+privileged operations use only `kvm-enable`, `docker-enable`, and
+`docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
 
 `dx_group` supports two optional, default-off steps that run off the GTK main
 thread after a confirmed live enable, and never on a disable, a page restore, a
@@ -164,6 +178,17 @@ the `glib-2.0/schemas` directory of any `$XDG_DATA_DIRS` entry, or the user's
 for a direct install, and a Homebrew cask has to compile the user directory
 itself.
 
+Livery publishes selections and master-switch state through the pure
+`internal/views/liverystate` transitions. A failed save or dry-run preview
+keeps the confirmed selection and switch; when a selection saves but its
+artwork fails, the persisted selection is shown and a toast names the failed
+step. Queued results recheck their shared serializer before publishing.
+Rotation candidates overlay the confirmed pair while work is in flight.
+Unlike an artwork selection, a rotation preference commits only after the
+user manager accepts its unit; failure preserves the previous preference
+pair and unit file, and dry-run restores both switches without writes.
+
+
 ### Maintenance Page (`maintenance_page`)
 
 | Group | Key | Description |
@@ -198,6 +223,27 @@ Each action has:
 |-------|-----|-------------|
 | Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; moved here from Features (issue #249); shown only when Homebrew is present |
 | Resources | `help_resources_group` | Links to project resources |
+
+**Set Up** installs missing Goose components and connects its read-only Linux
+diagnostics. A fresh configuration comes from
+`/usr/share/ublue-os/goose/config.yaml`; an existing configuration keeps its
+provider, model, other extensions, and unknown settings. Setup adds `linux-tools`
+when absent, or enables a recognized `linux-tools` / `linux-mcp-server` entry
+with an empty policy using explicit `--toolset FIXED --no-search-for-ssh-key
+--verify-host-keys` arguments. It does not replace a different command, transport,
+or an explicit conflicting tool policy. Malformed, duplicate-key, multiple-document,
+or merged affected YAML is refused without replacing user data.
+
+Configuration changes use an owned regular file and a private atomic replacement
+with mode `0600`; links, unsafe Goose directories, and detected concurrent edits
+are refused. Setup reads the resulting state before reporting connection. Dry-run
+leaves both new and existing configurations untouched.
+
+**Open Goose** means its Linux tools are connected, not that a model service has
+been authenticated or tested. The row discloses the selected provider and asks
+the user to choose a model when none is selected. ChairLift never chooses a
+provider, installs an API key, or changes a user's existing provider/model.
+
 
 Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
 

@@ -24,7 +24,7 @@ Control Center provides seven configurable pages, in sidebar order:
 | **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
 | **Apps** | Search/install Homebrew formulae and casks; uninstall installed formulae/casks; pin/unpin formulae; install curated app collections. List/uninstall Flatpaks and launch the configured external manager for Flatpak discovery and installation. |
 | **Agents** | Agent Mode: run a language model on this computer — llmman, installed with Homebrew and served as a systemd user unit in your own account. |
-| **Features** | Toggle system features managed by updex, plus Developer Mode and Gaming Mode. |
+| **Features** | Distribution features, Developer Mode, WSL Mode through Lima, Docker, individually chosen IDEs/editors, selective Gaming, and safely locked printer applications. |
 | **Livery** | Choose the marks shown on the app-grid button, the top-bar menu, and Files. |
 | **Maintenance** | Free up space, run administrator-configured maintenance scripts, and — when an administrator opts in — Powerwash or Factory Reset. |
 | **Help** | Enhanced Troubleshooting (an AI diagnostic assistant installed with Homebrew), plus links to the project website, issue tracker, and community documentation. |
@@ -46,7 +46,7 @@ always retained so the window always has a valid destination.
 | Flag | Description |
 |------|-------------|
 | `--dry-run`, `-d` | Run without making any changes to the system. Propagated to all package manager wrappers. |
-| `--setup`, `-s` | Open the Setup Assistant, even when setup was already completed or skipped and even under `--dry-run`. Against a running instance it re-opens the assistant there. |
+| `--first-run`, `--setup`, `-s` | Start the same explicit Features → Apps → Agents → Livery tour on existing page controls. A running tour retains its current step. Ordinary activation never starts setup. |
 
 ## Optional Dependencies
 

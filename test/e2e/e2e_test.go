@@ -47,6 +47,8 @@ func TestApplicationHelp(t *testing.T) {
 		"Usage:",
 		"Application Options:",
 		"--dry-run",
+		"--first-run",
+		"--setup",
 		"Don't make any changes to the system.",
 	} {
 		if !bytes.Contains(output, []byte(want)) {
@@ -251,6 +253,14 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		// PKEXEC_UID is absent outside a pkexec session, so a direct
 		// invocation cannot resolve a user to modify.
 		{name: "ublue dx enable outside pkexec", helper: "chairlift-helper", args: []string{"dx-enable"}, wantStderr: "PKEXEC_UID is not set"},
+		{name: "KVM refuses account", helper: "chairlift-helper", args: []string{"kvm-enable", "root"}, wantStderr: "usage: chairlift-helper kvm-enable"},
+		{name: "KVM refuses group", helper: "chairlift-helper", args: []string{"kvm-enable", "wheel"}, wantStderr: "usage: chairlift-helper kvm-enable"},
+		{name: "KVM outside pkexec", helper: "chairlift-helper", args: []string{"kvm-enable"}, wantStderr: "PKEXEC_UID is not set"},
+		{name: "Docker enable refuses unit", helper: "chairlift-helper", args: []string{"docker-enable", "other.service"}, wantStderr: "usage: chairlift-helper docker-enable"},
+		{name: "Docker enable refuses account", helper: "chairlift-helper", args: []string{"docker-enable", "root"}, wantStderr: "usage: chairlift-helper docker-enable"},
+		{name: "Docker enable outside pkexec", helper: "chairlift-helper", args: []string{"docker-enable"}, wantStderr: "PKEXEC_UID is not set"},
+		{name: "Docker disable refuses unit", helper: "chairlift-helper", args: []string{"docker-disable", "other.service"}, wantStderr: "usage: chairlift-helper docker-disable"},
+		{name: "Docker disable refuses flag", helper: "chairlift-helper", args: []string{"docker-disable", "--force"}, wantStderr: "usage: chairlift-helper docker-disable"},
 		// Restart takes no delay and no target: either would be a value the
 		// caller controls crossing an authenticated boundary.
 		{name: "ublue restart with a delay", helper: "chairlift-helper", args: []string{"restart", "02:00"}, wantStderr: "usage: chairlift-helper restart"},
@@ -271,6 +281,9 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		{name: "ublue driver switch without a driver", helper: "chairlift-helper", args: []string{"driver-switch"}, wantStderr: "usage: chairlift-helper driver-switch"},
 		// A factory reset takes no argument at all; the target is always the
 		// image already booted.
+		{name: "ublue pin refuses image reference", helper: "chairlift-helper", args: []string{"pin", "ghcr.io/evil/image:20240229"}, wantStderr: "usage: chairlift-helper pin"},
+		{name: "ublue pin refuses invalid day", helper: "chairlift-helper", args: []string{"pin", "20260230"}, wantStderr: "usage: chairlift-helper pin"},
+		{name: "ublue unpin refuses target", helper: "chairlift-helper", args: []string{"unpin", "stable"}, wantStderr: "usage: chairlift-helper unpin"},
 		{name: "ublue factory reset with a flag", helper: "chairlift-helper", args: []string{"factory-reset", "--force"}, wantStderr: "usage: chairlift-helper factory-reset"},
 		{name: "ublue factory reset with extra argument", helper: "chairlift-helper", args: []string{"factory-reset", "--dry-run", "now"}, wantStderr: "usage: chairlift-helper factory-reset"},
 	}

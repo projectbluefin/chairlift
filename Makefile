@@ -325,7 +325,7 @@ ci:
 	$(MAKE) build
 	@echo "==> CI mirror passed"
 
-bump: ## tag the next calendar version (YY.MM.N); PRE=alpha.1 for a prerelease
+bump: ## tag the next stable calendar version (YY.MM.N, starting at 1)
 	@# Tag only what main ships. A tag on a branch commit leaves main without the
 	@# tag in its history, so the next release's notes compare against the one
 	@# before it (v26.09.0-alpha.2 was tagged on a branch).
@@ -343,7 +343,7 @@ bump: ## tag the next calendar version (YY.MM.N); PRE=alpha.1 for a prerelease
 		exit 1; \
 	fi
 	@echo "Creating new tag..."
-	@version=$$(./scripts/next-version.sh $(PRE)) && \
+	@version=$$(./scripts/next-version.sh) && \
 		git tag -a $$version -m "Version $$version" && \
 		echo "Tagged version $$version" && \
 		echo "Pushing tag $$version to origin..." && \

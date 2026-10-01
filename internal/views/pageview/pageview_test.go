@@ -101,50 +101,6 @@ func TestUpdateRowsCoverEveryPresentation(t *testing.T) {
 		})
 	}
 
-	updateTests := []struct {
-		name         string
-		version      string
-		installation string
-		want         Row
-	}{
-		{
-			name: "system update without version",
-			want: Row{Title: "Firefox", Subtitle: "An update is available, for everyone who uses this computer"},
-		},
-		{
-			name:    "system update with version",
-			version: "129.0",
-			want:    Row{Title: "Firefox", Subtitle: "Updates to version 129.0, for everyone who uses this computer"},
-		},
-		{
-			name:         "user update without version",
-			installation: "user",
-			want:         Row{Title: "Firefox", Subtitle: "An update is available, for you only"},
-		},
-		{
-			name:         "user update with version",
-			version:      "129.0",
-			installation: "user",
-			want:         Row{Title: "Firefox", Subtitle: "Updates to version 129.0, for you only"},
-		},
-	}
-	for _, tt := range updateTests {
-		t.Run("app update/"+tt.name, func(t *testing.T) {
-			got := FlatpakUpdate("Firefox", "org.mozilla.firefox", tt.version, tt.installation)
-			if got != tt.want {
-				t.Fatalf("FlatpakUpdate() = %#v, want %#v", got, tt.want)
-			}
-		})
-	}
-
-	// An app with no name is the only case that may show its identifier:
-	// an unlabelled row would be worse than a technical one.
-	t.Run("app update/nameless app falls back to its identifier", func(t *testing.T) {
-		got := FlatpakUpdate("", "org.mozilla.firefox", "129.0", "user")
-		if got.Title != "org.mozilla.firefox" {
-			t.Fatalf("FlatpakUpdate() title = %q, want the identifier", got.Title)
-		}
-	})
 }
 
 func TestBootcUpdateSubtitlesCoverEveryState(t *testing.T) {

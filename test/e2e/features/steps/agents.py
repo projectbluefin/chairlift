@@ -1,22 +1,27 @@
 """Steps for the Agents page (features/agents.feature).
 
-Agent Mode is unprivileged: the switch writes a systemd *user* unit and an
-environment.d fragment, and "Use another machine" keeps ChairLift's own peer
-store beside llmman's configuration. Under --dry-run none of those files may
-be written and none of llmman, systemctl, or `brew bundle` may run; the
-steps here read the scenario HOME and the recording stubs in
-fixtures/stubs_agents.py to prove it.
+Agent Mode is unprivileged: the switch writes a systemd user unit and an
+environment.d fragment. Under --dry-run neither file may be written and no
+llmman, systemctl, or brew bundle mutation may run. Steps read the scenario
+HOME and recording stubs to prove it.
 """
 
 import os
+import shlex
 
 from behave import step, then
 
 import chairlift_atspi as atspi
 import stubs_agents
-from common import app, content, current_dialog, read_log, text_present
+from stubs_features import CALLS_LOG as FEATURES_CALLS_LOG
+from common import app, content, read_log
 
-AGENT_MODE_ROW = "Run AI models on this computer"
+AGENT_MODE_ROW = "Agent Mode"
+
+
+@step("I dismiss the model chooser with Escape")
+def step_dismiss_model_chooser(context):
+    atspi.press("Escape")
 
 
 def agent_mode_switch(context):
@@ -41,33 +46,12 @@ def artifacts(context):
     return {
         "unit": stubs_agents.unit_path(context),
         "environment fragment": stubs_agents.fragment_path(context),
-        "peer store": stubs_agents.peer_store_path(context),
     }
 
 
 def snapshot(context):
     return {label: read_bytes(path) for label, path in artifacts(context).items()}
 
-
-def peer_row(context, address):
-    return atspi.row_containing(content(context), address)
-
-
-def focus_by_tab(context, root, predicate, what, limit=80):
-    """Move keyboard focus with Tab until a node under root matching predicate has it.
-
-    GTK 4's AT-SPI bridge does not implement Component.GrabFocus, so focus can
-    only be moved the way a keyboard user moves it.
-    """
-    def focused_match():
-        return atspi.find_all(root, lambda n: predicate(n) and atspi.focused(n))
-
-    for _ in range(limit):
-        found = atspi.poll(focused_match, timeout=0.3, interval=0.05)
-        if found:
-            return found[0]
-        atspi.press("Tab")
-    raise AssertionError(f"Tab never moved keyboard focus to {what}")
 
 
 # ---------------------------------------------------------------- state
@@ -110,6 +94,26 @@ def step_switch_settles(context, state):
         f"sensitive={atspi.sensitive(agent_mode_switch(context))})"
     )
 
+@then("the model chooser is {state:w}")
+def step_model_chooser_state(context, state):
+    if state not in ("sensitive", "insensitive"):
+        raise NotImplementedError(f"unknown chooser state {state!r}")
+    want = state == "sensitive"
+
+    def settled():
+        row = atspi.row_containing(content(context), "Recommended Presets", timeout=1)
+        button = atspi.find_button(row, "Choose…", timeout=1)
+        # Dakota reports local sensitivity, not effective GTK sensitivity:
+        # any disabled widget ancestor makes this button unavailable.
+        node = button
+        while node is not None and atspi.role(node) != "application":
+            if not atspi.sensitive(node):
+                return not want
+            node = node.parent
+        return want
+
+    assert atspi.poll(settled), f"the model chooser never became {state}"
+
 
 @then('the application log shows Agent Mode would {verb:w} its unit and fragment')
 def step_log_would(context, verb):
@@ -128,15 +132,6 @@ def step_log_would(context, verb):
     assert ok, f"chairlift.log never contained {wanted!r}"
 
 
-@then('the application log shows the peer key would be set without revealing "{key}"')
-def step_log_key(context, key):
-    llmman = os.path.join(context.stub_bin, "llmman")
-    wanted = f"[DRY-RUN] would set llmman aggregation.api_key via {llmman} config set"
-    ok = atspi.poll(lambda: wanted in read_log(context))
-    assert ok, f"chairlift.log never contained {wanted!r}"
-    assert key not in read_log(context), "chairlift.log contains the peer key"
-
-
 # ---------------------------------------------------------------- stubs
 
 
@@ -152,92 +147,35 @@ def step_brew_never(context, args):
     assert not hits, f"brew ran {hits}"
 
 
-@then("systemctl was never run")
-def step_systemctl_never(context):
-    ran = calls(context, "systemctl")
-    assert not ran, f"systemctl ran {ran}"
+@then("the systemctl tool was never asked to mutate")
+def step_systemctl_no_mutations(context):
+    # Developer Mode legitimately observes docker.service at startup. Permit
+    # reads, but reject every service/environment mutation and unknown verb.
+    read_commands = {"show", "is-active", "is-enabled", "status", "list-units", "list-unit-files"}
+    mutations = {
+        "daemon-reload", "enable", "disable", "restart", "stop", "start",
+        "unset-environment", "mask", "unmask", "set-environment",
+    }
+    unexpected = []
+    recorded = calls(context, "systemctl")
+    feature_log = read_bytes(os.path.join(context.scenario_dir, FEATURES_CALLS_LOG))
+    if feature_log is not None:
+        recorded += [
+            line.removeprefix("systemctl ")
+            for line in feature_log.decode("utf-8", "replace").splitlines()
+            if line.startswith("systemctl ")
+        ]
+    for line in recorded:
+        command = next((arg for arg in shlex.split(line) if not arg.startswith("-")), "")
+        if command in mutations or command not in read_commands:
+            unexpected.append(line)
+    assert not unexpected, f"systemctl ran mutations or unexpected commands: {unexpected}"
 
 
 @then("the llmman node endpoint was probed")
 def step_node_probed(context):
     ok = atspi.poll(lambda: "/llmman/node" in calls(context, "node-requests"))
     assert ok, "nothing requested /llmman/node from the node stub"
-
-
-# ---------------------------------------------------------------- peers
-
-
-@step("I open the Agents add-peer dialog")
-def step_open_add_peer(context):
-    """Tab to the "Add a peer…" row and press Return, as a keyboard user does.
-
-    AdwActionRow publishes no AT-SPI action and GTK 4 on X11 publishes no
-    coordinates, so the row can only be activated from the keyboard.
-    """
-    focus_by_tab(
-        context,
-        content(context),
-        lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.name(n) == "Add a peer…",
-        "the Add a peer… row",
-    )
-    atspi.press("Return")
-
-
-@step('I enter "{value}" as the Agents peer address')
-def step_enter_peer(context, value):
-    dialog = current_dialog(context)
-    entry = focus_by_tab(
-        context, dialog, lambda n: atspi.role(n) in atspi.TEXT_ROLES, "the peer address entry"
-    )
-    atspi.type_text(value)
-    assert atspi.poll(lambda: atspi.text(entry) == value), (
-        f"peer address entry reads {atspi.text(entry)!r}, not {value!r}"
-    )
-
-
-@step('I enter "{value}" as the Agents peer key and press Return')
-def step_enter_key(context, value):
-    focus_by_tab(
-        context, content(context), lambda n: atspi.role(n) == "password text", "the peer key entry"
-    )
-    # A password entry does not publish its text, so the typed key cannot be
-    # read back; the log step that follows proves whether it arrived.
-    atspi.type_text(value)
-    atspi.press("Return")
-
-
-@step('I press the remove button in the Agents peer "{address}" row')
-def step_remove_peer(context, address):
-    """The row's only push button is its trash icon, named "Remove <address>"."""
-    row = peer_row(context, address)
-    button = atspi.find(
-        row,
-        lambda n: atspi.role(n) in atspi.BUTTON_ROLES and "click" in atspi.actions(n),
-        f"a remove button in the {address!r} row",
-    )
-    atspi.activate(button)
-
-
-@then('the Agents peer "{address}" switch is {state:w}')
-def step_peer_switch(context, address, state):
-    if state not in ("on", "off"):
-        raise NotImplementedError(f"unknown switch state {state!r}")
-    want = state == "on"
-
-    def check():
-        row = peer_row(context, address)
-        switch = atspi.find(row, lambda n: atspi.role(n) == "switch", "a peer switch", timeout=1)
-        return bool(atspi.checked(switch)) == want and atspi.sensitive(switch)
-
-    assert atspi.poll(check), f"peer {address!r} switch never settled {state}"
-
-
-@then('the Agents page lists no peer "{address}"')
-def step_no_peer_row(context, address):
-    def gone():
-        return not text_present(content(context), address, exact=True)
-
-    assert atspi.poll(gone), f"a peer row {address!r} is showing"
 
 
 # ---------------------------------------------------------------- navigation

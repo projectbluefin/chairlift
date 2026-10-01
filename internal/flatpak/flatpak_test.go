@@ -175,7 +175,7 @@ esac`
 		{
 			name: "list user app updates",
 			run: func() error {
-				updates, err := ListUpdates(true)
+				updates, err := ListUpdates(context.Background(), true)
 				if err == nil && (len(updates) != 1 || updates[0].Installation != "user") {
 					return errors.New("user update result was not parsed")
 				}
@@ -195,6 +195,49 @@ esac`
 				t.Fatalf("flatpak arguments = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestListUpdatesHonoursContextCancellation ensures the remote-ls query on the
+// reconciliation path can be cancelled: a cancelled ctx must abort the flatpak
+// invocation promptly instead of waiting out the read timeout, so an uncancellable
+// network call can never linger on the mutation path.
+func TestListUpdatesHonoursContextCancellation(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	// Fake flatpak that records its arguments then blocks until killed, so a
+	// ctx that is not honoured would hang the test rather than return.
+	dir := t.TempDir()
+	capture := filepath.Join(dir, "args")
+	script := filepath.Join(dir, "flatpak")
+	source := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$CHAIRLIFT_FLATPAK_ARGS\"\nsleep 30\n"
+	if err := os.WriteFile(script, []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	// Prepend the system PATH so the blocking command resolves; the isolated
+	// temp dir alone has no shell utilities.
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	t.Setenv("CHAIRLIFT_FLATPAK_ARGS", capture)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := ListUpdates(ctx, true)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatalf("ListUpdates error = nil, want a cancellation error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListUpdates error = %v, want context.Canceled", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("ListUpdates took %v; cancelled ctx should abort well under the 30s read timeout", elapsed)
 	}
 }
 
@@ -254,7 +297,7 @@ func TestQueryFailuresPropagate(t *testing.T) {
 		run  func() error
 	}{
 		{name: "applications", run: func() error { _, err := ListUserApplications(); return err }},
-		{name: "updates", run: func() error { _, err := ListUpdates(false); return err }},
+		{name: "updates", run: func() error { _, err := ListUpdates(context.Background(), false); return err }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

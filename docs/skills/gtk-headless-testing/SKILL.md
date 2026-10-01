@@ -2,7 +2,7 @@
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
 version: 2.0.0
-last_updated: 2026-09-26
+last_updated: 2026-10-01
 tags:
   - testing
   - gtk
@@ -101,6 +101,9 @@ tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
 `@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
 only one destination needs goes in `steps/<destination>.py`.
 
+Intentional malformed-input fixtures must stay malformed. Exclude their exact
+paths from syntax-lint hooks, not the entire fixture directory or hook.
+
 **Run it.** `make e2e-atspi [ATSPI_TAGS=@tag]` locally and in CI; both run
 `test/e2e/dakota_atspi.sh`, which runs the Go gate in
 `ghcr.io/projectbluefin/dakota:testing` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a
@@ -123,6 +126,12 @@ and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
   the `Loaded config from <fixture>` marker. The container masks the
   directory with `--tmpfs …:notmpcopyup` — plain `--tmpfs` copies the image's
   file into the tmpfs.
+- **Containers inherit the host kernel command line, not its deployments.**
+  A composefs host's `/proc/cmdline` makes the real bootc reader look for
+  `/sysroot/state/deploy` even inside the fixture container, bypassing its
+  fake `bootc` and hiding System version. `dakota_atspi.sh` binds `/dev/null`
+  read-only over `/proc/cmdline` so fixture tests use their own bootc answers.
+  This is test isolation only; a booted Dakota VM must keep its real cmdline.
 - **GTK 4 on X11 publishes no screen coordinates.** `position` is `None`, so
   nothing can be clicked by position. Activate through AT-SPI actions
   (`atspi.activate`) or the keyboard; list rows, which have no action, are
@@ -139,6 +148,24 @@ and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
   it lazily so `TestATSPIFeaturesHaveNoUndefinedSteps` (behave `--dry-run`)
   needs no display. dogtail's `checkForA11y` must be off before import: the
   suite uses `GSETTINGS_BACKEND=memory`.
+- **Homebrew GLib can silently use a different settings store.** A keyfile
+  write from Homebrew `gsettings` is not proof that native GNOME or a user
+  rotation service sees it. `deskenv.ConfigureSettingsModules` runs before
+  GUI construction and headless rotation, appending an installed native
+  `libdconfsettings.so` module directory to `GIO_EXTRA_MODULES`. It preserves
+  explicit `GSETTINGS_BACKEND=memory`, so isolated fixtures still use memory.
+  For real preference proof, observe the value through the desktop's native
+  tool as well as the app's tool environment; never override a memory fixture
+  to reach the live user's store.
+  A CGO-disabled launcher also calls native `g_setenv` before constructing GTK;
+  changing Go's environment alone is insufficient for native library readers.
+- **A current unit file is not a current daemon.** Reproduce interrupted user
+  service migrations with the replacement file already written and the old
+  daemon still running. Native HTTP health does not prove policy adoption.
+  Agent Mode stamps the successful systemd `InvocationID` in its owned unit
+  only after reload/restart; missing or mismatched stamps retry. Observe that
+  ID and the actual page readiness on a private user manager. Do not add a
+  root read route: even same-UID `/proc/<pid>/environ` reads may be denied.
 - **behave drops scenario-scoped context attributes** at scenario end; run-wide
   counters live in `context.config.userdata`.
 - **Homebrew readers escape the process group.** Teardown kills the group,
@@ -176,6 +203,16 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 **The rule:** When testing ChairLift locally in containers, **NEVER** use Ubuntu or generic Debian containers. Always use the official native Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the standard Homebrew tooling and environment.
 **Why:** ChairLift is specifically built for the Project Bluefin ecosystem. Generic Debian/Ubuntu container environments do not reproduce the Bluefin/Dakota filesystem layout, configuration paths, packaged tooling, system integration, or Homebrew setup. Testing or generating captures in generic Debian/Ubuntu containers produces inaccurate results, missing icons or themes, and incorrect capability evaluations.
 
+- Refresh a floating test tag with `podman pull` before a live QA sweep, then
+  record its digest and creation time. `--pull=missing` can silently reuse an
+  image from weeks earlier; its old Python interpreter also invalidates the
+  container-built venv's assumptions.
+- Keep the shipped `/usr/share/chairlift/config.yml` visible during live QA.
+  Mask it only for explicit configuration-fixture tests.
+- `chairlift_atspi.page_root` is a query pseudo-root, not an AT-SPI node.
+  Traverse it through `search_nodes` when writing evidence, or dump a real
+  window node; passing it directly to `dump` yields an empty-looking tree.
+
 ### Running the AT-SPI suite with Dakota
 
 `make e2e-atspi` (see "The behave AT-SPI suite" above). It needs podman, Go,
@@ -183,6 +220,13 @@ and Homebrew's `xorg-server` on the host, mounts the host's Go toolchain and
 Homebrew read-only, and creates its venv from `test/e2e/requirements-atspi.txt`
 with the container's interpreter. `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs
 `@known_issue` scenarios.
+This fixture suite uses Xvfb; it is not a live Wayland desktop walkthrough.
+For Wayland diagnosis on ghost, read testing-lab's
+`docs/reference/workflow-reference.md` and `docs/skills/argo-workflows/patterns.md`
+first. Dakota's VM install path is documented as blocked by its missing UKI.
+Reuse `run-container-tests`' nested systemd/GDM target, headless GNOME Shell,
+test-user linger, and `qecore-headless --session-type wayland`; do not invent
+another disk installer or substitute Xvfb for a requested Wayland session.
 
 ### Generating Walkthrough Screenshots with Lima + Dakota
 
@@ -191,3 +235,25 @@ When host runtime libraries or session portals cannot run the GTK capture harnes
 2. Ensure VM Homebrew has the required tools: `brew install go xdotool xdpyinfo xorg-server libxmu libxkbfile pkgconf` (Homebrew lacks `xwd`, so build `xwd-1.0.9` into `~/xtools`).
 3. Run `make screenshots` inside `ghcr.io/projectbluefin/dakota:testing` via Podman with `--userns=keep-id`, mapping `--tmpfs /tmp:rw,mode=1777`, mounting the source tree to `/workspace`, and masking `/usr/share/chairlift` with an empty directory (`--tmpfs /usr/share/chairlift:notmpcopyup`) so the packaged config does not override the test suite's `config.dev.yml`.
 4. Copy the resulting PNGs out via `limactl copy`.
+
+## Documentation source
+
+GNOME Shell nested-session isolation: Context7
+`/git_gitlab_gnome_org/gnome_gnome-shell`,
+[`docs/building-and-running.md`](https://gitlab.gnome.org/GNOME/gnome-shell/-/blob/main/docs/building-and-running.md).
+The lab's current Wayland runner remains the source for its deployment flags.
+
+GLib/GIO settings modules: Context7 `/gnome/glib`,
+[`Running GIO applications`](https://docs.gtk.org/gio/running.html).
+Configure `GIO_EXTRA_MODULES` before GSettings is used, preserve any explicit
+`GSETTINGS_BACKEND`, and synchronize the native environment with
+`g_setenv ("GIO_EXTRA_MODULES", modules, TRUE)`. Module-loading variables are
+not an elevated-privilege route: the GUI loads only the installed native
+system backend, and the fixed pure-Go privileged helpers do not load GIO.
+
+Systemd invocation identity: Context7 `/systemd/systemd`,
+[`systemctl`](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
+`systemctl --user show chairlift-llmman.service --property=InvocationID --value`
+observes the service invocation; `daemon-reload` alone does not restart it.
+llmman's [peer configuration source](https://github.com/llmmanorg/llmman/blob/main/src/config.rs)
+uses an explicitly set empty `LLMMAN_PEERS` before saved aggregation settings.

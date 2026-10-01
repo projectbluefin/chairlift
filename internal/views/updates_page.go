@@ -1,28 +1,21 @@
 package views
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log"
 	"sync"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
-	"github.com/projectbluefin/chairlift/internal/views/actionstate"
-	"github.com/projectbluefin/chairlift/internal/views/badgestate"
-	"github.com/projectbluefin/chairlift/internal/views/flatpakstatus"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/progresslog"
 	"github.com/projectbluefin/chairlift/internal/views/rowset"
-	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -57,87 +50,29 @@ func (uh *UserHome) buildUpdatesPage() {
 	// bootc hosts that ship the update-stage script.
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Operating system")
-		group.SetDescription("New versions download in the background and install when you restart.")
+		group.SetTitle("System update details")
+		group.SetDescription("Download a system update on its own, or compare the version waiting for your next restart.")
 		group.SetVisible(false)
 
 		uh.bootcStageExpander = adw.NewExpanderRow()
-		uh.bootcStageExpander.SetTitle("System updates")
+		uh.bootcStageExpander.SetTitle("Download system update")
 		uh.bootcStageExpander.SetSubtitle("Checking…")
 
 		uh.bootcStageBtn = gtk.NewButtonWithLabel("Check for updates")
 		uh.bootcStageBtn.SetValign(gtk.AlignCenterValue)
-		uh.bootcStageBtn.AddCssClass("suggested-action")
 		stageClickedCb := func(btn gtk.Button) {
 			uh.onBootcStageClicked()
 		}
 		uh.bootcStageBtn.ConnectClicked(&stageClickedCb)
 		uh.bootcStageExpander.AddSuffix(&uh.bootcStageBtn.Widget)
 
-		uh.buildChangelogRow(uh.bootcStageExpander)
+		uh.buildChangelogRow(group)
 
 		group.Add(&uh.bootcStageExpander.Widget)
 
 		page.Add(group)
 
 		go uh.loadBootcUpdateStatus(group)
-	}
-
-	// Apps
-	if uh.groupEnabled("updates_page", "flatpak_updates_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Apps")
-		group.SetDescription("Updates for the apps installed on this computer.")
-
-		uh.flatpakUpdatesExpander = adw.NewExpanderRow()
-		uh.flatpakUpdatesExpander.SetTitle("Available updates")
-		uh.flatpakUpdatesExpander.SetSubtitle("Checking…")
-		group.Add(&uh.flatpakUpdatesExpander.Widget)
-
-		page.Add(group)
-
-		// Load app updates asynchronously
-		uh.loadFlatpakUpdates()
-	}
-
-	// Developer tools
-	if uh.groupEnabled("updates_page", "brew_updates_group") {
-		group := adw.NewPreferencesGroup()
-		group.SetTitle("Developer tools")
-		group.SetDescription("Command-line tools you installed with Homebrew.")
-
-		// Refreshing the catalogue is what reveals new versions, so it is
-		// named for that rather than for the tool it runs.
-		updateRow := adw.NewActionRow()
-		updateRow.SetTitle("Check for new versions")
-		updateRow.SetSubtitle("Refresh the list of tools and the versions they offer")
-
-		updateBtn := gtk.NewButtonWithLabel("Check")
-		updateBtn.SetValign(gtk.AlignCenterValue)
-		updateBtn.AddCssClass("suggested-action")
-		updateGate := &actionstate.Gate{}
-		updateClickedCb := func(btn gtk.Button) {
-			if !updateGate.TryStart() {
-				return
-			}
-			btn.SetSensitive(false)
-			btn.SetLabel("Checking…")
-			go uh.updateHomebrew(btn, updateGate)
-		}
-		updateBtn.ConnectClicked(&updateClickedCb)
-
-		updateRow.AddSuffix(&updateBtn.Widget)
-		group.Add(&updateRow.Widget)
-
-		uh.outdatedExpander = adw.NewExpanderRow()
-		uh.outdatedExpander.SetTitle("Available updates")
-		uh.outdatedExpander.SetSubtitle("Checking…")
-		group.Add(&uh.outdatedExpander.Widget)
-
-		page.Add(group)
-
-		// Load outdated tools asynchronously
-		uh.loadOutdatedPackages()
 	}
 
 	// Sources whose updates Homebrew has paused - hidden unless there is
@@ -164,37 +99,50 @@ func (uh *UserHome) buildUpdatesPage() {
 // loadUntrustedTaps populates the unverified-sources group. Runs in a
 // goroutine; the group stays hidden when there is nothing actionable.
 func (uh *UserHome) loadUntrustedTaps() {
+	if uh.brewTrustGroup == nil {
+		return
+	}
 	taps, err := homebrew.ListUntrustedTaps()
 	if err != nil {
 		log.Printf("untrusted tap check failed: %v", err)
-		return
-	}
-	if len(taps) == 0 {
-		return
-	}
 
+	}
 	sgtk.RunOnMainThread(func() {
+		for _, row := range uh.brewTrustRows {
+			uh.brewTrustGroup.Remove(&row.Widget)
+		}
 		uh.brewTrustRows = make(map[string]*adw.ActionRow)
 		uh.trustButtons.clear()
+		if err != nil {
+			row := adw.NewActionRow()
+			row.SetTitle("Could not check software sources")
+			row.SetSubtitle(err.Error())
+			button := gtk.NewButtonWithLabel("Retry")
+			button.SetValign(gtk.AlignCenterValue)
+			uh.trustButtons.connect(button, func(btn gtk.Button) {
+				btn.SetSensitive(false)
+				go uh.loadUntrustedTaps()
+			})
+			row.AddSuffix(&button.Widget)
+			uh.brewTrustGroup.Add(&row.Widget)
+			uh.brewTrustRows[""] = row
+		}
 		for _, tap := range taps {
-			t := tap // capture
+			t := tap
 			presentation := pageview.UntrustedTap(t.Name, t.Formulae, t.Casks)
 			row := adw.NewActionRow()
 			row.SetTitle(presentation.Title)
 			row.SetSubtitle(presentation.Subtitle)
-
 			trustBtn := gtk.NewButtonWithLabel("Trust…")
 			trustBtn.SetValign(gtk.AlignCenterValue)
-			btn := trustBtn
 			uh.trustButtons.connect(trustBtn, func(gtk.Button) {
-				uh.confirmTrustTap(t, btn)
+				uh.confirmTrustTap(t, trustBtn)
 			})
 			row.AddSuffix(&trustBtn.Widget)
-
 			uh.brewTrustGroup.Add(&row.Widget)
 			uh.brewTrustRows[t.Name] = row
 		}
-		uh.brewTrustGroup.SetVisible(true)
+		uh.brewTrustGroup.SetVisible(len(uh.brewTrustRows) > 0)
 	})
 }
 
@@ -248,8 +196,10 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 
-			// Newly trusted software may now appear as out of date.
-			uh.loadOutdatedPackages()
+			// Newly trusted software may now appear in the unified inventory.
+			if uh.updateShell != nil {
+				uh.updateShell.StartCheck()
+			}
 		} else {
 			// Dry-run: nothing was actually trusted, so the row must not
 			// disappear from the unverified-sources list. Reset the button
@@ -257,280 +207,6 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 			button.SetSensitive(true)
 			button.SetLabel("Trust…")
 			uh.toastAdder.ShowToast(decision.Toast)
-		}
-	})
-}
-
-// loadOutdatedPackages loads out-of-date Homebrew tools asynchronously.
-// It is reachable from trustTap (a newly-trusted source's software may now
-// be out of date) as well as from buildUpdatesPage, so it must stay nil-safe
-// against brew_updates_group being disabled — trustTap only depends on
-// brew_trust_group and has no way to know whether outdatedExpander exists.
-func (uh *UserHome) loadOutdatedPackages() {
-	uh.loadOutdatedPackagesWithDone(nil)
-}
-
-// loadOutdatedPackagesWithDone starts a versioned refresh. Only the newest
-// request may replace rows/count, while every supplied completion callback
-// still runs so a superseded action cannot remain disabled.
-func (uh *UserHome) loadOutdatedPackagesWithDone(done func(bool)) {
-	generation := uh.brewRefresh.Begin()
-	go uh.loadOutdatedPackagesGeneration(generation, done)
-}
-
-func (uh *UserHome) loadOutdatedPackagesGeneration(generation uint64, done func(bool)) {
-	if uh.outdatedExpander == nil {
-		if done != nil {
-			sgtk.RunOnMainThread(func() {
-				done(false)
-			})
-		}
-		return
-	}
-
-	packages, err := homebrew.ListOutdated()
-	currentCount := uh.updateCounts.Get(badgestate.Homebrew)
-	refresh := actionstate.OutdatedRefresh(err == nil, currentCount, len(packages))
-	if err != nil {
-		sgtk.RunOnMainThread(func() {
-			if !uh.brewRefresh.IsCurrent(generation) {
-				if done != nil {
-					done(false)
-				}
-				return
-			}
-			log.Printf("refreshing outdated packages failed: %v", err)
-			uh.outdatedExpander.SetSubtitle("Could not check for tool updates")
-			if done != nil {
-				done(false)
-			}
-		})
-		return
-	}
-
-	sgtk.RunOnMainThread(func() {
-		if !uh.brewRefresh.IsCurrent(generation) {
-			if done != nil {
-				done(false)
-			}
-			return
-		}
-		presentation := actionstate.OutdatedPresentation(refresh.Count)
-		uh.updateCounts.Set(badgestate.Homebrew, refresh.Count)
-		uh.updateBadgeCount()
-		if refresh.ReplaceRows {
-			uh.outdatedRows.Clear(func(row *adw.ActionRow) {
-				uh.outdatedExpander.Remove(&row.Widget)
-			})
-			uh.outdatedButtons.clear()
-		}
-
-		uh.outdatedExpander.SetSubtitle(presentation.Subtitle)
-		uh.outdatedExpander.SetEnableExpansion(presentation.Expandable)
-		for _, pkg := range packages {
-			row := adw.NewActionRow()
-			row.SetTitle(pkg.Name)
-			row.SetSubtitle(fmt.Sprintf("Version %s", pkg.Version))
-
-			upgradeBtn := gtk.NewButtonWithLabel("Update")
-			upgradeBtn.SetValign(gtk.AlignCenterValue)
-			upgradeGate := &actionstate.Gate{}
-			pkgName := pkg.Name
-			uh.outdatedButtons.connect(upgradeBtn, func(btn gtk.Button) {
-				if !upgradeGate.TryStart() {
-					return
-				}
-				btn.SetSensitive(false)
-				btn.SetLabel("Updating…")
-				go func() {
-					err := homebrew.Upgrade(context.Background(), pkgName)
-					dryRun := dryrun.Enabled()
-					decision := actionstate.PackageUpgrade(err == nil, dryRun)
-					if err != nil {
-						var trustErr *homebrew.UntrustedTapError
-						log.Printf("upgrading %s failed: %v", pkgName, err)
-						msg := fmt.Sprintf("Could not update %s", pkgName)
-						if errors.As(err, &trustErr) {
-							// uh.brewTrustGroup is only ever assigned once, in
-							// buildUpdatesPage on the main thread before this
-							// goroutine (or any goroutine) starts, so reading
-							// it here is race-free.
-							msg = trustmsg.UpgradeMessage(pkgName, uh.brewTrustGroup != nil)
-						}
-						sgtk.RunOnMainThread(func() {
-							if decision.RestoreControl {
-								upgradeGate.Reset()
-								btn.SetSensitive(true)
-								btn.SetLabel("Update")
-							}
-							uh.toastAdder.ShowErrorToast(msg)
-						})
-						return
-					}
-					sgtk.RunOnMainThread(func() {
-						uh.toastAdder.ShowToast(actionmsg.Upgrade(dryRun, pkgName))
-						if decision.RemoveRow {
-							upgradeGate.Complete()
-						}
-						if decision.RemoveRow && uh.outdatedRows.Remove(row, func(row *adw.ActionRow) {
-							uh.outdatedExpander.Remove(&row.Widget)
-							uh.outdatedButtons.forget(upgradeBtn)
-						}) {
-							remaining := uh.updateCounts.Add(badgestate.Homebrew, -1).Count
-							presentation := actionstate.OutdatedPresentation(remaining)
-							uh.outdatedExpander.SetSubtitle(presentation.Subtitle)
-							uh.outdatedExpander.SetEnableExpansion(presentation.Expandable)
-							uh.updateBadgeCount()
-						}
-						if decision.RestoreControl {
-							upgradeGate.Reset()
-							btn.SetSensitive(true)
-							btn.SetLabel("Update")
-						}
-						if decision.Refresh {
-							uh.loadOutdatedPackages()
-						}
-					})
-				}()
-			})
-
-			row.AddSuffix(&upgradeBtn.Widget)
-			uh.outdatedExpander.AddRow(&row.Widget)
-			uh.outdatedRows.Add(row)
-		}
-		if done != nil {
-			done(true)
-		}
-	})
-}
-
-// loadFlatpakUpdates starts a versioned refresh of the Flatpak update
-// inventory. Only the newest request may publish its result, so a slow reload
-// that is overtaken by a later one is discarded instead of restoring rows the
-// later reload already retired.
-func (uh *UserHome) loadFlatpakUpdates() {
-	generation := uh.flatpakUpdatesRefresh.Begin()
-	go uh.loadFlatpakUpdatesGeneration(generation)
-}
-
-func (uh *UserHome) loadFlatpakUpdatesGeneration(generation uint64) {
-	// OnUpdateFinished calls this whether or not flatpak_updates_group was
-	// built; a group the floor or the configuration left out has no
-	// expander, and nothing to check for.
-	if uh.flatpakUpdatesExpander == nil {
-		return
-	}
-
-	// Collect updates from both user and system installations
-	var allUpdates []flatpak.UpdateInfo
-
-	// Load user updates. The error is kept as a value, not just logged: the
-	// expander subtitle has to say that half the picture is missing.
-	userUpdates, userErr := flatpak.ListUpdates(true)
-	if userErr != nil {
-		log.Printf("Error loading user flatpak updates: %v", userErr)
-	} else {
-		allUpdates = append(allUpdates, userUpdates...)
-	}
-
-	// Load system updates
-	systemUpdates, systemErr := flatpak.ListUpdates(false)
-	if systemErr != nil {
-		log.Printf("Error loading system flatpak updates: %v", systemErr)
-	} else {
-		allUpdates = append(allUpdates, systemUpdates...)
-	}
-
-	status := flatpakstatus.Subtitle(len(allUpdates), userErr != nil, systemErr != nil)
-
-	sgtk.RunOnMainThread(func() {
-		if !uh.flatpakUpdatesRefresh.IsCurrent(generation) {
-			return
-		}
-
-		// A load in which both queries failed knows nothing, so it keeps the
-		// last known count instead of publishing an empty inventory.
-		refresh := actionstate.OutdatedRefresh(
-			status.Authoritative,
-			uh.updateCounts.Get(badgestate.Flatpak),
-			len(allUpdates),
-		)
-		uh.updateCounts.Set(badgestate.Flatpak, refresh.Count)
-		uh.updateBadgeCount()
-
-		if uh.flatpakUpdatesExpander == nil {
-			return
-		}
-
-		if !refresh.ReplaceRows {
-			// Say the check failed, but leave the previously discovered rows
-			// reachable rather than wiping them.
-			uh.flatpakUpdatesExpander.SetSubtitle(status.Subtitle)
-			return
-		}
-
-		// Clear existing rows
-		for _, row := range uh.flatpakUpdateRows {
-			uh.flatpakUpdatesExpander.Remove(&row.Widget)
-		}
-		uh.flatpakUpdateRows = nil
-		uh.flatpakUpdateButtons.clear()
-
-		uh.flatpakUpdatesExpander.SetSubtitle(status.Subtitle)
-		uh.flatpakUpdatesExpander.SetEnableExpansion(status.Expandable)
-
-		if len(allUpdates) == 0 {
-			return
-		}
-
-		for _, update := range allUpdates {
-			presentation := pageview.FlatpakUpdate(
-				update.Name,
-				update.ApplicationID,
-				update.NewVersion,
-				update.Installation,
-			)
-			row := adw.NewActionRow()
-			row.SetTitle(presentation.Title)
-			row.SetSubtitle(presentation.Subtitle)
-
-			// Add update button
-			updateBtn := gtk.NewButtonWithLabel("Update")
-			updateBtn.SetValign(gtk.AlignCenterValue)
-			updateBtn.AddCssClass("suggested-action")
-
-			appID := update.ApplicationID
-			appName := update.Name
-			if appName == "" {
-				appName = appID
-			}
-			isUser := update.Installation == "user"
-			uh.flatpakUpdateButtons.connect(updateBtn, func(btn gtk.Button) {
-				btn.SetSensitive(false)
-				btn.SetLabel("Updating…")
-				go func() {
-					if err := flatpak.Update(context.Background(), appID, isUser); err != nil {
-						log.Printf("updating %s failed: %v", appID, err)
-						sgtk.RunOnMainThread(func() {
-							btn.SetSensitive(true)
-							btn.SetLabel("Update")
-							uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not update %s", appName))
-						})
-						return
-					}
-					sgtk.RunOnMainThread(func() {
-						uh.toastAdder.ShowToast(actionmsg.Update(dryrun.Enabled(), appName))
-						// Refresh the updates list. Called on the main thread so
-						// concurrent completions take generations in the order
-						// they finished.
-						uh.loadFlatpakUpdates()
-					})
-				}()
-			})
-
-			row.AddSuffix(&updateBtn.Widget)
-			uh.flatpakUpdatesExpander.AddRow(&row.Widget)
-			uh.flatpakUpdateRows = append(uh.flatpakUpdateRows, row)
 		}
 	})
 }
@@ -548,12 +224,6 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 	status, err := bootc.GetStatus(ctx)
 
 	staged := err == nil && status.Status.Staged != nil
-	count := 0
-	if staged {
-		count = 1
-	}
-	uh.updateCounts.SetObserved(badgestate.Bootc, count, err == nil)
-	uh.updateBadgeCount()
 
 	sgtk.RunOnMainThread(func() {
 		group.SetVisible(true)
@@ -651,6 +321,9 @@ func (s *stageProgressSink) flush() {
 // onBootcStageClicked runs the stage script with streamed log output.
 // The script checks, downloads, and stages in one idempotent operation.
 func (uh *UserHome) onBootcStageClicked() {
+	if uh.updateShell == nil || !uh.updateShell.beginMutation() {
+		return
+	}
 	button := uh.bootcStageBtn
 	expander := uh.bootcStageExpander
 
@@ -714,14 +387,9 @@ func (uh *UserHome) onBootcStageClicked() {
 		statusCancel()
 
 		staged := statusErr == nil && status.Status.Staged != nil
-		count := 0
-		if staged {
-			count = 1
-		}
-		uh.updateCounts.SetObserved(badgestate.Bootc, count, statusErr == nil)
-		uh.updateBadgeCount()
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			spinner.Stop()
 			button.SetSensitive(true)
 			button.SetLabel("Check for updates")
@@ -753,44 +421,11 @@ func (uh *UserHome) onBootcStageClicked() {
 			}
 			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
+			if !dryrun.Enabled() {
+				uh.updateShell.StartCheck()
+			}
 		})
 	}()
-}
-
-// updateHomebrew refreshes Homebrew's catalogue, then reloads the
-// out-of-date list before restoring the top-level action.
-func (uh *UserHome) updateHomebrew(button gtk.Button, gate *actionstate.Gate) {
-	err := homebrew.Update(context.Background())
-	dryRun := dryrun.Enabled()
-	decision := actionstate.MetadataUpdate(err == nil, dryRun)
-	if err != nil {
-		log.Printf("refreshing the Homebrew catalogue failed: %v", err)
-		sgtk.RunOnMainThread(func() {
-			if decision.RestoreControl {
-				gate.Reset()
-				button.SetSensitive(true)
-				button.SetLabel("Check")
-			}
-			uh.toastAdder.ShowErrorToast("Could not check for new tool versions")
-		})
-		return
-	}
-
-	sgtk.RunOnMainThread(func() {
-		uh.toastAdder.ShowToast(actionmsg.SelfUpdate(dryRun, "Homebrew"))
-		if decision.RestoreControl {
-			gate.Reset()
-			button.SetSensitive(true)
-			button.SetLabel("Check")
-		}
-		if decision.Refresh {
-			uh.loadOutdatedPackagesWithDone(func(bool) {
-				gate.Reset()
-				button.SetSensitive(true)
-				button.SetLabel("Check")
-			})
-		}
-	})
 }
 
 // buildSystemVersionGroup builds the read-only "System version" group: one

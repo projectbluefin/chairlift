@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,11 +79,20 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			call:     func(ctx context.Context) error { return SetDeveloperMode(ctx, false) },
 			wantArgs: []string{ubluehelper.CommandDXDisable},
 		},
+		{name: "EnableKVMAccess", call: EnableKVMAccess, wantArgs: []string{ubluehelper.CommandKVMEnable}},
+		{name: "SetDocker enabled", call: func(ctx context.Context) error { return SetDocker(ctx, true) }, wantArgs: []string{ubluehelper.CommandDockerEnable}},
+		{name: "SetDocker disabled", call: func(ctx context.Context) error { return SetDocker(ctx, false) }, wantArgs: []string{ubluehelper.CommandDockerDisable}},
 		{
 			name:     "Restart",
 			call:     Restart,
 			wantArgs: []string{ubluehelper.CommandRestart},
 		},
+		{
+			name:     "Pin",
+			call:     func(ctx context.Context) error { return Pin(ctx, "20240229") },
+			wantArgs: []string{ubluehelper.CommandPin, "20240229"},
+		},
+		{name: "Unpin", call: Unpin, wantArgs: []string{ubluehelper.CommandUnpin}},
 		{
 			name:     "Rollback",
 			call:     Rollback,
@@ -136,7 +146,7 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 				t.Errorf("suppressed = %q, want %q", entry.Suppressed, journal.SuppressedDryRun)
 			}
 			for _, arg := range test.wantArgs {
-				if filepath.IsAbs(arg) {
+				if strings.Contains(arg, "/") {
 					t.Errorf("argument %q crosses the pkexec boundary as a path; the helper must derive paths itself", arg)
 				}
 			}
@@ -161,9 +171,14 @@ func TestEmittedCommandsAreAllHelperSupported(t *testing.T) {
 		ubluehelper.CommandRestart,
 		ubluehelper.CommandRollback,
 		ubluehelper.CommandFactoryReset,
+		ubluehelper.CommandPin,
+		ubluehelper.CommandUnpin,
 		ubluehelper.CommandAutoEnable,
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandKVMEnable,
+		ubluehelper.CommandDockerEnable,
+		ubluehelper.CommandDockerDisable,
 	}
 	for _, command := range emitted {
 		if !supported[command] {
@@ -317,5 +332,20 @@ func TestStatusCachedDetectsOnceAndRepeats(t *testing.T) {
 	}
 	if calls > 1 {
 		t.Errorf("StatusCached ran detection %d times, want at most 1", calls)
+	}
+}
+
+func TestPinRejectionNeverReachesTheHelper(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "journal.jsonl")
+	t.Setenv(journal.PathEnv, path)
+	journal.Reset()
+	t.Cleanup(journal.Reset)
+	for _, day := range []string{"ghcr.io/evil/image:stable", "20260230", "99991231", "stable-20240229"} {
+		if err := Pin(context.Background(), day); err == nil {
+			t.Errorf("accepted %q", day)
+		}
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("invalid input reached journal: %v", err)
 	}
 }
