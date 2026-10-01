@@ -607,9 +607,13 @@ An agent must not break these:
   reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
 - **Enhanced Troubleshooting reads state, it does not infer it.**
   `internal/troubleshoot` installs `linux-mcp-server` and the Goose desktop
-  cask through Homebrew, then copies Common's premade
+  cask through Homebrew, then seeds Common's premade
   `/usr/share/ublue-os/goose/config.yaml` only when the user's config is absent.
-  Never overwrite an existing Goose config or select a provider for the user.
+  Bare diagnostic entries in that new copy receive explicit
+  `--toolset FIXED --no-search-for-ssh-key` arguments; an existing explicit
+  unsafe policy is rejected, not silently replaced. Other extensions, model,
+  and provider settings are preserved. Never overwrite an existing Goose
+  config or select a provider for the user.
   Both `linux-mcp-server` and legacy `linux-tools` entries are recognized;
   readiness requires enabled stdio, explicit FIXED tools, SSH-key search off,
   and a command that exists. Keep the stable prefix/bin path, not a versioned

@@ -246,6 +246,9 @@ list to read, not a control: nothing in it changes your system.
 up an AI assistant that can read your logs, services, and network to help
 work out what's wrong, then launches it. The premade configuration chooses no
 AI service; select one in Goose, and the row names the service you configured.
+Setup shows activity while it runs and pins the copied diagnostic preset to
+fixed tools with SSH-key discovery disabled. Your existing Goose configuration
+is never replaced.
 
 Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and

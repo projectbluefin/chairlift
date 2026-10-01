@@ -46,6 +46,8 @@ const (
 // defaultConfigPath is the premade configuration shipped by Common.
 var defaultConfigPath = "/usr/share/ublue-os/goose/config.yaml"
 
+var diagnosticExtensionKeys = [...]string{"linux-mcp-server", "linux-tools"}
+
 // State is what ChairLift knows about the feature on this host.
 type State struct {
 	// ServerInstalled reports whether linux-mcp-server is on $PATH.
@@ -57,7 +59,7 @@ type State struct {
 	// Wired reports whether an enabled Linux diagnostic extension uses the
 	// explicit fixed-tool policy. Detect also checks its command availability.
 	Wired    bool
-	commands [2]string
+	commands [len(diagnosticExtensionKeys)]string
 	// Provider is the LLM provider Goose is configured to use, empty when
 	// none is set. ChairLift does not select or replace the user's provider.
 	Provider string
@@ -86,7 +88,7 @@ func ParseConfig(data []byte) State {
 	}
 
 	state := State{Provider: cfg.Provider}
-	for i, key := range [...]string{"linux-mcp-server", "linux-tools"} {
+	for i, key := range diagnosticExtensionKeys {
 		ext, ok := cfg.Extensions[key]
 		if !ok || !ext.enabled() {
 			continue
@@ -263,7 +265,7 @@ func defaultRunSetup() error {
 		if data, err := os.ReadFile(path); err == nil && ParseConfig(data).Wired {
 			return nil
 		}
-		return &Error{Message: fmt.Sprintf("Goose configuration was kept unchanged; review Linux diagnostics in %s", defaultConfigPath), Err: os.ErrExist}
+		return &Error{Message: fmt.Sprintf("Goose configuration was kept unchanged; review Linux diagnostics in %s", path), Err: os.ErrExist}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -275,8 +277,9 @@ func defaultRunSetup() error {
 	if err != nil {
 		return fmt.Errorf("reading the shipped Goose configuration: %w", err)
 	}
-	if !ParseConfig(data).Wired {
-		return fmt.Errorf("the shipped Goose configuration does not enable fixed Linux diagnostics")
+	data, err = prepareNewConfig(data)
+	if err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -292,6 +295,38 @@ func defaultRunSetup() error {
 		return errors.Join(writeErr, closeErr)
 	}
 	return nil
+}
+
+// prepareNewConfig makes the shipped preset's implicit server defaults explicit
+// in a new user configuration. Existing user files never pass through here.
+func prepareNewConfig(data []byte) ([]byte, error) {
+	if ParseConfig(data).Wired {
+		return data, nil
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal(data, &document); err != nil {
+		return nil, err
+	}
+	extensions, _ := document["extensions"].(map[string]any)
+	for _, key := range diagnosticExtensionKeys {
+		extension, _ := extensions[key].(map[string]any)
+		command, _ := extension["cmd"].(string)
+		if extension["enabled"] == false || extension["type"] != "stdio" || filepath.Base(command) != "linux-mcp-server" {
+			continue
+		}
+		args, empty := extension["args"].([]any)
+		if extension["args"] == nil || (empty && len(args) == 0) {
+			extension["args"] = []string{"--toolset", "FIXED", "--no-search-for-ssh-key"}
+		}
+	}
+	prepared, err := yaml.Marshal(document)
+	if err != nil {
+		return nil, err
+	}
+	if !ParseConfig(prepared).Wired {
+		return nil, fmt.Errorf("the shipped Goose configuration does not enable fixed Linux diagnostics")
+	}
+	return prepared, nil
 }
 
 func runSetupScript() error { return runSetup() }

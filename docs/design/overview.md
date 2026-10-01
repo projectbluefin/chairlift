@@ -1496,17 +1496,22 @@ constraint rules out.
 
 `internal/troubleshoot` is the Homebrew-backed setup row on Help. It installs
 `linux-mcp-server` (including the Goose CLI) and the Goose desktop cask, then
-copies Common's `/usr/share/ublue-os/goose/config.yaml` into the user's XDG
+seeds Common's `/usr/share/ublue-os/goose/config.yaml` into the user's XDG
 configuration directory with exclusive creation. Existing configuration is
 never overwritten; missing or invalid shipped configuration is an error.
 
-The premade extension uses the stable absolute Linuxbrew bin path and explicit
-`--toolset FIXED --no-search-for-ssh-key --verify-host-keys`. Provider selection
-is left to Goose. `ParseConfig` recognizes both `linux-mcp-server` and legacy
-`linux-tools`, and `Detect` also checks command availability. Failed setup and
-dry-run preserve the observed state. Desktop launch remains `gtk-launch Goose`.
-Nothing crosses a privilege boundary. No additional launcher, model service,
-or configuration merger is introduced.
+The shipped preset can leave the diagnostic server's `args` empty. For a new
+copy only, `prepareNewConfig` pins that entry to
+`--toolset FIXED --no-search-for-ssh-key`, preserving unrelated extensions,
+model, and provider settings. Already-explicit policies remain unchanged and
+unsafe policies still fail validation. Both recognized keys share
+`diagnosticExtensionKeys`; adding an entry requires the same regression
+coverage. `ParseConfig` keeps requiring explicit safe policy for existing
+user files, and `Detect` checks command availability through the shared
+Homebrew resolution. Failed setup and dry-run preserve observed state.
+Desktop launch remains `gtk-launch Goose`. Nothing crosses a privilege
+boundary; no provider is selected and no extra launcher or model service is
+introduced.
 
 Homebrew's `stateChangingCommands` includes `tap`, so dry-run never changes
 package sources. The provider subtitle stays `use-markup` false because its

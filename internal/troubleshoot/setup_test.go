@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"gopkg.in/yaml.v3"
 )
 
 func TestConfigPathUsesUserConfigDir(t *testing.T) {
@@ -148,6 +149,61 @@ func TestSetupCopiesTheShippedConfiguration(t *testing.T) {
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != string(want) {
 		t.Fatalf("premade configuration: %q, %v", got, err)
+	}
+}
+
+func TestSetupPinsDiagnosticPolicyInNewPremadeConfig(t *testing.T) {
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	for _, key := range []string{"linux-mcp-server", "linux-tools"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+			data := []byte(fmt.Sprintf("GOOSE_PROVIDER: existing-provider\nGOOSE_MODEL: existing-model\nextensions:\n  %s:\n    cmd: linux-mcp-server\n    type: stdio\n    enabled: true\n    args: []\n    envs: {}\n  other:\n    cmd: other-server\n    type: stdio\n    enabled: false\n", key))
+			if err := os.WriteFile(defaultConfigPath, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err != nil {
+				t.Fatalf("shipped default preset could not be set up: %v", err)
+			}
+			path, _ := ConfigPath()
+			got, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if state := ParseConfig(got); !state.Wired || state.Provider != "existing-provider" {
+				t.Fatalf("new preset = %+v, want fixed diagnostics without changing provider", state)
+			}
+			var document map[string]any
+			if err := yaml.Unmarshal(got, &document); err != nil {
+				t.Fatal(err)
+			}
+			if document["GOOSE_MODEL"] != "existing-model" || document["extensions"].(map[string]any)["other"] == nil {
+				t.Fatal("setup dropped the model or an unrelated extension")
+			}
+		})
+	}
+}
+
+func TestSetupDoesNotReplaceExplicitUnsafePremadePolicy(t *testing.T) {
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+	for _, key := range []string{"linux-mcp-server", "linux-tools"} {
+		t.Run(key, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+			data := []byte(fmt.Sprintf("extensions:\n  %s:\n    cmd: linux-mcp-server\n    type: stdio\n    args: [--toolset, BOTH]\n", key))
+			if err := os.WriteFile(defaultConfigPath, data, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := defaultRunSetup(); err == nil {
+				t.Fatal("unsafe explicit policy was silently replaced")
+			}
+			path, _ := ConfigPath()
+			if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("unsafe preset was written: %v", err)
+			}
+		})
 	}
 }
 
