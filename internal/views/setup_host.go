@@ -242,6 +242,7 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 	content.Append(&labelWidget.Widget)
 	content.Append(&spinner.Widget)
 	button.SetChild(&content.Widget)
+	button.AddCssClass("text-button")
 	shared.buttons = append(shared.buttons, bundleInstallButton{button, labelWidget, spinner})
 	// A button connected while a run is in progress, or after one completed,
 	// joins at the phase the others already show; a fresh "Install" here

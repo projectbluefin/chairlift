@@ -108,8 +108,7 @@ func (uh *UserHome) buildApplicationsPage() {
 		dumpRow := adw.NewActionRow()
 		dumpRow.SetTitle("Export package list")
 		dumpRow.SetSubtitle("Saves a list of everything you installed here so you can put it back later. Replaces the list you exported last time.")
-		dumpSpinner := gtk.NewSpinner()
-		dumpSpinner.SetVisible(false)
+		dumpSpinner := newActivitySpinner()
 		dumpRow.AddSuffix(&dumpSpinner.Widget)
 
 		dumpBtn := gtk.NewButtonWithLabel("Export")

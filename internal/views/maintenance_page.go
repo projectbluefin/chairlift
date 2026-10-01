@@ -218,8 +218,7 @@ func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spi
 	}
 	button.SetSensitive(false)
 	button.SetLabel("Exporting…")
-	spinner.SetVisible(true)
-	spinner.Start()
+	setActivitySpinner(spinner, true)
 	go func() {
 		homeDir, err := os.UserHomeDir()
 		if err == nil {
@@ -227,8 +226,7 @@ func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spi
 		}
 		sgtk.RunOnMainThread(func() {
 			gate.Reset()
-			spinner.Stop()
-			spinner.SetVisible(false)
+			setActivitySpinner(spinner, false)
 			button.SetSensitive(true)
 			button.SetLabel("Export")
 			if err != nil {
