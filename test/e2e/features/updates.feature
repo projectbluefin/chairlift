@@ -58,6 +58,13 @@ Feature: Updates
     And the "Applications" row says "Up to date"
     And the Updates page offers only the "Check again" action
 
+  @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
+  Scenario: A failed source-trust check is not hidden as if every source were trusted
+    Given ChairLift is running
+    Then I see "Unverified sources"
+    And I see "Could not check which package sources need your trust."
+    And the application log contains "untrusted tap check failed"
+
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario Outline: <control> discovers an update that appeared after the first check
     Given ChairLift is running

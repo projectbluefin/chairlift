@@ -106,7 +106,12 @@ case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
 --prefix) echo "$state/brew-prefix"; exit 0 ;;
 outdated) cat "$state/brew-outdated.json"; exit 0 ;;
-tap-info) echo "[]"; exit 0 ;;
+tap-info)
+    if [ -f "$state/brew-tap-info.fail" ]; then
+        cat "$state/brew-tap-info.fail" >&2
+        exit 1
+    fi
+    echo "[]"; exit 0 ;;
 info) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
 esac
 exit 0
@@ -155,6 +160,12 @@ def brew_one_outdated(context):
 @stub("updates-brew-current")
 def brew_current(context):
     """Homebrew installed with nothing outdated."""
+    _install_brew(context, NOTHING_OUTDATED)
+
+
+@stub("updates-brew-trust-check-fails")
+def brew_trust_check_fails(context):
+    write_state(context, "brew-tap-info.fail", "Error: Broken pipe\n")
     _install_brew(context, NOTHING_OUTDATED)
 
 

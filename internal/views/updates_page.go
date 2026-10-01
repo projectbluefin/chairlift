@@ -167,6 +167,12 @@ func (uh *UserHome) loadUntrustedTaps() {
 	taps, err := homebrew.ListUntrustedTaps()
 	if err != nil {
 		log.Printf("untrusted tap check failed: %v", err)
+		sgtk.RunOnMainThread(func() {
+			if uh.brewTrustGroup != nil {
+				uh.brewTrustGroup.SetDescription("Could not check which package sources need your trust. Your existing trust choices have not changed.")
+				uh.brewTrustGroup.SetVisible(true)
+			}
+		})
 		return
 	}
 	if len(taps) == 0 {
