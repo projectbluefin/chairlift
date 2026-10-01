@@ -19,6 +19,7 @@ import (
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gio"
+	"codeberg.org/puregotk/puregotk/v4/glib"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
@@ -47,6 +48,8 @@ type UpdateShell struct {
 	refresh       *gtk.Button
 	primary       *gtk.Button
 	progress      *gtk.ProgressBar
+	progressPulse glib.SourceFunc
+	progressTimer uint32
 	banner        *adw.Banner
 	sourceGroup   *adw.PreferencesGroup
 	breakpointBin *adw.BreakpointBin
@@ -551,8 +554,20 @@ func (s *UpdateShell) renderPrimaryAction(presentation updatepresent.Presentatio
 func (s *UpdateShell) renderProgress(snapshot updateflow.Snapshot) {
 	visible := updatepresent.ShowProgress(snapshot.Phase)
 	s.progress.SetVisible(visible)
-	if visible {
+	if visible && s.progressTimer == 0 {
+		// Keep one callback identity across checks; provider snapshots can be
+		// silent for minutes while a command runs. GLib dispatches on GTK's thread.
+		if s.progressPulse == nil {
+			s.progressPulse = func(uintptr) bool {
+				s.progress.Pulse()
+				return true
+			}
+		}
 		s.progress.Pulse()
+		s.progressTimer = glib.TimeoutAdd(100, &s.progressPulse, 0)
+	} else if !visible && s.progressTimer != 0 {
+		glib.SourceRemove(s.progressTimer)
+		s.progressTimer = 0
 	}
 }
 
@@ -597,6 +612,10 @@ func (s *UpdateShell) operationContext() (context.Context, context.CancelFunc, b
 func (s *UpdateShell) dispose() {
 	if s == nil || s.closed.Swap(true) {
 		return
+	}
+	if s.progressTimer != 0 {
+		glib.SourceRemove(s.progressTimer)
+		s.progressTimer = 0
 	}
 	if s.cancel != nil {
 		s.cancel()

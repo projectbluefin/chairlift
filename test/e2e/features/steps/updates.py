@@ -79,6 +79,15 @@ def step_only_primary(context, label):
     assert ok, f"primary actions offered are {offered()}, want only {label!r}"
 
 
+@then("the Updates progress bar is {visibility:w}")
+def step_progress_visibility(context, visibility):
+    assert visibility in ("shown", "hidden")
+    assert atspi.poll(
+        lambda: bool(atspi.find_all(content(context), lambda n: atspi.role(n) == "progress bar"))
+        == (visibility == "shown")
+    ), f"Updates progress bar is not {visibility}"
+
+
 # ---------------------------------------------------------------- sidebar badge
 
 

@@ -36,11 +36,13 @@ Feature: Updates
   Scenario: The shell reports the check while it runs, then its result
     Given ChairLift is running
     Then the Updates status reads "Checking for updates"
+    And the Updates progress bar is shown
     And the "Applications" row says "Checking for updates…"
     And the Updates page offers no primary action
     When the Flatpak update check is allowed to finish
     Then the Updates status reads "Updates available"
     And the "Applications" row says "1 update available"
+    And the Updates progress bar is hidden
     And the "Update all" button is sensitive
 
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
