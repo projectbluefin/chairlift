@@ -79,9 +79,17 @@ refresh cannot overwrite newer rows. A failed install restores the `Install`
 action. A successful dry-run uses
 `actionmsg.BundleInstall(...).Complete == false`, shows an explicit preview,
 and restores the action because nothing was installed — and for the same
-reason it does not refresh the inventory. Each row owns a
-`bundleview.InstallGate`, so a second callback cannot overlap a running
-install even if invoked independently of GTK's insensitive-button guard.
+reason it does not refresh the inventory. `ConnectBundleInstall` owns one
+`bundleview.InstallGate` per collection path across Apps and the setup
+assistant, so a second callback cannot overlap a running install even if
+invoked independently of GTK's insensitive-button guard. Each bound button
+has a native spinner built once; the shared phase starts it only while
+`Installing…` and stops it on success, failure, or preview completion.
+
+The Apps page's package-list export holds its own `actionstate.Gate`. It
+disables Export and shows `Exporting…` with a native spinner until the worker
+returns; every outcome stops the spinner and restores the action. A failed
+home-directory lookup is an export error, not permission to write `/Brewfile`.
 
 ### Typed search and install
 

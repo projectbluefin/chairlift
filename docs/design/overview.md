@@ -143,6 +143,13 @@ go func() {
 }()
 ```
 
+Long-running action rows use the shared native spinner helpers in
+`internal/views/widgets.go`. The row builds its spinner once; its existing
+action gate or Livery serializer owns the start/stop lifetime. No progress
+percentage is inferred. `Window.ShowToast` and `ShowErrorToast` preempt older
+toasts with Libadwaita's high priority, retaining those older errors in the
+queue rather than leaving every later result behind an infinite timeout.
+
 ### Deferred visibility (async startup)
 
 A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Could not read the list", "Could not check for tool updates") while keeping the last known rows and counts.

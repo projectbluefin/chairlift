@@ -52,6 +52,8 @@ didn't finish, and **Restart now** once a new system version is staged and
 waiting. It only asks you to restart when something actually needs one, and
 a source that fails doesn't stop the others. A run long enough that you
 wandered off finishes with a desktop notification.
+While checking or installing, an animated activity bar stays moving even
+when the underlying tool has no new output. It does not claim a percentage.
 
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
@@ -100,11 +102,15 @@ duplicate it.
 one step, rather than hunting them down one at a time. Collections come from
 Homebrew, a third-party source, and can be a large download — the page says so
 once, at the top, instead of nagging on every row.
+Every collection's Install button shows an activity spinner while it runs,
+including the matching button in Setup Assistant.
 
 Below that sit the apps already installed, the packages Homebrew manages, and
 a search across both. Removing an installed app asks first, and says whether
 it leaves only your account or everyone's. **Export package list** saves what
 you have installed so you can put it back on another machine.
+Export shows **Exporting…** and an activity spinner until it finishes, then
+becomes available again, including after a failed export.
 
 ---
 
@@ -118,6 +124,8 @@ are not saved. Turning it on installs the llmman model server from Homebrew
 (and, on x86_64 PCs, the Jan chat app), downloads the engine that suits your
 hardware, and starts it on this computer only. Turning it off stops the
 server and keeps the software and any models you downloaded.
+The row shows an activity spinner throughout setup and shutdown, then
+restores the switch if the operation fails.
 
 **Details** gives the address other apps can reach it on. Apps and terminals
 opened after Agent Mode is on find it automatically through `OLLAMA_HOST`;
@@ -157,6 +165,9 @@ says **Nothing to set up here** rather than showing an empty screen.
 
 Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
 **Help**.
+Developer and Gaming switches show an activity spinner while their changes
+are running, and errors are shown immediately rather than hidden behind an
+older message.
 
 ---
 
@@ -225,8 +236,9 @@ app-grid reset behavior is being completed separately.
 
 One button. **Free up space** removes old downloads and supporting software
 nothing uses any more, and leaves your apps, files, and containers alone. It
-tells you how much it reclaimed only when it could measure it. Below it sit
-any **Maintenance tasks** whoever set up this computer added. **Recovery**
+tells you how much it reclaimed only when it could measure it. An activity
+spinner remains visible while cleanup is running. Below it sit any
+**Maintenance tasks** whoever set up this computer added. **Recovery**
 holds the actions you can't undo (under **Maintenance → Recovery**): one returns
 to a previous system version, one removes the apps you installed and your
 development containers, and the other reinstalls the system from scratch.

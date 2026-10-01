@@ -215,6 +215,9 @@ An agent must not break these:
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
+  Its indeterminate progress bar pulses from one reusable GLib callback while
+  checking or updating, not from provider snapshot arrivals; idle and disposal
+  remove the timer. A quiet external command must not freeze the indicator.
   The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
@@ -354,6 +357,12 @@ An agent must not break these:
   `uintptr(0)`. The wrong pointer emitted a GLib critical on every window
   launch; the E2E dry-run startup now uses `G_DEBUG=fatal-criticals` so the
   actual binary fails instead of only logging it.
+- **Action feedback must remain visible.** Long-running cleanup, Developer,
+  Gaming, Agent Mode, troubleshooting, and Livery switch operations use a
+  native spinner built once, stopped on every completion path on the GTK
+  thread. New result toasts use high priority so a persistent older error
+  cannot hide the current action's error or confirmation; older errors remain
+  queued for dismissal.
 - **Streamed command output renders bounded.** A stage helper prints an
   unbounded number of lines, so a view may not answer one line with one
   `sgtk.RunOnMainThread` callback creating one permanent row: that queues a
@@ -453,7 +462,8 @@ An agent must not break these:
   switch (`SetLiveryEnabled`), so the page's handler runs under its gate and
   the page shows the result; a collection row installs through
   `ConnectBundleInstall`, the one per-collection gate the Apps page's rows
-  also use, so every Install button for a collection shows one phase; an
+  also use, so every Install button for a collection shows one phase and a
+  native activity spinner during the run; an
   Update Preferences switch is bound to the `io.projectbluefin.chairlift.updates`
   key its `Choice.ID` spells, from the same `pageview.UpdateSourcePreferences`
   table the Preferences dialog renders. Because the pages are the actors,
@@ -506,6 +516,8 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  Package-list export likewise holds an `actionstate.Gate`, shows a spinner
+  and `Exporting…`, and restores the Export action after every outcome.
   Flatpak uninstall on the same page keeps the same contract: it confirms
   with an `AdwAlertDialog` worded by `pageview.FlatpakUninstallConfirmation`
   (a system-scope removal says it affects every account), holds a per-row
