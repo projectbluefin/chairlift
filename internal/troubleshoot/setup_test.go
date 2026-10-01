@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -229,8 +230,14 @@ func TestSetupCopiesTheShippedConfiguration(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	previous := defaultConfigPath
 	t.Cleanup(func() { defaultConfigPath = previous; dryrun.Set(false) })
+	bin := t.TempDir()
+	exe := filepath.Join(bin, "linux-mcp-server")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
-	want := []byte(freshConfig)
+	want := []byte(strings.Replace(freshConfig, "/home/linuxbrew/.linuxbrew/bin/linux-mcp-server", exe, 1))
 	if err := os.WriteFile(defaultConfigPath, want, 0o644); err != nil {
 		t.Fatal(err)
 	}
