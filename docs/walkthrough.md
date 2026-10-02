@@ -97,8 +97,10 @@ server and keeps the software and any models you downloaded.
 
 **Details** gives the address other apps can reach it on. Apps and terminals
 opened after Agent Mode is on find it automatically through `OLLAMA_HOST`;
-ones already open need restarting. Everything here runs in your own account,
-so it never asks for an administrator password.
+ones already open need restarting. **Progress** unfolds live output during setup
+or teardown so you can follow the component install, engine check, and service
+state. Everything here runs in your own account, so it never asks for an
+administrator password.
 
 ---
 

@@ -72,6 +72,16 @@ func AgentModeDetailsTitle() string {
 	return "Details"
 }
 
+// AgentModeProgressTitle is the title for the collapsed terminal-style progress panel.
+func AgentModeProgressTitle() string {
+	return "Progress"
+}
+
+// AgentModeProgressSubtitle returns the subtitle for the progress expander.
+func AgentModeProgressSubtitle(shown, total int) string {
+	return StagingLogSubtitle(shown, total)
+}
+
 // PeersGroupTitle is the peer-offload section's heading. It is deliberately
 // not "Cluster" or "Nodes": this machine only ever asks another one for
 // help, and is never made reachable itself.

@@ -84,3 +84,17 @@ func TestBundleMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestTroubleshootMessageGuidesTrustingTap(t *testing.T) {
+	gotNamed := TroubleshootMessage("ublue-os/tap")
+	for _, want := range []string{"ublue-os/tap", "brew trust ublue-os/tap"} {
+		if !strings.Contains(gotNamed, want) {
+			t.Errorf("TroubleshootMessage(\"ublue-os/tap\") = %q, want %q", gotNamed, want)
+		}
+	}
+
+	gotDefault := TroubleshootMessage("")
+	if !strings.Contains(gotDefault, "brew trust ublue-os/tap") {
+		t.Errorf("TroubleshootMessage(\"\") = %q, want default ublue-os/tap trust guidance", gotDefault)
+	}
+}

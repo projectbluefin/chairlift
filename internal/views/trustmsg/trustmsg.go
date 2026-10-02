@@ -30,3 +30,12 @@ func BundleMessage(bundleName, tap string) string {
 	}
 	return fmt.Sprintf("Brew bundle %s requires trusting third-party taps before packages can be installed", bundleName)
 }
+
+// TroubleshootMessage returns the toast text for an Enhanced Troubleshooting setup
+// that failed because an installed package's tap is untrusted.
+func TroubleshootMessage(tap string) string {
+	if tap != "" {
+		return fmt.Sprintf("Enhanced Troubleshooting requires trusting third-party tap %s — run brew trust %s", tap, tap)
+	}
+	return "Enhanced Troubleshooting requires trusting third-party tap ublue-os/tap — run brew trust ublue-os/tap"
+}

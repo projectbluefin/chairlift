@@ -3,13 +3,15 @@ package views
 import (
 	"context"
 	"fmt"
+	"log"
+	"runtime"
+	"time"
+
 	"github.com/projectbluefin/chairlift/internal/aistack"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
-	"log"
-	"runtime"
-	"time"
+	"github.com/projectbluefin/chairlift/internal/views/progresslog"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -106,6 +108,15 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 		details.AddRow(&detailRow.Widget)
 	}
 	group.Add(&details.Widget)
+
+	progressExpander := adw.NewExpanderRow()
+	progressExpander.SetTitle(pageview.AgentModeProgressTitle())
+	progressExpander.SetSubtitle(pageview.AgentModeProgressSubtitle(0, 0))
+	progressExpander.SetExpanded(false)
+	uh.agentProgressExpander = progressExpander
+	uh.agentProgressLines = progresslog.New(progresslog.DefaultLimit)
+	group.Add(&progressExpander.Widget)
+
 	page.Add(group)
 
 	uh.buildPeersGroup(page)
@@ -295,8 +306,27 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	}
 	toggle.widget.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
-	dryRun := dryrun.Enabled()
 
+	// Reset progress state for a fresh operation run.
+	if uh.agentProgressExpander != nil {
+		uh.agentProgressRows.TrimTo(0, func(row *adw.ActionRow) {
+			uh.agentProgressExpander.Remove(&row.Widget)
+		})
+		uh.agentProgressLines = progresslog.New(progresslog.DefaultLimit)
+		uh.agentProgressExpander.SetSubtitle(pageview.AgentModeProgressSubtitle(0, 0))
+	}
+
+	dryRun := dryrun.Enabled()
+	appendProgress := func(line string) {
+		if uh.agentProgressLines == nil {
+			return
+		}
+		if uh.agentProgressLines.Append(line) {
+			sgtk.RunOnMainThread(func() {
+				uh.flushAgentProgress()
+			})
+		}
+	}
 	go func() {
 		defer uh.agentModeGate.Reset()
 
@@ -305,10 +335,11 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 
 		var err error
 		if enabled {
-			err = aistack.Enable(ctx)
+			err = aistack.Enable(ctx, appendProgress)
 		} else {
-			err = aistack.Disable(ctx)
+			err = aistack.Disable(ctx, appendProgress)
 		}
+		appendProgress("Operation complete.")
 		facts := aistack.Observe(true)
 		if err == nil && !dryRun && facts.UnitPresent {
 			facts.Checked, facts.Healthy = true, aistack.WaitHealthy(ctx, agentModeReadyWait)
@@ -342,6 +373,27 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 // agentModeReadyWait bounds how long an enable waits for the daemon to
 // answer before reporting it degraded.
 const agentModeReadyWait = time.Minute
+
+func (uh *UserHome) flushAgentProgress() {
+	if uh.agentProgressLines == nil || uh.agentProgressExpander == nil {
+		return
+	}
+	batch := uh.agentProgressLines.Drain()
+	if len(batch.Lines) == 0 {
+		return
+	}
+	for _, line := range batch.Lines {
+		lineRow := adw.NewActionRow()
+		lineRow.SetTitle(line.Text)
+		lineRow.SetSubtitle(line.At.Format("15:04:05"))
+		uh.agentProgressExpander.AddRow(&lineRow.Widget)
+		uh.agentProgressRows.Add(lineRow)
+	}
+	uh.agentProgressRows.TrimTo(uh.agentProgressLines.Limit(), func(row *adw.ActionRow) {
+		uh.agentProgressExpander.Remove(&row.Widget)
+	})
+	uh.agentProgressExpander.SetSubtitle(pageview.AgentModeProgressSubtitle(uh.agentProgressRows.Len(), batch.Total))
+}
 
 // buildPeersGroup builds "Use another machine": the list of already-
 // configured llmman peers this host may route requests to, plus the shared

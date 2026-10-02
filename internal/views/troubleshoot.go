@@ -1,12 +1,15 @@
 package views
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -123,6 +126,11 @@ func (uh *UserHome) onTroubleshootClicked() {
 			uh.applyTroubleshootState(after)
 
 			if err != nil {
+				var trustErr *homebrew.UntrustedTapError
+				if errors.As(err, &trustErr) {
+					uh.toastAdder.ShowErrorToast(trustmsg.TroubleshootMessage(trustErr.Tap))
+					return
+				}
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Setup failed: %v", err))
 				return
 			}

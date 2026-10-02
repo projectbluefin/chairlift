@@ -54,9 +54,10 @@ const setupCommand = "goose-mcp-setup"
 
 // State is what ChairLift knows about the feature on this host.
 type State struct {
-	// ServerInstalled reports whether linux-mcp-server is on $PATH.
+	// ServerInstalled reports whether linux-mcp-server resolves on $PATH
+	// or beside the Homebrew executable.
 	ServerInstalled bool
-	// AgentInstalled reports whether the goose CLI is on $PATH.
+	// AgentInstalled reports whether the goose CLI resolves the same way.
 	AgentInstalled bool
 	// DesktopInstalled reports whether the Goose desktop app is available.
 	DesktopInstalled bool
@@ -96,8 +97,11 @@ func ConfigPath() (string, error) {
 // not claim readiness it does not have.
 func ParseConfig(data []byte) State {
 	var cfg gooseConfig
-	// A malformed config is treated as not wired, never as wired.
-	_ = yaml.Unmarshal(data, &cfg)
+	// YAML type errors can leave a partially decoded extension behind.
+	// None of that partial state is evidence a Goose session can start.
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return State{}
+	}
 
 	state := State{Provider: cfg.Provider}
 	if ext, ok := cfg.Extensions["linux-tools"]; ok && ext.enabled() && ext.valid() {
@@ -128,22 +132,37 @@ func (e gooseExt) enabled() bool {
 	return e.Enabled == nil || *e.Enabled
 }
 
-// valid reports whether the extension can run: a stdio extension needs a type
-// and a command, the same two things the buggy line scan ignored.
+// valid reports whether the extension can launch the Linux server over stdio.
 func (e gooseExt) valid() bool {
-	return e.Type != "" && e.Cmd != ""
+	return e.Type == "stdio" && strings.TrimSpace(e.Cmd) != ""
 }
 
 // lookPath is an injection seam for binary detection, so Detect is testable
-// without installing anything. Bare names are resolved on $PATH. Homebrew is
-// deliberately not detected this way: internal/homebrew.ExecutablePath is the
-// one resolution for `brew`, and it falls back to the Linuxbrew install path
-// when $PATH has none.
+// without installing anything. Detection and setup execution both resolve
+// $PATH first, then the directory of internal/homebrew.ExecutablePath. A
+// desktop launch may have no Homebrew bin directory on $PATH even though the
+// package installs succeeded through Homebrew's fallback executable.
 var lookPath = defaultLookPath
 
 func defaultLookPath(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
+	return resolveExecutable(name) != ""
+}
+
+// brewPath shares Homebrew's executable resolution while letting regression
+// tests model a desktop launch without depending on the host's installation.
+var brewPath = homebrew.ExecutablePath
+
+func resolveExecutable(name string) string {
+	if path, err := exec.LookPath(name); err == nil {
+		return path
+	}
+	if brew := brewPath(); brew != "" {
+		candidate := filepath.Join(filepath.Dir(brew), name)
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // readConfig is an injection seam for the configuration read.
@@ -230,7 +249,12 @@ func defaultRunSetup() error {
 	ctx, cancel := context.WithTimeout(context.Background(), setupTimeout)
 	defer cancel()
 
-	output, err := exec.CommandContext(ctx, setupCommand).CombinedOutput()
+	command := resolveExecutable(setupCommand)
+	if command == "" {
+		// Keep exec's meaningful not-found error when neither lookup succeeds.
+		command = setupCommand
+	}
+	output, err := exec.CommandContext(ctx, command).CombinedOutput()
 	if err != nil {
 		return &Error{Message: strings.TrimSpace(string(output)), Err: err}
 	}

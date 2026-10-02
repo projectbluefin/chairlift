@@ -164,8 +164,35 @@ def step_node_probed(context):
     assert ok, "nothing requested /llmman/node from the node stub"
 
 
-# ---------------------------------------------------------------- peers
+@step("I expand the Agents Progress row")
+def step_expand_agents_progress(context):
+    focus_by_tab(
+        context,
+        content(context),
+        lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.name(n) == "Progress",
+        "the Progress expander row",
+    )
+    atspi.press("Return")
 
+
+@then('the Agents Progress panel contains "{text}"')
+def step_agents_progress_contains(context, text):
+    def check():
+        header = atspi.find(
+            content(context),
+            lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.name(n) == "Progress",
+            "the Progress expander row",
+        )
+        outer = header.parent.parent.parent
+        for node in atspi.descendants(outer, only_showing=True):
+            if any(text in line for line in atspi.all_text_under(node)):
+                return True
+        return False
+
+    assert atspi.poll(check), f"Agents Progress panel never showed {text!r}"
+
+
+# ---------------------------------------------------------------- peers
 
 @step("I open the Agents add-peer dialog")
 def step_open_add_peer(context):

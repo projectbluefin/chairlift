@@ -15,6 +15,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/badgestate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
+	"github.com/projectbluefin/chairlift/internal/views/progresslog"
 	"github.com/projectbluefin/chairlift/internal/views/rowset"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -210,12 +211,15 @@ type UserHome struct {
 	troubleshootGate   actionstate.Gate
 
 	// Agent Mode (agents_page agents_group)
-	agentModeRow    *adw.ActionRow
-	agentModelRow   *adw.ActionRow
-	agentPresetRow  *adw.ActionRow
-	agentModeState  aistack.State
-	agentModeGate   actionstate.Gate
-	agentPresetGate actionstate.Gate
+	agentModeRow          *adw.ActionRow
+	agentModelRow         *adw.ActionRow
+	agentPresetRow        *adw.ActionRow
+	agentModeState        aistack.State
+	agentModeGate         actionstate.Gate
+	agentPresetGate       actionstate.Gate
+	agentProgressExpander *adw.ExpanderRow
+	agentProgressRows     rowset.Tracker[*adw.ActionRow]
+	agentProgressLines    *progresslog.Coalescer
 
 	// Agent Mode peer offload (agents_page agents_group, "Use another
 	// machine")

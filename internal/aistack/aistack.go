@@ -15,6 +15,7 @@
 package aistack
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -168,6 +169,7 @@ var (
 	brewPath      = homebrew.ExecutablePath
 	installBundle = homebrew.BundleInstall
 	run           = execCommand
+	runStream     = execStream
 	nodeURL       = "http://" + Address + "/llmman/node"
 )
 
@@ -187,6 +189,58 @@ func lastLine(s string) string {
 	return s
 }
 
+// scanLinesCRLF splits on \r, \n, or \r\n and yields final unterminated lines at EOF.
+func scanLinesCRLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	for i, b := range data {
+		if b == '\r' {
+			if i+1 < len(data) && data[i+1] == '\n' {
+				return i + 2, data[:i], nil
+			}
+			return i + 1, data[:i], nil
+		}
+		if b == '\n' {
+			return i + 1, data[:i], nil
+		}
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+const (
+	scanInitialBufferSize = 4 * 1024
+	scanMaxTokenSize      = 256 * 1024
+)
+
+func execStream(ctx context.Context, onLine func(string), name string, args ...string) error {
+	cmd := exec.CommandContext(ctx, name, args...)
+	pipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("%s %s: %w", filepath.Base(name), strings.Join(args, " "), err)
+	}
+	scanner := bufio.NewScanner(pipe)
+	scanner.Buffer(make([]byte, scanInitialBufferSize), scanMaxTokenSize)
+	scanner.Split(scanLinesCRLF)
+	for scanner.Scan() {
+		line := strings.TrimRight(scanner.Text(), "\r\n")
+		if onLine != nil && line != "" {
+			onLine(line)
+		}
+	}
+	scanErr := scanner.Err()
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("%s %s: %w", filepath.Base(name), strings.Join(args, " "), err)
+	}
+	return scanErr
+}
 func systemctl(ctx context.Context, args ...string) (string, error) {
 	return run(ctx, "systemctl", append([]string{"--user"}, args...)...)
 }
@@ -276,7 +330,7 @@ func WaitHealthy(ctx context.Context, within time.Duration) bool {
 // the environment fragment atomically, and starts the service. A failure
 // after the files were written removes what this call created, unless the
 // unit already existed before it ran.
-func Enable(ctx context.Context) error {
+func Enable(ctx context.Context, onProgress func(string)) error {
 	unit, err := UnitPath()
 	if err != nil {
 		return err
@@ -286,11 +340,18 @@ func Enable(ctx context.Context) error {
 		return err
 	}
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would install %s, run llmman serve --pull-only, write %s and %s, and start %s",
+		msg := fmt.Sprintf("[DRY-RUN] would install %s, run llmman serve --pull-only, write %s and %s, and start %s",
 			Formula, unit, fragment, ServiceName)
+		log.Println(msg)
+		if onProgress != nil {
+			onProgress(msg)
+		}
 		return nil
 	}
 
+	if onProgress != nil {
+		onProgress("Installing runtime components…")
+	}
 	if err := installRuntime(); err != nil {
 		return err
 	}
@@ -304,10 +365,20 @@ func Enable(ctx context.Context) error {
 	}
 	// Fetch the engine in the foreground so a runtime that cannot be
 	// obtained is reported here, before anything claims to be ready.
-	out, err := run(ctx, exe, "serve", "--pull-only")
+	if onProgress != nil {
+		onProgress("Checking llmman runtime engine…")
+	}
+	var outBuf strings.Builder
+	err = runStream(ctx, func(line string) {
+		outBuf.WriteString(line + "\n")
+		if onProgress != nil {
+			onProgress(line)
+		}
+	}, exe, "serve", "--pull-only")
 	if err != nil {
 		return fmt.Errorf("llmman runtime check: %w", err)
 	}
+	out := strings.TrimSpace(outBuf.String())
 	log.Printf("aistack: llmman serve --pull-only: %s", out)
 
 	_, statErr := os.Stat(unit)
@@ -319,6 +390,9 @@ func Enable(ctx context.Context) error {
 		_ = os.Remove(unit)
 		_ = os.Remove(fragment)
 		_, _ = systemctl(ctx, "daemon-reload")
+	}
+	if onProgress != nil {
+		onProgress("Configuring and starting user service…")
 	}
 
 	if err := writeAtomic(unit, content); err != nil {
@@ -366,7 +440,7 @@ func installRuntime() error {
 // the stop fails, both stay unless systemd confirms the service is no longer
 // active: removing the unit while it may still run would make the switch lie
 // and drop the user's handle on the process.
-func Disable(ctx context.Context) error {
+func Disable(ctx context.Context, onProgress func(string)) error {
 	unit, err := UnitPath()
 	if err != nil {
 		return err
@@ -376,10 +450,16 @@ func Disable(ctx context.Context) error {
 		return err
 	}
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would stop %s and remove %s and %s", ServiceName, unit, fragment)
+		msg := fmt.Sprintf("[DRY-RUN] would stop %s and remove %s and %s", ServiceName, unit, fragment)
+		log.Println(msg)
+		if onProgress != nil {
+			onProgress(msg)
+		}
 		return nil
 	}
-
+	if onProgress != nil {
+		onProgress("Stopping and disabling user service…")
+	}
 	if _, err := systemctl(ctx, "disable", "--now", ServiceName); err != nil {
 		if verifyErr := verifyStopped(ctx, err); verifyErr != nil {
 			return verifyErr

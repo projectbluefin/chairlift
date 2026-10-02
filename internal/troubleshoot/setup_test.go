@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 // fakeSetupScript puts an executable named after setupCommand on $PATH, so
@@ -138,6 +139,9 @@ func TestDefaultRunSetupWrapsFailureOutput(t *testing.T) {
 func TestDefaultRunSetupErrorsWhenCommandMissing(t *testing.T) {
 	dryrun.Set(false)
 	t.Setenv("PATH", t.TempDir())
+	previousBrewPath := brewPath
+	brewPath = func() string { return "" }
+	t.Cleanup(func() { brewPath = previousBrewPath })
 
 	if err := defaultRunSetup(); err == nil {
 		t.Fatal("defaultRunSetup succeeded with goose-mcp-setup absent")
@@ -241,5 +245,147 @@ func TestErrorUnwrap(t *testing.T) {
 
 	if !errors.Is(err, wrapped) {
 		t.Errorf("errors.Is did not find the wrapped error through Unwrap")
+	}
+}
+
+func TestHomebrewToolsResolveOutsidePath(t *testing.T) {
+	bin := filepath.Join(t.TempDir(), "bin")
+	if err := os.Mkdir(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previousBrewPath := brewPath
+	brewPath = func() string { return filepath.Join(bin, "brew") }
+	t.Cleanup(func() { brewPath = previousBrewPath })
+	t.Setenv("PATH", t.TempDir())
+
+	for _, name := range []string{"linux-mcp-server", "goose", "goose-desktop", setupCommand} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(bin, name)
+			if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if !defaultLookPath(name) {
+				t.Errorf("%s is installed beside the resolved Homebrew but was reported absent", name)
+			}
+			if name == setupCommand {
+				if err := defaultRunSetup(); err != nil {
+					t.Fatalf("installed setup script failed outside PATH: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestHomebrewToolResolutionKeepsPathPrecedence(t *testing.T) {
+	fakeSetupScript(t, "exit 0")
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, setupCommand), []byte("#!/bin/sh\nexit 7\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	previousBrewPath := brewPath
+	brewPath = func() string { return filepath.Join(bin, "brew") }
+	t.Cleanup(func() { brewPath = previousBrewPath })
+
+	if err := defaultRunSetup(); err != nil {
+		t.Fatalf("setup did not prefer the working PATH executable: %v", err)
+	}
+}
+
+func TestHomebrewToolResolutionRejectsNonExecutables(t *testing.T) {
+	bin := t.TempDir()
+	previousBrewPath := brewPath
+	brewPath = func() string { return filepath.Join(bin, "brew") }
+	t.Cleanup(func() { brewPath = previousBrewPath })
+	t.Setenv("PATH", t.TempDir())
+
+	for _, name := range []string{"linux-mcp-server", "goose", "goose-desktop", setupCommand} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(bin, name)
+			if err := os.WriteFile(path, []byte("not executable"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if defaultLookPath(name) {
+				t.Errorf("non-executable %s was reported installed", name)
+			}
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if defaultLookPath(name) {
+				t.Errorf("directory %s was reported installed", name)
+			}
+		})
+	}
+}
+
+func TestSetupFindsNewlyInstalledHomebrewToolsOutsidePath(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("shell stub requires a POSIX shell")
+	}
+	bin := t.TempDir()
+	config := t.TempDir()
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", config)
+	dryrun.Set(false)
+
+	previousBrewPath, previousLook, previousRead := brewPath, lookPath, readConfig
+	previousTap, previousInstall, previousSetup := tapPackage, installPackage, runSetup
+	t.Cleanup(func() {
+		brewPath, lookPath, readConfig = previousBrewPath, previousLook, previousRead
+		tapPackage, installPackage, runSetup = previousTap, previousInstall, previousSetup
+	})
+	brewPath = func() string { return filepath.Join(bin, "brew") }
+	lookPath, readConfig, runSetup = defaultLookPath, defaultReadConfig, defaultRunSetup
+	tapPackage = func(string) error { return nil }
+	installPackage = func(name string, _ bool) error {
+		tools := []string{"goose-desktop"}
+		if name == ServerFormula {
+			tools = []string{"linux-mcp-server", "goose", setupCommand}
+		}
+		for _, tool := range tools {
+			body := "#!/bin/sh\nexit 0\n"
+			if tool == setupCommand {
+				body = "#!/bin/sh\n/bin/mkdir -p \"$XDG_CONFIG_HOME/goose\"\nprintf '%s' '" + freshConfig + "' > \"$XDG_CONFIG_HOME/goose/config.yaml\"\n"
+			}
+			if err := os.WriteFile(filepath.Join(bin, tool), []byte(body), 0o755); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	after, err := Setup(State{}, nil)
+	if err != nil {
+		t.Fatalf("fresh setup failed outside the shell's PATH: %v", err)
+	}
+	if !after.Ready() || !after.DesktopInstalled || after.Provider != "gemini-cli" {
+		t.Fatalf("setup left %+v, want a configured Goose desktop session", after)
+	}
+}
+
+func TestSetupPropagatesUntrustedTapError(t *testing.T) {
+	previousTap := tapPackage
+	t.Cleanup(func() { tapPackage = previousTap })
+
+	wantTap := "ublue-os/tap"
+	tapPackage = func(string) error {
+		return &homebrew.UntrustedTapError{
+			Message: "tap is untrusted",
+			Tap:     wantTap,
+		}
+	}
+
+	_, err := Setup(State{}, nil)
+	if err == nil {
+		t.Fatal("Setup succeeded when tapPackage returned an error")
+	}
+	var trustErr *homebrew.UntrustedTapError
+	if !errors.As(err, &trustErr) {
+		t.Fatalf("Setup err = %v, want errors.As to unwrap to *homebrew.UntrustedTapError", err)
+	}
+	if trustErr.Tap != wantTap {
+		t.Errorf("unwrapped Tap = %q, want %q", trustErr.Tap, wantTap)
 	}
 }

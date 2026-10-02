@@ -27,8 +27,9 @@ Feature: Agents page
     When I open the "Agents" page
     Then the switch in the "Run AI models on this computer" row is off
     And the "Run AI models on this computer" row says "Turning this on installs llmman from Homebrew"
+    And I see "Details"
+    And I see "Progress"
     And I see "No peers configured"
-
   Scenario: Model preset controls stay hidden until Agent Mode is ready
     Given ChairLift is running
     When I open the "Agents" page
@@ -69,7 +70,9 @@ Feature: Agents page
     And brew was never asked to "bundle"
     And systemctl was never run
     And the action journal is empty
-
+    When I expand the Agents Progress row
+    Then the Agents Progress panel contains "[DRY-RUN] would install llmmanorg/tap/llmman"
+    And the Agents Progress panel contains "Operation complete."
   @stub.agents.llmman
   Scenario: Turning Agent Mode back on in a dry run keeps it off and keeps llmman idle
     Given ChairLift is running

@@ -108,6 +108,18 @@ func TestAgentModeActiveModelAndPresetStrings(t *testing.T) {
 	}
 }
 
+func TestAgentModeProgressTitleAndSubtitle(t *testing.T) {
+	if got := AgentModeProgressTitle(); got != "Progress" {
+		t.Errorf("AgentModeProgressTitle() = %q, want Progress", got)
+	}
+	if got := AgentModeProgressSubtitle(0, 0); got != "View output" {
+		t.Errorf("AgentModeProgressSubtitle(0, 0) = %q, want View output", got)
+	}
+	if got := AgentModeProgressSubtitle(5, 10); !strings.Contains(got, "5 of 10") {
+		t.Errorf("AgentModeProgressSubtitle(5, 10) = %q, want mention of 5 of 10", got)
+	}
+}
+
 // A dry run sends no key to llmman, so its feedback must say it previewed
 // rather than claim the key was saved.
 func TestPeerKeySavedToastIsHonestUnderDryRun(t *testing.T) {

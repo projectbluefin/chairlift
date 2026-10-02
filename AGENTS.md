@@ -565,7 +565,12 @@ An agent must not break these:
   calling a removed binary or rewriting a file another tool owns. ChairLift
   reads `GOOSE_PROVIDER` and never writes it; the row must keep naming the
   provider, because the default the setup script writes sends system details
-  to Google and "AI assistant" alone implies otherwise. Everything is a
+  to Google and "AI assistant" alone implies otherwise. Detection and
+  `goose-mcp-setup` execution resolve `$PATH` first, then beside the shared
+  Homebrew executable, so a desktop launch without Homebrew's bin directory on
+  `$PATH` does not misreport installed tools or fail setup. YAML decode errors
+  discard partial state; linux-tools readiness requires a stdio extension with
+  a nonblank command. Everything is a
   user-scope Homebrew install and the MCP tools are read-only, so nothing
   here touches pkexec. `brew tap` is in `stateChangingCommands`, without
   which it would run for real under `--dry-run`, including during
@@ -642,7 +647,10 @@ An agent must not break these:
   stopped; removing the unit while the service is still active makes the
   switch lie and removes the user's management handle. Do not give it a
   pkexec route, and do not reintroduce a container-image or vendor/stack
-  matrix. Known limitation: the peer key is passed to `llmman config set`
+  matrix. The page includes a collapsed Progress expander that streams
+  intermediate engine-check output from `llmman` and lifecycle phase milestones
+  via `progresslog`'s bounded rolling sink, enforcing both callback coalescing
+  and widget retention caps. Known limitation: the peer key is passed to `llmman config set`
   as an argv token, so any local user can read it from `/proc/<pid>/cmdline`
   for the life of that one short-lived process; switching to stdin needs
   llmman support first.

@@ -68,3 +68,32 @@ func TestStagingHandlersRenderThroughTheBoundedSink(t *testing.T) {
 		t.Errorf("updates_page.go mentions newStageProgressSink %d times, want 2 (one definition, one bootc staging call)", got)
 	}
 }
+
+// TestAgentModeProgressRendersThroughTheBoundedSink asserts that the Agents page
+// progress panel enforces both caps (coalescing callbacks + TrimTo row cap) and
+// renders the disclosure subtitle via pageview.AgentModeProgressSubtitle.
+func TestAgentModeProgressRendersThroughTheBoundedSink(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	path := filepath.Join(filepath.Clean(filepath.Join(filepath.Dir(filename), "..")), "agents_page.go")
+
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(source)
+
+	required := []string{
+		"progresslog.New(progresslog.DefaultLimit)",
+		"uh.agentProgressRows.TrimTo(uh.agentProgressLines.Limit(),",
+		"pageview.AgentModeProgressSubtitle(",
+		"uh.flushAgentProgress()",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(text, fragment) {
+			t.Errorf("agents_page.go does not use %q", fragment)
+		}
+	}
+}

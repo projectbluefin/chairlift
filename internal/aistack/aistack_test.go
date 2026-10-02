@@ -124,8 +124,10 @@ func newHost(t *testing.T) *host {
 	}
 	saved := []func(){}
 	restore := func(f func()) { saved = append(saved, f) }
-	oc, ol, ob, oi, or, on := configDir, lookPath, brewPath, installBundle, run, nodeURL
-	restore(func() { configDir, lookPath, brewPath, installBundle, run, nodeURL = oc, ol, ob, oi, or, on })
+	oc, ol, ob, oi, or, ors, on := configDir, lookPath, brewPath, installBundle, run, runStream, nodeURL
+	restore(func() {
+		configDir, lookPath, brewPath, installBundle, run, runStream, nodeURL = oc, ol, ob, oi, or, ors, on
+	})
 	configDir = func() (string, error) { return h.config, nil }
 	lookPath = func(string) (string, error) { return "", errors.New("not on PATH") }
 	brewPath = func() string { return filepath.Join(bin, "brew") }
@@ -138,6 +140,18 @@ func newHost(t *testing.T) *host {
 		call := strings.TrimSpace(filepath.Base(name) + " " + strings.Join(args, " "))
 		h.calls = append(h.calls, call)
 		return h.outputs[call], h.fail[call]
+	}
+	runStream = func(_ context.Context, onLine func(string), name string, args ...string) error {
+		call := strings.TrimSpace(filepath.Base(name) + " " + strings.Join(args, " "))
+		h.calls = append(h.calls, call)
+		if out, ok := h.outputs[call]; ok && onLine != nil {
+			for _, l := range strings.Split(out, "\n") {
+				if l != "" {
+					onLine(l)
+				}
+			}
+		}
+		return h.fail[call]
 	}
 	t.Cleanup(func() {
 		for _, f := range saved {
@@ -160,8 +174,12 @@ const (
 
 func TestEnableProvisionsInOrderWithTheResolvedPath(t *testing.T) {
 	h := newHost(t)
-	if err := Enable(context.Background()); err != nil {
+	var progressLines []string
+	if err := Enable(context.Background(), func(line string) { progressLines = append(progressLines, line) }); err != nil {
 		t.Fatalf("Enable: %v", err)
+	}
+	if len(progressLines) == 0 {
+		t.Fatal("Enable emitted no progress lines")
 	}
 	want := []string{
 		"llmman serve --pull-only",
@@ -202,7 +220,7 @@ func TestEnableInstallsTheFormulaWhenLLMManIsMissing(t *testing.T) {
 		h.bundles = append(h.bundles, string(data))
 		return os.WriteFile(h.exe, []byte("#!/bin/sh\n"), 0o755)
 	}
-	if err := Enable(context.Background()); err != nil {
+	if err := Enable(context.Background(), nil); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
 	if len(h.bundles) != 1 || !strings.Contains(h.bundles[0], `brew "`+Formula+`"`) {
@@ -213,7 +231,7 @@ func TestEnableInstallsTheFormulaWhenLLMManIsMissing(t *testing.T) {
 func TestEnableStopsBeforeWritingWhenTheRuntimeCheckFails(t *testing.T) {
 	h := newHost(t)
 	h.fail["llmman serve --pull-only"] = errors.New("no engine")
-	if err := Enable(context.Background()); err == nil {
+	if err := Enable(context.Background(), nil); err == nil {
 		t.Fatal("Enable succeeded with a failed runtime check")
 	}
 	if h.exists(t, unitRel) || h.exists(t, envRel) {
@@ -224,7 +242,7 @@ func TestEnableStopsBeforeWritingWhenTheRuntimeCheckFails(t *testing.T) {
 func TestEnableRollsBackWhatItWroteWhenStartFails(t *testing.T) {
 	h := newHost(t)
 	h.fail["systemctl --user restart "+ServiceName] = errors.New("start failed")
-	if err := Enable(context.Background()); err == nil {
+	if err := Enable(context.Background(), nil); err == nil {
 		t.Fatal("Enable succeeded with a failed start")
 	}
 	if h.exists(t, unitRel) || h.exists(t, envRel) {
@@ -238,7 +256,7 @@ func TestEnableKeepsAPreexistingUnitWhenStartFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.fail["systemctl --user restart "+ServiceName] = errors.New("start failed")
-	if err := Enable(context.Background()); err == nil {
+	if err := Enable(context.Background(), nil); err == nil {
 		t.Fatal("Enable succeeded with a failed start")
 	}
 	if !h.exists(t, unitRel) {
@@ -251,7 +269,7 @@ func TestEnableFailsWhenNoExecutableResolvesAfterInstall(t *testing.T) {
 	if err := os.Remove(h.exe); err != nil {
 		t.Fatal(err)
 	}
-	if err := Enable(context.Background()); err == nil {
+	if err := Enable(context.Background(), nil); err == nil {
 		t.Fatal("Enable succeeded without an llmman executable")
 	}
 	if len(h.calls) != 0 || h.exists(t, unitRel) {
@@ -263,11 +281,16 @@ func TestDryRunMutatesNothing(t *testing.T) {
 	h := newHost(t)
 	dryrun.Set(true)
 	t.Cleanup(func() { dryrun.Set(false) })
-	if err := Enable(context.Background()); err != nil {
+	var dryProgress []string
+	record := func(line string) { dryProgress = append(dryProgress, line) }
+	if err := Enable(context.Background(), record); err != nil {
 		t.Fatal(err)
 	}
-	if err := Disable(context.Background()); err != nil {
+	if err := Disable(context.Background(), record); err != nil {
 		t.Fatal(err)
+	}
+	if len(dryProgress) < 2 {
+		t.Fatalf("dry run progress = %v, want at least 2 lines", dryProgress)
 	}
 	if len(h.calls) != 0 || len(h.bundles) != 0 || h.exists(t, unitRel) || h.exists(t, envRel) {
 		t.Errorf("dry run acted: calls=%v bundles=%v", h.calls, h.bundles)
@@ -281,7 +304,7 @@ func TestDisableRemovesOnlyOwnedFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := Disable(context.Background()); err != nil {
+	if err := Disable(context.Background(), nil); err != nil {
 		t.Fatalf("Disable: %v", err)
 	}
 	if h.exists(t, unitRel) || h.exists(t, envRel) {
@@ -309,7 +332,7 @@ func TestDisableKeepsTheUnitWhileTheServiceMayStillRun(t *testing.T) {
 			}
 			h.fail["systemctl --user disable --now "+ServiceName] = errors.New("stop failed")
 			h.outputs["systemctl --user is-active "+ServiceName] = state
-			err := Disable(context.Background())
+			err := Disable(context.Background(), nil)
 			if (err != nil) != keep || h.exists(t, unitRel) != keep || h.exists(t, envRel) != keep {
 				t.Errorf("state %q: err=%v unit=%v fragment=%v, want kept=%v", state, err, h.exists(t, unitRel), h.exists(t, envRel), keep)
 			}
@@ -360,5 +383,50 @@ func TestExecutablePrefersPathThenBrewSibling(t *testing.T) {
 	brewPath = func() string { return "" }
 	if got := Executable(); got != "" {
 		t.Errorf("no brew, no PATH: got %q", got)
+	}
+}
+
+func TestExecStreamHandlesCarriageReturnsLargeLinesAndFragments(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var captured []string
+	onLine := func(line string) {
+		captured = append(captured, line)
+	}
+
+	// Script outputs:
+	// 1. \r-separated progress updates
+	// 2. A >64KiB line (e.g. 70KiB) terminated with \n
+	// 3. A trailing fragment without newline
+	script := `
+printf "downloading 10%%\rdownloading 50%%\rdownloading 100%%\n"
+head -c 71680 < /dev/zero | tr '\0' 'a'
+printf "\n"
+printf "unterminated-final-token"
+`
+	err := execStream(ctx, onLine, "/bin/sh", "-c", script)
+	if err != nil {
+		t.Fatalf("execStream failed: %v", err)
+	}
+
+	if len(captured) < 4 {
+		t.Fatalf("captured %d lines, want at least 4: %v", len(captured), captured)
+	}
+	if captured[0] != "downloading 10%" {
+		t.Errorf("line 0 = %q, want 'downloading 10%%'", captured[0])
+	}
+	if captured[1] != "downloading 50%" {
+		t.Errorf("line 1 = %q, want 'downloading 50%%'", captured[1])
+	}
+	if captured[2] != "downloading 100%" {
+		t.Errorf("line 2 = %q, want 'downloading 100%%'", captured[2])
+	}
+	if len(captured[3]) != 71680 {
+		t.Errorf("line 3 length = %d, want 71680 (oversized token test)", len(captured[3]))
+	}
+	last := captured[len(captured)-1]
+	if last != "unterminated-final-token" {
+		t.Errorf("last line = %q, want 'unterminated-final-token'", last)
 	}
 }

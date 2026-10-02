@@ -76,6 +76,31 @@ func TestParseConfig(t *testing.T) {
 			wantWired:    false,
 			wantProvider: "anthropic",
 		},
+		{
+			name:      "invalid provider leaves a partially decoded extension",
+			data:      "GOOSE_PROVIDER: [anthropic]\nextensions:\n  linux-tools:\n    type: stdio\n    cmd: /usr/bin/linux-mcp-server\n",
+			wantWired: false,
+		},
+		{
+			name:      "invalid enabled flag leaves a partially decoded extension",
+			data:      "extensions:\n  linux-tools:\n    enabled: invalid\n    type: stdio\n    cmd: /usr/bin/linux-mcp-server\n",
+			wantWired: false,
+		},
+		{
+			name:      "duplicate extension keys make the config invalid",
+			data:      "extensions:\n  linux-tools:\n    type: stdio\n    cmd: /usr/bin/linux-mcp-server\n  linux-tools:\n    enabled: false\n",
+			wantWired: false,
+		},
+		{
+			name:      "non-stdio extension cannot launch the Linux server",
+			data:      "extensions:\n  linux-tools:\n    type: builtin\n    cmd: /usr/bin/linux-mcp-server\n",
+			wantWired: false,
+		},
+		{
+			name:      "blank server command cannot launch",
+			data:      "extensions:\n  linux-tools:\n    type: stdio\n    cmd: '   '\n",
+			wantWired: false,
+		},
 	}
 
 	for _, tt := range tests {
