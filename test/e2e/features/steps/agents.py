@@ -182,6 +182,7 @@ def step_agents_progress_contains(context, text):
             content(context),
             lambda n: atspi.role(n) in atspi.ROW_ROLES and atspi.name(n) == "Progress",
             "the Progress expander row",
+            timeout=1,
         )
         outer = header.parent.parent.parent
         for node in atspi.descendants(outer, only_showing=True):
