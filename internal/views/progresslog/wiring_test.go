@@ -35,11 +35,9 @@ func TestStagingHandlersRenderThroughTheBoundedSink(t *testing.T) {
 		"progresslog.New(progresslog.DefaultLimit)",
 		// Both staging handlers consume their channel through it.
 		"newStageProgressSink(activityRow, logExpander).consume(progressCh)",
-		// The expander is trimmed back to the window after every batch, so
-		// its row count is bounded rather than merely its pending batch.
-		"s.rows.TrimTo(s.lines.Limit(),",
-		// And the user is told when the window hid older lines.
-		"pageview.StagingLogSubtitle(",
+		// Rendering goes through the shared renderer, which is where the
+		// row cap and the "window hid older lines" subtitle live.
+		"renderProgressBatch(s.logExpander, s.lines, &s.rows)",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(text, fragment) {
@@ -87,13 +85,41 @@ func TestAgentModeProgressRendersThroughTheBoundedSink(t *testing.T) {
 
 	required := []string{
 		"progresslog.New(progresslog.DefaultLimit)",
-		"uh.agentProgressRows.TrimTo(uh.agentProgressLines.Limit(),",
+		"renderProgressBatch(uh.agentProgressExpander, uh.agentProgressLines, &uh.agentProgressRows)",
 		"pageview.AgentModeProgressSubtitle(",
 		"uh.flushAgentProgress()",
 	}
 	for _, fragment := range required {
 		if !strings.Contains(text, fragment) {
 			t.Errorf("agents_page.go does not use %q", fragment)
+		}
+	}
+}
+
+// TestSharedProgressRendererEnforcesBothCaps asserts that the one renderer both
+// panels now call still trims the expander back to the retention window and
+// still says how much of the run is on screen. Both panels delegate to it, so
+// this is where those two caps have to be checked.
+func TestSharedProgressRendererEnforcesBothCaps(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	path := filepath.Join(filepath.Clean(filepath.Join(filepath.Dir(filename), "..")), "progress_panel.go")
+
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	text := string(source)
+
+	required := []string{
+		"rows.TrimTo(lines.Limit(),",
+		"pageview.StagingLogSubtitle(",
+	}
+	for _, fragment := range required {
+		if !strings.Contains(text, fragment) {
+			t.Errorf("progress_panel.go does not use %q", fragment)
 		}
 	}
 }

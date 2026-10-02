@@ -82,6 +82,16 @@ func AgentModeProgressSubtitle(shown, total int) string {
 	return StagingLogSubtitle(shown, total)
 }
 
+// AgentModeProgressResultLine is the progress panel's closing line. The panel
+// is the only place a user watches the run, so it must not say the run
+// completed when the toast says it failed.
+func AgentModeProgressResultLine(ok bool) string {
+	if ok {
+		return "Operation complete."
+	}
+	return "Operation failed."
+}
+
 // PeersGroupTitle is the peer-offload section's heading. It is deliberately
 // not "Cluster" or "Nodes": this machine only ever asks another one for
 // help, and is never made reachable itself.

@@ -1,6 +1,7 @@
 package aistack
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"net/http"
@@ -428,5 +429,51 @@ printf "unterminated-final-token"
 	last := captured[len(captured)-1]
 	if last != "unterminated-final-token" {
 		t.Errorf("last line = %q, want 'unterminated-final-token'", last)
+	}
+}
+
+// TestExecStreamReturnsOnTokenPastTheScannerCap covers the shape that used to
+// hang: a token larger than scanMaxTokenSize stops the scanner before EOF, and
+// a child that keeps writing then blocks on a full pipe. execStream must drain
+// the rest and return instead of waiting for commandTimeout.
+func TestExecStreamReturnsOnTokenPastTheScannerCap(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	// One token well past the 256 KiB cap, then enough further output to fill
+	// any pipe buffer the child could otherwise block on.
+	script := `
+head -c 400000 < /dev/zero | tr '\0' 'a'
+printf "\n"
+head -c 2000000 < /dev/zero | tr '\0' 'b\n'
+`
+	done := make(chan error, 1)
+	go func() {
+		done <- execStream(ctx, nil, "/bin/sh", "-c", script)
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, bufio.ErrTooLong) {
+			t.Fatalf("execStream err = %v, want bufio.ErrTooLong", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("execStream did not return after an oversized token")
+	}
+}
+
+// TestExecStreamErrorCarriesTheLastLine keeps the streaming path's failures as
+// diagnosable as execCommand's: the log line the caller writes must still name
+// what the command last printed.
+func TestExecStreamErrorCarriesTheLastLine(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := execStream(ctx, nil, "/bin/sh", "-c", `printf "early noise\nfinal diagnostic\n"; exit 3`)
+	if err == nil {
+		t.Fatal("execStream succeeded, want failure")
+	}
+	if !strings.Contains(err.Error(), "final diagnostic") {
+		t.Errorf("err = %v, want it to name the last line", err)
 	}
 }

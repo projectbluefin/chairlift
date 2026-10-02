@@ -339,7 +339,7 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 		} else {
 			err = aistack.Disable(ctx, appendProgress)
 		}
-		appendProgress("Operation complete.")
+		appendProgress(pageview.AgentModeProgressResultLine(err == nil))
 		facts := aistack.Observe(true)
 		if err == nil && !dryRun && facts.UnitPresent {
 			facts.Checked, facts.Healthy = true, aistack.WaitHealthy(ctx, agentModeReadyWait)
@@ -378,21 +378,7 @@ func (uh *UserHome) flushAgentProgress() {
 	if uh.agentProgressLines == nil || uh.agentProgressExpander == nil {
 		return
 	}
-	batch := uh.agentProgressLines.Drain()
-	if len(batch.Lines) == 0 {
-		return
-	}
-	for _, line := range batch.Lines {
-		lineRow := adw.NewActionRow()
-		lineRow.SetTitle(line.Text)
-		lineRow.SetSubtitle(line.At.Format("15:04:05"))
-		uh.agentProgressExpander.AddRow(&lineRow.Widget)
-		uh.agentProgressRows.Add(lineRow)
-	}
-	uh.agentProgressRows.TrimTo(uh.agentProgressLines.Limit(), func(row *adw.ActionRow) {
-		uh.agentProgressExpander.Remove(&row.Widget)
-	})
-	uh.agentProgressExpander.SetSubtitle(pageview.AgentModeProgressSubtitle(uh.agentProgressRows.Len(), batch.Total))
+	renderProgressBatch(uh.agentProgressExpander, uh.agentProgressLines, &uh.agentProgressRows)
 }
 
 // buildPeersGroup builds "Use another machine": the list of already-

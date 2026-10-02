@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -229,15 +230,29 @@ func execStream(ctx context.Context, onLine func(string), name string, args ...s
 	scanner := bufio.NewScanner(pipe)
 	scanner.Buffer(make([]byte, scanInitialBufferSize), scanMaxTokenSize)
 	scanner.Split(scanLinesCRLF)
+	var last string
 	for scanner.Scan() {
 		line := strings.TrimRight(scanner.Text(), "\r\n")
-		if onLine != nil && line != "" {
+		if line == "" {
+			continue
+		}
+		last = line
+		if onLine != nil {
 			onLine(line)
 		}
 	}
 	scanErr := scanner.Err()
+	if scanErr != nil {
+		// A scanner error — a token past scanMaxTokenSize — stops the read
+		// before EOF. Waiting now would block until commandTimeout on a child
+		// that is itself blocked writing into a pipe nobody reads, so drain
+		// the rest first and let the child finish.
+		_, _ = io.Copy(io.Discard, pipe)
+	}
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("%s %s: %w", filepath.Base(name), strings.Join(args, " "), err)
+		// Match execCommand: the command's final line is the diagnostic the
+		// caller logs, and the streamed panel is not available to a log.
+		return fmt.Errorf("%s %s: %w: %s", filepath.Base(name), strings.Join(args, " "), err, last)
 	}
 	return scanErr
 }

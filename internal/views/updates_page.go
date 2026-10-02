@@ -627,24 +627,12 @@ func (s *stageProgressSink) consume(progressCh <-chan stageexec.ProgressEvent) s
 // flush renders one coalesced batch on the GTK main thread, then trims the
 // expander back to the retention window so its row count stays bounded.
 func (s *stageProgressSink) flush() {
-	batch := s.lines.Drain()
+	batch := renderProgressBatch(s.logExpander, s.lines, &s.rows)
 	if len(batch.Lines) == 0 {
 		return
 	}
 
-	for _, line := range batch.Lines {
-		msgRow := adw.NewActionRow()
-		msgRow.SetTitle(line.Text)
-		msgRow.SetSubtitle(line.At.Format("15:04:05"))
-		s.logExpander.AddRow(&msgRow.Widget)
-		s.rows.Add(msgRow)
-	}
-	s.rows.TrimTo(s.lines.Limit(), func(row *adw.ActionRow) {
-		s.logExpander.Remove(&row.Widget)
-	})
-
 	s.activityRow.SetSubtitle(batch.Lines[len(batch.Lines)-1].Text)
-	s.logExpander.SetSubtitle(pageview.StagingLogSubtitle(s.rows.Len(), batch.Total))
 }
 
 // onBootcStageClicked runs the stage script with streamed log output.

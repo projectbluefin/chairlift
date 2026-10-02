@@ -146,3 +146,15 @@ func TestPeerControlLabelsNameTheirPeer(t *testing.T) {
 		t.Errorf("switch and remove button share the name %q", sw)
 	}
 }
+
+// TestAgentModeProgressResultLineReportsFailure keeps the progress panel's
+// closing line consistent with the toast: a failed toggle must not end with a
+// line saying the operation completed.
+func TestAgentModeProgressResultLine(t *testing.T) {
+	if got := AgentModeProgressResultLine(true); got != "Operation complete." {
+		t.Errorf("AgentModeProgressResultLine(true) = %q, want Operation complete.", got)
+	}
+	if got := AgentModeProgressResultLine(false); got != "Operation failed." {
+		t.Errorf("AgentModeProgressResultLine(false) = %q, want Operation failed.", got)
+	}
+}
