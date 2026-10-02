@@ -20,7 +20,7 @@ snapshot:
   version_template: "{{ .ShortCommit }}-snapshot"
 
 gomod:
-  proxy: true
+  proxy: false
 
 before:
   hooks:
