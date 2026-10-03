@@ -14,7 +14,7 @@
 # suite directly: /usr/share/chairlift/config.yml outranks every configuration
 # fixture, and the suite must never touch the live desktop session. This runs
 # the same Go gate CI runs (TestATSPIBehaveSuite) in
-# ghcr.io/projectbluefin/dakota:testing with:
+# the pinned Dakota image from dakota-image.sh with:
 #   - the checkout at /workspace,
 #   - /usr/share/chairlift masked by an empty tmpfs,
 #   - Homebrew mounted read-only for Xvfb (brew install xorg-server),
@@ -28,7 +28,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE="${CHAIRLIFT_DAKOTA_IMAGE:-ghcr.io/projectbluefin/dakota:testing}"
+source "$ROOT/test/e2e/dakota-image.sh"
 BREW="${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
 REQUIREMENTS="$ROOT/test/e2e/requirements-atspi.txt"
