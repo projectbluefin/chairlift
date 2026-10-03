@@ -3,7 +3,11 @@
 #
 # Usage: capture_walkthrough.sh <chairlift-binary> <output-dir> <page-name>...
 #
-# Writes <output-dir>/<n>-<page>.xwd for each page, plus chairlift.log.
+# Run it inside wayland_session.sh (walkthrough_test.go does), with
+# CHAIRLIFT_WAYLAND_SIZE set to the window's default size: Mutter then fits
+# the window to the virtual monitor, so each capture is exactly the window.
+#
+# Writes <output-dir>/<n>-<page>.png for each page, plus chairlift.log.
 #
 # The page names are passed in by walkthrough_test.go, sourced from
 # internal/navigation so the script cannot drift from the application's real
@@ -16,10 +20,9 @@
 # before pkexec or Flatpak. This is a rendering and navigation check, not a
 # test of the mutations themselves.
 #
-# Modeled on tuna-os/gtk-office-suite's tests/gui/capture_walkthrough.sh —
-# private Xvfb display, private D-Bus session, keyboard-only interaction —
-# adapted to ChairLift's Go/puregotk stack and its existing readiness log
-# markers.
+# Keyboard-only interaction, like tuna-os/gtk-office-suite's
+# tests/gui/capture_walkthrough.sh: keys go through Mutter's RemoteDesktop API
+# and frames come from its ScreenCast API (features/lib/wayland_remote.py).
 set -euo pipefail
 
 APP="${1:?usage: capture_walkthrough.sh <chairlift-binary> <output-dir> <page>...}"
@@ -27,49 +30,40 @@ OUTDIR="${2:?usage: capture_walkthrough.sh <chairlift-binary> <output-dir> <page
 shift 2
 PAGES=("$@")
 [ ${#PAGES[@]} -gt 0 ] || { echo "no pages requested" >&2; exit 2; }
+# wayland_session.sh exports its private compositor's absolute socket path.
+# A bare name (wayland-0) or a socket under /run/user is a live session's
+# compositor, which this script would otherwise drive and capture.
+case "${WAYLAND_DISPLAY:-}" in
+    /run/user/*) echo "refusing the live session's compositor $WAYLAND_DISPLAY; run capture_walkthrough.sh inside wayland_session.sh" >&2; exit 2 ;;
+    /*) ;;
+    *) echo "run capture_walkthrough.sh inside wayland_session.sh" >&2; exit 2 ;;
+esac
 
 mkdir -p "$OUTDIR"
 OUTDIR="$(cd "$OUTDIR" && pwd)"
-
-WIDTH="${CHAIRLIFT_WALKTHROUGH_WIDTH:-1400}"
-HEIGHT="${CHAIRLIFT_WALKTHROUGH_HEIGHT:-900}"
-# A display number unlikely to collide with a developer's own session.
-DISPLAY_NUM="${CHAIRLIFT_WALKTHROUGH_DISPLAY:-:97}"
+REMOTE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/features/lib/wayland_remote.py"
+# Keys go through dogtail's Mutter input backend, so the interpreter needs
+# dogtail: the suite's venv when the caller names it.
+PYTHON="${CHAIRLIFT_ATSPI_PYTHON:-python3}"
+remote() { "$PYTHON" "$REMOTE" "$@"; }
 
 LOG="$OUTDIR/chairlift.log"
 : > "$LOG"
 
 cleanup() {
     if [ -n "${APP_PID:-}" ]; then
-        kill -TERM "-$APP_PID" 2>/dev/null || kill -TERM "$APP_PID" 2>/dev/null || true
+        kill -TERM "$APP_PID" 2>/dev/null || true
         wait "$APP_PID" 2>/dev/null || true
-    fi
-    if [ -n "${XVFB_PID:-}" ]; then
-        kill "$XVFB_PID" 2>/dev/null || true
-        wait "$XVFB_PID" 2>/dev/null || true
     fi
 }
 trap cleanup EXIT
 
-Xvfb "$DISPLAY_NUM" -screen 0 "${WIDTH}x${HEIGHT}x24" -nolisten tcp &
-XVFB_PID=$!
-export DISPLAY="$DISPLAY_NUM"
-
-# Wait for the display to accept clients rather than sleeping a fixed time.
-for _ in $(seq 1 100); do
-    if xdpyinfo >/dev/null 2>&1; then break; fi
-    sleep 0.1
-done
-xdpyinfo >/dev/null 2>&1 || { echo "Xvfb on $DISPLAY_NUM never became ready" >&2; exit 1; }
-
 # The same environment the dry-run startup smoke test uses, so the two agree
-# on what a clean headless launch looks like.
-export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory G_DEBUG=fatal-criticals GDK_DEBUG=no-portals
-# GTK 4 prefers Wayland whenever WAYLAND_DISPLAY is set. A developer running
-# this from a desktop session would otherwise open the window on the live
-# compositor instead of the private Xvfb display above.
-unset WAYLAND_DISPLAY || true
-export GDK_BACKEND=x11
+# on what a clean headless launch looks like. wayland_session.sh has already
+# pointed the application at its private compositor. G_DEBUG is set on the
+# application's own command line below, so the capture helpers are not
+# aborted by a critical the application is not responsible for.
+export LANG=C LC_ALL=C NO_AT_BRIDGE=1 GTK_A11Y=none GSETTINGS_BACKEND=memory GDK_DEBUG=no-portals
 # The Livery page reads its selections through `gsettings`, which needs
 # ChairLift's schema on the search path. A source build has not run
 # `make install`, so without this the page would capture its
@@ -79,10 +73,7 @@ if [ -n "${CHAIRLIFT_SCHEMA_DIR:-}" ]; then
   export GSETTINGS_SCHEMA_DIR="$CHAIRLIFT_SCHEMA_DIR"
 fi
 export HOME="$OUTDIR/home"
-export XDG_RUNTIME_DIR="$OUTDIR/runtime"
 mkdir -p "$HOME"
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 0700 "$XDG_RUNTIME_DIR"
 
 # Render the Bluefin-family rows (release channel, developer mode, gaming)
 # even though the runner is not a Bluefin system. Without this the
@@ -137,7 +128,7 @@ export CHAIRLIFT_CAPABILITIES
 # Setup is explicit, including on a new account. The existing-page wizard
 # starts at Features with its navigation footer; Escape dismisses it before
 # the ordinary sidebar walk. Disposition writes are previews only.
-dbus-run-session -- "$APP" --dry-run --setup >>"$LOG" 2>&1 &
+G_DEBUG=fatal-criticals "$APP" --dry-run --setup >>"$LOG" 2>&1 &
 APP_PID=$!
 
 # Poll the application's own readiness markers — the same three the dry-run
@@ -159,26 +150,16 @@ for _ in $(seq 1 300); do
 done
 [ "$ready" = 1 ] || { echo "ChairLift did not become ready in 30s:" >&2; cat "$LOG" >&2; exit 1; }
 
-# Give the compositor-free display a moment to finish the first paint. This
-# is the one unavoidable fixed wait: there is no "drawn" signal to poll for
-# from outside the process.
+# Give the compositor a moment to finish the first paint. This is the one
+# unavoidable fixed wait: there is no "drawn" signal to poll for from outside
+# the process.
 sleep 2
-
-WINDOW="$(xdotool search --sync --onlyvisible --name . | head -n 1 || true)"
-[ -n "$WINDOW" ] || { echo "no visible ChairLift window found on $DISPLAY" >&2; exit 1; }
-xdotool windowactivate --sync "$WINDOW" 2>/dev/null || true
-
-# Record the window's geometry so the Go side can crop the captured root
-# image down to just the application. Reading it from the running window
-# rather than hardcoding it keeps the crop correct if the default window size
-# ever changes.
-xdotool getwindowgeometry --shell "$WINDOW" > "$OUTDIR/window-geometry.env"
 
 # Capture the Features step and wizard footer under the stable setup name,
 # which the walkthrough and installcheck referential gate both reference.
-xwd -root -silent -display "$DISPLAY" -out "$OUTDIR/0-setup.xwd"
-echo "captured 0-setup.xwd"
-xdotool key --window "$WINDOW" --clearmodifiers Escape
+remote screenshot "$OUTDIR/0-setup.png"
+echo "captured 0-setup.png"
+remote key Escape
 sleep 1
 
 index=0
@@ -186,14 +167,10 @@ for page in "${PAGES[@]}"; do
     index=$((index + 1))
     # navigation compacts Alt+<number> over the visible pages in order, so
     # the Nth requested page is always Alt+N.
-    xdotool key --window "$WINDOW" --clearmodifiers "alt+$index"
+    remote key "<Alt>$index"
     sleep 1
-    # xwd, not ImageMagick's import: import only captures when ImageMagick
-    # was built with the X11 delegate, which is not guaranteed. xwd ships
-    # with the same X utilities this script already needs, and
-    # walkthrough_test.go decodes its output directly.
-    xwd -root -silent -display "$DISPLAY" -out "$OUTDIR/$index-$page.xwd"
-    echo "captured $index-$page.xwd"
+    remote screenshot "$OUTDIR/$index-$page.png"
+    echo "captured $index-$page.png"
 done
 
 echo "walkthrough complete"

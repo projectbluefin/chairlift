@@ -55,7 +55,7 @@ are listed in [org-adrs.md](org-adrs.md).
   headless leaf packages with wiring tests proving the page builders use them
 - [adr/0008-e2e-readiness-is-a-log-marker-contract.md](adr/0008-e2e-readiness-is-a-log-marker-contract.md)
   — E2E startup readiness is three exact stdout markers polled under
-  dbus-run-session + xvfb-run; the log lines are a public API
+  dbus-run-session + a headless Mutter Wayland session; the log lines are a public API
 - [adr/0009-dry-run-output-convention-and-single-decision-structs.md](adr/0009-dry-run-output-convention-and-single-decision-structs.md)
   — `internal/dryrun` as the single process-wide dry-run authority, fixed
   `[DRY-RUN]` message prefixes, and single tested decision structs gating

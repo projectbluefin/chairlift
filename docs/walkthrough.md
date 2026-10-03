@@ -305,17 +305,17 @@ that names each such feature and what it needs.
 make screenshots
 ```
 
-Builds the app, runs it headless under Xvfb, and writes one cropped PNG per
-page to `docs/screenshots/`. Always `--dry-run`, so nothing on the capture
-machine changes. Hardware the runner doesn't have is stubbed, and `make ci`
-checks no released binary can read those stubs.
+Builds the app, runs it inside the Dakota image on a private headless Mutter
+Wayland session — the compositor Bluefin runs — and writes one PNG per page to
+`docs/screenshots/`. The session's virtual monitor is the window's default
+900×700, so each capture is exactly the window. Keys go through Mutter's
+RemoteDesktop API and frames through its ScreenCast API. Always `--dry-run`,
+so nothing on the capture machine changes. Hardware the runner doesn't have
+is stubbed, and `make ci` checks no released binary can read those stubs.
 
-The images in this revision use GNOME Shell's Wayland Screenshot interface,
-cropped to the actual 900×700 window bounds. The live target has no Docker
-daemon and is not a booted OS-update target, so those controls disclose their
-unavailability instead of pretending an operation was tested. Dark appearance
-was checked with Libadwaita's test override because the isolated session lacks
-the desktop settings portal. The Xvfb capture runner additionally needs `xwd`.
+The capture session has no Docker daemon and is not a booted OS-update
+target, so those controls disclose their unavailability instead of
+pretending an operation was tested. It needs podman and Go on the host.
 
 Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme

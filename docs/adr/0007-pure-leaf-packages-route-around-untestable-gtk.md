@@ -66,9 +66,10 @@ is a pure function under test.
   stub GTK surface large enough to exercise page builders is a second
   implementation that drifts; the leaf split tests real logic instead of
   imitation widgets.
-- **Running unit tests under xvfb with GTK installed:** rejected as the
-  primary strategy — it makes every unit-test invocation host-dependent and
-  slow; reserved for the single E2E smoke test.
+- **Running unit tests under a headless display with GTK installed:**
+  rejected as the primary strategy — it makes every unit-test invocation
+  host-dependent and slow; reserved for the E2E suite, which runs the real
+  application under headless Mutter in the Dakota image.
 
 ## References
 

@@ -421,12 +421,14 @@ See [docs/design/overview.md](docs/design/overview.md) and [docs/design/package-
 ### Testing
 
 Run `make ci` before pushing; it mirrors the hosted verify, lint, unit, race,
-and cross-architecture build gates. Run `make e2e` on a host with GTK4,
-Libadwaita, `dbus-run-session`, and Xvfb to execute the built application's
-help path, start its dry-run window in a private headless session, poll bounded
+and cross-architecture build gates. Run `make e2e` on a host with podman and
+Go to execute the built application's help path, start its dry-run window in a
+private headless Wayland session (headless Mutter, no X server), poll bounded
 startup readiness, stage the complete install layout, and exercise the installed
-privileged helper's argument rejection. The hosted E2E job installs those
-runtime dependencies and runs the same target. The unit gate also scans every
+privileged helper's argument rejection. Every display test runs inside
+`ghcr.io/projectbluefin/dakota:testing` through `test/e2e/dakota.sh`, so the
+host needs no GTK, Libadwaita, or display stack; the hosted E2E job runs the
+same target. `make e2e-atspi` runs the behave AT-SPI suite the same way. The unit gate also scans every
 workflow and rejects external GitHub Actions references that are not pinned to
 full commit SHAs.
 

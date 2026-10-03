@@ -42,7 +42,7 @@ func TestLiveSessionMembersSelectsOnlyRunnableDescendants(t *testing.T) {
 	writeProcessEntry(t, procTable, 4245, "4245 (brew) S 4242 4245 4200 0 -1 4194304 0 0")
 	// Exited but not yet reaped: it owns a PID and answers signal 0, yet it
 	// cannot create a file, so it must not hold the cleanup open.
-	writeProcessEntry(t, procTable, 4244, "4244 (xvfb-run) Z 4200 4200 4200 0 -1 4194304 0 0")
+	writeProcessEntry(t, procTable, 4244, "4244 (wireplumber) Z 4200 4200 4200 0 -1 4194304 0 0")
 	// The session id itself. The leader is reaped before the drain runs, so a
 	// process wearing that PID is an unrelated one the kernel has recycled it
 	// for — never counted, and never signalled.
