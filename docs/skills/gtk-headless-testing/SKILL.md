@@ -114,7 +114,8 @@ inner list carries the title), where Dakota publishes a `grouping` named by
 the title — 63 scenarios passed on Dakota and failed on Ubuntu for that and
 similar version drift. `make e2e` skips `TestATSPIBehaveSuite` but keeps the
 behave dry-run check. Artifacts:
-`build/atspi/<tag|all>/` locally, the `atspi-results` artifact in CI —
+`build/atspi/<tag|all>/` locally, one `atspi-results-<shard>` artifact per
+shard in CI —
 `behave.log`, JUnit XML, `mutter.log`, and per scenario `chairlift.log`,
 `journal.jsonl`, and on failure `tree.txt` (the accessibility tree) and
 `screen.png`. Read `tree.txt` before guessing at a lookup.
@@ -153,9 +154,13 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   `--userns=keep-id` the container cannot run `ldconfig` itself.
 - **A Unix socket path is limited to 108 bytes.** Mutter refuses to start
   (`socket path ... exceeds 108 bytes`) when its socket would sit in a
-  runtime directory under `build/atspi/<tag expression>/`.
+  shard's runtime directory under `build/atspi/<tag expression>/`.
   `wayland_session.sh` keeps the compositor's and PipeWire's sockets in a
   short `/tmp/chairlift-wl.*` directory instead.
+- **A new feature file needs a CI shard.** The test workflow runs the suite
+  as tag-expression shards; add the feature's first tag to one of them in
+  `.github/workflows/test.yml`, or `TestATSPIShardsCoverEveryFeatureOnce`
+  fails.
 - **dogtail picks X11 or Wayland when it is imported.** `rawinput` reads
   `XDG_SESSION_TYPE` at import time and, unless it says `wayland`, sends
   XTest events that do nothing under Mutter. `wayland_session.sh` exports it
