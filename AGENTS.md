@@ -35,12 +35,49 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   the mill's deep gate calls this exact target. Codecov's remote project status
   additionally rejects coverage regressions greater than one percentage point;
   it has no fixed coverage target and cannot be mirrored locally.
-- `make e2e` — builds both executables, checks the application's real
-  `--help` surface, starts the dry-run GTK window under a private D-Bus/Xvfb
-  session, stages `make install`, and executes the installed privileged
-  helper's rejection paths. Startup polls the three readiness log markers for
-  up to 30 seconds, requires one additional second of process stability, and
-  terminates the private process group as soon as the smoke check passes.
+- `make e2e` — builds both executables and runs `./test/e2e` (except the
+  behave suite, below) **inside `ghcr.io/projectbluefin/dakota:testing`**
+  through `test/e2e/dakota.sh`: the application's real `--help` surface, the
+  dry-run GTK window, the screenshot walkthrough, a staged `make install`, and
+  the installed privileged helpers' accepted and rejected argv. Every E2E
+  target that needs a display — `make e2e`, `make e2e-atspi`,
+  `make screenshots` — runs through that one script and nowhere else, so the
+  host supplies only podman and Go. The script mounts the checkout at its own
+  host path (every absolute path a target hands in stays valid), masks
+  `/usr/share/chairlift` and `/proc/cmdline`, mounts the host Go toolchain
+  read-only with shared module and build caches, and builds the suite's venv
+  from `test/e2e/requirements-atspi.txt` with the image's interpreter.
+  **There is no X11 anywhere in the harness.** Each GUI runs under
+  `test/e2e/wayland_session.sh` inside a private `dbus-run-session`: headless
+  Mutter (`--headless --no-x11 --virtual-monitor`), the compositor Bluefin
+  runs, plus PipeWire and WirePlumber for its ScreenCast API. The script
+  exports `GDK_BACKEND=wayland`, `XDG_SESSION_TYPE=wayland`, unsets
+  `DISPLAY`, and sets `WAYLAND_DISPLAY` to the compositor's **absolute**
+  socket path: a behave scenario launches the application with its own
+  `XDG_RUNTIME_DIR`, so a bare socket name would resolve somewhere else, and
+  an absolute path also makes a developer's live compositor unreachable. It
+  refuses a `/run/user/*` runtime directory. Dakota's container image does
+  not list Mesa's `GL/default/lib` in `/etc/ld.so.cache`, and without it
+  Mutter's GPU-less renderer cannot load llvmpipe and segfaults; the script
+  puts that directory on the loader path and renders in software, as CI
+  runners have no GPU. Keyboard input and screenshots go through
+  `test/e2e/features/lib/wayland_remote.py`: input is dogtail 2.1's own
+  `MutterInputBackend` (`dogtail.hermetic.mutter`, Mutter's RemoteDesktop
+  API) driving `dogtail.rawinput`, with its pointer warm-up disabled because
+  on Mutter 51 those motions swallowed the keys that followed; frames are one
+  PipeWire buffer from Mutter's ScreenCast API. Input starts its
+  RemoteDesktop session up front and waits briefly before the first key,
+  because Mutter brings the virtual keyboard up asynchronously and drops a key
+  sent before then; a one-shot input command also holds its D-Bus connection
+  briefly after the last key, because Mutter drops undispatched events when a
+  RemoteDesktop client vanishes.
+  `internal/installcheck`'s `TestE2EHarnessIsolatesRuntimeAndPortals` holds
+  every harness to the session script and `TestE2EHarnessHasNoX11Dependency`
+  rejects X11 tooling in every executable file under `test/e2e` and
+  `.github` and in the `Makefile` (prose is exempt, so docs can explain why).
+  Startup polls the three readiness log markers for up to 30 seconds,
+  requires one additional second of process stability, and terminates the
+  private process group as soon as the smoke check passes.
   Terminating it is not the end of the story: startup's Homebrew readers are
   grandchildren, and the Homebrew runner starts them in new process groups.
   The smoke test launches a private **session** (`Setsid: true`), scans `/proc`
@@ -51,20 +88,13 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   test runner's shared session. The drain cleanup is registered *after*
   `t.TempDir()` so it runs before the directory removal. A test that launches
   a private session and lends it a temporary directory owes the same drain.
-  The harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory,
-  sets `GDK_DEBUG=no-portals`, and forces `GDK_BACKEND=x11` with
-  `WAYLAND_DISPLAY` cleared — GTK 4 prefers Wayland whenever that variable is
-  set, so a harness started from a desktop session would otherwise open on the
-  live compositor. Never run the GTK binary or dry-run tests directly
-  against the developer's live `/run/user/<uid>` or host session bus; ad-hoc runs
-  must use an isolated container or `env -u DBUS_SESSION_BUS_ADDRESS dbus-run-session`
-  with an isolated runtime directory. When testing in containers, never use
-  Ubuntu or generic Debian containers — always use the official native
-  Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the
-  standard Homebrew environment and tooling. Never stop, mask, or unmount host desktop portals.
-  The E2E suite requires GTK4, Libadwaita, `dbus-run-session`, and `xvfb-run`; the hosted E2E job
-  installs those runtime dependencies explicitly because ordinary unit-test
-  hosts intentionally do not carry them.
+  Every harness also isolates `XDG_RUNTIME_DIR` to a private 0700 directory
+  and sets `GDK_DEBUG=no-portals`. Never run the GTK binary or dry-run tests
+  directly against the developer's live `/run/user/<uid>` or host session
+  bus. When testing in containers, never use Ubuntu or generic Debian
+  containers — always use the official native Bluefin/Dakota environment
+  (`ghcr.io/projectbluefin/dakota:testing`), which `test/e2e/dakota.sh` does.
+  Never stop, mask, or unmount host desktop portals.
   With `E2E_COVERDIR` set, the GUI's counters reach it only because
   `cmd/chairlift` handles `SIGTERM`/`SIGINT` by quitting the application on
   the main thread, so `Run` returns and `main` exits normally; a process that
@@ -75,26 +105,25 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `SIGKILL` only on timeout.
 - **Every destination is driven through AT-SPI, on Dakota.** `make e2e-atspi`
   runs `TestATSPIBehaveSuite` — the behave + dogtail suite in
-  `test/e2e/features/`, in projectbluefin/testsuite's shape — inside
-  `ghcr.io/projectbluefin/dakota:testing` through `test/e2e/dakota_atspi.sh`,
-  with a private Xvfb and D-Bus session. It runs there, not on the runner's
-  Ubuntu stack, because what the tree announces depends on the GTK/Libadwaita
-  release: Ubuntu's Libadwaita 1.5 publishes preference groups differently
-  from what Bluefin ships, and 63 scenarios failed there that pass on Dakota.
-  `make e2e` therefore skips that one test (it still runs the behave dry-run
-  check for undefined steps). `features/environment.py` launches a fresh
-  `--dry-run` ChairLift per scenario with its own HOME, runtime directory,
-  config fixture (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`,
-  a closed proxy, and an action journal; the page and shortcut inventories
-  come from `internal/navigation`. The test, release, and nightly workflows
-  run `make e2e-atspi` after `make e2e` (Homebrew's `xorg-server` supplies an
-  Xvfb the container can execute), the script sets
+  `test/e2e/features/`, in projectbluefin/testsuite's shape — through
+  `test/e2e/dakota.sh` like every E2E test, under the headless Mutter session
+  above. It runs on Dakota because what the tree announces depends on the
+  GTK/Libadwaita release: Ubuntu's Libadwaita 1.5 publishes preference groups
+  differently from what Bluefin ships, and 63 scenarios failed there that pass
+  on Dakota. `make e2e` skips that one test because it alone takes most of the
+  E2E time (it still runs the behave dry-run check for undefined steps).
+  `features/environment.py` launches a fresh `--dry-run` ChairLift per
+  scenario with its own HOME, runtime directory, config fixture
+  (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`, a closed
+  proxy, and an action journal; the page and shortcut inventories come from
+  `internal/navigation`. The test, release, and nightly workflows run
+  `make e2e-atspi` after `make e2e`; `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
-  failed scenarios upload their accessibility tree and a screenshot in
-  `atspi-results`. A user-facing feature lands with its scenario; a confirmed
-  defect is written as a scenario tagged `@known_issue.<N>` rather than left
-  untested. Never run the suite on a live session. The `gtk-headless-testing`
-  skill carries the traps.
+  failed scenarios upload their accessibility tree and a `screen.png` in
+  `atspi-results` (`build/atspi/<tags|all>/`). A user-facing feature lands
+  with its scenario; a confirmed defect is written as a scenario tagged
+  `@known_issue.<N>` rather than left untested. Never run the suite on a live
+  session. The `gtk-headless-testing` skill carries the traps.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed

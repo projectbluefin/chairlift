@@ -92,8 +92,9 @@ pure message to `internal/views/trustmsg` and removing the views-package test.
 the accessibility tree — anything under `test/e2e/features/`.
 
 **Shape.** projectbluefin/testsuite's behave + dogtail pattern, minus the VM:
-`run_atspi.sh` owns a private Xvfb (`-displayfd`, so parallel runs never
-collide) and one private `dbus-run-session`; `features/environment.py`
+`run_atspi.sh` runs behave inside one private `dbus-run-session` and
+`wayland_session.sh` — headless Mutter, the compositor Bluefin runs, with no
+X server anywhere; `features/environment.py`
 launches a fresh `--dry-run` ChairLift **per scenario** with its own HOME,
 `XDG_RUNTIME_DIR`, config fixture, and `$CHAIRLIFT_ACTION_JOURNAL`. Scenario
 tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
@@ -105,7 +106,7 @@ Intentional malformed-input fixtures must stay malformed. Exclude their exact
 paths from syntax-lint hooks, not the entire fixture directory or hook.
 
 **Run it.** `make e2e-atspi [ATSPI_TAGS=@tag]` locally and in CI; both run
-`test/e2e/dakota_atspi.sh`, which runs the Go gate in
+`test/e2e/dakota.sh`, which runs the Go gate in
 `ghcr.io/projectbluefin/dakota:testing` with `CHAIRLIFT_REQUIRE_ATSPI=1` (a
 missing stack fails instead of skipping). Not on the runner's Ubuntu: its
 Libadwaita 1.5 publishes an AdwPreferencesGroup as an unnamed panel (only the
@@ -114,9 +115,16 @@ the title — 63 scenarios passed on Dakota and failed on Ubuntu for that and
 similar version drift. `make e2e` skips `TestATSPIBehaveSuite` but keeps the
 behave dry-run check. Artifacts:
 `build/atspi/<tag|all>/` locally, the `atspi-results` artifact in CI —
-`behave.log`, JUnit XML, and per scenario `chairlift.log`, `journal.jsonl`,
-and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
-(`ffmpeg -i screen.xwd x.png`). Read `tree.txt` before guessing at a lookup.
+`behave.log`, JUnit XML, `mutter.log`, and per scenario `chairlift.log`,
+`journal.jsonl`, and on failure `tree.txt` (the accessibility tree) and
+`screen.png`. Read `tree.txt` before guessing at a lookup.
+
+**Input and screenshots are native Wayland.** `atspi.press`/`type_text` call
+`dogtail.rawinput` through dogtail 2.1's own `MutterInputBackend`
+(`dogtail.hermetic.mutter`, Mutter's RemoteDesktop API), installed by
+`features/lib/wayland_remote.py`; Dakota ships the `ponytail` Python module
+but not `gnome-ponytail-daemon`, so dogtail's default Wayland path cannot
+work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 
 **Traps, each learned the hard way:**
 
@@ -129,13 +137,37 @@ and on failure `tree.txt` (the accessibility tree) and `screen.xwd`
 - **Containers inherit the host kernel command line, not its deployments.**
   A composefs host's `/proc/cmdline` makes the real bootc reader look for
   `/sysroot/state/deploy` even inside the fixture container, bypassing its
-  fake `bootc` and hiding System version. `dakota_atspi.sh` binds `/dev/null`
+  fake `bootc` and hiding System version. `dakota.sh` binds `/dev/null`
   read-only over `/proc/cmdline` so fixture tests use their own bootc answers.
   This is test isolation only; a booted Dakota VM must keep its real cmdline.
-- **GTK 4 on X11 publishes no screen coordinates.** `position` is `None`, so
-  nothing can be clicked by position. Activate through AT-SPI actions
-  (`atspi.activate`) or the keyboard; list rows, which have no action, are
-  reached with arrow keys from the focused row and Return.
+- **A Wayland client is never told where its window is.** AT-SPI reports
+  every window at (0, 0) and `position` is useless, so nothing can be
+  clicked by position. Activate through AT-SPI actions (`atspi.activate`) or
+  the keyboard; list rows, which have no action, are reached with arrow keys
+  from the focused row and Return.
+- **Dakota's container loader cache does not list Mesa.** Mesa lives in
+  `/usr/lib/<triplet>/GL/default/lib`, which a booted system registers but
+  the image's `/etc/ld.so.cache` does not; headless Mutter then cannot load
+  llvmpipe and segfaults in `meta_renderer_egl_set_renderer_gpu_data`.
+  `wayland_session.sh` puts the directory on the loader path. Under
+  `--userns=keep-id` the container cannot run `ldconfig` itself.
+- **dogtail picks X11 or Wayland when it is imported.** `rawinput` reads
+  `XDG_SESSION_TYPE` at import time and, unless it says `wayland`, sends
+  XTest events that do nothing under Mutter. `wayland_session.sh` exports it
+  before any Python starts; setting it later has no effect.
+- **dogtail's pointer warm-up eats keys on Mutter 51.** `MutterInputBackend`
+  opens each session with zero-length pointer motions measured on Mutter 50;
+  on 51 the keys that follow were lost. `wayland_remote` sets
+  `DOGTAIL_WARM_UP_EVENTS=0`; the suite never moves the pointer.
+- **Mutter drops undispatched input when its client disconnects** ("D-Bus
+  client with active sessions vanished" in `mutter.log`). A one-shot input
+  command must stay connected briefly after its last key, as
+  `wayland_remote.py`'s command line does.
+- **The first key after a RemoteDesktop session starts is lost.** Mutter
+  brings the session's virtual keyboard up asynchronously after `Start()`
+  and offers no readiness signal; `agents.feature:18`, the first scenario to
+  press a key, failed 3 of 3 runs until `wayland_remote.install_input` started
+  the session up front and waited `KEYBOARD_SETTLE` before the first key.
 - **GtkMenuButton is two nodes.** An action-less `button` wraps the `toggle
   button` carrying `click`. `is_button` requires an action so the wrapper
   never shadows it.
@@ -191,12 +223,11 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 ```
 
 **Required harness isolation:**
-1. In Go E2E tests (`test/e2e/e2e_test.go`), allocate a private `0700` directory under `t.TempDir()` and pass `XDG_RUNTIME_DIR=<dir>` in `cmd.Env`.
-2. In shell scripts (`test/e2e/capture_walkthrough.sh`, `test/e2e/run_atspi.sh`), export `XDG_RUNTIME_DIR="$OUTDIR/runtime"` (mode `0700`).
+1. Launch every GTK process inside `dbus-run-session -- test/e2e/wayland_session.sh`. It refuses a `/run/user/*` runtime directory, starts its own headless Mutter, and hands GTK that compositor's **absolute** socket in `WAYLAND_DISPLAY` with `GDK_BACKEND=wayland` and `DISPLAY` unset, so neither a live compositor nor a bare socket name resolved against another runtime directory can be reached.
+2. In Go E2E tests (`test/e2e/e2e_test.go`, `test/e2e/walkthrough_test.go`), allocate a private `0700` directory and pass `XDG_RUNTIME_DIR=<dir>` in `cmd.Env`; in shell scripts (`test/e2e/run_atspi.sh`), export `XDG_RUNTIME_DIR="$OUTDIR/runtime"` (mode `0700`).
 3. Always export `GDK_DEBUG=no-portals` in every harness.
-4. Always force `GDK_BACKEND=x11` and clear `WAYLAND_DISPLAY`: GTK 4 prefers Wayland whenever `WAYLAND_DISPLAY` is set, so a harness launched from a desktop session otherwise opens the window on the live compositor instead of Xvfb.
-5. Automated enforcement is maintained by `internal/installcheck/e2e_portal_isolation_test.go`.
-6. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
+4. Never add an X server or X client to the harness. `internal/installcheck/e2e_portal_isolation_test.go` enforces items 1–3 and rejects X11 tooling in every executable file under `test/e2e` and `.github` and in the `Makefile`; Markdown is exempt so documentation can explain the history.
+5. Never execute `systemctl --user mask`, `stop`, or unmount commands against host desktop portals.
 
 ## Container Testing Environment for ChairLift
 
@@ -213,28 +244,27 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
   Traverse it through `search_nodes` when writing evidence, or dump a real
   window node; passing it directly to `dump` yields an empty-looking tree.
 
-### Running the AT-SPI suite with Dakota
+### Running the E2E suites with Dakota
 
-`make e2e-atspi` (see "The behave AT-SPI suite" above). It needs podman, Go,
-and Homebrew's `xorg-server` on the host, mounts the host's Go toolchain and
-Homebrew read-only, and creates its venv from `test/e2e/requirements-atspi.txt`
-with the container's interpreter. `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs
-`@known_issue` scenarios.
-This fixture suite uses Xvfb; it is not a live Wayland desktop walkthrough.
-For Wayland diagnosis on ghost, read testing-lab's
+`make e2e`, `make e2e-atspi`, and `make screenshots` all run through
+`test/e2e/dakota.sh`. It needs podman and Go on the host, mounts the checkout
+at its own path and the host's Go toolchain read-only, and creates the venv
+from `test/e2e/requirements-atspi.txt` with the container's interpreter.
+`CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs `@known_issue` scenarios.
+This fixture suite runs on bare headless Mutter; it is not a live GNOME Shell
+desktop walkthrough. For GNOME Shell diagnosis on ghost, read testing-lab's
 `docs/reference/workflow-reference.md` and `docs/skills/argo-workflows/patterns.md`
 first. Dakota's VM install path is documented as blocked by its missing UKI.
 Reuse `run-container-tests`' nested systemd/GDM target, headless GNOME Shell,
 test-user linger, and `qecore-headless --session-type wayland`; do not invent
-another disk installer or substitute Xvfb for a requested Wayland session.
+another disk installer.
 
-### Generating Walkthrough Screenshots with Lima + Dakota
+### Generating walkthrough screenshots
 
-When host runtime libraries or session portals cannot run the GTK capture harness directly:
-1. Launch the `dakota-fedora` Lima VM (`limactl start dakota-fedora`).
-2. Ensure VM Homebrew has the required tools: `brew install go xdotool xdpyinfo xorg-server libxmu libxkbfile pkgconf` (Homebrew lacks `xwd`, so build `xwd-1.0.9` into `~/xtools`).
-3. Run `make screenshots` inside `ghcr.io/projectbluefin/dakota:testing` via Podman with `--userns=keep-id`, mapping `--tmpfs /tmp:rw,mode=1777`, mounting the source tree to `/workspace`, and masking `/usr/share/chairlift` with an empty directory (`--tmpfs /usr/share/chairlift:notmpcopyup`) so the packaged config does not override the test suite's `config.dev.yml`.
-4. Copy the resulting PNGs out via `limactl copy`.
+`make screenshots` captures inside Dakota itself, so a host only needs podman
+and Go. On a host without podman, run it from the `dakota-fedora` Lima VM
+(`limactl start dakota-fedora`, `brew install go` in the VM) and copy the PNGs
+out with `limactl copy`.
 
 ## Documentation source
 

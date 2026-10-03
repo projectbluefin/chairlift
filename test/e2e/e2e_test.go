@@ -62,7 +62,9 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 	requireExecutable(t, app)
 
 	dbusRunSession := requireCommand(t, "dbus-run-session")
-	xvfbRun := requireCommand(t, "xvfb-run")
+	requireCommand(t, "mutter")
+	session := filepath.Join(repoRoot(t), "test", "e2e", "wayland_session.sh")
+	requireExecutable(t, session)
 
 	// Startup reads the user's Homebrew inventory, and `brew` populates
 	// $HOME/.cache/Homebrew while it does. Go removes this directory when the
@@ -77,8 +79,7 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 	cmd := exec.Command(
 		dbusRunSession,
 		"--",
-		xvfbRun,
-		"-a",
+		session,
 		app,
 		"--dry-run",
 	)
@@ -92,11 +93,10 @@ func TestApplicationStartsInDryRun(t *testing.T) {
 		"GSETTINGS_BACKEND=memory",
 		"G_DEBUG=fatal-criticals",
 		"GDK_DEBUG=no-portals",
-		// GTK 4 prefers Wayland whenever WAYLAND_DISPLAY is set; without
-		// these a developer's run opens on the live compositor instead of
-		// xvfb-run's private display.
-		"GDK_BACKEND=x11",
-		"WAYLAND_DISPLAY=",
+		// wayland_session.sh starts its own headless Mutter in this runtime
+		// directory and hands the application that compositor's absolute
+		// socket, never a developer's live one.
+		"CHAIRLIFT_WAYLAND_LOG_DIR="+runtimeDir,
 		"HOME="+home,
 		"XDG_RUNTIME_DIR="+runtimeDir,
 	)
@@ -348,9 +348,10 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 
 	group := cmd.Process.Pid
 	// Find chairlift within the private session and send SIGTERM directly to it
-	// first. If we signal the whole process group at once, Xvfb and dbus-daemon
-	// die immediately, killing the X connection and aborting chairlift via
-	// fatal-criticals before it can perform a normal exit and flush GOCOVERDIR.
+	// first. If we signal the whole process group at once, the compositor and
+	// dbus-daemon die immediately, closing the Wayland connection and aborting
+	// chairlift via fatal-criticals before it can perform a normal exit and
+	// flush GOCOVERDIR.
 	if !hasExited(done) {
 		if members, err := liveSessionMembers(defaultProcTable, group); err == nil {
 			for _, member := range members {

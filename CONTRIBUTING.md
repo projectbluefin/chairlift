@@ -78,7 +78,9 @@ ad-hoc local test that CI never executes.
 
 Run `make e2e` when a change affects application startup, GTK integration,
 installation staging, command-line behavior, or the privileged helper. This
-target requires GTK4, Libadwaita, `dbus-run-session`, GNU `timeout`, and Xvfb.
+target needs only podman and Go on the host: it runs inside
+`ghcr.io/projectbluefin/dakota:testing` under a private headless Mutter
+Wayland session (`test/e2e/dakota.sh`).
 
 ## Quality gates
 
