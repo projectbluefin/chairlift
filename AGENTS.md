@@ -56,7 +56,12 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   socket path: a behave scenario launches the application with its own
   `XDG_RUNTIME_DIR`, so a bare socket name would resolve somewhere else, and
   an absolute path also makes a developer's live compositor unreachable. It
-  refuses a `/run/user/*` runtime directory. Dakota's container image does
+  refuses a `/run/user/*` runtime directory. The compositor's and PipeWire's
+  sockets live in a short private `/tmp/chairlift-wl.*` directory rather than
+  the test's runtime directory, because a Unix socket path is limited to 108
+  bytes and an artifact path such as `build/atspi/<tag expression>/`
+  overflows it; screenshot clients reach PipeWire through
+  `PIPEWIRE_RUNTIME_DIR`. Dakota's container image does
   not list Mesa's `GL/default/lib` in `/etc/ld.so.cache`, and without it
   Mutter's GPU-less renderer cannot load llvmpipe and segfaults; the script
   puts that directory on the loader path and renders in software, as CI

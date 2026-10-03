@@ -36,7 +36,11 @@ func TestE2EHarnessIsolatesRuntimeAndPortals(t *testing.T) {
 		},
 		{
 			path: filepath.Join("test", "e2e", "capture_walkthrough.sh"),
-			want: []string{"GDK_DEBUG=no-portals", "run capture_walkthrough.sh inside wayland_session.sh"},
+			want: []string{
+				"GDK_DEBUG=no-portals",
+				"run capture_walkthrough.sh inside wayland_session.sh",
+				"/run/user/*) echo \"refusing the live session's compositor",
+			},
 		},
 		{
 			path: filepath.Join("test", "e2e", "run_atspi.sh"),

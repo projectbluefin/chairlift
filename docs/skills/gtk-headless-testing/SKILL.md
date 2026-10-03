@@ -151,6 +151,11 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   llvmpipe and segfaults in `meta_renderer_egl_set_renderer_gpu_data`.
   `wayland_session.sh` puts the directory on the loader path. Under
   `--userns=keep-id` the container cannot run `ldconfig` itself.
+- **A Unix socket path is limited to 108 bytes.** Mutter refuses to start
+  (`socket path ... exceeds 108 bytes`) when its socket would sit in a
+  runtime directory under `build/atspi/<tag expression>/`.
+  `wayland_session.sh` keeps the compositor's and PipeWire's sockets in a
+  short `/tmp/chairlift-wl.*` directory instead.
 - **dogtail picks X11 or Wayland when it is imported.** `rawinput` reads
   `XDG_SESSION_TYPE` at import time and, unless it says `wayland`, sends
   XTest events that do nothing under Mutter. `wayland_session.sh` exports it
