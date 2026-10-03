@@ -30,7 +30,14 @@ OUTDIR="${2:?usage: capture_walkthrough.sh <chairlift-binary> <output-dir> <page
 shift 2
 PAGES=("$@")
 [ ${#PAGES[@]} -gt 0 ] || { echo "no pages requested" >&2; exit 2; }
-[ -n "${WAYLAND_DISPLAY:-}" ] || { echo "run capture_walkthrough.sh inside wayland_session.sh" >&2; exit 2; }
+# wayland_session.sh exports its private compositor's absolute socket path.
+# A bare name (wayland-0) or a socket under /run/user is a live session's
+# compositor, which this script would otherwise drive and capture.
+case "${WAYLAND_DISPLAY:-}" in
+    /run/user/*) echo "refusing the live session's compositor $WAYLAND_DISPLAY; run capture_walkthrough.sh inside wayland_session.sh" >&2; exit 2 ;;
+    /*) ;;
+    *) echo "run capture_walkthrough.sh inside wayland_session.sh" >&2; exit 2 ;;
+esac
 
 mkdir -p "$OUTDIR"
 OUTDIR="$(cd "$OUTDIR" && pwd)"

@@ -140,8 +140,8 @@ func TestWalkthroughDocumentsTheSetupAssistant(t *testing.T) {
 	}
 }
 
-// The capture byproducts must never be committed: the .xwd dumps are large,
-// and the log and stub files are per-run scratch.
+// The capture byproducts must never be committed: the private HOME directory,
+// the log, and the image-descriptor stub are all per-run scratch.
 func TestScreenshotDirectoryHoldsOnlyImages(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(RepoRoot(), screenshotDir))
 	if err != nil {
