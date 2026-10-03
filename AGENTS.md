@@ -125,10 +125,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `atspi` job split into parallel shards — behave tag expressions over the
   feature files' first tags, balanced by measured scenario time — and
   `internal/installcheck`'s `TestATSPIShardsCoverEveryFeatureOnce` fails when
-  a feature is in no shard or in two, so a new feature cannot silently stop
-  running on pull requests (add its tag to a shard). Both E2E jobs restore the
-  suite venv through `.github/actions/dakota-venv`, keyed on the image's
-  Python and the pinned requirements. `dakota.sh` sets
+  a feature is in no shard or in two, or when a scenario carries another
+  feature's first tag (behave selects by effective tags), so a new feature
+  cannot silently stop running on pull requests (add its tag to a shard). Both
+  E2E jobs restore the suite venv through `.github/actions/dakota-venv`, keyed
+  on the image's Python and the pinned requirements. `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a `screen.png` in
   `atspi-results-<shard>` (`build/atspi/<tags|all>/`). Dakota harnesses
