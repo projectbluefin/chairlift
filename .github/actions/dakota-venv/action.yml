@@ -10,12 +10,13 @@ runs:
     # The key must name the image's interpreter, not only the requirements: a
     # Dakota Python upgrade makes dakota.sh build a venv under a new key, and
     # a cache keyed on requirements alone would never save it.
+    # The image comes from the same pin dakota.sh sources, so the key names
+    # the interpreter of the image the venv is actually built for.
     - name: Pull Dakota and read its Python version
       id: python
       shell: bash
-      env:
-        IMAGE: ${{ env.CHAIRLIFT_DAKOTA_IMAGE || 'ghcr.io/projectbluefin/dakota:testing' }}
       run: |
+        source "$GITHUB_WORKSPACE/test/e2e/dakota-image.sh"
         version="$(podman run --rm --pull=missing "$IMAGE" python3 --version)"
         echo "version=$(printf '%s' "$version" | tr -cd 'A-Za-z0-9.')" >> "$GITHUB_OUTPUT"
 
