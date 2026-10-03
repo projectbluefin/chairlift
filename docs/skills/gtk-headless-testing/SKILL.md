@@ -203,10 +203,11 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 **The rule:** When testing ChairLift locally in containers, **NEVER** use Ubuntu or generic Debian containers. Always use the official native Bluefin/Dakota environment (`ghcr.io/projectbluefin/dakota:testing`) with the standard Homebrew tooling and environment.
 **Why:** ChairLift is specifically built for the Project Bluefin ecosystem. Generic Debian/Ubuntu container environments do not reproduce the Bluefin/Dakota filesystem layout, configuration paths, packaged tooling, system integration, or Homebrew setup. Testing or generating captures in generic Debian/Ubuntu containers produces inaccurate results, missing icons or themes, and incorrect capability evaluations.
 
-- Refresh a floating test tag with `podman pull` before a live QA sweep, then
-  record its digest and creation time. `--pull=missing` can silently reuse an
-  image from weeks earlier; its old Python interpreter also invalidates the
-  container-built venv's assumptions.
+- The gated Dakota harness uses the reviewed digest in
+  `test/e2e/dakota-image.sh`; follow the multi-arch-digest-pinning skill to
+  update it. For a local live-QA experiment with a floating override, pull it
+  first and record its digest and creation time. Such an override is rejected
+  in CI and does not validate the committed pin.
 - Keep the shipped `/usr/share/chairlift/config.yml` visible during live QA.
   Mask it only for explicit configuration-fixture tests.
 - `chairlift_atspi.page_root` is a query pseudo-root, not an AT-SPI node.

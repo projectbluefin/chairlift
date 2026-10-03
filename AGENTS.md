@@ -91,7 +91,10 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   Xvfb the container can execute), the script sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a screenshot in
-  `atspi-results`. A user-facing feature lands with its scenario; a confirmed
+  `atspi-results`. Dakota harnesses source `test/e2e/dakota-image.sh` for
+  the reviewed digest pin; CI rejects image overrides. Update the pin through
+  the multi-arch-digest-pinning skill, never by restoring a floating tag.
+  A user-facing feature lands with its scenario; a confirmed
   defect is written as a scenario tagged `@known_issue.<N>` rather than left
   untested. Never run the suite on a live session. The `gtk-headless-testing`
   skill carries the traps.

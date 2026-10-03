@@ -41,7 +41,8 @@ provide these independent signals:
 - **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
   screenshots uploaded as an artifact, then `make e2e-atspi`: the behave +
   dogtail AT-SPI suite (`test/e2e/features`) driving every destination inside
-  `ghcr.io/projectbluefin/dakota:testing`, with its results uploaded as
+  the Dakota `testing` image pinned by digest in `test/e2e/dakota-image.sh`
+  (currently linux/amd64), with its results uploaded as
   `atspi-results`.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.

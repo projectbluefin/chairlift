@@ -1,8 +1,8 @@
 ---
 name: multi-arch-digest-pinning
 description: Use when pinning or rolling a container image reference to a content digest.
-version: 1.0.0
-last_updated: 2026-09-24
+version: 1.1.0
+last_updated: 2026-10-03
 tags:
   - supply-chain
   - containers
@@ -73,3 +73,38 @@ pin — but every one of the four was the amd64 child entry of that image's
 manifest list, and the comment carried a provenance date that was not when
 the digests were taken. They were re-resolved as index digests on 2026-09-18
 with the Accept header above, and later removed with the stack itself.
+
+## Dakota E2E and release gates
+
+`test/e2e/dakota-image.sh` owns the reviewed Dakota pin. Every Dakota
+container harness sources it before invoking podman. `--pull=missing` is
+safe for that content-addressed reference: a cached image cannot silently
+change when `testing` moves. `CHAIRLIFT_DAKOTA_IMAGE` is a local experiment
+override only; CI (`CI=true` or `GITHUB_ACTIONS=true`) rejects a different
+value. Local override results are not evidence for the committed gate.
+
+To roll the pin:
+
+1. Obtain an anonymous GHCR pull token from
+   `https://ghcr.io/token?service=ghcr.io&scope=repository:projectbluefin/dakota:pull`.
+   Request `/v2/projectbluefin/dakota/manifests/testing` with that Bearer token
+   and the index/list Accept types above. Verify the response type and digest.
+2. If GHCR reports that the tag is an OCI manifest rather than an index,
+   repeat with `application/vnd.oci.image.manifest.v1+json` also accepted.
+   Verify the response's Content-Type and the config blob's `os` and
+   `architecture`. Do not select a child from an available index. On
+   2026-10-03, Dakota served a single linux/amd64 OCI manifest directly;
+   there was no index to pin. Its body omitted `mediaType`, so use the
+   response Content-Type as well. This does not provide arm64 E2E coverage.
+3. Verify SHA-256 of the raw response bytes equals `Docker-Content-Digest`,
+   and fetch the manifest by that digest to confirm it remains addressable.
+   Update the pin and resolution date together; record platform changes.
+4. Run `make ci` and `make e2e-atspi` using the committed default (no image
+   override), and exercise any other Dakota-backed E2E/screenshot targets.
+   Review the resulting logs/screenshots before accepting the update.
+
+`TestDakotaImageSelection` covers CI rejection and local overrides;
+`TestDakotaHarnessesUsePinnedImage` prevents a replacement harness from
+reintroducing its own floating default. These checks cannot verify image
+contents or availability. Digest pinning gives reproducibility, not publisher
+identity verification, and an intentional update still requires review.
