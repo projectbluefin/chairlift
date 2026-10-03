@@ -107,10 +107,11 @@ logic belongs in a pure package under `internal/`, as required by `AGENTS.md`.
 
 The `Nightly compliance` workflow runs every day at 04:17 UTC and can also be
 started manually. It checks out the current default branch, runs the complete
-host-independent `make ci` gate, installs the same GTK/Xvfb runtime used by the
-hosted E2E job and runs `make e2e`, then runs `govulncheck ./...` against the
-current Go vulnerability database. This catches dependency disclosures and
-environment drift even when no pull request is active.
+host-independent `make ci` gate, runs `make e2e` and `make e2e-atspi` inside
+the Dakota image under a private headless Mutter Wayland session (the same
+`test/e2e/dakota.sh` the hosted E2E job uses), then runs `govulncheck ./...`
+against the current Go vulnerability database. This catches dependency
+disclosures and environment drift even when no pull request is active.
 
 The workflow has read-only repository permission, persists no checkout
 credentials, consumes no repository secrets, and publishes nothing. Its
@@ -133,7 +134,8 @@ asset can be published, publication is gated on two required verification jobs:
   permission and executes `make ci` (tidy-module, vet, formatting,
   `golangci-lint`, unit tests, race detector, and cross-architecture builds).
 - **End-to-end quality gate** (`e2e`) — runs with read-only repository
-  permission under a private GTK/Xvfb runtime and executes `make e2e`.
+  permission and executes `make e2e` and `make e2e-atspi` inside the Dakota
+  image under a private headless Mutter Wayland session.
 
 The `goreleaser` publishing job depends on both gate jobs (`needs: [gate, e2e]`)
 and receives `contents: write` and `id-token: write` (for keyless cosign signing)
