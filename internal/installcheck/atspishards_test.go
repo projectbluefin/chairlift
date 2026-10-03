@@ -21,6 +21,11 @@ var shardExpression = regexp.MustCompile(`^@[A-Za-z0-9_-]+( or @[A-Za-z0-9_-]+)*
 // shard, and no shard names a feature that does not exist. A feature in no
 // shard would silently stop running on every pull request; a feature in two
 // would run twice and skew the balance the shards are chosen for.
+//
+// Behave selects scenarios by their effective tags — the feature's tags plus
+// the scenario's own — so a feature's first tag must come from the tag block
+// above its Feature: line, and must not appear on any other feature's
+// scenarios: either would put a scenario in a shard its feature is not in.
 func TestATSPIShardsCoverEveryFeatureOnce(t *testing.T) {
 	var workflow struct {
 		Jobs map[string]struct {
@@ -48,23 +53,45 @@ func TestATSPIShardsCoverEveryFeatureOnce(t *testing.T) {
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no feature files found: %v", err)
 	}
+	type occurrence struct{ file, tag string }
+	var tagged []occurrence
 	for _, file := range paths {
 		data, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
 		}
-		tag := ""
+		name := filepath.Base(file)
+		tag, header := "", true
 		for _, line := range strings.Split(string(data), "\n") {
-			if strings.HasPrefix(line, "@") {
-				tag = strings.Fields(line)[0]
-				break
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "Feature:") {
+				header = false
+				continue
+			}
+			if !strings.HasPrefix(line, "@") {
+				continue
+			}
+			fields := strings.Fields(line)
+			if header && tag == "" {
+				tag, fields = fields[0], fields[1:]
+			}
+			for _, field := range fields {
+				tagged = append(tagged, occurrence{name, field})
 			}
 		}
 		if tag == "" {
-			t.Errorf("%s has no feature tag to shard it by", filepath.Base(file))
+			t.Errorf("%s has no feature tag above its Feature: line to shard it by", name)
 			continue
 		}
-		features[tag] = filepath.Base(file)
+		if previous, dup := features[tag]; dup {
+			t.Errorf("%s and %s share the feature tag %s, so no shard can select one without the other", previous, name, tag)
+		}
+		features[tag] = name
+	}
+	for _, o := range tagged {
+		if owner, ok := features[o.tag]; ok && owner != o.file {
+			t.Errorf("%s tags a scenario %s, %s's feature tag, so that scenario also runs in %s's shard", o.file, o.tag, owner, owner)
+		}
 	}
 
 	seen := map[string]string{}

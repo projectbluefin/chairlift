@@ -158,9 +158,10 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   `wayland_session.sh` keeps the compositor's and PipeWire's sockets in a
   short `/tmp/chairlift-wl.*` directory instead.
 - **A new feature file needs a CI shard.** The test workflow runs the suite
-  as tag-expression shards; add the feature's first tag to one of them in
-  `.github/workflows/test.yml`, or `TestATSPIShardsCoverEveryFeatureOnce`
-  fails.
+  as tag-expression shards; add the feature's first tag (the tag block above
+  `Feature:`) to one of them in `.github/workflows/test.yml`, and never reuse
+  another feature's first tag on a scenario, or
+  `TestATSPIShardsCoverEveryFeatureOnce` fails.
 - **dogtail picks X11 or Wayland when it is imported.** `rawinput` reads
   `XDG_SESSION_TYPE` at import time and, unless it says `wayland`, sends
   XTest events that do nothing under Mutter. `wayland_session.sh` exports it
