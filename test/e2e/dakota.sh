@@ -25,6 +25,14 @@
 #   - no host session bus, display, Wayland socket, or runtime directory.
 #
 # CHAIRLIFT_DAKOTA_IMAGE overrides the image for testing another release.
+#
+# The default is the mutable :testing tag on purpose: the suite exists to
+# catch what the next Bluefin release changes, so it follows that release
+# rather than a pinned digest. The image is trusted with a writable checkout
+# and Go caches. Release binaries are built by goreleaser in a separate job
+# from a fresh checkout; the only output that leaves a Dakota run for the
+# repository is release-screenshots.yml's PNGs, which land through a reviewed
+# pull request. Set CHAIRLIFT_DAKOTA_IMAGE to an @sha256: reference to pin a run.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
