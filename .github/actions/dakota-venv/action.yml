@@ -1,0 +1,26 @@
+name: Dakota suite venv
+description: >
+  Pull the Dakota image test/e2e/dakota.sh runs in and restore the behave
+  suite's venv for it. dakota.sh keys the venv on the image's Python version
+  and the pinned requirements, and builds it inside the container when the
+  key is missing; caching it here saves that pip install on every job.
+runs:
+  using: composite
+  steps:
+    # The key must name the image's interpreter, not only the requirements: a
+    # Dakota Python upgrade makes dakota.sh build a venv under a new key, and
+    # a cache keyed on requirements alone would never save it.
+    - name: Pull Dakota and read its Python version
+      id: python
+      shell: bash
+      env:
+        IMAGE: ${{ env.CHAIRLIFT_DAKOTA_IMAGE || 'ghcr.io/projectbluefin/dakota:testing' }}
+      run: |
+        version="$(podman run --rm --pull=missing "$IMAGE" python3 --version)"
+        echo "version=$(printf '%s' "$version" | tr -cd 'A-Za-z0-9.')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the suite venv
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.cache/chairlift-atspi-venv-*
+        key: atspi-venv-${{ steps.python.outputs.version }}-${{ hashFiles('test/e2e/requirements-atspi.txt') }}

@@ -39,10 +39,12 @@ provide these independent signals:
 - **Unit Tests** — headless tests under `internal/...`, with atomic coverage.
 - **Race Detection** — the same internal test scope under the race detector.
 - **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
-  screenshots uploaded as an artifact, then `make e2e-atspi`: the behave +
-  dogtail AT-SPI suite (`test/e2e/features`) driving every destination inside
-  `ghcr.io/projectbluefin/dakota:testing`, with its results uploaded as
-  `atspi-results`.
+  screenshots uploaded as an artifact.
+- **AT-SPI** — `make e2e-atspi`: the behave + dogtail AT-SPI suite
+  (`test/e2e/features`) driving every destination inside
+  `ghcr.io/projectbluefin/dakota:testing`, split into parallel shards
+  (`AT-SPI (<shard>)`) by behave tag expression, each uploading its results
+  as `atspi-results-<shard>`.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.
 - **Tests Passed** — an aggregating job that succeeds only when every job
@@ -106,10 +108,11 @@ logic belongs in a pure package under `internal/`, as required by `AGENTS.md`.
 
 The `Nightly compliance` workflow runs every day at 04:17 UTC and can also be
 started manually. It checks out the current default branch, runs the complete
-host-independent `make ci` gate, installs the same GTK/Xvfb runtime used by the
-hosted E2E job and runs `make e2e`, then runs `govulncheck ./...` against the
-current Go vulnerability database. This catches dependency disclosures and
-environment drift even when no pull request is active.
+host-independent `make ci` gate, runs `make e2e` and `make e2e-atspi` inside
+the Dakota image under a private headless Mutter Wayland session (the same
+`test/e2e/dakota.sh` the hosted E2E job uses), then runs `govulncheck ./...`
+against the current Go vulnerability database. This catches dependency
+disclosures and environment drift even when no pull request is active.
 
 The workflow has read-only repository permission, persists no checkout
 credentials, consumes no repository secrets, and publishes nothing. Its
@@ -132,7 +135,8 @@ asset can be published, publication is gated on two required verification jobs:
   permission and executes `make ci` (tidy-module, vet, formatting,
   `golangci-lint`, unit tests, race detector, and cross-architecture builds).
 - **End-to-end quality gate** (`e2e`) — runs with read-only repository
-  permission under a private GTK/Xvfb runtime and executes `make e2e`.
+  permission and executes `make e2e` and `make e2e-atspi` inside the Dakota
+  image under a private headless Mutter Wayland session.
 
 The `goreleaser` publishing job depends on both gate jobs (`needs: [gate, e2e]`)
 and receives `contents: write` and `id-token: write` (for keyless cosign signing)

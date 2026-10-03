@@ -117,10 +117,11 @@ build-e2e: build
 # from the real application, then remove the capture byproducts so only the
 # PNGs are left to commit.
 #
-# It cannot join `make ci`: it needs a display, GTK, and the X utilities. It
-# is also deliberately not run per-push — font hinting and GTK point releases
-# move pixels, so regenerating on every commit would churn the repository for
-# no signal. Run it when a feature's appearance actually changes.
+# It cannot join `make ci`: like every E2E target it runs the GUI inside the
+# Dakota image (test/e2e/dakota.sh) and needs podman. It is also deliberately
+# not run per-push — font hinting and GTK point releases move pixels, so
+# regenerating on every commit would churn the repository for no signal. Run
+# it when a feature's appearance actually changes.
 #
 # The referential check that every page has a screenshot and every screenshot
 # is referenced by docs/walkthrough.md is a pure-Go test in
@@ -131,21 +132,21 @@ screenshots: build-e2e schemas
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_WALKTHROUGH_DIR=$(abspath $(SCREENSHOT_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
-		$(GOTEST) -count=1 -run TestWalkthroughScreenshots ./test/e2e
+		test/e2e/dakota.sh -count=1 -run '^TestWalkthroughScreenshots$$'
 	@test -n "$(SCREENSHOT_DIR)" || { echo "SCREENSHOT_DIR is empty; refusing to clean" >&2; exit 1; }
-	@rm -rf "$(SCREENSHOT_DIR)/home" "$(SCREENSHOT_DIR)/runtime" $(SCREENSHOT_DIR)/*.xwd \
-		"$(SCREENSHOT_DIR)/chairlift.log" "$(SCREENSHOT_DIR)/window-geometry.env" \
-		"$(SCREENSHOT_DIR)/image-info.json"
+	@rm -rf "$(SCREENSHOT_DIR)/home" "$(SCREENSHOT_DIR)/runtime" \
+		"$(SCREENSHOT_DIR)/chairlift.log" "$(SCREENSHOT_DIR)/image-info.json"
 	@echo "==> screenshots written to $(SCREENSHOT_DIR)"
 
 SCREENSHOT_DIR=docs/screenshots
 
-# End-to-end smoke tests require GTK4, Libadwaita, dbus-run-session, and Xvfb;
-# the screenshot walkthrough additionally requires Xvfb, xdotool, xdpyinfo,
-# and xwd, and the behave dry-run step check requires behave and dogtail
-# (test/e2e/requirements-atspi.txt). They run separately from ci because the
-# ordinary unit-test gate is intentionally usable on hosts without those
-# runtime libraries.
+# The end-to-end tests run inside ghcr.io/projectbluefin/dakota:testing
+# (test/e2e/dakota.sh, which needs podman and Go on the host), each GUI under
+# its own private headless Mutter Wayland session and private D-Bus session
+# (test/e2e/wayland_session.sh). That is the GTK, Libadwaita, compositor and
+# accessibility stack ChairLift ships on; nothing runs on the host's display
+# stack. They run separately from ci because the ordinary unit-test gate is
+# intentionally usable on hosts without podman.
 #
 # Only the GUI is built with E2E_TAGS. Both privileged helpers are built
 # exactly as they ship, so the boundary assertions in test/e2e exercise the
@@ -157,32 +158,37 @@ SCREENSHOT_DIR=docs/screenshots
 # docs/screenshots.
 #
 # The behave AT-SPI suite (TestATSPIBehaveSuite) is skipped here and run by
-# e2e-atspi instead: it asserts what the accessibility tree announces, which
-# depends on the GTK/Libadwaita release, so it runs against the Dakota image
-# ChairLift ships on rather than whatever the host carries.
+# e2e-atspi instead, because it alone takes most of the E2E time.
 e2e: build-e2e schemas
 ifeq ($(E2E_COVERDIR),)
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
-		$(GOTEST) -v -skip '^TestATSPIBehaveSuite$$' ./test/e2e
+		test/e2e/dakota.sh -v -skip '^TestATSPIBehaveSuite$$'
 else
 	@rm -rf "$(E2E_COVERDIR)" && mkdir -p "$(E2E_COVERDIR)"
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
+		E2E_COVERDIR=$(abspath $(E2E_COVERDIR)) \
 		GOCOVERDIR=$(abspath $(E2E_COVERDIR)) \
-		$(GOTEST) -v -skip '^TestATSPIBehaveSuite$$' ./test/e2e
+		test/e2e/dakota.sh -v -skip '^TestATSPIBehaveSuite$$'
 	$(GOCMD) tool covdata textfmt -i=$(abspath $(E2E_COVERDIR)) -o=e2e-coverage.out
 	@echo "==> e2e statement coverage written to e2e-coverage.out"
 endif
 
-# The behave AT-SPI suite (test/e2e/features), inside
-# ghcr.io/projectbluefin/dakota:testing via podman: the GTK, Libadwaita and
-# accessibility stack ChairLift actually ships on. Needs podman, Go, and
-# Homebrew's xorg-server (for Xvfb) on the host. ATSPI_TAGS narrows the run to
-# a behave tag expression, e.g. `make e2e-atspi ATSPI_TAGS=@maintenance`.
+# The behave AT-SPI suite (test/e2e/features), run by test/e2e/dakota.sh like
+# every E2E test. Artifacts land in build/atspi/<tags|all>/. ATSPI_TAGS
+# narrows the run to a behave tag expression, e.g.
+# `make e2e-atspi ATSPI_TAGS=@maintenance`; CHAIRLIFT_ATSPI_KNOWN_ISSUES=1 also
+# runs @known_issue scenarios.
 ATSPI_TAGS?=
+ATSPI_RUN=$(or $(shell printf '%s' '$(ATSPI_TAGS)' | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$$//'),all)
 e2e-atspi: build-e2e schemas
-	CHAIRLIFT_ATSPI_NO_BUILD=1 test/e2e/dakota_atspi.sh $(ATSPI_TAGS)
+	@rm -rf "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)" && mkdir -p "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)"
+	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
+		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
+		CHAIRLIFT_ATSPI_OUT=$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN) \
+		CHAIRLIFT_ATSPI_TAGS='$(ATSPI_TAGS)' \
+		test/e2e/dakota.sh -count=1 -v -timeout 40m -run '^TestATSPI'
 
 # Development build with race detector (requires CGO)
 dev:
@@ -297,7 +303,7 @@ uninstall:
 	rm -f $(DESTDIR)$(POLKITRULESDIR)/org.frostyard.ChairLift.updex.rules
 
 # One command mirrors CI's host-independent gates (verify → lint → unit → race
-# → build), in fail-fast order. The GTK/Xvfb-dependent E2E job runs separately
+# → build), in fail-fast order. The podman-dependent E2E job runs separately
 # through `make e2e`. The mill's deep gate calls this target.
 #
 # The build step reproduces CI's GOOS/GOARCH matrix (linux/amd64 and

@@ -64,28 +64,10 @@ jobs:
         with:
           go-version: "1.26.6"
 
-      # Same package list as test.yml's E2E job — see that workflow's
-      # comment for why each package is here: x11-apps for xwd (a separate
-      # Debian/Ubuntu package from x11-utils) and flatpak so the update
-      # shell finds at least one reachable source (Homebrew is on
-      # the runner but not on PATH; bootc is never present in a container).
-      - name: Install headless GTK runtime
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            adwaita-icon-theme \
-            dbus-x11 \
-            flatpak \
-            imagemagick \
-            libadwaita-1-0 \
-            libgtk-4-1 \
-            librsvg2-common \
-            x11-apps \
-            x11-utils \
-            xauth \
-            xdotool \
-            xvfb
-
+      # `make screenshots` captures inside ghcr.io/projectbluefin/dakota:testing
+      # under a private headless Mutter Wayland session (test/e2e/dakota.sh),
+      # so the images show the GTK, Libadwaita and icon theme Bluefin ships.
+      # The runner supplies only podman and Go.
       - name: Regenerate walkthrough screenshots
         run: make screenshots
 

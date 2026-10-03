@@ -20,9 +20,11 @@ from dogtail.config import config
 
 config.checkForA11y = False
 
-# dogtail.tree and dogtail.rawinput connect to the accessibility bus when
-# imported, so they are imported on first use: behave's --dry-run loads these
-# steps on hosts with no bus at all.
+# dogtail.tree connects to the accessibility bus when imported, so it is
+# imported on first use: behave's --dry-run loads these steps on hosts with
+# no bus at all. Keyboard input is dogtail.rawinput driven through dogtail's
+# MutterInputBackend (wayland_remote.install_input), Mutter's RemoteDesktop
+# API, the native Wayland path.
 
 
 def _tree():
@@ -31,10 +33,11 @@ def _tree():
     return tree
 
 
-def _rawinput():
-    from dogtail import rawinput
+def _input():
+    import wayland_remote
 
-    return rawinput
+    return wayland_remote
+
 
 # Lookups here poll with their own deadlines (see poll), so dogtail's own
 # retry knobs are not used; only the input pacing is set.
@@ -470,11 +473,11 @@ def set_text(node, value):
 
 
 def press(combo):
-    _rawinput().keyCombo(combo)
+    _input().press(combo)
 
 
 def type_text(value):
-    _rawinput().typeText(value)
+    _input().type_text(value)
 
 
 def dump(node, stream, depth=0, limit=40):

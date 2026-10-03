@@ -4,8 +4,8 @@
 # runner. behave is pinned to projectbluefin/testsuite's runner
 # (container/Containerfile.runner) so steps written here run unchanged there.
 # Install into a venv created with --system-site-packages: PyGObject and
-# pyatspi come from the distribution (python3-gi, python3-pyatspi,
-# gir1.2-atspi-2.0). To bump: change a pin, re-resolve with a clean venv's
+# pyatspi come from the Dakota image test/e2e/dakota.sh runs the suite in.
+# To bump: change a pin, re-resolve with a clean venv's
 # `pip freeze`, and regenerate every hash from PyPI.
 behave==1.3.3 \
     --hash=sha256:2b8f4b64ed2ea756a5a2a73e23defc1c4631e9e724c499e46661778453ebaf51 \

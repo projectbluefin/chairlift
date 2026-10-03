@@ -1,9 +1,9 @@
 """behave hooks: launch a fresh ChairLift per scenario and tear it down.
 
-run_atspi.sh provides the private Xvfb display and the private D-Bus session
-this process runs in. Each scenario gets its own application process with its
-own HOME, XDG_RUNTIME_DIR, configuration fixture and action journal, so a
-scenario cannot leak state into the next one.
+run_atspi.sh provides the private headless Mutter session and the private D-Bus
+session this process runs in. Each scenario gets its own application process
+with its own HOME, XDG_RUNTIME_DIR, configuration fixture and action journal,
+so a scenario cannot leak state into the next one.
 
 Scenario tags select fixtures:
 
@@ -292,13 +292,12 @@ def capture_failure(context):
             atspi.dump(context.app, handle)
     except Exception as error:  # a failed dump must not mask the real failure
         sys.stdout.write(f"accessibility tree dump failed: {error}\n")
-    xwd = shutil.which("xwd")
-    if xwd:
-        subprocess.run(
-            [xwd, "-root", "-silent", "-out", os.path.join(context.scenario_dir, "screen.xwd")],
-            check=False,
-            timeout=20,
-        )
+    try:
+        import wayland_remote
+
+        wayland_remote.screenshot(os.path.join(context.scenario_dir, "screen.png"))
+    except Exception as error:  # a failed capture must not mask the real failure
+        sys.stdout.write(f"screenshot failed: {error}\n")
 
 
 def stop_app(context):
