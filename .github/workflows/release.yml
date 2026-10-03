@@ -92,6 +92,10 @@ jobs:
           # compiler. See ci pin Go and GoReleaser in the write-capable
           # release job (#88).
           go-version: "1.26.6"
+          # Do not restore or save Go caches in the write-capable release build;
+          # prevents caches populated or modified by preceding gate/e2e jobs
+          # from reaching the release binaries.
+          cache: false
       # GoReleaser OSS (free): publishes the archives, checksums, SBOMs and
       # signatures straight to the GitHub Release for this tag. No Pro
       # license or external package-repo credentials needed.

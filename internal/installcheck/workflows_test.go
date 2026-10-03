@@ -185,6 +185,10 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 			Steps       []struct {
 				Name string `yaml:"name"`
 				Run  string `yaml:"run"`
+				Uses string `yaml:"uses"`
+				With struct {
+					Cache *bool `yaml:"cache"`
+				} `yaml:"with"`
 			} `yaml:"steps"`
 		} `yaml:"jobs"`
 	}
@@ -262,6 +266,18 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	}
 	if !hasGate || !hasE2E {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
+	}
+
+	setupGoDisablesCache := false
+	for _, step := range goreleaserJob.Steps {
+		if strings.HasPrefix(step.Uses, "actions/setup-go@") {
+			if step.With.Cache != nil && !*step.With.Cache {
+				setupGoDisablesCache = true
+			}
+		}
+	}
+	if !setupGoDisablesCache {
+		t.Errorf("goreleaser job must set cache: false on actions/setup-go to isolate release builds from test caches")
 	}
 }
 

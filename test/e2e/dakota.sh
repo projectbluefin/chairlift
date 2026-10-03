@@ -28,10 +28,9 @@
 # dakota-image.sh rejects an override in CI.
 #
 # The image is trusted with a writable checkout and Go caches. Release
-# binaries are built by goreleaser in a separate job from a fresh checkout,
-# but its actions/setup-go step shares the e2e job's default cache key, so a
-# Go build or module cache written inside the image can be restored into that
-# build until the goreleaser job sets cache: false. Otherwise the only output
+# binaries are built by goreleaser in a separate job from a fresh checkout
+# whose actions/setup-go step sets cache: false, so a Go build or module cache
+# written inside the image is never restored into that build. The only output
 # that leaves a Dakota run for the repository is release-screenshots.yml's
 # PNGs, which land through a reviewed pull request.
 set -euo pipefail

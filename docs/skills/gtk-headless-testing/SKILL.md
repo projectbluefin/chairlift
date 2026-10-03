@@ -262,6 +262,9 @@ bwrap: Can't find source path /run/user/<uid>/doc/by-app/<app>: No such file or 
 `test/e2e/dakota.sh`. It needs podman and Go on the host, mounts the checkout
 at its own path and the host's Go toolchain read-only, and creates the venv
 from `test/e2e/requirements-atspi.txt` with the container's interpreter.
+It mounts `GOCACHE` and `GOMODCACHE` read-write, so the release workflow's
+goreleaser job sets `cache: false` on `actions/setup-go`: caches the image
+wrote must never reach release binaries.
 `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs `@known_issue` scenarios.
 This fixture suite runs on bare headless Mutter; it is not a live GNOME Shell
 desktop walkthrough. For GNOME Shell diagnosis on ghost, read testing-lab's
