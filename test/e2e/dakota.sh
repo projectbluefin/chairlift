@@ -26,6 +26,14 @@
 #
 # CHAIRLIFT_DAKOTA_IMAGE overrides the image for a local experiment only;
 # dakota-image.sh rejects an override in CI.
+#
+# The image is trusted with a writable checkout and Go caches. Release
+# binaries are built by goreleaser in a separate job from a fresh checkout,
+# but its actions/setup-go step shares the e2e job's default cache key, so a
+# Go build or module cache written inside the image can be restored into that
+# build until the goreleaser job sets cache: false. Otherwise the only output
+# that leaves a Dakota run for the repository is release-screenshots.yml's
+# PNGs, which land through a reviewed pull request.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -76,14 +84,26 @@ ENVIRONMENT=(
     -e CHAIRLIFT_REQUIRE_ATSPI=1
 )
 # Directories and settings a Makefile target hands in. A directory outside the
-# checkout is mounted at its own path, so the absolute path stays valid.
+# checkout is mounted at its own path, so the absolute path stays valid; a
+# path handed in under two names (GOCOVERDIR and E2E_COVERDIR) is mounted once.
+MOUNTED=()
 for name in CHAIRLIFT_E2E_BUILD_DIR CHAIRLIFT_SCHEMA_DIR CHAIRLIFT_WALKTHROUGH_DIR \
     CHAIRLIFT_ATSPI_OUT GOCOVERDIR E2E_COVERDIR; do
     value="${!name:-}"
     [ -n "$value" ] || continue
     case "$value" in
         "$ROOT"|"$ROOT"/*) ;;
-        *) mkdir -p "$value"; MOUNTS+=(-v "$value:$value") ;;
+        *)
+            mkdir -p "$value"
+            seen=0
+            for m in "${MOUNTED[@]+"${MOUNTED[@]}"}"; do
+                if [ "$m" = "$value" ]; then seen=1; fi
+            done
+            if [ "$seen" = 0 ]; then
+                MOUNTS+=(-v "$value:$value")
+                MOUNTED+=("$value")
+            fi
+            ;;
     esac
     ENVIRONMENT+=(-e "$name=$value")
 done
