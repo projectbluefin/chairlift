@@ -13,8 +13,10 @@ runs:
     - name: Pull Dakota and read its Python version
       id: python
       shell: bash
+      env:
+        IMAGE: ${{ env.CHAIRLIFT_DAKOTA_IMAGE || 'ghcr.io/projectbluefin/dakota:testing' }}
       run: |
-        version="$(podman run --rm --pull=missing ghcr.io/projectbluefin/dakota:testing python3 --version)"
+        version="$(podman run --rm --pull=missing "$IMAGE" python3 --version)"
         echo "version=$(printf '%s' "$version" | tr -cd 'A-Za-z0-9.')" >> "$GITHUB_OUTPUT"
 
     - name: Restore the suite venv
