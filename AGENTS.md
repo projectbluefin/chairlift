@@ -59,9 +59,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   refuses a `/run/user/*` runtime directory. The compositor's and PipeWire's
   sockets live in a short private `/tmp/chairlift-wl.*` directory rather than
   the test's runtime directory, because a Unix socket path is limited to 108
-  bytes and an artifact path such as `build/atspi/<tag expression>/`
-  overflows it; screenshot clients reach PipeWire through
-  `PIPEWIRE_RUNTIME_DIR`. Dakota's container image does
+  bytes and a shard's artifact path overflows it; screenshot clients reach
+  PipeWire through `PIPEWIRE_RUNTIME_DIR`. Dakota's container image does
   not list Mesa's `GL/default/lib` in `/etc/ld.so.cache`, and without it
   Mutter's GPU-less renderer cannot load llvmpipe and segfaults; the script
   puts that directory on the loader path and renders in software, as CI
@@ -121,11 +120,18 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   scenario with its own HOME, runtime directory, config fixture
   (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`, a closed
   proxy, and an action journal; the page and shortcut inventories come from
-  `internal/navigation`. The test, release, and nightly workflows run
-  `make e2e-atspi` after `make e2e`; `dakota.sh` sets
+  `internal/navigation`. The release and nightly workflows run
+  `make e2e-atspi` after `make e2e`; the test workflow runs it as a separate
+  `atspi` job split into parallel shards — behave tag expressions over the
+  feature files' first tags, balanced by measured scenario time — and
+  `internal/installcheck`'s `TestATSPIShardsCoverEveryFeatureOnce` fails when
+  a feature is in no shard or in two, so a new feature cannot silently stop
+  running on pull requests (add its tag to a shard). Both E2E jobs restore the
+  suite venv through `.github/actions/dakota-venv`, keyed on the image's
+  Python and the pinned requirements. `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a `screen.png` in
-  `atspi-results` (`build/atspi/<tags|all>/`). A user-facing feature lands
+  `atspi-results-<shard>` (`build/atspi/<tags|all>/`). A user-facing feature lands
   with its scenario; a confirmed defect is written as a scenario tagged
   `@known_issue.<N>` rather than left untested. Never run the suite on a live
   session. The `gtk-headless-testing` skill carries the traps.
