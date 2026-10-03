@@ -39,11 +39,12 @@ provide these independent signals:
 - **Unit Tests** — headless tests under `internal/...`, with atomic coverage.
 - **Race Detection** — the same internal test scope under the race detector.
 - **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
-  screenshots uploaded as an artifact, then `make e2e-atspi`: the behave +
-  dogtail AT-SPI suite (`test/e2e/features`) driving every destination inside
-  the Dakota `testing` image pinned by digest in `test/e2e/dakota-image.sh`
-  (currently linux/amd64), with its results uploaded as
-  `atspi-results`.
+  screenshots uploaded as an artifact.
+- **AT-SPI** — `make e2e-atspi`: the behave + dogtail AT-SPI suite
+  (`test/e2e/features`) driving every destination inside the Dakota `testing`
+  image pinned by digest in `test/e2e/dakota-image.sh` (currently
+  linux/amd64), split into parallel shards (`AT-SPI (<shard>)`) by behave tag
+  expression, each uploading its results as `atspi-results-<shard>`.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.
 - **Tests Passed** — an aggregating job that succeeds only when every job
