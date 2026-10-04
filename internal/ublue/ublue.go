@@ -31,7 +31,7 @@ import (
 const (
 	// HelperPath is the fixed, absolute installed path of the privileged
 	// ublue helper binary. It must match the
-	// org.freedesktop.policykit.exec.path annotation on all three actions in
+	// org.freedesktop.policykit.exec.path annotation on all fourteen actions in
 	// data/io.projectbluefin.chairlift.ublue.policy exactly, and each action
 	// additionally selects one supported helper command through the
 	// exec.argv1 annotation. A path mismatch (for example a bare,

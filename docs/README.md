@@ -47,9 +47,7 @@ are listed in [org-adrs.md](org-adrs.md).
   unknown keys hard-error; files are field-by-field overlays (explicit empty
   clears, omitted inherits)
 - [adr/0006-split-system-integration-package-with-mutual-conflicts.md](adr/0006-split-system-integration-package-with-mutual-conflicts.md)
-  — **superseded, historical:** described a two-package split that no longer
-  exists; ChairLift now ships only the release archive the Homebrew cask
-  installs, which also carries the privileged helpers and policies
+  — publish a GUI-less system-integration package that conflicts with the full package (superseded by ADR-0018)
 - [adr/0007-pure-leaf-packages-route-around-untestable-gtk.md](adr/0007-pure-leaf-packages-route-around-untestable-gtk.md)
   — puregotk-importing packages stay test-free; all decidable logic lives in
   headless leaf packages with wiring tests proving the page builders use them
@@ -63,6 +61,9 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
   — documentation splits into current-state vs historical and is enforced by
   string-matching unit tests; prose is testable
+- [adr/0011-chairlift-owns-bluefin-family-rebasing.md](adr/0011-chairlift-owns-bluefin-family-rebasing.md)
+  — ChairLift owns Bluefin-family image rebasing and channel switching, deriving
+  switch targets from registry-verified channel and driver variant tables
 - [adr/0012-ship-as-control-center-keep-chairlift-code-name.md](adr/0012-ship-as-control-center-keep-chairlift-code-name.md)
   — the application ships as "Control Center" and keeps ChairLift as the code
   name; `branding.AppName` owns every user-visible spelling, and three
@@ -90,6 +91,10 @@ are listed in [org-adrs.md](org-adrs.md).
   validated `YYYYMMDD` word plus the booted stream and `internal/imageinfo`'s
   table; two new ublue actions (`pin`, `unpin`), and the registry confirms the
   derived reference exists before anything is staged
+- [adr/0018-distribute-via-homebrew-release-archives.md](adr/0018-distribute-via-homebrew-release-archives.md)
+  — distribute exclusively through Homebrew release archives; retire distro nFPM
+  packaging (`deb`, `rpm`, `apk`) and carry the full install surface (GUI,
+  both helpers, and policies) in the published release archive
 
 ### Design
 

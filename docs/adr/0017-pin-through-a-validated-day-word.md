@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-25
+- **Amended:** 2026-09-27 — privileged helper renamed to `chairlift-helper` (#388)
 
 ## Context
 

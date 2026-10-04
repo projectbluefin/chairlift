@@ -1,7 +1,8 @@
 # 0006 — Publish a GUI-less system-integration package that conflicts with the full package
 
-- **Status:** Accepted
+- **Status:** Superseded by [0018](0018-distribute-via-homebrew-release-archives.md)
 - **Date:** 2026-08-12
+- **Superseded:** 2026-09-27 — distro nFPM packages (`deb`, `rpm`, `apk`) dropped (#388); ChairLift is distributed exclusively through Homebrew release archives
 
 ## Context
 

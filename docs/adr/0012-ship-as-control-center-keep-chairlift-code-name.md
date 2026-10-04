@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-20
+- **Amended:** 2026-09-27 — packaging reference updated from retired nFPM packages to the ADR-0018 Homebrew release archive model (#388)
 
 ## Context
 
@@ -17,9 +18,8 @@ Most of that split is not a preference. The application ID
   installed path ([ADR-0001](0001-fixed-path-pkexec-privilege-boundary.md));
 - the install prefix and its fixed directories
   ([ADR-0002](0002-usr-prefix-is-the-only-supported-install-prefix.md));
-- the nfpm package names and their `contents:` destinations in
-  `.goreleaser.yaml`, including the system-integration split
-  ([ADR-0006](0006-split-system-integration-package-with-mutual-conflicts.md));
+- the release archive name and its contents in `.goreleaser.yaml`
+  ([ADR-0018](0018-distribute-via-homebrew-release-archives.md));
 - the desktop entry basename, which the icon theme name and the `Icon=` key
   both follow.
 

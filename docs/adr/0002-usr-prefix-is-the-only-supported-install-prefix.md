@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
+- **Amended:** 2026-09-27 — helper renamed to `chairlift-helper` and nFPM distro packaging retired in favor of Homebrew release archives (#388)
 
 ## Context
 
@@ -12,36 +13,35 @@ directory `/usr/share/polkit-1/actions` — it consults neither `PREFIX` nor
 Second, `pkexec` matches each privileged helper against the absolute
 `exec.path` annotation ([ADR-0001](0001-fixed-path-pkexec-privilege-boundary.md)),
 which names `/usr/bin/chairlift-updex-helper` for updex and
-`/usr/bin/chairlift-ublue-helper` for Bluefin-family writes. The Makefile's
+`/usr/bin/chairlift-helper` for Bluefin-family writes. The Makefile's
 `PREFIX` used to default to `/usr/local`, which put the polkit assets somewhere
 polkit never looks and the helpers somewhere the policies never match.
 
 ## Decision
 
-The Makefile defaults `PREFIX ?= /usr` (`Makefile:24`, with the rationale in
+The Makefile defaults `PREFIX ?= /usr` (`Makefile:43`, with the rationale in
 the comment above it) and `/usr` is the only supported prefix; overriding it
 produces an install whose privileged operations do not work. `DESTDIR`
 layers under the prefix for staged/packaged installs and remains fully
-supported. `.goreleaser.yaml`'s nFPM packages use the same layout.
+supported.
 
 The invariant is test-enforced: `TestMakefileInstallUsesUsrPrefix`
-(`internal/installcheck/makefile_test.go:120`) runs `make -n install` dry
+(`internal/installcheck/makefile_test.go:142`) runs `make -n install` dry
 runs for the default and explicit `PREFIX=/usr` and asserts both helper
-binaries land under `DESTDIR/usr/bin` and all four policies land under
+binaries land under `DESTDIR/usr/bin` and all three policies land under
 `DESTDIR` + `/usr/share/polkit-1/actions`;
-`TestGoreleaserNfpmLayoutMatchesUsrPrefix`
-(`internal/installcheck/goreleaser_test.go:100`) holds every nFPM entry's
-`bindir` and polkit destinations to the same constants; and the E2E staged
-install (`test/e2e/e2e_test.go`, `TestInstalledBundleAndHelperBoundary`)
+`TestGoreleaserArchivesCarryTheInstallSurface` holds every archive to the
+same `/usr` layout and helper inventory; and the E2E staged install
+(`test/e2e/e2e_test.go`, `TestInstalledBundleAndHelperBoundary`)
 verifies the real `make install` layout.
 
-Migration from the old default is documented in `README.md:150-152`: before
+Migration from the old default is documented in `README.md:223-224`: before
 reinstalling at `/usr`, remove a prior source install with
 `sudo make uninstall PREFIX=/usr/local`.
 
 ## Consequences
 
-- Source installs, nFPM packages, and the polkit/pkexec constants all agree
+- Source installs, release archives, and the polkit/pkexec constants all agree
   on one layout; a change to any of the three fails a test rather than
   silently drifting.
 - Installing to `$HOME/.local` or `/usr/local` still "works" for the
@@ -75,5 +75,5 @@ reinstalling at `/usr`, remove a prior source install with
 - Enforced by: `internal/installcheck/makefile_test.go`
   (`TestMakefileInstallUsesUsrPrefix`),
   `internal/installcheck/goreleaser_test.go`
-  (`TestGoreleaserNfpmLayoutMatchesUsrPrefix`),
+  (`TestGoreleaserArchivesCarryTheInstallSurface`),
   `test/e2e/e2e_test.go` (`TestInstalledBundleAndHelperBoundary`)

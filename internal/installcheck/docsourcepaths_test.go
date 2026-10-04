@@ -70,10 +70,10 @@ var knownMissingDocPaths = map[string]string{}
 // future edit to docSourcePathPattern, or a reorganisation of docs/,
 // stopped the extractor from matching anything, every assertion below
 // would pass over an empty set and the gate would silently protect
-// nothing. 63 paths are cited today; the floor is set well beneath that so
+// nothing. 134 paths are cited today; the floor is set well beneath that so
 // ordinary documentation edits do not trip it, while a parser regression
 // that collapses the set still fails.
-const minCitedSourcePaths = 40
+const minCitedSourcePaths = 100
 
 // docSourcePathPattern matches one backtick-quoted, repository-relative
 // source path, with an optional :line or :start-end suffix (ADR-0009 and
@@ -88,11 +88,20 @@ var docSourcePathPattern = regexp.MustCompile(
 	`^(?:internal|cmd|data|test)/[A-Za-z0-9_.\-/]+\.(?:go|yml|yaml|sh|policy|desktop|svg|toml)(?::\d+(?:-\d+)?)?$`,
 )
 
-// backtickSpanPattern matches the contents of a single-line inline code
-// span. Citations are always written in backticks in these documents, and
+// fencedBlockPattern matches Markdown fenced code blocks (```...```).
+// Fenced blocks are stripped before inline code span extraction because
+// a three-backtick fence introduces an odd number of backticks that shifts
+// inline span parity across the rest of the document, hiding subsequent
+// backtick-quoted source path citations.
+var fencedBlockPattern = regexp.MustCompile("(?s)```[^\n]*\n.*?```")
+
+// backtickSpanPattern matches the contents of an inline code span.
+// Citations are always written in backticks in these documents, and
 // restricting extraction to code spans keeps ordinary prose — which may
-// mention a package name in passing — out of the set.
-var backtickSpanPattern = regexp.MustCompile("`([^`\n]+)`")
+// mention a package name in passing — out of the set. Soft-wrapped multi-line
+// code spans (such as constant declarations split across a line break) are
+// matched so trailing parenthetical citations are not missed by shifting parity.
+var backtickSpanPattern = regexp.MustCompile("`([^`\n]+(?:\n[ \t]*[^ \t\r\n`][^`\n]*)?)`")
 
 // citation is one extracted source-path reference: the path with any
 // :line suffix stripped, plus the document it was read from, so a failure
@@ -116,12 +125,25 @@ func stripLineSuffix(cited string) string {
 // which is the document's text, in the order encountered.
 func extractCitedSourcePaths(document, text string) []citation {
 	var found []citation
-	for _, span := range backtickSpanPattern.FindAllStringSubmatch(text, -1) {
-		cited := span[1]
-		if !docSourcePathPattern.MatchString(cited) {
+	cleanText := fencedBlockPattern.ReplaceAllString(text, "")
+	for _, span := range backtickSpanPattern.FindAllStringSubmatch(cleanText, -1) {
+		raw := span[1]
+		candidates := []string{
+			strings.TrimSpace(raw),
+			strings.TrimSpace(strings.ReplaceAll(raw, "\n", " ")),
+			strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(raw, "\n", ""), " ", "")),
+		}
+		var matched string
+		for _, c := range candidates {
+			if docSourcePathPattern.MatchString(c) {
+				matched = c
+				break
+			}
+		}
+		if matched == "" {
 			continue
 		}
-		found = append(found, citation{Path: stripLineSuffix(cited), Document: document})
+		found = append(found, citation{Path: stripLineSuffix(matched), Document: document})
 	}
 	return found
 }

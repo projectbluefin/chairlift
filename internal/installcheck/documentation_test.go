@@ -153,6 +153,43 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 		}
 	})
 
+	t.Run("retired helper name is absent from active ADRs", func(t *testing.T) {
+		// ADRs permitted to contain the historical chairlift-ublue-helper name
+		// mapped to their justification (ADR-0006 is superseded; ADR-0013 and
+		// ADR-0017 predate the #388 rename and carry Amended notes).
+		permittedHistoricalADRs := map[string]string{
+			"0006-split-system-integration-package-with-mutual-conflicts.md": "superseded by ADR-0018",
+			"0013-rollback-catalog-reads-the-registry-live.md":               "amended with note on helper rename",
+			"0017-pin-through-a-validated-day-word.md":                       "amended with note on helper rename",
+		}
+
+		adrDir := filepath.Join(RepoRoot(), "docs", "adr")
+		entries, err := os.ReadDir(adrDir)
+		if err != nil {
+			t.Fatalf("read %s: %v", adrDir, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") || entry.Name() == "TEMPLATE.md" {
+				continue
+			}
+			path := filepath.Join("docs", "adr", entry.Name())
+			content := readRepoFile(t, path)
+			if _, allowed := permittedHistoricalADRs[entry.Name()]; allowed {
+				continue
+			}
+			if strings.Contains(content, "chairlift-ublue-helper") {
+				t.Errorf("%s contains retired helper name %q but is not in permittedHistoricalADRs allowlist", path, "chairlift-ublue-helper")
+			}
+		}
+
+		for allowedFile, reason := range permittedHistoricalADRs {
+			path := filepath.Join("docs", "adr", allowedFile)
+			content := readRepoFile(t, path)
+			if !strings.Contains(content, "chairlift-ublue-helper") {
+				t.Errorf("permittedHistoricalADR %s (%s) no longer contains retired name %q; remove from allowlist", path, reason, "chairlift-ublue-helper")
+			}
+		}
+	})
 	t.Run("public metrics catalog stays auditable", func(t *testing.T) {
 		catalog := strings.Join(strings.Fields(readRepoFile(t, filepath.Join("docs", "metrics", "README.md"))), " ")
 		for _, required := range []string{

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
+- **Amended:** 2026-09-24 — native A/B staging (`internal/sysupdate`) removed (#272); 2026-09-27 — helper renamed to `chairlift-helper` (#388) and subcommand count updated to fourteen
 
 ## Context
 
@@ -25,23 +26,22 @@ Every root mutation is invoked through `pkexec` at a hardcoded absolute path
 that is a Go constant, matching the policy's `exec.path` annotation exactly:
 
 - updex writes go through `internal/updex.HelperPath =
-  "/usr/bin/chairlift-updex-helper"` (`internal/updex/updex.go:28`); `runHelper`
+  "/usr/bin/chairlift-updex-helper"` (`internal/updex/updex.go:31`); `runHelper`
   always passes this constant, never a bare name.
 - Bluefin-family system writes go through `internal/ublue.HelperPath =
-  "/usr/bin/chairlift-ublue-helper"` (`internal/ublue/ublue.go:41`); `runHelper`
+  "/usr/bin/chairlift-helper"` (`internal/ublue/ublue.go:42`); `runHelper`
   always passes this constant, never a bare name.
 - bootc staging runs `internal/bootc.StageScriptPath =
-  "/usr/libexec/bootc-update-stage"` (`internal/bootc/stage.go:18`).
-- native A/B staging runs `internal/sysupdate.StageScriptPath =
-  "/usr/libexec/snosi-sysupdate-stage"` (`internal/sysupdate/stage.go:20`).
+  "/usr/libexec/bootc-update-stage"` (`internal/bootc/stage.go:14`).
 
 The updex policy (`data/io.projectbluefin.chairlift.updex.policy`) declares one
 action per helper subcommand, each selecting its command through `exec.argv1`
 (`enable-feature`, `disable-feature`, `update`). The ublue policy
-(`data/io.projectbluefin.chairlift.ublue.policy`) does the same for its nine
+(`data/io.projectbluefin.chairlift.ublue.policy`) does the same for its fourteen
 subcommands: `channel-switch`, `dx-enable`, `dx-disable`, `restart`,
-`rollback`, `auto-updates-enable`, `auto-updates-disable`, `driver-switch`, and
-`factory-reset`. Because PolicyKit does not validate the rest of argv, the
+`rollback`, `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
+`factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`, and
+`docker-disable`. Because PolicyKit does not validate the rest of argv, the
 helpers are a second boundary: `internal/updexhelper.ParseInvocation` and
 `internal/ubluehelper.ParseInvocation` reject extra, misplaced, and unknown
 arguments before any privileged call.
