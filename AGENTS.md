@@ -640,11 +640,13 @@ An agent must not break these:
   `bootc_status_group` and `channel_group` into Updates. Current non-null
   fields win; retired information/health groups have no runtime effect.
   This must not add a navigable page or relax unknown-name or sudo validation.
-- **CI actions are immutable.** Every external `uses:` reference under
-  `.github/workflows/` must use a full 40-character commit SHA. Keep the
-  human-readable version or source ref in a trailing comment and update both
-  intentionally. Local actions referenced with `./` are exempt. The
-  `internal/installcheck` workflow scan enforces this across every workflow.
+- **CI action authority.** Third-party `.github/workflows/` actions use full
+  40-character commit SHAs with reviewed version comments. Local `./` actions
+  are exempt. Shared `projectbluefin/actions` production interfaces use managed
+  `@v1`; candidate branches are allowed only for the secret-free, entirely
+  read-only issue-policy preview interface. Native review, actual main CI and
+  released-source guards still precede writes. The installcheck scan enforces
+  these boundaries across every workflow.
 - **The merge queue gates on one context, and that context waits for every
   other job.** `main` merges through a merge queue, which validates a
   candidate on a `gh-readonly-queue/main/pr-<n>-<sha>` ref — a `merge_group`
@@ -1178,6 +1180,13 @@ the linked sidecar authority for cross-repository factory process; do not copy
 its policy into this file. For local navigation, start at
 [`docs/factory/README.md`](docs/factory/README.md).
 
+For ChairLift intake, classification, maintainer acceptance, assignment, Prow
+commands, label migration, release delivery or reporter verification, read
+[`docs/skills/issue-lifecycle/SKILL.md`](docs/skills/issue-lifecycle/SKILL.md)
+and the canonical [`.github/issue-policy.json`](.github/issue-policy.json).
+Product reports stay open through actual delivery and reporter verification;
+link unresolved reports with `Refs`, not automatic merge-closing keywords.
+
 | Topic | Common source |
 | --- | --- |
 | Factory onboarding | [`docs/skills/factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md) |
@@ -1193,8 +1202,8 @@ and a knowledge decision. Preserve a durable lesson in the closest canonical
 package under `docs/skills/`, or record a verified correction in `.memory/`.
 Banned stale-artifact patterns: no committed session notes, no append-only
 changelog/status files, and no "append here" instructions. ChairLift's normal
-PR and review rules remain in force; Common's `common`-only direct-push
-exception does not apply here.
+PR and review rules remain in force; cross-repository factory guidance does
+not authorize a direct push or bypass of ChairLift's native merge controls.
 
 Two of those imports are load-bearing often enough to name here, without
 restating the policy behind them. First, an AI-authored commit carries **both**

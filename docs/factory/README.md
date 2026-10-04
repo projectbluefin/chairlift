@@ -8,6 +8,10 @@ intentionally a link map; the linked documents are the authorities.
 | ChairLift contract | [`AGENTS.md`](../../AGENTS.md) |
 | Local skill router | [`docs/SKILL.md`](../SKILL.md) |
 | Local skill catalog | [`docs/skills/index.md`](../skills/index.md) |
+| ChairLift lifecycle, catalog and Prow | [`issue-lifecycle`](../skills/issue-lifecycle/SKILL.md) |
+| ChairLift canonical catalog | [`.github/issue-policy.json`](../../.github/issue-policy.json) |
+| ChairLift Prow allowlist configuration | [`.github/prow.yaml`](../../.github/prow.yaml) |
+| ChairLift release and merge mechanics | [`factory-onboarding`](../skills/factory-onboarding/SKILL.md) |
 | Common factory onboarding | [`docs/skills/factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md) |
 | Common agentic model | [`docs/factory/agentic-model.md`](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md) |
 | Common human decision gates | [`docs/skills/human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md) |

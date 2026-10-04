@@ -1,0 +1,102 @@
+name: "Bug report"
+description: "Report broken or incorrect ChairLift behavior."
+title: "bug: "
+labels: ["needs-triage", "kind/bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## What happens next
+
+        A maintainer assesses the report before accepting implementation. You do
+        not need label permissions or slash commands: answer questions in normal
+        replies. Choosing machine analysis does not approve implementation.
+
+        ChairLift is distributed through Homebrew, with stable `vYY.MM.N` releases.
+        A merged fix is not proof that your installation has it. The report stays
+        open through delivery and a request to test the named version. Fixes to
+        image-installed helpers also need the affected OS image to deliver them.
+
+        Keep Common reports in [Common](https://github.com/projectbluefin/common/issues).
+        For a ChairLift problem that depends on Common or an image, link the
+        related report here; filing does not transfer it or change code ownership.
+        Remove secrets and personal information from logs before posting.
+  - type: dropdown
+    id: automation_preference
+    attributes:
+      label: "Automation preference"
+      description: "Choose how this report may be analyzed; a maintainer separately accepts implementation."
+      options:
+        - "Human interaction only"
+        - "Machine analysis is welcome"
+        - "No preference"
+    validations:
+      required: true
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: "What happened?"
+      description: "Name the page, control, or action and describe what actually happened."
+      placeholder: "On Updates, I selected ... and saw ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: "Expected behavior"
+      description: "What should have happened instead?"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction_steps
+    attributes:
+      label: "Reproduction steps"
+      description: "Give the exact starting state, steps, and whether the problem repeats. If it cannot be repeated, explain when it happened and provide the available evidence."
+      placeholder: |
+        1. Start with ...
+        2. Open ...
+        3. Select ...
+        Result: ...
+    validations:
+      required: true
+  - type: input
+    id: chairlift_version
+    attributes:
+      label: "ChairLift version"
+      description: "Copy the version from ChairLift's About dialog or the installed Homebrew package. If ChairLift cannot start, say so and provide the package version."
+      placeholder: "26.10.1 (stable release v26.10.1)"
+    validations:
+      required: true
+  - type: textarea
+    id: image
+    attributes:
+      label: "Host OS image and version"
+      description: "Give the booted OS/image, channel, version and CPU architecture. Include the desktop (GNOME/KDE/etc.). If the image is unknown, say what you can identify; do not guess a digest."
+      placeholder: |
+        OS/image and channel:
+        Booted version:
+        Architecture:
+        Desktop:
+    validations:
+      required: true
+  - type: textarea
+    id: installation
+    attributes:
+      label: "Installation and affected component"
+      description: "State the Homebrew cask/tap and whether the problem concerns the app, chairlift-helper, chairlift-updex-helper, or an OS-provided dependency. If known, identify the installed helper/image version."
+    validations:
+      required: false
+  - type: textarea
+    id: evidence
+    attributes:
+      label: "Logs and screenshots"
+      description: "Attach relevant error text, terminal output, or screenshots. Redact tokens, private paths, and other personal information."
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: "Extra context"
+      description: "Link related issues or recent changes; keep reports in their original repository."
+    validations:
+      required: false

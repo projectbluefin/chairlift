@@ -7,6 +7,9 @@ matches the task before acting.
 
 - [factory-onboarding](factory-onboarding/SKILL.md) — onboard a verified
   Project Bluefin factory assignment and load the Common sidecar procedures.
+- [issue-lifecycle](issue-lifecycle/SKILL.md) — file and triage reports, accept or
+  assign work, use maintainer Prow commands, migrate labels, and verify delivery
+  to the Homebrew app and any image-installed helpers.
 - [skill-improvement](skill-improvement/SKILL.md) — preserve durable lessons,
   corrections, and catalog integrity when a change is complete.
 

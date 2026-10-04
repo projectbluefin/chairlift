@@ -6,9 +6,17 @@
 
 ## Related issue
 
-<!-- Use a closing keyword when this pull request fully resolves the issue. -->
+<!-- Use Refs for product reports awaiting delivery and reporter verification. Use Closes only for code-only work whose acceptance criteria are met at merge, or an already delivered and verified report. See docs/skills/issue-lifecycle/SKILL.md. -->
 
-Closes #
+Refs #
+
+## Delivery and verification
+
+<!-- For product fixes, identify the actual fix, affected Homebrew app version and any separately image-installed helpers. A release or merged reference is not proof that the reporter can consume the fix. For code-only work, explain why merge completes acceptance. -->
+
+- Affected app/package or image-installed component:
+- Release/delivery owner and remaining steps:
+- Reporter verification steps (or why not applicable):
 
 ## Change classification
 

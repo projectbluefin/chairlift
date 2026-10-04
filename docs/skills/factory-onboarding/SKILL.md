@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
-description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release.
-version: 1.2.0
-last_updated: 2026-10-01
+description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; load issue-lifecycle for intake, label decisions, assignment and delivery verification.
+version: 1.3.0
+last_updated: 2026-10-04
 tags:
   - factory
   - onboarding
@@ -31,15 +31,21 @@ factory-assigned change:
 This package is ChairLift's local entry point. Common remains authoritative for
 cross-repository factory rules.
 
+For issue intake, label/catalog decisions, acceptance and assignment, Prow
+commands, migration or reporter verification, load
+[`issue-lifecycle`](../issue-lifecycle/SKILL.md). It links shared policy and
+owns the local Homebrew-versus-image-helper delivery boundary.
+
 ## Local mechanic: the merge queue, and how to get back out of it
 
-The gates themselves are Common's policy, not ChairLift's. Who may approve,
-when the Merge Gate is satisfied, what the independent Security Gate covers,
-and why `hold` is workflow-controlled all live in Common's
+Human approval and independent security gates come from Common's linked
 [`human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md)
 and
-[`label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md);
-read them there rather than reasoning from a local copy.
+[`label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
+ChairLift's actual merge requirements are its native ruleset: one required
+approving review, **Tests Passed**, and the squash/ALLGREEN merge queue. Read
+the live ruleset before publishing; an administrative bypass capability is
+not permission to use it. Issue acceptance is separate from PR approval.
 
 What is local, and what a factory agent has to know before touching a pull
 request here, is that this repository merges through a **merge queue**:

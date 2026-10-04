@@ -1,0 +1,296 @@
+---
+name: issue-lifecycle
+description: Use when filing or triaging ChairLift reports, classifying labels, accepting or assigning work, linking PRs, recording delivery, verifying fixes, or migrating the local lifecycle.
+version: 1.0.0
+last_updated: 2026-10-04
+tags:
+  - factory
+  - issues
+  - labels
+  - release
+metadata:
+  type: reference
+---
+
+# ChairLift issue lifecycle
+
+ChairLift owns its intake, label catalog and application delivery boundary.
+The shared implementation lives in `projectbluefin/actions`; this repository
+consumes it rather than maintaining another lifecycle bot. Start with local
+[`AGENTS.md`](../../../AGENTS.md) and
+[`factory-onboarding`](../factory-onboarding/SKILL.md). Common supplies the
+shared [label and lifecycle authority](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
+and [human gates](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md).
+Use those authorities for shared policy; the procedures below resolve
+ChairLift-specific intake, routing, publication and migration.
+
+## Preflight and intake
+
+1. Verify the target is `projectbluefin/chairlift`, the exact issue or PR, the
+   current scope and any Hive assignment. Read `.knowledge/README.md` and
+   `.memory/README.md` plus their indexed corrections before acting.
+2. Read the default-branch [`issue-policy.json`](../../../.github/issue-policy.json)
+   and caller workflow. That catalog, not another repository's labels or a work
+   board column, defines the local vocabulary. Read live assignment and Hive
+   state when needed; an offered queue item is not implementation approval.
+3. Use the [bug or feature forms](../../../.github/ISSUE_TEMPLATE/). Bug reports
+   need actual behavior, expected behavior, reproducible steps, ChairLift's
+   About/package version, and the booted OS/image/version. Identify the page or
+   control, installation source, and any affected privileged helper. Logs and
+   screenshots must be redacted. A missing fact should be reported as unknown,
+   not invented.
+4. Preserve the **Automation preference** exactly: **Human interaction only**,
+   **Machine analysis is welcome**, or **No preference**. The first requests
+   `human-only`; the other choices never accept implementation. Routine status
+   reconciliation is not permission for machine analysis or agent execution.
+5. Keep Common reports in Common. Link cross-repository dependencies where they
+   are; this intake does not transfer reports, reroute application code, or
+   authorize a change to image ownership. Questions can use ChairLift
+   Discussions. Blank/CLI intake still needs classification and assessment;
+   reporters never need label permissions or slash commands.
+
+Preflight is complete when the repository, scope, preference, source version,
+required evidence and next human decision are known or explicitly requested.
+
+## Catalog and reader contracts
+
+Open issues carry **one** of `needs-triage`, `triage/needs-information`,
+`triage/accepted`, `awaiting-release`, or `needs-verification`. PRs carry no
+issue-stage labels: native assignment, review requests, review state, checks
+and the merge queue describe their progress. A `kind/*` label describes work,
+not authorization; an open issue has exactly one. Missing or conflicting
+classification needs a maintainer decision, not an arbitrary dispatch.
+
+The catalog contains:
+
+- **Kinds:** `kind/bug`, `kind/feature`, `kind/task`, `kind/documentation`,
+  and `kind/tech-debt`. These are primary work types, not stacked topics.
+- **Native areas:** the route identities `updates`, `applications`, `agents`,
+  `features`, `livery`, `maintenance`, `help`, and `recovery`, plus source-backed
+  subsystem areas `homebrew`, `flatpak`, `bootc`, `updex`, `privileged-helper`,
+  `configuration`, `accessibility`, `ci`, and `release`. Cross-cutting
+  `area/quality`, `area/testing`, `area/security` and `area/architecture` stack
+  alongside these, so classifying a bug does not erase its security or testing
+  context. Areas do not replace route or code ownership. Route identity is
+  defined by [`internal/navigation`](../../../internal/navigation/navigation.go).
+- **Independent overlays/gates:** `blocked`, `hold`, `human-only`,
+  `needs-human`, `needs-decision`, `needs-kind`, and `tracking`. Preserve their
+  owner and reason when classifying or advancing a stage. Acceptance clears
+  only an eligible lifecycle-bot gate, not a human/App gate or pause.
+- **Operational readers:** existing `agent/*`, `hive/*`, `source:agent`,
+  `from-review`, `priority/*`, `acmm`, `ai-fix-requested`, newcomer and
+  disposition labels remain separate from stage and kind. Provenance does not
+  grant acceptance or merge authority. An implementation-request label still
+  requires current accepted scope and all independent safety gates.
+
+The unprefixed `bug`, `enhancement`, `question` and `epic` labels are retained
+reader contracts, not extra canonical kinds. `kind_sources` derives a primary
+kind from existing reader metadata only when no primary kind exists; it never
+writes reverse mirrors. `gate_labels` preserves `question` as an independent
+answer-required negative gate, not implementation acceptance. Pinned Hive
+source uses the legacy labels in ordering, exact contributor skips and tracker
+detection. Keep their definitions and assignments until an evidenced reader
+cutover; Prow cannot edit them or clear the operational question gate.
+The [Hive operator reference](https://github.com/hivecommons/hive/blob/263382dd59d27c9a921d261ab4dd2172fa0d0f79/src/docs/labels-and-control-signals.md)
+also documents `from-review` as informational, agent lane tokens as segmented
+routing, tracker detection by the final `epic` segment, and the independent
+`needs-human` enumeration gate. This is reader evidence, not a promise that
+cached or differently configured workers cannot act.
+
+The old auto-merge wording on `source:agent` and `kind/tech-debt` is not an
+authorization contract: [#25](https://github.com/projectbluefin/chairlift/issues/25)
+uses both for a quality-agent coverage finding explicitly filed in hold-gated
+mode, and [#26](https://github.com/projectbluefin/chairlift/issues/26) explicitly
+requires human review. Their catalog descriptions record provenance and debt,
+not a fabricated approval. `from-review` retains the pinned reader's review
+finding meaning.
+
+Standing trackers [#137](https://github.com/projectbluefin/chairlift/issues/137),
+[#252](https://github.com/projectbluefin/chairlift/issues/252), and
+[#328](https://github.com/projectbluefin/chairlift/issues/328) retain their
+child-work/portfolio role. Their bodies enumerate unfinished sub-work; an old
+human queue or a merged child is not proof that the parent is complete. Keep
+`tracking` and the human preference; assign concrete child tasks separately.
+
+## Maintainer acceptance and assignment
+
+1. Assess the report at `needs-triage`. Select `triage/needs-information` if
+   information or a decision is missing, then post a new specific request.
+   Explicitly `@mention` the reporter only if they must answer; otherwise name
+   the responsible maintainer. Old or answered questions do not request action.
+   A reporter's ordinary reply returns the report to assessment, not directly
+   to accepted implementation.
+2. Review or edit scope and acceptance criteria **before** accepting. Resolve
+   a `needs-decision` reason through its owner. In GitHub's **Labels** picker,
+   add `triage/accepted` as a human with current write/maintain/admin permission.
+   Removing `needs-triage` or `needs-human` is not approval: the bot restores
+   waiting labels until it has a valid acceptance event. `/hive approve` and
+   Prow commands are not ChairLift lifecycle acceptance controls.
+   An operational `question` label remains an independent answer-required gate
+   even after acceptance. Its owner resolves the answer and explicitly removes
+   that label in the Labels picker before new implementation can start; a
+   `/kind` command or acceptance never clears it.
+3. Treat body changes and a return to assessment/information gathering as a
+   new scope requiring fresh acceptance. Bot maintenance does not replace the
+   underlying human acceptance or withdrawal. Decline or close a duplicate
+   with the explicit reason instead of inventing another stage.
+4. **Acceptance does not assign a contributor.** Assign in GitHub or explicitly
+   route accepted work through the existing factory process. Verify the
+   assignee, scope, `human-only`, unresolved gates, `blocked` and `hold` before
+   starting. Name each blocker, its owner and what permits resuming. Neither
+   analysis consent nor an old queue authorizes implementation.
+
+Every lifecycle post should state **Status**, then the relevant role headings
+(**Maintainer**, **Contributor**, **Reporter**), concise action bullets, and an
+explicit **Reporter action**. Keep an unchanged waiting notice quiet; do not
+replace a question, blocker or tracker instruction with a dense generic post.
+Reporters reply normally and need no label privileges.
+
+## Implementation, native review and release
+
+1. Link product fixes using **`Refs #NNN`** while installation delivery or
+   reporter verification is outstanding. Use **`Closes #NNN`** only for code-only
+   work whose acceptance criteria are satisfied at merge, or a report already
+   delivered and verified. A merged related reference may be documentation;
+   it does not automatically advance the actual fix or close the report.
+2. Implement the accepted scope, add the regression coverage and current-state
+   docs, and complete the [PR template](../../../.github/pull_request_template.md).
+   Follow [CONTRIBUTING](../../../CONTRIBUTING.md), the local risk/security
+   gates, and Common's linked human gates. Preserve native approvals,
+   assignees, review requests and existing queue decisions.
+3. Follow ChairLift's native `main — review policy`: one required approving
+   review, the **Tests Passed** aggregate, and the squash/ALLGREEN merge queue.
+   The queue runs `merge_group` validation; green branch CI or an agent review
+   does not substitute for the human gate. Re-read live rulesets before
+   publication. Administrative capability is not authorization to bypass.
+4. After verifying that the **actual accepted fix** merged, a maintainer names
+   its PR/commit and affected component and selects `awaiting-release` in the
+   Labels picker. Merge is not publication. Keep the product report open.
+5. Publish only from clean, reviewed, CI-green `origin/main`, using ChairLift's
+   existing stable `vYY.MM.N` tag workflow. The
+   [local release checklist](../factory-onboarding/SKILL.md#stable-release-cutover)
+   owns exact release commands and checks. ChairLift is **Homebrew-only**;
+   there are no deb/rpm/apk packages. Verify the successful publishing run,
+   signed architecture-appropriate release assets and the Homebrew package
+   that the reporter can actually install.
+6. If the fix changes `chairlift-helper`, `chairlift-updex-helper`, PolicyKit
+   files, or an image-owned dependency, also verify delivery on the reporter's
+   affected booted image. A Homebrew app publication does not update helpers
+   installed at `/usr/bin/`, policies under `/usr/share/polkit-1/actions/`, or
+   the image-provided `/usr/libexec/bootc-update-stage`. Link the image evidence
+   and record any necessary update/reboot in the verification instructions.
+
+## Delivery evidence and reporter verification
+
+A trusted human verifies installation availability, then edits the issue body
+with a **Delivery evidence** heading and the following fields before selecting
+`needs-verification` in the Labels picker:
+
+```text
+Package: <actual Homebrew cask/tap or delivered component>
+Version: <actual published stable vYY.MM.N version>
+Fix revision: <full 40-hex merged commit>
+Release/build: https://<actual published release or successful publishing run>
+Verify: <exact install/update, restart/reboot and original reproduction steps>
+```
+
+Use real values, not a guessed version or a skipped publication run. Include
+separate image/helper delivery links when required; the runtime checks the
+record shape and authorized request, while the human verifies the fix really
+reaches the named installation. Record the final body first, then select the
+stage so the authorization matches the body revision.
+
+The reporter installs the named version, performs any specified image update
+and restart/reboot, repeats the original reproduction, and replies normally:
+
+- **Confirmed fixed** plus the tested version confirms the delivered fix and
+  allows closure after the authorized verification request.
+- **Still broken** plus the tested version and evidence returns the report to
+  triage; do not infer success from silence or a merged PR.
+
+A maintainer reviews other replies and unresolved scope. No reporter command,
+label permission, automatic merge-close or early approval is required.
+
+## Maintainer Prow commands
+
+[`prow.yaml`](../../../.github/prow.yaml) configures the constrained wrapper for
+CNCF Prow GitHub Actions **v3.0.1**
+([immutable upstream revision](https://github.com/cncf/prow-github-actions/tree/187c5e3cd95a329c43448e1bdb3b1f5249232e44)).
+The local catalog is the allowlist. Send exactly one command as the entire
+comment; current human write/maintain/admin permission is checked. Mutating
+commands are **issue-only**, not a replacement PR review/merge interface.
+
+| Command | Authorized result |
+| --- | --- |
+| `/kind VALUE` | Select one catalog kind and replace the prior kind |
+| `/area VALUE` | Add one catalog area; other areas remain |
+| `/remove-area VALUE` | Remove that catalog area |
+| `/hold` | Pause the issue with literal `hold` |
+| `/hold cancel`, `/unhold`, `/remove-hold` | Explicitly withdraw literal `hold` only |
+| `/help`, `/prow help` | Wrapper-only informational help; no labels change |
+
+For example, `/kind bug` selects `kind/bug`; `/area updates` adds
+`area/updates`. Hold withdrawal does not clear `blocked`, `human-only`,
+`needs-human`, `do-not-merge*` or acceptance requirements. Read the pause reason
+before explicitly withdrawing it. The wrapper reports the actual applied,
+denied, invalid or failed result with specific next steps. Check that result,
+not merely the command's presence.
+
+There is no generic `/label`, `/remove-kind`, stage/acceptance command,
+assignment, approval, implementation dispatch or merge command in this surface.
+Upstream `/help` mutates a label, so it is not forwarded; help here is read-only.
+Prow's PR label-to-merge path is not enabled. Reporters continue to use normal
+replies, not these maintainer controls.
+
+## Full-history catalog migration
+
+Use Common's shared
+[factory onboarding](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md)
+and [lifecycle operator procedure](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
+for action pinning, CI/main activation, preview/archive, caller cutover and
+post-deployment proof. Locally:
+
+1. Inventory **all** issue and PR assignments, open and closed, and every label
+   writer/reader before mutation. Archive definitions, assignments, preference,
+   scope and current assignees. Update owned writers together so they cannot
+   restore retired stages; preserve operational and external Hive contracts.
+   ChairLift's `prior_comment_markers` names the existing Common hidden marker
+   solely to reuse an authoritative machine status already in transferred
+   history. New reports use the ChairLift marker; this configuration neither
+   transfers reports nor grants old bot text acceptance or delivery authority.
+2. Review the catalog's `label_aliases` and `retired_stages` against that archive.
+   Descriptive mappings are explicit:
+
+   | Retired description | Canonical target |
+   | --- | --- |
+   | `docs`, `documentation` | `kind/documentation` |
+   | `quality`, `testing`, `security`, `architecture` | Corresponding `area/*` |
+   | `tech-debt` | `kind/tech-debt` |
+   | `roadmap` | `kind/task` |
+   | `accessibility`, `ci` | Corresponding `area/*` |
+
+   `kind_sources` establishes `bug` → `kind/bug`, `enhancement` →
+   `kind/feature`, and `question`/`epic` → `kind/task` when no primary kind
+   exists, retaining every operational reader assignment. `question` remains
+   an independent negative gate and `epic` retains tracker handling; neither
+   becomes a dispatchable kind. Conflicting kinds require a human
+   classification rather than silently discarding meaning.
+3. Retire `1-triage`, `2-discussing`, `3-human-queue`, `3-clanker-queue`,
+   `4-review`, `status/discussing`, `status/queued`, `status/claimed`,
+   `queue/agent-ready`, and `queue/claimed` as stage assignments. None maps to
+   acceptance. Old human routing remains `human-only`; ambiguous queues return
+   to assessment. Preserve explicit human scope, trackers, independent gates,
+   `blocked`/`hold`, all assignees, approvals and native PR state. Closed history
+   receives taxonomy cleanup, not new open-issue stages or reopening.
+4. Apply only the reviewed labels-only migration after the shared implementation
+   and caller pass CI and are present on `main`. Archive before writing; no
+   migration comments, mentions, closures, transfers, assignments or approvals.
+   GITHUB_TOKEN mutations do not reliably trigger a second Actions workflow:
+   serialize Prow and reconciliation in the caller and keep scheduled repair.
+5. Retire obsolete definitions only after all historical assignments are
+   accounted for and all supported writers/clients have cut over. Retained
+   operational labels are not retirement candidates. Keep the archive outside
+   the repository and use the deployment's backup artifacts for recovery.
+6. Prove one issue stage, one kind, no PR stages, preserved gates/preferences,
+   truthful bot/Prow outcomes, and no premature close with real event flows.
+   A green docs-only check or catalog creation alone is not activation proof.

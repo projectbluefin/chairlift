@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/config"
-	"gopkg.in/yaml.v3"
 )
 
 func readRepoFile(t *testing.T, relative string) string {
@@ -315,52 +314,6 @@ func TestDocumentedOptionalFieldsCoverCanonicalGroupFields(t *testing.T) {
 	}
 }
 
-func TestAIFixRequestedWorkflowIsLabelScoped(t *testing.T) {
-	path := filepath.Join(".github", "workflows", "ai-fix-requested.yml")
-	workflow := readRepoFile(t, path)
-
-	var document yaml.Node
-	if err := yaml.Unmarshal([]byte(workflow), &document); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-
-	for _, required := range []string{
-		"issues:",
-		"types: [labeled]",
-		"issues: write",
-		"github.event.issue.state == 'open'",
-		"github.event.label.name == 'ai-fix-requested'",
-		"actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd",
-		"<!-- ai-fix-requested:${issueNumber} -->",
-		"comments.some((comment) => comment.body?.includes(marker))",
-		"@copilot Please implement",
-	} {
-		if !strings.Contains(workflow, required) {
-			t.Errorf("%s does not contain required contract %q", path, required)
-		}
-	}
-
-	for _, unsafe := range []string{
-		"pull_request_target:",
-		"actions/checkout@",
-		"github.event.issue.body",
-		"github.event.issue.title",
-		"context.payload.issue.body",
-		"context.payload.issue.title",
-		"contents: write",
-		"\n        run:",
-	} {
-		if strings.Contains(workflow, unsafe) {
-			t.Errorf("%s contains unsafe or unnecessary workflow surface %q", path, unsafe)
-		}
-	}
-
-	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
-	if !strings.Contains(quality, "`.github/workflows/ai-fix-requested.yml`") {
-		t.Error("docs/quality.md does not document the AI-fix-requested workflow")
-	}
-}
-
 func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
 	path := filepath.Join(".github", "workflows", "copilot-review-apply.yml")
 	workflow := readRepoFile(t, path)
@@ -394,14 +347,4 @@ func TestCopilotReviewApplyWorkflowContract(t *testing.T) {
 		}
 	}
 
-	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
-	if !strings.Contains(quality, "`.github/workflows/copilot-review-apply.yml`") {
-		t.Error("docs/quality.md does not document the Copilot review apply workflow")
-	}
-	if !strings.Contains(quality, "The review workflow receives read-only contents and pull-requests") {
-		t.Error("docs/quality.md does not document the review workflow's pull-requests write permission")
-	}
-	if strings.Contains(quality, "issues write, and pull-requests") {
-		t.Error("docs/quality.md still claims the review workflow holds issues write permission")
-	}
 }

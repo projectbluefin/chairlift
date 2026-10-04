@@ -43,7 +43,7 @@ var expectedLegacySkillAliases = map[string]string{
 // fixture-path-fidelity, multi-arch-digest-pinning, phony-target-shadowing,
 // and self-referential-assertions. Issue #81 added bounded-stream-rendering.
 // Issue #204 added fail-open-tables-need-a-totality-gate.
-const factoryCanonicalSkillPackageCount = 33
+const factoryCanonicalSkillPackageCount = 34
 
 type factorySkillFrontMatter struct {
 	name         string

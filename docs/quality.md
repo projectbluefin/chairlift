@@ -120,11 +120,11 @@ third-party actions are pinned to commits and its Go compliance tools are
 installed at explicit versions. A nightly failure is an investigation signal;
 it does not replace pull-request checks or authorize an automatic merge.
 
-Every external action used by any workflow is pinned to a full 40-character
-commit SHA; trailing comments retain the corresponding version or source ref
-for maintainers. `TestWorkflowActionsUseImmutableCommitSHAs` scans every `.yml` and
-`.yaml` file in `.github/workflows/`, so adding a floating tag or branch fails
-the ordinary unit-test gate.
+Third-party actions use full 40-character commit SHAs with reviewed version
+comments. Shared `projectbluefin/actions` production uses managed `@v1`;
+candidate refs are limited to the secret-free, entirely read-only issue-policy
+preview interface during bootstrap. The workflow security scan enforces both
+the immutable third-party boundary and this constrained first-party authority.
 
 ## Release gating
 
@@ -170,38 +170,38 @@ non-draft pull request, the workflow posts one deduplicated `@copilot` fix
 request linked to that review. A review without inline findings does not start
 a fix cycle.
 
-`.github/workflows/ai-fix-requested.yml` handles explicit implementation
-requests on issues. When the `ai-fix-requested` label is applied to an open
-issue, it posts one deduplicated `@copilot` request linked to that issue.
-Reapplying the label does not start a duplicate fix cycle.
-
-The review workflow receives read-only contents and pull-requests write
-permissions; the issue workflow receives only issues write permission. Each
-uses its write permission only to create the request comment. Neither workflow
-checks out or executes repository code, interpolates review or issue text into
-a shell, approves, merges, or bypasses required checks. Copilot's resulting
-changes must still pass the ordinary quality gates and human review; review
+Issue implementation uses the shared lifecycle and native GitHub assignment.
+An `ai-fix-requested` label is an intent marker, not acceptance or dispatch.
+The maintainer first accepts the current scope through the Labels picker,
+resolves independent gates, and assigns or explicitly routes the work.
+The former label-only `@copilot` dispatcher is removed: it could start work
+without validating current acceptance, `human-only`, blockers or holds.
+The review-feedback workflow receives read-only contents and pull-requests
+write permission. It creates only a deduplicated request comment; it does not
+approve, merge, bypass checks, or grant issue implementation acceptance.
+Copilot's resulting changes still pass ordinary quality gates and human review;
 findings that should not be applied must be explained on the pull request.
 
 ## Automated issue triage
 
-`.github/workflows/triage.yml` applies conservative, additive labels when an
-issue is opened or edited. Its deterministic rules are:
+`.github/workflows/issue-lifecycle.yml` is the sole issue-stage and admission
+writer. It consumes the shared Prow/lifecycle conductor from
+`projectbluefin/actions`, using the default-branch catalog rather than another
+copy of the bot. See the [local lifecycle procedure](skills/issue-lifecycle/SKILL.md).
 
-| Structured input | Labels |
-|---|---|
-| An `[ACMM L…]` title plus an `acmm:` criterion field | `acmm`, `ai-fix-requested` |
-| A `[guide]` title or guide-agent filing marker | `documentation`, `agent/guide` |
-| A `[quality]` title or quality-agent filing marker | `agent/quality` |
-| Explicit bug, documentation, feature/enhancement, or question title prefixes | The matching standard category label |
-| A `Documentation Gap` or `Feature Request` body heading | `documentation` or `enhancement` |
+The shared engine preserves deterministic descriptive intake: explicit bug,
+feature and documentation shapes seed a kind; quality and guide findings retain
+their lane labels; an ACMM criterion needs both its structured title and criterion
+field. Existing primary kinds are not overwritten. Classification never grants
+acceptance or automatically requests implementation. Unknown or conflicting
+classification stays gated for a maintainer instead of being guessed.
 
-Triage never removes a label, so an edit cannot erase a maintainer decision. It
-checks that configured labels still exist, skips labels already present, and
-leaves ambiguous issues for humans. Issue text is bounded and matched only as
-data by a commit-pinned API action: the workflow checks out and executes no
-issue-controlled code, receives no secrets, and has only read-only contents
-plus issue-label write permission.
+Prow runs first for authorized issue comments; lifecycle reconciliation follows
+even after partial Prow failure. Prow changes descriptive kinds/areas and negative
+holds only, never stage acceptance, independent human gates, reviews or merges.
+Scheduled repair is labels-only. Manual previews expose proposed labels,
+comments and reporter requests before applying; migrations remain quiet and
+archive full historical assignments before retirement.
 
 Reusable implementation and review prompts are available in the
 [agent prompt catalog](prompts/index.md). They are aids only; repository

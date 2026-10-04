@@ -5,7 +5,13 @@ contact_links:
     about: "Not sure it is a bug? Ask here first — most questions are answered faster than issues."
   - name: "todo.projectbluefin.io — the work board"
     url: https://github.com/orgs/projectbluefin/projects/2
-    about: "Every open issue, left to right, from triage to shipped. Find something to work on."
+    about: "Find related work; a board position is not acceptance, assignment, or delivery evidence."
   - name: "ChairLift Documentation"
     url: https://github.com/projectbluefin/chairlift/blob/main/docs/README.md
     about: "Architecture, walkthrough, and developer guides."
+  - name: "Common reports"
+    url: https://github.com/projectbluefin/common/issues
+    about: "Report Common-owned shared image configuration there. ChairLift intake does not transfer existing reports."
+  - name: "ChairLift issue lifecycle"
+    url: https://github.com/projectbluefin/chairlift/blob/main/docs/skills/issue-lifecycle/SKILL.md
+    about: "Maintainer acceptance, assignment, Homebrew delivery, and reporter verification."
