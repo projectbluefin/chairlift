@@ -1,8 +1,8 @@
 ---
 name: agent-contracts
 description: Use when a change affects AGENTS.md claims or plan acceptance criteria.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - planning
   - agent-contracts
@@ -19,20 +19,13 @@ path, default, or invariant that AGENTS.md's "Repository invariants" or
 `make install` `PREFIX`, or any other fact AGENTS.md states as fact rather
 than pointing to code for.
 
-**What to do:** AGENTS.md's own documentation rule ("after any change to
-source code, update relevant documentation in AGENTS.md, README.md, and
-`docs/`" — the docs tree formerly included the `yeti/` folder) is enforced by
-plan review as a real, per-chunk acceptance
-criterion — not just a closing-checklist reminder. Updating README.md and
-`docs/` while leaving AGENTS.md's prose making the old claim (a bare helper
-name, an unstated default prefix, etc.) will be rejected even though README
-and docs were both updated, because AGENTS.md itself is now stale and it is
-one of the three named locations. When drafting a chunk's `files` list, check
-each changed invariant against AGENTS.md's current wording specifically (not
-just "did I update docs somewhere") and add AGENTS.md whenever the chunk
-changes a fact AGENTS.md states — but don't pad an unrelated chunk with an
-AGENTS.md edit it doesn't need just to be safe; "relevant" is the bar, not
-"every chunk touches every doc."
+**What to do:** Check each changed fact against AGENTS.md's current wording and
+include its reconciliation in the same chunk's files and acceptance criteria.
+Updating another doc while AGENTS.md still states the old helper path, default,
+or invariant leaves the contract stale. Update relevant `AGENTS.md` and `docs/`
+claims; root `README.md` is human-owned, so report necessary corrections without
+editing it. Do not pad unrelated chunks with AGENTS.md changes: relevance, not a
+mandatory edit to every doc, is the bar.
 
 **Learned from:** issue #59's mill run, plan round 2 — a chunk changed the
 updex helper invocation to a fixed `/usr/bin/chairlift-updex-helper` path and

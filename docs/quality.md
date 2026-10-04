@@ -12,13 +12,14 @@ collects those read-only sources and their interpretation boundaries.
 
 | Signal | What it reports | Source |
 |---|---|---|
-| Tests workflow | Latest lint, unit-test, race-detection, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
+| Tests workflow | Latest lint, filtered unit tests, race detection, E2E, sharded AT-SPI, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
 | Nightly compliance | Daily full CI, E2E, and known-vulnerability scan results for the default branch | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/nightly-compliance.yml) |
 | Issue lifecycle | Reviewed stage authority, catalog-bound descriptive intake and constrained Prow reports | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/issue-lifecycle.yml) |
+| Issue policy preview | Read-only proposed reconciliation and migration for caller catalog changes, including full closed-issue/PR history | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/issue-policy-preview.yml) |
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
 | Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
-| Coverage | Line coverage produced by tests under `internal/...` | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) |
+| Coverage | Filtered `internal/...` unit coverage plus a separate `e2e` profile from instrumented executables | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) |
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
 | Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
 
@@ -28,6 +29,10 @@ It deliberately has no fixed project target or patch target. The upload step
 remains non-blocking, so a missing Codecov report does not mean tests failed,
 and a green Tests workflow does not prove that coverage was uploaded. Use the
 workflow's **Unit Tests** log to distinguish those outcomes.
+
+The E2E job also uploads `e2e-coverage.out` under the `e2e` flag, independently
+and non-blockingly. Its executed paths are not the same as the unit profile;
+inspect both upload logs before drawing conclusions about missing GTK coverage.
 
 ## Enforced checks
 
@@ -78,10 +83,11 @@ succeeded would report success for a run whose tests failed.
 properties and fails when a job is added to the workflow without being wired
 into the gate.
 
-`make ci` mirrors those credential-free checks locally in fail-fast order and
-also rebuilds the native binaries at the end. It is the pre-submission quality
-gate documented in `AGENTS.md`; Codecov's remote project status is additional
-and cannot be reproduced by that target.
+`make ci` mirrors the **host-independent** checks locally in fail-fast order
+and also rebuilds native binaries at the end. It does not run E2E or AT-SPI;
+use `make e2e` and `make e2e-atspi` separately on a host with podman and Go.
+Codecov's remote project status is additional and cannot be reproduced by
+that target. The command definitions live in [`Makefile`](../Makefile).
 
 ```bash
 make ci
@@ -123,7 +129,7 @@ it does not replace pull-request checks or authorize an automatic merge.
 Third-party actions use full 40-character commit SHAs with reviewed version
 comments. Shared `projectbluefin/actions` production uses managed `@v1`;
 candidate refs are limited to the secret-free, entirely read-only issue-policy
-preview interface during bootstrap. The workflow security scan enforces both
+preview interface. The workflow security scan enforces both
 the immutable third-party boundary and this constrained first-party authority.
 
 ## Release gating
@@ -142,9 +148,9 @@ The `goreleaser` publishing job depends on both gate jobs (`needs: [gate, e2e]`)
 and receives `contents: write` and `id-token: write` (for keyless cosign signing)
 only after both have succeeded. It explicitly disables Go setup caching
 (`cache: false`) so build or module caches populated during test and E2E gate
-jobs cannot reach the release build. A failure in either gate stops the pipeline before
-GoReleaser can publish, ensuring that broken behavior or install-boundary
-regressions never become an official release.
+jobs cannot reach the release build. A failure in either gate stops publication.
+Passing those checks is evidence for the tagged commit, not proof that every
+hardware combination or failure mode has been exercised.
 
 ## Reviewing agent changes
 
@@ -182,12 +188,14 @@ approve, merge, bypass checks, or grant issue implementation acceptance.
 Copilot's resulting changes still pass ordinary quality gates and human review;
 findings that should not be applied must be explained on the pull request.
 
-## Automated issue triage
+## Shared issue lifecycle and classification
 
-`.github/workflows/issue-lifecycle.yml` is the sole issue-stage and admission
-writer. It consumes the shared Prow/lifecycle conductor from
-`projectbluefin/actions`, using the default-branch catalog rather than another
-copy of the bot. See the [local lifecycle procedure](skills/issue-lifecycle/SKILL.md).
+[`issue-lifecycle.yml`](../.github/workflows/issue-lifecycle.yml) is the sole
+issue-stage and admission writer. It consumes the shared Prow/lifecycle conductor
+from `projectbluefin/actions@v1`, using the default-branch
+[`issue-policy.json`](../.github/issue-policy.json) and constrained
+[`prow.yaml`](../.github/prow.yaml), rather than another copy of the bot.
+See the [local lifecycle procedure](skills/issue-lifecycle/SKILL.md).
 
 The shared engine preserves deterministic descriptive intake: explicit bug,
 feature and documentation shapes seed a kind; quality and guide findings retain
@@ -209,6 +217,21 @@ change only managed primary kinds, leaving operational signals/gates unchanged.
 Scheduled repair is labels-only. Manual previews expose proposed labels,
 comments and reporter requests before applying; migrations remain quiet and
 archive full historical assignments before retirement.
+
+Open issues carry one stage: `needs-triage`, `triage/needs-information`,
+`triage/accepted`, `awaiting-release`, or `needs-verification`. Current human
+acceptance applies to the current scope; classification and assignment are
+separate decisions, and independent gates stay in force. PR progress uses
+native assignment, reviews, checks and the merge queue, not issue-stage labels.
+A merged fix is not delivered until its actual Homebrew package and any
+image-installed helpers reach the affected installation; reporters verify the
+named version through ordinary replies.
+
+[`issue-policy-preview.yml`](../.github/workflows/issue-policy-preview.yml)
+runs for policy-related PRs or manual dispatch with read-only repository
+permissions and no secrets. It previews reviewed caller data through the shared
+first-party interface; it does not apply labels, dispatch implementation or
+activate production. Production remains the managed `@v1` lifecycle caller.
 
 Reusable implementation and review prompts are available in the
 [agent prompt catalog](prompts/index.md). They are aids only; repository

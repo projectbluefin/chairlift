@@ -1,8 +1,8 @@
 ---
 name: fixture-path-fidelity
 description: Use when a test writes a fixture to the same on-disk path the code under test reads from an external tool's layout.
-version: 1.0.0
-last_updated: 2026-09-18
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - testing
   - homebrew
@@ -56,5 +56,5 @@ fixture up a level to follow the code. On any real host every cask would
 have been skipped: the reported bug would be unfixed and the
 previously-working tap attribution lost as well. The same file's "no
 receipt" case was asserted against `byTap["stale-org/tap"]`, a key no
-fixture wrote. Both are fixed on `main`: `trust.go:103` joins `.metadata`,
-and `trust_test.go` asserts the complete map.
+fixture wrote. The current `installedCasksByTap` in `internal/homebrew/trust.go`
+joins `.metadata`, and `TestCasksGroupedByTap` asserts the complete map.

@@ -1,6 +1,6 @@
 # 0010 — Treat documentation as a CI-gated artifact split into current-state and historical
 
-- **Status:** Accepted
+- **Status:** Superseded in historical-artifact retention by [ADR-0019](0019-retire-obsolete-docs-to-git-history.md); current-state consistency remains required
 - **Date:** 2026-08-12
 
 ## Context

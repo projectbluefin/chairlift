@@ -9,6 +9,7 @@ then inspect the changed code in context rather than reviewing the diff alone.
 | Area | Approval standard |
 |---|---|
 | Scope | The change satisfies the linked issue, contains no unrelated refactors or generated artifacts, and preserves behavior outside the requested scope. |
+| Acceptance and delivery | Implementation matches current human-accepted scope and assignment, preserving independent lifecycle gates. Product fixes use `Refs` while Homebrew or image-installed delivery and reporter verification remain outstanding; native review and the merge queue remain authoritative. See the [local issue lifecycle](skills/issue-lifecycle/SKILL.md). |
 | Risk classification | The pull request selects the highest applicable [change risk tier](risk-tiers.md), and its review and validation evidence meet that tier's requirements. |
 | Correctness | Success, failure, dry-run, retry, and disabled-feature paths behave consistently. Errors remain visible instead of being silently converted into success or invented state. |
 | Repository invariants | The privilege boundary, GTK main-thread rule, async generation guards, config-driven visibility, navigation authority, and known-state ownership rules in `AGENTS.md` remain intact. |

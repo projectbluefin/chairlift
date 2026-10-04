@@ -1,8 +1,8 @@
 ---
 name: removal-verification
 description: Use when proving a removed identifier is absent with repository-wide grep.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - verification
   - removal
@@ -10,34 +10,33 @@ metadata:
   type: reference
 ---
 
-# A "prove it's fully removed" grep criterion must exclude `.mill/` and must not fight a regression test that names the removed thing
+# Scope absence checks to the contract being removed
 
-**When it applies:** Planning or reviewing any chunk whose acceptance
-criteria include a repo-wide `grep -rn <removed-identifier> .`-style check
-asserting some name, key, flag, or symbol is now completely gone — especially
-when the same chunk also adds a regression test meant to prevent that exact
-thing from silently coming back.
+Use when proving a retired identifier, key, flag, or document is no longer part
+of the shipped surface or current instructions.
 
-**What to do:** A bare `grep -rn <name> .` (even with `--include`/`.git/`
-filters) also walks `.mill/` — and `.mill/spec.md`, `.mill/plan.md`, and
-`.mill/objections.json` necessarily keep naming the removed thing as the
-historical record of *why* it was removed. That makes the criterion
-unsatisfiable as literally written. Exclude `.mill/` (and `.git/`) from the
-start: `grep -rn <name> . --exclude-dir=.git --exclude-dir=.mill`, rather than
-enumerating an explicit allowlist of product/doc paths — an allowlist has to
-be kept in sync as new files are added, while excluding the two fixed
-tooling directories does not.
+## Procedure
 
-Separately, check whether the chunk's own new regression test needs to spell
-the removed identifier to prove its absence (e.g. a test named after the key,
-or a string-literal assertion quoting it) — if so, that test file will also
-trip the same grep, since it lives outside `.mill/`. Resolve this by writing
-the test so it never needs the literal name at all: assert the *exact*
-remaining set (`len(x) == N` plus membership of every surviving entry) rather
-than "does not contain `<removed-name>`". An exact-set check is strictly
-stronger anyway — it also catches the same thing being re-added under a
-*different* name — and it removes the conflict without touching the grep's
-scope or the test's location.
+1. State the search scope: shipped source, configuration, current docs, or
+   executable tests. Exclude Git internals and historical/generated task
+   artifacts from a current-behavior assertion. Do not assume a retired tool's
+   artifact directory is still part of the live workflow.
+2. Search every live caller and restatement, including inline source-path
+   mentions and indexes when deleting a document. A retained historical lesson
+   may name the removed thing without making it a supported current feature.
+3. Check regression evidence separately. When the acceptance criterion demands
+   literal absence even from tests, assert the exact surviving set rather than
+   spelling the removed member. This also catches a reintroduction under a
+   different name. Otherwise let an explicit rejection test name the old input
+   and exclude that intentional evidence from the shipped-surface search.
+
+## Verification
+
+Report the search's actual paths and exclusions, then have the integration
+owner run the affected regression gates. For doc deletion, follow
+[documentation-reconciliation](../documentation-reconciliation/SKILL.md) and
+validate inbound links, source-path mentions, and catalog entries. A zero-hit
+search is useful only when it covers the intended surface.
 
 **Learned from:** issue #58's mill run — plan round 1 was rejected because
 its grep-based removal criterion walked `.mill/spec.md`/`plan.md`. Round 2's

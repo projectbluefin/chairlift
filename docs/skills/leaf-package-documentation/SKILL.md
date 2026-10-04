@@ -1,8 +1,8 @@
 ---
 name: leaf-package-documentation
 description: Use when documentation enumerates outcomes of a leaf package.
-version: 1.0.0
-last_updated: 2026-10-01
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - documentation
   - packages
@@ -40,12 +40,13 @@ no text of its own. The reviewer flagged it (medium) as insufficient; the
 sweep fixed it by spelling out each outcome and its producing function.
 
 When a pure model precedes its GTK adapter, document both boundaries. A model
-emitting a disposition is not evidence that the dialog persists it, and a choice
-referencing a delivered backend is not evidence that the dialog renders its
-control. For setup (#224/#225), name the model's zero-step exit, intermediate
-navigation, terminal completion, skip and intentional-dismissal outcomes, then
-state which callbacks remain owned by the adapter ticket. This prevents model
-tests from being reported as desktop interaction coverage.
+emitting a disposition is not evidence that its adapter persists it, and a
+model describing a choice is not evidence that a widget renders it. The old
+setup model/adapter split (#224/#225) exposed that gap. Current explicit setup
+instead filters existing pages through `internal/firstrun.Pages` and uses
+`Window.PresentFirstRun` and its footer callbacks to navigate and persist:
+see [setup-model](../../specs/setup-model.md). Model tests remain separate from
+desktop interaction coverage.
 
 When consolidating several update surfaces, trace every inventory and badge
 writer before preserving the old adapters. A secondary status reader must not

@@ -292,11 +292,12 @@ An agent must not break these:
   their conjunction is `effectiveEnabled`, but a source the host cannot back
   must read "Not available on this system", never "Disabled by
   administrator". Do not collapse them back into one boolean map. The rest
-  of the Updates page — automatic updates, system version, per-source groups,
-  unverified sources, and the Advanced channel/driver controls — is
-  `buildUpdatesPage`'s preferences page, which `buildContentArea` mounts
-  beneath the shell's source rows through `UpdateShell.SetSecondaryContent`;
-  without that call none of those controls is reachable.
+  of the Updates page — automatic updates, system version, dedicated staging
+  and Compare, unverified sources, and Advanced channel/driver controls — is
+  `buildUpdatesPage`'s preferences page, mounted by `buildContentArea` beneath
+  the shell's source rows through `UpdateShell.SetSecondaryContent`. Per-source
+  rows belong to the shell; without the mount none of the secondary controls
+  is reachable.
   A provider that learns only during `Check` that the host cannot back it
   (the operating-system source finding bootc not booted) wraps
   `updateflow.ErrUnavailable`; the coordinator then shows the source as not
@@ -565,26 +566,31 @@ An agent must not break these:
   changing rows or counts. A live package success removes its row, decrements
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
-- **Homebrew application actions are typed and refresh-safe.** Search queries
-  both formula and cask namespaces and carries the result kind into
+- **Homebrew application actions are typed and refresh-safe.** Apps retains six
+  configuration groups: `applications_installed_group`, `brew_search_group`,
+  `flatpak_user_group`, `flatpak_system_group`, `brew_group`, and
+  `brew_bundles_group`. Its builder orders the external catalog launcher,
+  Homebrew search/results, installed Flatpaks, installed casks, collections,
+  explicitly requested formulae, then Brewfile export. Built-in defaults enable
+  all six; shipped `config.yml` enables only collections. Search queries both
+  formula and cask namespaces and carries `homebrew.SearchResult.Kind` into
   `brew install [--cask]`. Search and installed-package refreshes use separate
   `actionstate.RefreshGate` generations; stale workers must not replace newer
-  rows. Confirmed installs use an `actionstate.Gate`, restore controls on
-  failure/dry-run, and refresh installed rows only after a live success.
+  rows. Confirmed installs use `actionstate.PackageInstall` and `actionmsg.Install`,
+  restore controls on failure/dry-run, and refresh installed rows only after live success.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
   Package-list export likewise holds an `actionstate.Gate`, shows a spinner
   and `Exporting…`, and restores the Export action after every outcome.
-  Flatpak uninstall on the same page keeps the same contract: it confirms
-  with an `AdwAlertDialog` worded by `pageview.FlatpakUninstallConfirmation`
-  (a system-scope removal says it affects every account), holds a per-row
-  `actionstate.Gate`, restores on failure or dry-run, and refreshes only after
-  a live success. `runFlatpakUninstall` is in `internal/installcheck`'s
-  `TestDestructiveActionsRequireConfirmation` inventory beside `runPowerwash`
-  and `runFactoryReset`; a destructive `run*` entry point added to
-  `internal/views` belongs in that inventory too.
+  Flatpak rows use `pageview.FlatpakApplicationWithScope` and confirm uninstall
+  with `pageview.FlatpakUninstallConfirmation`; system-scope removal explicitly
+  affects every account. A per-row `actionstate.Gate` restores controls after
+  failure or preview and refreshes only after live success. `runFlatpakUninstall`
+  belongs to `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation`
+  inventory beside `runPowerwash` and `runFactoryReset`; new destructive `run*`
+  entry points belong there too.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -597,10 +603,12 @@ An agent must not break these:
   live click completes its gate and leaves its button insensitive; only a
   failure or preview resets it. `internal/views/actionstate`'s wiring tests
   guard both lifetimes.
-  Both the dedicated bootc stage action and a live unified update run whose
-  operating-system source completed (`UserHome.OnUpdateFinished`) refresh
-  the badge and changelog's Compare references from the new status rather
-  than leaving Compare disabled until restart.
+  Both dedicated staging and a live unified run whose operating-system source
+  completed refresh the changelog's Compare references from observed status.
+  `UserHome.OnUpdateFinished` refreshes Flatpak inventory for a completed
+  applications source, Homebrew inventory for completed developer tools, and
+  Compare for a completed OS source; previews refresh none. The coordinator
+  snapshot remains the only badge owner.
   A changed pinned image pair clears old diff rows; an in-flight comparison
   for the old pair must not render after the refresh.
 - **Update inventory and badge have one state owner.** The pure
@@ -661,13 +669,14 @@ An agent must not break these:
   `internal/installcheck`'s `TestMergeQueueGateWaitsForEveryTestJob` fails
   otherwise — and renaming the job means editing the ruleset in the same
   change.
-- **Every privileged dispatch point journals, unconditionally.** `internal/ublue.runHelper`
-  and `internal/updex.runHelper` call `journal.Record` on every invocation, dry-run
-  or live, before doing anything else, and record the execution outcome
-  (`succeeded`, `refused`, `failed`, `timed-out`, or `cancelled`) and any
-  concrete privileged command derived inside the helper (`executed`) after the
-  command returns. Dry-run remains recorded as suppressed with no outcome
-  record. This is not a `chairlift_e2e` stub: with
+- **Every privileged dispatch point journals, unconditionally.**
+  `internal/ublue.runHelper` and `internal/updex.runHelper` delegate to
+  `internal/helperexec.Run`, which records every invocation before execution
+  and then records its live outcome (`succeeded`, `refused`, `failed`,
+  `timed-out`, or `cancelled`). The `executed` argv is helper-reported evidence
+  parsed from the fixed helper's output, not independent execution proof.
+  Dry-run records a suppressed invocation with no outcome record.
+  This is not a `chairlift_e2e` stub: with
   `$CHAIRLIFT_ACTION_JOURNAL` unset — every ordinary run — it costs one atomic
   load and does nothing else, so it ships in every released binary. Do not gate
   a new privileged call behind a helper that bypasses `runHelper`; the journal's
@@ -1119,23 +1128,26 @@ An agent must not break these:
 
 ## Documentation
 
-All documentation lives in the `docs/` tree, in frostyard/core's
-four-category shape (core ADR-0025; the former `yeti/` AI-docs directory is
-folded in). `docs/README.md` carries the category table, the index of every
-doc, and the conventions — new docs start from their category's
-`TEMPLATE.md`, and adding a doc means indexing it there:
+Documentation lives in `docs/`, with the local four-category layout from
+frostyard/core ADR-0025. `docs/README.md` is the contributor index. Follow
+Project Bluefin Common's task routing, canonical-source links, and progressive
+disclosure; keep ChairLift's product and safety contracts local. New docs start
+from their category's `TEMPLATE.md` and are indexed in `docs/README.md`:
 
 - `docs/adr/` — why: repo-local decisions, immutable once accepted. Org-wide
   decisions go to frostyard/core instead, per
   [docs/org-adrs.md](docs/org-adrs.md).
-- `docs/design/` — how it fits together: living architecture docs. The entry
-  point is `docs/design/overview.md` (formerly `yeti/OVERVIEW.md`); read it
-  and `docs/design/package-managers.md` (formerly `yeti/package-managers.md`)
-  for architecture, patterns, and decision rationale before working. Write
-  them to be maximally useful to an AI agent understanding the codebase —
-  detailed architecture and rationale rather than user-facing guides.
-- `docs/specs/` — exact contracts, changed only alongside implementing code.
-- `docs/plans/` — phased plans with "Done when" outcomes.
+- `docs/design/` — how it fits together: living architecture docs. Read
+  `docs/design/overview.md` and `docs/design/package-managers.md` before
+  architecture or provider changes. Keep current ownership, invariants, and
+  failure modes here; link decision rationale rather than repeating it.
+- `docs/specs/` — exact implemented contracts; reconcile stale descriptions
+  against the code, and change behavior only alongside its implementation.
+- `docs/plans/` — active implementation plans with an owning issue, explicit
+  status, and executable "Done when" outcomes. Remove completed or superseded
+  plans after their contracts and lessons are in the living docs and skills.
+  Git history preserves retired plans; speculative ideas belong in issues,
+  not a second backlog in the documentation tree.
 
 After any change to source code, update relevant documentation in `AGENTS.md`
 and `docs/`. Only humans edit `README.md`; AI agents must never modify or rewrite
@@ -1144,6 +1156,13 @@ documentation. For behavior, configuration, dependency, or install-layout
 changes, also follow `docs/documentation-consistency.md`; current-state claims
 must be checked against source/config/go.mod rather than copied from historical
 plans.
+
+Documentation cleanup must inspect every inbound link before removing an
+artifact. Preserve accepted ADR decisions; repair a retired-plan reference
+with a revision-pinned history link, not a rewritten decision. Verify local
+links and cited source paths after reconciliation. ChairLift is onboarded through
+its local catalog and the shared Project Bluefin Actions lifecycle. Link those
+contracts; do not copy their runtime or bypass native review/merge controls.
 
 **.knowledge/ directory** is the repository's cross-session knowledge index.
 Read `.knowledge/README.md` before working so prior corrections, handoffs,

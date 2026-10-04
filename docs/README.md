@@ -1,17 +1,17 @@
 # Documentation
 
-ChairLift keeps one documentation tree, `docs/`, in frostyard/core's
-four-category shape
-([core ADR-0025](https://github.com/frostyard/core/blob/main/docs/adr/0025-consolidate-repository-docs-into-docs.md);
-the former `yeti/` AI-docs directory is folded in here). Docs are split by
-the question they answer:
+ChairLift keeps one documentation tree, `docs/`, using the local four-category
+layout from [core ADR-0025](https://github.com/frostyard/core/blob/main/docs/adr/0025-consolidate-repository-docs-into-docs.md).
+Task routing, canonical links, and reusable skills follow
+[Project Bluefin Common](https://github.com/projectbluefin/common/blob/main/docs/SKILL.md).
+Docs are split by the question they answer:
 
 | Directory | Question | Contents |
 | --- | --- | --- |
 | [adr/](adr/) | **Why** did we choose this? | Repo-local Architecture Decision Records — immutable once accepted; superseded, never edited. Org-wide decisions go to frostyard/core instead (see [org-adrs.md](org-adrs.md)) |
 | [design/](design/) | **How** does it fit together? | Living documents describing the current architecture; [design/overview.md](design/overview.md) is the entry point |
-| [specs/](specs/) | **What exactly** is the contract? | Precise, testable interface definitions, changed only alongside implementing code |
-| [plans/](plans/) | **When/in what order** do we build? | Phased plans with "Done when" outcomes |
+| [specs/](specs/) | **What exactly** is the contract? | Precise, testable descriptions of implemented interfaces |
+| [plans/](plans/) | **When/in what order** do we build? | Active issue-owned plans with executable "Done when" outcomes; completed work belongs in living docs and Git history |
 | [factory/](factory/) | **How** do we work across the Project Bluefin factory? | Local navigation for factory-assigned work; Common remains the authority for cross-repository process |
 
 The `factory/` entry is a process and navigation surface; the four core
@@ -59,8 +59,8 @@ are listed in [org-adrs.md](org-adrs.md).
   `[DRY-RUN]` message prefixes, and single tested decision structs gating
   toast + UI mutation together
 - [adr/0010-docs-are-a-ci-gated-artifact.md](adr/0010-docs-are-a-ci-gated-artifact.md)
-  — documentation splits into current-state vs historical and is enforced by
-  string-matching unit tests; prose is testable
+  — original current-state/historical classification and CI consistency;
+  in-tree archival retention is superseded by ADR-0019
 - [adr/0011-chairlift-owns-bluefin-family-rebasing.md](adr/0011-chairlift-owns-bluefin-family-rebasing.md)
   — ChairLift owns Bluefin-family image rebasing and channel switching, deriving
   switch targets from registry-verified channel and driver variant tables
@@ -95,28 +95,28 @@ are listed in [org-adrs.md](org-adrs.md).
   — distribute exclusively through Homebrew release archives; retire distro nFPM
   packaging (`deb`, `rpm`, `apk`) and carry the full install surface (GUI,
   both helpers, and policies) in the published release archive
+- [adr/0019-retire-obsolete-docs-to-git-history.md](adr/0019-retire-obsolete-docs-to-git-history.md)
+  — retain active issue-owned plans only; preserve retired artifacts in Git,
+  accepted decision bodies, and source-backed documentation checks
 
 ### Design
 
 - [design/overview.md](design/overview.md) — architecture entry point:
-  purpose, dependency flow, key patterns, configuration, build and release
-  (formerly `yeti/OVERVIEW.md`)
-- [design/package-managers.md](design/package-managers.md) — the Homebrew,
-  Flatpak, bootc, updex, and ublue wrappers, the registry tag
-  catalog, and their view-layer leaf packages (formerly
-  `yeti/package-managers.md`)
+  ownership, dependency flow, UI safety, configuration, build and release
+- [design/package-managers.md](design/package-managers.md) — package providers,
+  privileged executor boundaries, registry catalog, and view-layer seams
 - [design/printer-applications.md](design/printer-applications.md) — the
   rootless printer-application quadlets: host-networking surface,
   authenticated-admin boundary, family inventory, and verified image state
 
-- [design/destination-matrix.md](design/destination-matrix.md) — historical
-  five-section proposal from #241/#344, superseded by #201's closure; current
-  routes and groups are in source and [design/overview.md](design/overview.md)
+- [design/destination-matrix.md](design/destination-matrix.md) — current
+  seven-primary-page and Recovery action ownership, with page-qualified config
+  references; no proposed sidebar cutover
 
 ### Specs
 
-- [specs/setup-model.md](specs/setup-model.md) — optional task/choice filtering,
-  navigation-only transitions, and emitted setup dispositions
+- [specs/setup-model.md](specs/setup-model.md) — explicit setup using the real
+  visible pages, navigation-only transitions, and recorded dispositions
 
 - [specs/developer-feeds.md](specs/developer-feeds.md) — the developer feed
   OPML catalog: structure and attribute contract, the offline validation rules
@@ -125,21 +125,10 @@ are listed in [org-adrs.md](org-adrs.md).
 
 ### Plans
 
-- [plans/2026-09-30-goose-config.md](plans/2026-09-30-goose-config.md)
-  — ship Common's premade Goose configuration through the existing setup path
-
-Historical plan/design artifacts from past automated runs (per
-[documentation-consistency.md](documentation-consistency.md), not sources of
-current behavior):
-
-- [plans/2026-02-27-extensions-to-features-design.md](plans/2026-02-27-extensions-to-features-design.md)
-- [plans/2026-02-27-extensions-to-features-plan.md](plans/2026-02-27-extensions-to-features-plan.md)
-- [plans/2026-02-27-feature-update-check-design.md](plans/2026-02-27-feature-update-check-design.md)
-- [plans/2026-03-04-puregotk-alignment-design.md](plans/2026-03-04-puregotk-alignment-design.md)
-- [plans/2026-03-04-puregotk-alignment-plan.md](plans/2026-03-04-puregotk-alignment-plan.md)
-- [adr/0011-chairlift-owns-bluefin-family-rebasing.md](adr/0011-chairlift-owns-bluefin-family-rebasing.md)
-- [plans/2026-08-17-bluefin-suite-parity-plan.md](plans/2026-08-17-bluefin-suite-parity-plan.md)
-- [walkthrough.md](walkthrough.md) — every screen, captured from the real application
+No active implementation plans are retained. Use [plans/TEMPLATE.md](plans/TEMPLATE.md)
+for issue-owned work. Completed and superseded plans, the Go-port proposal, and
+the old superpowers execution artifacts are preserved in Git history; current
+behavior belongs in the design docs and specs above.
 
 ### Factory and agent process
 
@@ -147,6 +136,9 @@ current behavior):
 - [skills/index.md](skills/index.md) — canonical catalog of agent skill packages
 - [factory/README.md](factory/README.md) — local Project Bluefin factory
   navigation and Common sidecar links
+- [skills/issue-lifecycle/SKILL.md](skills/issue-lifecycle/SKILL.md) — deployed
+  ChairLift intake, classification, trusted acceptance, Prow controls, delivery
+  evidence and reporter verification through the shared Actions runtime
 - [skills/](skills/) — canonical agent knowledge base; edit the matching
   `SKILL.md` package, never a compatibility surface
 - [agents/skills/](agents/skills/) — legacy compatibility aliases only; do not
@@ -157,19 +149,20 @@ current behavior):
 - [index.md](index.md) — user-facing overview: pages, shortcuts, optional
   dependencies, building and installing
 - [reference.md](reference.md) — user-facing configuration/behavior reference
+- [walkthrough.md](walkthrough.md) — every screen, using committed real-app captures
 - [quality.md](quality.md) — quality dashboard: CI, coverage, release signals
 - [metrics.md](metrics.md) and [metrics/README.md](metrics/README.md) —
   metrics definitions and the public metrics catalog
 - [documentation-consistency.md](documentation-consistency.md) — checklist
-  for keeping current-state docs in sync with source; defines which docs are
-  current-state vs historical
+  for keeping current-state docs aligned with source, preserving decision
+  history, and retiring obsolete implementation plans
 - [risk-tiers.md](risk-tiers.md) — change risk classification used by PRs
 - [review-rubric.md](review-rubric.md) — pull request review rubric
 - [SECURITY-AI.md](SECURITY-AI.md) — AI security policy
 - [org-adrs.md](org-adrs.md) — frostyard/core ADRs that bind this repository
 - [prompts/index.md](prompts/index.md) — reusable agent prompt catalog
-- [superpowers/](superpowers/) — historical plan/spec artifacts from past
-  superpowers runs (not sources of current behavior)
+- Category templates: [ADRs](adr/TEMPLATE.md), [design](design/TEMPLATE.md),
+  [specs](specs/TEMPLATE.md), and [active plans](plans/TEMPLATE.md)
 
 ## Conventions
 
@@ -179,9 +172,15 @@ current behavior):
   Org-wide decisions become ADRs in frostyard/core plus a line in
   [org-adrs.md](org-adrs.md).
 - Design docs are updated in place to always reflect reality.
-- Specs change only alongside the code that implements them.
-- Cross-links between categories are mandatory in both directions.
+- Specs describe the implemented contract; behavior changes land with code.
+- Cross-link governing ADRs, implemented specs, and living designs. Link plans
+  only while active; preserve references to retired work with revision-pinned
+  Git history links rather than retaining duplicate instructions.
 - Adding a doc means adding it to the index above.
 - Doc-consistency tests in `internal/installcheck` pin literal paths and
   claims in these docs; when docs and tests disagree, update both in the
   same commit.
+- Load only task-matching [skills](skills/index.md). Link Common's canonical
+  factory policy and ChairLift's adopted lifecycle instead of copying them.
+- After reconciliation, validate local links and source citations and run the
+  relevant repository gates. Keep root `README.md` human-owned.

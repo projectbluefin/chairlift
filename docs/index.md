@@ -17,16 +17,18 @@ point.
 
 ## Pages
 
-Control Center provides seven configurable pages, in sidebar order:
+Control Center has seven primary destinations, in sidebar order. The shipped
+[`config.yml`](../config.yml) hides several Apps groups; this inventory describes
+the available surface, not controls guaranteed on every host.
 
 | Page | Description |
 |------|-------------|
 | **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
-| **Apps** | Search/install Homebrew formulae and casks; uninstall installed formulae/casks; pin/unpin formulae; install curated app collections. List/uninstall Flatpaks and launch the configured external manager for Flatpak discovery and installation. |
+| **Apps** | Open the external software catalog, search Homebrew formulae and casks, manage installed Flatpaks and Homebrew packages, install app collections, and export a Brewfile. |
 | **Agents** | Agent Mode: run a language model on this computer (llmman), launch Goose Desktop with verified Linux tools, and contribute to Bluefin. |
 | **Features** | Distribution features, Developer Mode, WSL Mode (nsl or Lima), Docker, individually chosen IDEs/editors, selective Gaming, and safely locked printer applications. |
 | **Livery** | Choose your profile picture and the marks shown on the app launcher button, the top-bar menu, and Files. |
-| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and Recovery: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
+| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and open Recovery: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
 | **Help** | Enhanced Troubleshooting (an AI diagnostic assistant installed with Homebrew), plus links to the project website, issue tracker, and community documentation. |
 
 A functional page is omitted when all of its groups are disabled. Help is
@@ -58,24 +60,26 @@ Runtime visibility depends on the group:
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
 - Agents is hidden where Homebrew is absent, because Agent Mode installs
   llmman through it;
-- Applications and Updates groups for Homebrew and Flatpak are omitted by the
-  capability floor when Homebrew or Flatpak is absent; a tool that is present
-  but fails reports the failure in its row;
+- Apps groups for Homebrew and Flatpak, and their Updates groups, are omitted
+  by the capability floor when their backing tool is absent. The external
+  catalog launcher is independent. A tool that is present but fails reports
+  the failure in its row;
 - Features hides its optional-features group when Updex lists none, and keeps
   it with an error description when the listing fails;
 - Livery hides its top-bar section on KDE Plasma or when the Custom Command
   Menu extension is not installed;
-- Maintenance's "Free up space" action is always shown. Which package
-  managers are installed is the cleanup runner's business, not something a
-  user should have to learn from a group appearing or disappearing.
+- Maintenance's "Free up space" action is shown when its configuration group
+  is enabled. The cleanup runner skips absent providers rather than asking
+  the user to choose a package manager.
 
-Page omission is separate and static: it depends only on which builder-backed
-groups configuration enables, not on runtime tool availability.
+Page omission uses configuration composed with the host capability floor.
+Runtime readiness checks remain separate and may hide or explain individual
+controls after construction. See the [configuration reference](reference.md).
 
 | Tool | Used For |
 |------|----------|
 | Homebrew | Package management (formulae, casks, bundles) |
-| Flatpak | Installed-application listing/uninstall and updates; new installs are delegated to the configured external manager |
+| Flatpak | Apps inventory/removal and external catalog launch, Updates, Gaming installs, and maintenance/reset operations |
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | Updex | System feature toggles |
 | llmman (installed by Agent Mode through Homebrew) | The Agents page's local model server |
@@ -122,7 +126,8 @@ sudo make install
 
 Installs binaries, desktop file, icons, PolicyKit policies, both privileged
 helpers, maintainer configuration defaults, and the documented channel-table
-example (`/usr/share/doc/chairlift/channels.example.yml`) to `PREFIX`
+example (`/usr/share/doc/chairlift/channels.example.yml`) and compiled GSettings
+schemas to `PREFIX`
 (default `/usr`). The maintainer configuration is installed at
 `/usr/share/chairlift/config.yml`; `/etc/chairlift/config.yml` is reserved for
 administrator overrides and is never created or overwritten by ChairLift's

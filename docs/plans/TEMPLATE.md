@@ -1,13 +1,18 @@
 # Plan: Name (e.g. "Roadmap", "Migration to X")
 
 <!--
-Plans are updated as work lands: check off what shipped, renumber what moved.
-Every phase MUST have a "Done when" — a demonstrable outcome, not an activity.
+Plans describe active, issue-owned work only. Remove completed or superseded
+plans after reconciling their contracts and lessons into living docs and skills;
+Git history retains the execution record. Every phase has an executable
+"Done when" outcome, not an activity or an inspection-only claim.
 -->
+
+- **Status:** Proposed | Active | Blocked
+- **Owner:** [issue](https://github.com/projectbluefin/chairlift/issues/NNN)
 
 One paragraph: what this plan delivers and its relationship to other plans.
 
-## Phase 1 — Name (size estimate)
+## Phase 1 — Name
 
 - Work item, linking the [spec](../specs/….md) or [design doc](../design/….md)
   it implements.
@@ -20,10 +25,11 @@ One paragraph: what this plan delivers and its relationship to other plans.
 - …
 - **Done when:** …
 
-## Later / ideas
+## Verification
 
-Unscheduled candidates. Move items up into a phase rather than letting this
-section become a second backlog.
+List the commands or scenarios proving the phase outcomes and the relevant
+repository gates. State any required environment or human acceptance.
+Unscheduled candidates belong in the owning issue, not a second backlog here.
 
 ## Open questions
 

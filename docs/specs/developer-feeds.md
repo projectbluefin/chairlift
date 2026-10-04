@@ -1,10 +1,11 @@
 # Spec: Developer feeds OPML catalog
 
 This contract governs `internal/developerfeeds/developer-feeds.opml`, the
-curated developer feed catalog ChairLift compiles into the binary and stages
-for the Pulp feed reader when Developer Mode is enabled. It is consumed by the
-catalog's validator (`internal/developerfeeds/developerfeeds.go`), by the
-Developer Mode staging path, and by whoever curates the list.
+curated developer feed catalog ChairLift compiles into the binary. A confirmed
+live Developer Mode enable may stage it for manual import when
+`features_page.dx_group.stage_feeds` is opted in; that setting and the separate
+`install_pulp` setting both default to false. The validator and catalog curator
+consume this format contract; staging never imports subscriptions into Pulp.
 
 ## Interface
 
@@ -15,16 +16,16 @@ enforces:
 | --- | --- | --- | --- |
 | `opml` | `version` | yes | exactly `2.0` |
 | `head` | `title` | yes | non-empty; labels the imported list in a reader |
-| `body > outline` | `text` | yes | one of the three required category groups |
+| `body > outline` | display label (`title`, else `text`) | required categories | all three required category labels must be present; additional group names are not validated |
 | `outline` (group) | `outline` children | yes | at least one; a group MUST NOT carry `xmlUrl` |
-| `outline` (feed) | `text`, `title` | yes | non-empty; `title` is what a reader displays |
+| `outline` (feed) | `title` | yes | non-empty; used as the display label; `text` is retained by curation convention |
 | `outline` (feed) | `type` | yes | exactly `rss` |
 | `outline` (feed) | `category` | yes | one of `changelog`, `blog`, `newsletter`, `podcast` |
 | `outline` (feed) | `xmlUrl` | yes | absolute `https` URL; no credentials, fragment, or tracking parameter |
-| `outline` (feed) | `htmlUrl` | no | absolute `https` URL when present |
+| `outline` (feed) | `htmlUrl` | no | same clean absolute `https` constraints as `xmlUrl` when present |
 | `outline` (feed) | `outline` children | no | a feed MUST NOT contain child outlines |
 
-Minimal valid shape:
+Shape excerpt (the other two required groups must also contain feeds):
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -42,16 +43,21 @@ Minimal valid shape:
 </opml>
 ```
 
-The three required top-level groups are `Changelogs`, `Blogs & Newsletters`,
-and `Podcasts`. `Podcasts` MAY nest one further level by show family; a nested
-group carries no feed URL and its feeds keep the `podcast` category tag.
+The three required top-level labels are `Changelogs`, `Blogs & Newsletters`,
+and `Podcasts`. Curation groups podcasts one level further by show family and
+keeps their `podcast` category tag. The validator walks nested groups recursively;
+it does not enforce a maximum depth or category-to-group mapping.
 
 ## Rules
 
 1. The document MUST be well-formed XML with balanced tags and a single
-   `<opml>` root element. Content after the closing tag is invalid.
+   `<opml>` root element. A following root or non-whitespace text is invalid;
+   trailing whitespace and comments are permitted. `Parse` also ignores trailing
+   processing-instruction/directive tokens rather than enforcing a token allowlist.
 2. Every feed `xmlUrl` MUST be unique across the whole document.
-3. Two outlines in the same group MUST NOT share a title.
+3. Sibling outlines below a top-level group MUST NOT share a display label
+   (`title` when non-empty, otherwise `text`). Required top-level labels are
+   checked for presence, not uniqueness.
 4. Every `xmlUrl` and `htmlUrl` MUST be an absolute `https` URL, and MUST NOT
    carry userinfo, a fragment, or a campaign/tracking query parameter (`utm_*`,
    `fbclid`, `gclid`, `igshid`, `mc_cid`, `mc_eid`, `ref_src`). A feed's URL is
@@ -62,19 +68,22 @@ group carries no feed URL and its feeds keep the `podcast` category tag.
 6. The document MUST declare OPML `2.0` and carry a non-empty `head` title.
 7. Each of the three required groups MUST exist and MUST contain at least one
    feed.
-8. Validation MUST be offline: no rule in this spec resolves a hostname, opens
-   a socket, or runs a command. `TestPackageStaysOffline` holds the package to
-   that by rejecting imports of an HTTP client, a dialer, or a command runner.
+8. Catalog parsing and validation MUST be offline: no validation rule resolves
+   a hostname, opens a socket, or runs a command. `TestPackageStaysOffline`
+   rejects direct imports of the listed network/command/GTK packages in
+   production files. It is not a transitive dependency audit: Pulp provisioning
+   separately delegates user-scope execution to `internal/flatpak`.
 9. The number of feeds per category is pinned in
    `internal/developerfeeds/developerfeeds_test.go`. Adding or removing a feed
    MUST update that count in the same change, which is what makes a catalog
    edit a visible, reviewable event.
 
-Rule 9 is deliberate friction. A feed list that can grow without review is how
-an unvetted or dead subscription reaches users; the epic that asked for this
-catalog ([projectbluefin/chairlift#235](https://github.com/projectbluefin/chairlift/issues/235))
-requires community vetting, and the test is where that requirement is enforced
-rather than merely stated.
+Rule 9 makes a count-changing catalog edit visible to review; it does not prove
+publisher liveness or community vetting, and a same-count replacement needs the
+same review. The epic that requested this catalog
+([projectbluefin/chairlift#235](https://github.com/projectbluefin/chairlift/issues/235))
+requires community vetting; preserve that human curation step separately from
+the offline gate.
 
 ## Curation
 
@@ -129,8 +138,9 @@ When a check fails:
 
 ### Last verification
 
-2026-09-22: all 32 feed URLs returned HTTP 200 with an XML content type, and
-all 26 site URLs (`htmlUrl`) returned HTTP 200, checked with:
+Historical evidence from 2026-09-22: all 32 feed URLs returned HTTP 200 with an
+XML content type, and all 26 site URLs (`htmlUrl`) returned HTTP 200. This is not
+current liveness evidence; repeat verification when curating a change. Command:
 
 ```sh
 curl -sS -L -o /dev/null --max-time 20 \
@@ -139,23 +149,23 @@ curl -sS -L -o /dev/null --max-time 20 \
 
 ### Known exclusions
 
-Proposed entries deliberately absent from the catalog:
+Historical curation rationale from 2026-09-22 for entries absent from the catalog:
 
-- **Last Week in Cloud Native** (`lwcn.dev`) — the domain serves a parking page
-  pending validation and the only known URL carried a `utm_source` parameter.
-  Excluded until the publisher restores a canonical feed.
+- **Last Week in Cloud Native** (`lwcn.dev`) — the domain served a parking page
+  and the only known URL carried a `utm_source` parameter. Recheck for a
+  canonical publisher feed before adding it.
 - **Site links for six shows** — `OpenObservability Talks`, `Geeking Out`,
   `Agentic DevOps`, `PurePerformance`, `The Kubelist Podcast`, and `Argo
-  Unpacked` have no verified publisher page (`openobservability.fm` and
-  `pureperformance.show` do not resolve; the Heavybit Kubelist landing page
-  returned 404). `htmlUrl` is optional, and their feed URLs are live and
-  verified. Add the site link when a publisher page resolves.
+  Unpacked` had no verified publisher page (`openobservability.fm` and
+  `pureperformance.show` did not resolve; the Heavybit Kubelist landing page
+  returned 404). `htmlUrl` is optional; their feed URLs passed that dated
+  verification. Recheck a publisher page before adding its site link.
 
 ## Derived artifacts
 
 | Artifact | Derivation |
 | --- | --- |
-| `~/.local/share/chairlift/developer-feeds.opml` | The embedded asset, staged for user import by the Developer Mode flow (epic [#235](https://github.com/projectbluefin/chairlift/issues/235)) |
+| `~/.local/share/chairlift/developer-feeds.opml` | Embedded asset staged only after a confirmed live enable with `stage_feeds` opted in; imported by the user, never by ChairLift |
 
 ## References
 
@@ -165,3 +175,8 @@ Proposed entries deliberately absent from the catalog:
   [#235](https://github.com/projectbluefin/chairlift/issues/235), which decides
   the catalog's contents and its vetting requirement
 - Context: [design/overview.md](../design/overview.md)
+- Source: [`developerfeeds.go`](../../internal/developerfeeds/developerfeeds.go)
+  (offline parser/validator), [`pulp.go`](../../internal/developerfeeds/pulp.go)
+  (user-scope provisioning/staging), and
+  [`features_page.go`](../../internal/views/features_page.go)
+  (`startDeveloperFeedSetup` opt-in admission and worker).

@@ -26,23 +26,10 @@ import (
 // currentStateDocRoots is the set of documents whose source-path citations
 // must resolve.
 //
-// The first seven entries are the current-state class defined by
-// docs/documentation-consistency.md (enforced against that file by
-// TestCurrentStateScopeMatchesDocumentationConsistency, so the two cannot
-// drift apart). AGENTS.md and CONTRIBUTING.md are added here because that
-// classification has no residual class and leaves them out entirely:
-// AGENTS.md is the contributor entry point and names the design documents
-// to read first. docs/adr holds Accepted decision records that AGENTS.md
-// routes contributors to as binding, and is one of the seven published
-// entries — a decision record citing a path that no longer resolves
-// misleads exactly the reader who was told to trust it.
-//
-// Deliberately excluded: the historical class named by the same checklist
-// (README-go-port.md, docs/plans/, docs/superpowers/) and docs/skills/.
-// Those cite files from past states of the tree on purpose — a skill
-// describing a change that added internal/testnames/testnames.go is
-// correct prose about a file that is gone, and a gate that failed on it
-// would be demanding the repository falsify its own history.
+// Living guides and retained decisions cite source paths whose existence is
+// checked here. Skills are excluded because their historical examples may
+// legitimately name retired files; active plans are implementation proposals,
+// not claims about the current tree. Retired proposals remain in Git history.
 var currentStateDocRoots = []string{
 	"README.md",
 	"CONFIG.md",
@@ -275,50 +262,6 @@ func TestCurrentDocsCiteManySourcePaths(t *testing.T) {
 	if len(cited) < minCitedSourcePaths {
 		t.Errorf("extracted %d cited source paths from current-state documentation, want at least %d; "+
 			"the extractor is probably no longer matching citations", len(cited), minCitedSourcePaths)
-	}
-}
-
-// TestCurrentStateScopeMatchesDocumentationConsistency holds
-// currentStateDocRoots to the classification docs/documentation-consistency.md
-// publishes, so the gate's scope cannot quietly diverge from the checklist
-// contributors are told to follow. Only the seven roots that file actually
-// classifies are checked; AGENTS.md and CONTRIBUTING.md are this gate's own
-// additions precisely because the checklist does not classify them.
-func TestCurrentStateScopeMatchesDocumentationConsistency(t *testing.T) {
-	checklist := readRepoFile(t, filepath.Join("docs", "documentation-consistency.md"))
-
-	for _, classified := range []string{
-		"`README.md`",
-		"`CONFIG.md`",
-		"`docs/index.md`",
-		"`docs/reference.md`",
-		"`docs/design/`",
-		"`docs/specs/`",
-		"`docs/adr/`",
-	} {
-		if !strings.Contains(checklist, classified) {
-			t.Errorf("docs/documentation-consistency.md no longer classifies %s as current-state; "+
-				"update currentStateDocRoots to match the published classification", classified)
-		}
-	}
-
-	for _, historical := range []string{
-		"`README-go-port.md`",
-		"`docs/plans/`",
-		"`docs/superpowers/`",
-	} {
-		if !strings.Contains(checklist, historical) {
-			t.Errorf("docs/documentation-consistency.md no longer names %s as historical; "+
-				"this gate excludes it on that basis", historical)
-		}
-	}
-
-	for _, root := range currentStateDocRoots {
-		if strings.HasPrefix(filepath.ToSlash(root), "docs/plans") ||
-			strings.HasPrefix(filepath.ToSlash(root), "docs/superpowers") ||
-			root == "README-go-port.md" {
-			t.Errorf("currentStateDocRoots includes historical document root %s", root)
-		}
 	}
 }
 

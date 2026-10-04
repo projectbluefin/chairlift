@@ -1,8 +1,8 @@
 ---
 name: fail-open-tables-need-a-totality-gate
 description: Use when a lookup table's default for an unlisted key is permissive.
-version: 1.0.0
-last_updated: 2026-09-22
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - testing
   - schema
@@ -19,8 +19,8 @@ the table does *not* list is the permissive one (`true`, "supported",
 "allowed"), usually on purpose, because failing closed would make a typo or a
 gap silently hide UI. `internal/capability`'s prerequisites table is one:
 `Set.Supports` reports an unclassified pair as supported so that a missing
-entry cannot hide a group at runtime. `internal/navigation`'s group slices are
-the same shape with a different default.
+entry cannot hide a group at runtime. Navigation's page-qualified group refs
+likewise need consistency checks against the declared config schema.
 
 **What to do:** Recognise that the permissive default makes the omission
 invisible to every test that exercises the lookup: a key the table forgot and
@@ -32,8 +32,8 @@ which is exactly where the gate does not run. So pair the table with a
 set-equality gate against the authoritative collection, comparing **both**
 directions (an entry the schema declares but the table omits, and an entry the
 table names that the schema does not declare), and assert non-vacuity on both
-sides so an empty table cannot pass. Report the two failure shapes — missing
-and duplicated — as separate messages, since they need different fixes. Keep
+sides so an empty table cannot pass. Report missing, extra, and duplicate
+entries separately, since they need different fixes. Keep
 the permissive default; it is the right runtime answer, and the gate is what
 carries the completeness obligation instead. When the collection is the page
 and group grammar, the gate belongs in `internal/installcheck` beside

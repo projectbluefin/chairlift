@@ -1,7 +1,7 @@
 ---
 name: issue-lifecycle
 description: Use when filing or triaging ChairLift reports, classifying labels, accepting or assigning work, linking PRs, recording delivery, verifying fixes, or migrating the local lifecycle.
-version: 1.0.0
+version: 1.1.0
 last_updated: 2026-10-04
 tags:
   - factory
@@ -14,15 +14,40 @@ metadata:
 
 # ChairLift issue lifecycle
 
-ChairLift owns its intake, label catalog and application delivery boundary.
-The shared implementation lives in `projectbluefin/actions`; this repository
-consumes it rather than maintaining another lifecycle bot. Start with local
-[`AGENTS.md`](../../../AGENTS.md) and
-[`factory-onboarding`](../factory-onboarding/SKILL.md). Common supplies the
-shared [label and lifecycle authority](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
+ChairLift is onboarded and owns its intake, label catalog and application
+delivery boundary. The shared implementation lives in `projectbluefin/actions`;
+this repository consumes its managed `v1` rather than maintaining another bot.
+Start with local [`AGENTS.md`](../../../AGENTS.md) and
+[`factory-onboarding`](../factory-onboarding/SKILL.md). Common supplies
+[cross-repository label guidance](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
 and [human gates](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md).
-Use those authorities for shared policy; the procedures below resolve
-ChairLift-specific intake, routing, publication and migration.
+Its Common-only pilot commands are not ChairLift commands; use this local
+catalog and the released Actions runtime for the adopted procedures below.
+
+## Deployed source and Hive boundary
+
+- [`.github/issue-policy.json`](../../../.github/issue-policy.json) defines local
+  vocabulary, protected reader signals and release-shaped delivery evidence.
+- [`issue-lifecycle.yml`](../../../.github/workflows/issue-lifecycle.yml) consumes
+  the [released reusable workflow](https://github.com/projectbluefin/actions/blob/v1/.github/workflows/reusable-issue-lifecycle.yml).
+  Events apply reconciliation; hourly repair is labels-only. Explicit dispatch
+  defaults to read-only. Prow runs before reconciliation in the same serialized
+  shared workflow; scheduled repair stays quiet.
+- [`issue-policy-preview.yml`](../../../.github/workflows/issue-policy-preview.yml)
+  consumes the [read-only preview](https://github.com/projectbluefin/actions/blob/v1/.github/workflows/reusable-issue-policy-preview.yml)
+  with read permissions and no secrets. It can inspect candidate data/runtime
+  refs without activating them. Production uses managed `v1`; third-party
+  actions remain SHA-pinned. A preview is not permission to apply a migration.
+
+Hive supplies assignment and scheduling, not ChairLift acceptance. The local
+runtime uses Hive's native `needs-human` enumeration gate while scope is
+unaccepted, human-only, paused, blocked, unclassified or otherwise ineligible;
+it preserves independent human/App gates after acceptance. This is GitHub-side
+enforcement, not a Hive deployment or scheduling change, and cannot guarantee
+that cached or differently configured workers obey it. Verify the trusted
+human acceptance event, current scope, assignment, preference and independent
+gates even when Hive reports work ready. Neither PR approval nor delivered
+software substitutes for those implementation gates.
 
 ## Preflight and intake
 
@@ -267,10 +292,11 @@ replies, not these maintainer controls.
 ## Full-history catalog migration
 
 Use Common's shared
-[factory onboarding](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md)
-and [lifecycle operator procedure](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
-for action pinning, CI/main activation, preview/archive, caller cutover and
-post-deployment proof. Locally:
+[factory entry procedure](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md#copyable-agent-onboarding)
+for local authority and human gates. For activation, preview/archive and mutation,
+use ChairLift's callers above and the
+[released Actions implementation](https://github.com/projectbluefin/actions/blob/v1/scripts/issue_policy.py),
+not Common's repository-specific script or dispatch commands. Locally:
 
 1. Inventory **all** issue and PR assignments, open and closed, and every label
    writer/reader before mutation. Archive definitions, assignments, preference,

@@ -15,6 +15,10 @@ Thank you for helping improve ChairLift.
   release delivery and reporter verification, follow the local
   [issue lifecycle](docs/skills/issue-lifecycle/SKILL.md). Reporters reply
   normally; no label permissions or slash commands are required.
+- For factory-assigned work, use the [factory entry point](docs/factory/README.md)
+  and Common's linked onboarding and human-gate contracts. Check live scope,
+  acceptance and assignment state; repository security rules and merge gates
+  still apply.
 
 ## Local setup
 
@@ -49,12 +53,15 @@ Installation details and optional runtime dependencies are listed in the
 
 2. Keep the change limited to one issue and avoid unrelated refactors or
    generated artifacts.
-3. Add or update regression tests for changed behavior. Use `make test` and
-   `make lint` for a quick local iteration loop, and format Go changes with
-   `make fmt`.
+3. Add or update regression tests for changed behavior. For headless iteration,
+   run focused pure-Go tests under `internal/` with CI's name filters (below),
+   then `make lint`; format Go changes with `make fmt`. `make test` runs
+   `go test ./...` unfiltered and is not the headless CI gate.
 4. Update the relevant current-state documentation. Changes to behavior,
    configuration, dependencies, or installation layout must follow the
    [documentation consistency checklist](docs/documentation-consistency.md).
+   AI contributors leave the human-owned root `README.md` unchanged and report
+   any drift to its maintainer; update the relevant owned documentation instead.
 5. Run `make ci` before pushing. Rebase onto the latest `upstream/main`, rerun
    the gate, then push the branch to your fork:
 
@@ -86,6 +93,11 @@ target needs only podman and Go on the host: it runs inside
 `ghcr.io/projectbluefin/dakota:testing` under a private headless Mutter
 Wayland session (`test/e2e/dakota.sh`).
 
+User-facing changes also need a scenario in `test/e2e/features/` and
+`make e2e-atspi`; changes to appearance need the walkthrough and
+`make screenshots`. Never run the GTK test binary against your live desktop
+session. See the [GTK testing skill](docs/skills/gtk-headless-testing/SKILL.md).
+
 ## Quality gates
 
 `make ci` is required before opening or updating a pull request. It mirrors the
@@ -99,10 +111,12 @@ host-independent checks in the repository's `Tests` workflow:
 | Race detection | The same internal test scope passes with the race detector |
 | Build | Linux amd64, Linux arm64, and the native binaries compile |
 
-The hosted workflow additionally runs `make e2e` with its runtime dependencies.
-Codecov reports the same internal test scope and rejects project coverage
-regressions greater than one percentage point; that remote signal is not
-reproduced by `make ci`. See the [quality dashboard](docs/quality.md) for the
+The hosted workflow additionally runs `make e2e` and the sharded
+`make e2e-atspi` accessibility suite inside isolated Dakota sessions. Codecov
+receives the filtered internal unit profile and a separately flagged E2E
+profile, and rejects project coverage regressions greater than one percentage
+point; that remote signal is not reproduced by `make ci`. See the
+[quality dashboard](docs/quality.md) for the
 canonical description of every signal.
 
 ## Pull requests

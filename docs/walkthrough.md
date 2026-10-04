@@ -1,8 +1,10 @@
 # Control Center walkthrough
 
-Every screen below was captured from the real application in an isolated
-Dakota Wayland session on 2026-10-01 — not mockups. The regular release
-capture command remains documented [below](#how-these-are-made).
+The screenshots below come from the real application, not mockups. They are
+committed captures, not a live report of this checkout; the isolated Dakota
+capture command and release refresh workflow are documented [below](#how-these-are-made).
+Screenshots can show optional groups that the shipped profile hides; available
+controls also depend on this computer's tools and administrator configuration.
 
 One app for the Bluefin family (Bluefin, Bluefin LTS, Dakota).
 Everything here is one control per decision — no strategy pickers, no
@@ -92,17 +94,24 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**Browse** and **Search** lead the page; search across both Homebrew formulae
-and casks. Apps already installed follow, then **App collections**, then
-explicit command-line tools (the packages Homebrew manages) and export controls.
-Dependency runtimes do not crowd the app inventory. Collections identify
-Homebrew as a third-party source. Installs show native activity and streamed command progress
-while they run, using the same controls in the explicit setup flow.
+**Browse all apps** opens the external software catalog (Bazaar by default).
+**Find more apps and tools** lets you search across both Homebrew formulae and
+casks. Results identify the package kind and ask before installing from this
+third-party source. **Installed applications** shows apps already installed as
+user- and system-scope Flatpaks, with confirmed removal; removing a system
+application affects every account.
 
-Removing an installed app asks first, and says whether
-it leaves only your account (user Flatpak) or everyone's (system Flatpak).
-**Export package list** saves what
-you have installed so you can put it back on another machine.
+**Homebrew applications** lists installed casks, followed by **App collections**,
+then **Command line tools** for explicitly requested formulae (the packages Homebrew manages).
+Dependency-only formulae do not crowd the inventory. Removing a Homebrew package asks first;
+formulae also offer pin and unpin actions. Collection installs show native
+activity and streamed command progress, using the same controls in setup.
+
+The screenshot shows these configurable controls; the shipped profile enables
+collections but hides the catalog, search and installed-package groups.
+
+Finally, **Export package list** saves a Brewfile so you can restore your
+Homebrew packages on another machine.
 Export shows **Exporting…** and an activity spinner until it finishes, then
 becomes available again, including after a failed export.
 
@@ -112,9 +121,11 @@ becomes available again, including after a failed export.
 
 ![Agents](screenshots/3-agents.png)
 
-**Agent Mode** is one switch that runs AI models on this computer. Answers are
-generated locally — nothing you type is sent to a cloud service — and prompts
-are not saved. Turning it on installs the llmman model server from Homebrew,
+**Agent Mode** is one switch that runs AI models on this computer. Its owned
+server binds only to loopback, disables peers and prompt history, and does not
+offload inference. A client such as Goose can separately use a cloud provider;
+check that client's settings before sending sensitive information.
+Turning Agent Mode on installs the llmman model server from Homebrew,
 downloads the engine that suits your hardware, and starts it on this computer
 only. Turning it off stops the server and keeps the software and any models you
 downloaded. The row shows an activity spinner throughout setup and shutdown, then
@@ -163,13 +174,15 @@ a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the
 reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
-default, with Lima Ubuntu LTS as an alternative), **Enable
-Docker**, and individually selected IDEs and terminal editors, including one
-JetBrains Toolbox entry. WSL needs hardware virtualization and access to
+default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64),
+**Enable Docker**, and individually selected IDEs and terminal editors, including
+one JetBrains Toolbox entry. WSL needs hardware virtualization and access to
 `/dev/kvm`; permission grants require a new login. Docker needs the base
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
+Use **WSL Backend** to choose nsl or Lima. An existing Lima Ubuntu machine is
+kept as the choice when no nsl machine exists, rather than creating a second one.
 **Gaming** lets you select individual applications and tools. Installed states
 distinguish applications from runtime extensions and user from system scope.
 Only selected user-scope entries can be removed. Partial failures stay visible
@@ -179,10 +192,11 @@ instead of being reported as an all-or-nothing success.
 driverless printing. Each runs as a small container in your own account,
 adds nothing to the system, and shares its printers with this computer and
 your network; when one is running, its row names the local web page where you
-add and manage printers. The switches are locked for now, and each row says
+add and manage printers. New enables are locked for now, and each row says
 why: a family can be turned on only once its driver image accepts an
 administrator credential for that web page, so nothing on your network can
-reach an unprotected administration screen. The rows evaluate systemd state,
+reach an unprotected administration screen. An existing unit can still be turned
+off. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.
@@ -260,9 +274,10 @@ one icon per app, not one per place; Plasma's Dolphin is a separate surface.
 Only the Files icon is in color: GNOME's top bar and app-grid glyph draw
 single-color silhouettes, recolored to match your theme.
 
-On GNOME, turning a section off puts back exactly what was there before,
-including a mark your distribution set rather than one you chose. KDE Plasma
-app-grid reset behavior is being completed separately.
+On GNOME, turning a section off restores the previous override or resets to
+the distribution default. On KDE Plasma, turning App Grid Livery off removes
+ChairLift's icon key from Kickoff applets still using it, restoring Plasma's
+default; an applet changed to another icon is left alone.
 
 ---
 
@@ -275,7 +290,7 @@ nothing uses any more, and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
 spinner remains visible while cleanup is running. Below it sit any
 **Maintenance tasks** whoever set up this computer added. **Recovery**
-holds the actions you can't undo (under **Maintenance → Recovery**): **Roll Back**
+holds the recovery actions (under **Maintenance → Recovery**): **Roll Back**
 returns to the previous system version if an update went badly, **Powerwash**
 removes the apps you installed and your development containers, and **Factory Reset**
 reinstalls the system from scratch.
@@ -308,7 +323,7 @@ Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and
 **Browse documentation**.
 
-A **Diagnostics** group offers a *Copy system diagnostics* row that places
+A **Diagnostics** group offers a **System diagnostics** row that places
 scrubbed system information — OS, image, kernel, desktop, and GPU — onto the
 clipboard to include when asking for help.
 
@@ -339,10 +354,10 @@ pretending an operation was tested. It needs podman and Go on the host.
 
 Run it locally when something's appearance changes and you want to preview
 before a release. It isn't regenerated per commit, since font and theme
-drift would churn the repo — instead, `.github/workflows/release-screenshots.yml`
-runs it automatically after each published GitHub Release (building from that
-release's tag) and opens a `release-screenshots` pull request against `main`
-with any changed PNGs, so what ships is what's pictured here without anyone
-remembering to do it by hand. That pull request goes through the merge queue
+drift would churn the repo — instead, [the release screenshot workflow](../.github/workflows/release-screenshots.yml)
+runs after a successful `goreleaser` workflow (or a manual dispatch), builds
+from the selected release tag, and opens a `release-screenshots` pull request
+against `main` with changed PNGs. The release-completion trigger is
+`workflow_run`, not `release: published`. That pull request goes through the merge queue
 like any other and still needs one approval. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.

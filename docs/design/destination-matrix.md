@@ -1,277 +1,196 @@
 # Destination and action ownership matrix
 
-## Status: superseded proposal
+## Overview
 
-This file records the original inventory and proposed five-section relocation
-from #241/#344. The maintainer closed #201 as **superseded** on 2026-09-28:
-the application keeps seven primary routes (Updates, Apps, Agents, Features,
-Livery, Maintenance, Help) under `internal/navigation`. The destination map
-and counts below are historical planning evidence, **not** a current or future
-implementation contract. Current group keys and mounts must be read from
-`internal/config`, `internal/navigation`, and the view builders; do not copy
-this table into new issue acceptance or a user-facing walkthrough.
+This is the shipped destination inventory, not a relocation plan. Route names,
+titles, order, parentage and page-qualified configuration references are owned
+by `internal/navigation`. Widget mounting is in `internal/window`; action
+controllers remain in `internal/views` and their existing provider packages.
+See [overview](overview.md#pages) for architecture and
+[package-managers](package-managers.md) for execution boundaries.
 
-## Design
+## Destination map
 
-### Destination map
+The seven primaries, in canonical order, are **Updates, Apps, Agents, Features,
+Livery, Maintenance, Help**. Recovery is the only detail, owned by Maintenance;
+it has no sidebar row or accelerator. There is no System, Appearance, Developer
+Tools or Local AI tools route. Wallpaper is not a shipped control.
 
-Names below are review labels, not a second route registry or new YAML keys.
-Canonical route identity and parentage belong to `internal/navigation` as
-extended by [#342](https://github.com/projectbluefin/chairlift/issues/342);
-widget composition belongs to [#343](https://github.com/projectbluefin/chairlift/issues/343).
-
-```text
-Control Center
-├── Updates
-│   ├── Aggregate status and update action
-│   ├── Settings (automatic updates, channel, source preferences)
-│   ├── Sources (provider detail and tap trust)
-│   └── Changes (SBOM compare)
-├── Apps
-│   ├── Installed apps
-│   ├── Collections and gaming
-│   ├── Developer Tools
-│   └── Local AI tools
-├── Appearance
-│   ├── Profile picture
-│   ├── Wallpaper
-│   └── Icons (app grid, panel, Files)
-├── System
-│   ├── About
-│   ├── Storage
-│   ├── Graphics
-│   ├── Distribution features
-│   ├── Administrator maintenance
-│   └── Recovery
-└── Help
-    ├── Troubleshooting and support
-    └── Capability explanations
-```
-
-Wallpaper is a destination requirement, not an existing configurable group or
-working control. System About is the proposed machine-information destination;
-it must not be confused with the existing application About dialog. Neither
-requires a placeholder page in the preparatory parcels.
-
-### Configuration references and owners
-
-**The configuration-to-navigation one-to-one assumption is retired.** Keep the
-seven original YAML namespaces. Every group reference carries both its original
-configuration page and its group; display names never determine configuration
-identity. A destination can consume several namespaces, and a group can supply
-more than one destination without creating a second mutation or state owner.
-
-```text
-(original config page, group) + capability floor
-                       │
-                       ▼
-             one live action/state owner
-                       │
-                       ▼
-              canonical destination
-                       ▲
-                       │
-       primary entry / detail / deep link
-```
-
-The table is total over the 26 groups in `config.SchemaGroups`, derived from
-`defaultConfig()` in `internal/config/config.go`. The action IDs join to the
-next table. A row with multiple destinations is an explicit split of content,
-not permission to run its builder twice.
-
-| Original configuration page | Canonical group | Current mount | Target destination(s) | Action IDs |
-| --- | --- | --- | --- | --- |
-| `updates_page` | `automatic_updates_group` | Updates | Updates / Settings | U2 |
-| `updates_page` | `bootc_updates_group` | Updates; Recovery detail | Updates / Sources, Changes; System / Recovery | U3, U4, S5, S6 |
-| `updates_page` | `flatpak_updates_group` | Updates | Updates / Sources | U5 |
-| `updates_page` | `brew_updates_group` | Updates | Updates / Sources | U6, U7 |
-| `updates_page` | `brew_trust_group` | Updates | Updates / Sources | U8 |
-| `updates_page` | `channel_group` | Updates | Updates / Settings; System / Graphics | U9, S1 |
-| `updates_page` | `bootc_status_group` | Updates | System / About (version summary remains available to Updates) | S2 |
-| `applications_page` | `applications_installed_group` | Apps | Apps / Installed apps | A1 |
-| `applications_page` | `flatpak_user_group` | Apps | Apps / Installed apps | A2 |
-| `applications_page` | `flatpak_system_group` | Apps | Apps / Installed apps | A3 |
-| `applications_page` | `brew_group` | Apps | Apps / Installed apps; Apps / Developer Tools | A4, A5, A6 |
-| `applications_page` | `brew_search_group` | Apps | Apps / Developer Tools | A7 |
-| `applications_page` | `brew_bundles_group` | Apps | Apps / Collections and gaming | A8 |
-| `features_page` | `features_group` | Features | System / Distribution features | S3, S4 |
-| `features_page` | `dx_group` | Features | Apps / Developer Tools | A9, A10 |
-| `features_page` | `gaming_group` | Features | Apps / Collections and gaming | A11 |
-| `features_page` | `printers_group` | Features | Features / Printers | — |
-| `agents_page` | `agents_group` | Agents | Apps / Local AI tools | A12 |
-| `livery_page` | `account_group` | Livery | Appearance / Profile picture | P1 |
-| `livery_page` | `livery_app_grid_group` | Livery | Appearance / Icons | P2 |
-| `livery_page` | `livery_foundation_group` | Livery | Appearance / Icons | P3 |
-| `livery_page` | `livery_dock_group` | Livery | Appearance / Icons | P4 |
-| `maintenance_page` | `maintenance_freespace_group` | Maintenance; post-update runner | System / Storage | S7 |
-| `maintenance_page` | `maintenance_cleanup_group` | Maintenance | System / Administrator maintenance | S8 |
-| `maintenance_page` | `reset_group` | Recovery detail | System / Recovery | S9, S10 |
-| `help_page` | `troubleshooting_group` | Help | Help / Troubleshooting and support | H1, H2 |
-| `help_page` | `help_resources_group` | Help | Help / Troubleshooting and support | H3 |
-
-Explicit shared-group rules:
-
-- `channel_group` continues to gate **both** channel switching in Updates and
-  graphics switching in System. The controls have different actions (U9 and
-  S1), each with one owner; neither gets a replacement configuration key.
-- `brew_group` contributes GUI inventory to Installed apps and specialist
-  formula detail/export to Developer Tools. `loadHomebrewPackages` remains
-  the one installed Homebrew inventory loader, with its existing generation
-  guard. Do not duplicate it or its mutation gates for the two presentations.
-  `brew_bundles_group` stays independently configurable and nil-safe when
-  `brew_group` is disabled.
-- `bootc_updates_group` already spans staging, comparison and Recovery. Keep
-  its original namespace for rollback/catalog reads after relocation too.
-- `maintenance_freespace_group` gates both the manual cleanup and the composed
-  post-update step through `updateproviders.CleanupGroup`. Both use S7's runner.
-
-Legacy `system_page` aliases are migration input, not canonical groups or new
-routes: `bootc_status_group` and `channel_group` migrate into Updates;
-`system_info_group` and `health_group` are retired. The former
-`maintenance_brew_group` and `maintenance_flatpak_group` are not current schema
-groups. Do not resurrect their separate cleanup buttons.
-
-### Action/route matrix
-
-Each row records exactly one owning action controller (or state owner for a
-read-only row). The provider column is the existing execution dependency, not
-an additional UI owner. Names without a package prefix are `UserHome` methods
-in `internal/views`. Bundled verbs in a row share the stated owner. Internal
-refresh callbacks and confirmation/cancel paths stay with that action; they
-are not new routes. A target route never creates a second copy of the owner.
-
-| ID | Existing action / state | Target route | Single action/state owner | Existing provider or boundary |
-| --- | --- | --- | --- | --- |
-| U1 | Check, Update All, retry and aggregate progress | Updates | `updateflow.Coordinator` via `UpdateShell` | `internal/updateproviders` composes Flatpak, Homebrew, updex and bootc; no new executor |
-| U2 | Enable/disable automatic updates | Updates / Settings | `onAutomaticUpdatesToggled` | `ublue.SetAutomaticUpdates`; state reads via `internal/autoupdate` |
-| U3 | Stage OS update and show progress | Updates / Sources | `onBootcStageClicked` | `internal/bootc` via `internal/stageexec`; same stage path used by U1 |
-| U4 | Compare running/staged SBOM; expand diff | Updates / Changes | `onChangelogClicked` and its pinned comparison state | `internal/sbom`; explicit read, no background fetch on navigation |
-| U5 | Read pending app updates; update each app | Updates / Apps and tools | `UpdateShell.startItemUpdate` | `updateproviders.UpdateItem`; application identity and scope retained |
-| U6 | Read outdated tools; upgrade each | Updates / Apps and tools | `UpdateShell.startItemUpdate` | `updateproviders.UpdateItem` using Homebrew |
-| U7 | Refresh tool metadata | Updates / Apps and tools | `UpdateShell.startToolRefresh` | `updateproviders.RefreshDeveloperTools` |
-| U8 | Discover untrusted taps; confirm trust | Updates / Sources | `trustTap` (confirmation in `confirmTrustTap`) | `homebrew.TrustPackages`; per-user, no pkexec |
-| U9 | Change release channel | Updates / Settings | `onChannelToggled` | `ublue.SwitchChannel`; helper resolves image from channel word |
-| U10 | Restart after update | Updates | `UpdateShell.StartRestart` | `ublue.Restart`; separate from staging/rollback |
-| U11 | Toggle four update sources and post-update maintenance preference | Updates / Settings | `internal/settings` store, bound by `Window.buildPreferences` | Updates GSettings preferences; source policy/capability still floors execution |
-| A1 | Launch configured software catalog (`app_id`, default Bazaar) | Apps / Installed apps | `launchApp` | External application launcher; installs belong to that catalog |
-| A2 | List/uninstall user Flatpaks | Apps / Installed apps | `loadFlatpakApplications` user-scope row action | `internal/flatpak` |
-| A3 | List/uninstall system Flatpaks | Apps / Installed apps | `loadFlatpakApplications` system-scope row action | `internal/flatpak`; retain system scope |
-| A4 | List/uninstall Homebrew formulae and casks | Apps / Installed apps (GUI), Developer Tools (formulae) | `runHomebrewUninstall` with shared `loadHomebrewPackages` inventory | `homebrew.Uninstall`; typed formula/cask target |
-| A5 | Pin/unpin formula | Apps / Developer Tools | `runHomebrewPin` | `homebrew.Pin` / `Unpin`; same row gate as uninstall |
-| A6 | Export package list (replaces `~/Brewfile`) | Apps / Developer Tools | `onBrewBundleDumpClicked` | `homebrew.BundleDump`; handler is currently in `maintenance_page.go`, control is in Apps |
-| A7 | Search formulae/casks; confirm install | Apps / Developer Tools | `onHomebrewSearch` / `installHomebrewSearchResult` search controller | `homebrew.Search` / `Install`; independent search generation, shared installed loader |
-| A8 | Discover/check collections; install Brewfile | Apps / Collections and gaming | `loadBrewBundles` row install gate | `homebrew.AvailableBundles`, `BundleCheck`, `BundleInstall` |
-| A9 | Enable/disable Developer Mode; choose WSL, Docker and individual IDE/editor tools; update command-menu visibility | Apps / Developer Tools | `onDeveloperToggled` / `onDeveloperOption` | `internal/ublue` fixed helper access/daemon commands; `internal/devtools` user Homebrew/Lima; one developer gate, real VM/socket readiness |
-| A10 | Open developer onboarding; optional Pulp install and OPML staging after successful enable | Apps / Developer Tools | `startDeveloperFeedSetup` (onboarding launch via `openDeveloperOnboarding`) | `internal/developerfeeds`; `install_pulp` / `stage_feeds` opt in, no rollback of successful enable |
-| A11 | Install/remove selected gaming components; show verified per-component user/system state | Apps / Collections and gaming | `onGamingSelected` / `runGamingSelected` | `internal/gaming`; one gate, confirmed selected user Flatpak removals, preserve system copies and partial-failure summary |
-| A12 | Enable/disable Agent Mode; inspect readiness/details | Apps / Local AI tools | `onAgentModeToggled` / `showAgentModeState` Agent Mode controller | `internal/aistack`; user unit and environment fragment, llmman owns models |
-| P1 | Open avatar chooser, preview, Apply | Appearance / Profile picture | `avatarPicker` controller in `profile_picture.go` | `internal/avatar.Applier`; AccountsService or face-file fallback, no pkexec |
-| P2 | Search/select app-grid brand; enable/revert | Appearance / Icons | `onLiveryAppGridToggled` / `onLiveryBrandChosen` app-grid controller | `internal/livery`; user theme |
-| P3 | Select panel foundation/custom file; enable/revert; toggle login rotation | Appearance / Icons | `livery.Panel` controller in `livery_actions.go` | `internal/livery`; user icon/dconf/preferences and rotation unit |
-| P4 | Search/select Files project/custom artwork; enable/revert; toggle login rotation | Appearance / Icons | `livery.Dock` controller in `livery_actions.go` | `internal/livery`; Files application icon, not a separate dock-only icon |
-| S1 | Select graphics driver variant | System / Graphics | `onDriverSwitchClicked` | `ublue.SwitchDriver`; fixed helper, retain `channel_group` gate |
-| S2 | Read version, deployment and technical image details | System / About | `loadSystemVersion` (identity presentation in `buildImageIdentityGroup`) | `internal/bootc`, cached image identity; read-only |
-| S3 | Enable/disable distribution feature | System / Distribution features | `onFeatureToggled` | `internal/updex` fixed helper |
-| S4 | Check/update distribution features | System / Distribution features | `onUpdateFeaturesClicked` (reads via `checkFeatureUpdates`) | `internal/updex`; U1's system-components source uses same provider |
-| S5 | Roll Back to previous deployment | System / Recovery | `onBootcRollbackClicked` | `ublue.Rollback`; existing target only, completes gate after live success, no restart |
-| S6 | Check/Check Again published versions; expand list | System / Recovery | `onPublishedVersionsClicked` | `internal/registrytags.Catalog`; lists dated builds of the running stream |
-| S6a | Pin to a published dated build | System / Recovery | `confirmPin` / `runPin` | `ublue.Pin`; fixed helper, validated day word only, confirmed via dialog |
-| S6b | Return to stream (unpin) | System / Recovery | `confirmReturnToStream` / `runReturnToStream` | `ublue.Unpin`; fixed helper, offered when booted on dated tag, confirmed via dialog |
-| S7 | Free up space; post-update cleanup | System / Storage (also composed by U1) | `internal/updateproviders` cleanup runner | Typed cleanup steps; manual presentation via `onFreeUpSpaceClicked`, never configured scripts |
-| S8 | Execute each configured `actions[]` entry, including default Clean Up Boot Old Entries | System / Administrator maintenance | `runMaintenanceAction` | `pageview.MaintenanceCommand` → `internal/maintenanceexec`; existing trusted-config sudo rules, five-minute timeout |
-| S9 | Confirm Powerwash | System / Recovery | `onPowerwashClicked` | `internal/powerwash`; user-scope reset, opt-in `reset_group` |
-| S10 | Confirm Factory Reset | System / Recovery | `onFactoryResetClicked` | `ublue.FactoryReset`; fixed helper with no target argument, opt-in `reset_group` |
-| H1 | Set up Enhanced Troubleshooting | Help / Troubleshooting and support | `onTroubleshootClicked` setup gate | `internal/troubleshoot`; Homebrew/Goose user setup, readiness read from config |
-| H2 | Start troubleshooting session | Help / Troubleshooting and support | `launchApp` | Existing Goose desktop application |
-| H3 | Open configured website, issues, chat | Help / Troubleshooting and support | `openURL` | `xdg-open` through `internal/launcher` |
-| H4 | Expand “Why is something missing?” | Help / Capability explanations | `pageview.UnavailableFeatures` | Read-only capability/config snapshot; no separate group |
-
-The pure `updateflow.Coordinator` owns update inventory and aggregate counts.
-Manual item updates, tool metadata refresh, dedicated staging and the unified
-run share `UpdateShell.beginMutation`; no separate provider-list state or badge
-counter remains. All external work stays off GTK, with results marshalled back
-before touching controls or starting a new coordinator check.
-
-Livery orders Profile Picture, App Launcher Icon, Top Bar Icon, then Files
-Icon. Foundations use an embedded, theme-adaptive FlowBox preview grid with
-one activation signal. The shared catalog chooser renders at most twelve
-search matches plus Custom SVG; artwork is fetched sequentially through the
-existing livery fetch seams only for those matches. New searches cancel old
-fetches and generation checks discard stale images. Rotation scheduling is
-serialized and commits both preference keys only after systemd accepts the
-unit change; rejected changes restore the last known switches and unit file.
-
-Global actions have no invented configuration group:
-
-| Existing action | Destination relationship | Single owner |
+| Route | Builder under `internal/views` | Content |
 | --- | --- | --- |
-| Sidebar/Alt+number/F1 Help; Recovery entry/Back | Primary or detail navigation only | `Window.navigateToPage`; the Recovery callbacks in `internal/window/window.go` (`showRecoveryDetail`, `navigateBack`) resolve the `recovery` route and the transition's `Back` primary through it, so entry keeps the Maintenance row selected and Back returns there without re-running anything (#343). A known primary the caller cannot enter resolves to Help. |
-| Preferences menu aliases; Check action | Opens Updates settings / invokes U1 | `Window.setupActions`, delegating to U11 / U1 rather than owning mutations |
-| Help action | Opens configured website through GIO when present | `Window.setupActions` |
-| Setup Assistant, `--first-run`, `--setup`/`-s`, Back, Next/Finish, Dismiss/Escape | Explicit existing-page tour; no additional primary destination | `Window.PresentFirstRun` routes `firstrun.Pages` through `navigateToPage`; page controls own mutations and the store records only completion/dismissal |
-| Keyboard Shortcuts | Global dialog | `Window.onShowShortcuts`, inventory from `internal/navigation` |
-| About Control Center | Global application About dialog | `Window.onShowAbout`; distinct from System / About |
-| Quit / close while updates run | Application lifecycle | `internal/app` quit action; window close guard consults `UpdateShell.Busy` |
+| `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
+| `applications` | `applications_page.go` | External app catalog, Homebrew search/results, installed Flatpaks, installed casks, collections, explicitly requested formulae and Brewfile export, in that order |
+| `agents` | `agents_page.go`, `contribute.go` | Local Agent Mode, model selection/presets, verified Goose Desktop launch, Ask Bluefin menu visibility and Contribute to Bluefin |
+| `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and locked printer applications |
+| `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
+| `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Recovery entry |
+| `help` | `help_page.go`, `troubleshoot.go` | Enhanced Troubleshooting, support links and capability explanations |
+| `recovery` | `recovery.go`, `reset.go`, `versions.go` | Previous-deployment rollback, live published-version reads, confirmed pin/return-to-stream and opt-in reset actions |
 
-### Decision-reference reconciliation
+## Configuration references and owners
 
-Use filenames and recorded decisions, not numbers copied from issue prose:
+A configuration page is a stable YAML namespace, not a display title. Each
+`navigation.Ref` is `{Page, Group}`; Recovery consumes both Updates and
+Maintenance namespaces. A shared group does not authorize a second state owner
+or a duplicated builder. This table covers the current `config.SchemaGroups`
+inventory; derive schema additions from source rather than a frozen count.
 
-| Actual reference | Subject | Consequence for #241 and #210 |
+| Configuration page | Group | Current mount / owner |
 | --- | --- | --- |
-| [ADR-0013](../adr/0013-rollback-catalog-reads-the-registry-live.md) | Live, read-only rollback catalog | Not capability visibility; catalog does not authorize switching to a dated tag |
-| [ADR-0014](../adr/0014-capability-driven-visibility-as-a-floor.md) | Capability-driven visibility as a floor | This is the capability reference for routes, source settings and onboarding |
-| [ADR-0015](../adr/0015-agent-mode-llmman.md) | Agent Mode using llmman | Not onboarding/avatar; changing its dedicated-page decision needs a superseding decision |
-| [ADR-0016](../adr/0016-printer-app-admin-denied-until-authenticated.md) | Printer application admin authentication | Also allocated; do not reuse for workstation/navigation decisions |
+| `updates_page` | `automatic_updates_group` | Updates; `onAutomaticUpdatesToggled`, observed through `internal/autoupdate`, writes via `ublue.SetAutomaticUpdates` |
+| `updates_page` | `bootc_updates_group` | Updates staging/Compare and Recovery rollback/catalog/pin/unpin; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked`, `onPublishedVersionsClicked`, `confirmPin` / `runPin`, `confirmReturnToStream` / `runReturnToStream` |
+| `updates_page` | `flatpak_updates_group` | Updates applications source; `updateflow.Coordinator` / `UpdateShell` |
+| `updates_page` | `brew_updates_group` | Updates developer-tools source; `updateflow.Coordinator` / `UpdateShell` |
+| `updates_page` | `brew_trust_group` | Updates; `confirmTrustTap` / `trustTap`, unprivileged `homebrew.TrustPackages` |
+| `updates_page` | `channel_group` | Updates Advanced; `onChannelToggled` / `onDriverSwitchClicked`, fixed ublue helper |
+| `updates_page` | `bootc_status_group` | Updates system-version readout; `loadSystemVersion`, read-only bootc state |
+| `applications_page` | `applications_installed_group` | Apps external catalog launcher; `launchApp`, defaulting to Bazaar through configurable `app_id` |
+| `applications_page` | `brew_search_group` | Apps formula/cask search and confirmed installs; `onHomebrewSearch`, `confirmHomebrewInstall` / `installHomebrewSearchResult` |
+| `applications_page` | `flatpak_user_group` | Apps user-scope Flatpak inventory and confirmed removal; `loadFlatpakApplications`, `confirmFlatpakUninstall` / `runFlatpakUninstall` |
+| `applications_page` | `flatpak_system_group` | Apps system-scope Flatpak inventory and confirmed removal; the same loader and removal handlers, with scope-specific confirmation |
+| `applications_page` | `brew_bundles_group` | Apps collections, after installed casks and before requested formulae; `loadBrewBundles`, shared collection install/progress handling |
+| `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
+| `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
+| `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
+| `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
+| `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
+| `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` readiness and authenticated-administration enable gate |
+| `agents_page` | `agents_group` | Agents service/model/presets, Goose launch, Ask Bluefin visibility and contributor launch; `internal/aistack`, `internal/agentmode`, `internal/devmenu`, `internal/contribute` |
+| `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
+| `livery_page` | `livery_app_grid_group` | Livery app-grid mark; app-grid controller and `internal/livery` |
+| `livery_page` | `livery_foundation_group` | Livery panel mark/login rotation; `livery.Panel` controller |
+| `livery_page` | `livery_dock_group` | Livery Files application mark/login rotation; `livery.Dock` controller, not a dock-only icon |
+| `maintenance_page` | `maintenance_freespace_group` | Maintenance manual cleanup and unified post-update cleanup; `updateproviders.CleanupGroup`, one typed cleanup runner |
+| `maintenance_page` | `maintenance_cleanup_group` | Maintenance configured `actions[]`; `runMaintenanceAction` → `pageview.MaintenanceCommand` → `internal/maintenanceexec` |
+| `maintenance_page` | `reset_group` | Recovery Powerwash/Factory Reset; `onPowerwashClicked` / `onFactoryResetClicked`, each confirmed before dispatch |
+| `help_page` | `troubleshooting_group` | Help setup/session launch; `onTroubleshootClicked`, `internal/troubleshoot`, existing Goose desktop launcher |
+| `help_page` | `help_resources_group` | Help website/issues/chat; `openURL` through `internal/launcher` |
 
-The accepted ADR-0014 file itself still has a `0013` heading. That historical
-heading does not change its filename identity and is not grounds to overwrite
-an accepted decision. This reconciliation deliberately leaves accepted ADRs
-untouched. #241 step 6 and #210's “ADR-0013 is capability-driven visibility”
-claim should be read with the corrected links above. There is no accepted
-onboarding/avatar or workstation-domain ADR in the current ADR inventory to
-cite under those numbers. Do not invent one or reserve an already claimed
-number. A future changed decision must follow [the ADR template](../adr/TEMPLATE.md),
-use the then-next free number, and receive maintainer acceptance; this matrix
-does not self-accept or supersede an ADR.
+Important shared boundaries:
 
-## Operational notes
+- `channel_group` gates both release-channel and graphics-driver changes **in
+  Updates**; no System destination or replacement configuration key exists.
+- Homebrew has one installed inventory loader and generation guard. Search has
+  its own generation; confirmed actions refresh installed rows only after live
+  success. Collections remain independently configurable and nil-safe when
+  `brew_group` is disabled. Export's handler file does not change its Apps mount.
+- `bootc_updates_group` retains its Updates namespace for Recovery reads/actions.
+  Recovery is offered only when its Maintenance ancestor is visible and one
+  of its page-qualified refs is effectively enabled.
+- `maintenance_freespace_group` gates both manual and post-update cleanup.
+  Configured administrator scripts are a separate opt-in surface, not cleanup
+  steps in the unified run.
+- Legacy `system_page` is validated migration input, not a current schema page
+  or route: status/channel settings migrate to Updates; information/health
+  groups have no runtime effect. Separate package-manager cleanup groups are
+  retired and must not be revived.
 
-- Apply `Configured && Available` using the original group reference at every
-  destination. Navigation must not construct a disabled cross-group control.
-  Runtime errors stay errors; an unavailable tool does not become a mutation.
-- Build each live control once. Do not rerun builders into a second parent or
-  overwrite `UserHome` handles. The original roots are temporary mounting
-  points, not a second compatibility UI to keep indefinitely.
-- Detail entry selects its primary ancestor, sets its own title and Back
-  target, and reveals collapsed content. Back restores parent selection,
-  scroll and sensible focus without rerunning an action. Details get no extra
-  Alt+number accelerators. Hidden/unsupported links resolve to the nearest
-  visible ancestor or Help; config failure keeps Help and its persistent error.
-- Freeze the primary shortcut inventory for the session; first-run dismissal
-  and asynchronous probes must not reindex it. These are #241's implementation
-  requirements, not claims that every transition is implemented today.
-- #201 must remove temporary mounts: Apps' specialist Homebrew content moves
-  to Developer Tools; Agents to Local AI tools; Features splits between Apps
-  and System; Livery becomes Appearance; Maintenance splits into Storage,
-  administrator maintenance and Recovery; Updates' driver/technical identity
-  content moves to System. Re-parent the Recovery detail under System — its
-  window callbacks already go through `navigateToPage`, so that is a change
-  to the route's `Parent` in `internal/navigation`, not to the window. Keep
-  update status/settings/sources/changes in Updates. Do not delete original
-  YAML namespaces or hide still-working roots early.
+## Action and state boundaries
 
-## References
+The pure `updateflow.Coordinator` owns source inventory, phases and aggregate
+counts. The shell is snapshot rendering and event wiring; production
+`internal/updateproviders` wraps existing Flatpak, Homebrew, updex and bootc
+entry points. `UpdateShell.beginMutation` admits manual item updates, metadata
+refresh, dedicated staging and the unified run. Failed observations preserve
+confirmed state; dry-run previews mutate none of it. Restart is offered from
+the Operating system row only after an observed staged deployment, through the
+fixed `ublue.Restart` action, not an invented update executor.
 
-- Current architecture: [overview](overview.md), [provider ownership](package-managers.md).
-- Existing rationale: [configuration schema ADR-0005](../adr/0005-config-schema-reflected-from-canonical-struct.md),
-  [documentation ADR-0010](../adr/0010-docs-are-a-ci-gated-artifact.md), and the
-  reconciled decisions above.
-- Implementation plan/contract: [#241 steps 2, 3 and 6](https://github.com/projectbluefin/chairlift/issues/241),
-  [#344 acceptance criteria](https://github.com/projectbluefin/chairlift/issues/344).
-  No navigation Spektacular spec/clause identifier was supplied; these issue
-  clauses are the contract for this documentation parcel, not a new accepted spec.
-- Related delivered contract: [optional setup model](../specs/setup-model.md)
-  (`original-policy` and `navigation-only`); it reuses original group references
-  and does not introduce another mutation owner.
-- Follow-on documentation: [#210](https://github.com/projectbluefin/chairlift/issues/210).
+Provider-specific safety remains with each live owner:
+
+- Staging uses the fixed bootc stage path and bounded streamed logs. Compare
+  starts only on a click, with pinned image references and stale-result guards.
+  Published versions are read-only registry observations. Pin and Return to stream
+  require confirmation and installed helper support; only a validated day or
+  fixed unpin word crosses pkexec, never a registry-supplied image reference.
+  Roll Back uses the existing previous deployment and completes its gate after
+  live success, without restarting.
+- Flatpak removals and Homebrew uninstall/pin actions confirm intent and retain
+  typed target/scope identity. Failure and preview restore controls; refresh
+  generations reject stale workers. Visible retryable controls reset their gates.
+- Developer Mode opens onboarding tabs and optional Pulp/feed work only after a
+  confirmed live enable. `install_pulp` and `stage_feeds` are opt-in user-scope
+  work; their failures do not reverse or misreport the permission promotion.
+  WSL defaults to nsl (Linux amd64), with Lima available explicitly and retained
+  for an existing Lima-only machine. Both need KVM access; Docker requires an
+  actually ready socket. Missing helper actions leave affected options visible
+  but insensitive.
+- Gaming validates selected refs, distinguishes applications/runtimes and
+  user/system scope, preserves system installations and reports partial failures.
+- Agent Mode is local and unprivileged: user service, loopback endpoint, no
+  peer/offload controls. Readiness is observed HTTP health after the owned unit's
+  restart/invocation-stamp boundary, not file presence or optimistic switch state.
+  Goose Desktop launches through `llmman launch goose-desktop --model` only after
+  daemon/model/package and safe Linux-extension checks; persistent provider
+  settings are untouched. Ask Bluefin uses the same readiness dispatcher.
+  Contribute requires terminal/ujust recipe/Podman/registration preflight and
+  launches `xdg-terminal-exec ujust contribute`, without a privileged route.
+- Printers are rootless quadlets. New enables are refused until administration
+  is authenticated or absent; the locked rows remain visible and off. Existing
+  units stay disableable; a failed stop preserves the management file.
+  Installed units are diagnosed from systemd, user journal and Podman image
+  observations; plugin, device-access, crash and image failures remain distinct.
+- Livery applies no mutations on load or preview, retains confirmed state across
+  failed writes and serializes rotation scheduling. Catalog searches cancel
+  older fetches and discard stale generations. Profile-picture application is
+  unprivileged AccountsService or a disclosed face-file fallback.
+- Powerwash and Factory Reset are opt-in and destructive-confirmed. Factory
+  Reset sends only its fixed command word; no caller-supplied reset target
+  crosses the helper boundary. Manual cleanup never claims skipped or failed
+  steps succeeded, or invents reclaimed-byte figures.
+- Enhanced Troubleshooting preserves unrelated Goose settings and provider/model
+  choices; unsafe diagnostic policies/shared mappings are refused, not rewritten.
+- Privileged intent is journalled at shared choke points. Live helper outcomes
+  distinguish success, refusal, failure, timeout and cancellation and include
+  self-reported derived argv where available; markers are an audit aid, not proof.
+
+Livery uses an embedded, theme-adaptive foundation `GtkFlowBox` with one
+activation signal. The shared catalog chooser fetches only its visible page of
+at most twelve search matches plus Custom SVG; new searches cancel old fetches
+and generation checks discard stale artwork. Rotation scheduling serializes
+systemd changes and retains confirmed preferences when a unit change fails.
+
+All external work runs off GTK; widget updates return through
+`sgtk.RunOnMainThread`. Configuration and capability are distinct facts:
+configuration may subtract from the host floor, never add to it. Nil-guard
+cross-group widget access, connect reusable signals once, and retain one owner
+for each mutation and observation.
+
+## Global actions and navigation
+
+| Action | Single owner / relationship |
+| --- | --- |
+| Sidebar, Alt+number, F1 Help, Recovery entry/Back | `Window.navigateToPage` applies `navigation.Resolve`: selected primary row, visible child, title, collapsed-content reveal and recorded Back parent |
+| Preferences menu aliases | `Window.buildPreferences`, shared Updates GSettings source/maintenance preferences; no new configurable group |
+| Check | `UpdateShell.StartCheck`, same coordinator as the page action |
+| Configured Help website | `Window.setupActions`, GIO launch when a URL is present |
+| Setup Assistant, `--first-run`, `--setup`/`-s` | `Window.PresentFirstRun`; existing visible pages in Features → Apps → Agents → Livery order, no separate destination or copied controls |
+| Keyboard Shortcuts | `Window.onShowShortcuts`; advertised and registered inventory from `internal/navigation` |
+| About Control Center | `Window.onShowAbout`; application About dialog, not a machine-information route |
+| `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose without presenting a window, otherwise open Agents with prerequisite/start-failure feedback |
+| Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
+
+The visible primary inventory is fixed for the session and Alt+number compacts
+over it. Details never acquire shortcuts. Recovery keeps Maintenance selected;
+Back resolves the recorded primary through the same navigation path. A known
+hidden/unbuilt detail resolves to its visible ancestor, then Help; a known
+hidden/unbuilt primary resolves to Help. Only an unknown route is rejected.
+Navigation transitions execute no mutations. Setup Back/Next also mutate no
+settings; Finish/dismissal record disposition asynchronously, and previews write
+nothing. Ordinary activation never opens setup automatically.
+
+## Decision references
+
+Use actual filenames/subjects rather than copied issue numbering:
+
+- [ADR-0013](../adr/0013-rollback-catalog-reads-the-registry-live.md) covers the
+  live read-only registry catalog, not capability visibility.
+- [ADR-0014](../adr/0014-capability-driven-visibility-as-a-floor.md) covers the
+  capability floor. Its historical `0013` heading does not change file identity;
+  accepted decision text remains untouched.
+- [ADR-0015](../adr/0015-agent-mode-llmman.md) covers Agent Mode using llmman.
+- [ADR-0016](../adr/0016-printer-app-admin-denied-until-authenticated.md) covers
+  printer administration authentication.
+- [Setup model](../specs/setup-model.md) records the existing-page, navigation-only
+  flow. Future route proposals belong in live issues and require explicit
+  implementation/decision changes, not a second proposed registry in this file.

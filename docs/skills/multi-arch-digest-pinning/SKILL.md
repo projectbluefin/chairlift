@@ -1,8 +1,8 @@
 ---
 name: multi-arch-digest-pinning
 description: Use when pinning or rolling a container image reference to a content digest.
-version: 1.1.0
-last_updated: 2026-10-03
+version: 1.2.0
+last_updated: 2026-10-04
 tags:
   - supply-chain
   - containers
@@ -20,13 +20,12 @@ changing a pin. Agent Mode delegates engine fetching to llmman and has no
 ChairLift-owned container pin. Printer enablement remains independently locked
 until the published image's administration boundary is verified.
 
-**What to do:** Resolve the *index* (manifest list) digest, never an
-architecture's child entry. A registry answers a bare
-`curl -sI https://<registry>/v2/<repo>/manifests/latest` with a
-single-architecture digest — for the images this was learned on, a
+**What to do:** Resolve the *index* (manifest list) digest when the tag publishes
+one, never an architecture's child entry. A bare
+`curl -sI https://<registry>/v2/<repo>/manifests/latest` can negotiate a
+single-architecture manifest instead — for the images this was learned on, a
 `application/vnd.docker.distribution.manifest.v1+json` digest entirely
-different from the index digest — so the obvious one-liner produces exactly
-the wrong value. Request the list media types explicitly instead:
+different from the index digest. Request the list media types explicitly:
 
 ```
 curl -sS -D - -o /tmp/m.json \
@@ -34,11 +33,11 @@ curl -sS -D - -o /tmp/m.json \
   https://<registry>/v2/<repo>/manifests/latest
 ```
 
-Confirm the response body's `mediaType` really is an index or manifest list
-before taking the `Docker-Content-Digest` header; only then paste it. That
-ChairLift targets more than one architecture is not incidental —
-`.github/workflows/test.yml` ships a `goarch: [amd64, arm64]` build matrix —
-and the two pins fail in importantly different ways on an arm64 host. A child
+Confirm the response's Content-Type is an index or manifest list before taking
+the `Docker-Content-Digest` header; a missing body `mediaType` is not contrary
+evidence. Inspect body metadata when present. ChairLift targets both architectures:
+`.github/workflows/test.yml` ships a `goarch: [amd64, arm64]` build matrix.
+The two pins fail in importantly different ways on an arm64 host. A child
 digest is a specific, addressable manifest, so the registry serves it happily
 and the mismatch surfaces later, as an image that will not run; the reference
 looks valid everywhere you inspect it. An index digest makes the registry
@@ -77,7 +76,8 @@ with the Accept header above, and later removed with the stack itself.
 ## Dakota E2E and release gates
 
 `test/e2e/dakota-image.sh` owns the reviewed Dakota pin. Every Dakota
-container harness sources it before invoking podman. `--pull=missing` is
+container harness sources it before invoking podman; today the tag's pin is a
+single linux/amd64 manifest, not an invented multi-arch index. `--pull=missing` is
 safe for that content-addressed reference: a cached image cannot silently
 change when `testing` moves. `CHAIRLIFT_DAKOTA_IMAGE` is a local experiment
 override only; CI (`CI=true` or `GITHUB_ACTIONS=true`) rejects a different

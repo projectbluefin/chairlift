@@ -1,8 +1,8 @@
 ---
 name: documentation-reconciliation
-description: Use when documentation changes may leave contradictory claims.
-version: 1.1.0
-last_updated: 2026-09-25
+description: Use when reconciling current documentation, retiring plans, checking links, or citing an ADR.
+version: 2.1.0
+last_updated: 2026-10-04
 tags:
   - documentation
   - consistency
@@ -10,34 +10,70 @@ metadata:
   type: reference
 ---
 
-# A doc chunk must grep for and fix existing contradictory claims, not just add new prose
+# Reconcile claims with their live owners
 
-**When it applies:** Planning or reviewing any chunk that documents new or
-changed behavior in a `.md` file (`CONFIG.md`, `README.md`,
-`docs/design/*.md`, `AGENTS.md`) — especially when the behavior already has *some* prose written
-about it (an old default, an old fallback rule, an old "how this works"
-paragraph) that the change makes wrong or incomplete.
+Use for documentation updates and stale-document cleanup. Follow
+[`docs/documentation-consistency.md`](../../documentation-consistency.md) for
+the source-backed claim checklist; load subsystem design docs only as needed.
 
-**What to do:** Before scoping a doc chunk as "add a paragraph describing the
-new behavior," grep the target file (and any sibling doc that describes the
-same subsystem, e.g. `CONFIG.md` vs. `docs/design/overview.md`) for existing
-sentences that state the old, now-contradicted behavior — including
-restatements in a "Notes" or FAQ-style section, which tend to repeat a claim
-in different words rather than reference the primary description once. Add
-those exact locations to the chunk's acceptance criteria as concrete greps
-(e.g. `grep -n 'all features enabled' CONFIG.md` returning nothing) so the
-chunk is checkable rather than relying on a reviewer's careful re-read.
-Writing accurate new prose next to stale old prose still leaves the doc
-self-contradictory and will be rejected on plan review even though the
-acceptance criterion asked only for the new behavior to be "documented."
+## Procedure
 
-When the stale claim is an exhaustive inventory — package contents, fixed
-privileged paths, policy files, command surfaces, or another closed set — do
-not stop at a prose rewrite. Add or update a source-backed consistency check
-that derives the collection from the authoritative file (`.goreleaser.yaml`,
-`Makefile`, policy XML, helper command list, schema, etc.) and fails on the old
-count or omitted member. That turns "complete inventory" from reviewer memory
-into an executable contract.
+1. **Map authority.** Read local `AGENTS.md`, `.knowledge/README.md`, and
+   `.memory/README.md`. Root `README.md` is human-owned: report needed changes
+   to its maintainer, while updating relevant `AGENTS.md`, `CONFIG.md`, and
+   `docs/` claims within the task's ownership.
+2. **Trace the claim.** Check schema/defaults in `internal/config` and
+   `config.yml`, routes in `internal/navigation`, behavior in the live caller,
+   versions in `go.mod`, and install/release claims in `Makefile`,
+   `.goreleaser.yaml`, and PolicyKit files. Built-in defaults and shipped
+   overrides may differ; name both rather than treating one as the other.
+3. **Reconcile every restatement.** Search current docs for the old term,
+   symbol, count, default, and fallback. Rewrite contradictory sentences rather
+   than adding accurate prose beside them. A test pinning retired prose is not
+   authority to retain it: update the source-backed gate with the doc change.
+4. **Classify plans against live work.** Compare each plan's unresolved scope
+   with source and the current issue/PR, not its filename or checked boxes.
+   Keep a plan only when it describes active, unmet scope. An open issue whose
+   implementation already landed is not proof the plan remains active; an
+   unimplemented active acceptance criterion is not permission to delete it.
+   Remove implemented, superseded, or abandoned plans after preserving any
+   durable contract in its canonical spec/design/skill. Git retains retired
+   artifacts; use a pinned history link only when historical evidence matters.
+5. **Preserve decisions.** Resolve ADR filename, subject, status and approved
+   amendments/supersessions before citing its number. Accepted decisions remain
+   history; bibliographic repairs do not change their policy. Explain other drift
+   in living docs and route substantive changes through maintainer acceptance.
+   Do not infer a supersession or discard an approved amendment from a stale tree.
+6. **Repair discovery.** Update the owning index and every inbound link when
+   removing a doc. Current instructions point at live source or canonical
+   docs, not retired plans or compatibility aliases. Common is a linked sidecar;
+   verify the current default-branch baseline and local source wiring before
+   documenting factory or lifecycle adoption. A stale checkout without a caller
+   is not proof of exclusion: ChairLift's adopted caller lives in
+   `.github/workflows/issue-lifecycle.yml`, backed by `.github/issue-policy.json`
+   and the [local lifecycle package](../issue-lifecycle/SKILL.md). Read the shared
+   Actions runtime it consumes, not Common's repository-specific pilot script.
+   Do not infer a generated catalog, frontmatter migration, universal Hive
+   scheduling guarantee or direct-push exception from sidecar conventions.
+
+## Verification
+
+For the integration owner, after all documentation edits land:
+
+- Search current docs and tests for removed paths and obsolete claims. Include
+  source-path mentions in inline code, not only Markdown links.
+- Check local link targets and anchors, router/catalog reachability, canonical
+  skill frontmatter, and compatibility alias targets. Example focused gate:
+  `go test ./internal/installcheck -run '^TestFactoryDocumentationContract$'`.
+- Run `make ci` once. Read `internal/installcheck/documentation_test.go` and
+  `docsourcepaths_test.go` when retiring docs so neither gate demands stale
+  prose or validates history as if it were live implementation.
+- Report reviewed-but-unchanged files, source evidence, unresolved active
+  scopes, human-owned README corrections, and immutable ADR discrepancies.
+
+For closed inventories, derive consistency checks from the source owner
+(archive contents, helper commands, policy actions, or schema) and cover every
+entry. A prose count or a search for one expected string is not totality.
 
 **Learned from:** issue #60's mill run, plan round 1 — the plan added overlay
 prose to `CONFIG.md`'s Notes section but left three pre-existing sentences

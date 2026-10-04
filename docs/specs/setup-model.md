@@ -14,8 +14,10 @@ capability floor therefore remove unavailable pages. Missing pages are omitted,
 not advertised and redirected to Help. An empty sequence leaves the ordinary
 window available without entering setup or writing a disposition.
 
-There is no welcome hero, Appearance-only adapter, or Update Preferences step.
-The embedded wordmark asset loader remains available to Updates.
+There is no welcome hero, choice inventory, `SetupHost` bridge, or Update
+Preferences step. Setup reuses the real page widgets and their action gates;
+`internal/firstrun` owns page selection and disposition helpers, not duplicated
+configuration controls. The embedded wordmark loader remains available to Updates.
 
 ## Native window adapter
 
@@ -25,8 +27,9 @@ controls, or add a settings actor. A footer built once offers Dismiss setup,
 Back, and Next (Finish on the last page). Back is insensitive on the first page.
 Navigation always passes through `Window.navigateToPage`; while setup is active,
 other navigation requests cannot leave its current step. The sidebar is
-insensitive and the split view shows content only. Exiting restores the prior
-split-view mode and sidebar sensitivity.
+insensitive, the split view shows content only, and the content page's native
+Back-to-sidebar route is disabled. Exiting restores the prior collapsed mode,
+sidebar sensitivity, and the native Back route while keeping the current page.
 
 Moving Back or Next changes only navigation. It never installs software,
 changes configuration, or writes setup disposition. Advancing onto Livery must
@@ -49,3 +52,14 @@ an empty floor, and the explicit-only presentation decision. Store regression
 tests cover persistence, dry-run suppression, and completion-preserving skips.
 `test/e2e/features/setup.feature` exercises the native window sequence, Back,
 Finish, both launch options, menu presentation, and dismissal on Dakota.
+
+## Source authority
+
+- [`internal/firstrun/flow.go`](../../internal/firstrun/flow.go) — eligible-page
+  sequence, not a catalog of choices.
+- [`internal/window/window.go`](../../internal/window/window.go) —
+  `PresentFirstRun`, footer navigation, intentional dismissal, and persistence.
+- [`internal/firstrun/settings.go`](../../internal/firstrun/settings.go) —
+  explicit-only presentation and dry-run-aware disposition/version storage.
+- [`test/e2e/features/setup.feature`](../../test/e2e/features/setup.feature) —
+  separate desktop interaction evidence; model tests do not replace it.

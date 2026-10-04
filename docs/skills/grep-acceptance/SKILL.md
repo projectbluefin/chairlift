@@ -1,8 +1,8 @@
 ---
 name: grep-acceptance
 description: Use when grep-based acceptance criteria involve subtests or cross-chunk names.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - planning
   - grep
@@ -19,13 +19,12 @@ expected to change by some exact number, or (b) a `grep -P '\bWORD\b'`-style
 later chunk's acceptance criteria also grep for text containing that same
 word (e.g. documenting the convention by naming the pattern in prose).
 
-**What to do:** For RUN-line/test-count deltas: `go test -list`/`-v` output
-includes one line per top-level test *and* one per subtest (`t.Run(...)`), so
-renaming or adding parent tests that already contain table-driven or
-`t.Run`-based subtests changes the count by more than the number of renamed
-identifiers. Compute the expected delta by actually listing tests before and
-after (or reasoning subtest-by-subtest), not by counting renamed function
-names. For `\b`-anchored greps: GNU grep's `\b` treats an ellipsis character
+**What to do:** `go test -list` lists matching top-level tests; it does not run
+their bodies or enumerate runtime `t.Run` subtests. Verbose execution (`-v`)
+prints parent and subtest RUN lines, so a RUN-line delta can exceed the number
+of renamed functions. Decide which output the criterion counts, then compute
+the delta from that output (or the concrete subtests), not function names.
+For `\b`-anchored greps: GNU grep's `\b` treats an ellipsis character
 and most punctuation as a word boundary, so a criterion like
 `grep -P '\bTestInstall\b'` returning nothing can directly conflict with a
 sibling chunk's requirement that some doc literally contain the string

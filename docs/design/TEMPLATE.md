@@ -31,9 +31,10 @@ debugging session would want to know.
 
 ## References
 
-<!-- Required. Every design doc links: the ADRs that justify it, the specs
-that pin its contracts, and the roadmap phase that builds it. -->
+<!-- Required. Link the ADRs and implemented specs that govern this area.
+Link an active implementation plan only while that work is in progress. -->
 
 - Rationale: [ADR-NNNN](../adr/NNNN-….md)
 - Contracts: [specs/…](../specs/….md)
-- Built in: [roadmap — Phase N](../plans/roadmap.md)
+- Verification: commands or scenarios that demonstrate the current mechanism
+  and failure boundaries.

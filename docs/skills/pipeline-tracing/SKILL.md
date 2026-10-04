@@ -1,8 +1,8 @@
 ---
 name: pipeline-tracing
 description: Use when layered validation criteria need an input traced through ordering.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - validation
   - pipeline
@@ -22,7 +22,7 @@ can produce, while (b) scope that chunk's own test file to assert nothing
 about errors originating below the level the early stage already checked.
 
 **What to do:** A decision table fixing the Kind boundary (see
-`multi-tier-error-classification-needs-a-decision-table.md`) is necessary but
+[error-classification](../error-classification/SKILL.md)) is necessary but
 not sufficient. Once the table is fixed, pick one concrete malformed input
 per criterion that names a specific mechanism (an error type, a wrapped
 error, a call-stack shape) and hand-trace it through the pipeline in the

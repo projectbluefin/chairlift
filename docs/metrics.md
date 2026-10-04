@@ -1,6 +1,6 @@
 # Pull request metrics
 
-ChairLift tracks pull request acceptance as an outcome signal for its
+ChairLift defines pull request acceptance as an outcome signal for its
 contribution and agent feedback loops. The metric is descriptive: it helps
 maintainers investigate changes in review outcomes, but it is not a target and
 must not be used to discourage valid experimental or difficult work.
@@ -35,16 +35,16 @@ The following command queries GitHub directly and calculates the current
 90-day value. It requires authenticated `gh`, GNU `date`, and `jq`:
 
 ```bash
-since="$(date -u -d '90 days ago' +%F)"
+since="$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)"
 
 gh pr list \
   --repo projectbluefin/chairlift \
   --state closed \
-  --search "closed:>=$since" \
+  --search "closed:>=${since%%T*}" \
   --limit 1000 \
   --json number,closedAt,mergedAt |
   jq --arg window_start "$since" '
-    . as $prs
+    map(select(.closedAt >= $window_start)) as $prs
     | ($prs | length) as $closed
     | ($prs | map(select(.mergedAt != null)) | length) as $accepted
     | {
@@ -60,9 +60,10 @@ gh pr list \
   '
 ```
 
-If more than 1,000 pull requests close during a window, replace this
-convenience query with paginated GitHub API collection before reporting the
-metric; silently truncating the cohort is invalid.
+If the GitHub query reaches its 1,000-result limit, collect the cohort through
+paginated GitHub API requests before reporting the metric; silently truncating
+the cohort is invalid. The query's date search is a broad prefilter; `jq`
+applies the exact UTC timestamp cutoff.
 
 ## Interpretation
 

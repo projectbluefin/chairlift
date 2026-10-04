@@ -37,10 +37,18 @@ authoritative.
   In product code, preserve the fixed PolicyKit helper and argument-validation
   boundary documented in `AGENTS.md`; never add arbitrary privileged command
   execution.
-- Pin third-party actions to reviewed commit SHAs when adding or materially
-  changing automation that handles write permissions or untrusted events.
+- Pin every third-party workflow action to a reviewed full 40-character commit
+  SHA with a readable version comment. Local actions are exempt; first-party
+  `projectbluefin/actions` production callers use managed `@v1`. Candidate refs
+  are permitted only through the entirely read-only, secret-free shared
+  issue-policy preview interface, never the production lifecycle writer.
 - AI-authored automation must not approve, merge, release, or deploy its own
   changes.
+- Issue classification and analysis consent are not implementation approval.
+  Follow the [catalog-bound local lifecycle](skills/issue-lifecycle/SKILL.md):
+  verify current human acceptance, scope, assignment and all independent gates.
+  `ai-fix-requested` is intent only, not a label-driven Copilot dispatch. Prow
+  may classify or manage a hold, not accept work, approve a PR or merge it.
 
 ### Code and review
 
@@ -77,7 +85,7 @@ unsafe automation:
 1. Stop the affected automation and avoid further exploitation or disclosure.
 2. Notify the maintainers privately; do not publish exploit details or secrets
    in a public issue or pull request. Use the private reporting channel
-   described in [`SECURITY.md`](../SECURITY.md) (GitHub Private Vulner
+   described in [`SECURITY.md`](../SECURITY.md) (GitHub Private Vulnerability
    Reporting).
 3. Preserve useful evidence without copying sensitive values into repository
    artifacts.

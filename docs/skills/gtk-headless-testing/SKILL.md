@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.0.0
-last_updated: 2026-10-01
+version: 2.1.0
+last_updated: 2026-10-04
 tags:
   - testing
   - gtk
@@ -267,12 +267,10 @@ goreleaser job sets `cache: false` on `actions/setup-go`: caches the image
 wrote must never reach release binaries.
 `CHAIRLIFT_ATSPI_KNOWN_ISSUES=1` also runs `@known_issue` scenarios.
 This fixture suite runs on bare headless Mutter; it is not a live GNOME Shell
-desktop walkthrough. For GNOME Shell diagnosis on ghost, read testing-lab's
-`docs/reference/workflow-reference.md` and `docs/skills/argo-workflows/patterns.md`
-first. Dakota's VM install path is documented as blocked by its missing UKI.
-Reuse `run-container-tests`' nested systemd/GDM target, headless GNOME Shell,
-test-user linger, and `qecore-headless --session-type wayland`; do not invent
-another disk installer.
+desktop walkthrough. For live-shell QA, read the target lab repository's local
+router and current workflow before selecting its supported isolated Wayland
+runner. Reuse that workflow rather than inventing another disk installer; keep
+its deployment flags and installation prerequisites in the lab's source docs.
 
 ### Generating walkthrough screenshots
 

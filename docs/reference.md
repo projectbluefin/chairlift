@@ -20,6 +20,13 @@ persistent toast with the path and cause. Fix the file and restart Control Cente
 If no file is found, built-in defaults apply: all groups are enabled except
 `maintenance_cleanup_group` and `reset_group`.
 
+The shipped [`config.yml`](../config.yml) enables Apps collections but disables
+the external catalog launcher, both Flatpak inventories, Homebrew inventory/export,
+and Homebrew search. Built-in defaults enable all six Apps groups. Collections
+remain independently configurable from inventory and export.
+The full group inventory below describes available controls, not a promise
+that every control appears with the shipped profile.
+
 Source installs (`make install`) provide the repository's maintainer defaults
 at `/usr/share/chairlift/config.yml`; an OS image may install the release
 archive's `config.yml` there instead. Whoever installs that file may replace it
@@ -48,10 +55,19 @@ Groups with `enabled: false` are hidden from the UI. Missing entries inherit
 their built-in values. Unknown page, group, or field names and wrong field
 types are errors. Changes require restarting ChairLift.
 
+The configuration is an overlay on built-in defaults: omitted or explicitly
+null fields inherit, while an explicit empty list or empty string clears the
+field. A non-empty list replaces the default rather than appending to it.
+See [`CONFIG.md`](../CONFIG.md#notes) for the complete overlay rules.
+
 When every builder-backed group on a functional page is disabled, the page is
 also omitted from the sidebar, content stack, shortcuts dialog, and
 Alt+number bindings. Alt+number is compacted over the remaining pages in the
 order below. Help is always retained.
+
+The host capability floor also participates in page visibility: enabling a
+group cannot supply its missing backing tool or asset. Runtime readiness is
+checked separately after the page is built.
 
 ## Pages and Groups
 
@@ -73,19 +89,16 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Installed Apps | `applications_installed_group` | Launcher for the external Flatpak manager used for discovery and installation |
-| User Flatpak | `flatpak_user_group` | User-installed Flatpak applications with uninstall actions |
-| System Flatpak | `flatpak_system_group` | System-wide Flatpak applications with uninstall actions |
-| Homebrew | `brew_group` | Installed Homebrew formulae/casks with uninstall actions and formula pin/unpin actions |
-| Brew Search | `brew_search_group` | Search and install Homebrew formulae and casks with an explicit package-type confirmation |
-| App Collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions |
+| Your apps | `applications_installed_group` | External software catalog launcher; `app_id` defaults to `io.github.kolunmi.Bazaar` |
+| Find more apps and tools | `brew_search_group` | Search Homebrew formulae and casks, with confirmed installs and visible results |
+| Installed user applications | `flatpak_user_group` | User-scope Flatpak inventory and confirmed removal |
+| Installed system applications | `flatpak_system_group` | System-scope Flatpak inventory and confirmed removal; the confirmation explains that removal affects every account |
+| App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions |
+| Packages from Homebrew | `brew_group` | Installed casks and explicitly requested formulae, with uninstall and formula pin/unpin actions, plus the Brewfile exporter |
 
-`applications_installed_group` supports:
-
-- `app_id` — Flatpak application ID to launch (default: `io.github.kolunmi.Bazaar`)
-
-ChairLift does not directly discover or install new Flatpak applications.
-Those operations belong to the configured external manager.
+Apps orders the catalog launcher and search/results before installed Flatpaks,
+installed casks, collections, explicitly requested formulae, and export.
+Dependency-only formulae do not appear in the inventory.
 
 `brew_bundles_group` supports:
 
@@ -129,16 +142,22 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a confirmed live enable also opens the three developer onboarding tabs and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming Mode | `gaming_group` | Selectively installs/removes chosen user-scope Flatpak applications and runtime extensions, reports installed scopes and persistent partial failures, and preserves system-scope entries; shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting every switch is locked and the row says what is needed. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
+| Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting new enables are locked and the row says what is needed. Existing units remain manageable for disabling. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 
 Developer options include WSL Mode (persistent Linux machines in systemd-vmspawn
-via nsl by default, or Ubuntu LTS in Lima), the base image's
+via nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
+Lima supports amd64 and arm64. Both require hardware virtualization and
+`/dev/kvm` access. The group also offers the base image's
 Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
 entry. Missing fixed helper actions keep affected switches discoverable but
 insensitive. KVM permission requires a new login; Docker readiness requires
 the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and
 `docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
+
+The **WSL Backend** chooser changes the current window's backend without rewriting
+YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
+with no nsl machine resolves the nsl default to Lima.
 
 `dx_group` takes `wsl_backend`, the WSL Mode backend: `nsl` (default) or
 `lima`; any other value is a configuration error. It also supports optional steps that run off the GTK main
@@ -233,8 +252,9 @@ diagnostics. A fresh configuration comes from
 provider, model, other extensions, and unknown settings. Setup adds `linux-tools`
 when absent, or enables a recognized `linux-tools` / `linux-mcp-server` entry
 with an empty policy using explicit `--toolset FIXED --no-search-for-ssh-key
---verify-host-keys` arguments. It does not replace a different command, transport,
-or an explicit conflicting tool policy. Malformed, duplicate-key, multiple-document,
+--verify-host-keys` arguments. It repairs a missing or stale executable only
+for a recognized Linux diagnostic command, not a different server, transport,
+or explicit conflicting tool policy. Malformed, duplicate-key, multiple-document,
 or merged affected YAML is refused without replacing user data.
 
 Configuration changes use an owned regular file and a private atomic replacement
@@ -270,6 +290,14 @@ applications_page:
     enabled: false
   brew_bundles_group:
     enabled: false
+
+agents_page:
+  agents_group:
+    enabled: false
+
+features_page:
+  dx_group:
+    enabled: false # Also hides non-Homebrew Developer controls
 
 updates_page:
   automatic_updates_group:

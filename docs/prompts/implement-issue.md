@@ -6,10 +6,14 @@ Use this prompt for a scoped ChairLift feature, fix, or maintenance issue.
 Implement [ISSUE OR TASK] in ChairLift.
 
 Before editing:
-1. Read AGENTS.md, docs/SKILL.md, the matching package from docs/skills/, and
-   the relevant current-state documentation.
+1. Read AGENTS.md, .knowledge/README.md, .memory/README.md, docs/SKILL.md,
+   the matching package from docs/skills/, and relevant current-state docs.
 2. Inspect the existing implementation and tests; do not infer behavior from historical plans.
 3. State the intended change and identify affected repository invariants.
+4. For issue-backed work, load docs/skills/issue-lifecycle/SKILL.md and verify
+   trusted scope acceptance, assignment, automation preference and independent
+   gates. A Hive-ready item, machine-analysis consent or PR approval is not
+   implementation acceptance.
 
 While implementing:
 - Keep the GTK main thread free of external tool calls and marshal UI updates through sgtk.RunOnMainThread.
@@ -17,7 +21,10 @@ While implementing:
 - Respect config-driven group visibility and nil-guard cross-group widgets.
 - Put non-UI logic in a pure package where it can be tested headlessly.
 - Add regression tests that exercise the actual failure mode and all affected collection entries.
-- Update current-state documentation when behavior, configuration, dependencies, or install layout changes.
+- Update relevant AGENTS.md and docs/ claims alongside source changes;
+  root README.md is human-owned, so report needed corrections without editing it.
+- Use Refs for product reports awaiting delivery/verification; a merged PR or
+  Homebrew app release does not prove image-installed helpers reached the reporter.
 
 Before finishing:
 1. Run focused tests while iterating.

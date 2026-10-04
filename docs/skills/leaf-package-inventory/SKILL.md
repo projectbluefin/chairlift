@@ -1,8 +1,8 @@
 ---
 name: leaf-package-inventory
 description: Use when adding a package to an exact documentation enumeration.
-version: 1.0.0
-last_updated: 2026-09-08
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - documentation
   - inventory
@@ -15,19 +15,19 @@ metadata:
 **When it applies:** Planning or reviewing any chunk that adds a new
 puregotk-free leaf package under `internal/views` (following the
 `internal/views/trustmsg`/`internal/views/actionmsg`/`internal/views/rowset`
-pattern from `docs/agents/skills/gtk-headless-tests.md`) — or, more generally,
-adds a new member to any collection that `docs/design/overview.md` or
-`docs/design/package-managers.md` (formerly `yeti/`) documents by an exact
+pattern from [gtk-headless-testing](../gtk-headless-testing/SKILL.md)) — or,
+more generally, adds a new member to any collection that
+`docs/design/overview.md` or `docs/design/package-managers.md` documents by an exact
 count or exhaustive list
 ("two small, puregotk-free packages...", a diagram enumerating every leaf).
 
 **What to do:** Those docs state an exact enumeration, not just descriptive
 prose, so adding a new member makes the existing sentence factually wrong the
 moment the new package exists — even if the new package's own subsection is
-also added. The binding "update AGENTS.md/README.md/docs/ after any source
-change" rule is enforced per chunk, so a chunk that adds the new leaf package
-but defers the enumeration-count fix to a later chunk leaves the tree
-self-contradictory in the interim and will be rejected on plan review. Fix the
+also added. Update relevant `AGENTS.md` and `docs/` claims in the same chunk;
+root `README.md` is human-owned, so report needed corrections without editing it.
+A chunk that adds the package but defers the enumeration fix leaves the tree
+self-contradictory and will be rejected on plan review. Fix the
 stale count/list in the *same* chunk that introduces the new member, not a
 later one — put the "does this new thing exist" doc edits in the chunk that
 creates it, and reserve any *behavioral* doc edits (how callers now use it)

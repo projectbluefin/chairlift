@@ -119,7 +119,7 @@ question.
 ## References
 
 - Shapes: [design/package-managers.md](../design/package-managers.md),
-  [plans/2026-08-17-bluefin-suite-parity-plan.md](../plans/2026-08-17-bluefin-suite-parity-plan.md)
+  [historical suite-parity plan](https://github.com/projectbluefin/chairlift/blob/8c98e6f0878bd87de3e9e867fdbcddb28c8251a1/docs/plans/2026-08-17-bluefin-suite-parity-plan.md)
 - Builds on: [ADR-0001](0001-fixed-path-pkexec-privilege-boundary.md) (the
   privilege boundary a pin target would have to cross),
   [ADR-0007](0007-pure-leaf-packages-route-around-untestable-gtk.md) (the

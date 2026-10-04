@@ -1,8 +1,8 @@
 ---
 name: self-referential-assertions
 description: Use when writing or reviewing a test whose expected value is computed rather than written down.
-version: 1.0.0
-last_updated: 2026-09-18
+version: 1.1.0
+last_updated: 2026-10-04
 tags:
   - testing
   - review
@@ -18,8 +18,8 @@ calls, by re-evaluating the expression the function under test evaluates, by
 using a production constant as its own reference, or by reading the same host
 file or path the implementation reads. It is most tempting for the thin
 entry-point wrappers this repo is full of: `internal/bootc`'s `GetStatus`,
-`StageScriptAvailable`, and `DefaultContext`, and anything whose real input
-is a fixed absolute path outside the repository.
+`StageScriptAvailable`, and `DefaultContext`, and anything whose input includes
+a fixed absolute path outside the repository.
 
 **What to do:** The expected value must come from somewhere the
 implementation cannot reach: a literal, a fixture written by the test, or a
@@ -29,11 +29,11 @@ would this test still pass?* If the answer is yes, the test is worthless:
 either delete it, or give the production code a seam it can be driven
 through. The idiom this repo already uses is an unexported `...From`
 variant that takes the path or executable as a parameter, with the exported
-function supplying the fixed constant — `internal/bootc`'s
-`getStatusFrom(ctx, name)` behind `GetStatus()`, and `checkUpdateFrom`
-behind `CheckUpdate()`. Tests drive the `...From` variant with a
-`t.TempDir()` fixture script and assert literal fields; the fixed-path
-constants are pinned separately against string literals
+function supplying the fixed constant. `internal/bootc`'s `getStatusFrom` and
+`checkUpdateFrom` accept a fake executable for the non-composefs path; the
+composefs readers instead take a filesystem seam, with registry resolution
+injected separately. Neutralize every host input the wrapper reads before
+asserting it is absent. Pin fixed paths separately against string literals
 (`TestStageUpdateDryRunUsesFixedPath` checks `StageScriptPath`).
 
 Host-branched expectations are the subtle form of the same defect. A test

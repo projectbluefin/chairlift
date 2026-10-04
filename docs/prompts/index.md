@@ -4,10 +4,10 @@ These reusable prompts give coding agents a consistent starting point for
 common ChairLift tasks. Copy a prompt, replace its bracketed placeholders, and
 include the relevant issue or diff.
 
-The prompts supplement rather than replace repository instructions. Agents
-must read and follow `AGENTS.md`, `docs/SKILL.md`, and the matching package
-from `docs/skills/` before changing code. When a prompt conflicts with
-repository instructions, the repository instructions take precedence.
+The prompts supplement rather than replace repository instructions. Start with
+`AGENTS.md` and the task router `docs/SKILL.md`; load only the relevant canonical
+packages from `docs/skills/`. Repository instructions take precedence, including
+human ownership of root `README.md` and immutable accepted ADR decisions.
 
 ## Catalog
 

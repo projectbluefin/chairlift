@@ -7,9 +7,9 @@ definitions instead of committing snapshots that become stale.
 | Signal | Public source | Interpretation |
 |---|---|---|
 | Pull request acceptance | [Definition and reproducible 90-day query](../metrics.md) | Accepted and closed counts plus their ratio. It is descriptive, not a target. |
-| CI results | [Tests workflow](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) | Lint, unit tests, race detection, verification, and cross-architecture builds for each run. |
+| CI results | [Tests workflow](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) | Lint, filtered unit tests, race detection, E2E, sharded AT-SPI, verification, and cross-architecture builds for each run. |
 | Nightly compliance | [Nightly workflow](https://github.com/projectbluefin/chairlift/actions/workflows/nightly-compliance.yml) | Default-branch CI, E2E, and vulnerability checks run on a schedule. |
-| Test coverage | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) | Coverage for the tested `internal/...` scope; consult the upload status before interpreting missing data. |
+| Test coverage | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) | Filtered `internal/...` unit coverage and a separately flagged `e2e` executable profile; consult both upload logs before interpreting missing data. |
 | Releases | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) | Published versions, timestamps, and release assets. |
 | Review activity | [Pull requests](https://github.com/projectbluefin/chairlift/pulls) | Public review discussions, outcomes, checks, and merge history. |
 
