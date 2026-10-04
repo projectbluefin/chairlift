@@ -14,6 +14,10 @@
   "gate_labels": [
     "question"
   ],
+  "protected_labels": [
+    "kind/tech-debt",
+    "source:agent"
+  ],
   "delivery": {
     "type": "release"
   },
@@ -248,6 +252,10 @@
       "color": "d73a4a",
       "description": "Something is broken or behaves incorrectly."
     },
+    "kind/debt": {
+      "color": "fbca04",
+      "description": "Accumulated technical debt to pay down; descriptive classification only."
+    },
     "kind/documentation": {
       "color": "0075ca",
       "description": "Documentation authoring, correction, or completeness."
@@ -259,10 +267,6 @@
     "kind/task": {
       "color": "c5def5",
       "description": "An explicit maintenance or implementation task."
-    },
-    "kind/tech-debt": {
-      "color": "fbca04",
-      "description": "Accumulated technical debt to pay down; not merge approval."
     },
     "needs-decision": {
       "color": "d93f0b",
@@ -296,10 +300,6 @@
       "color": "d876e3",
       "description": "Further information is requested"
     },
-    "source:agent": {
-      "color": "8250df",
-      "description": "Agent-filed issue provenance; not implementation acceptance or merge approval."
-    },
     "tracking": {
       "color": "8b949e",
       "description": "Standing dashboard or portfolio tracker, not an implementation task."
@@ -328,7 +328,7 @@
     "testing": "area/testing",
     "security": "area/security",
     "architecture": "area/architecture",
-    "tech-debt": "kind/tech-debt",
+    "tech-debt": "kind/debt",
     "roadmap": "kind/task",
     "accessibility": "area/accessibility",
     "ci": "area/ci"

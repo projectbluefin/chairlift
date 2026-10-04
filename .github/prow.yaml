@@ -6,7 +6,7 @@
         "feature",
         "task",
         "documentation",
-        "tech-debt"
+        "debt"
       ],
       "exclusive": true
     },

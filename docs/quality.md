@@ -195,10 +195,17 @@ their lane labels; an ACMM criterion needs both its structured title and criteri
 field. Existing primary kinds are not overwritten. Classification never grants
 acceptance or automatically requests implementation. Unknown or conflicting
 classification stays gated for a maintainer instead of being guessed.
+The catalog protects `kind/tech-debt` and `source:agent` as unmanaged operational
+signals while live operator configuration remains unconfirmed. Their assignments
+and definitions are preserved, not used as classification. Ordinary debt uses
+non-colliding `kind/debt`, including quiet historical migration.
 
 Prow runs first for authorized issue comments; lifecycle reconciliation follows
 even after partial Prow failure. Prow changes descriptive kinds/areas and negative
 holds only, never stage acceptance, independent human gates, reviews or merges.
+Upstream `/kind` would remove every other `kind/*`, so Prow preflight refuses it
+when a protected operational kind is assigned. Use the native Labels picker to
+change only managed primary kinds, leaving operational signals/gates unchanged.
 Scheduled repair is labels-only. Manual previews expose proposed labels,
 comments and reporter requests before applying; migrations remain quiet and
 archive full historical assignments before retirement.

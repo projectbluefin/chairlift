@@ -57,9 +57,10 @@ required evidence and next human decision are known or explicitly requested.
 Open issues carry **one** of `needs-triage`, `triage/needs-information`,
 `triage/accepted`, `awaiting-release`, or `needs-verification`. PRs carry no
 issue-stage labels: native assignment, review requests, review state, checks
-and the merge queue describe their progress. A `kind/*` label describes work,
-not authorization; an open issue has exactly one. Missing or conflicting
-classification needs a maintainer decision, not an arbitrary dispatch.
+and the merge queue describe their progress. A managed canonical kind describes
+work, not authorization; an open issue has exactly one primary kind. Protected
+operational `kind/*` signals do not count toward classification. Missing or
+conflicting classification needs a maintainer decision, not an arbitrary dispatch.
 
 The catalog contains:
 
@@ -70,7 +71,7 @@ The catalog contains:
   Native `question` denial is not auto-projected from a title; existing explicit
   assignments remain until their real owner resolves and withdraws the gate.
 - **Kinds:** `kind/bug`, `kind/feature`, `kind/task`, `kind/documentation`,
-  and `kind/tech-debt`. These are primary work types, not stacked topics.
+  and `kind/debt`. These are primary work types, not stacked topics.
 - **Native areas:** the route identities `updates`, `applications`, `agents`,
   `features`, `livery`, `maintenance`, `help`, and `recovery`, plus source-backed
   subsystem areas `homebrew`, `flatpak`, `bootc`, `updex`, `privileged-helper`,
@@ -83,11 +84,14 @@ The catalog contains:
   `needs-human`, `needs-decision`, `needs-kind`, and `tracking`. Preserve their
   owner and reason when classifying or advancing a stage. Acceptance clears
   only an eligible lifecycle-bot gate, not a human/App gate or pause.
-- **Operational readers:** existing `agent/*`, `hive/*`, `source:agent`,
-  `from-review`, `priority/*`, `acmm`, `ai-fix-requested`, newcomer and
-  disposition labels remain separate from stage and kind. Provenance does not
-  grant acceptance or merge authority. An implementation-request label still
-  requires current accepted scope and all independent safety gates.
+- **Operational readers:** existing `agent/*`, `hive/*`, `from-review`,
+  `priority/*`, `acmm`, `ai-fix-requested`, newcomer and disposition labels remain
+  separate from stage and kind. An implementation-request label still requires
+  current accepted scope and all independent safety gates.
+- **Protected operational signals:** `protected_labels` names `kind/tech-debt`
+  and `source:agent`. Their existing assignments and live definitions remain
+  unmanaged and unchanged; they are not descriptive aliases, intake targets,
+  primary kinds, ambiguity candidates or retirement candidates.
 
 The unprefixed `bug`, `enhancement`, `question` and `epic` labels are retained
 reader contracts, not extra canonical kinds. `kind_sources` derives a primary
@@ -103,13 +107,15 @@ routing, tracker detection by the final `epic` segment, and the independent
 `needs-human` enumeration gate. This is reader evidence, not a promise that
 cached or differently configured workers cannot act.
 
-The old auto-merge wording on `source:agent` and `kind/tech-debt` is not an
-authorization contract: [#25](https://github.com/projectbluefin/chairlift/issues/25)
-uses both for a quality-agent coverage finding explicitly filed in hold-gated
-mode, and [#26](https://github.com/projectbluefin/chairlift/issues/26) explicitly
-requires human review. Their catalog descriptions record provenance and debt,
-not a fabricated approval. `from-review` retains the pinned reader's review
-finding meaning.
+Live descriptions of `source:agent` and `kind/tech-debt` claim an auto-merge role,
+but descriptions and historical issue text do not establish active consumer
+configuration. The pinned Hive operator reference documents a configurable
+`governor.labels.automerge` queue label (default `lgtm`), not an intrinsic debt
+or provenance approval. ChairLift's live operator configuration is unconfirmed.
+Only the Hive operator can resolve that limited uncertainty. Until then, neither
+onboarding nor sync rewrites their definitions or changes their assignments.
+Use non-colliding `kind/debt` for ordinary debt; `from-review` retains the pinned
+reader's review-finding meaning.
 
 Standing trackers [#137](https://github.com/projectbluefin/chairlift/issues/137),
 [#252](https://github.com/projectbluefin/chairlift/issues/252), and
@@ -228,7 +234,7 @@ commands are **issue-only**, not a replacement PR review/merge interface.
 
 | Command | Authorized result |
 | --- | --- |
-| `/kind VALUE` | Select one catalog kind and replace the prior kind |
+| `/kind VALUE` | Select one managed catalog kind; refused while a protected operational `kind/*` is assigned |
 | `/area VALUE` | Add one catalog area; other areas remain |
 | `/remove-area VALUE` | Remove that catalog area |
 | `/hold` | Pause the issue with literal `hold` |
@@ -241,6 +247,16 @@ For example, `/kind bug` selects `kind/bug`; `/area updates` adds
 before explicitly withdrawing it. The wrapper reports the actual applied,
 denied, invalid or failed result with specific next steps. Check that result,
 not merely the command's presence.
+
+`/kind debt` selects ordinary `kind/debt`, never operational `kind/tech-debt`.
+Upstream exclusive `/kind` removes every other `kind/*`, including labels outside
+its allowlist. The wrapper therefore denies execution if protected `kind/tech-debt`
+is already assigned, even for an otherwise valid/no-op kind request. In GitHub's
+**Labels** picker, select the desired managed kind and deselect only other managed
+primary kinds; leave `kind/tech-debt`, `source:agent` and independent gates
+unchanged. Do not remove the protected signal just to make a slash command work.
+An operator must confirm the live consumer configuration before anyone changes
+these operational assignments or definitions.
 
 There is no generic `/label`, `/remove-kind`, stage/acceptance command,
 assignment, approval, implementation dispatch or merge command in this surface.
@@ -271,7 +287,7 @@ post-deployment proof. Locally:
    | --- | --- |
    | `docs`, `documentation` | `kind/documentation` |
    | `quality`, `testing`, `security`, `architecture` | Corresponding `area/*` |
-   | `tech-debt` | `kind/tech-debt` |
+   | `tech-debt` | `kind/debt` |
    | `roadmap` | `kind/task` |
    | `accessibility`, `ci` | Corresponding `area/*` |
 
@@ -281,6 +297,9 @@ post-deployment proof. Locally:
    an independent negative gate and `epic` retains tracker handling; neither
    becomes a dispatchable kind. Conflicting kinds require a human
    classification rather than silently discarding meaning.
+   Existing `kind/tech-debt` and `source:agent` are explicitly protected instead
+   of being aliases or kinds. They stay unchanged on open/closed issues and PRs;
+   ordinary `tech-debt` migration never adds either operational signal.
 3. Retire `1-triage`, `2-discussing`, `3-human-queue`, `3-clanker-queue`,
    `4-review`, `status/discussing`, `status/queued`, `status/claimed`,
    `queue/agent-ready`, and `queue/claimed` as stage assignments. None maps to
@@ -297,6 +316,7 @@ post-deployment proof. Locally:
    accounted for and all supported writers/clients have cut over. Retained
    operational labels are not retirement candidates. Keep the archive outside
    the repository and use the deployment's backup artifacts for recovery.
-6. Prove one issue stage, one kind, no PR stages, preserved gates/preferences,
-   truthful bot/Prow outcomes, and no premature close with real event flows.
+6. Prove one issue stage, one managed primary kind, no PR stages, preserved
+   operational signals/gates/preferences, truthful bot/Prow outcomes, and no
+   premature close with real event flows.
    A green docs-only check or catalog creation alone is not activation proof.
