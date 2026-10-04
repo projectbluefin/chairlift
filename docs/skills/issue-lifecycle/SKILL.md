@@ -109,6 +109,10 @@ The catalog contains:
   `needs-human`, `needs-decision`, `needs-kind`, and `tracking`. Preserve their
   owner and reason when classifying or advancing a stage. Acceptance clears
   only an eligible lifecycle-bot gate, not a human/App gate or pause.
+  `human-only` is set from the reporter's preference at intake; a maintainer
+  can waive it by removing the label, and the bot won't re-add it. On an
+  accepted issue, `needs-decision` pauses work; acceptance stays, and removing
+  `needs-decision` resumes it.
 - **Operational readers:** existing `agent/*`, `hive/*`, `from-review`,
   `priority/*`, `acmm`, `ai-fix-requested`, newcomer and disposition labels remain
   separate from stage and kind. An implementation-request label still requires
