@@ -699,8 +699,8 @@ An agent must not break these:
   `internal/troubleshoot` installs `linux-mcp-server` and the Goose desktop
   cask through Homebrew, then seeds Common's premade
   `/usr/share/ublue-os/goose/config.yaml` only when the user's config is absent.
-  ChairLift owns the diagnostic extension repair in-process without relying on
-  or waiting for `goose-mcp-setup` or `ublue-os/homebrew-tap#687`.
+  ChairLift owns the diagnostic extension repair in-process; no external
+  setup helper is involved.
   Setup repairs only recognized diagnostic nodes, including a missing entry,
   empty fixed-tool policy or stale executable. Explicit unsafe policies and
   shared anchor mappings are refused. Other extensions, model, provider and

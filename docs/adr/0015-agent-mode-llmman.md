@@ -121,8 +121,7 @@ selected-model alias through llmman's CLI and overrides aggregation in the unit.
   SSH-key discovery and remote-host tools stay off unless separately opted in.
 - *Configuration ownership:* ChairLift writes no llmman TOML. Its selected
   model alias is read and written through `llmman config get/set`.
-  ChairLift owns the Goose configuration repair in-process (no dependency on
-  `goose-mcp-setup` or `ublue-os/homebrew-tap#687`). Before replacing an
+  ChairLift owns the Goose configuration repair in-process. Before replacing an
   existing user Goose configuration, it saves a recoverable backup
   (`config.yaml.chairlift-backup`, 0600) atomically, only when contents change,
   never under dry-run, and never on fresh creation.
