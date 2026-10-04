@@ -20,6 +20,19 @@
   "bug_fields": ["what happened?", "expected behavior", "reproduction steps", "chairlift version", "host os image and version"],
   "feature_fields": ["problem to solve", "proposed outcome"],
   "main_ci_workflows": [".github/workflows/test.yml"],
+  "intake_rules": [
+    {"match": {"title_prefixes": ["[ACMM L"], "body_contains": ["**Criterion ID:** `acmm:"]}, "labels": ["acmm", "kind/task"]},
+    {"match": {"title_prefixes": ["[guide]"]}, "labels": ["agent/guide", "kind/documentation"]},
+    {"match": {"body_contains": ["Filed by guide agent"]}, "labels": ["agent/guide", "kind/documentation"]},
+    {"match": {"title_prefixes": ["[quality]"]}, "labels": ["agent/quality", "area/quality", "kind/task"]},
+    {"match": {"body_contains": ["Filed by quality agent"]}, "labels": ["agent/quality", "area/quality", "kind/task"]},
+    {"match": {"title_prefixes": ["bug:", "fix:", "[bug]"]}, "labels": ["kind/bug"]},
+    {"match": {"title_prefixes": ["doc:", "docs:", "documentation:", "[doc]", "[docs]", "[documentation]"]}, "labels": ["kind/documentation"]},
+    {"match": {"body_headings": ["Documentation Gap"]}, "labels": ["kind/documentation"]},
+    {"match": {"title_prefixes": ["feat:", "feature:", "enhancement:", "[feature]", "[enhancement]"]}, "labels": ["kind/feature"]},
+    {"match": {"body_headings": ["Feature Request"]}, "labels": ["kind/feature"]},
+    {"match": {"title_prefixes": ["question:", "[question]"]}, "labels": ["kind/task"]}
+  ],
   "stages": {
     "needs-triage": {
       "color": "ededed",

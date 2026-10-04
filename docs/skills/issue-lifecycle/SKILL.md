@@ -63,6 +63,12 @@ classification needs a maintainer decision, not an arbitrary dispatch.
 
 The catalog contains:
 
+- **Descriptive intake:** this catalog's `intake_rules` declares ACMM/guide/quality
+  and title/body classification locally. Literal selectors are bounded and can
+  add catalog metadata only; they do not authenticate a filing agent, grant
+  consent/acceptance, assign work or override an existing primary kind.
+  Native `question` denial is not auto-projected from a title; existing explicit
+  assignments remain until their real owner resolves and withdraws the gate.
 - **Kinds:** `kind/bug`, `kind/feature`, `kind/task`, `kind/documentation`,
   and `kind/tech-debt`. These are primary work types, not stacked topics.
 - **Native areas:** the route identities `updates`, `applications`, `agents`,
