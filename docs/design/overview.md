@@ -626,6 +626,8 @@ parses this line from output, strips it from caller-visible stdout/stderr, and
 includes the concrete argv list as `executed` (`[][]string`) in the journal
 outcome record. The marker is self-reported and can also be emitted by helper
 children; it is an audit aid, not independent proof of execution.
+`chairlift-updex-helper` calls the updex library in-process and runs no
+subprocess, so its outcome records carry no `executed` list.
 
 Gaming mode, the third Bluefin-family feature, crosses no privilege boundary
 at all: every component is a user-scope Flatpak installed with

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 	"time"
 
@@ -58,82 +57,31 @@ func readJournal(t *testing.T, path string) []journal.Entry {
 	return entries
 }
 
-func TestRunHelperJournalsSuccessWithDerivedCommand(t *testing.T) {
+// The updex helper calls the updex library in-process and runs no
+// subprocess, so a successful outcome carries no derived commands.
+func TestRunHelperJournalsSuccessWithoutDerivedCommands(t *testing.T) {
 	journalPath := withJournalSink(t)
 
-	script := "#!/bin/sh\n" +
-		"echo 'chairlift-updex-helper: exec [\"updex\", \"enable\", \"demo\"]'\n" +
-		"echo 'enabled feature demo'\n" +
-		"exit 0\n"
-	fakePkexec := writeCustomFakePkexec(t, script)
+	fakePkexec := writeCustomFakePkexec(t, "#!/bin/sh\necho 'enabled feature demo'\nexit 0\n")
 
-	stdout, stderr, err := runHelper(context.Background(), fakePkexec, updexhelper.CommandEnableFeature, "demo")
+	stdout, _, err := runHelper(context.Background(), fakePkexec, updexhelper.CommandEnableFeature, "demo")
 	if err != nil {
 		t.Fatalf("runHelper returned error: %v", err)
-	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want empty", stderr)
 	}
 	if stdout != "enabled feature demo\n" {
-		t.Errorf("stdout = %q, want stripped clean stdout", stdout)
+		t.Errorf("stdout = %q, want the helper's output unchanged", stdout)
 	}
 
 	entries := readJournal(t, journalPath)
 	if len(entries) != 2 {
 		t.Fatalf("journal has %d entries, want 2 (dispatch + outcome)", len(entries))
 	}
-
-	dispatch := entries[0]
-	if dispatch.Action != updexhelper.CommandEnableFeature || dispatch.Suppressed != journal.SuppressedNone {
+	if dispatch := entries[0]; dispatch.Action != updexhelper.CommandEnableFeature || dispatch.Suppressed != journal.SuppressedNone {
 		t.Errorf("dispatch = %+v, want action enable-feature, suppressed no", dispatch)
 	}
-
 	outcome := entries[1]
-	if outcome.Action != updexhelper.CommandEnableFeature || outcome.Outcome != journal.OutcomeSucceeded {
-		t.Errorf("outcome = %+v, want action enable-feature, outcome succeeded", outcome)
-	}
-	wantExecuted := [][]string{{"updex", "enable", "demo"}}
-	if !reflect.DeepEqual(outcome.Executed, wantExecuted) {
-		t.Errorf("outcome.Executed = %v, want %v", outcome.Executed, wantExecuted)
-	}
-}
-
-func TestRunHelperJournalsMultipleDerivedCommands(t *testing.T) {
-	journalPath := withJournalSink(t)
-
-	script := "#!/bin/sh\n" +
-		"echo 'chairlift-updex-helper: exec [\"updex\", \"prepare\", \"demo\"]'\n" +
-		"echo 'chairlift-updex-helper: exec [\"updex\", \"enable\", \"demo\"]'\n" +
-		"echo 'completed demo'\n" +
-		"exit 0\n"
-	fakePkexec := writeCustomFakePkexec(t, script)
-
-	stdout, stderr, err := runHelper(context.Background(), fakePkexec, updexhelper.CommandEnableFeature, "demo")
-	if err != nil {
-		t.Fatalf("runHelper returned error: %v", err)
-	}
-	if stderr != "" {
-		t.Errorf("stderr = %q, want empty", stderr)
-	}
-	if stdout != "completed demo\n" {
-		t.Errorf("stdout = %q, want clean stdout", stdout)
-	}
-
-	entries := readJournal(t, journalPath)
-	if len(entries) != 2 {
-		t.Fatalf("journal has %d entries, want 2 (dispatch + outcome)", len(entries))
-	}
-
-	outcome := entries[1]
-	if outcome.Outcome != journal.OutcomeSucceeded {
-		t.Errorf("outcome = %+v, want succeeded", outcome)
-	}
-	wantExecuted := [][]string{
-		{"updex", "prepare", "demo"},
-		{"updex", "enable", "demo"},
-	}
-	if !reflect.DeepEqual(outcome.Executed, wantExecuted) {
-		t.Errorf("outcome.Executed = %v, want %v", outcome.Executed, wantExecuted)
+	if outcome.Outcome != journal.OutcomeSucceeded || len(outcome.Executed) != 0 {
+		t.Errorf("outcome = %+v, want succeeded with no executed commands", outcome)
 	}
 }
 
