@@ -14,7 +14,7 @@ collects those read-only sources and their interpretation boundaries.
 |---|---|---|
 | Tests workflow | Latest lint, unit-test, race-detection, verification, and cross-architecture build results | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml) |
 | Nightly compliance | Daily full CI, E2E, and known-vulnerability scan results for the default branch | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/nightly-compliance.yml) |
-| Issue triage | Deterministic labels applied from structured issue titles and bodies | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/triage.yml) |
+| Issue lifecycle | Reviewed stage authority, catalog-bound descriptive intake and constrained Prow reports | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/issue-lifecycle.yml) |
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
 | Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
