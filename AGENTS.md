@@ -476,7 +476,7 @@ An agent must not break these:
   `internal/navigation` package. It also decides route visibility from static
   group configuration: omit a functional page when all of its builder-backed
   groups are disabled, always retain Help, and compact Alt+number over visible
-  pages. Mouse activation, window navigation actions, and the Recovery
+  pages. Mouse activation, window navigation actions, and the Powerwash
   detail's entry row and Back button must all call `Window.navigateToPage`,
   which applies the complete `navigation.Resolve` transition against
   `Window.navRoutes` (`navigation.VisibleRoutes`: the visible primaries plus
@@ -500,14 +500,14 @@ An agent must not break these:
   the caller cannot enter — disabled by configuration, floored out by
   capability, or never built — has no ancestor and resolves straight to Help
   with `ok=true`; `Resolve` rejects only a name the inventory does not declare
-  (#343). Recovery is the
+  (#343). Powerwash is the
   live detail: a content-stack child of Maintenance, registered in the
   window's built pages so `Resolve` can enter it, whose row stays selected
   while it is shown, with `Back` resolving the recorded primary through
   `navigateToPage` rather than naming Maintenance itself. **A route's configuration
   identity is never inferred from its display name.** Each route carries
   page-qualified `Refs`, not a group list under a route-owned page field,
-  because one destination can consume several namespaces at once: Recovery's
+  because one destination can consume several namespaces at once: Powerwash's
   rollback controls are gated by `bootc_updates_group` on `updates_page` while
   its reset controls are gated by `reset_group` on `maintenance_page`. Keep
   those refs page-qualified and keep them held to `config.SchemaPages()` /
@@ -578,31 +578,20 @@ An agent must not break these:
   changing rows or counts. A live package success removes its row, decrements
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
-- **Homebrew application actions are typed and refresh-safe.** Apps retains six
-  configuration groups: `applications_installed_group`, `brew_search_group`,
-  `flatpak_user_group`, `flatpak_system_group`, `brew_group`, and
-  `brew_bundles_group`. Its builder orders the external catalog launcher,
-  Homebrew search/results, installed Flatpaks, installed casks, collections,
-  explicitly requested formulae, then Brewfile export. Built-in defaults enable
-  all six; shipped `config.yml` enables only collections. Search queries both
-  formula and cask namespaces and carries `homebrew.SearchResult.Kind` into
-  `brew install [--cask]`. Search and installed-package refreshes use separate
-  `actionstate.RefreshGate` generations; stale workers must not replace newer
-  rows. Confirmed installs use `actionstate.PackageInstall` and `actionmsg.Install`,
-  restore controls on failure/dry-run, and refresh installed rows only after live success.
+- **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
+  groups are `brew_bundles_group` and `brew_group`: app collections come first,
+  installed casks and explicitly requested formulae next, then the Brewfile
+  exporter (also gated by `brew_group`). No Flatpak inventory, external catalog
+  launcher, or package search belongs here. Installed-package refreshes use
+  `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
   Package-list export likewise holds an `actionstate.Gate`, shows a spinner
   and `Exporting…`, and restores the Export action after every outcome.
-  Flatpak rows use `pageview.FlatpakApplicationWithScope` and confirm uninstall
-  with `pageview.FlatpakUninstallConfirmation`; system-scope removal explicitly
-  affects every account. A per-row `actionstate.Gate` restores controls after
-  failure or preview and refreshes only after live success. `runFlatpakUninstall`
-  belongs to `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation`
-  inventory beside `runPowerwash` and `runFactoryReset`; new destructive `run*`
-  entry points belong there too.
+  A destructive `run*` entry point added to `internal/views` belongs in
+  `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -617,9 +606,8 @@ An agent must not break these:
   guard both lifetimes.
   Both dedicated staging and a live unified run whose operating-system source
   completed refresh the changelog's Compare references from observed status.
-  `UserHome.OnUpdateFinished` refreshes Flatpak inventory for a completed
-  applications source, Homebrew inventory for completed developer tools, and
-  Compare for a completed OS source; previews refresh none. The coordinator
+  `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
+  its source completed and Compare when the OS source completed; the coordinator
   snapshot remains the only badge owner.
   A changed pinned image pair clears old diff rows; an in-flight comparison
   for the old pair must not render after the refresh.
@@ -814,14 +802,14 @@ An agent must not break these:
   never replaced by a previous answer. `Catalog` caches in process only,
   bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
   GTK main thread, so it must stay safe for concurrent readers. `Catalog`'s
-  one caller is the Recovery page's **Published versions** row
+  one caller is the Powerwash page's **Published versions** row
   (`internal/views/versions.go`), which reads the registry when the user presses
   Check, lists one row per day of the running stream
   (`pageview.PublishedVersions` drops other streams' aliases), removes the
   last list when a read fails rather than leaving it standing as current,
   and offers a confirmed Pin action for each build that stages a switch to
   that dated tag (`chairlift-helper pin <YYYYMMDD>`). When booted on a dated
-  tag, Recovery offers **Return to stream** (`chairlift-helper unpin`).
+  tag, Powerwash offers **Return to stream** (`chairlift-helper unpin`).
   `internal/bootc.CheckUpdate` also calls `Client.Tag` directly on composefs
   hosts (below); it only compares digests.
 - **Reading OS state never needs a password.** bootc 1.16 refuses
@@ -1142,7 +1130,7 @@ An agent must not break these:
 - **Powerwash and Factory Reset are opt-in and always confirmed.**
   `reset_group` (maintenance_page) ships `enabled: false` in config.yml, the
   same default as `maintenance_cleanup_group`, because both actions are
-  irreversible. Its group is titled "Recovery" rather than anything
+  irreversible. Its group is titled "Powerwash" rather than anything
   resembling cleanup, so a person hunting for disk space does not press it.
   Neither may run without the `AdwAlertDialog` confirmation in
   `internal/views/reset.go` first — that dialog's title and body come from

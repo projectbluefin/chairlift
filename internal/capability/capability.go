@@ -245,12 +245,8 @@ var prerequisites = []Prerequisite{
 	{Page: "updates_page", Group: "flatpak_updates_group", AnyOf: []Capability{Flatpak}},
 
 	// Applications.
-	{Page: "applications_page", Group: "applications_installed_group"},
 	{Page: "applications_page", Group: "brew_bundles_group", AnyOf: []Capability{Homebrew}},
 	{Page: "applications_page", Group: "brew_group", AnyOf: []Capability{Homebrew}},
-	{Page: "applications_page", Group: "brew_search_group", AnyOf: []Capability{Homebrew}},
-	{Page: "applications_page", Group: "flatpak_system_group", AnyOf: []Capability{Flatpak}},
-	{Page: "applications_page", Group: "flatpak_user_group", AnyOf: []Capability{Flatpak}},
 
 	// Agents.
 	{Page: "agents_page", Group: "agents_group", AnyOf: []Capability{Homebrew}},

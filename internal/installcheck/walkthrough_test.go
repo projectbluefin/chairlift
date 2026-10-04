@@ -188,16 +188,12 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"channel_group":      "Release Channel",
 		"bootc_status_group": "queued for the next",
 		// applications_page
-		"applications_installed_group": "already installed",
-		"flatpak_user_group":           "Flatpak",
-		"flatpak_system_group":         "Flatpak",
-		"brew_group":                   "packages Homebrew manages",
-		"brew_search_group":            "search across both",
-		"brew_bundles_group":           "App collections",
+		"brew_group":         "packages Homebrew manages",
+		"brew_bundles_group": "App collections",
 		// maintenance_page
 		"maintenance_cleanup_group":   "Maintenance tasks",
 		"maintenance_freespace_group": "Free up space",
-		"reset_group":                 "Recovery",
+		"reset_group":                 "Powerwash",
 		// features_page
 		"features_group":             "feature manager",
 		"desktop_integrations_group": "Desktop integrations",

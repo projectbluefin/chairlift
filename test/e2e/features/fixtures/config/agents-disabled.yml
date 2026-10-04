@@ -4,15 +4,7 @@
 # Loaded from an untrusted path (config.dev.yml beside a staged binary), so no
 # action may set sudo: true.
 applications_page:
-  applications_installed_group:
-    enabled: true
-  flatpak_user_group:
-    enabled: true
-  flatpak_system_group:
-    enabled: true
   brew_group:
-    enabled: true
-  brew_search_group:
     enabled: true
   brew_bundles_group:
     enabled: true

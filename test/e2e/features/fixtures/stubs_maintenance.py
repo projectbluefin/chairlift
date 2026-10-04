@@ -1,4 +1,4 @@
-"""Prelaunch stubs for the Maintenance page and its Recovery detail.
+"""Prelaunch stubs for the Maintenance page and its Powerwash detail.
 
 Every fake tool appends its argv to <scenario>/tool-calls.log, so a scenario
 can prove a mutation stayed a dry-run preview: the fake was consulted for
@@ -67,7 +67,7 @@ exit 0
 
 @stub("maintenance_bootc_rollback")
 def maintenance_bootc_rollback(context):
-    """A bootc host that still keeps the previous deployment, so Recovery offers Roll Back."""
+    """A bootc host that still keeps the previous deployment, so Powerwash offers Roll Back."""
     _fake_bootc(context, BOOTC_STATUS_WITH_ROLLBACK)
 
 

@@ -184,11 +184,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"bootc_status_group",
 		),
 		"applications": refsOn("applications_page",
-			"applications_installed_group",
-			"flatpak_user_group",
-			"flatpak_system_group",
 			"brew_group",
-			"brew_search_group",
 			"brew_bundles_group",
 		),
 		"agents": refsOn("agents_page", "agents_group", "troubleshooting_group"),
@@ -233,10 +229,12 @@ func TestDetailMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 	// case in the inventory today.
 	want := map[string]struct {
 		parent string
+		title  string
 		refs   []Ref
 	}{
 		"recovery": {
 			parent: "maintenance",
+			title:  "Powerwash",
 			refs: []Ref{
 				{Page: "maintenance_page", Group: "reset_group"},
 				{Page: "updates_page", Group: "bootc_updates_group"},
@@ -256,6 +254,9 @@ func TestDetailMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 		}
 		if detail.Parent != wantDetail.parent {
 			t.Errorf("%s parent = %q, want %q", detail.Name, detail.Parent, wantDetail.parent)
+		}
+		if detail.Title != wantDetail.title {
+			t.Errorf("%s title = %q, want %q", detail.Name, detail.Title, wantDetail.title)
 		}
 		if !reflect.DeepEqual(detail.Refs, wantDetail.refs) {
 			t.Errorf("%s refs = %v, want %v", detail.Name, detail.Refs, wantDetail.refs)
@@ -644,7 +645,6 @@ func TestRecoveryCallbacksUseTheCanonicalTransition(t *testing.T) {
 	}
 	for _, bypass := range []string{
 		`SetVisibleChildName("recovery")`,
-		`SetTitle("Recovery")`,
 		`w.navigateToPage("maintenance")`,
 	} {
 		if strings.Contains(source, bypass) {

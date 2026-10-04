@@ -176,41 +176,6 @@ func TestListOutdatedEndToEnd(t *testing.T) {
 	})
 }
 
-// searchBody answers `brew search --formula|--cask <query>` per namespace so a
-// single fake can serve both invocations Search makes.
-const searchBody = `case "$2" in
-  --formula) printf '%s' "$FORMULA_OUT" ;;
-  --cask) printf '%s' "$CASK_OUT" ;;
-esac
-exit 0`
-
-func TestSearchEndToEnd(t *testing.T) {
-	t.Run("queries both namespaces with the trimmed query", func(t *testing.T) {
-		argvLog := fakeBrewOnPath(t, searchBody)
-		t.Setenv("FORMULA_OUT", "==> Formulae\nripgrep\nrga\n")
-		t.Setenv("CASK_OUT", "==> Casks\nfirefox\n")
-
-		if _, err := Search("  rg  "); err != nil {
-			t.Fatalf("Search() error = %v", err)
-		}
-
-		assertArgv(t, argvLog, []string{"search --formula rg", "search --cask rg"})
-	})
-
-	t.Run("does not shell out for a blank query", func(t *testing.T) {
-		argvLog := fakeBrewOnPath(t, searchBody)
-
-		results, err := Search("   ")
-		if err != nil {
-			t.Fatalf("Search() error = %v", err)
-		}
-		if results != nil {
-			t.Fatalf("Search() = %#v, want nil", results)
-		}
-		assertArgv(t, argvLog, nil)
-	})
-}
-
 func TestBrewIsInstalledEndToEnd(t *testing.T) {
 	t.Run("true when brew --version succeeds", func(t *testing.T) {
 		argvLog := fakeBrewOnPath(t, "exit 0")

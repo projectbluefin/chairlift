@@ -366,7 +366,6 @@ func TestConfigurationGuideExamplePassesStrictValidation(t *testing.T) {
 				{"updates_page", "brew_updates_group"},
 				{"updates_page", "brew_trust_group"},
 				{"applications_page", "brew_group"},
-				{"applications_page", "brew_search_group"},
 				{"applications_page", "brew_bundles_group"},
 				{"maintenance_page", "maintenance_freespace_group"},
 				{"agents_page", "troubleshooting_group"},

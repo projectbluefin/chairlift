@@ -86,48 +86,7 @@ func TestBundleInstallDecision(t *testing.T) {
 	}
 }
 
-// TestPackageInstallMessage covers both dry-run states for the Homebrew
-// package-install toast text.
-func TestPackageInstallMessage(t *testing.T) {
-	tests := []struct {
-		name         string
-		dryRun       bool
-		pkgName      string
-		wantExact    string
-		wantContains []string
-	}{
-		{
-			name:      "live run reports the package as installed",
-			dryRun:    false,
-			pkgName:   "ripgrep",
-			wantExact: "ripgrep installed",
-		},
-		{
-			name:         "dry-run previews without claiming an install happened",
-			dryRun:       true,
-			pkgName:      "ripgrep",
-			wantContains: []string{"[DRY-RUN]", "ripgrep", "no changes made"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := Install(tt.dryRun, tt.pkgName)
-
-			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("Install(%v, %q) = %q, want %q", tt.dryRun, tt.pkgName, got, tt.wantExact)
-			}
-			for _, want := range tt.wantContains {
-				if !strings.Contains(got, want) {
-					t.Errorf("Install(%v, %q) = %q, want it to contain %q", tt.dryRun, tt.pkgName, got, want)
-				}
-			}
-		})
-	}
-}
-
-// TestUninstall covers both dry-run states for shared Homebrew/Flatpak
-// uninstall toast text.
+// TestUninstall covers both dry-run states for Homebrew uninstall toast text.
 func TestUninstall(t *testing.T) {
 	tests := []struct {
 		name         string

@@ -344,14 +344,7 @@ func defaultConfig() *Config {
 			"bootc_status_group": GroupConfig{Enabled: true},
 		},
 		ApplicationsPage: PageConfig{
-			"applications_installed_group": GroupConfig{
-				Enabled: true,
-				AppID:   "io.github.kolunmi.Bazaar",
-			},
-			"flatpak_user_group":   GroupConfig{Enabled: true},
-			"flatpak_system_group": GroupConfig{Enabled: true},
-			"brew_group":           GroupConfig{Enabled: true},
-			"brew_search_group":    GroupConfig{Enabled: true},
+			"brew_group": GroupConfig{Enabled: true},
 			"brew_bundles_group": GroupConfig{
 				Enabled:      true,
 				BundlesPaths: []string{"/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles"},

@@ -1,7 +1,7 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.0
+version: 2.1.1
 last_updated: 2026-10-04
 tags:
   - testing
@@ -187,6 +187,17 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 - **AdwAboutDialog is a separate top-level frame** at the suite's window
   size; `current_dialog` searches in-window `dialog`/`alert` nodes first, then
   extra top-level frames.
+- **The content pseudo-root is not an AT-SPI node.** `common.content` returns
+  `_ContentRoot`, so traverse it with `atspi.search_nodes`, not `descendants`.
+  Named `grouping` nodes also include window and page wrappers. For exact
+  preference-group order, locate a known group and compare its shared parent's
+  grouping children; do not slice off a guessed number of wrappers. See the
+  Apps ordering scenario in `steps/apps.py`.
+- **A tool-call assertion needs isolated readers.** Gaming's capability floor
+  is `ImageDescriptor`, so it can read Flatpak inventories even when the
+  `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
+  image descriptor or disable Gaming, rather than treating a legitimate
+  Gaming read as evidence the Apps page still manages Flatpaks.
 - **dogtail.tree connects to the bus at import.** The helper library imports
   it lazily so `TestATSPIFeaturesHaveNoUndefinedSteps` (behave `--dry-run`)
   needs no display. dogtail's `checkForA11y` must be off before import: the

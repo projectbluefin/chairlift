@@ -230,7 +230,7 @@ func TestMaintenanceCleanupGroupDefaultConsistentAcrossAbsentAndOmitted(t *testi
 }
 
 // defaultBearingGroups lists every group in defaultConfig() that defines a
-// non-Enabled default field (AppID, Website/Issues/Chat, Actions, or
+// non-Enabled default field (Website/Issues/Chat, Actions, or
 // BundlesPaths). Enabled-only-overlay coverage loops over all of them, not
 // just one, per the repo's regression-tests-must-cover-every-collection-entry
 // skill.
@@ -238,7 +238,6 @@ var defaultBearingGroups = []struct {
 	page  string
 	group string
 }{
-	{"applications_page", "applications_installed_group"},
 	{"help_page", "help_resources_group"},
 	{"maintenance_page", "maintenance_cleanup_group"},
 	{"applications_page", "brew_bundles_group"},

@@ -142,7 +142,6 @@ resolves per call; the absent case uses the bare name only to retain
 | `ListInstalledFormulae()` | `brew info --installed --json=v2 --formula` |
 | `ListInstalledCasks()` | `brew info --installed --json=v2 --cask` |
 | `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings |
-| `Search(query)` | Separate formula/cask searches returning typed `[]SearchResult` |
 | `Tap(name)` | `brew tap <name>` |
 | `Install(name, isCask)` / `Uninstall(name, isCask)` | `install` / `uninstall`, with `--cask` only for casks |
 | `Upgrade(ctx, name)` | `brew upgrade [<name>]`; empty name upgrades all |
@@ -167,25 +166,21 @@ mutation budget; most other operations own their timeout context.
 
 ### Apps callers and action state
 
-[`applications_page.go`](../../internal/views/applications_page.go) retains
-six independent configuration groups: `applications_installed_group` launches
-the configured external catalog (Bazaar by default); `brew_search_group`
-searches both Homebrew namespaces; `flatpak_user_group` and
-`flatpak_system_group` select installed Flatpak scopes; `brew_group` owns
-installed casks, explicitly requested formulae and Brewfile export;
-`brew_bundles_group` owns collections. The builder orders catalog, search/results,
-Flatpaks, casks, collections, requested formulae, then export. Built-in defaults
-enable all six; shipped `config.yml` enables only collections, with
-`brew_group: enabled: false` rather than the built-in `true`.
+[`applications_page.go`](../../internal/views/applications_page.go) has
+two configuration groups: `brew_bundles_group` owns collections, shown first;
+`brew_group` owns installed casks, explicitly requested formulae and the
+Brewfile exporter, in that order. Both are enabled in shipped `config.yml`.
+Apps has no Flatpak inventory, external catalog launcher, or package search;
+the four retired Apps keys are accepted and stripped as legacy configuration
+(see [overview](overview.md)).
 
-`onHomebrewSearch` calls `homebrew.Search`, preserving `SearchResult.Kind`
-through confirmation into `homebrew.Install(name, isCask)`. Search and installed
-inventories have separate refresh generations. `pageview.SearchResult` owns
-result row text, while `actionstate.PackageInstall` and `actionmsg.Install`
-separate live success from preview/failure. Only live success completes the
-install control and refreshes installed Homebrew rows; other outcomes restore it.
-Installed uninstall/pin/unpin controls share a per-row action gate, and export
-restores its gate and spinner after every outcome.
+Installed uninstall/pin/unpin controls share a per-row action gate, use
+`actionmsg.Uninstall`/`actionmsg.Pin` for live versus preview wording, restore
+on failure or dry-run, and refresh the installed inventory only after live
+success. The installed loader clears and repopulates separate
+`formulaeRows`/`caskRows` trackers under its refresh generation; a stale
+generation's result is dropped and a failed read preserves the last known rows.
+Export restores its gate and spinner after every outcome.
 
 ### Process and diagnostic contract
 
@@ -302,12 +297,8 @@ mutation diagnostic, Flatpak prefers stderr and falls back to the stdout tail
 only when stderr is empty. Neither runner reports its own cancellation merely
 as `signal: killed`.
 
-Apps lists enabled user/system Flatpak scopes through
-`loadFlatpakApplications`, using `pageview.FlatpakApplicationWithScope` for
-row text and `pageview.FlatpakUninstallConfirmation` before removal. System
-removal explicitly affects every account. `runFlatpakUninstall` holds a per-row
-action gate, preserves rows after failure/preview and refreshes only after live
-success. Flatpak also remains in Updates, Gaming, and maintenance/reset operations.
+Apps has no Flatpak inventory or removal. Flatpak remains in Updates, Gaming,
+and maintenance/Powerwash operations.
 
 ## Shared OS stage executor (`internal/stageexec`)
 
@@ -521,7 +512,7 @@ disk, never caches a failed read and never serves an expired answer as a
 failure fallback. Every request uses the injectable `Client.HTTP`; tests use
 loopback registries.
 
-Recovery's [`versions.go`](../../internal/views/versions.go) reads the catalog
+Powerwash's [`versions.go`](../../internal/views/versions.go) reads the catalog
 only when Check is pressed. `pageview.PublishedVersions` selects the running
 stream and one row per day. A failed read removes the previous list rather
 than leaving it displayed as current. Each row offers a confirmed **Pin**

@@ -45,17 +45,8 @@ updates_page:
     enabled: true
 
 applications_page:
-  applications_installed_group:
-    enabled: false
-    app_id: io.github.kolunmi.Bazaar
-  flatpak_user_group:
-    enabled: false
-  flatpak_system_group:
-    enabled: false
   brew_group:
-    enabled: false
-  brew_search_group:
-    enabled: false
+    enabled: true
   brew_bundles_group:
     enabled: true
     bundles_paths:

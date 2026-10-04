@@ -1,12 +1,8 @@
 """Prelaunch stubs for the Apps destination (applications_page).
 
-The Apps page reads its inventories from `brew` and `flatpak` and opens the
-software catalog with `gtk-launch`. Each stub below replaces one of those
-tools with a small shell script first on the scenario's PATH, so every row
-the page draws comes from a fixed catalog instead of whatever the runner
-happens to have installed. A PATH `brew` wins over the Linuxbrew fallback
-(internal/homebrew.ExecutablePath), which the Dakota container and GitHub's
-runners both ship.
+The Apps page reads Homebrew inventories and configured Brewfiles. PATH stubs
+serve a fixed inventory and record calls; one scenario supplies Flatpak apps
+to prove the Homebrew-only page never lists them.
 
 Every stub records its argv, one invocation per line, in
 <scenario>/<program>-calls.log. Under --dry-run ChairLift must never execute
@@ -32,10 +28,6 @@ FORMULAE = [
 CASKS = [
     {"token": "visual-studio-code", "version": "1.104.0", "installed": "1.104.0"},
 ]
-
-# What `brew search --formula|--cask <query>` matches, by substring.
-SEARCH_FORMULAE = ("chezmoi", "lazydocker", "lazygit")
-SEARCH_CASKS = ("lazyterm",)
 
 # `flatpak list --<scope> --app --columns=name,application,version` rows.
 FLATPAK_USER = (("Firefox", "org.mozilla.firefox", "140.0"),)
@@ -69,13 +61,11 @@ def _record(context, program):
 def _brew(context, fail=()):
     """A brew serving the fixed catalog above.
 
-    fail names the read operations ("info", "search") that exit 1 the way
-    brew does when its API or a tap cannot be read.
+    fail names read operations that exit 1 when brew cannot read its API.
     """
     formulae = json.dumps({"formulae": FORMULAE, "casks": []})
     casks = json.dumps({"formulae": [], "casks": CASKS})
     info_fail = "echo 'Error: Failed to load the API' >&2; exit 1\n" if "info" in fail else ""
-    search_fail = "echo 'Error: Could not reach the Homebrew API' >&2; exit 1\n" if "search" in fail else ""
     script = _record(context, "brew") + f"""
 case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
@@ -92,21 +82,6 @@ EOF
     ;;
     esac
     exit 0 ;;
-search)
-    {search_fail}case "$2" in
-    --formula) names="{' '.join(SEARCH_FORMULAE)}" ;;
-    --cask) names="{' '.join(SEARCH_CASKS)}" ;;
-    *) names="" ;;
-    esac
-    found=0
-    for name in $names; do
-        case "$name" in *"$3"*) echo "$name"; found=1 ;; esac
-    done
-    if [ "$found" = 0 ]; then
-        echo "Error: No formulae or casks found for \\"$3\\"." >&2
-        exit 1
-    fi
-    exit 0 ;;
 outdated) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
 tap-info) echo '[]'; exit 0 ;;
 esac
@@ -121,7 +96,7 @@ def _rows(rows):
 
 @stub("apps-brew")
 def apps_brew(context):
-    """Homebrew with two formulae (one pinned), one cask, and a search catalog."""
+    """Homebrew with two requested formulae (one pinned) and one cask."""
     _brew(context)
 
 
@@ -129,12 +104,6 @@ def apps_brew(context):
 def apps_brew_unreadable(context):
     """Homebrew whose installed-package listing fails."""
     _brew(context, fail=("info",))
-
-
-@stub("apps-brew-search-broken")
-def apps_brew_search_broken(context):
-    """Homebrew whose search cannot reach its API."""
-    _brew(context, fail=("search",))
 
 
 @stub("apps-flatpak")
@@ -158,22 +127,6 @@ esac
 exit 0
 """
     fake_executable(context, "flatpak", script)
-
-
-@stub("apps-gtk-launch")
-def apps_gtk_launch(context):
-    """gtk-launch that records which desktop ID it was asked to open."""
-    fake_executable(context, "gtk-launch", _record(context, "gtk-launch") + "exit 0\n")
-
-
-@stub("apps-gtk-launch-missing")
-def apps_gtk_launch_missing(context):
-    """gtk-launch for a desktop ID that is not installed: it exits 1."""
-    fake_executable(
-        context,
-        "gtk-launch",
-        _record(context, "gtk-launch") + 'echo "gtk-launch: no such application $1" >&2\nexit 1\n',
-    )
 
 
 @stub("apps-collections")

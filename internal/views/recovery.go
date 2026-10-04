@@ -18,13 +18,13 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// createRecoveryPage builds the Recovery detail page: a ToolbarView whose
+// createRecoveryPage builds the Powerwash detail page: a ToolbarView whose
 // header bar carries a back button (this is a detail, reached from Maintenance),
-// hosting the Recovery preferences page.
+// hosting the Powerwash preferences page.
 func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 	toolbarView := adw.NewToolbarView()
 
-	// Header bar with a back button: Recovery is a detail, so the user
+	// Header bar with a back button: Powerwash is a detail, so the user
 	// returns to Maintenance. The back button only fires once the window has
 	// wired closeRecoveryDetail, which it does right after New.
 	headerBar := adw.NewHeaderBar()
@@ -53,7 +53,7 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 	return toolbarView, prefsPage
 }
 
-// Recovery is the single named detail view a user opens deliberately to return
+// Powerwash is the single named detail view a user opens deliberately to return
 // to a previous system version or perform an explicitly scoped reset. It is
 // reached from Maintenance, never from routine Free Up Space.
 //
@@ -62,32 +62,32 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 // invents a mutation the backend cannot perform: the bootc Roll Back row
 // appears only when bootc records a previous deployment.
 
-// RecoveryPage returns the Recovery detail ToolbarView so the window can add
+// RecoveryPage returns the Powerwash detail ToolbarView so the window can add
 // it to its content stack. Nil-guarded: the page is always built by New.
 func (uh *UserHome) RecoveryPage() *adw.ToolbarView {
 	return uh.recoveryPage
 }
 
 // SetOpenRecoveryDetail wires the callback the Maintenance page calls to open the
-// Recovery detail view.
+// Powerwash detail view.
 func (uh *UserHome) SetOpenRecoveryDetail(fn func()) {
 	uh.openRecoveryDetail = fn
 }
 
-// SetCloseRecoveryDetail wires the callback the Recovery back button calls to
+// SetCloseRecoveryDetail wires the callback the Powerwash back button calls to
 // return to Maintenance.
 func (uh *UserHome) SetCloseRecoveryDetail(fn func()) {
 	uh.closeRecoveryDetail = fn
 }
 
-// buildRecoveryPage builds the Recovery detail page.
+// buildRecoveryPage builds the Powerwash detail page.
 func (uh *UserHome) buildRecoveryPage() {
 	page := uh.recoveryPrefsPage
 	if page == nil {
 		return
 	}
 
-	page.SetTitle("Recovery")
+	page.SetTitle("Powerwash")
 
 	// Roll Back: gated by the OS provider group, built hidden, revealed
 	// asynchronously once a previous deployment is confirmed to exist.
@@ -97,7 +97,7 @@ func (uh *UserHome) buildRecoveryPage() {
 	}
 }
 
-// buildRecoveryRollbackGroup builds the bootc Roll Back row on the Recovery
+// buildRecoveryRollbackGroup builds the bootc Roll Back row on the Powerwash
 // page. It is built hidden and revealed asynchronously, so a fresh install
 // never offers a rollback to nothing.
 func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
@@ -130,7 +130,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	page.Add(group)
 }
 
-// buildReturnToStreamRow builds the Return to stream row on the Recovery
+// buildReturnToStreamRow builds the Return to stream row on the Powerwash
 // page when booted on a dated tag.
 func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 	status := ublue.StatusCached()
@@ -258,10 +258,10 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 	})
 }
 
-// recoveryProvidersAvailable reports whether the Recovery detail view has
+// recoveryProvidersAvailable reports whether the Powerwash detail view has
 // anything to show: a reset (reset_group) or the bootc rollback provider
 // (bootc_updates_group) is enabled. The Maintenance page uses it to decide
-// whether to show its Recovery entry, so the entry's gate lives in one place
+// whether to show its Powerwash entry, so the entry's gate lives in one place
 // and does not reach across pages from maintenance_page.go.
 func (uh *UserHome) recoveryProvidersAvailable() bool {
 	return uh.groupEnabled("maintenance_page", "reset_group") ||

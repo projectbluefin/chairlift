@@ -26,33 +26,6 @@ type Command struct {
 	Args []string
 }
 
-// FlatpakApplication returns the row text for an installed Flatpak application.
-func FlatpakApplication(name, applicationID, version string) Row {
-	subtitle := applicationID
-	if version != "" {
-		subtitle = fmt.Sprintf("%s (%s)", applicationID, version)
-	}
-	return Row{Title: name, Subtitle: subtitle}
-}
-
-// FlatpakApplicationWithScope returns the row text for an installed Flatpak application
-// including its installation scope ("Installed for you" vs "Installed for everyone").
-func FlatpakApplicationWithScope(name, applicationID, version string, userScope bool) Row {
-	title := name
-	if title == "" {
-		title = applicationID
-	}
-	details := applicationID
-	if version != "" {
-		details = fmt.Sprintf("%s (%s)", applicationID, version)
-	}
-	scope := "Installed for everyone"
-	if userScope {
-		scope = "Installed for you"
-	}
-	return Row{Title: title, Subtitle: fmt.Sprintf("%s • %s", details, scope)}
-}
-
 // HomebrewPackage returns the row text for an installed Homebrew package.
 func HomebrewPackage(name, version string, pinned bool) Row {
 	subtitle := version
@@ -60,11 +33,6 @@ func HomebrewPackage(name, version string, pinned bool) Row {
 		subtitle += " • Pinned"
 	}
 	return Row{Title: name, Subtitle: subtitle}
-}
-
-// SearchResult returns the row text for a Homebrew search result.
-func SearchResult(name, kind string) Row {
-	return Row{Title: name, Subtitle: kind}
 }
 
 // UntrustedTap returns the row text for a software source whose updates

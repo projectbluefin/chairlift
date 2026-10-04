@@ -79,5 +79,5 @@ is a pure function under test.
   [ADR-0009](0009-dry-run-output-convention-and-single-decision-structs.md)
 - Enforced by: `internal/views/pageview/wiring_test.go`,
   `internal/views/actionstate/wiring_test.go`,
-  `internal/views/actionstate/applications_wiring_test.go`, and the per-leaf
-  unit tests in each `internal/views/*` package
+  the [historical Apps wiring test](https://github.com/projectbluefin/chairlift/blob/8c98e6f0878bd87de3e9e867fdbcddb28c8251a1/internal/views/actionstate/applications_wiring_test.go),
+  and the per-leaf unit tests in each `internal/views/*` package

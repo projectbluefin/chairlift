@@ -17,12 +17,9 @@ ChairLift searches for the configuration file in the following locations (in ord
 If no configuration file is found, all features default to enabled, except
 `maintenance_cleanup_group` and `reset_group`, which default to disabled.
 
-The repository's shipped [`config.yml`](config.yml) enables only
-`brew_bundles_group` on Apps. It disables `applications_installed_group`,
-`flatpak_user_group`, `flatpak_system_group`, `brew_group`, and
-`brew_search_group`; all six Apps groups are enabled by built-in defaults.
-Administrators can enable `brew_group` for installed Homebrew inventory and
-the Brewfile exporter independently of collections.
+The shipped [`config.yml`](config.yml) enables both Apps groups,
+`brew_bundles_group` and `brew_group`. Administrators can disable `brew_group`
+to hide the installed inventory and Brewfile exporter without hiding collections.
 
 Whoever installs the `/usr/share` defaults owns them and may replace them
 during an upgrade. Administrators should put local changes in
@@ -125,19 +122,18 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 
 ### Applications Page (`applications_page`)
 
-When enabled and supported, Apps orders the external catalog launcher,
-Homebrew search/results, installed Flatpak applications, installed Homebrew
-casks, app collections, explicitly requested formulae, then Brewfile export.
-All six configuration groups remain supported; none is retired.
+Apps contains Homebrew app collections first, installed casks and explicitly
+requested formulae second, then the Brewfile exporter. It has no Flatpak
+inventory, external catalog launcher, or package search.
 
-- `applications_installed_group`: External software catalog launcher
-  - `app_id`: Application launched by "Browse all apps"; defaults to `io.github.kolunmi.Bazaar`
-- `flatpak_user_group`: Installed applications for the invoking account, with confirmed uninstall actions
-- `flatpak_system_group`: Installed applications for every account, with scope-aware uninstall confirmation
-- `brew_search_group`: Search Homebrew formulae and casks, with typed install actions
+Existing configurations must remove `applications_installed_group`,
+`flatpak_user_group`, `flatpak_system_group`, and `brew_search_group`.
+These retired names are rejected; leaving them in a file triggers the
+normal fail-closed configuration error.
+
 - `brew_group`: Installed Homebrew casks and explicitly requested formulae,
   with uninstall actions and formula pin/unpin actions, plus the Brewfile exporter
-- `brew_bundles_group`: Curated Homebrew package bundles, displayed after installed casks
+- `brew_bundles_group`: Curated Homebrew package bundles, displayed first
   - `bundles_paths`: Array of directories searched for immediate
     `*.Brewfile` entries. The built-in default (`internal/config/config.go`,
     used when no configuration file supplies the field) is
@@ -157,7 +153,7 @@ All six configuration groups remain supported; none is retired.
     - `script`: Absolute path to the script to execute. Required when `sudo: true`.
     - `sudo`: Boolean indicating if the script requires administrator privileges (uses pkexec). `sudo: true` is accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The rule is applied to the effective configuration, so an untrusted file may not enable a group whose actions include a privileged one, even when it inherits that action from the built-in defaults rather than declaring `sudo: true` itself.
 - `maintenance_freespace_group`: One routine cleanup action composing the shared post-update maintenance runner; removes cached downloads and unused supporting software, never installed apps, documents, or containers
-- `reset_group`: Recovery reset actions (disabled by default); gates user-scope Powerwash (removes user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`). Roll Back and Published versions (Pin, Return to stream) on the same Recovery screen are gated by `updates_page.bootc_updates_group`, not this key.
+- `reset_group`: Powerwash reset actions (disabled by default); gates Powerwash (removes user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`). Roll Back and Published versions (Pin, Return to stream) on the same Powerwash screen are gated by `updates_page.bootc_updates_group`, not this key.
 
 ### Features Page (`features_page`)
 
@@ -227,8 +223,6 @@ updates_page:
 applications_page:
   brew_group:
     enabled: false # Hide Homebrew packages
-  brew_search_group:
-    enabled: false # Hide Homebrew search and installs
   brew_bundles_group:
     enabled: false # Hide Homebrew bundles
 

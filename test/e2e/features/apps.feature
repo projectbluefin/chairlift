@@ -1,18 +1,25 @@
 @apps
 Feature: Apps destination
-  The Apps page lists what Homebrew and Flatpak report as installed, searches
-  both Homebrew namespaces, and confirms every Homebrew package mutation.
-  ChairLift runs with --dry-run, so a confirmed mutation is previewed in the
-  log, never executed, and its controls come back usable with the known
-  inventory unchanged. brew, flatpak, and gtk-launch are stubs serving a
-  fixed catalog (fixtures/stubs_apps.py) that record every invocation.
+  The Apps page offers Homebrew collections first, installed packages next,
+  and a Brewfile exporter last. Package mutations require confirmation.
+  ChairLift runs with --dry-run: commands are previewed, controls restored,
+  and known inventory preserved. Stubs record every actual invocation.
   Each scenario names its configuration: behave lists a Feature's tags after
   a Scenario's, so a Feature-level @config would override any scenario's.
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: Installed Homebrew formulae and casks are listed with their state
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=brew
+  Scenario: Collections lead the Homebrew-only inventory and exporter
     Given ChairLift is running
     When I open the "Apps" page
+    Then the Apps groups are ordered exactly
+      | title                 |
+      | App collections       |
+      | Homebrew applications |
+      | Command line tools    |
+      | Packages from Homebrew |
+    And I do not see "Firefox"
+    And I do not see "Text Editor"
+    And Flatpak was never asked to "list"
     Then the "Command line tools" apps group says "2 installed"
     And the "Homebrew applications" apps group says "1 installed"
     Then the "Command line tools" apps group shows exactly
@@ -28,79 +35,7 @@ Feature: Apps destination
       | title              |
       | visual-studio-code |
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: Search covers formulae and casks, and a new search replaces the old results
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I search Homebrew for "lazy"
-    Then the "Results" apps group says "3 results"
-    And Homebrew was asked to "search --formula lazy"
-    And Homebrew was asked to "search --cask lazy"
-    Then the "Results" apps group shows exactly
-      | title      |
-      | lazydocker |
-      | lazygit    |
-      | lazyterm   |
-    And the "lazygit" row says "Command line tool"
-    And the "lazyterm" row says "Application"
-    When I search Homebrew for "chezmoi"
-    Then the "Results" apps group says "1 result"
-    Then the "Results" apps group shows exactly
-      | title   |
-      | chezmoi |
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: A search neither namespace matches reports no results, not a failure
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I search Homebrew for "zzz-nothing"
-    Then the "Results" apps group says "No results"
-
-  @config.apps-bundles @stub.apps-brew-search-broken @stub.apps-flatpak
-  Scenario: A search Homebrew cannot complete says so
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I search Homebrew for "lazy"
-    Then the "Results" apps group says "Search could not be completed"
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: Cancelling an install changes nothing and leaves the result installable
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I search Homebrew for "lazy"
-    And I click the "Install" button in the "lazygit" row
-    Then a dialog titled "Install lazygit?" is shown
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the "Install" button in the "lazygit" row is sensitive
-    When I click the "Install" button in the "lazygit" row
-    Then a dialog titled "Install lazygit?" is shown
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the application log previews no "brew install"
-    And Homebrew was never asked to "install"
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario Outline: A confirmed install of a <kind> is previewed with its namespace
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I search Homebrew for "lazy"
-    And I click the "Install" button in the "<name>" row
-    Then a dialog titled "Install <name>?" is shown
-    And the dialog says "Downloads and installs this <kind> from Homebrew."
-    When I choose "Install" in the dialog
-    Then the application log previews "<command>" exactly once
-    And a toast on the Apps page says "[DRY-RUN] Preview: <name> would be installed — no changes made"
-    And the "Install" button in the "<name>" row is sensitive
-    And Homebrew was never asked to "install"
-    And I do not see "Installing from Homebrew…"
-
-    Examples:
-      | kind              | name     | command                      |
-      | command line tool | lazygit  | brew install lazygit         |
-      | application       | lazyterm | brew install --cask lazyterm |
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew
   Scenario: Cancelling an uninstall changes nothing and leaves the row usable
     Given ChairLift is running
     When I open the "Apps" page
@@ -113,7 +48,7 @@ Feature: Apps destination
     And the application log previews no "brew uninstall"
     And Homebrew was never asked to "uninstall"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew
   Scenario Outline: A confirmed uninstall of <name> is previewed and the known inventory is kept
     Given ChairLift is running
     When I open the "Apps" page
@@ -131,7 +66,7 @@ Feature: Apps destination
       | Command line tools | jq                 | 2 installed | brew uninstall jq                        |
       | Homebrew applications| visual-studio-code | 1 installed | brew uninstall --cask visual-studio-code |
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew
   Scenario Outline: <action> on <name> is confirmed, previewed, and restores both row controls
     Given ChairLift is running
     When I open the "Apps" page
@@ -149,24 +84,21 @@ Feature: Apps destination
       | Pin    | jq      | brew pin jq       | pin   | 1.7.1           |
       | Unpin  | ripgrep | brew unpin ripgrep | unpin | 14.1.1 • Pinned |
 
-  @config.apps-bundles @stub.apps-brew-unreadable @stub.apps-flatpak
-  Scenario: An unreadable Homebrew inventory says so without hiding Flatpak apps
+  @config.apps-bundles @stub.apps-brew-unreadable @stub.apps-collections
+  Scenario: An unreadable Homebrew inventory leaves collections and export usable
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Command line tools" apps group says "Could not read the list"
     And the "Homebrew applications" apps group says "Could not read the list"
-    And the "Installed applications" apps group says "2 installed"
+    And the "Install" button in the "Team tools" row is sensitive
+    And the "Export" button in the "Export package list" row is sensitive
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
-  Scenario: A host without Homebrew shows no Homebrew groups
+  @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
+  Scenario: A host without Homebrew omits Apps even with Flatpak available
     Given ChairLift is running
-    When I open the "Apps" page
-    Then the Apps page shows the "Installed applications" group
-    And the Apps page does not show the "Packages from Homebrew" group
-    And the Apps page does not show the "Find more apps and tools" group
-    And the Apps page does not show the "App collections" group
+    Then the sidebar omits "Apps"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
   Scenario: A confirmed app collection install is previewed and its button restored
     Given ChairLift is running
     When I open the "Apps" page
@@ -181,19 +113,20 @@ Feature: Apps destination
     And I do not see "Installing collection…"
     And Homebrew was never asked to "bundle"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew
   Scenario: A system with no app collections says none are offered
     Given ChairLift is running
     When I open the "Apps" page
     Then I see "No collections available"
     And I see "This system does not offer any app collections."
 
-  @config.apps-collections-only @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  @config.apps-collections-only @stub.apps-brew @stub.apps-collections
   Scenario: App collections install without the Homebrew package groups
     Given ChairLift is running
     When I open the "Apps" page
     Then the Apps page does not show the "Packages from Homebrew" group
-    And the Apps page does not show the "Find more apps and tools" group
+    And the Apps page does not show the "Command line tools" group
+    And the Apps page does not show the "Homebrew applications" group
     When I click the "Install" button in the "Team tools" row
     Then the application log contains "/bundles/team-tools.Brewfile"
     And the "Install" button in the "Team tools" row is sensitive
@@ -201,52 +134,7 @@ Feature: Apps destination
     And I do not see "Installing collection…"
     And the application log does not contain "panic"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: Flatpak apps are listed with the installation they belong to
-    Given ChairLift is running
-    When I open the "Apps" page
-    Then the "Installed applications" apps group says "2 installed"
-    Then the "Installed applications" apps group shows exactly
-      | title       |
-      | Firefox     |
-      | Text Editor |
-    And the "Firefox" row says "org.mozilla.firefox (140.0) • Installed for you"
-    And the "Text Editor" row says "org.gnome.TextEditor (48.0) • Installed for everyone"
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario Outline: A confirmed removal of a Flatpak app installed <scope> is previewed in that installation
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I click the remove button in the "<name>" row
-    Then a dialog titled "Uninstall <name>?" is shown
-    When I choose "Uninstall" in the dialog
-    Then the application log previews "<command>" exactly once
-    And a toast on the Apps page says "[DRY-RUN] Preview: <name> would be uninstalled — no changes made"
-    And the "Installed applications" apps group says "2 installed"
-    And the remove button in the "<name>" row is sensitive
-    And Flatpak was never asked to "uninstall"
-
-    Examples:
-      | scope        | name        | command                                        |
-      | for the user | Firefox     | flatpak uninstall -y --user org.mozilla.firefox |
-      | for everyone | Text Editor | flatpak uninstall -y --system org.gnome.TextEditor |
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-gtk-launch
-  Scenario: Browse all apps opens the configured software catalog
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I open the "Browse all apps" row with the keyboard
-    Then gtk-launch was asked to open "io.github.kolunmi.Bazaar"
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-gtk-launch-missing
-  Scenario: A software catalog that cannot be opened says so
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I open the "Browse all apps" row with the keyboard
-    Then gtk-launch was asked to open "io.github.kolunmi.Bazaar"
-    And a toast on the Apps page says "Could not open that application"
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
+  @config.apps-bundles @stub.apps-brew
   Scenario: Exporting the package list is previewed and writes nothing
     Given ChairLift is running
     When I open the "Apps" page
@@ -257,36 +145,12 @@ Feature: Apps destination
     And the home directory has no "Brewfile"
     And Homebrew was never asked to "bundle"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: The Homebrew search field has an accessible name
-    Given ChairLift is running
-    When I open the "Apps" page
-    Then the Homebrew search field has an accessible name
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
   Scenario: Every control on the Apps page, including every list row's, is named and operable
     Given ChairLift is running
     When I open the "Apps" page
-    And I search Homebrew for "lazy"
     Then the "Pin" button in the "jq" row is sensitive
-    And the "Install" button in the "lazyterm" row is sensitive
-    And the remove button in the "Firefox" row has an accessible name
-    And the remove button in the "Text Editor" row has an accessible name
+    And the "Install" button in the "Team tools" row is sensitive
+    And the "Uninstall" button in the "visual-studio-code" row is sensitive
+    And the "Export" button in the "Export package list" row is sensitive
     And every visible action control has an accessible name and an action
-
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
-  Scenario: Removing a Flatpak app asks for confirmation first, like a Homebrew package
-    Given ChairLift is running
-    When I open the "Apps" page
-    And I click the remove button in the "Firefox" row
-    Then a dialog titled "Uninstall Firefox?" is shown
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the remove button in the "Firefox" row is sensitive
-    And the application log previews no "flatpak uninstall"
-    When I click the remove button in the "Firefox" row
-    Then a dialog titled "Uninstall Firefox?" is shown
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the application log previews no "flatpak uninstall"
-    And Flatpak was never asked to "uninstall"

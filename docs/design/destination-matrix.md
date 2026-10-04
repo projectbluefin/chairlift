@@ -12,25 +12,26 @@ See [overview](overview.md#pages) for architecture and
 ## Destination map
 
 The seven primaries, in canonical order, are **Updates, Apps, Agents, Features,
-Livery, Maintenance, Help**. Recovery is the only detail, owned by Maintenance;
+Livery, Maintenance, Help**. The `recovery` route, titled **Powerwash**, is the
+only detail, owned by Maintenance;
 it has no sidebar row or accelerator. There is no System, Appearance, Developer
 Tools or Local AI tools route. Wallpaper is not a shipped control.
 
 | Route | Builder under `internal/views` | Content |
 | --- | --- | --- |
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
-| `applications` | `applications_page.go` | External app catalog, Homebrew search/results, installed Flatpaks, installed casks, collections, explicitly requested formulae and Brewfile export, in that order |
+| `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
 | `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and locked printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
-| `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Recovery entry |
+| `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
 | `recovery` | `recovery.go`, `reset.go`, `versions.go` | Previous-deployment rollback, live published-version reads, confirmed pin/return-to-stream and opt-in reset actions |
 
 ## Configuration references and owners
 
 A configuration page is a stable YAML namespace, not a display title. Each
-`navigation.Ref` is `{Page, Group}`; Recovery consumes both Updates and
+`navigation.Ref` is `{Page, Group}`; Powerwash consumes both Updates and
 Maintenance namespaces. A shared group does not authorize a second state owner
 or a duplicated builder. This table covers the current `config.SchemaGroups`
 inventory; derive schema additions from source rather than a frozen count.
@@ -38,17 +39,13 @@ inventory; derive schema additions from source rather than a frozen count.
 | Configuration page | Group | Current mount / owner |
 | --- | --- | --- |
 | `updates_page` | `automatic_updates_group` | Updates; `onAutomaticUpdatesToggled`, observed through `internal/autoupdate`, writes via `ublue.SetAutomaticUpdates` |
-| `updates_page` | `bootc_updates_group` | Updates staging/Compare and Recovery rollback/catalog/pin/unpin; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked`, `onPublishedVersionsClicked`, `confirmPin` / `runPin`, `confirmReturnToStream` / `runReturnToStream` |
+| `updates_page` | `bootc_updates_group` | Updates staging/Compare and Powerwash rollback/catalog/pin/unpin; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked`, `onPublishedVersionsClicked`, `confirmPin` / `runPin`, `confirmReturnToStream` / `runReturnToStream` |
 | `updates_page` | `flatpak_updates_group` | Updates applications source; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_updates_group` | Updates developer-tools source; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_trust_group` | Updates; `confirmTrustTap` / `trustTap`, unprivileged `homebrew.TrustPackages` |
 | `updates_page` | `channel_group` | Updates Advanced; `onChannelToggled` / `onDriverSwitchClicked`, fixed ublue helper |
 | `updates_page` | `bootc_status_group` | Updates system-version readout; `loadSystemVersion`, read-only bootc state |
-| `applications_page` | `applications_installed_group` | Apps external catalog launcher; `launchApp`, defaulting to Bazaar through configurable `app_id` |
-| `applications_page` | `brew_search_group` | Apps formula/cask search and confirmed installs; `onHomebrewSearch`, `confirmHomebrewInstall` / `installHomebrewSearchResult` |
-| `applications_page` | `flatpak_user_group` | Apps user-scope Flatpak inventory and confirmed removal; `loadFlatpakApplications`, `confirmFlatpakUninstall` / `runFlatpakUninstall` |
-| `applications_page` | `flatpak_system_group` | Apps system-scope Flatpak inventory and confirmed removal; the same loader and removal handlers, with scope-specific confirmation |
-| `applications_page` | `brew_bundles_group` | Apps collections, after installed casks and before requested formulae; `loadBrewBundles`, shared collection install/progress handling |
+| `applications_page` | `brew_bundles_group` | Apps collections, shown first; `loadBrewBundles`, shared collection install/progress handling |
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
@@ -63,19 +60,18 @@ inventory; derive schema additions from source rather than a frozen count.
 | `livery_page` | `livery_dock_group` | Livery Files application mark/login rotation; `livery.Dock` controller, not a dock-only icon |
 | `maintenance_page` | `maintenance_freespace_group` | Maintenance manual cleanup and unified post-update cleanup; `updateproviders.CleanupGroup`, one typed cleanup runner |
 | `maintenance_page` | `maintenance_cleanup_group` | Maintenance configured `actions[]`; `runMaintenanceAction` → `pageview.MaintenanceCommand` → `internal/maintenanceexec` |
-| `maintenance_page` | `reset_group` | Recovery Powerwash/Factory Reset; `onPowerwashClicked` / `onFactoryResetClicked`, each confirmed before dispatch |
+| `maintenance_page` | `reset_group` | Powerwash detail Powerwash/Factory Reset; `onPowerwashClicked` / `onFactoryResetClicked`, each confirmed before dispatch |
 | `help_page` | `help_resources_group` | Help website/issues/chat; `openURL` through `internal/launcher` |
 
 Important shared boundaries:
 
 - `channel_group` gates both release-channel and graphics-driver changes **in
   Updates**; no System destination or replacement configuration key exists.
-- Homebrew has one installed inventory loader and generation guard. Search has
-  its own generation; confirmed actions refresh installed rows only after live
-  success. Collections remain independently configurable and nil-safe when
+- Homebrew has one installed inventory loader and generation guard; confirmed
+  actions refresh installed rows only after live success. Collections remain independently configurable and nil-safe when
   `brew_group` is disabled. Export's handler file does not change its Apps mount.
-- `bootc_updates_group` retains its Updates namespace for Recovery reads/actions.
-  Recovery is offered only when its Maintenance ancestor is visible and one
+- `bootc_updates_group` retains its Updates namespace for Powerwash reads/actions.
+  The Powerwash detail is offered only when its Maintenance ancestor is visible and one
   of its page-qualified refs is effectively enabled.
 - `maintenance_freespace_group` gates both manual and post-update cleanup.
   Configured administrator scripts are a separate opt-in surface, not cleanup
@@ -83,7 +79,10 @@ Important shared boundaries:
 - Legacy `system_page` is validated migration input, not a current schema page
   or route: status/channel settings migrate to Updates; information/health
   groups have no runtime effect. Separate package-manager cleanup groups are
-  retired and must not be revived.
+  retired and must not be revived. The retired Apps groups
+  (`applications_installed_group`, `flatpak_user_group`, `flatpak_system_group`,
+  `brew_search_group`) are likewise accepted, validated and stripped; they have
+  no route or runtime effect.
 
 ## Action and state boundaries
 
@@ -105,8 +104,8 @@ Provider-specific safety remains with each live owner:
   fixed unpin word crosses pkexec, never a registry-supplied image reference.
   Roll Back uses the existing previous deployment and completes its gate after
   live success, without restarting.
-- Flatpak removals and Homebrew uninstall/pin actions confirm intent and retain
-  typed target/scope identity. Failure and preview restore controls; refresh
+- Homebrew uninstall/pin actions confirm intent and retain typed target
+  identity. Failure and preview restore controls; refresh
   generations reject stale workers. Visible retryable controls reset their gates.
 - Developer Mode opens onboarding tabs and optional Pulp/feed work only after a
   confirmed live enable. `install_pulp` and `stage_feeds` are opt-in user-scope
@@ -163,7 +162,7 @@ for each mutation and observation.
 
 | Action | Single owner / relationship |
 | --- | --- |
-| Sidebar, Alt+number, F1 Help, Recovery entry/Back | `Window.navigateToPage` applies `navigation.Resolve`: selected primary row, visible child, title, collapsed-content reveal and recorded Back parent |
+| Sidebar, Alt+number, F1 Help, Powerwash entry/Back | `Window.navigateToPage` applies `navigation.Resolve`: selected primary row, visible child, title, collapsed-content reveal and recorded Back parent |
 | Preferences menu aliases | `Window.buildPreferences`, shared Updates GSettings source/maintenance preferences; no new configurable group |
 | Check | `UpdateShell.StartCheck`, same coordinator as the page action |
 | Configured Help website | `Window.setupActions`, GIO launch when a URL is present |
@@ -174,7 +173,7 @@ for each mutation and observation.
 | Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
 
 The visible primary inventory is fixed for the session and Alt+number compacts
-over it. Details never acquire shortcuts. Recovery keeps Maintenance selected;
+over it. Details never acquire shortcuts. Powerwash keeps Maintenance selected;
 Back resolves the recorded primary through the same navigation path. A known
 hidden/unbuilt detail resolves to its visible ancestor, then Help; a known
 hidden/unbuilt primary resolves to Help. Only an unknown route is rejected.

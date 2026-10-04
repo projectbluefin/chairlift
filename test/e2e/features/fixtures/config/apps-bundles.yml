@@ -5,15 +5,7 @@
 # that directory; without it the directory is missing, which
 # internal/homebrew.AvailableBundles treats as "nothing offered here".
 applications_page:
-  applications_installed_group:
-    enabled: true
-  flatpak_user_group:
-    enabled: true
-  flatpak_system_group:
-    enabled: true
   brew_group:
-    enabled: true
-  brew_search_group:
     enabled: true
   brew_bundles_group:
     enabled: true

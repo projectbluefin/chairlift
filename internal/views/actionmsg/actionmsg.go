@@ -74,22 +74,8 @@ func BundleInstall(dryRun bool, name string) BundleInstallDecision {
 	}
 }
 
-// Install returns the toast text for a Homebrew package install. The
-// wrapper package (internal/homebrew) already skips the state-changing
-// `brew install` command under dry-run — install is one of homebrew's
-// stateChangingCommands — so this function only selects which string to
-// show: a preview when dryRun is true, or a fixed completion message when
-// the install actually ran.
-func Install(dryRun bool, pkgName string) string {
-	if dryRun {
-		return fmt.Sprintf("[DRY-RUN] Preview: %s would be installed — no changes made", pkgName)
-	}
-	return fmt.Sprintf("%s installed", pkgName)
-}
-
-// Uninstall returns toast text for a Homebrew package or Flatpak application
-// uninstall. Both wrappers skip their state-changing uninstall command under
-// dry-run.
+// Uninstall returns toast text for a Homebrew package uninstall.
+// The wrapper skips the state-changing command under dry-run.
 func Uninstall(dryRun bool, name string) string {
 	if dryRun {
 		return fmt.Sprintf("[DRY-RUN] Preview: %s would be uninstalled — no changes made", name)

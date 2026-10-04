@@ -98,7 +98,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
   Scenario: Disabling one Maintenance group hides only its rows
     Given ChairLift is running
     When I select "Maintenance" in the sidebar
-    Then I see "Recovery"
+    Then I see "Powerwash"
     And I do not see "Free up space"
     And the "Clean up" button is not shown
 
@@ -111,16 +111,13 @@ Feature: Fail-closed configuration and configuration-driven visibility
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: The capability floor hides pages and groups that configuration enables
     Given ChairLift is running
-    Then the sidebar lists exactly "Updates, Apps, Features, Livery, Maintenance, Help"
-    When I select "Apps" in the sidebar
-    Then I see "Browse all apps"
-    And I do not see "App collections"
+    Then the sidebar lists exactly "Updates, Features, Livery, Maintenance, Help"
     When I select "Help" in the sidebar
     And I expand the "Why is something missing?" row with the keyboard
     Then the "Agent Mode" row says "Needs Homebrew"
     And the "Troubleshooting" row says "Needs Homebrew"
     And the "App updates" row says "Needs Flatpak"
-    And the "Recovery" row says "Needs Flatpak or Distrobox"
+    And the "Powerwash" row says "Needs Flatpak or Distrobox"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: An update source the host cannot back is not blamed on the administrator
@@ -136,7 +133,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Then the "Packages from Homebrew" row says "Needs Homebrew"
     And the feature availability list omits "Agent Mode"
     And the feature availability list omits "Troubleshooting"
-    And the feature availability list omits "Recovery"
+    And the feature availability list omits "Powerwash"
 
   @env.CHAIRLIFT_CAPABILITIES=flatpak,brew,podman,bootc-stage
   Scenario Outline: The legacy system_page channel group migrates onto Updates

@@ -1,9 +1,4 @@
-"""Steps for the Apps destination (applications_page).
-
-Installed apps and search results are ordinary AdwPreferencesGroup lists.
-Text is entered through EditableText and committed with Return once Tab
-has reached the search entry.
-"""
+"""Steps for the Homebrew-only Apps destination and shared keyboard row helpers."""
 
 import os
 
@@ -12,7 +7,7 @@ from behave import step, then
 import chairlift_atspi as atspi
 from common import content, read_log, text_present
 
-# Bound keyboard traversal so an inaccessible search control fails clearly.
+# Bound keyboard traversal so an inaccessible control fails clearly.
 MAX_TABS = 80
 
 
@@ -79,14 +74,6 @@ def step_expand(context, title, group_title):
 
 
 
-def search_entry(context):
-    return atspi.find(
-        group(context, "Find more apps and tools"),
-        lambda n: atspi.role(n) in atspi.TEXT_ROLES,
-        "the Homebrew search entry",
-    )
-
-
 def focus_by_tab(context, target, what):
     """Press Tab until target has keyboard focus."""
     for _ in range(MAX_TABS):
@@ -134,6 +121,23 @@ def step_group_absent(context, title):
     assert gone, f"the Apps page still shows a group titled {title!r}"
 
 
+@then("the Apps groups are ordered exactly")
+def step_group_order(context):
+    want = [row["title"] for row in context.table]
+
+    def titles():
+        root = group(context, want[0], timeout=1).parent
+        return [atspi.name(node) for node in atspi.children(root)
+                if atspi.role(node) == "grouping" and atspi.name(node)]
+
+    assert atspi.poll(lambda: titles() == want), f"Apps groups are {titles()}, want {want}"
+
+
+@then('the sidebar omits "{title}"')
+def step_sidebar_omits(context, title):
+    titles = [atspi.label_text(row) for row in atspi.sidebar_rows(context.app)]
+    assert title not in titles, f"sidebar still lists {title!r}: {titles}"
+
 # ---------------------------------------------------------------- visible lists
 
 
@@ -156,34 +160,6 @@ def step_group_rows(context, title):
         f"the {title!r} group shows {group_rows(context, title)}, want {want}"
 
 
-# ---------------------------------------------------------------- search
-
-
-@step('I search Homebrew for "{query}"')
-def step_search(context, query):
-    """Enter the query and commit it with Return, as a keyboard user does.
-
-    The entry's AT-SPI "activate" action does not emit GtkSearchEntry's
-    ::activate, which is what starts a search, so the entry is reached with
-    Tab and the query committed with Return.
-    """
-    entry = search_entry(context)
-    editable = entry.get_editable_text_iface()
-    assert editable is not None, "the Homebrew search entry is not editable"
-    assert editable.set_text_contents(query), "the Homebrew search entry refused the query"
-    assert atspi.poll(lambda: atspi.text(search_entry(context)) == query), "the query never reached the entry"
-    focus_by_tab(context, search_entry(context), "the Homebrew search entry")
-    atspi.press("Return")
-
-
-@then("the Homebrew search field has an accessible name")
-def step_search_named(context):
-    entry = search_entry(context)
-    assert atspi.name(entry) or atspi.description(entry), (
-        "the Homebrew search entry has neither an accessible name nor a description"
-    )
-
-
 # ---------------------------------------------------------------- keyboard rows
 
 
@@ -192,39 +168,6 @@ def step_open_row(context, title):
     row = atspi.row_containing(content(context), title)
     focus_by_tab(context, row, f"the {title!r} row")
     atspi.press("Return")
-
-
-# ---------------------------------------------------------------- icon buttons
-
-
-@step('I click the remove button in the "{row}" row')
-def step_click_remove(context, row):
-    target = atspi.row_containing(content(context), row)
-    buttons = atspi.find_all(target, lambda n: atspi.role(n) in atspi.BUTTON_ROLES and atspi.actions(n))
-    assert len(buttons) == 1, f"row {row!r} has {len(buttons)} operable buttons, want 1"
-    context.apps_remove_button = buttons[0]
-    atspi.activate(buttons[0])
-
-
-@then('the remove button in the "{row}" row has an accessible name')
-def step_remove_named(context, row):
-    target = atspi.row_containing(content(context), row)
-    buttons = atspi.find_all(target, lambda n: atspi.role(n) in atspi.BUTTON_ROLES and atspi.actions(n))
-    assert buttons, f"row {row!r} has no operable button"
-    nameless = [atspi.description(b) for b in buttons if not atspi.name(b)]
-    assert not nameless, f"row {row!r} has icon buttons with no accessible name (descriptions: {nameless})"
-
-
-@then('the remove button in the "{row}" row is sensitive')
-def step_remove_sensitive(context, row):
-    """A cancelled, failed, or previewed removal hands the button back."""
-
-    def check():
-        target = atspi.row_containing(content(context), row, timeout=1)
-        buttons = atspi.find_all(target, lambda n: atspi.role(n) in atspi.BUTTON_ROLES and atspi.actions(n))
-        return len(buttons) == 1 and atspi.sensitive(buttons[0])
-
-    assert atspi.poll(check), f"the remove button in the {row!r} row never became sensitive"
 
 
 # ---------------------------------------------------------------- toasts
@@ -244,24 +187,11 @@ def step_brew_never(context, command):
     assert not ran, f"brew ran {command!r} for real: {ran}"
 
 
-@then('Homebrew was asked to "{argv}"')
-def step_brew_asked(context, argv):
-    assert atspi.poll(lambda: argv in calls(context, "brew")), (
-        f"brew was never run as {argv!r}; calls were {calls(context, 'brew')}"
-    )
-
-
 @then('Flatpak was never asked to "{command}"')
 def step_flatpak_never(context, command):
     ran = [line for line in calls(context, "flatpak") if line.split(" ", 1)[0] == command]
     assert not ran, f"flatpak ran {command!r} for real: {ran}"
 
-
-@then('gtk-launch was asked to open "{desktop_id}"')
-def step_gtk_launch(context, desktop_id):
-    assert atspi.poll(lambda: desktop_id in calls(context, "gtk-launch")), (
-        f"gtk-launch was never asked for {desktop_id!r}; calls were {calls(context, 'gtk-launch')}"
-    )
 
 
 @then('the application log previews "{command}" exactly once')

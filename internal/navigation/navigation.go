@@ -147,11 +147,7 @@ var routes = []Item{
 		Icon:  "application-x-executable-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("applications_page",
-			"applications_installed_group",
-			"flatpak_user_group",
-			"flatpak_system_group",
 			"brew_group",
-			"brew_search_group",
 			"brew_bundles_group",
 		),
 	},
@@ -215,7 +211,7 @@ var routes = []Item{
 	// internal/window, which is the duplication this table removes.
 	{
 		Name:   "recovery",
-		Title:  "Recovery",
+		Title:  "Powerwash",
 		Kind:   KindDetail,
 		Parent: "maintenance",
 		Refs: []Ref{

@@ -712,9 +712,6 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 			if refreshErr == nil {
 				uh.applyGamingState(state)
 			}
-			if !dryrun.Enabled() && len(changed) > 0 {
-				go uh.loadFlatpakApplications()
-			}
 			if len(failures) > 0 {
 				uh.toastAdder.ShowErrorToast(decision.Toast)
 			} else {

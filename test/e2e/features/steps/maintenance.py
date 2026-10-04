@@ -1,8 +1,8 @@
-"""Steps for the Maintenance page and its Recovery detail.
+"""Steps for the Maintenance page and its Powerwash detail.
 
 Shared vocabulary (navigation, buttons, rows, dialogs, the action journal)
 comes from common.py; this module adds only what the Maintenance destination
-needs: reaching the Recovery detail by keyboard, leaving it again, and
+needs: reaching the Powerwash detail by keyboard, leaving it again, and
 checking what the fake package tools from fixtures/stubs_maintenance.py were
 asked to do.
 
@@ -18,8 +18,8 @@ from behave import step, then
 import chairlift_atspi as atspi
 
 MAINTENANCE = "Maintenance"
-RECOVERY = "Recovery"
-# The Recovery entry on the Maintenance page is a plain activatable
+RECOVERY = "Powerwash"
+# The Powerwash entry on the Maintenance page is a plain activatable
 # AdwActionRow; the free-space row is what tells the two pages apart.
 MAINTENANCE_ONLY_ROW = "Free up space"
 MAX_TAB_STOPS = 40
@@ -63,16 +63,16 @@ def _tool_calls(context):
         return []
 
 
-# ---------------------------------------------------------------- Recovery
+# ---------------------------------------------------------------- Powerwash
 
 
-@step("I open the Recovery detail")
+@step("I open the Powerwash detail")
 def step_open_recovery(context):
-    """Shift+Tab to the Maintenance page's Recovery row and press Return.
+    """Shift+Tab to the Maintenance page's Powerwash row and press Return.
 
     The row publishes no AT-SPI action and GTK 4 does not honour
     Component.GrabFocus, so keyboard traversal is how an assistive
-    technology user reaches it. Traversal runs backwards: Recovery is the
+    technology user reaches it. Traversal runs backwards: Powerwash is the
     page's last row, and Shift+Tab from the first sidebar row (where focus
     rests after the Alt+number shortcut) leaves the sidebar at once. Forward
     Tab would first walk the sidebar, and every sidebar Tab stop moves the
@@ -93,7 +93,7 @@ def step_open_recovery(context):
     step_recovery_shown(context)
 
 
-@then("the Recovery detail is shown")
+@then("the Powerwash detail is shown")
 def step_recovery_shown(context):
     def settled():
         return (
@@ -104,24 +104,24 @@ def step_recovery_shown(context):
         )
 
     assert atspi.poll(settled), (
-        f"Recovery detail not shown: sidebar selection {_selected_sidebar_titles(context)}, "
+        f"Powerwash detail not shown: sidebar selection {_selected_sidebar_titles(context)}, "
         f"back buttons {atspi.describe(_back_buttons(context))}"
     )
 
 
-@step("I go back from the Recovery detail")
+@step("I go back from the Powerwash detail")
 def step_recovery_back(context):
     buttons = atspi.poll(lambda: _back_buttons(context))
-    assert buttons, "the Recovery detail shows no back button"
+    assert buttons, "the Powerwash detail shows no back button"
     atspi.activate(buttons[0])
 
 
-@then('the Recovery back button is named "{wanted}"')
+@then('the Powerwash back button is named "{wanted}"')
 def step_recovery_back_named(context, wanted):
     buttons = atspi.poll(lambda: _back_buttons(context))
-    assert buttons, "the Recovery detail shows no back button"
+    assert buttons, "the Powerwash detail shows no back button"
     got = atspi.label_text(buttons[0])
-    assert got == wanted, f"the Recovery back button is announced as {got!r}, want {wanted!r}"
+    assert got == wanted, f"the Powerwash back button is announced as {got!r}, want {wanted!r}"
 
 
 # ---------------------------------------------------------------- journal

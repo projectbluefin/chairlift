@@ -89,16 +89,14 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Your apps | `applications_installed_group` | External software catalog launcher; `app_id` defaults to `io.github.kolunmi.Bazaar` |
-| Find more apps and tools | `brew_search_group` | Search Homebrew formulae and casks, with confirmed installs and visible results |
-| Installed user applications | `flatpak_user_group` | User-scope Flatpak inventory and confirmed removal |
-| Installed system applications | `flatpak_system_group` | System-scope Flatpak inventory and confirmed removal; the confirmation explains that removal affects every account |
-| App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions |
-| Packages from Homebrew | `brew_group` | Installed casks and explicitly requested formulae, with uninstall and formula pin/unpin actions, plus the Brewfile exporter |
+| App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
+| Homebrew packages | `brew_group` | Homebrew applications (installed casks), then Command line tools (explicitly requested formulae), then Packages from Homebrew containing the Brewfile exporter; uninstall and formula pin/unpin actions |
 
-Apps orders the catalog launcher and search/results before installed Flatpaks,
-installed casks, collections, explicitly requested formulae, and export.
-Dependency-only formulae do not appear in the inventory.
+Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
+do not appear in the inventory. Apps has no Flatpak inventory, external catalog
+launcher, or package search. The retired `applications_installed_group`,
+`flatpak_user_group`, `flatpak_system_group`, and `brew_search_group` keys are
+rejected; remove them as described in [CONFIG.md](../CONFIG.md).
 
 `brew_bundles_group` supports:
 
@@ -218,7 +216,7 @@ pair and unit file, and dry-run restores both switches without writes.
 |-------|-----|-------------|
 | Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other |
 | Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
-| Recovery | `reset_group` | Recovery utilities: Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back and Published versions (Pin, Return to stream) are gated by `updates_page.bootc_updates_group` |
+| Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back and Published versions (Pin, Return to stream) are gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
 
 `maintenance_cleanup_group` supports:
 
@@ -267,8 +265,6 @@ A configuration that disables all Homebrew features:
 ```yaml
 applications_page:
   brew_group:
-    enabled: false
-  brew_search_group:
     enabled: false
   brew_bundles_group:
     enabled: false

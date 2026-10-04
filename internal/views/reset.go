@@ -28,9 +28,9 @@ import (
 // response before anything runs, per the HIG's rule that destructive
 // dialogs are reserved for genuinely non-undoable actions — which these are.
 //
-// The reset rows are built on the Recovery detail page, so the dialogs are
-// parented to the Recovery page, never the Maintenance page. A reset is a
-// deliberate Recovery action, not a routine cleanup control. maintenance_page
+// The reset rows are built on the Powerwash detail page, so the dialogs are
+// parented to the Powerwash page, never the Maintenance page. A reset is a
+// deliberate Powerwash action, not a routine cleanup control. maintenance_page
 // guards reset_group and builds these rows on the recovery page; the rows are
 // gated by reset_group (disabled by shipped default), the same default
 // maintenance_cleanup_group uses.
@@ -55,7 +55,7 @@ const (
 // of them.
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle("Recovery")
+	group.SetTitle("Powerwash")
 	group.SetDescription("For when something has gone wrong. Each one asks you to confirm, and cannot be undone.")
 
 	powerwashRow := adw.NewActionRow()

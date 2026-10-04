@@ -51,7 +51,7 @@ type UserHome struct {
 	featuresPage     *adw.ToolbarView
 	liveryPage       *adw.ToolbarView
 	helpPage         *adw.ToolbarView
-	recoveryPage     *adw.ToolbarView // Recovery detail, reached from System, not a sidebar page
+	recoveryPage     *adw.ToolbarView // Powerwash detail, reached from Maintenance, not a sidebar page
 
 	// PreferencesPages inside each ToolbarView - keep references to prevent GC
 	agentsPrefsPage       *adw.PreferencesPage
@@ -64,31 +64,23 @@ type UserHome struct {
 	recoveryPrefsPage     *adw.PreferencesPage
 
 	// References for dynamic updates
-	installedFormulae   *adw.PreferencesGroup
-	installedCasks      *adw.PreferencesGroup
-	searchResults       *adw.PreferencesGroup
-	searchEntry         *gtk.SearchEntry
-	flatpakApplications *adw.PreferencesGroup
-	flatpakRows         rowset.Tracker[*adw.ActionRow] // Store references for cleanup
-	formulaeRows        rowset.Tracker[*adw.ActionRow]
-	caskRows            rowset.Tracker[*adw.ActionRow]
-	searchResultRows    rowset.Tracker[*adw.ActionRow]
-	brewBundlesGroup    *adw.PreferencesGroup
-	appInstallProgress  installProgress
-	searchInstalls      int
-	brewTrustGroup      *adw.PreferencesGroup
-	brewTrustRows       map[string]*adw.ActionRow
+	installedFormulae  *adw.PreferencesGroup
+	installedCasks     *adw.PreferencesGroup
+	formulaeRows       rowset.Tracker[*adw.ActionRow]
+	caskRows           rowset.Tracker[*adw.ActionRow]
+	brewBundlesGroup   *adw.PreferencesGroup
+	appInstallProgress installProgress
+	brewTrustGroup     *adw.PreferencesGroup
+	brewTrustRows      map[string]*adw.ActionRow
 	// Apps collections share one install gate per collection.
 	bundleInstalls map[string]*bundleInstall
 	bundleButtons  buttonRoute
 
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.
-	formulaButtons      buttonRoute
-	caskButtons         buttonRoute
-	flatpakButtons      buttonRoute
-	searchResultButtons buttonRoute
-	trustButtons        buttonRoute
+	formulaButtons buttonRoute
+	caskButtons    buttonRoute
+	trustButtons   buttonRoute
 	// confirmations routes every confirmation dialog the Apps and Updates
 	// pages present, one response each.
 	confirmations dialogRoute
@@ -231,7 +223,7 @@ type UserHome struct {
 	changelogGate     actionstate.Gate
 
 	// Published versions (the dated-build catalog, ADR-0013), listed on
-	// the Recovery page under Roll Back. runningVersion and
+	// the Powerwash page under Roll Back. runningVersion and
 	// previousVersion are the bootc versions of the booted and rollback
 	// deployments, recorded by loadBootcRollbackStatus.
 	publishedVersionsRow    *adw.ExpanderRow
@@ -302,21 +294,13 @@ type UserHome struct {
 
 	// Groups with deferred visibility
 
-	// Recovery detail navigation, wired by the window after construction.
-	// The System page opens Recovery; Recovery's back button returns to
-	// System. Recovery is a detail, not a sidebar page, so it is not part of
-	// navigation.Items() — see #241 for the canonical route.
+	// Powerwash detail navigation, wired by the window after construction.
+	// Maintenance opens the detail; its back button returns to Maintenance.
+	// The stable recovery route is a detail, not a sidebar page.
 	openRecoveryDetail  func()
 	closeRecoveryDetail func()
 
-	searchRefresh       actionstate.RefreshGate
 	brewPackagesRefresh actionstate.RefreshGate
-	// flatpakPackagesRefresh bounds overlapping Flatpak inventory reloads so
-	// only the newest reload may publish. Two uninstalls finishing close
-	// together each trigger a reload; without a generation guard an older,
-	// slower reload can complete last and re-add a removed row or overwrite
-	// a newer status. See chairlift#69.
-	flatpakPackagesRefresh actionstate.RefreshGate
 }
 
 // New creates a new UserHome views manager.
@@ -378,8 +362,6 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 	}
 	for _, source := range final.CompletedSources {
 		switch source {
-		case updateflow.Applications:
-			go uh.loadFlatpakApplications()
 		case updateflow.DeveloperTools:
 			go uh.loadHomebrewPackages()
 		case updateflow.OperatingSystem:

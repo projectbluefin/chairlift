@@ -36,7 +36,7 @@ import (
 //  2. Whatever maintenance the administrator configured, labelled as
 //     theirs. ChairLift knows nothing about these scripts, so they are never
 //     folded into the cleanup above.
-//  3. Recovery. Powerwash and Factory Reset are not maintenance, they are
+//  3. Powerwash. Powerwash and Factory Reset are not maintenance, they are
 //     what you reach for when something has already gone wrong, and they are
 //     separated visually and by an opt-in default (see reset.go).
 
@@ -55,12 +55,12 @@ func (uh *UserHome) buildMaintenancePage() {
 		uh.buildConfiguredTasksGroup(page)
 	}
 
-	// Recovery detail entry. The detail view houses rollback and reset.
+	// Powerwash detail entry. The detail view houses rollback and reset.
 	if uh.recoveryProvidersAvailable() {
 		recoveryGroup := adw.NewPreferencesGroup()
-		recoveryGroup.SetTitle("Recovery")
+		recoveryGroup.SetTitle("Powerwash")
 		recoveryRow := adw.NewActionRow()
-		recoveryRow.SetTitle("Recovery")
+		recoveryRow.SetTitle("Powerwash")
 		recoveryRow.SetSubtitle(pageview.RecoveryEntrySubtitle())
 		recoveryRow.SetActivatable(true)
 		icon := gtk.NewImageFromIconName("pan-end-symbolic")

@@ -47,15 +47,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
-				"pageview.FlatpakApplication",
-				"pageview.SearchResult(",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
-				`fmt.Sprintf("%s (%s)", app.ApplicationID, app.Version)`,
-				`row.SetSubtitle(result.Kind.DisplayName())`,
 				"pageview.BrewBundle(",
-				`"Brew Bundle Dump"`,
 				"~/Brewfile",
 				`fmt.Sprintf("Error: %v", err)`,
 				"homebrew.BundleInstall(",
@@ -272,22 +267,6 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 			if !strings.Contains(body, assertion) {
 				t.Errorf("%s.%s no longer preserves staged Compare/badge refresh: %s", check.file, check.function, assertion)
 			}
-		}
-	}
-}
-
-func TestUpdateAllRefreshesProviderInventories(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "views.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, call := range []string{"if final.Preview {", "range final.CompletedSources", "uh.loadFlatpakApplications()", "uh.loadHomebrewPackages()"} {
-		if !strings.Contains(string(source), call) {
-			t.Errorf("live Update All leaves installed inventory stale without %s", call)
 		}
 	}
 }

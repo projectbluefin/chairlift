@@ -104,7 +104,6 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "ReopenCommand"},       // goose-desktop (handed to the running session)
-	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"},    // gtk-launch
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},              // xdg-open
 }
 

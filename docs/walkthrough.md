@@ -67,7 +67,7 @@ On systems that update as a whole, **Operating system** holds
 **System Updates**, which downloads the next system version by itself, and
 **What's changing**, which lists exactly what software a pending update will
 add, remove, or upgrade once you press **Compare**. **Roll Back** — returning to
-the previous version if an update went badly — lives under **Recovery**, and
+the previous version if an update went badly — lives under **Powerwash**, and
 only appears where a previous deployment actually exists.
 
 Each other source keeps its own group for when you want to update just one
@@ -94,24 +94,18 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**Browse all apps** opens the external software catalog (Bazaar by default).
-**Find more apps and tools** lets you search across both Homebrew formulae and
-casks. Results identify the package kind and ask before installing from this
-third-party source. **Installed applications** shows apps already installed as
-user- and system-scope Flatpaks, with confirmed removal; removing a system
-application affects every account.
+**App collections** lead the page and identify Homebrew as a third-party
+source. Installs show native activity and streamed command progress while they
+run, using the same controls in the explicit setup flow.
 
-**Homebrew applications** lists installed casks, followed by **App collections**,
-then **Command line tools** for explicitly requested formulae (the packages Homebrew manages).
-Dependency-only formulae do not crowd the inventory. Removing a Homebrew package asks first;
-formulae also offer pin and unpin actions. Collection installs show native
-activity and streamed command progress, using the same controls in setup.
+**Homebrew applications** and **Command line tools** follow: installed casks
+first, then explicitly requested formulae (the packages Homebrew manages).
+Dependency-only formulae do not crowd the inventory. Removing a package asks
+first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
+external catalog launcher, or package search here.
 
-The screenshot shows these configurable controls; the shipped profile enables
-collections but hides the catalog, search and installed-package groups.
-
-Finally, **Export package list** saves a Brewfile so you can restore your
-Homebrew packages on another machine.
+Finally, **Packages from Homebrew** contains **Export package list**, which
+saves a Brewfile so you can restore your Homebrew packages on another machine.
 Export shows **Exporting…** and an activity spinner until it finishes, then
 becomes available again, including after a failed export.
 
@@ -297,17 +291,17 @@ One button. **Free up space** removes old downloads and supporting software
 nothing uses any more, and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
 spinner remains visible while cleanup is running. Below it sit any
-**Maintenance tasks** whoever set up this computer added. **Recovery**
-holds the recovery actions (under **Maintenance → Recovery**): **Roll Back**
+**Maintenance tasks** whoever set up this computer added. **Powerwash**
+holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
 returns to the previous system version if an update went badly, **Powerwash**
 removes the apps you installed and your development containers, and **Factory Reset**
 reinstalls the system from scratch.
 Those stay hidden normally until turned on or until a rollback exists.
-Recovery also has **Published versions**, which asks the image registry for
+Powerwash also has **Published versions**, which asks the image registry for
 the versions of your release stream from the last 90 days and lists one per
 day, marking the one you are running and the one Roll Back returns to. Each
 published build offers a **Pin** button to freeze updates at that specific
-dated version. When booted on a dated version, Recovery offers **Return to stream**
+dated version. When booted on a dated version, Powerwash offers **Return to stream**
 to switch back to receiving regular stream updates. Both pin and return-to-stream
 ask you to confirm before applying the switch at the next restart.
 

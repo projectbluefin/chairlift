@@ -1,6 +1,6 @@
 # Control Center
 
-Control Center is a GTK4/Libadwaita system management GUI for [Bluefin](https://github.com/projectbluefin/bluefin), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew and Flatpak applications, bootc system updates, system features (via updex), and maintenance tasks.
+Control Center is a GTK4/Libadwaita system management GUI for [Bluefin](https://github.com/projectbluefin/bluefin), written in Go using [puregotk](https://codeberg.org/puregotk/puregotk) bindings (no CGO). It provides a unified interface for managing Homebrew applications, Homebrew and Flatpak updates, bootc system updates, system features (via updex), and maintenance tasks.
 
 The project, its repository, and its binaries are named ChairLift; Control
 Center is the name the product ships under, so the paths, package names, and
@@ -17,18 +17,19 @@ point.
 
 ## Pages
 
-Control Center has seven primary destinations, in sidebar order. The shipped
-[`config.yml`](../config.yml) hides several Apps groups; this inventory describes
-the available surface, not controls guaranteed on every host.
+Control Center has seven primary destinations, in sidebar order. Both Apps
+groups are enabled in the shipped [`config.yml`](../config.yml); their controls
+require Homebrew. This inventory describes the available surface, not controls
+guaranteed on every host.
 
 | Page | Description |
 |------|-------------|
 | **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
-| **Apps** | Open the external software catalog, search Homebrew formulae and casks, manage installed Flatpaks and Homebrew packages, install app collections, and export a Brewfile. |
+| **Apps** | App collections first, then Homebrew applications (installed casks), Command line tools (explicitly requested formulae), and Packages from Homebrew with Brewfile export. Installed packages offer uninstall and formula pin/unpin actions. No Flatpak inventory, external catalog launcher, or package search. |
 | **Agents** | Agent Mode: run a language model on this computer (llmman); Troubleshooting: set up Goose Desktop with read-only Linux tools and launch it on that model; and contribute to Bluefin. |
 | **Features** | Distribution features, Developer Mode, WSL Mode (nsl or Lima), Docker, individually chosen IDEs/editors, selective Gaming, and safely locked printer applications. |
 | **Livery** | Choose your profile picture and the marks shown on the app launcher button, the top-bar menu, and Files. |
-| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and open Recovery: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
+| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and Powerwash: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
 | **Help** | Links to the project website, issue tracker, and community documentation, plus system diagnostics. |
 
 A functional page is omitted when all of its groups are disabled. Help is
@@ -60,10 +61,9 @@ Runtime visibility depends on the group:
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
 - Agents is hidden where Homebrew is absent, because Agent Mode installs
   llmman through it;
-- Apps groups for Homebrew and Flatpak, and their Updates groups, are omitted
-  by the capability floor when their backing tool is absent. The external
-  catalog launcher is independent. A tool that is present but fails reports
-  the failure in its row;
+- Apps requires Homebrew; Updates groups for Homebrew and Flatpak are omitted
+  by the capability floor when their backing tool is absent; a tool that is
+  present but fails reports the failure in its row;
 - Features hides its optional-features group when Updex lists none, and keeps
   it with an error description when the listing fails;
 - Livery hides its top-bar section on KDE Plasma or when the Custom Command
@@ -79,7 +79,7 @@ controls after construction. See the [configuration reference](reference.md).
 | Tool | Used For |
 |------|----------|
 | Homebrew | Package management (formulae, casks, bundles) |
-| Flatpak | Apps inventory/removal and external catalog launch, Updates, Gaming installs, and maintenance/reset operations |
+| Flatpak | Updates, Gaming installs, and maintenance/reset operations; no Apps inventory or catalog launcher |
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | Updex | System feature toggles |
 | llmman (installed by Agent Mode through Homebrew) | The Agents page's local model server |

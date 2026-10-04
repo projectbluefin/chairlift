@@ -101,14 +101,6 @@ type Decision struct {
 	CompleteControl bool
 }
 
-// PackageInstall distinguishes a command failure, a successful dry-run
-// preview, and a successful live install from a search result. Only the live
-// install permanently completes the row control and refreshes installed
-// packages.
-func PackageInstall(succeeded, dryRun bool) Decision {
-	return completedPackageMutation(succeeded, dryRun)
-}
-
 // PackageUninstall decides whether an installed-package uninstall control
 // resets or completes and whether the installed inventory must refresh.
 func PackageUninstall(succeeded, dryRun bool) Decision {

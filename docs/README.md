@@ -110,8 +110,8 @@ are listed in [org-adrs.md](org-adrs.md).
   authenticated-admin boundary, family inventory, and verified image state
 
 - [design/destination-matrix.md](design/destination-matrix.md) — current
-  seven-primary-page and Recovery action ownership, with page-qualified config
-  references; no proposed sidebar cutover
+  seven-primary-page and Powerwash detail action ownership, with page-qualified
+  config references; no proposed sidebar cutover
 
 ### Specs
 

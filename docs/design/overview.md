@@ -94,14 +94,14 @@ this inventory, independently of the original YAML namespace names.
 | Page | File under `internal/views/` | Current purpose |
 | --- | --- | --- |
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
-| Apps | `applications_page.go` | External catalog, Homebrew search/results, installed Flatpaks, installed casks, app collections, explicitly requested formulae, then Brewfile export |
+| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no Flatpak inventory, external catalog launcher or package search |
 | Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
 | Features | `features_page.go` (+ `printers_page.go`) | Distribution features, Developer Mode, Gaming Mode, and Printers |
 | Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
-| Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Recovery entry |
+| Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
-Recovery is an existing detail (route `recovery`) built by `recovery.go` and reached from
+Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
 Maintenance, with rollback, published-version reads with pin and return-to-stream
 actions, and opt-in reset controls. There is no current System primary page;
 machine-wide desktop settings belong to the desktop's own settings application.
@@ -473,7 +473,7 @@ Each wrapper in `internal/` follows a consistent shape:
 - Reads `dryrun.Enabled()` from the single process-wide `internal/dryrun` package (see "Dry-run mode" above) rather than keeping a package-level flag
 - `IsInstalled()` to check tool availability, plus `IsInstalledCached()` (`sync.Once`) for use from views during async startup
 - Homebrew, Flatpak, and Updex implement both `IsInstalled()` and `IsInstalledCached()`
-- List/Search/Install/Uninstall/Update functions
+- List/Install/Uninstall/Update functions
 - Context-based timeouts. Homebrew and Flatpak both use a two-class model selected per invocation by an unexported `commandTimeout(args)` helper: 30s for read-only commands, 30m for state-changing ones (the keys of each package's `stateChangingCommands` map). updex uses 5min and bootc 30min.
 - Custom error types where needed
 
@@ -751,11 +751,10 @@ sends `ublue.Restart` through the `chairlift-helper` `restart` subcommand.
 Its argv is the fixed `systemctl reboot` (`ubluehelper.RestartArgs`) with no
 delay and no target; scheduled restarts would each need their own action.
 
-After a live run, `UserHome.OnUpdateFinished` refreshes installed Flatpak
-inventory for a completed applications source and Homebrew inventory for
-completed developer tools. When the OS source completed, it re-reads status
-to refresh Compare references. The coordinator remains the badge owner.
-A preview refreshes nothing.
+After a live run, `UserHome.OnUpdateFinished` refreshes the installed Homebrew
+inventory when its source completed and, when the OS source completed,
+re-reads status to refresh Compare references. The coordinator remains the
+badge owner. A preview refreshes nothing.
 `UpdateShell.notifyUpdateComplete` sends the single desktop notification
 (see below) and skips previews.
 
@@ -1206,7 +1205,7 @@ screen reached from the primary that owns it — `Parent` names that primary, no
 `Refs` entry of a detail is inferred from its display name, and it acquires
 neither a row nor an accelerator: `Shortcuts` and `Bindings` skip it
 structurally, so a detail can never be advertised or registered by accident.
-Recovery is the live detail. It is a content-stack child of Maintenance, whose
+Powerwash is the live detail. It is a content-stack child of Maintenance, whose
 row stays selected while it is shown, and it draws on two configuration
 namespaces at once — `bootc_updates_group` on `updates_page` for its rollback,
 pin, and return-to-stream controls and `reset_group` on `maintenance_page` for its
@@ -1226,18 +1225,18 @@ The accelerators are:
 - `F1` → navigate to Help (the same `win.navigate-help` action as Help's
   current compacted Alt+number binding)
 
-Mouse row activation, keyboard navigation actions, and the Recovery detail's
+Mouse row activation, keyboard navigation actions, and the Powerwash detail's
 entry row and Back button all call `Window.navigateToPage`. That method calls
 `navigation.Resolve` against `Window.navRoutes` — `navigation.VisibleRoutes`,
 the visible primaries plus the details they offer, computed once beside the
 sidebar's `navItems` — with the window's built pages as the construction seam
-(the Recovery ToolbarView is registered there like any primary), and enters a
+(the Powerwash ToolbarView is registered there like any primary), and enters a
 route by applying all of its state changes: select the compacted sidebar row,
 set the stack's visible child, update the content-page title, set
 `NavigationSplitView.show-content` true so a collapsed layout reveals the
 destination, and record the transition's `Back` primary in `Window.backRoute`.
 A detail resolves to its ancestor's row index with its own title, its own
-child name, and the ancestor its Back control returns to, so Recovery keeps the
+child name, and the ancestor its Back control returns to, so Powerwash keeps the
 Maintenance row selected while it is shown; `navigateBack` resolves that
 recorded primary through the same path and does nothing while a primary is
 shown. `Resolve` rejects only a name the canonical inventory does not declare.
@@ -1252,7 +1251,7 @@ groups disabled, each builder-backed group individually enabled, the Help-only
 fallback, compacted indices/accelerators, the hidden-primary and hidden-detail
 fallbacks, unknown-name rejection, the complete advertised-to-registered
 shortcut inventory, the F1 Help binding, and static app/window wiring —
-including that the Recovery callbacks resolve through `navigateToPage` rather
+including that the Powerwash callbacks resolve through `navigateToPage` rather
 than setting the stack child or title directly. No `_test.go` is added to the
 puregotk-importing `internal/window` or `internal/app` packages.
 

@@ -84,32 +84,13 @@ type Package struct {
 	Dependencies       []string `json:"dependencies,omitempty"`
 }
 
-// SearchResult represents a search result
-type SearchResult struct {
-	Name string
-	Kind PackageKind
-}
-
-// PackageKind identifies which Homebrew install namespace a search result
-// belongs to. Formulae and casks can share a name, so the kind must travel
-// with the result all the way to the install command.
+// PackageKind identifies the Homebrew formula or cask namespace.
 type PackageKind string
 
 const (
 	Formula PackageKind = "formula"
 	Cask    PackageKind = "cask"
 )
-
-// DisplayName returns what the kind is, in words a person recognizes.
-// "Formula" and "Cask" are Homebrew's own vocabulary and say nothing about
-// what the package turns out to be, which is the only thing a row or a
-// confirmation dialog needs to convey.
-func (k PackageKind) DisplayName() string {
-	if k == Cask {
-		return "Application"
-	}
-	return "Command line tool"
-}
 
 // stateChangingCommands are commands that modify system state
 var stateChangingCommands = map[string]bool{
@@ -485,55 +466,6 @@ func ListOutdated() ([]Package, error) {
 	}
 
 	return packages, nil
-}
-
-// Search searches both Homebrew namespaces and returns typed results.
-func Search(query string) ([]SearchResult, error) {
-	return searchWith(runBrewCommand, query)
-}
-
-func searchWith(run func(...string) (string, error), query string) ([]SearchResult, error) {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return nil, nil
-	}
-
-	formulae, err := searchKind(run, query, "--formula", Formula)
-	if err != nil {
-		return nil, err
-	}
-	casks, err := searchKind(run, query, "--cask", Cask)
-	if err != nil {
-		return nil, err
-	}
-	return append(formulae, casks...), nil
-}
-
-func searchKind(run func(...string) (string, error), query, flag string, kind PackageKind) ([]SearchResult, error) {
-	output, err := run("search", flag, query)
-	if err != nil {
-		// Homebrew exits 1 when one namespace has no matches, even if the
-		// other namespace may have results. Treat only that documented
-		// no-result diagnostic as an empty category.
-		if strings.Contains(err.Error(), "No formulae or casks found") {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	return parseSearchOutput(output, kind), nil
-}
-
-func parseSearchOutput(output string, kind PackageKind) []SearchResult {
-	var results []SearchResult
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "==>") {
-			results = append(results, SearchResult{Name: line, Kind: kind})
-		}
-	}
-	return results
 }
 
 // Tap adds a third-party tap. It is required before installing a package by
