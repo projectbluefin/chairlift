@@ -635,6 +635,9 @@ func TestBackupOverwritesPreviousBackupOnSubsequentRepair(t *testing.T) {
 
 func TestNoBackupWhenNothingChanges(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	oldLook := lookPath
+	t.Cleanup(func() { lookPath = oldLook })
+	lookPath = func(string) bool { return true }
 	path, _ := ConfigPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)

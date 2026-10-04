@@ -186,6 +186,24 @@ func readUserConfig(path string) ([]byte, os.FileInfo, error) {
 	return data, info, err
 }
 
+// writeTemp writes data to a new private 0600 file in root and returns its
+// name. On success the caller owns removing the temporary name.
+func writeTemp(root *os.Root, data []byte) (string, error) {
+	name := ".chairlift-" + rand.Text()
+	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", err
+	}
+	_, writeErr := file.Write(data)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
+		_ = root.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
 func writeAtomicBackup(root *os.Root, backupName string, data []byte) error {
 	if bInfo, err := root.Lstat(backupName); err == nil {
 		stat, ok := bInfo.Sys().(*syscall.Stat_t)
@@ -195,18 +213,11 @@ func writeAtomicBackup(root *os.Root, backupName string, data []byte) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	tempName := ".chairlift-" + rand.Text()
-	file, err := root.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	tempName, err := writeTemp(root, data)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = root.Remove(tempName) }()
-	_, writeErr := file.Write(data)
-	syncErr := file.Sync()
-	closeErr := file.Close()
-	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		return err
-	}
 	return root.Rename(tempName, backupName)
 }
 
@@ -242,18 +253,11 @@ func writeUserConfig(path string, original []byte, previous os.FileInfo, prepare
 	}
 	base := filepath.Base(path)
 	if previous == nil {
-		name := ".chairlift-" + rand.Text()
-		file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		name, err := writeTemp(root, prepared)
 		if err != nil {
 			return err
 		}
 		defer func() { _ = root.Remove(name) }()
-		_, writeErr := file.Write(prepared)
-		syncErr := file.Sync()
-		closeErr := file.Close()
-		if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-			return err
-		}
 		// Link is atomic and refuses an existing destination; the temporary
 		// name is then removed by the deferred cleanup.
 		return root.Link(name, base)
@@ -269,18 +273,11 @@ func writeUserConfig(path string, original []byte, previous os.FileInfo, prepare
 	if err != nil || !bytes.Equal(original, observed) {
 		return fmt.Errorf("the Goose configuration changed during setup; try again")
 	}
-	name := ".chairlift-" + rand.Text()
-	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	name, err := writeTemp(root, prepared)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = root.Remove(name) }()
-	_, writeErr := file.Write(prepared)
-	syncErr := file.Sync()
-	closeErr := file.Close()
-	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
-		return err
-	}
 	if err := writeAtomicBackup(root, base+BackupSuffix, original); err != nil {
 		return fmt.Errorf("saving Goose configuration backup: %w", err)
 	}

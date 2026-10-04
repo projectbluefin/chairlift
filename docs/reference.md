@@ -239,8 +239,12 @@ or merged affected YAML is refused without replacing user data.
 
 Configuration changes use an owned regular file and a private atomic replacement
 with mode `0600`; links, unsafe Goose directories, and detected concurrent edits
-are refused. Setup reads the resulting state before reporting connection. Dry-run
-leaves both new and existing configurations untouched.
+are refused. Before repairing an existing configuration, Setup saves its exact
+prior bytes to `config.yaml.chairlift-backup` (mode `0600`) beside it; each
+later repair overwrites that backup, and no backup is written when nothing
+changes or a new configuration is created. Setup reads the resulting state
+before reporting connection. Dry-run leaves both new and existing
+configurations, and any backup, untouched.
 
 **Open Goose** means its Linux tools are connected, not that a model service has
 been authenticated or tested. The row discloses the selected provider and asks
