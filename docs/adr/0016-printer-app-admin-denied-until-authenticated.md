@@ -117,6 +117,40 @@ without a real host ([#329](https://github.com/projectbluefin/chairlift/issues/3
 A user who wants the web UI must opt in with a credential configured — the
 default is no web administration, not unauthenticated web administration.
 
+## Update (2026-10-04)
+
+Upstream container entrypoint verification across the four printer-application
+repositories (ghostscript PR #68, hplip PR #52, gutenprint PR #59) confirmed
+the following interface contract:
+
+- `PRINTER_APP_SERVER_OPTIONS`: strict allowlist accepting only
+  `no-web-interface` (mapped to `-o server-options=no-web-interface`); any other
+  value causes the entrypoint to exit 64.
+- `PRINTER_APP_AUTH_SERVICE`: any non-empty value causes the entrypoint to exit
+  78 (fail-closed) because the shared base container builds PAPPL with
+  `--disable-libpam`, so authenticated PAM web administration is not available.
+- `PRINTER_APP_ADMIN_GROUP`: exits 78 unless `PRINTER_APP_AUTH_SERVICE` is set.
+
+Under ADR-0016's decision that remote administration must be default-deny
+(either authenticated or absent), the only available and supported enable path
+is **web administration absent**. ChairLift's quadlet unit sets
+`Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface` and never sets
+`AUTH_SERVICE` or `ADMIN_GROUP`.
+
+Consequences of this update:
+
+- Unlocked driver applications run with their web administration interface
+  disabled; printers are reached directly over IPP and added from GNOME
+  Settings.
+- HPLIP's proprietary plugin consent mechanism exists only as an interactive
+  page (`/plugin`) on PAPPL's web interface. Because the web interface is
+  disabled, printers requiring proprietary plugins cannot be consented to and
+  are not supported yet (the honest remainder of [#331](https://github.com/projectbluefin/chairlift/issues/331)).
+- Pinned digests in ChairLift predate the entrypoint updates (gutenprint
+  `5.3.6-4.2` is being released; ghostscript `10.07.1-3` and hplip `3.26.4-1`
+  await review). Families remain locked via `Family.AdminSurface` in
+  `internal/printerapp` until their digests are bumped to verified images.
+
 ## Alternatives considered
 
 - **Loopback-only port publishing** (what the lifecycle PR rendered first):

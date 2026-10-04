@@ -1,7 +1,6 @@
 package pageview
 
 import (
-	"strconv"
 	"strings"
 	"testing"
 
@@ -41,7 +40,7 @@ func TestPrinterFamilyRowNamesEveryFamilyDistinctly(t *testing.T) {
 func TestPrinterAppSubtitleDistinguishesEveryState(t *testing.T) {
 	seen := map[string]printerapp.State{}
 	for s := printerapp.StateUnavailable; s <= printerapp.StateFailedCrash; s++ {
-		text := PrinterAppSubtitle(s, 18010)
+		text := PrinterAppSubtitle(s, "ghostscript", 18010)
 		if prev, dup := seen[text]; dup {
 			t.Errorf("states %d and %d share subtitle %q", prev, s, text)
 		}
@@ -82,7 +81,7 @@ func TestPrinterAppDiagnosticSubtitlesAreActionable(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		text := strings.ToLower(PrinterAppSubtitle(tc.state, 18010))
+		text := strings.ToLower(PrinterAppSubtitle(tc.state, "ghostscript", 18010))
 		for _, want := range tc.wants {
 			if !strings.Contains(text, strings.ToLower(want)) {
 				t.Errorf("state %d subtitle %q does not contain %q", tc.state, text, want)
@@ -99,7 +98,7 @@ func TestPrinterAppDiagnosticSubtitlesAreActionable(t *testing.T) {
 // and that the switch unlocks — without spelling an environment variable no
 // image ships yet.
 func TestPrinterAppBlockedSubtitleIsActionable(t *testing.T) {
-	text := PrinterAppSubtitle(printerapp.StateBlocked, 18010)
+	text := PrinterAppSubtitle(printerapp.StateBlocked, "ghostscript", 18010)
 	for _, want := range []string{"Can't be turned on yet", "administration page", "secured", "credential", "unlocks"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("blocked subtitle %q does not say %q", text, want)
@@ -110,15 +109,40 @@ func TestPrinterAppBlockedSubtitleIsActionable(t *testing.T) {
 	}
 }
 
-// The ready row is where a person goes next: the web page on the app's port.
-func TestPrinterAppReadySubtitleNamesTheWebPage(t *testing.T) {
+// Unlocked ready rows have no web administration page; printers are reached
+// via IPP and added from GNOME Settings.
+func TestPrinterAppReadySubtitleExplainsNoWebPage(t *testing.T) {
 	for _, f := range printerapp.Families() {
 		app := printerapp.Select(f)
-		text := PrinterAppSubtitle(printerapp.StateReady, app.Port())
-		want := "http://localhost:" + strconv.Itoa(app.Port()) + "/"
-		if !strings.Contains(text, want) {
-			t.Errorf("%s ready subtitle %q does not name %q", f.ID, text, want)
+		text := PrinterAppSubtitle(printerapp.StateReady, f.ID, app.Port())
+		for _, forbidden := range []string{"http://", "http:", "localhost"} {
+			if strings.Contains(text, forbidden) {
+				t.Errorf("%s ready subtitle %q advertises web page %q", f.ID, text, forbidden)
+			}
 		}
+		for _, want := range []string{"no web administration page", "IPP", "GNOME Settings"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s ready subtitle %q does not contain %q", f.ID, text, want)
+			}
+		}
+	}
+}
+
+// HPLIP plugin consent lives on the disabled web page, so HPLIP copy notes that
+// plugin-requiring printers are not supported yet (#331).
+func TestPrinterAppHPLIPNotesPluginLimitation(t *testing.T) {
+	ready := PrinterAppSubtitle(printerapp.StateReady, "hplip", 18030)
+	if !strings.Contains(ready, "proprietary plugin") {
+		t.Errorf("HPLIP ready subtitle %q does not note plugin limitation", ready)
+	}
+	off := PrinterAppSubtitle(printerapp.StateOff, "hplip", 18030)
+	if !strings.Contains(off, "proprietary plugin") {
+		t.Errorf("HPLIP off subtitle %q does not note plugin limitation", off)
+	}
+
+	nonHP := PrinterAppSubtitle(printerapp.StateReady, "ghostscript", 18010)
+	if strings.Contains(nonHP, "plugin") {
+		t.Errorf("ghostscript ready subtitle %q notes plugin limitation", nonHP)
 	}
 }
 

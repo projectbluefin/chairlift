@@ -67,6 +67,7 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 			"Network=host",
 			"Volume=%h/printer-workspaces/" + app.Family.ID + "/" + app.Name + ":/var/lib/" + app.Family.ID + "-printer-app:z",
 			"Environment=PORT=" + strconv.Itoa(app.Port()),
+			"Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface",
 			"UserNS=keep-id:uid=65532,gid=65532",
 		} {
 			if !strings.Contains(unit, required) {
@@ -77,6 +78,19 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 		// ADR-0016: RenderUnit must not publish ports (Network=host is used instead).
 		if strings.Contains(unit, "PublishPort=") {
 			t.Errorf("%s unit renders PublishPort under host networking:\n%s", app.UnitName(), unit)
+		}
+
+		// ADR-0016: PAPPL is built without PAM (--disable-libpam); setting AUTH_SERVICE
+		// or ADMIN_GROUP fails closed (exit 78). The unit must never set auth knobs.
+		for _, forbidden := range []string{
+			"AUTH_SERVICE",
+			"ADMIN_GROUP",
+			"auth-service",
+			"admin-group",
+		} {
+			if strings.Contains(unit, forbidden) {
+				t.Errorf("%s unit contains forbidden auth configuration %q:\n%s", app.UnitName(), forbidden, unit)
+			}
 		}
 	}
 }
@@ -497,6 +511,30 @@ func TestDefaultUnitDirReturnsPathUnderUserConfig(t *testing.T) {
 	want := filepath.Join(configDir, "containers", "systemd")
 	if got != want {
 		t.Errorf("defaultUnitDir() = %q, want %q", got, want)
+	}
+}
+
+func TestPrinterAppCanEnableRejectsUnverifiedFamilies(t *testing.T) {
+	for _, f := range Families() {
+		if err := CanEnable(f); !errors.Is(err, ErrAdminUnauthenticated) {
+			t.Errorf("CanEnable(%s) = %v, want %v", f.ID, err, ErrAdminUnauthenticated)
+		}
+	}
+}
+
+func TestPrinterAppCanEnableAllowsVerifiedFamily(t *testing.T) {
+	f := Family{
+		ID:           "gutenprint",
+		DisplayName:  "Gutenprint",
+		Repo:         "ghcr.io/projectbluefin/gutenprint-printer-app",
+		Version:      "5.3.6-4.2",
+		Digest:       "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+		DefaultPort:  18050,
+		AdminSurface: AdminSurfaceWebInterfaceDisabled,
+	}
+
+	if err := CanEnable(f); err != nil {
+		t.Errorf("CanEnable(verified family) = %v, want nil", err)
 	}
 }
 

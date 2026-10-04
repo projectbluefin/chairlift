@@ -2,6 +2,7 @@ package pageview
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
@@ -36,9 +37,10 @@ func PrinterFamilyRow(f printerapp.Family) string {
 // blocked text is the ADR-0016 condition as a person meets it: it names what
 // cannot be secured, what is needed, and that the switch unlocks once the
 // image accepts it — an actionable, non-enabled state, never a switch that
-// silently does nothing. port is where the ready application serves both
-// IPP and its web page.
-func PrinterAppSubtitle(s printerapp.State, port int) string {
+// silently does nothing. port is where the application serves IPP printing.
+// Unlocked families run with no web administration page; printers are reached
+// over IPP or added from GNOME Settings.
+func PrinterAppSubtitle(s printerapp.State, familyID string, port int) string {
 	switch s {
 	case printerapp.StateUnavailable:
 		return "Not available on this computer — Podman is not installed."
@@ -47,7 +49,10 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	case printerapp.StateStarting:
 		return "Starting… The driver image is downloaded the first time, which can take a few minutes."
 	case printerapp.StateReady:
-		return fmt.Sprintf("Running. Add and manage its printers at http://localhost:%d/", port)
+		if strings.ToLower(familyID) == "hplip" {
+			return fmt.Sprintf("Running on port %d with no web administration page. Printers are reached over IPP and added from GNOME Settings. Printers requiring proprietary plugins are not supported yet.", port)
+		}
+		return fmt.Sprintf("Running on port %d with no web administration page. Printers are reached over IPP and added from GNOME Settings.", port)
 	case printerapp.StateFailedDeviceAccess:
 		return "Printer device access failed. Ensure your user account has permission to access USB printer devices (e.g. 'lp' group membership or udev rules)."
 	case printerapp.StateFailedImage:
@@ -59,6 +64,9 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	case printerapp.StateFailed:
 		return "Turned on, but the printer application is not running. Turn it off and on again to restart it."
 	default:
+		if strings.ToLower(familyID) == "hplip" {
+			return fmt.Sprintf("Turning this on starts the driver service in your account and shares its printers on port %d. Printers requiring proprietary plugins are not supported yet.", port)
+		}
 		return fmt.Sprintf("Turning this on starts the driver service in your account and shares its printers on port %d.", port)
 	}
 }

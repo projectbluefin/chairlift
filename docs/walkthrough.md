@@ -178,10 +178,11 @@ instead of being reported as an all-or-nothing success.
 (HPLIP), and Gutenprint — for printers that need more than built-in
 driverless printing. Each runs as a small container in your own account,
 adds nothing to the system, and shares its printers with this computer and
-your network; when one is running, its row names the local web page where you
-add and manage printers. The switches are locked for now, and each row says
-why: a family can be turned on only once its driver image accepts an
-administrator credential for that web page, so nothing on your network can
+your network. Running applications have no web administration page; printers
+are reached over IPP and added from GNOME Settings, and HP printers requiring
+proprietary plugins are not supported yet. The switches are locked for now,
+and each row says why: a family can be turned on only once its driver image is
+verified to disable the web administration page, so nothing on your network can
 reach an unprotected administration screen. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or

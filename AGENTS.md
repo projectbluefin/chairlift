@@ -832,15 +832,21 @@ An agent must not break these:
   `$PATH`; `internal/views/printers_page.go`) renders a refused family as an
   actionable, non-enabled state: the row is shown, the switch is off *and*
   insensitive, and the subtitle says the administration page cannot be
-  secured until the image accepts an administrator credential. No published
-  image accepts one yet (ghostscript-printer-app#65, hplip-printer-app#51,
-  gutenprint-printer-app#57), so today every family is locked. The contract
-  those issues specify — the entrypoint reading `PRINTER_APP_AUTH_SERVICE`,
-  `PRINTER_APP_ADMIN_GROUP`, and `PRINTER_APP_SERVER_OPTIONS` — may be named
-  in comments and docs as what will be wired, but no ChairLift code reads or
-  writes those names until an image ships them; and do not turn the lock
-  into a hidden group or a switch that fails on every flip. Readiness and
-  failure classification on the row come from
+  secured until the image accepts an administrator credential. Upstream
+  entrypoints (ghostscript PR #68, hplip PR #52, gutenprint PR #59) accept
+  `PRINTER_APP_SERVER_OPTIONS=no-web-interface` (anything else exits 64);
+  `PRINTER_APP_AUTH_SERVICE` exits 78 because PAPPL was compiled without PAM
+  (`--disable-libpam`), so authenticated web administration is unavailable.
+  Under ADR-0016, ChairLift's quadlet unit sets
+  `Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface` and never sets
+  `AUTH_SERVICE` or `ADMIN_GROUP`. Families are gated by `Family.AdminSurface`
+  and remain locked in `CanEnable` until their pinned image digest is bumped to
+  a verified image (gutenprint 5.3.6-4.2 releasing; ghostscript 10.07.1-3 and
+  hplip 3.26.4-1 pending review). Unlocked families have no web administration
+  page; printers are reached over IPP / added from GNOME Settings, and HPLIP
+  printers requiring proprietary plugins remain unsupported (#331). Do not
+  turn the lock into a hidden group or a switch that fails on every flip.
+  Readiness and failure classification on the row come from
   `printerapp.Observe`/`ProbeActive`/`ProbeDiagnostics`/`Diagnose` —
   `systemctl --user is-active`'s state *word*, systemd Result/SubState
   properties, journal logs, and container image presence probes, off the main

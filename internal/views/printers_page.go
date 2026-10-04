@@ -109,7 +109,7 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 // showPrinterAppState renders one state on a row. Main thread only.
 func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) {
 	pr.state = state
-	pr.row.SetSubtitle(pageview.PrinterAppSubtitle(state, pr.app.Port()))
+	pr.row.SetSubtitle(pageview.PrinterAppSubtitle(state, pr.app.Family.ID, pr.app.Port()))
 	// A blocked family's switch is locked, not merely off: flipping it could
 	// only ever fail, and a switch that fails on every flip is the silent
 	// no-op ADR-0016 rules out.

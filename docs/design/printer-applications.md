@@ -14,16 +14,23 @@ This document covers ChairLift's support for the
 rootless Podman quadlets, one unit per printer, for the Ghostscript,
 PostScript, HPLIP, and Gutenprint driver families.
 
-**Current state (2026-09-30):** the quadlet lifecycle
+**Current state (2026-10-04):** the quadlet lifecycle
 ([#334](https://github.com/projectbluefin/chairlift/pull/334)) has merged and
 the Features page renders the locked **Printers** group
-([#397](https://github.com/projectbluefin/chairlift/pull/397)). Three of the
-four driver families — Ghostscript, HPLIP, and Gutenprint — have a published,
-digest-pinned image, but no image can yet receive the administration settings
-ADR-0016 requires, so `CanEnable` refuses every family and every switch is off
-and insensitive; PostScript has no published image. This page records the
-contracted network and access surface, the family inventory, and the verified
-image state.
+([#397](https://github.com/projectbluefin/chairlift/pull/397)). Upstream
+entrypoints (ghostscript PR #68, hplip PR #52, gutenprint PR #59) accept
+`PRINTER_APP_SERVER_OPTIONS=no-web-interface` (mapped to `-o server-options=no-web-interface`),
+while `PRINTER_APP_AUTH_SERVICE` exits 78 (fail-closed) because the shared base
+builds PAPPL with `--disable-libpam`. Under ADR-0016, ChairLift's quadlet unit
+writes `Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface` and never sets
+auth knobs. Families are gated by `AdminSurface` and remain locked in `CanEnable`
+until their pinned digests are bumped to verified images (gutenprint `5.3.6-4.2`
+is releasing; ghostscript `10.07.1-3` and hplip `3.26.4-1` are pending review).
+Unlocked families have no web administration page; printers are discovered via
+DNS-SD / reached over IPP and added from GNOME Settings. For HPLIP, printers
+requiring proprietary plugins are not supported yet ([#331](https://github.com/projectbluefin/chairlift/issues/331)).
+This page records the contracted network and access surface, the family
+inventory, and the verified image state.
 
 ## Overview
 
@@ -56,9 +63,13 @@ IPP — PAPPL serves both on one set of listeners and cannot bind administration
 to loopback separately. The boundary is therefore authorization, not binding:
 IPP-transport administration already refuses remote clients without an
 authentication service, and web administration must be authenticated or
-disabled before ChairLift enables the unit (ADR-0016). Today's published
-images forward only `PORT` and a log file from their entrypoints, so none can
-be configured to meet that condition — the images must change first.
+disabled before ChairLift enables the unit (ADR-0016). Because PAPPL is built
+with `--disable-libpam` in the shared base container, authenticated web
+administration is unavailable. ChairLift therefore disables web administration
+entirely (`Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface`), leaving
+only IPP printing and DNS-SD discovery active on host networking. Current
+pinned digests predate the entrypoint changes; families unlock as their pins
+are updated to verified images.
 
 ## Family inventory
 
@@ -117,17 +128,21 @@ lands; a host with several families enabled repeats the bulk of each pull.
 
 All three images run as user 65532 with
 `catatonit -- bash /usr/libexec/<family>-printer-app/container-entrypoint` and
-an environment of `PATH`, `container=podman`, and `HOME` only. Their
-entrypoints honor one knob, `PORT` (passed to PAPPL as `server-port`), and
-forward no other options: extra arguments are ignored, and there is no env
-path to `server-options`, `auth-service`, or `admin-group` — the three
-settings pappl-retrofit itself supports. The upstream source changes are not
-evidence that these immutable pins contain them. Runtime checks on 2026-10-01
+an environment of `PATH`, `container=podman`, and `HOME` only. Verified
+upstream changes (ghostscript PR #68, hplip PR #52, gutenprint PR #59) update
+the entrypoints to accept `PRINTER_APP_SERVER_OPTIONS=no-web-interface` (passed
+to PAPPL as `-o server-options=no-web-interface`). Any other server option exits
+64. Setting `PRINTER_APP_AUTH_SERVICE` exits 78 because PAPPL was compiled
+without PAM (`--disable-libpam`). Setting `PRINTER_APP_ADMIN_GROUP` exits 78
+unless `AUTH_SERVICE` is set.
+
+The current pinned digests predate these PRs. Runtime checks on 2026-10-01
 started all three pinned images on `--network none`, with no published ports,
 and `PRINTER_APP_SERVER_OPTIONS=no-web-interface`. Every application's local
 HTTP listener returned **200**, not the required 404: these pins ignore the
-option, so `CanEnable` continues to refuse every family. The test containers
-were removed after observation; no unauthenticated listener reached the LAN.
+option, so `CanEnable` continues to refuse every family until a verified pin
+is adopted. The test containers were removed after observation; no unauthenticated
+listener reached the LAN.
 
 Ghostscript's index and its attached SBOM were independently verified against
 the exact keyless signing identity
@@ -162,7 +177,7 @@ lock or establish physical printing, USB, or mDNS interoperability.
   - **Plugin verification failure**: detected via GPG/checksum verification failure logs from HP's proprietary driver plugin verifier; the row notes the signature failure.
   - **Service crash**: detected via systemd signal, core dump, or fatal exception status; the row directs the user to `journalctl --user` and restart.
   Every failure is rendered as an actionable state, never a false enabled indicator.
-- **HPLIP plugin consent**: HPLIP's proprietary plugin consent is an interactive opt-in flow served exclusively within PAPPL's web interface at `/plugin`. The published OCI image's entrypoint exposes no external CLI, flag, or environment variable for headless consent; automated or host-driven plugin consent remains unmet until an image-side configuration contract exists.
+- **HPLIP plugin consent**: HPLIP's proprietary plugin consent is an interactive opt-in flow served exclusively within PAPPL's web interface at `/plugin`. Because web administration is disabled (`no-web-interface`), this endpoint is absent; automated or host-driven plugin consent remains unmet, and printers requiring proprietary plugins are not supported yet ([#331](https://github.com/projectbluefin/chairlift/issues/331)).
 
 ## References
 

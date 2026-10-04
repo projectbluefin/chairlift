@@ -44,6 +44,22 @@ const (
 	portRange = 1000
 )
 
+// AdminSurface classifies the verified administration configuration supported
+// by a printer application image (ADR-0016).
+type AdminSurface int
+
+const (
+	// AdminSurfaceUnverified means the pinned image is not verified to support
+	// safe administration configuration (web admin disabled or authenticated).
+	AdminSurfaceUnverified AdminSurface = iota
+	// AdminSurfaceWebInterfaceDisabled means the pinned image is verified to
+	// accept PRINTER_APP_SERVER_OPTIONS=no-web-interface, disabling web admin.
+	AdminSurfaceWebInterfaceDisabled
+)
+
+// WebInterfaceDisabled is an alias for AdminSurfaceWebInterfaceDisabled.
+const WebInterfaceDisabled = AdminSurfaceWebInterfaceDisabled
+
 // Family identifies one Printer Application family. Each publishes a
 // digest-pinned, multi-architecture index at GHCR (the projectbluefin
 // *-printer-app repositories). The index, pinned by an immutable
@@ -62,6 +78,9 @@ type Family struct {
 	Digest string
 	// DefaultPort is the contracted host port for this family (ADR-0016).
 	DefaultPort int
+	// AdminSurface records the verified administration configuration surface
+	// supported by this family's pinned image (ADR-0016).
+	AdminSurface AdminSurface
 }
 
 // Image returns the digest-pinned index for this family.
@@ -145,28 +164,31 @@ func (a App) HostVolumeDir() (string, error) {
 // which publish digest-pinned, multi-architecture indexes.
 var families = []Family{
 	{
-		ID:          "ghostscript",
-		DisplayName: "Ghostscript",
-		Repo:        "ghcr.io/projectbluefin/ghostscript-printer-app",
-		Version:     "10.07.1-2",
-		Digest:      "sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc",
-		DefaultPort: 18010,
+		ID:           "ghostscript",
+		DisplayName:  "Ghostscript",
+		Repo:         "ghcr.io/projectbluefin/ghostscript-printer-app",
+		Version:      "10.07.1-2",
+		Digest:       "sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc",
+		DefaultPort:  18010,
+		AdminSurface: AdminSurfaceUnverified,
 	},
 	{
-		ID:          "hplip",
-		DisplayName: "HPLIP",
-		Repo:        "ghcr.io/projectbluefin/hplip-printer-app",
-		Version:     "3.26.4",
-		Digest:      "sha256:1f81f507ce603f19eebb83fdcdc5b7de7bc7f52f728e9626c2c1224ea7477de8",
-		DefaultPort: 18030,
+		ID:           "hplip",
+		DisplayName:  "HPLIP",
+		Repo:         "ghcr.io/projectbluefin/hplip-printer-app",
+		Version:      "3.26.4",
+		Digest:       "sha256:1f81f507ce603f19eebb83fdcdc5b7de7bc7f52f728e9626c2c1224ea7477de8",
+		DefaultPort:  18030,
+		AdminSurface: AdminSurfaceUnverified,
 	},
 	{
-		ID:          "gutenprint",
-		DisplayName: "Gutenprint",
-		Repo:        "ghcr.io/projectbluefin/gutenprint-printer-app",
-		Version:     "5.3.6-4.1",
-		Digest:      "sha256:3ca46b65bba16e258d7f93582beb9ccdf71a8b4e450b9d01f8cb545a945b93a1",
-		DefaultPort: 18050,
+		ID:           "gutenprint",
+		DisplayName:  "Gutenprint",
+		Repo:         "ghcr.io/projectbluefin/gutenprint-printer-app",
+		Version:      "5.3.6-4.1",
+		Digest:       "sha256:3ca46b65bba16e258d7f93582beb9ccdf71a8b4e450b9d01f8cb545a945b93a1",
+		DefaultPort:  18050,
+		AdminSurface: AdminSurfaceUnverified,
 	},
 }
 
@@ -227,6 +249,7 @@ func ApplyOverrides(images map[string]string) error {
 					families[i].Digest = ""
 					families[i].Version = versionPart(image)
 				}
+				families[i].AdminSurface = AdminSurfaceUnverified
 				found = true
 				break
 			}
@@ -283,6 +306,7 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "ContainerName=%s\n", app.ContainerName())
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image())
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
+	b.WriteString("Environment=PRINTER_APP_SERVER_OPTIONS=no-web-interface\n")
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	b.WriteString("Network=host\n")
 	fmt.Fprintf(&b, "Volume=%s\n\n", app.Volume())
@@ -404,24 +428,19 @@ func IsEnabled(app App) bool {
 // reachable without authentication (ADR-0016).
 var ErrAdminUnauthenticated = errors.New("printer application web administration is unauthenticated; refused on host network (ADR-0016)")
 
-// CanEnable is the ADR-0016 enable condition, queryable so the view can show
-// a family as a non-enabled state instead of offering a switch that refuses.
-// An application may be enabled only when its web administration is either
-// authenticated (an auth service, admin group, or password) or absent
-// (server-options=no-web-interface).
+// CanEnable reports whether the family meets the ADR-0016 enable condition:
+// its pinned image is verified to accept disabling the web interface.
 //
-// No published image can be given either yet: every entrypoint forwards only
-// PORT and a log file, so ChairLift has no way to hand the credential over.
-// The image-side contract is requested in projectbluefin/ghostscript-printer-app#65
-// (mirrored in hplip-printer-app#51 and gutenprint-printer-app#57): the
-// entrypoint is to read PRINTER_APP_AUTH_SERVICE, PRINTER_APP_ADMIN_GROUP,
-// and PRINTER_APP_SERVER_OPTIONS and forward them as -o auth-service, -o
-// admin-group, and -o server-options. Once an image ships that, this is
-// where the family starts returning nil and RenderUnit gains the Environment
-// lines that carry the values; nothing reads or writes those names today.
-// Until then every family is refused, and the refusal is the same error
-// Enable returns.
+// An application may be enabled only when its web administration is absent
+// (PRINTER_APP_SERVER_OPTIONS=no-web-interface). Authenticated web admin is
+// unavailable because PAPPL is built without PAM in the shared base.
+// CanEnable returns nil only when the family's pinned image is verified to
+// accept no-web-interface (AdminSurfaceWebInterfaceDisabled). Otherwise, it
+// returns ErrAdminUnauthenticated.
 func CanEnable(f Family) error {
+	if f.AdminSurface == AdminSurfaceWebInterfaceDisabled {
+		return nil
+	}
 	return ErrAdminUnauthenticated
 }
 
