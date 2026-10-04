@@ -81,6 +81,15 @@ func ConfigPath() (string, error) {
 	return filepath.Join(config, "goose", "config.yaml"), nil
 }
 
+// BackupPath returns Goose's backup configuration file path.
+func BackupPath() (string, error) {
+	path, err := ConfigPath()
+	if err != nil {
+		return "", err
+	}
+	return path + BackupSuffix, nil
+}
+
 // ParseConfig recognizes the shipped and legacy diagnostic extension keys.
 // Malformed YAML and extensions without explicit fixed tools are not wired.
 func ParseConfig(data []byte) State {
@@ -329,7 +338,9 @@ func VerifyExtensionOnDisk() ExtensionStatus {
 
 // EnsureDiagnosticsConfigured writes the hardened Linux diagnostic extension into
 // Goose's configuration, preserving existing user settings, models, providers, and
-// other extensions. It verifies the written configuration before returning.
+// other extensions. Before replacing an existing configuration, it keeps an atomic
+// backup of the exact prior bytes at config.yaml.chairlift-backup. It verifies the
+// written configuration before returning.
 func EnsureDiagnosticsConfigured() error {
 	path, err := ConfigPath()
 	if err != nil {

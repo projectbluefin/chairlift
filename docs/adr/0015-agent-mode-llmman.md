@@ -121,15 +121,20 @@ selected-model alias through llmman's CLI and overrides aggregation in the unit.
   SSH-key discovery and remote-host tools stay off unless separately opted in.
 - *Configuration ownership:* ChairLift writes no llmman TOML. Its selected
   model alias is read and written through `llmman config get/set`.
+  ChairLift owns the Goose configuration repair in-process (no dependency on
+  `goose-mcp-setup` or `ublue-os/homebrew-tap#687`). Before replacing an
+  existing user Goose configuration, it saves a recoverable backup
+  (`config.yaml.chairlift-backup`, 0600) atomically, only when contents change,
+  never under dry-run, and never on fresh creation.
 - *Secrets:* ChairLift stores and logs no API key, provider credential, or
   prompt, and this surface accepts no credentials.
 - *Privilege:* no pkexec route, helper subcommand, or PolicyKit action.
 
 **Issue map.** #253 (this decision), #254 (llmman provisioning and user
 unit), #262 (`OLLAMA_HOST` discovery) land with it. #255 model picker, #256
-control surface and launch intents, #257 Goose, #258/#259 Oh My Pi, #261
-Ask Bluefin dispatcher, #263 contributor flow, and
-#264 acceptance build on this contract.
+control surface and launch intents, #257 Goose (in-process configuration repair
+with recoverable backup), #258/#259 Oh My Pi, #261 Ask Bluefin dispatcher, #263
+contributor flow, and #264 acceptance build on this contract.
 
 ## Consequences
 

@@ -10,8 +10,13 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"gopkg.in/yaml.v3"
 )
+
+// BackupSuffix is appended to the Goose configuration filename when saving
+// a backup before repairing an existing configuration.
+const BackupSuffix = ".chairlift-backup"
 
 // decodeConfig rejects duplicate keys, multiple documents, and non-mapping
 // roots before any user data can be changed. Nodes retain comments and unknown
@@ -181,10 +186,39 @@ func readUserConfig(path string) ([]byte, os.FileInfo, error) {
 	return data, info, err
 }
 
+func writeAtomicBackup(root *os.Root, backupName string, data []byte) error {
+	if bInfo, err := root.Lstat(backupName); err == nil {
+		stat, ok := bInfo.Sys().(*syscall.Stat_t)
+		if !bInfo.Mode().IsRegular() || !ok || stat.Uid != uint32(os.Geteuid()) || stat.Nlink != 1 {
+			return fmt.Errorf("the backup file must be an owned regular file, not a link or directory")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tempName := ".chairlift-" + rand.Text()
+	file, err := root.OpenFile(tempName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Remove(tempName) }()
+	_, writeErr := file.Write(data)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
+		return err
+	}
+	return root.Rename(tempName, backupName)
+}
+
 // writeUserConfig installs a complete 0600 file atomically in the owned Goose
 // directory. A fresh install cannot replace a file created by Goose meanwhile;
 // an update refuses a changed file or snapshot rather than losing user edits.
+// Before replacing an existing configuration, an atomic backup is saved to
+// <filename>.chairlift-backup with 0600 permissions.
 func writeUserConfig(path string, original []byte, previous os.FileInfo, prepared []byte) error {
+	if dryrun.Enabled() {
+		return nil
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -206,6 +240,35 @@ func writeUserConfig(path string, original []byte, previous os.FileInfo, prepare
 	if err != nil || !os.SameFile(info, opened) {
 		return fmt.Errorf("the Goose directory changed; try again")
 	}
+	base := filepath.Base(path)
+	if previous == nil {
+		name := ".chairlift-" + rand.Text()
+		file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = root.Remove(name) }()
+		_, writeErr := file.Write(prepared)
+		syncErr := file.Sync()
+		closeErr := file.Close()
+		if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
+			return err
+		}
+		// Link is atomic and refuses an existing destination; the temporary
+		// name is then removed by the deferred cleanup.
+		return root.Link(name, base)
+	}
+	if bytes.Equal(original, prepared) {
+		return nil
+	}
+	current, err := root.Lstat(base)
+	if err != nil || !os.SameFile(previous, current) || !current.Mode().IsRegular() {
+		return fmt.Errorf("the Goose configuration changed during setup; try again")
+	}
+	observed, err := root.ReadFile(base)
+	if err != nil || !bytes.Equal(original, observed) {
+		return fmt.Errorf("the Goose configuration changed during setup; try again")
+	}
 	name := ".chairlift-" + rand.Text()
 	file, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
@@ -218,19 +281,8 @@ func writeUserConfig(path string, original []byte, previous os.FileInfo, prepare
 	if err := errors.Join(writeErr, syncErr, closeErr); err != nil {
 		return err
 	}
-	base := filepath.Base(path)
-	if previous == nil {
-		// Link is atomic and refuses an existing destination; the temporary
-		// name is then removed by the deferred cleanup.
-		return root.Link(name, base)
-	}
-	current, err := root.Lstat(base)
-	if err != nil || !os.SameFile(previous, current) || !current.Mode().IsRegular() {
-		return fmt.Errorf("the Goose configuration changed during setup; try again")
-	}
-	observed, err := root.ReadFile(base)
-	if err != nil || !bytes.Equal(original, observed) {
-		return fmt.Errorf("the Goose configuration changed during setup; try again")
+	if err := writeAtomicBackup(root, base+BackupSuffix, original); err != nil {
+		return fmt.Errorf("saving Goose configuration backup: %w", err)
 	}
 	return root.Rename(name, base)
 }

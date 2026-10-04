@@ -1555,9 +1555,14 @@ constraint rules out.
 `internal/troubleshoot` is the Homebrew-backed setup row on Help. It installs
 `linux-mcp-server` (including the Goose CLI) and the Goose desktop cask, then
 uses the shipped preset for a new configuration and repairs only recognized
-diagnostic extension nodes in an existing one. Repair preserves provider,
+diagnostic extension nodes in an existing one. ChairLift owns this repair
+in-process without depending on or waiting for `goose-mcp-setup` or
+`ublue-os/homebrew-tap#687`. Repair preserves provider,
 model and unrelated settings, fixes a stale diagnostic executable, and supplies
-the fixed read-only tool policy. A usable existing configuration stays unchanged;
+the fixed read-only tool policy. Before replacing an existing user configuration,
+it saves a recoverable backup of the exact prior bytes (`config.yaml.chairlift-backup`, 0600)
+beside it atomically, overwriting any previous backup, only when content actually changes,
+never under `--dry-run`, and never for a fresh file. A usable existing configuration stays unchanged;
 shared anchor mappings are refused rather than rewritten ambiguously. Writes
 are secure and atomic. Readiness requires the actual wired diagnostic command
 to resolve, not a successful setup-script exit or installed packages alone.

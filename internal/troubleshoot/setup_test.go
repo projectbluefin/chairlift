@@ -546,3 +546,202 @@ func TestSetupRepairsStaleDiagnosticExecutable(t *testing.T) {
 		t.Fatalf("stale diagnostic repair: %+v", after)
 	}
 }
+
+func TestBackupPathAppendsSuffix(t *testing.T) {
+	base := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", base)
+	got, err := BackupPath()
+	if err != nil {
+		t.Fatalf("BackupPath: %v", err)
+	}
+	want := filepath.Join(base, "goose", "config.yaml.chairlift-backup")
+	if got != want {
+		t.Errorf("BackupPath = %q, want %q", got, want)
+	}
+}
+
+func TestBackupCreatedOnRepairOfExistingFile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, err := ConfigPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := "# Custom user configuration\nGOOSE_PROVIDER: anthropic\nGOOSE_MODEL: claude-3-opus\nCUSTOM_KEY: custom-val\nextensions:\n  other:\n    type: builtin\n    enabled: true\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	backup, err := BackupPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureDiagnosticsConfigured(); err != nil {
+		t.Fatalf("repairing config: %v", err)
+	}
+
+	bInfo, err := os.Stat(backup)
+	if err != nil {
+		t.Fatalf("backup file was not created: %v", err)
+	}
+	if bInfo.Mode().Perm() != 0o600 {
+		t.Errorf("backup permissions = %o, want 0600", bInfo.Mode().Perm())
+	}
+	bContent, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bContent) != original {
+		t.Errorf("backup content = %q, want %q", string(bContent), original)
+	}
+
+	repaired, err := os.ReadFile(path)
+	if err != nil || !ParseConfig(repaired).Wired {
+		t.Fatalf("repaired config is not wired: %v", err)
+	}
+}
+
+func TestBackupOverwritesPreviousBackupOnSubsequentRepair(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	backup, _ := BackupPath()
+	if err := os.WriteFile(backup, []byte("stale-backup-content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	original := "GOOSE_PROVIDER: custom\nextensions:\n  linux-tools:\n    type: stdio\n    cmd: linux-mcp-server\n    enabled: false\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureDiagnosticsConfigured(); err != nil {
+		t.Fatalf("repairing config: %v", err)
+	}
+
+	bContent, err := os.ReadFile(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bContent) != original {
+		t.Errorf("overwritten backup content = %q, want %q", string(bContent), original)
+	}
+}
+
+func TestNoBackupWhenNothingChanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(freshConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	backup, _ := BackupPath()
+
+	if err := EnsureDiagnosticsConfigured(); err != nil {
+		t.Fatalf("EnsureDiagnosticsConfigured: %v", err)
+	}
+
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("backup exists when nothing changed: %v", err)
+	}
+}
+
+func TestNoBackupOnFreshCreate(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := defaultConfigPath
+	t.Cleanup(func() { defaultConfigPath = previous })
+
+	bin := t.TempDir()
+	exe := filepath.Join(bin, "linux-mcp-server")
+	if err := os.WriteFile(exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	defaultConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	premade := strings.Replace(freshConfig, "/home/linuxbrew/.linuxbrew/bin/linux-mcp-server", exe, 1)
+	if err := os.WriteFile(defaultConfigPath, []byte(premade), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := EnsureDiagnosticsConfigured(); err != nil {
+		t.Fatalf("EnsureDiagnosticsConfigured: %v", err)
+	}
+
+	backup, _ := BackupPath()
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("backup exists on fresh creation: %v", err)
+	}
+
+	path, _ := ConfigPath()
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("fresh config was not created: %v", err)
+	}
+}
+
+func TestNoBackupUnderDryRun(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := "GOOSE_PROVIDER: custom\nextensions:\n  other:\n    type: builtin\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	if err := EnsureDiagnosticsConfigured(); err != nil {
+		t.Fatalf("dry run EnsureDiagnosticsConfigured: %v", err)
+	}
+
+	backup, _ := BackupPath()
+	if _, err := os.Stat(backup); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("backup exists under dry-run: %v", err)
+	}
+
+	got, _ := os.ReadFile(path)
+	if string(got) != original {
+		t.Errorf("config modified under dry-run: got %q, want %q", string(got), original)
+	}
+}
+
+func TestFailureBeforeReplaceLeavesOriginalIntact(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	path, _ := ConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	original := "# Original content\nGOOSE_PROVIDER: preserved\nextensions:\n  other:\n    type: builtin\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	backup, _ := BackupPath()
+	if err := os.MkdirAll(backup, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	err := EnsureDiagnosticsConfigured()
+	if err == nil {
+		t.Fatal("EnsureDiagnosticsConfigured succeeded when backup path was a directory")
+	}
+
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("reading original config: %v", readErr)
+	}
+	if string(got) != original {
+		t.Fatalf("original config changed after failure: got %q, want %q", string(got), original)
+	}
+}
