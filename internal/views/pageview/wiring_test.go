@@ -169,9 +169,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
-			file: "ask_bluefin.go",
+			file: "troubleshoot.go",
 			required: []string{
-				"pageview.AskBluefinGroupDescription()",
+				"pageview.TroubleshootGroupTitle()",
+				"pageview.TroubleshootGroupDescription()",
 				"pageview.GooseRow(",
 				"pageview.GooseSetupToast(",
 				// Readiness and the launch both belong to agentmode, which
@@ -181,11 +182,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"troubleshoot.Setup(",
 			},
 			// The Goose row is the one surface: no gtk-launch of the cask's
-			// desktop file (which would bypass the profile), and no second
-			// Enhanced Troubleshooting row.
+			// desktop file (which would bypass the profile), and no repair of
+			// the user's own Goose configuration.
 			retired: []string{
 				"launchApp(",
-				"Enhanced Troubleshooting",
 				"EnsureDiagnosticsConfigured",
 			},
 		},

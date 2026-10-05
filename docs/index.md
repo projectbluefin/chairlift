@@ -25,7 +25,7 @@ the available surface, not controls guaranteed on every host.
 |------|-------------|
 | **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
 | **Apps** | Open the external software catalog, search Homebrew formulae and casks, manage installed Flatpaks and Homebrew packages, install app collections, and export a Brewfile. |
-| **Agents** | Agent Mode: run a language model on this computer (llmman); Ask Bluefin: set up Goose Desktop with read-only Linux tools and launch it on that model; and contribute to Bluefin. |
+| **Agents** | Agent Mode: run a language model on this computer (llmman); Enhanced Troubleshooting: set up Goose Desktop with read-only Linux tools and launch it on that model; and contribute to Bluefin. |
 | **Features** | Distribution features, Developer Mode, WSL Mode (nsl or Lima), Docker, individually chosen IDEs/editors, selective Gaming, and safely locked printer applications. |
 | **Livery** | Choose your profile picture and the marks shown on the app launcher button, the top-bar menu, and Files. |
 | **Maintenance** | Free up space, run administrator-configured maintenance scripts, and open Recovery: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |

@@ -118,7 +118,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     When I select "Help" in the sidebar
     And I expand the "Why is something missing?" row with the keyboard
     Then the "Agent Mode" row says "Needs Homebrew"
-    And the "Ask Bluefin" row says "Needs Homebrew"
+    And the "Enhanced Troubleshooting" row says "Needs Homebrew"
     And the "App updates" row says "Needs Flatpak"
     And the "Recovery" row says "Needs Flatpak or Distrobox"
 
@@ -135,7 +135,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     And I expand the "Why is something missing?" row with the keyboard
     Then the "Packages from Homebrew" row says "Needs Homebrew"
     And the feature availability list omits "Agent Mode"
-    And the feature availability list omits "Ask Bluefin"
+    And the feature availability list omits "Enhanced Troubleshooting"
     And the feature availability list omits "Recovery"
 
   @env.CHAIRLIFT_CAPABILITIES=flatpak,brew,podman,bootc-stage

@@ -95,7 +95,7 @@ this inventory, independently of the original YAML namespace names.
 | --- | --- | --- |
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
 | Apps | `applications_page.go` | External catalog, Homebrew search/results, installed Flatpaks, installed casks, app collections, explicitly requested formulae, then Brewfile export |
-| Agents | `agents_page.go`, `ask_bluefin.go`, `contribute.go` | Agent Mode using llmman, Ask Bluefin's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
+| Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Enhanced Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
 | Features | `features_page.go` (+ `printers_page.go`) | Distribution features, Developer Mode, Gaming Mode, and Printers |
 | Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
 | Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Recovery entry |
@@ -778,7 +778,7 @@ away before it finished; every other toggle completes in view and already has
 a toast, so a second notification there would be noise the simple-interface
 constraint rules out.
 
-### Ask Bluefin's Goose engine (`internal/troubleshoot`)
+### Enhanced Troubleshooting (`internal/troubleshoot`)
 
 `internal/troubleshoot` is the engine behind the Agents page's Goose row
 (`agents_page.troubleshooting_group`); `internal/agentmode` decides readiness
@@ -1421,7 +1421,7 @@ One session runs at a time. `launcher.Run` reports every exit, clean or not, and
 - When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
 - When any prerequisite is missing, a session is already open, or the launch fails to start, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
 
-The Ask Bluefin group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state.
+The Enhanced Troubleshooting group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state.
 
 ## Explicit setup flow
 

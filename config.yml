@@ -9,12 +9,12 @@
 agents_page:
   agents_group:
     enabled: true
-  # Ask Bluefin: Goose on the Agent Mode model, with read-only tools for
-  # this system's logs, services, and network, plus online searches of the
-  # Project Bluefin knowledge base. Everything it installs comes from
-  # Homebrew, so the group hides itself where Homebrew is absent. Nothing is
-  # downloaded until the user presses Set Up. Accepted under help_page too,
-  # its old home.
+  # Enhanced Troubleshooting: Goose on the Agent Mode model, with read-only
+  # tools for this system's logs, services, and network, plus online
+  # searches of the Project Bluefin knowledge base. Everything it installs
+  # comes from Homebrew, so the group hides itself where Homebrew is absent.
+  # Nothing is downloaded until the user presses Set Up. Accepted under
+  # help_page too, its old home. The Ask Bluefin menu entry opens it.
   troubleshooting_group:
     enabled: true
 

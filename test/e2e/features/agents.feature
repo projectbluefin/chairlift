@@ -2,8 +2,8 @@
 Feature: Agents page
   Agent Mode runs a loopback model server as a systemd user unit. Its status
   comes from the executable, unit and node endpoint, never the unit alone.
-  Model controls stay visible when unavailable. Ask Bluefin's Goose row sits
-  below it: it installs Goose and its read-only tools with Set Up, then
+  Model controls stay visible when unavailable. Enhanced Troubleshooting's Goose
+  row sits below it: it installs Goose and its read-only tools with Set Up, then
   launches Goose on the Agent Mode model in a profile ChairLift writes at
   launch, so nothing reads or writes a Goose configuration under HOME.
   Under --dry-run every action is a preview and leaves software, files and
@@ -157,32 +157,32 @@ Feature: Agents page
     Then the application log contains "[DRY-RUN] would configure alias bluefin-active to unsloth/gemma-3"
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
 
-  # ------------------------------------------------------------ ask bluefin
+  # ------------------------------------------------------------ enhanced troubleshooting
 
-  Scenario: Ask Bluefin sits between Agent Mode and Contribute
+  Scenario: Enhanced Troubleshooting sits between Agent Mode and Contribute
     Given ChairLift is running
     When I open the "Agents" page
     Then the Agents page groups are, in order
-      | group       |
-      | Local AI    |
-      | Ask Bluefin |
-      | Contribute  |
+      | group                    |
+      | Local AI                 |
+      | Enhanced Troubleshooting |
+      | Contribute               |
     And I see "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
 
   @config.agents-no-troubleshooting
-  Scenario: Ask Bluefin disabled by configuration leaves Agent Mode
+  Scenario: Enhanced Troubleshooting disabled by configuration leaves Agent Mode
     Given ChairLift is running
     When I open the "Agents" page
-    Then the Agents page has no Ask Bluefin group
+    Then the Agents page has no Enhanced Troubleshooting group
     And I see "Contribute to Bluefin"
     And the application log does not contain "CONFIGURATION ERROR"
 
   @config.help-no-troubleshooting
-  Scenario: The legacy help_page key still turns Ask Bluefin off
+  Scenario: The legacy help_page key still turns Enhanced Troubleshooting off
     Given ChairLift is running
     Then the application log does not contain "CONFIGURATION ERROR"
     When I open the "Agents" page
-    Then the Agents page has no Ask Bluefin group
+    Then the Agents page has no Enhanced Troubleshooting group
     When I press "F1"
     Then I do not see "Enhanced Troubleshooting"
 

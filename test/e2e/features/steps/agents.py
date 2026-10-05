@@ -204,9 +204,9 @@ def step_sidebar_lacks(context, title):
     assert title not in titles, f"sidebar lists {title!r}: {titles}"
 
 
-# ---------------------------------------------------------------- ask bluefin
+# ---------------------------------------------------------------- enhanced troubleshooting
 
-ASK_BLUEFIN_GROUP = "Ask Bluefin"
+TROUBLESHOOT_GROUP = "Enhanced Troubleshooting"
 
 
 def _groups(context):
@@ -238,11 +238,11 @@ def step_groups_in_order(context):
     assert ok, f"Agents page groups {_groups(context)} != {want}"
 
 
-@then("the Agents page has no Ask Bluefin group")
-def step_ask_bluefin_absent(context):
+@then("the Agents page has no Enhanced Troubleshooting group")
+def step_troubleshoot_absent(context):
     # Settle on the page first: Agent Mode's row is built with it.
     atspi.row_containing(content(context), AGENT_MODE_ROW)
-    assert ASK_BLUEFIN_GROUP not in _groups(context), f"the {ASK_BLUEFIN_GROUP!r} group is showing: {_groups(context)}"
+    assert TROUBLESHOOT_GROUP not in _groups(context), f"the {TROUBLESHOOT_GROUP!r} group is showing: {_groups(context)}"
 
 
 @then("the Goose setup previewed exactly")

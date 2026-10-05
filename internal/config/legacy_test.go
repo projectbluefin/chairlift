@@ -136,7 +136,7 @@ func TestLegacySystemPageInvalidInputStillFailsClosed(t *testing.T) {
 	}
 }
 
-// troubleshooting_group (Ask Bluefin's Goose row) moved from Help to the Agents page. An
+// Enhanced Troubleshooting moved from Help to the Agents page. An
 // administrator file that disabled it at the old address must keep it
 // disabled, and a current setting must win over the old one.
 func TestTroubleshootingGroupMovedFromHelp(t *testing.T) {

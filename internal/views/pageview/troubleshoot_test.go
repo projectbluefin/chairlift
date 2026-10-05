@@ -44,8 +44,8 @@ func TestGooseSetupToastSaysWhatStillBlocksALaunch(t *testing.T) {
 
 // Knowledge searches go online, so the copy must say so and never promise
 // that questions stay on this computer.
-func TestAskBluefinCopyNeverClaimsAnswersStayLocal(t *testing.T) {
-	description := AskBluefinGroupDescription()
+func TestTroubleshootCopyNeverClaimsAnswersStayLocal(t *testing.T) {
+	description := TroubleshootGroupDescription()
 	if !strings.Contains(description, "online") {
 		t.Errorf("description does not say knowledge searches go online: %q", description)
 	}

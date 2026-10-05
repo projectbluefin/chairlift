@@ -718,10 +718,11 @@ An agent must not break these:
   user imported. The worker reads its plan from config on the main thread
   before it starts, is admitted one at a time by `developerFeedGate`, and
   reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
-- **Ask Bluefin runs Goose in ChairLift's own profile, never the user's.**
-  The Agents page's **Ask Bluefin** group (`agents_page`
-  `troubleshooting_group`, floored on Homebrew; `internal/views/ask_bluefin.go`)
-  holds the Goose row and the "Show Ask Bluefin in menu" switch. It is the
+- **Enhanced Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
+  The Agents page's **Enhanced Troubleshooting** group (`agents_page`
+  `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
+  holds the Goose row and the "Show Ask Bluefin in menu" switch; the Ask
+  Bluefin menu entry and `--ask-bluefin` are paths into it, not its name. It is the
   one Goose surface: Help no longer has an Enhanced Troubleshooting group,
   and `help_page.troubleshooting_group` is still accepted and migrated to
   `agents_page` (`internal/config/legacy.go` `legacyGroups`). `internal/troubleshoot`
@@ -819,7 +820,7 @@ An agent must not break these:
   `agents_page` has one Agent Mode switch, visible model and preset controls,
   a "Models and Chat" row that opens llmman's own web UI
   (`aistack.WebUIURL`) while Agent Mode is ready, and the local API address;
-  the Ask Bluefin group below it is the invariant above. Unready model and
+  the Enhanced Troubleshooting group below it is the invariant above. Unready model and
   launch controls stay visible and insensitive instead of disappearing.
   Peer/offload controls and their backend are removed; this surface manages
   this computer only.
@@ -859,7 +860,7 @@ An agent must not break these:
   cannot prove the service inactive preserves both files and the management
   handle. There is no pkexec route, Homebrew service, or container stack.
   Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI,
-  launched by `agentmode.Launch` as described under Ask Bluefin above.
+  launched by `agentmode.Launch` as described under Enhanced Troubleshooting above.
   `chairlift --ask-bluefin` dispatches to Goose Desktop when all prerequisites
   are met — the launch, which writes the profile, runs off the GTK main
   thread — or presents Control Center on the Agents page naming the missing

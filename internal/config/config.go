@@ -321,7 +321,7 @@ func defaultConfig() *Config {
 		// crosses no privilege boundary and needs no administrator route.
 		AgentsPage: PageConfig{
 			"agents_group": GroupConfig{Enabled: true},
-			// Ask Bluefin: the Goose row on the Agent Mode model, with
+			// Enhanced Troubleshooting: Goose on the Agent Mode model, with
 			// read-only tools. Installs nothing until Set Up, and is
 			// accepted under help_page too, its old home (legacy.go).
 			"troubleshooting_group": GroupConfig{Enabled: true},

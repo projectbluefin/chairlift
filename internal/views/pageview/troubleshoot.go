@@ -54,13 +54,14 @@ func GooseSetupToast(state agentmode.State, model string) string {
 	return "Goose is installed — " + state.Subtitle(model)
 }
 
-// AskBluefinGroupTitle titles the group holding the Goose row and the menu
-// switch: Ask Bluefin is what the panel menu entry calls this feature.
-func AskBluefinGroupTitle() string { return "Ask Bluefin" }
+// TroubleshootGroupTitle titles the group holding the Goose row and the
+// Ask Bluefin menu switch. Ask Bluefin is one path into this feature, not
+// its name.
+func TroubleshootGroupTitle() string { return "Enhanced Troubleshooting" }
 
-// AskBluefinGroupDescription names both places a session's questions go: the
+// TroubleshootGroupDescription names both places a session's questions go: the
 // Agent Mode model and the Project Bluefin knowledge base, which is searched
 // online.
-func AskBluefinGroupDescription() string {
+func TroubleshootGroupDescription() string {
 	return "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
 }

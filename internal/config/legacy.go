@@ -19,9 +19,8 @@ func validateLegacySystemPage(src configSource, value *yaml.Node) *LoadError {
 
 // legacyGroups are groups a current page still accepts under their old
 // configuration home, each validated with that page's ordinary group rules
-// and then moved by migrateLegacyGroups. troubleshooting_group (Ask
-// Bluefin's Goose row) moved from Help to the Agents page, beside the model
-// it runs on.
+// and then moved by migrateLegacyGroups. Enhanced Troubleshooting moved
+// from Help to the Agents page, beside the model it runs on.
 var legacyGroups = []legacyGroup{
 	{From: "help_page", To: "agents_page", Group: "troubleshooting_group"},
 }

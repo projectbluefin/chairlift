@@ -19,20 +19,20 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
-// buildAskBluefinGroup builds the Ask Bluefin group (agents_page
-// troubleshooting_group): the Goose row, whose one button installs Goose and
-// its read-only tools when they are missing and launches a session once
-// Agent Mode serves a model, and the switch for the distro's Ask Bluefin
-// panel-menu entry.
+// buildTroubleshootGroup builds the Enhanced Troubleshooting group
+// (agents_page troubleshooting_group): the Goose row, whose one button
+// installs Goose and its read-only tools when they are missing and launches a
+// session once Agent Mode serves a model, and the switch for the distro's Ask
+// Bluefin panel-menu entry, which is one path into the same session.
 //
 // The row is an action row rather than a switch because there is nothing
 // to turn off: the session's profile is ChairLift's own and is rewritten on
 // every launch (internal/troubleshoot), and the packages are ordinary
 // Homebrew installs. Signals are connected once, here.
-func (uh *UserHome) buildAskBluefinGroup(page *adw.PreferencesPage) {
+func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.AskBluefinGroupTitle())
-	group.SetDescription(pageview.AskBluefinGroupDescription())
+	group.SetTitle(pageview.TroubleshootGroupTitle())
+	group.SetDescription(pageview.TroubleshootGroupDescription())
 
 	gooseRow := adw.NewActionRow()
 	gooseRow.SetTitle(pageview.GooseRowTitle())

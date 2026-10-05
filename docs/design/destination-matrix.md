@@ -20,7 +20,7 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | --- | --- | --- |
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | External app catalog, Homebrew search/results, installed Flatpaks, installed casks, collections, explicitly requested formulae and Brewfile export, in that order |
-| `agents` | `agents_page.go`, `ask_bluefin.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Ask Bluefin's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
+| `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Enhanced Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
 | `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and locked printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Recovery entry |
@@ -56,7 +56,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` readiness and authenticated-administration enable gate |
 | `agents_page` | `agents_group` | Agents service/model/presets, Models and Chat link and contributor launch; `internal/aistack`, `internal/contribute` |
-| `agents_page` | `troubleshooting_group` | Ask Bluefin: Goose Set Up/Launch and menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
+| `agents_page` | `troubleshooting_group` | Enhanced Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
 | `livery_page` | `livery_app_grid_group` | Livery app-grid mark; app-grid controller and `internal/livery` |
 | `livery_page` | `livery_foundation_group` | Livery panel mark/login rotation; `livery.Panel` controller |
@@ -140,7 +140,7 @@ Provider-specific safety remains with each live owner:
   Reset sends only its fixed command word; no caller-supplied reset target
   crosses the helper boundary. Manual cleanup never claims skipped or failed
   steps succeeded, or invents reclaimed-byte figures.
-- Ask Bluefin's Set Up installs only missing packages (user-scope Homebrew)
+- Enhanced Troubleshooting's Set Up installs only missing packages (user-scope Homebrew)
   and previews without tapping; its Goose profile enables only the read-only
   Linux tools and the online knowledge search.
 - Privileged intent is journalled at shared choke points. Live helper outcomes

@@ -176,7 +176,7 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 	documented := map[string]string{
 		// agents_page
 		"agents_group":          "Agents",
-		"troubleshooting_group": "**Ask Bluefin**",
+		"troubleshooting_group": "**Enhanced Troubleshooting**",
 		// updates_page
 		"automatic_updates_group": "Automatic updates",
 		"bootc_updates_group":     "System Updates",

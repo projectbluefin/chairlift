@@ -117,10 +117,11 @@ profile. Readiness is therefore the packages (`linux-mcp-server` and
 `goose-desktop` resolved, x86_64), the running daemon, and a selected
 model; when the packages are missing the Goose row offers Set Up, which
 installs them with Homebrew. One session runs at a time. The Goose row and
-the menu switch form an **Ask Bluefin** group gated by
-`agents_page.troubleshooting_group`, the key Help's former Enhanced
-Troubleshooting group used under `help_page` (still accepted and
-migrated); Help no longer offers a second Goose surface. Knowledge
+the menu switch form the Agents page's **Enhanced Troubleshooting** group,
+gated by `agents_page.troubleshooting_group`, the key it used on Help
+under `help_page` (still accepted and migrated); Help no longer offers a
+second Goose surface. The Ask Bluefin menu entry and `--ask-bluefin` are
+paths into it. Knowledge
 searches go online, so no copy claims a session's questions stay on this
 computer. The Agent Mode group also gains a **Models and Chat** row that
 opens llmman's own web UI while the daemon is ready.

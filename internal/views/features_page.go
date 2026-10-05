@@ -110,7 +110,7 @@ func (uh *UserHome) buildFeaturesPage() {
 		emptyGroup.SetVisible(empty)
 	}
 
-	// Ask Bluefin's Goose row and Agent Mode both live on Agents (issues
+	// Enhanced Troubleshooting and Agent Mode both live on Agents (issues
 	// #249 and #244), so neither is built here.
 
 	featuresEnabled := uh.groupEnabled("features_page", "features_group")

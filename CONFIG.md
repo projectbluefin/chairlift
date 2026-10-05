@@ -86,7 +86,7 @@ two surviving groups to `updates_page` and remove `system_page` when convenient.
 ### Agents Page (`agents_page`)
 
 - `agents_group`: Agent Mode — llmman installed with Homebrew and served as a systemd user unit on `127.0.0.1:17434` in the invoking user's own account; shown where Homebrew is present. Nothing here crosses a privilege boundary. It has no options beyond `enabled`. The page also presents Contribute to Bluefin via `ujust contribute`.
-- `troubleshooting_group`: Ask Bluefin — the Goose row and the "Show Ask Bluefin in menu" shortcut preference; shown where Homebrew is present. Set Up installs `linux-mcp-server` and the Goose desktop app with Homebrew in the invoking user's account (nothing is downloaded until it is pressed; the app is published for x86_64 only); Launch runs Goose on the Agent Mode model in ChairLift's own profile under `$XDG_DATA_HOME/chairlift/troubleshooting`, never `~/.config/goose`, with read-only tools for this computer and online searches of the Project Bluefin knowledge base. It has no options beyond `enabled`. Formerly `help_page.troubleshooting_group`; that key is still accepted and moved here, and a value set under `agents_page` wins.
+- `troubleshooting_group`: Enhanced Troubleshooting — the Goose row and the "Show Ask Bluefin in menu" shortcut preference; shown where Homebrew is present. Set Up installs `linux-mcp-server` and the Goose desktop app with Homebrew in the invoking user's account (nothing is downloaded until it is pressed; the app is published for x86_64 only); Launch runs Goose on the Agent Mode model in ChairLift's own profile under `$XDG_DATA_HOME/chairlift/troubleshooting`, never `~/.config/goose`, with read-only tools for this computer and online searches of the Project Bluefin knowledge base. It has no options beyond `enabled`. Formerly `help_page.troubleshooting_group`; that key is still accepted and moved here, and a value set under `agents_page` wins.
 
 ### Updates Page (`updates_page`)
 
@@ -211,7 +211,7 @@ agents_page:
   agents_group:
     enabled: false # Agent Mode installs llmman through Homebrew
   troubleshooting_group:
-    enabled: false # Ask Bluefin installs Goose and its tools through Homebrew
+    enabled: false # Enhanced Troubleshooting installs Goose and its tools through Homebrew
 
 # Developer IDE/editor installation also uses Homebrew; this disables the
 # whole Developer group, including its permission switches.

@@ -3,8 +3,8 @@ Feature: Help destination
   Help is the one page every configuration keeps. It lists the support
   links configuration names, in the order internal/views/pageview fixes,
   and explains which features this host cannot back. The xdg-open the
-  links reach is stubbed and records instead of opening. Ask Bluefin's
-  Goose row, which Help once led with, is on the Agents page
+  links reach is stubbed and records instead of opening. Enhanced
+  Troubleshooting, which Help once led with, is on the Agents page
   (agents.feature).
 
   Scenario: F1 opens Help from any page

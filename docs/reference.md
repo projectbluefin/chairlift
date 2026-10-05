@@ -133,7 +133,7 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Group | Key | Description |
 |-------|-----|-------------|
 | Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers a "Models and Chat" row that opens llmman's web UI while it is ready, and Contribute to Bluefin via `ujust contribute`. When llmman is missing, enabling taps `llmmanorg/tap` and trusts exactly `llmmanorg/tap/llmman` before installing it. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
-| Ask Bluefin | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it, one session at a time. `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
+| Enhanced Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it, one session at a time. `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
 
 ### Features Page (`features_page`)
 
@@ -246,8 +246,8 @@ Each action has:
 |-------|-----|-------------|
 | Resources | `help_resources_group` | Links to project resources |
 
-`help_page.troubleshooting_group`, Help's former Enhanced Troubleshooting
-group, is still accepted and moved to `agents_page.troubleshooting_group`
+`help_page.troubleshooting_group`, Enhanced Troubleshooting's former Help
+key, is still accepted and moved to `agents_page.troubleshooting_group`
 (below); a value set under `agents_page` wins.
 
 Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).

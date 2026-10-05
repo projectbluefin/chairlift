@@ -6,7 +6,7 @@ assertions do not depend on what the runner happens to have installed:
 * xdg-open, which the resource rows spawn, records its argv into the
   scenario directory instead of opening a browser.
 
-Ask Bluefin's Goose row lives on the Agents page; its stubs are in
+Enhanced Troubleshooting's Goose row lives on the Agents page; its stubs are in
 fixtures/stubs_agents.py.
 """
 

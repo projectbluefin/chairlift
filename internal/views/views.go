@@ -263,7 +263,7 @@ type UserHome struct {
 	// agentManageRow opens llmman's own web UI, where models are managed.
 	agentManageRow *adw.ActionRow
 
-	// Ask Bluefin (agents_page troubleshooting_group): the Goose row, which
+	// Enhanced Troubleshooting (agents_page troubleshooting_group): the Goose row, which
 	// sets Goose up and launches it, and the menu-entry switch. Main-thread
 	// only. gooseGate admits one setup or launch at a time and gooseBusy
 	// keeps a background readiness read off the row while one runs;

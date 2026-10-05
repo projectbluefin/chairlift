@@ -1,5 +1,6 @@
-// Package troubleshoot is the engine behind Ask Bluefin, the Agents page's
-// Goose row: the Goose desktop app, running on the Agent Mode model, with
+// Package troubleshoot is the engine behind Enhanced Troubleshooting, the
+// Agents page's Goose row; the Ask Bluefin menu entry is one path into it.
+// It is the Goose desktop app, running on the Agent Mode model, with
 // read-only tools for this machine's live state and the Project Bluefin
 // knowledge base. Knowledge searches go online, so nothing here claims a
 // session's questions stay on this computer.
@@ -353,7 +354,7 @@ func RenderConfig(serverPath string, current []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte("# Written by "+branding.AppName+" for Ask Bluefin; rewritten on every launch.\n"), body...), nil
+	return append([]byte("# Written by "+branding.AppName+" for Enhanced Troubleshooting; rewritten on every launch.\n"), body...), nil
 }
 
 // writeFile is an injection seam for the profile writes.

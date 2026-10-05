@@ -16,8 +16,8 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
-// Agent Mode is a loopback model server managed by a systemd user unit; Ask
-// Bluefin is Goose on that server's model. No operation on this page is
+// Agent Mode is a loopback model server managed by a systemd user unit;
+// Enhanced Troubleshooting is Goose on that server's model. No operation on this page is
 // privileged.
 func (uh *UserHome) buildAgentsPage() {
 	page := uh.agentsPrefsPage
@@ -29,7 +29,7 @@ func (uh *UserHome) buildAgentsPage() {
 		uh.buildAgentModeGroup(page)
 	}
 	if uh.groupEnabled("agents_page", "troubleshooting_group") {
-		uh.buildAskBluefinGroup(page)
+		uh.buildTroubleshootGroup(page)
 	}
 	if agents {
 		uh.buildContributeGroup(page)

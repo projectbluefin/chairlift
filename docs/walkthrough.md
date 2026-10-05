@@ -136,7 +136,7 @@ only when the local server is ready; then **Models and Chat** opens llmman's
 own web interface for pulling, removing, and trying models. The connection
 address is directly selectable, not hidden in Details.
 
-**Ask Bluefin** sits below Agent Mode where Homebrew is installed. Its
+**Enhanced Troubleshooting** sits below Agent Mode where Homebrew is installed. Its
 **Goose** row is the Agent Mode desktop GUI with read-only tools for this
 computer's logs, services, and network, plus searches of the Project Bluefin
 knowledge base, which go online. While Goose Desktop or linux-mcp-server is
@@ -215,7 +215,7 @@ where the distribution ships none. When a computer offers none of these —
 no Developer tools, no Gaming, no Printers, no optional features — the page
 says **Nothing to set up here** rather than showing an empty screen.
 
-Agent Mode and Ask Bluefin have their own **Agents** page.
+Agent Mode and Enhanced Troubleshooting have their own **Agents** page.
 Developer and Gaming actions show an activity spinner while their changes
 are running, and errors are shown immediately rather than hidden behind an
 older message.
@@ -317,7 +317,7 @@ ask you to confirm before applying the switch at the next restart.
 
 ![Help](screenshots/7-help.png)
 
-The AI troubleshooting assistant is **Ask Bluefin** on the Agents page.
+**Enhanced Troubleshooting**, the AI troubleshooting assistant, is on the Agents page.
 
 Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and

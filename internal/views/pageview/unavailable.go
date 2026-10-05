@@ -24,7 +24,7 @@ var featureTitles = map[[2]string]string{
 	{"applications_page", "brew_search_group"}:    "Find more apps and tools",
 	{"applications_page", "brew_bundles_group"}:   "App collections",
 	{"agents_page", "agents_group"}:               "Agent Mode",
-	{"agents_page", "troubleshooting_group"}:      "Ask Bluefin",
+	{"agents_page", "troubleshooting_group"}:      "Enhanced Troubleshooting",
 	{"features_page", "dx_group"}:                 "Developer mode",
 	{"features_page", "gaming_group"}:             "Gaming mode",
 	{"features_page", "printers_group"}:           "Printers",

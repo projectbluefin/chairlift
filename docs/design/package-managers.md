@@ -626,7 +626,7 @@ Neither gaming nor per-user Homebrew trust adds privilege.
 
 Agent Mode runs llmman as a systemd **user service**, not a ChairLift-managed
 container stack or Homebrew service. The Homebrew capability floors
-`agents_page.agents_group`. The Agents page's Ask Bluefin group
+`agents_page.agents_group`. The Agents page's Enhanced Troubleshooting group
 (`agents_page.troubleshooting_group`, also floored on Homebrew) offers the
 Goose row — Set Up, then Launch — and Ask Bluefin menu visibility; runtime
 enable does not itself install Goose. When llmman is missing, enable taps
