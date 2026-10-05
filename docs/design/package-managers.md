@@ -18,8 +18,8 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/updateproviders`](../../internal/updateproviders/) | Adapters and typed cleanup over the existing integrations | Adds no privileged route |
 | [`internal/aistack`](../../internal/aistack/aistack.go) | Local llmman runtime, selected-model alias and owned user unit | Invoking account |
 | [`internal/printerapp`](../../internal/printerapp/printerapp.go) | Rootless printer quadlets, administration gate and observed diagnostics | Invoking account |
-| [`internal/agentmode`](../../internal/agentmode/readiness.go) | Goose launch readiness and Ask Bluefin dispatch | Invoking account |
-| [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) | Goose/Linux MCP installation and safe diagnostic configuration | Invoking account |
+| [`internal/agentmode`](../../internal/agentmode/readiness.go) | Goose launch readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch | Invoking account |
+| [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) | Goose/Linux MCP installation and ChairLift's own Goose profile | Invoking account |
 
 All integrations read the single process-wide `dryrun.Enabled()` flag from
 [`internal/dryrun`](../../internal/dryrun/dryrun.go). There are no per-wrapper
@@ -626,10 +626,13 @@ Neither gaming nor per-user Homebrew trust adds privilege.
 
 Agent Mode runs llmman as a systemd **user service**, not a ChairLift-managed
 container stack or Homebrew service. The Homebrew capability floors
-`agents_page.agents_group`. The Agents page also offers Goose Desktop launch
-and Ask Bluefin menu visibility; runtime enable does not itself install Goose.
-The shared Goose/Linux MCP installer remains the Enhanced Troubleshooting
-action on Help. Rationale: [ADR-0015](../adr/0015-agent-mode-llmman.md).
+`agents_page.agents_group`. The Agents page's Ask Bluefin group
+(`agents_page.troubleshooting_group`, also floored on Homebrew) offers the
+Goose row — Set Up, then Launch — and Ask Bluefin menu visibility; runtime
+enable does not itself install Goose. When llmman is missing, enable taps
+`llmmanorg/tap` and trusts exactly `brew trust --formula
+llmmanorg/tap/llmman` before the bundle, because Homebrew refuses a formula
+from an untrusted tap. Rationale: [ADR-0015](../adr/0015-agent-mode-llmman.md).
 
 [`aistack.go`](../../internal/aistack/aistack.go) owns three filesystem
 artifacts and their removal policies:
@@ -695,39 +698,44 @@ the displayed configured model.
 ### Goose, Linux MCP and Ask Bluefin
 
 [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) installs
-`ublue-os/tap/linux-mcp-server` (which supplies the Goose CLI dependency) and
-the `ublue-os/tap/goose-linux` desktop cask. Setup taps in user scope and resumes
-missing steps, then re-observes the installed tools and diagnostic wiring.
-`~/.config/goose/config.yaml` is seeded from
-`/usr/share/ublue-os/goose/config.yaml` only when absent. For an existing file,
-the atomic configuration writer repairs recognized diagnostic entries while
-preserving provider, model, other extensions and unknown settings; it refuses
-explicit unsafe policy and shared-anchor mappings rather than replacing the
-user's file. Preview performs no installation or write.
+`ublue-os/tap/linux-mcp-server` and the `ublue-os/tap/goose-linux` desktop
+cask, with `cpio` installed first because the cask's preflight pipes its RPM
+through a `cpio` it does not declare and Bluefin does not ship. Setup taps
+`ublue-os/tap` only when a package is missing, resumes missing steps, and
+returns `ErrUnsupported` off x86_64, the only architecture the desktop app is
+published for. Preview performs no installation or write. Every brew call,
+and the Goose launch, runs with `homebrew.WithBrewPath` so brew's children
+and llmman find Homebrew's tools under a direct launch.
 
-Both `linux-mcp-server` and legacy `linux-tools` extension keys are recognized.
-Usable diagnostics require enabled stdio, a real `linux-mcp-server` command,
-literal `--toolset FIXED`, `--no-search-for-ssh-key`, and no explicit SSH key or
-unsafe SSH policy. Keep a stable executable path, not a versioned Cellar path.
-`troubleshoot.State.Ready()` verifies installed CLI/server plus diagnostic
-wiring; it does **not** verify provider credentials or connectivity, and
-desktop presence is checked separately by Setup.
+Goose never reads the user's `~/.config/goose`. `troubleshoot.Profile` is a
+dedicated profile under `$XDG_DATA_HOME/chairlift/troubleshooting`;
+`Profile.Write` rewrites its `config.yaml` (`RenderConfig`: `linux-tools`
+with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the
+`bluefin-knowledge` search enabled, every other extension disabled) and
+`.goosehints` atomically before every launch, and links the user's
+`mimeapps.list` and `dconf` into the desktop app's own `XDG_CONFIG_HOME`.
 
-[`agentmode.ObserveLive`](../../internal/agentmode/readiness.go) applies a
-different launch predicate: healthy local llmman, a configured active-model
-alias, installed Goose Desktop/server and safe diagnostic extension verified
-on disk. The Agents Launch button rechecks those facts on each click.
-[`agentmode.Launch`](../../internal/agentmode/launch.go) runs
-`llmman launch goose-desktop --model <active-model>` without rewriting Goose's
-persistent provider/model. Launch lifetime is detached from the short
-preflight context; asynchronous failures return through the GTK thread.
+[`agentmode.ObserveLive`](../../internal/agentmode/readiness.go) evaluates,
+in order: supported architecture, `linux-mcp-server` and `goose-desktop`
+resolved to absolute paths, a healthy llmman, and a configured active-model
+alias. Nothing on disk is verified. A missing package turns the Goose row's
+button into Set Up; the Launch button rechecks readiness on each click.
+[`agentmode.Launch`](../../internal/agentmode/launch.go) writes the profile,
+then runs `llmman launch goose-desktop --model bluefin-active` with
+`GOOSE_PATH_ROOT` and `XDG_CONFIG_HOME` inside it, through `launcher.Run`.
+Launch lifetime is detached from the short preflight context; asynchronous
+failures return through the GTK thread. A second launch is refused with
+`ErrSessionOpen` until the first session's process exits.
 
 `chairlift --ask-bluefin` uses the same pure
 [`dispatcher`](../../internal/agentmode/dispatcher.go): launch when ready,
-otherwise present Agents with the missing prerequisite. Cold and running
-application requests share that dispatcher. `internal/devmenu` changes only
-the existing distro-owned Ask Bluefin menu tuple's visibility, using the
-user-layer override/reset rule; it does not run a privileged action.
+otherwise present Agents with the missing prerequisite (or the open
+session). Cold and running application requests share that dispatcher.
+`internal/devmenu` changes only the existing distro-owned Ask Bluefin menu
+tuple's visibility — recognizing the web link, `chairlift --ask-bluefin`,
+and the distro's `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper
+--ask-bluefin` — using the user-layer override/reset rule; it never rewrites
+the command and does not run a privileged action.
 
 The same Agents page's **Contribute to Bluefin** action uses
 [`internal/contribute`](../../internal/contribute/contribute.go) to check
