@@ -1,0 +1,5 @@
+# The administrator turned Troubleshooting off under its current
+# home, agents_page; Agent Mode stays on.
+agents_page:
+  troubleshooting_group:
+    enabled: false

@@ -1,4 +1,5 @@
-# The administrator turned Enhanced Troubleshooting off.
+# The administrator turned Troubleshooting off under its old home,
+# help_page. The key is still accepted and migrates to agents_page.
 help_page:
   troubleshooting_group:
     enabled: false

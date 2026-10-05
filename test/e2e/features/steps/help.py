@@ -15,7 +15,6 @@ import chairlift_atspi as atspi
 import stubs_help
 
 RESOURCES_GROUP = "Help & Resources"
-TROUBLESHOOT_ROW = "Enhanced Troubleshooting"
 
 
 def _content(context):
@@ -59,16 +58,6 @@ def _resource_rows(context):
     if group is None:
         return None
     return [tuple(_row_labels(row)[:2]) for row in _rows(group)]
-
-
-def _troubleshoot_subtitle(context):
-    try:
-        row = atspi.row_containing(_content(context), TROUBLESHOOT_ROW, timeout=1)
-    except atspi.TreeError:
-        return None
-    labels = [label for label in _row_labels(row) if label != TROUBLESHOOT_ROW]
-    # The first remaining label is the subtitle; the rest are the button's.
-    return labels[0] if labels else None
 
 
 # ---------------------------------------------------------------- resources
@@ -139,63 +128,6 @@ def step_url_opened(context, url):
 def step_still_responsive(context):
     assert context.app_process.poll() is None, "ChairLift exited"
     assert atspi.poll(lambda: _group(context, "Diagnostics")), "the Help page stopped publishing its content"
-
-
-# ---------------------------------------------------------------- troubleshooting
-
-
-@then('the Enhanced Troubleshooting status is "{text}"')
-def step_troubleshoot_status(context, text):
-    ok = atspi.poll(lambda: _troubleshoot_subtitle(context) == text)
-    assert ok, f"Enhanced Troubleshooting subtitle is {_troubleshoot_subtitle(context)!r}, want {text!r}"
-
-
-@then("the Enhanced Troubleshooting group is not shown")
-def step_troubleshoot_absent(context):
-    assert atspi.poll(lambda: _group(context, "Diagnostics")), "the Help page never finished building"
-    assert _group(context, TROUBLESHOOT_ROW) is None, "the Enhanced Troubleshooting group is showing"
-
-
-@then('Goose was launched as "{desktop_id}"')
-def step_goose_launched(context, desktop_id):
-    ok = atspi.poll(lambda: _record(context, stubs_help.LAUNCH_RECORD) == [desktop_id])
-    assert ok, f"gtk-launch calls {_record(context, stubs_help.LAUNCH_RECORD)} != [{desktop_id!r}]"
-
-@then("connected Linux tools offer Goose without claiming a ready AI service")
-def step_tools_connected(context):
-    row = atspi.row_containing(_content(context), TROUBLESHOOT_ROW)
-    button = atspi.find_button(row, "Open Goose")
-    assert atspi.poll(lambda: atspi.sensitive(button)), "Goose cannot be opened after tools were connected"
-    subtitle = _troubleshoot_subtitle(context) or ""
-    assert "Ready" not in subtitle, "tool wiring was misrepresented as a ready model service"
-
-
-@then('the troubleshooting row names "{service}"')
-def step_selected_service(context, service):
-    assert atspi.poll(lambda: service in (_troubleshoot_subtitle(context) or "")), "the selected service is not disclosed"
-
-
-@then("Goose's existing configuration was kept unchanged")
-def step_existing_config_untouched(context):
-    path = os.path.join(context.home, ".config", "goose", "config.yaml")
-    with open(path, "r", encoding="utf-8") as handle:
-        observed = handle.read()
-    assert observed == context.goose_config_before, "setup changed existing Goose settings under dry-run or after refusal"
-
-
-
-@then('the troubleshooting setup never ran "brew {verb}"')
-def step_brew_never(context, verb):
-    calls = [c for c in _record(context, stubs_help.BREW_RECORD) if c.split(" ", 1)[0] == verb]
-    assert not calls, f"brew ran {verb!r} for real: {calls}"
-
-
-
-
-@then("Goose's configuration file was not written")
-def step_goose_config_untouched(context):
-    path = os.path.join(context.home, ".config", "goose", "config.yaml")
-    assert not os.path.exists(path), f"{path} exists after a dry-run setup"
 
 
 # ---------------------------------------------------------------- feature availability

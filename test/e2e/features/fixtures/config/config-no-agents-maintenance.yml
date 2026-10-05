@@ -4,6 +4,8 @@
 agents_page:
   agents_group:
     enabled: false
+  troubleshooting_group:
+    enabled: false
 maintenance_page:
   maintenance_cleanup_group:
     enabled: false

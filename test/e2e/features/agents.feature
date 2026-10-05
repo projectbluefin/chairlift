@@ -2,8 +2,12 @@
 Feature: Agents page
   Agent Mode runs a loopback model server as a systemd user unit. Its status
   comes from the executable, unit and node endpoint, never the unit alone.
-  Model controls stay visible when unavailable. Under --dry-run every action
-  is a preview and leaves software, files and model configuration unchanged.
+  Model controls stay visible when unavailable. Troubleshooting's Goose
+  row sits below it: it installs Goose and its read-only tools with Set Up, then
+  launches Goose on the Agent Mode model in a profile ChairLift writes at
+  launch, so nothing reads or writes a Goose configuration under HOME.
+  Under --dry-run every action is a preview and leaves software, files and
+  model configuration unchanged.
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,podman,bootc-stage
   Scenario: Agents is hidden on a host without Homebrew
@@ -11,7 +15,7 @@ Feature: Agents page
     Then the sidebar has no "Agents" row
 
   @config.agents-disabled
-  Scenario: Agents is hidden when its group is disabled in configuration
+  Scenario: Agents is hidden when both of its groups are disabled in configuration
     Given ChairLift is running
     Then the sidebar has no "Agents" row
 
@@ -22,8 +26,9 @@ Feature: Agents page
     And the "Agent Mode" row says "Turn on to install the model server"
     And the "Active Model" row says "Turn on Agent Mode to choose a model."
     And the model chooser is insensitive
-    And the "Goose" row says "Turn on Agent Mode to launch Goose."
-    And the "Launch" button in the "Goose" row is insensitive
+    And I do not see "Models and Chat"
+    And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    And the "Set Up" button in the "Goose" row is sensitive
     And the "Local connection" row says "http://127.0.0.1:17434/v1"
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
@@ -35,8 +40,19 @@ Feature: Agents page
     And the llmman node endpoint was probed
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
     And the model chooser is sensitive
+    And the "Models and Chat" row says "Pull, remove, and try models in llmman's own web interface"
     And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
-    And the "Launch" button in the "Goose" row is insensitive
+    And the "Set Up" button in the "Goose" row is sensitive
+
+  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.help-xdg-open
+  Scenario: Open llmman hands its loopback web interface to xdg-open
+    Given ChairLift is running
+    When I open the "Agents" page
+    # The row is the button's label (AdwActionRow activatable widget), so the
+    # "Open llmman" button announces itself as "Models and Chat".
+    And I click the "Models and Chat" button in the "Models and Chat" row
+    Then xdg-open was asked to open "http://127.0.0.1:17434/"
+    And the action journal is empty
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node
   Scenario: A ready server with no alias does not invent an active model
@@ -55,6 +71,7 @@ Feature: Agents page
     And the "Active Model" row says "Available when the model server is ready."
     And the "Recommended Presets" row says "Available when the model server is ready."
     And the model chooser is insensitive
+    And I do not see "Models and Chat"
 
   Scenario: Turning Agent Mode on in a dry run installs and writes nothing
     Given ChairLift is running
@@ -140,8 +157,95 @@ Feature: Agents page
     Then the application log contains "[DRY-RUN] would configure alias bluefin-active to unsloth/gemma-3"
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
 
+  # ------------------------------------------------------------ troubleshooting
+
+  Scenario: Troubleshooting sits between Agent Mode and Contribute
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the Agents page groups are, in order
+      | group                    |
+      | Local AI                 |
+      | Troubleshooting |
+      | Contribute               |
+    And I see "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
+
+  @config.agents-no-troubleshooting
+  Scenario: Troubleshooting disabled by configuration leaves Agent Mode
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the Agents page has no Troubleshooting group
+    And I see "Contribute to Bluefin"
+    And the application log does not contain "CONFIGURATION ERROR"
+
+  @config.help-no-troubleshooting
+  Scenario: The legacy help_page key still turns Troubleshooting off
+    Given ChairLift is running
+    Then the application log does not contain "CONFIGURATION ERROR"
+    When I open the "Agents" page
+    Then the Agents page has no Troubleshooting group
+    When I press "F1"
+    Then I do not see "Troubleshooting"
+
+  Scenario: Set Up on a fresh host previews every step and changes nothing
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    When I click the "Set Up" button in the "Goose" row
+    Then I see "[DRY-RUN] Preview: Goose would be set up — no changes made"
+    And the Goose setup previewed exactly
+      | command                                      |
+      | brew tap ublue-os/tap                        |
+      | brew install ublue-os/tap/linux-mcp-server   |
+      | brew install cpio                            |
+      | brew install --cask ublue-os/tap/goose-linux |
+    And brew was never asked to "tap"
+    And brew was never asked to "install"
+    And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    And the "Set Up" button in the "Goose" row is sensitive
+    And no Goose session was previewed
+    And the Goose profile was not written
+    And the home directory has no ".config/goose"
+    And the action journal is empty
+
+  @stub.agents.goose-server
+  Scenario: Set Up with the tools installed only adds the Goose app
+    Given ChairLift is running
+    When I open the "Agents" page
+    And I click the "Set Up" button in the "Goose" row
+    Then I see "[DRY-RUN] Preview: Goose would be set up — no changes made"
+    And the Goose setup previewed exactly
+      | command                                      |
+      | brew tap ublue-os/tap                        |
+      | brew install cpio                            |
+      | brew install --cask ublue-os/tap/goose-linux |
+
+  @stub.agents.goose-desktop
+  Scenario: Set Up with the Goose app installed only adds the tools
+    Given ChairLift is running
+    When I open the "Agents" page
+    And I click the "Set Up" button in the "Goose" row
+    Then I see "[DRY-RUN] Preview: Goose would be set up — no changes made"
+    And the Goose setup previewed exactly
+      | command                                    |
+      | brew tap ublue-os/tap                      |
+      | brew install ublue-os/tap/linux-mcp-server |
+
+  @stub.agents.goose
+  Scenario: Installed Goose with Agent Mode off points at Agent Mode
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the "Goose" row says "Turn on Agent Mode to launch Goose."
+    And the "Launch" button in the "Goose" row is insensitive
+
+  @stub.agents.goose @stub.agents.llmman @stub.agents.unit @stub.agents.node
+  Scenario: Agent Mode running without a model asks for one
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the "Goose" row says "Choose a model to launch Goose."
+    And the "Launch" button in the "Goose" row is insensitive
+
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose
-  Scenario: A ready Agent Mode with verified Goose allows launch in dry run
+  Scenario: A ready Agent Mode launches Goose in ChairLift's own profile, previewed
     Given ChairLift is running
     When I open the "Agents" page
     Then the Agent Mode switch settles on and sensitive
@@ -151,7 +255,13 @@ Feature: Agents page
     When I click the "Launch" button in the "Goose" row
     Then I see "[DRY-RUN] Would launch Goose Desktop"
     And the application log contains "[DRY-RUN] would launch Goose Desktop with model unsloth/Qwen3-8B-GGUF:Q4_K_M via llmman"
+    And the Goose session previewed its profile and launch
     And llmman was never asked to "launch"
+    And the Goose profile was not written
+    And the home directory has no ".config/goose"
+    And the Goose setup previewed exactly
+      | command |
+    And the action journal is empty
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node
   Scenario: Every Agents control has an accessible name
@@ -188,6 +298,7 @@ Feature: Agents page
     And dconf was never asked to "write"
     And dconf was never asked to "reset"
 
+  @stub.agents.goose
   Scenario: A second invocation with ask-bluefin lands on Agents when prerequisite is missing
     Given ChairLift is running
     When I open the "Apps" page
@@ -195,11 +306,21 @@ Feature: Agents page
     Then the "Agents" page is shown
     And I see "Agent Mode is not running."
 
-  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose
-  Scenario: A second invocation with ask-bluefin launches Goose when Agent Mode is ready
+  Scenario: A second invocation with ask-bluefin names missing Goose packages
     Given ChairLift is running
     When I open the "Apps" page
     And I run a second invocation with "--dry-run --ask-bluefin"
-    Then the application log contains "[DRY-RUN] would launch Goose Desktop with model unsloth/Qwen3-8B-GGUF:Q4_K_M via llmman"
-    And the "Apps" page is shown
-    And llmman was never asked to "launch"
+    Then the "Agents" page is shown
+    And I see "Goose Desktop or linux-mcp-server is not installed."
+    And no Goose session was previewed
+
+  @stub.agents.devmenu.wrapper
+  Scenario: The distro's chairlift-wrapper Ask Bluefin entry is the one the switch shows and hides
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the switch in the "Show Ask Bluefin in menu" row is on
+    When I toggle the switch in the "Show Ask Bluefin in menu" row
+    Then the application log contains "[DRY-RUN] would set Custom Command Menu command11 visible=false"
+    And the switch in the "Show Ask Bluefin in menu" row is on
+    And dconf was never asked to "write"
+    And dconf was never asked to "reset"

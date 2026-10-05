@@ -1,4 +1,4 @@
-# The everything fixture with the Agents page's only group disabled, so
+# The everything fixture with both of the Agents page's groups disabled, so
 # internal/navigation must omit the page from the sidebar.
 #
 # Loaded from an untrusted path (config.dev.yml beside a staged binary), so no
@@ -30,4 +30,6 @@ maintenance_page:
 
 agents_page:
   agents_group:
+    enabled: false
+  troubleshooting_group:
     enabled: false
