@@ -429,34 +429,41 @@ help_page:
 			t.Errorf("legacy features group %q reached runtime Config", retired)
 		}
 	}
-	group, present := cfg.HelpPage["troubleshooting_group"]
+	group, present := cfg.AgentsPage["troubleshooting_group"]
 	if !present {
-		t.Fatal("troubleshooting_group missing from help_page")
+		t.Fatal("troubleshooting_group missing from agents_page")
 	}
 	if group.Enabled {
-		t.Fatal("features_page troubleshooting_group opt-out was not migrated to help_page")
+		t.Fatal("features_page troubleshooting_group opt-out was not migrated to agents_page")
+	}
+	if _, stale := cfg.HelpPage["troubleshooting_group"]; stale {
+		t.Error("the migrated group stopped at help_page")
 	}
 	if !cfg.HelpPage["help_resources_group"].Enabled {
 		t.Fatal("help_resources_group should remain enabled")
 	}
 }
 
-// TestLegacyTroubleshootingGroupCurrentFieldsWin verifies an explicit
-// help_page value takes precedence over the migrated features_page copy.
+// TestLegacyTroubleshootingGroupCurrentFieldsWin verifies the newest home
+// wins along features_page → help_page → agents_page.
 func TestLegacyTroubleshootingGroupCurrentFieldsWin(t *testing.T) {
-	data := `features_page:
-  troubleshooting_group:
-    enabled: false
-help_page:
-  troubleshooting_group:
-    enabled: true
-`
-	cfg, err := loadFromPath(writeConfigFile(t, data))
-	if err != nil {
-		t.Fatalf("loadFromPath failed: %v", err)
-	}
-	if !cfg.HelpPage["troubleshooting_group"].Enabled {
-		t.Fatal("current help_page troubleshooting_group value did not win")
+	for _, tt := range []struct {
+		data string
+		want bool
+	}{
+		{"features_page: {troubleshooting_group: {enabled: false}}\nhelp_page: {troubleshooting_group: {enabled: true}}", true},
+		{"features_page: {troubleshooting_group: {enabled: true}}\nhelp_page: {troubleshooting_group: {enabled: false}}", false},
+		{"features_page: {troubleshooting_group: {enabled: false}}\nhelp_page: {troubleshooting_group: {enabled: false}}\nagents_page: {troubleshooting_group: {enabled: true}}", true},
+	} {
+		t.Run(tt.data, func(t *testing.T) {
+			cfg, err := loadFromPath(writeConfigFile(t, tt.data))
+			if err != nil {
+				t.Fatalf("loadFromPath failed: %v", err)
+			}
+			if got := cfg.IsGroupEnabled("agents_page", "troubleshooting_group"); got != tt.want {
+				t.Errorf("agents_page.troubleshooting_group enabled = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 
@@ -470,6 +477,53 @@ func TestLegacyAIGroupFieldsStillFailClosed(t *testing.T) {
 		"features_page: {dx_group: {ai_model: x}}",
 		"features_page: {troubleshooting_group: {ai_model: x}}",
 		"agents_page: {ai_group: {ai_model: x}}",
+	} {
+		t.Run(data, func(t *testing.T) {
+			path := writeConfigFile(t, data)
+			withConfigPaths(t, []string{path, "must-not-read.yml"})
+			cfg, err := Load()
+			if err == nil || err.Path != path {
+				t.Fatalf("error = %v, want authoritative failure", err)
+			}
+			assertAllKnownGroupsDisabled(t, cfg)
+		})
+	}
+}
+
+// Troubleshooting moved from Help to the Agents page. An
+// administrator file that disabled it at the old address must keep it
+// disabled, and a current setting must win over the old one.
+func TestTroubleshootingGroupMovedFromHelp(t *testing.T) {
+	tests := []struct {
+		data string
+		want bool
+	}{
+		{"help_page: {troubleshooting_group: {enabled: false}}", false},
+		{"help_page: {troubleshooting_group: {enabled: false}}\nagents_page: {troubleshooting_group: {enabled: true}}", true},
+		{"agents_page: {troubleshooting_group: {enabled: false}}\nhelp_page: {troubleshooting_group: {enabled: true}}", false},
+		{"help_page: {troubleshooting_group: null}", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.data, func(t *testing.T) {
+			cfg, err := loadFromPath(writeConfigFile(t, tt.data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.IsGroupEnabled("agents_page", "troubleshooting_group"); got != tt.want {
+				t.Errorf("agents_page.troubleshooting_group enabled = %v, want %v", got, tt.want)
+			}
+			if _, stale := cfg.HelpPage["troubleshooting_group"]; stale {
+				t.Error("the moved group is still present under help_page")
+			}
+		})
+	}
+}
+
+func TestTroubleshootingGroupAtItsOldAddressStillFailsClosed(t *testing.T) {
+	for _, data := range []string{
+		"help_page: {troubleshooting_group: {enabeld: false}}",
+		"help_page: {troubleshooting_group: []}",
+		"help_page: {troubleshooting_group: {actions: [{title: t, script: /bin/t, sudo: true}]}}",
 	} {
 		t.Run(data, func(t *testing.T) {
 			path := writeConfigFile(t, data)

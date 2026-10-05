@@ -100,6 +100,31 @@ removed, avoiding a second configuration workflow on this local-mode page.
 ChairLift leaves unrelated llmman configuration intact; it changes only its
 selected-model alias through llmman's CLI and overrides aggregation in the unit.
 
+**Goose runs in a ChairLift-owned profile (2026-10-05).** This note
+replaces the 2026-10-03 paragraph's Goose readiness and launch sentences;
+the rest of that surface stands. Verifying, and repairing, the user's own
+`~/.config/goose` made ChairLift a second owner of a file Goose and the
+user also write, so Goose now runs in a dedicated profile under
+`$XDG_DATA_HOME/chairlift/troubleshooting` and the user's configuration is
+never read or written. The profile is rewritten immediately before every
+launch with exactly two enabled extensions — `linux-mcp-server` with
+`--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key`, and the
+Project Bluefin knowledge search at `https://mcp.projectbluefin.io/mcp`
+limited to `search_knowledge` — with every other extension disabled. The
+launch is `llmman launch goose-desktop --model bluefin-active` with
+`GOOSE_PATH_ROOT` and the desktop app's `XDG_CONFIG_HOME` inside that
+profile. Readiness is therefore the packages (`linux-mcp-server` and
+`goose-desktop` resolved, x86_64), the running daemon, and a selected
+model; when the packages are missing the Goose row offers Set Up, which
+installs them with Homebrew. One session runs at a time. The Goose row and
+the menu switch form the Agents page's **Troubleshooting** group,
+gated by `agents_page.troubleshooting_group`, the key it used on Help
+under `help_page` (still accepted and migrated); Help no longer offers a
+second Goose surface. The Ask Bluefin menu entry and `--ask-bluefin` are
+paths into it. Knowledge
+searches go online, so no copy claims a session's questions stay on this
+computer. The Agent Mode group also gains a **Models and Chat** row that
+opens llmman's own web UI while the daemon is ready.
 
 **Security boundaries.**
 

@@ -191,7 +191,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"brew_search_group",
 			"brew_bundles_group",
 		),
-		"agents": refsOn("agents_page", "agents_group"),
+		"agents": refsOn("agents_page", "agents_group", "troubleshooting_group"),
 		"features": refsOn("features_page", "features_group",
 			"desktop_integrations_group", "dx_group", "gaming_group", "printers_group"),
 		"livery": refsOn("livery_page",
@@ -205,7 +205,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"maintenance_freespace_group",
 			"reset_group",
 		),
-		"help": refsOn("help_page", "troubleshooting_group", "help_resources_group"),
+		"help": refsOn("help_page", "help_resources_group"),
 	}
 
 	items := Items()

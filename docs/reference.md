@@ -132,7 +132,8 @@ to ChairLift's log, which is where to look when filing a bug report.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers Goose Desktop (`ublue-os/tap/goose-linux`) launched via `llmman launch goose-desktop --model <active-model>` with verified Linux MCP diagnostic tools, "Show Ask Bluefin in menu" shortcut preference, and Contribute to Bluefin via `ujust contribute`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
+| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers a "Models and Chat" row that opens llmman's web UI while it is ready, and Contribute to Bluefin via `ujust contribute`. When llmman is missing, enabling taps `llmmanorg/tap` and trusts exactly `llmmanorg/tap/llmman` before installing it. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
+| Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it; if Goose is already running there, the request goes to that session and no second Goose starts (GNOME may show a "Goose is ready" notification instead of raising the window). `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
 
 ### Features Page (`features_page`)
 
@@ -243,34 +244,11 @@ Each action has:
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Enhanced Troubleshooting | `troubleshooting_group` | AI assistant for diagnosing system logs, services, and network; moved here from Features (issue #249); shown only when Homebrew is present |
 | Resources | `help_resources_group` | Links to project resources |
 
-**Set Up** installs missing Goose components and connects its read-only Linux
-diagnostics. A fresh configuration comes from
-`/usr/share/ublue-os/goose/config.yaml`; an existing configuration keeps its
-provider, model, other extensions, and unknown settings. Setup adds `linux-tools`
-when absent, or enables a recognized `linux-tools` / `linux-mcp-server` entry
-with an empty policy using explicit `--toolset FIXED --no-search-for-ssh-key
---verify-host-keys` arguments. It repairs a missing or stale executable only
-for a recognized Linux diagnostic command, not a different server, transport,
-or explicit conflicting tool policy. Malformed, duplicate-key, multiple-document,
-or merged affected YAML is refused without replacing user data.
-
-Configuration changes use an owned regular file and a private atomic replacement
-with mode `0600`; links, unsafe Goose directories, and detected concurrent edits
-are refused. Before repairing an existing configuration, Setup saves its exact
-prior bytes to `config.yaml.chairlift-backup` (mode `0600`) beside it; each
-later repair overwrites that backup, and no backup is written when nothing
-changes or a new configuration is created. Setup reads the resulting state
-before reporting connection. Dry-run leaves both new and existing
-configurations, and any backup, untouched.
-
-**Open Goose** means its Linux tools are connected, not that a model service has
-been authenticated or tested. The row discloses the selected provider and asks
-the user to choose a model when none is selected. ChairLift never chooses a
-provider, installs an API key, or changes a user's existing provider/model.
-
+`help_page.troubleshooting_group`, Troubleshooting's former Help
+key, is still accepted and moved to `agents_page.troubleshooting_group`
+(below); a value set under `agents_page` wins.
 
 Help also shows a **Feature availability** group — not configurable, and absent when empty — whose collapsed "Why is something missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
 
@@ -298,6 +276,8 @@ applications_page:
 agents_page:
   agents_group:
     enabled: false
+  troubleshooting_group:
+    enabled: false
 
 features_page:
   dx_group:
@@ -313,10 +293,6 @@ updates_page:
 
 maintenance_page:
   maintenance_freespace_group:
-    enabled: false
-
-help_page:
-  troubleshooting_group:
     enabled: false
 ```
 

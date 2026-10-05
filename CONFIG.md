@@ -98,8 +98,9 @@ stripped from the configuration prior to runtime decoding so they have no
 runtime effect and do not trigger the fail-closed schema error that would
 otherwise disable every feature group. `features_page.troubleshooting_group`
 moved rather than retired: like the System page groups, it supplies omitted or
-null fields of `help_page.troubleshooting_group`, so an explicit opt-out is
-kept and explicit current values take precedence. Unknown names on the same
+null fields of `help_page.troubleshooting_group`, which in turn supplies
+`agents_page.troubleshooting_group`, so an explicit opt-out is kept and the
+newest explicit value takes precedence. Unknown names on the same
 page still fail closed — the rule is a per-page compatibility exception, not
 general acceptance of arbitrary obsolete keys. Routine cleanup is handled by
 `maintenance_freespace_group` and `maintenance_cleanup_group`; the
@@ -109,7 +110,8 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 
 ### Agents Page (`agents_page`)
 
-- `agents_group`: Agent Mode — llmman installed with Homebrew and served as a systemd user unit on `127.0.0.1:17434` in the invoking user's own account; shown where Homebrew is present. Nothing here crosses a privilege boundary. It has no options beyond `enabled`. The page also presents Goose Desktop launch with verified Linux diagnostic tools, the "Show Ask Bluefin in menu" shortcut preference, and Contribute to Bluefin via `ujust contribute`.
+- `agents_group`: Agent Mode — llmman installed with Homebrew and served as a systemd user unit on `127.0.0.1:17434` in the invoking user's own account; shown where Homebrew is present. Nothing here crosses a privilege boundary. It has no options beyond `enabled`. The page also presents Contribute to Bluefin via `ujust contribute`.
+- `troubleshooting_group`: Troubleshooting — the Goose row and the "Show Ask Bluefin in menu" shortcut preference; shown where Homebrew is present. Set Up installs `linux-mcp-server` and the Goose desktop app with Homebrew in the invoking user's account (nothing is downloaded until it is pressed; the app is published for x86_64 only); Launch runs Goose on the Agent Mode model in ChairLift's own profile under `$XDG_DATA_HOME/chairlift/troubleshooting`, never `~/.config/goose`, with read-only tools for this computer and online searches of the Project Bluefin knowledge base. It has no options beyond `enabled`. Formerly `help_page.troubleshooting_group`; that key is still accepted and moved here, and a value set under `agents_page` wins.
 
 ### Updates Page (`updates_page`)
 
@@ -196,7 +198,6 @@ face-file fallback in `$HOME`), nothing is written outside `$XDG_DATA_HOME` and
 
 ### Help Page (`help_page`)
 
-- `troubleshooting_group`: Enhanced Troubleshooting; AI diagnostic assistant installed via Homebrew (moved here from Features, issue #249; shown only when Homebrew is present)
 - `help_resources_group`: Help and support resources
   - `website`: URL to the project website
   - `issues`: URL to the issue tracker for bug reports and feature requests
@@ -234,6 +235,8 @@ applications_page:
 agents_page:
   agents_group:
     enabled: false # Agent Mode installs llmman through Homebrew
+  troubleshooting_group:
+    enabled: false # Troubleshooting installs Goose and its tools through Homebrew
 
 # Developer IDE/editor installation also uses Homebrew; this disables the
 # whole Developer group, including its permission switches.
@@ -246,8 +249,6 @@ maintenance_page:
     enabled: false # Hide shared cleanup, which includes Homebrew when installed
 
 help_page:
-  troubleshooting_group:
-    enabled: false # Hide Homebrew-backed troubleshooting assistant
   help_resources_group:
     enabled: true
 ```

@@ -10,20 +10,29 @@ import (
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
-	"github.com/projectbluefin/chairlift/internal/agentmode"
 	"github.com/projectbluefin/chairlift/internal/aistack"
-	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
-// Agent Mode is a loopback model server managed by a systemd user unit.
-// No operation on this page is privileged.
+// Agent Mode is a loopback model server managed by a systemd user unit;
+// Troubleshooting is Goose on that server's model. No operation on this page is
+// privileged.
 func (uh *UserHome) buildAgentsPage() {
-	if uh.agentsPrefsPage != nil && uh.groupEnabled("agents_page", "agents_group") {
-		uh.buildAgentModeGroup(uh.agentsPrefsPage)
-		uh.buildContributeGroup(uh.agentsPrefsPage)
+	page := uh.agentsPrefsPage
+	if page == nil {
+		return
+	}
+	agents := uh.groupEnabled("agents_page", "agents_group")
+	if agents {
+		uh.buildAgentModeGroup(page)
+	}
+	if uh.groupEnabled("agents_page", "troubleshooting_group") {
+		uh.buildTroubleshootGroup(page)
+	}
+	if agents {
+		uh.buildContributeGroup(page)
 	}
 }
 
@@ -69,32 +78,20 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	uh.agentPresetRow = presetRow
 	group.Add(&presetRow.Widget)
 
-	gooseRow := adw.NewActionRow()
-	gooseRow.SetTitle(pageview.GooseRowTitle())
-	gooseRow.SetUseMarkup(false)
-	uh.gooseRow = gooseRow
-	uh.gooseSpinner = newActivitySpinner()
-	gooseRow.AddSuffix(&uh.gooseSpinner.Widget)
-	launchBtn := gtk.NewButtonWithLabel(pageview.GooseLaunchButtonLabel())
-	launchBtn.SetValign(gtk.AlignCenterValue)
-	launchClicked := func(_ gtk.Button) { uh.onGooseLaunchClicked() }
-	launchBtn.ConnectClicked(&launchClicked)
-	launchBtn.SetSensitive(false)
-	gooseRow.AddSuffix(&launchBtn.Widget)
-	uh.gooseLaunchBtn = launchBtn
-	group.Add(&gooseRow.Widget)
-
-	askBluefinRow := adw.NewActionRow()
-	askBluefinRow.SetTitle(pageview.AskBluefinMenuRowTitle())
-	askBluefinRow.SetSubtitle(pageview.AskBluefinMenuRowSubtitle())
-	uh.askBluefinMenuRow = askBluefinRow
-	uh.askBluefinToggle = newGuardedSwitch(false, func(on bool) {
-		uh.onAskBluefinMenuToggled(on, uh.askBluefinToggle)
-	})
-	uh.askBluefinToggle.widget.SetSensitive(false)
-	askBluefinRow.AddSuffix(&uh.askBluefinToggle.widget.Widget)
-	askBluefinRow.SetActivatableWidget(&uh.askBluefinToggle.widget.Widget)
-	group.Add(&askBluefinRow.Widget)
+	// Models, chat, and everything else llmman manages live in its own web
+	// UI; ChairLift links there rather than growing a second copy.
+	manageRow := adw.NewActionRow()
+	manageRow.SetTitle(pageview.AgentModeManageTitle())
+	manageRow.SetSubtitle(pageview.AgentModeManageSubtitle())
+	manageBtn := gtk.NewButtonWithLabel(pageview.AgentModeManageLabel())
+	manageBtn.SetValign(gtk.AlignCenterValue)
+	manageClicked := func(_ gtk.Button) { uh.openURL(aistack.WebUIURL()) }
+	manageBtn.ConnectClicked(&manageClicked)
+	manageRow.AddSuffix(&manageBtn.Widget)
+	manageRow.SetActivatableWidget(&manageBtn.Widget)
+	manageRow.SetVisible(false)
+	uh.agentManageRow = manageRow
+	group.Add(&manageRow.Widget)
 
 	address := adw.NewActionRow()
 	address.SetTitle("Local connection")
@@ -102,33 +99,6 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	address.SetSubtitleSelectable(true)
 	group.Add(&address.Widget)
 	page.Add(group)
-
-	// The menu entry is read the first time the Agents page is shown, not
-	// at window build: opening another page must not touch dconf.
-	uh.askBluefinMapped = func(gtk.Widget) {
-		if uh.askBluefinProbed {
-			return
-		}
-		uh.askBluefinProbed = true
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			avail, vis, err := devmenu.AskBluefinState(ctx)
-			sgtk.RunOnMainThread(func() {
-				if uh.askBluefinMenuRow == nil || uh.askBluefinToggle == nil {
-					return
-				}
-				if err != nil || !avail {
-					uh.askBluefinToggle.widget.SetSensitive(false)
-					return
-				}
-				uh.askBluefinToggle.set(vis)
-				uh.askBluefinToggle.widget.SetSensitive(true)
-			})
-		}()
-	}
-	page.ConnectMap(&uh.askBluefinMapped)
-
 	uh.showAgentModeState(state)
 
 	if !facts.UnitPresent {
@@ -177,28 +147,20 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	uh.agentPresetRow.SetSensitive(ready)
 	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
 	uh.agentPresetRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
+	if uh.agentManageRow != nil {
+		uh.agentManageRow.SetVisible(ready)
+	}
+	// Goose runs on this server's model; its row follows every change.
+	uh.refreshGooseState()
 	if !ready {
-		if uh.gooseRow != nil {
-			uh.gooseRow.SetSubtitle(agentmode.StateDaemonUnavailable.Subtitle(""))
-		}
-		if uh.gooseLaunchBtn != nil {
-			uh.gooseLaunchBtn.SetSensitive(false)
-		}
 		return
 	}
 	uh.agentPresetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
 	uh.agentModelRow.SetSubtitle("Checking the selected model…")
-	if uh.gooseRow != nil {
-		uh.gooseRow.SetSubtitle("Checking Goose readiness…")
-	}
-	if uh.gooseLaunchBtn != nil {
-		uh.gooseLaunchBtn.SetSensitive(false)
-	}
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
 		modelRef, err := aistack.ReadActiveModel(ctx)
-		gState, _, _ := agentmode.ObserveLive(ctx)
 		sgtk.RunOnMainThread(func() {
 			if !uh.agentRefresh.IsCurrent(generation) {
 				return
@@ -206,21 +168,9 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 			if err != nil {
 				log.Printf("views: read active model failed: %v", err)
 				uh.agentModelRow.SetSubtitle("Could not read the selected model. Choose a preset to set one.")
-				if uh.gooseRow != nil {
-					uh.gooseRow.SetSubtitle(agentmode.StateModelUnavailable.Subtitle(""))
-				}
-				if uh.gooseLaunchBtn != nil {
-					uh.gooseLaunchBtn.SetSensitive(false)
-				}
 				return
 			}
 			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-			if uh.gooseRow != nil {
-				uh.gooseRow.SetSubtitle(gState.Subtitle(modelRef))
-			}
-			if uh.gooseLaunchBtn != nil {
-				uh.gooseLaunchBtn.SetSensitive(gState.Ready())
-			}
 		})
 	}()
 }
@@ -384,83 +334,3 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 }
 
 const agentModeReadyWait = time.Minute
-
-func (uh *UserHome) onGooseLaunchClicked() {
-	if uh.gooseLaunchBtn == nil || !uh.gooseGate.TryStart() {
-		return
-	}
-	uh.gooseLaunchBtn.SetSensitive(false)
-	setActivitySpinner(uh.gooseSpinner, true)
-	uh.gooseRow.SetSubtitle("Launching Goose Desktop…")
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		state, facts, err := agentmode.ObserveLive(ctx)
-		if err != nil || !state.Ready() {
-			sgtk.RunOnMainThread(func() {
-				uh.gooseGate.Reset()
-				setActivitySpinner(uh.gooseSpinner, false)
-				if uh.gooseLaunchBtn != nil {
-					uh.gooseLaunchBtn.SetSensitive(state.Ready())
-				}
-				if uh.gooseRow != nil {
-					uh.gooseRow.SetSubtitle(state.Subtitle(facts.ActiveModel))
-				}
-				uh.toastAdder.ShowErrorToast("Goose cannot be launched: " + state.MissingPrerequisite())
-			})
-			return
-		}
-
-		dryRun := dryrun.Enabled()
-		launchErr := agentmode.Launch(ctx, facts.ActiveModel, func(asyncErr error) {
-			sgtk.RunOnMainThread(func() {
-				log.Printf("views: goose desktop exited with error: %v", asyncErr)
-				uh.toastAdder.ShowErrorToast("Goose Desktop encountered an error.")
-			})
-		})
-
-		sgtk.RunOnMainThread(func() {
-			uh.gooseGate.Reset()
-			setActivitySpinner(uh.gooseSpinner, false)
-			if uh.gooseLaunchBtn != nil {
-				uh.gooseLaunchBtn.SetSensitive(state.Ready())
-			}
-			if uh.gooseRow != nil {
-				uh.gooseRow.SetSubtitle(state.Subtitle(facts.ActiveModel))
-			}
-			if launchErr != nil {
-				log.Printf("views: launch goose desktop failed: %v", launchErr)
-				uh.toastAdder.ShowErrorToast("Failed to launch Goose Desktop.")
-				return
-			}
-			if dryRun {
-				uh.toastAdder.ShowToast("[DRY-RUN] Would launch Goose Desktop")
-			}
-		})
-	}()
-}
-
-func (uh *UserHome) onAskBluefinMenuToggled(enabled bool, toggle *guardedSwitch) {
-	if !uh.askBluefinGate.TryStart() {
-		return
-	}
-	toggle.widget.SetSensitive(false)
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		err := devmenu.SetAskBluefinVisible(ctx, enabled)
-		_, visible, readErr := devmenu.AskBluefinState(ctx)
-		sgtk.RunOnMainThread(func() {
-			uh.askBluefinGate.Reset()
-			toggle.widget.SetSensitive(true)
-			if readErr == nil {
-				toggle.set(visible)
-			}
-			if err != nil {
-				log.Printf("views: setting ask bluefin menu visibility failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not update the Ask Bluefin menu entry.")
-			}
-		})
-	}()
-}

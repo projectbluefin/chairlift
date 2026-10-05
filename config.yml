@@ -9,6 +9,14 @@
 agents_page:
   agents_group:
     enabled: true
+  # Troubleshooting: Goose on the Agent Mode model, with read-only
+  # tools for this system's logs, services, and network, plus online
+  # searches of the Project Bluefin knowledge base. Everything it installs
+  # comes from Homebrew, so the group hides itself where Homebrew is absent.
+  # Nothing is downloaded until the user presses Set Up. Accepted under
+  # help_page too, its old home. The Ask Bluefin menu entry opens it.
+  troubleshooting_group:
+    enabled: true
 
 updates_page:
   # Whether this system installs updates on its own schedule. Updating now
@@ -128,12 +136,6 @@ livery_page:
     enabled: true
 
 help_page:
-  # An AI assistant that can read this system's logs, services, and network
-  # to help diagnose problems. Everything it installs comes from Homebrew, so
-  # the group hides itself where Homebrew is absent. Nothing is downloaded
-  # until the user presses Set Up.
-  troubleshooting_group:
-    enabled: true
   help_resources_group:
     enabled: true
     website: https://projectbluefin.io

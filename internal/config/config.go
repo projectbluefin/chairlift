@@ -321,6 +321,10 @@ func defaultConfig() *Config {
 		// crosses no privilege boundary and needs no administrator route.
 		AgentsPage: PageConfig{
 			"agents_group": GroupConfig{Enabled: true},
+			// Troubleshooting: Goose on the Agent Mode model, with
+			// read-only tools. Installs nothing until Set Up, and is
+			// accepted under help_page too, its old home (legacy.go).
+			"troubleshooting_group": GroupConfig{Enabled: true},
 		},
 		UpdatesPage: PageConfig{
 			// Whether this system updates itself on a schedule. Updating
@@ -406,11 +410,6 @@ func defaultConfig() *Config {
 			"livery_dock_group":       GroupConfig{Enabled: true},
 		},
 		HelpPage: PageConfig{
-			// Enhanced Troubleshooting lives on Help (issue #249): one
-			// task-oriented destination for help and support, with the AI
-			// assistant leading. It keeps the Homebrew-backed self-hiding
-			// behavior, so it is safe to enable everywhere Homebrew exists.
-			"troubleshooting_group": GroupConfig{Enabled: true},
 			"help_resources_group": GroupConfig{
 				Enabled: true,
 				Website: "https://projectbluefin.io",

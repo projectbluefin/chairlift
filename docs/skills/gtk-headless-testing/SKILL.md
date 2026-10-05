@@ -271,6 +271,10 @@ desktop walkthrough. For live-shell QA, read the target lab repository's local
 router and current workflow before selecting its supported isolated Wayland
 runner. Reuse that workflow rather than inventing another disk installer; keep
 its deployment flags and installation prerequisites in the lab's source docs.
+One harness accommodation exists for that runner: in a GNOME Shell session,
+Mutter's focus-stealing prevention leaves each new window unfocused, so
+`environment.py` activates it through `Shell.Eval` after launch. On bare
+Mutter there is no `org.gnome.Shell` on the bus, and the step is skipped.
 
 ### Generating walkthrough screenshots
 

@@ -50,7 +50,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/devmenu/   Custom Command Menu tuple updater for developer tools and Ask Bluefin visibility
         ├── internal/printerapp/ Rootless printer-application quadlets, one per driver family, with the ADR-0016 enable gate and the pure readiness model behind the Features page's Printers group
         ├── internal/aistack/   Local llmman user service, observed health and canonical model aliases
-        ├── internal/agentmode/ Goose Desktop readiness, invocation-scoped launch and Ask Bluefin dispatch
+        ├── internal/agentmode/ Goose Desktop readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch
         ├── internal/contribute/ Read-only contributor preflight and terminal command construction
         ├── internal/livery/    User icon-theme/settings mutations and login rotation
         ├── internal/firstrun/  Explicit existing-page setup selection and disposition
@@ -95,11 +95,11 @@ this inventory, independently of the original YAML namespace names.
 | --- | --- | --- |
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
 | Apps | `applications_page.go` | External catalog, Homebrew search/results, installed Flatpaks, installed casks, app collections, explicitly requested formulae, then Brewfile export |
-| Agents | `agents_page.go` | Agent Mode using llmman, Goose Desktop launch with verified Linux diagnostics, and Contribute to Bluefin |
+| Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
 | Features | `features_page.go` (+ `printers_page.go`) | Distribution features, Developer Mode, Gaming Mode, and Printers |
 | Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
 | Maintenance | `maintenance_page.go` | Free up space, administrator scripts and Recovery entry |
-| Help | `help_page.go` | Troubleshooting, support links and capability explanations |
+| Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
 Recovery is an existing detail (route `recovery`) built by `recovery.go` and reached from
 Maintenance, with rollback, published-version reads with pin and return-to-stream
@@ -253,7 +253,8 @@ groups (`maintenance_brew_group`, `maintenance_flatpak_group`,
 removed by the 26.09-alpha Control Center reorganisation are recognized as
 known group names, validated alongside their canonical siblings, and stripped
 prior to runtime decoding so existing host files do not fail closed;
-`troubleshooting_group` first supplies omitted/null `help_page` fields. Source files,
+`troubleshooting_group` first supplies omitted/null `help_page` fields and then
+moves on to `agents_page` with the old Help address. Source files,
 search precedence, and fail-closed handling for invalid inputs remain
 unchanged.
 
@@ -790,113 +791,42 @@ away before it finished; every other toggle completes in view and already has
 a toast, so a second notification there would be noise the simple-interface
 constraint rules out.
 
-### Enhanced Troubleshooting
+### Troubleshooting (`internal/troubleshoot`)
 
-`internal/troubleshoot` is the Homebrew-backed setup row on Help. It installs
-`linux-mcp-server` (including the Goose CLI) and the Goose desktop cask, then
-uses the shipped preset for a new configuration and repairs only recognized
-diagnostic extension nodes in an existing one. ChairLift owns this repair
-in-process. Repair preserves provider,
-model and unrelated settings, fixes a stale diagnostic executable, and supplies
-the fixed read-only tool policy. Before replacing an existing user configuration,
-it saves a recoverable backup of the exact prior bytes (`config.yaml.chairlift-backup`, 0600)
-beside it atomically, overwriting any previous backup, only when content actually changes,
-never under `--dry-run`, and never for a fresh file. A usable existing configuration stays unchanged;
-shared anchor mappings are refused rather than rewritten ambiguously. Writes
-are secure and atomic. Readiness requires the actual wired diagnostic command
-to resolve, not a successful setup-script exit or installed packages alone.
-Dry-run inspects the same policy and preserves observed state.
-Desktop launch remains `gtk-launch Goose`. Nothing crosses a privilege
-boundary; no provider is selected and no extra launcher or model service is
-introduced.
+`internal/troubleshoot` is the engine behind the Agents page's Goose row
+(`agents_page.troubleshooting_group`); `internal/agentmode` decides readiness
+and owns the launch. Everything Goose reads is ChairLift's own: a session
+runs in a dedicated profile under `$XDG_DATA_HOME/chairlift/troubleshooting`
+(`troubleshoot.Profile`). `GOOSE_PATH_ROOT` points Goose's config, data, and
+state at `goose/`; `XDG_CONFIG_HOME` points the desktop app's Electron
+profile and single-instance lock at `desktop/`, where `Profile.Write`
+symlinks the user's `mimeapps.list` and `dconf` so links open in the user's
+browser and GSettings still apply. The user's `~/.config/goose` is never
+read or written, and a Goose window the user already has open is never
+handed this launch.
 
-Homebrew's `stateChangingCommands` includes `tap`, so dry-run never changes
-package sources. The provider subtitle stays `use-markup` false because its
-text comes from user configuration, not trusted Pango markup.
+`Profile.Write` runs immediately before every launch and is atomic and
+dry-run gated. `RenderConfig` is the complete tool surface: `linux-tools`
+(the absolute `linux-mcp-server` with `--toolset FIXED --host-mode
+LOCAL_ONLY --no-search-for-ssh-key`) and `bluefin-knowledge` (streamable HTTP
+at `https://mcp.projectbluefin.io/mcp`, `available_tools: [search_knowledge]`)
+are enabled; every other extension already in the profile file — one a later
+Goose added — is carried over disabled, and Goose 1.53's platform extensions
+(`developer`, `extensionmanager`, …) are written disabled, because Goose adds
+a missing platform extension with its own default and keeps an `enabled`
+value already present. No provider, model, or key is written: llmman hands
+Goose its provider through the environment. `hints.md` becomes the profile's
+`.goosehints`. Knowledge searches go online, so no copy claims a session's
+questions stay on this computer.
 
-### Staged-update changelog
-
-`internal/sbom` answers "what actually changes if I take this update?" from
-the images themselves rather than a hand-written changelog. The package is
-split the usual way: `Parse`, `Diff`, and `CompareVersions` are pure and
-fixture-tested, `RegistryClient.Fetch` does the registry round-trip, and
-`Compare` takes the fetch as a `FetchFunc` seam so the gated tests never
-reach the network.
-
-Two registry behaviors shape the implementation, both verified against
-ghcr.io/ublue-os/bluefin:stable on 2026-08-17. First, GHCR returns 404 from
-the OCI referrers API for these images; the SBOM is discoverable only through
-the specification's fallback tag, the manifest digest rewritten as
-`sha256-<hex>`, which returns an index carrying the artifact types. A client
-that only calls the referrers API finds nothing on the registry that
-publishes Bluefin. Second, the referrer advertised as
-`application/vnd.spdx+json` is Syft JSON — a top-level `artifacts` array,
-4,562 entries — so `Parse` accepts both shapes and treats "recognized
-neither" as an error.
-
-Version ordering follows rpm, including the tilde rule that makes `1.0~rc1`
-precede `1.0`. Where the order genuinely cannot be established — two commit
-hashes, or versions in unrelated formats — the pair lands in
-`Result.Changed` rather than being guessed into `Upgraded`, because
-presenting an unknown direction as an upgrade is how a rollback comes to look
-like an update.
-
-The UI is a Compare row in the Operating system preferences group with
-expandable results, not a separate destination. A comparison is pinned to
-specific booted/staged references and only starts on an explicit click.
-
-After staging, the view re-reads bootc status and refreshes the Compare row's
-image references and sensitivity in the same window; reopening ChairLift is
-not required. A new pinned image pair removes the previous package-diff rows,
-and an in-flight comparison for the old pair cannot render its result after
-the new status arrives. A failed status read keeps the previous comparison and
-badge state and reports that the staged outcome cannot be verified rather
-than claiming the system is current.
-
-### Developer feeds catalog (`internal/developerfeeds`)
-
-`internal/developerfeeds` owns the curated feed list Developer Mode offers when
-it stages an OPML file for the Pulp reader (epic
-[#235](https://github.com/projectbluefin/chairlift/issues/235)): the asset
-itself, `developer-feeds.opml`, compiled into the binary with `go:embed`, and
-the validator that reports what is wrong with it. The three required groups are
-`Changelogs`, `Blogs & Newsletters`, and `Podcasts`, and every feed carries one
-clean category tag — `changelog`, `blog`, `newsletter`, `podcast` — so a reader
-groups by tag while the OPML hierarchy carries the finer structure.
-
-The package is a puregotk-free leaf package (ADR-0007) for the same reason the
-view helpers are: `Parse`, `Validate`, and `Feeds` decide everything from bytes
-the caller supplies, so they are exercised headlessly under the ordinary
-`go test ./internal/...` gate. `Load` reads only the embedded asset. Nothing in
-the package opens a socket or runs a command — `TestPackageStaysOffline`
-rejects importing an HTTP client, a dialer, or a command runner — which is what
-lets CI check well-formedness, tag balance, category tags, URL shape, and
-uniqueness without an outbound request. Liveness is therefore out of CI's
-reach by construction and stays a manual procedure; the contract, the curation
-requirement, and that re-verification recipe live in
-[specs/developer-feeds.md](../specs/developer-feeds.md). The per-category feed
-counts are pinned in the package's tests, so adding a feed is a reviewable
-curation event rather than a data edit.
-
-The same package owns the two optional Developer Mode steps that consume the
-catalog, in `pulp.go`: `IsInstalled` queries the user scope with
-`flatpak list --user --app` rather than reading anything inside Pulp's sandbox,
-`Provision` installs `org.gnome.gitlab.cheywood.Pulp` from Flathub only when
-that check says it is missing, and `StageOPML` writes the embedded asset to
-`~/.local/share/chairlift/developer-feeds.opml` (0644, directory created) with
-`OPMLPath` reporting where. All three are unprivileged and user-scoped: no
-`pkexec`, no root, and no write into Pulp's own SQLite store, whose schema is
-Pulp's to migrate. `Provision` and `StageOPML` each short-circuit on
-`dryrun.Enabled()` themselves, and `TestPackageStaysOffline`'s import ban still
-scopes the *catalog and validator* files: the provisioning half reaches a
-command runner only through `internal/flatpak`, which is the same runner the
-Applications page uses. The view half — when these run, and what may be claimed
-afterwards — is `actionmsg.DeveloperFeedSetupPlan`/`DeveloperFeedFeedback`,
-described under "Dry-run mode" above; the user-facing contract, including the
-deliberate absence of a Pulp import API, is
-[specs/developer-feeds.md](../specs/developer-feeds.md).
-
-### Agent Mode
+`troubleshoot.Setup` installs what is missing, with `Needed` per step so a
+half-done install resumes: `ublue-os/tap` (only when a package is missing),
+`linux-mcp-server`, then `cpio` before the `goose-linux` cask — the cask's
+preflight pipes its RPM through a `cpio` it does not declare and Bluefin
+does not ship. Goose Desktop is published for x86_64 only, so Setup returns
+`ErrUnsupported` elsewhere. Homebrew's `stateChangingCommands` includes
+`tap`, so dry-run never changes package sources. Nothing crosses a privilege
+boundary.
 
 `internal/aistack` is Agent Mode's runtime owner; [ADR-0015](../adr/0015-agent-mode-llmman.md)
 is the contract. [llmman](https://github.com/llmmanorg/llmman) chooses the
@@ -906,9 +836,12 @@ model selection and recommended presets without a GPU-vendor stack matrix.
 Enabling:
 
 1. Renders `Brewfile(haveLLMMan)`, with `tap "llmmanorg/tap"` and
-   `brew "llmmanorg/tap/llmman"` only when no executable resolves, and runs
-   it through `homebrew.BundleInstall`. Runtime provisioning installs no chat
-   client; Goose setup remains on Help.
+   `brew "llmmanorg/tap/llmman"` only when no executable resolves. In that
+   case it first taps `llmmanorg/tap` and trusts exactly that formula
+   (`brew trust --formula llmmanorg/tap/llmman`) — Homebrew refuses a
+   formula from an untrusted tap — then runs the bundle through
+   `homebrew.BundleInstall`. Runtime provisioning installs no chat
+   client; Goose setup is the Goose row's Set Up.
 2. Resolves `llmman` (`$PATH`, then beside `homebrew.ExecutablePath()`), and
    runs `llmman serve --pull-only`, which fetches the engine in the
    foreground and fails if it cannot — the one mode in which llmman treats a
@@ -1484,21 +1417,24 @@ regenerated on every push. See [GTK headless testing](../skills/gtk-headless-tes
 
 `internal/agentmode` coordinates Agent Mode's client integration, readiness evaluation, and the `chairlift --ask-bluefin` dispatcher.
 
-Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI. Rather than writing or rewriting Goose's persistent provider configuration (`~/.config/goose/config.yaml`), ChairLift launches Goose Desktop through llmman's invocation-scoped integration:
-`llmman launch goose-desktop --model <active-model>`.
-This passes the model, endpoint, and invocation environment without mutating the user's persistent configuration.
+Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI. `agentmode.Launch` writes ChairLift's own Goose profile (above), then runs
+`llmman launch goose-desktop --model bluefin-active` (`troubleshoot.Command`) with the profile's `GOOSE_PATH_ROOT` and `XDG_CONFIG_HOME` and Homebrew on `PATH`, so llmman resolves the alias at launch and passes the endpoint through the invocation environment.
 
-Launching Goose requires all readiness prerequisites to be satisfied:
-- llmman daemon is healthy (`aistack.Healthy`)
-- An active model is selected (`aistack.ReadActiveModel`)
-- Goose Desktop and `linux-mcp-server` are installed (`goose-desktop` and `linux-mcp-server` resolving on `$PATH` or via Homebrew)
-- Goose's Linux diagnostic extension is verified: stdio transport, enabled, real executable, literal `--toolset FIXED`, and no SSH defaults (`troubleshoot.VerifyExtensionOnDisk`).
+Readiness (`agentmode.Evaluate`), in the order the Goose row reports it:
+- Goose Desktop is published for this architecture (x86_64); otherwise `StateUnsupported`.
+- `linux-mcp-server` and `goose-desktop` resolve to absolute paths (`$PATH`, or beside `homebrew.ExecutablePath()`); otherwise `StatePackagesMissing`, the one state the row resolves itself with **Set Up**.
+- The llmman daemon is healthy (`aistack.Healthy`) and `llmman` resolves; otherwise `StateDaemonUnavailable`.
+- An active model is selected (`aistack.ReadActiveModel`); otherwise `StateModelUnavailable`.
+
+Nothing on disk is verified: the profile is ChairLift's and is written at launch.
+
+Once set up, Ask Bluefin just opens Goose. With no session running, `agentmode.Launch` writes the profile and starts Goose through llmman. With one running — the profile's Chromium `SingletonLock` names a live process on this host — it starts `goose-desktop` again in the same profile (`troubleshoot.ReopenCommand`), and Goose's single-instance lock hands that request to the running session, so no second Goose starts. Whether the window is raised is the compositor's call: no activation token is passed, and on GNOME a minimized window stayed minimized while the Shell showed a "Goose is ready" notification instead (lab run `chairlift-wayland-lane-n7fsg`). llmman is not involved there: it refuses a launch while the lock is held.
 
 `chairlift --ask-bluefin` is the entry point for Bluefin's Custom Command Menu and desktop shortcut. Cold invocations and running-application remote invocations behave identically:
-- When all readiness conditions are met, Goose Desktop is launched directly via llmman's integration without presenting the Control Center window.
-- When any prerequisite is missing or the launch fails to start, Control Center opens to the Agents page and displays the missing prerequisite or launch-failure toast. A later asynchronous Goose exit is logged, not rerouted through the window.
+- When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
+- When any prerequisite is missing, or the launch fails to start, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
 
-The Agents page also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state.
+The Troubleshooting group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state.
 
 ## Explicit setup flow
 

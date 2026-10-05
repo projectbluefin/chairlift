@@ -247,7 +247,14 @@ An agent must not break these:
   Agents page, never on view construction, state restore, failed
   authentication, or dry-run. Distro defaults are preserved via reset when
   matching, while `visible=false` is enforced as an override when the distro
-  default is visible.
+  default is visible. The Ask Bluefin entry is the distro's: `IsAskBluefin`
+  recognizes it by its label plus one of three commands — the
+  `xdg-open https://ask.projectbluefin.io` web link, `chairlift --ask-bluefin`,
+  and `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin`, which
+  Bluefin's distro layer ships (projectbluefin/common#1396) because an
+  extension's command runs without Homebrew on `$PATH`. ChairLift changes only
+  that entry's visibility and never rewrites its command; a slot whose command
+  the user changed is not claimed.
 - **The release-channel table is keyed on the image, never on the tag alone.**
   `internal/imageinfo`'s `imageChannelMap` records, per registry path, which
   tags are stable streams, which are testing streams, and how each maps to
@@ -560,6 +567,11 @@ An agent must not break these:
   resolves through `homebrew.ResolveExecutable`, so the floor, `IsInstalled`,
   and the exec paths share one answer. Do not reintroduce a second resolution: no
   bare `"brew"` at an exec site, and no private copy of the fallback path.
+  Resolving brew is not enough for its children: a cask preflight runs tools
+  beside brew by bare name (`rpm2cpio | cpio` for `goose-linux`), and a
+  direct launch gives them no Homebrew on `$PATH`. `runBrewCommandAt` and
+  the Goose launch's `llmman launch` therefore run with
+  `homebrew.WithBrewPath`, which puts brew's directory first on `PATH`.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
@@ -655,7 +667,8 @@ An agent must not break these:
   (v0.12.x) and removed by the 26.09-alpha Control Center reorganisation are
   accepted by the same per-page rule, validated for shape/typo/sudo, and
   stripped prior to runtime decoding so they never re-enable removed behavior.
-  `troubleshooting_group` first supplies omitted/null `help_page` fields.
+  `troubleshooting_group` first supplies omitted/null `help_page` fields,
+  then moves on to `agents_page` with the old Help address.
   This must not add a navigable page or relax unknown-name or sudo validation.
 - **CI action authority.** Third-party `.github/workflows/` actions use full
   40-character commit SHAs with reviewed version comments. Local `./` actions
@@ -715,29 +728,54 @@ An agent must not break these:
   user imported. The worker reads its plan from config on the main thread
   before it starts, is admitted one at a time by `developerFeedGate`, and
   reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
-- **Enhanced Troubleshooting reads state, it does not infer it.**
-  `internal/troubleshoot` installs `linux-mcp-server` and the Goose desktop
-  cask through Homebrew, then seeds Common's premade
-  `/usr/share/ublue-os/goose/config.yaml` only when the user's config is absent.
-  ChairLift owns the diagnostic extension repair in-process; no external
-  setup helper is involved.
-  Setup repairs only recognized diagnostic nodes, including a missing entry,
-  empty fixed-tool policy or stale executable. Explicit unsafe policies and
-  shared anchor mappings are refused. Other extensions, model, provider and
-  unknown settings are preserved; usable existing configuration is unchanged.
-  Before replacing an existing user configuration, ChairLift atomically saves
-  a recoverable backup (`config.yaml.chairlift-backup`, 0600) beside the original
-  file, overwriting any previous backup, only when content actually changes,
-  never under `--dry-run`, and never for a fresh file.
-  Secure atomic writes never replace the whole file with a preset or choose a
-  provider for the user. Preview inspects the same policy and writes nothing.
-  Both `linux-mcp-server` and legacy `linux-tools` entries are recognized;
-  readiness requires enabled stdio, explicit FIXED tools, SSH-key search off,
-  and a command that exists. Keep the stable prefix/bin path, not a versioned
-  Cellar target. No pkexec route is involved, and dry-run writes nothing.
-  Keep `brew tap` in Homebrew's `stateChangingCommands` so previews never tap
-  for real. Provider subtitles contain user-controlled text: keep the row's
-  `use-markup` false rather than interpreting provider names as Pango markup.
+- **Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
+  The Agents page's **Troubleshooting** group (`agents_page`
+  `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
+  holds the Goose row and the "Show Ask Bluefin in menu" switch; the Ask
+  Bluefin menu entry and `--ask-bluefin` are paths into it, not its name. It is the
+  one Goose surface: Help no longer has an Troubleshooting group,
+  and `help_page.troubleshooting_group` is still accepted and migrated to
+  `agents_page` (`internal/config/legacy.go` `legacyGroups`). `internal/troubleshoot`
+  is the engine. A session runs in a dedicated profile under
+  `$XDG_DATA_HOME/chairlift/troubleshooting` (`troubleshoot.Profile`):
+  `GOOSE_PATH_ROOT` points Goose's config, data, and state at `goose/`, and
+  `XDG_CONFIG_HOME` points the desktop app's Electron profile and
+  single-instance lock at `desktop/`, where the user's `mimeapps.list` and
+  `dconf` are symlinked so links and settings still behave. `~/.config/goose`
+  is never read or written, and nothing reads
+  `/usr/share/ublue-os/goose/config.yaml`. `agentmode.Launch` rewrites the
+  profile atomically immediately before every launch (`Profile.Write`,
+  dry-run gated): `RenderConfig` enables exactly `linux-tools` — the
+  absolute `linux-mcp-server` with `--toolset FIXED --host-mode LOCAL_ONLY
+  --no-search-for-ssh-key` — and `bluefin-knowledge`, the streamable-HTTP
+  `https://mcp.projectbluefin.io/mcp` limited to `search_knowledge`; every
+  other extension already in the profile file is carried over disabled, and
+  Goose 1.53's platform extensions are written disabled; `hints.md` becomes
+  the profile's `.goosehints`. It then runs `llmman launch goose-desktop
+  --model bluefin-active` (`troubleshoot.Command`) with those two variables
+  and `homebrew.WithBrewPath`; llmman hands Goose its provider through the
+  environment, so no provider, model, or key is written by anyone. Readiness
+  (`internal/agentmode`) is therefore the packages, not a file:
+  `linux-mcp-server` and `goose-desktop` resolve to absolute paths, the host
+  is x86_64 (the only architecture Goose Desktop is published for), and
+  Agent Mode's daemon answers with a selected model. Packages are judged
+  first, because a missing package is the one state the row resolves
+  itself: its button becomes **Set Up**, which runs `troubleshoot.Setup`
+  (tap `ublue-os/tap` only when something is missing, `linux-mcp-server`,
+  then `cpio` before the `goose-linux` cask, whose preflight pipes the RPM
+  through a `cpio` Bluefin does not ship; `ErrUnsupported` off x86_64).
+  When Goose is already running in the profile (its `SingletonLock` names a
+  live process on this host), `agentmode.Launch` opens Goose the ordinary
+  way instead — `troubleshoot.ReopenCommand` starts `goose-desktop` in the
+  same profile and Goose's lock hands it to the running session, so no
+  second Goose starts; llmman would refuse a launch while that lock is held.
+  GNOME's focus-stealing prevention may answer with a "Goose is ready"
+  notification rather than raising the window (observed in the lab on a
+  minimized window); nothing passes an activation token. Copy never
+  claims a session's questions stay on this computer: knowledge searches go
+  online. No pkexec route is involved, every install is user-scope Homebrew,
+  and dry-run writes and installs nothing. Keep `brew tap` in Homebrew's
+  `stateChangingCommands` so previews never tap for real.
 - **The staged-update changelog never fetches on its own.** `internal/sbom`
   is pure — parse, diff, version ordering — with the registry round-trip
   behind the `FetchFunc` seam, so no gated test makes an outbound request
@@ -794,15 +832,21 @@ An agent must not break these:
   staging keeps its existing fixed `bootc-update-stage` path.
 - **Agent Mode is local, unprivileged, and reports observed readiness.**
   `agents_page` has one Agent Mode switch, visible model and preset controls,
-  the local API address, a Goose Desktop row with a Launch action, and a
-  "Show Ask Bluefin in menu" preference. Unready model and launch controls stay
-  visible and insensitive instead of disappearing. Peer/offload controls and
-  their backend are removed; this surface manages this computer only.
+  a "Models and Chat" row that opens llmman's own web UI
+  (`aistack.WebUIURL`) while Agent Mode is ready, and the local API address;
+  the Troubleshooting group below it is the invariant above. Unready model and
+  launch controls stay visible and insensitive instead of disappearing.
+  Peer/offload controls and their backend are removed; this surface manages
+  this computer only.
   `internal/aistack` owns three artifacts: the generated installation Brewfile,
   `~/.config/systemd/user/chairlift-llmman.service`, and
   `~/.config/environment.d/10-chairlift-llmman.conf`. The fragment contains
   only `OLLAMA_HOST=127.0.0.1:17434`; no OpenAI key or endpoint is exported.
-  llmman owns models and engine selection; Homebrew owns its binary.
+  llmman owns models and engine selection; Homebrew owns its binary. When
+  llmman is missing, installing it taps `llmmanorg/tap` and trusts exactly
+  `brew trust --formula llmmanorg/tap/llmman` before the bundle loads it:
+  Homebrew refuses a formula from an untrusted tap, and turning Agent Mode
+  on is consent to that one formula, not the tap.
   The unit uses the absolute resolved executable, binds loopback, and sets
   `LLMMAN_SHELL=off`, `LLMMAN_NOHISTORY=1`, and empty `LLMMAN_PEERS=` to
   override any legacy aggregation settings. Wildcard CORS is forbidden.
@@ -830,15 +874,12 @@ An agent must not break these:
   cannot prove the service inactive preserves both files and the management
   handle. There is no pkexec route, Homebrew service, or container stack.
   Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI,
-  launched via `llmman launch goose-desktop --model <active-model>` without
-  persisting provider or model into Goose's configuration. It requires the
-  hardened `linux-mcp-server` extension verified on disk: stdio transport,
-  enabled, real executable, literal `--toolset FIXED`, and no SSH defaults.
+  launched by `agentmode.Launch` as described under Troubleshooting above.
   `chairlift --ask-bluefin` dispatches to Goose Desktop when all prerequisites
-  are met, or presents Control Center on the Agents page naming the missing
-  prerequisite, with identical behavior for cold and running instances.
-  "Show Ask Bluefin in menu" modifies only the distro-owned Ask Bluefin entry
-  in GNOME Custom Command Menu via user-layer override/reset.
+  are met — the launch, which writes the profile, runs off the GTK main
+  thread — or presents Control Center on the Agents page naming the missing
+  prerequisite, with identical behavior for
+  cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
   `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (linking `https://github.com/projectbluefin/contribute#configuration` for missing registration) and leaves the button insensitive. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
 - **Printer applications are rootless quadlets, locked until their

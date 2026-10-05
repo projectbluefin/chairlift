@@ -84,7 +84,6 @@ var privilegedExecSites = []privilegedExecSite{
 //
 // The comment on each entry is the command word that makes it unprivileged.
 var unprivilegedExecSites = []execSite{
-	{File: "internal/agentmode/launch.go", Func: "Launch"},                       // llmman launch goose-desktop
 	{File: "internal/aistack/aistack.go", Func: "execCommand"},                   // systemctl --user / llmman / dbus-update-activation-environment
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                      // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},         // systemctl (query)
@@ -103,6 +102,8 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/livery/apply.go", Func: "execCommand"},                      // gsettings / dconf / gtk-update-icon-cache / systemctl --user
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},     // systemctl --user
 	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
+	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop
+	{File: "internal/troubleshoot/troubleshoot.go", Func: "ReopenCommand"},       // goose-desktop (handed to the running session)
 	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"},    // gtk-launch
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},              // xdg-open
 }

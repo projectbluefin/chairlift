@@ -57,7 +57,8 @@ var legacyUpdatesGroups = []string{
 // /usr/share/chairlift/config.yml with these groups in place; accepting
 // them keeps those hosts runnable without re-activating the old features
 // layout. troubleshooting_group is migrated to help_page (see
-// migrateLegacyFeaturesPage) before the features_page copy is stripped.
+// migrateLegacyFeaturesPage) and from there to agents_page (legacyGroups)
+// before the features_page copy is stripped.
 var legacyFeaturesGroups = []string{
 	"ai_group",
 	"troubleshooting_group",
@@ -109,7 +110,8 @@ func stripLegacyGroups(top *yaml.Node) {
 // troubleshooting_group to help_page, where c594a4e relocated it, with the
 // same precedence as the system_page migration: current non-null help_page
 // fields win. This preserves an administrator's explicit opt-out. It runs
-// after validation and before stripLegacyGroups removes the old copy.
+// after validation, before migrateLegacyGroups carries the group on to
+// agents_page and before stripLegacyGroups removes the old copy.
 func migrateLegacyFeaturesPage(top *yaml.Node) {
 	legacy := mappingValue(top, "features_page")
 	if legacy == nil || legacy.Kind != yaml.MappingNode {
@@ -146,6 +148,31 @@ func stripLegacyGroupFromPage(top *yaml.Node, page string, retired []string) {
 	pageNode.Content = newContent
 }
 
+// legacyGroups are groups a current page still accepts under their old
+// configuration home, each validated with that page's ordinary group rules
+// and then moved by migrateLegacyGroups. Troubleshooting moved
+// from Help to the Agents page, beside the model it runs on; a pre-26.09
+// features_page copy reaches Help first through migrateLegacyFeaturesPage
+// and continues here, so the newest home's non-null fields win.
+var legacyGroups = []legacyGroup{
+	{From: "help_page", To: "agents_page", Group: "troubleshooting_group"},
+}
+
+type legacyGroup struct {
+	From, To, Group string
+}
+
+// acceptedGroups returns the groups a page's mapping may name: its schema
+// groups plus any legacy group whose old home it is.
+func acceptedGroups(page string, groups []string) []string {
+	for _, legacy := range legacyGroups {
+		if legacy.From == page {
+			groups = append(groups, legacy.Group)
+		}
+	}
+	return groups
+}
+
 // migrateLegacySystemPage runs only after source-graph and schema validation.
 // The effective tree is alias-free and privately owned. Move surviving groups
 // to Updates, preserving explicit false values. Current non-null fields win;
@@ -158,6 +185,20 @@ func migrateLegacySystemPage(top *yaml.Node) {
 	}
 	for _, name := range []string{"bootc_status_group", "channel_group"} {
 		migrateLegacyGroup(top, legacy, "updates_page", name)
+	}
+}
+
+// migrateLegacyGroups moves each legacy group to its current page with the
+// same precedence as migrateLegacySystemPage, then drops it from its old
+// home so it never reaches the runtime Config twice.
+func migrateLegacyGroups(top *yaml.Node) {
+	for _, legacy := range legacyGroups {
+		from := mappingValue(top, legacy.From)
+		if from == nil || from.Kind != yaml.MappingNode {
+			continue
+		}
+		migrateLegacyGroup(top, from, legacy.To, legacy.Group)
+		removeKey(from, legacy.Group)
 	}
 }
 
@@ -190,6 +231,15 @@ func migrateLegacyGroup(top, legacy *yaml.Node, toPage, name string) {
 			} else if field.Tag == "!!null" {
 				*field = *value
 			}
+		}
+	}
+}
+
+func removeKey(node *yaml.Node, name string) {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == name {
+			node.Content = append(node.Content[:i], node.Content[i+2:]...)
+			return
 		}
 	}
 }

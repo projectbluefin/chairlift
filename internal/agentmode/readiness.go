@@ -1,16 +1,17 @@
 // Package agentmode provides readiness evaluation, launch coordination, and
 // the Ask Bluefin dispatcher for Agent Mode's Goose Desktop client.
+//
+// Goose runs in a profile ChairLift writes immediately before every launch
+// (internal/troubleshoot), so readiness never inspects a configuration file:
+// it is the packages, the architecture they are published for, and Agent
+// Mode's running model.
 package agentmode
 
 import (
 	"context"
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 
 	"github.com/projectbluefin/chairlift/internal/aistack"
-	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 )
 
@@ -18,19 +19,20 @@ import (
 type State int
 
 const (
-	// StateReady indicates all prerequisites are satisfied: healthy daemon,
-	// active model, installed packages, and verified Linux MCP extension.
+	// StateReady indicates all prerequisites are satisfied: supported
+	// architecture, installed packages, healthy daemon, and active model.
 	StateReady State = iota
 	// StateDaemonUnavailable indicates llmman daemon is not running or unhealthy.
 	StateDaemonUnavailable
 	// StateModelUnavailable indicates no active model is selected.
 	StateModelUnavailable
-	// StatePackagesMissing indicates Goose Desktop or linux-mcp-server is missing.
+	// StatePackagesMissing indicates Goose Desktop or linux-mcp-server is
+	// missing. It is the one state the Goose row can resolve itself, with
+	// Set Up.
 	StatePackagesMissing
-	// StateExtensionMissing indicates Goose config or linux-tools extension is missing.
-	StateExtensionMissing
-	// StateExtensionUnsafe indicates linux-tools extension is malformed or violates safety policy.
-	StateExtensionUnsafe
+	// StateUnsupported indicates Goose Desktop is not published for this
+	// architecture.
+	StateUnsupported
 )
 
 // String returns a human-readable representation of State.
@@ -44,10 +46,8 @@ func (s State) String() string {
 		return "ModelUnavailable"
 	case StatePackagesMissing:
 		return "PackagesMissing"
-	case StateExtensionMissing:
-		return "ExtensionMissing"
-	case StateExtensionUnsafe:
-		return "ExtensionUnsafe"
+	case StateUnsupported:
+		return "Unsupported"
 	default:
 		return fmt.Sprintf("State(%d)", int(s))
 	}
@@ -56,6 +56,12 @@ func (s State) String() string {
 // Ready reports whether all launch prerequisites are satisfied.
 func (s State) Ready() bool {
 	return s == StateReady
+}
+
+// CanSetUp reports whether installing the packages is what stands between
+// this host and a launch.
+func (s State) CanSetUp() bool {
+	return s == StatePackagesMissing
 }
 
 // MissingPrerequisite returns the description of the unmet requirement.
@@ -67,10 +73,8 @@ func (s State) MissingPrerequisite() string {
 		return "No model is selected in Agent Mode."
 	case StatePackagesMissing:
 		return "Goose Desktop or linux-mcp-server is not installed."
-	case StateExtensionMissing:
-		return "Linux tools extension in Goose is not configured."
-	case StateExtensionUnsafe:
-		return "Linux tools extension in Goose is unsafe."
+	case StateUnsupported:
+		return "Goose Desktop is only published for x86_64 computers."
 	default:
 		return ""
 	}
@@ -90,10 +94,8 @@ func (s State) Subtitle(model string) string {
 		return "Choose a model to launch Goose."
 	case StatePackagesMissing:
 		return "Goose Desktop or linux-mcp-server is not installed."
-	case StateExtensionMissing:
-		return "Linux tools extension in Goose is not configured."
-	case StateExtensionUnsafe:
-		return "Linux tools extension in Goose has unsafe settings."
+	case StateUnsupported:
+		return "Goose Desktop is only published for x86_64 computers."
 	default:
 		return ""
 	}
@@ -101,81 +103,52 @@ func (s State) Subtitle(model string) string {
 
 // ReadinessFacts captures observed facts about Agent Mode and Goose.
 type ReadinessFacts struct {
-	DaemonHealthy   bool
-	ActiveModel     string
-	GooseInstalled  bool
-	ServerInstalled bool
-	ExtensionStatus troubleshoot.ExtensionStatus
-	DryRun          bool
+	DaemonHealthy bool
+	// ActiveModel is the reference Agent Mode's alias resolves to, for
+	// display. A launch asks llmman for the alias itself.
+	ActiveModel string
+	// Tools is what troubleshoot.Detect resolved: the architecture check
+	// and the absolute paths of linux-mcp-server, goose-desktop, and llmman.
+	Tools troubleshoot.State
 }
 
 // Evaluate determines the readiness State from the supplied facts.
+//
+// The packages are judged first because installing them is the one thing
+// the Goose row can do itself; Agent Mode and its model are the switch and
+// the chooser above it.
 func Evaluate(facts ReadinessFacts) State {
-	if !facts.DaemonHealthy {
+	if !facts.Tools.Supported {
+		return StateUnsupported
+	}
+	if !facts.Tools.Installed() {
+		return StatePackagesMissing
+	}
+	if !facts.DaemonHealthy || facts.Tools.LLMManPath == "" {
 		return StateDaemonUnavailable
 	}
 	if facts.ActiveModel == "" {
 		return StateModelUnavailable
 	}
-	if !facts.GooseInstalled || !facts.ServerInstalled {
-		return StatePackagesMissing
-	}
-	switch facts.ExtensionStatus {
-	case troubleshoot.ExtensionStatusMissing:
-		return StateExtensionMissing
-	case troubleshoot.ExtensionStatusMalformed, troubleshoot.ExtensionStatusUnsafe:
-		return StateExtensionUnsafe
-	case troubleshoot.ExtensionStatusValid:
-		return StateReady
-	default:
-		return StateExtensionUnsafe
-	}
+	return StateReady
 }
 
 // Injection seams for testing live observation.
 var (
-	lookTool       = defaultLookTool
-	checkExtension = troubleshoot.VerifyExtensionOnDisk
-	checkDaemon    = aistack.Healthy
-	checkModel     = aistack.ReadActiveModel
+	detectTools = troubleshoot.Detect
+	checkDaemon = aistack.Healthy
+	checkModel  = aistack.ReadActiveModel
 )
 
-func defaultLookTool(name string) bool {
-	if path, err := exec.LookPath(name); err == nil && path != "" {
-		return true
-	}
-	brew := homebrew.ExecutablePath()
-	if brew == "" {
-		return false
-	}
-	path, err := exec.LookPath(filepath.Join(filepath.Dir(brew), name))
-	if err != nil {
-		return false
-	}
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular()
-}
-
-// ObserveLive queries the live system state and evaluates readiness.
+// ObserveLive queries the live system state and evaluates readiness. It
+// probes HTTP and runs llmman, so callers keep it off the GTK main thread.
 func ObserveLive(ctx context.Context) (State, ReadinessFacts, error) {
-	daemonHealthy := checkDaemon(ctx)
-	var activeModel string
-	if daemonHealthy {
-		model, err := checkModel(ctx)
-		if err == nil {
-			activeModel = model
+	facts := ReadinessFacts{Tools: detectTools()}
+	facts.DaemonHealthy = checkDaemon(ctx)
+	if facts.DaemonHealthy {
+		if model, err := checkModel(ctx); err == nil {
+			facts.ActiveModel = model
 		}
-	}
-	gooseInstalled := lookTool("goose-desktop")
-	serverInstalled := lookTool("linux-mcp-server")
-	extStatus := checkExtension()
-
-	facts := ReadinessFacts{
-		DaemonHealthy:   daemonHealthy,
-		ActiveModel:     activeModel,
-		GooseInstalled:  gooseInstalled,
-		ServerInstalled: serverInstalled,
-		ExtensionStatus: extStatus,
 	}
 	return Evaluate(facts), facts, nil
 }

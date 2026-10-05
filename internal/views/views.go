@@ -5,12 +5,12 @@ import (
 	"log"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/agentmode"
 	"github.com/projectbluefin/chairlift/internal/aistack"
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/livery"
-	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/liverystate"
@@ -101,7 +101,6 @@ type UserHome struct {
 	liveryDockRotateSpinner  *gtk.Spinner
 	developerSpinner         *gtk.Spinner
 	gamingSpinner            *gtk.Spinner
-	troubleshootSpinner      *gtk.Spinner
 	agentModeSpinner         *gtk.Spinner
 
 	// Livery references. liveryState is the last state the page loaded and
@@ -250,12 +249,6 @@ type UserHome struct {
 	runningVersion          string
 	previousVersion         string
 
-	// Enhanced Troubleshooting (help_page troubleshooting_group)
-	troubleshootRow    *adw.ActionRow
-	troubleshootButton *gtk.Button
-	troubleshootState  troubleshoot.State
-	troubleshootGate   actionstate.Gate
-
 	// Agent Mode (agents_page agents_group)
 	agentModeRow       *adw.ActionRow
 	agentModelRow      *adw.ActionRow
@@ -267,12 +260,23 @@ type UserHome struct {
 	agentPresetGate    actionstate.Gate
 	agentRefresh       actionstate.RefreshGate
 	agentPresetDialogs dialogRoute
+	// agentManageRow opens llmman's own web UI, where models are managed.
+	agentManageRow *adw.ActionRow
 
-	// Goose Desktop & Ask Bluefin (agents_page)
-	gooseRow          *adw.ActionRow
-	gooseLaunchBtn    *gtk.Button
-	gooseSpinner      *gtk.Spinner
-	gooseGate         actionstate.Gate
+	// Troubleshooting (agents_page troubleshooting_group): the Goose row, which
+	// sets Goose up and launches it, and the menu-entry switch. Main-thread
+	// only. gooseGate admits one setup or launch at a time and gooseBusy
+	// keeps a background readiness read off the row while one runs;
+	// gooseRefresh drops a read a newer one superseded.
+	gooseRow       *adw.ActionRow
+	gooseLaunchBtn *gtk.Button
+	gooseSpinner   *gtk.Spinner
+	gooseGate      actionstate.Gate
+	gooseBusy      bool
+	gooseRefresh   actionstate.RefreshGate
+	gooseFacts     agentmode.ReadinessFacts
+	gooseState     agentmode.State
+
 	askBluefinMenuRow *adw.ActionRow
 	askBluefinToggle  *guardedSwitch
 	askBluefinGate    actionstate.Gate

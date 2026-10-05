@@ -160,7 +160,7 @@ var routes = []Item{
 		Title: "Agents",
 		Icon:  "starred-symbolic",
 		Kind:  KindPrimary,
-		Refs:  refsOn("agents_page", "agents_group"),
+		Refs:  refsOn("agents_page", "agents_group", "troubleshooting_group"),
 	},
 	{
 		Name:  "features",
@@ -199,15 +199,11 @@ var routes = []Item{
 		),
 	},
 	{
-		Name:  "help",
-		Title: "Help",
-		Icon:  "help-browser-symbolic",
-		Kind:  KindPrimary,
-		// Troubleshooting leads Help (issue #249); resources follow it.
-		Refs: refsOn("help_page",
-			"troubleshooting_group",
-			"help_resources_group",
-		),
+		Name:       "help",
+		Title:      "Help",
+		Icon:       "help-browser-symbolic",
+		Kind:       KindPrimary,
+		Refs:       refsOn("help_page", "help_resources_group"),
 		AlwaysShow: true,
 	},
 

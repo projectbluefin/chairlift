@@ -1,61 +1,67 @@
 package pageview
 
-import (
-	"fmt"
+import "github.com/projectbluefin/chairlift/internal/agentmode"
 
-	"github.com/projectbluefin/chairlift/internal/troubleshoot"
+// GooseAction is what the Goose row's one button does.
+type GooseAction int
+
+const (
+	// GooseNoAction shows the button insensitive: what the row names has to
+	// happen elsewhere first (Agent Mode, a model) or cannot happen at all
+	// (an unsupported architecture).
+	GooseNoAction GooseAction = iota
+	// GooseSetUp installs the missing packages.
+	GooseSetUp
+	// GooseLaunch starts a session.
+	GooseLaunch
 )
 
-// TroubleshootRow returns the Enhanced Troubleshooting row text for a host's
-// current state.
-func TroubleshootRow(state troubleshoot.State) Row {
-	row := Row{Title: "Enhanced Troubleshooting"}
+// Label is the button's text for the action.
+func (a GooseAction) Label() string {
+	if a == GooseSetUp {
+		return "Set Up"
+	}
+	return GooseLaunchButtonLabel()
+}
 
+// GooseRowView is the Goose row's subtitle and button.
+type GooseRowView struct {
+	Subtitle string
+	Action   GooseAction
+}
+
+// GooseRow decides the Goose row for a readiness state. Set Up is offered
+// only for missing packages, because installing them is the one thing the
+// row can do itself; Agent Mode and its model are the controls above it.
+func GooseRow(state agentmode.State, model string) GooseRowView {
+	view := GooseRowView{Subtitle: state.Subtitle(model)}
 	switch {
 	case state.Ready():
-		row.Subtitle = TroubleshootSetupSubtitle(state)
-	case state.ServerInstalled && state.AgentInstalled:
-		// The packages exist, but their diagnostic configuration is not ready.
-		row.Subtitle = "Installed, but not connected to this system yet"
-	default:
-		row.Subtitle = "Ask an AI assistant about your logs, services, and network"
+		view.Action = GooseLaunch
+	case state.CanSetUp():
+		view.Action = GooseSetUp
 	}
-	return row
+	return view
 }
 
-// TroubleshootProviderNote names the user's selected service. The premade
-// configuration chooses no provider, and a provider name alone proves no locality.
-func TroubleshootProviderNote(provider string) string {
-	switch provider {
-	case "":
-		return "no AI service configured yet"
-	case "gemini-cli":
-		return "Google Gemini selected"
-	case "ollama":
-		return "Ollama service selected"
-	default:
-		return fmt.Sprintf("%s selected", provider)
-	}
-}
-
-// TroubleshootSetupSubtitle returns the subtitle after setup finishes.
-// Setup can succeed at every step and still leave the feature unusable,
-// which the row has to say rather than reporting a bare success.
-func TroubleshootSetupSubtitle(state troubleshoot.State) string {
+// GooseSetupToast reports a finished, live setup. Every step can succeed and
+// still leave Goose blocked on Agent Mode, which the toast has to say rather
+// than reporting a bare success.
+func GooseSetupToast(state agentmode.State, model string) string {
 	if state.Ready() {
-		note := TroubleshootProviderNote(state.Provider)
-		if state.Provider != "" && !state.ModelSelected {
-			note += "; choose a model in Goose"
-		}
-		return "Tools connected — " + note
+		return "Goose is ready"
 	}
-	if state.ServerInstalled && state.AgentInstalled {
-		return "Installed, but not connected to this system yet"
-	}
-	return "Setup did not complete"
+	return "Goose is installed — " + state.Subtitle(model)
 }
 
-// TroubleshootSetupNote is the one-line explanation shown before setup runs.
-func TroubleshootSetupNote() string {
-	return "Installs Goose and the read-only Linux tools it uses to inspect this system"
+// TroubleshootGroupTitle titles the group holding the Goose row and the
+// Ask Bluefin menu switch. Ask Bluefin is one path into this feature, not
+// its name.
+func TroubleshootGroupTitle() string { return "Troubleshooting" }
+
+// TroubleshootGroupDescription names both places a session's questions go: the
+// Agent Mode model and the Project Bluefin knowledge base, which is searched
+// online.
+func TroubleshootGroupDescription() string {
+	return "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
 }

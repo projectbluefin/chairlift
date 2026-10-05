@@ -110,8 +110,8 @@ func (uh *UserHome) buildFeaturesPage() {
 		emptyGroup.SetVisible(empty)
 	}
 
-	// Enhanced Troubleshooting was moved to Help (issue #249), and Local AI
-	// moved to Agents (issue #244), so neither is built here.
+	// Troubleshooting and Agent Mode both live on Agents (issues
+	// #249 and #244), so neither is built here.
 
 	featuresEnabled := uh.groupEnabled("features_page", "features_group")
 	if featuresEnabled {

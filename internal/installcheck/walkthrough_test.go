@@ -175,7 +175,8 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 	// the omission rather than hiding it.
 	documented := map[string]string{
 		// agents_page
-		"agents_group": "Agents",
+		"agents_group":          "Agents",
+		"troubleshooting_group": "**Troubleshooting**",
 		// updates_page
 		"automatic_updates_group": "Automatic updates",
 		"bootc_updates_group":     "System Updates",
@@ -203,7 +204,6 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"dx_group":                   "Developer tools",
 		"gaming_group":               "**Gaming**",
 		"printers_group":             "**Printers**",
-		"troubleshooting_group":      "Enhanced Troubleshooting",
 		// livery_page
 		"account_group":           "Profile Picture",
 		"livery_app_grid_group":   "**App Launcher Icon**",

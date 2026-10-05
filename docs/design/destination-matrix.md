@@ -20,11 +20,11 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | --- | --- | --- |
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | External app catalog, Homebrew search/results, installed Flatpaks, installed casks, collections, explicitly requested formulae and Brewfile export, in that order |
-| `agents` | `agents_page.go`, `contribute.go` | Local Agent Mode, model selection/presets, verified Goose Desktop launch, Ask Bluefin menu visibility and Contribute to Bluefin |
+| `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
 | `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and locked printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Recovery entry |
-| `help` | `help_page.go`, `troubleshoot.go` | Enhanced Troubleshooting, support links and capability explanations |
+| `help` | `help_page.go` | Support links, diagnostics and capability explanations |
 | `recovery` | `recovery.go`, `reset.go`, `versions.go` | Previous-deployment rollback, live published-version reads, confirmed pin/return-to-stream and opt-in reset actions |
 
 ## Configuration references and owners
@@ -55,7 +55,8 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
 | `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` readiness and authenticated-administration enable gate |
-| `agents_page` | `agents_group` | Agents service/model/presets, Goose launch, Ask Bluefin visibility and contributor launch; `internal/aistack`, `internal/agentmode`, `internal/devmenu`, `internal/contribute` |
+| `agents_page` | `agents_group` | Agents service/model/presets, Models and Chat link and contributor launch; `internal/aistack`, `internal/contribute` |
+| `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
 | `livery_page` | `livery_app_grid_group` | Livery app-grid mark; app-grid controller and `internal/livery` |
 | `livery_page` | `livery_foundation_group` | Livery panel mark/login rotation; `livery.Panel` controller |
@@ -63,7 +64,6 @@ inventory; derive schema additions from source rather than a frozen count.
 | `maintenance_page` | `maintenance_freespace_group` | Maintenance manual cleanup and unified post-update cleanup; `updateproviders.CleanupGroup`, one typed cleanup runner |
 | `maintenance_page` | `maintenance_cleanup_group` | Maintenance configured `actions[]`; `runMaintenanceAction` → `pageview.MaintenanceCommand` → `internal/maintenanceexec` |
 | `maintenance_page` | `reset_group` | Recovery Powerwash/Factory Reset; `onPowerwashClicked` / `onFactoryResetClicked`, each confirmed before dispatch |
-| `help_page` | `troubleshooting_group` | Help setup/session launch; `onTroubleshootClicked`, `internal/troubleshoot`, existing Goose desktop launcher |
 | `help_page` | `help_resources_group` | Help website/issues/chat; `openURL` through `internal/launcher` |
 
 Important shared boundaries:
@@ -120,9 +120,11 @@ Provider-specific safety remains with each live owner:
 - Agent Mode is local and unprivileged: user service, loopback endpoint, no
   peer/offload controls. Readiness is observed HTTP health after the owned unit's
   restart/invocation-stamp boundary, not file presence or optimistic switch state.
-  Goose Desktop launches through `llmman launch goose-desktop --model` only after
-  daemon/model/package and safe Linux-extension checks; persistent provider
-  settings are untouched. Ask Bluefin uses the same readiness dispatcher.
+  Goose Desktop launches through `llmman launch goose-desktop --model
+  bluefin-active` only after architecture/package/daemon/model checks, in a
+  profile ChairLift rewrites before every launch; `~/.config/goose` is never
+  read or written, and one session runs at a time. Ask Bluefin uses the same
+  readiness dispatcher.
   Contribute requires terminal/ujust recipe/Podman/registration preflight and
   launches `xdg-terminal-exec ujust contribute`, without a privileged route.
 - Printers are rootless quadlets. New enables are refused until administration
@@ -138,8 +140,9 @@ Provider-specific safety remains with each live owner:
   Reset sends only its fixed command word; no caller-supplied reset target
   crosses the helper boundary. Manual cleanup never claims skipped or failed
   steps succeeded, or invents reclaimed-byte figures.
-- Enhanced Troubleshooting preserves unrelated Goose settings and provider/model
-  choices; unsafe diagnostic policies/shared mappings are refused, not rewritten.
+- Troubleshooting's Set Up installs only missing packages (user-scope Homebrew)
+  and previews without tapping; its Goose profile enables only the read-only
+  Linux tools and the online knowledge search.
 - Privileged intent is journalled at shared choke points. Live helper outcomes
   distinguish success, refusal, failure, timeout and cancellation and include
   self-reported derived argv where available; markers are an audit aid, not proof.
@@ -167,7 +170,7 @@ for each mutation and observation.
 | Setup Assistant, `--first-run`, `--setup`/`-s` | `Window.PresentFirstRun`; existing visible pages in Features → Apps → Agents → Livery order, no separate destination or copied controls |
 | Keyboard Shortcuts | `Window.onShowShortcuts`; advertised and registered inventory from `internal/navigation` |
 | About Control Center | `Window.onShowAbout`; application About dialog, not a machine-information route |
-| `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose without presenting a window, otherwise open Agents with prerequisite/start-failure feedback |
+| `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose (off the GTK thread) without presenting a window, otherwise open Agents with prerequisite, open-session, or start-failure feedback |
 | Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
 
 The visible primary inventory is fixed for the session and Alt+number compacts

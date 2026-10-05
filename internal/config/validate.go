@@ -109,6 +109,7 @@ func parseAndValidate(src configSource, data []byte) (*rawConfig, *LoadError) {
 		}
 		migrateLegacySystemPage(top)
 		migrateLegacyFeaturesPage(top)
+		migrateLegacyGroups(top)
 		stripLegacyGroups(top)
 		var raw rawConfig
 		if err := effective.Decode(&raw); err != nil {
@@ -203,9 +204,7 @@ func validateGroupEntries(src configSource, page string, groupsNode *yaml.Node) 
 	if err != nil {
 		return validatorSchemaGroupsError(src.path, err)
 	}
-	if extra := legacyGroupNames(page); len(extra) > 0 {
-		groups = append(append([]string(nil), groups...), extra...)
-	}
+	groups = acceptedGroups(page, append(append([]string(nil), groups...), legacyGroupNames(page)...))
 	return validateNamedGroupEntries(src, page, groups, groupsNode)
 }
 

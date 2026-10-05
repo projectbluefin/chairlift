@@ -29,15 +29,6 @@ func (uh *UserHome) buildHelpPage() {
 		return
 	}
 
-	// Enhanced Troubleshooting leads Help (issue #249): the one task-oriented
-	// destination for help and support, with the AI assistant first. It keeps
-	// the Features-page behavior — same Homebrew/config gate and shared
-	// runner — but now answers "where do I get help?" directly. It is built
-	// before resources so the assistant is the first thing a user sees.
-	if uh.groupEnabled("help_page", "troubleshooting_group") {
-		uh.buildTroubleshootGroup(page)
-	}
-
 	// Help Resources group
 	if uh.groupEnabled("help_page", "help_resources_group") {
 		group := adw.NewPreferencesGroup()

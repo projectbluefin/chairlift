@@ -96,3 +96,14 @@ func AskBluefinMenuRowTitle() string {
 func AskBluefinMenuRowSubtitle() string {
 	return "Show the Ask Bluefin shortcut in the top panel menu."
 }
+
+// AgentModeManageTitle titles the row that opens llmman's web UI.
+func AgentModeManageTitle() string { return "Models and Chat" }
+
+// AgentModeManageSubtitle says what the web UI is for.
+func AgentModeManageSubtitle() string {
+	return "Pull, remove, and try models in llmman's own web interface"
+}
+
+// AgentModeManageLabel is the button that opens it.
+func AgentModeManageLabel() string { return "Open llmman" }

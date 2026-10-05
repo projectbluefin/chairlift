@@ -65,6 +65,8 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 		"versions.go":     {"pinGate"},
 		"recovery.go":     {"unpinGate"},
 		"agents_page.go":  {"agentPresetGate"},
+		// Set Up and Launch share one gate, and both are offered again.
+		"troubleshoot.go": {"gooseGate", "askBluefinGate"},
 		// The developer switch and the optional feed setup behind it are
 		// both repeatable: the switch is used again after every toggle, and
 		// the setup gate has to reopen when its worker finishes or a second

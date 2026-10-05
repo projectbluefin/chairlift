@@ -132,14 +132,23 @@ downloaded. The row shows an activity spinner throughout setup and shutdown, the
 restores the switch if the operation fails.
 
 **Active Model** and **Recommended Presets** remain visible, becoming usable
-only when the local server is ready. **Goose** is the Agent Mode desktop GUI,
-launched with the active model through llmman without rewriting your persistent
-configuration. It becomes launchable once Goose Desktop, linux-mcp-server, and
-the verified Linux diagnostic toolset are in place. The desktop shortcut and
-`chairlift --ask-bluefin` launch Goose Desktop directly when ready, or open
-Control Center to the Agents page naming the missing requirement. **Show Ask
-Bluefin in menu** toggles the shortcut in GNOME's top panel menu. The connection
-address is directly selectable, not hidden in Details. Apps and terminals opened
+only when the local server is ready; then **Models and Chat** opens llmman's
+own web interface for pulling, removing, and trying models. The connection
+address is directly selectable, not hidden in Details.
+
+**Troubleshooting** sits below Agent Mode where Homebrew is installed. Its
+**Goose** row is the Agent Mode desktop GUI with read-only tools for this
+computer's logs, services, and network, plus searches of the Project Bluefin
+knowledge base, which go online. While Goose Desktop or linux-mcp-server is
+missing, the row offers **Set Up**, which installs them with Homebrew (Goose
+Desktop is published for x86_64 computers only). Once they are installed it
+asks for Agent Mode, then a model, and then offers **Launch**. Goose runs in a
+profile Control Center writes for it on every launch, so your own Goose
+configuration is never read or changed, and one session runs at a time. The
+desktop shortcut and `chairlift --ask-bluefin` launch Goose Desktop directly
+when ready, or open Control Center to the Agents page naming the missing
+requirement. **Show Ask Bluefin in menu** toggles the distribution's shortcut
+in GNOME's top panel menu. Apps and terminals opened
 after Agent Mode is on receive `OLLAMA_HOST`; already-open ones need restarting.
 Everything here runs in your own account, without an administrator password.
 
@@ -206,8 +215,7 @@ where the distribution ships none. When a computer offers none of these —
 no Developer tools, no Gaming, no Printers, no optional features — the page
 says **Nothing to set up here** rather than showing an empty screen.
 
-Agent Mode has its own **Agents** page, and Enhanced Troubleshooting is on
-**Help**.
+Agent Mode and Troubleshooting have their own **Agents** page.
 Developer and Gaming actions show an activity spinner while their changes
 are running, and errors are shown immediately rather than hidden behind an
 older message.
@@ -309,15 +317,7 @@ ask you to confirm before applying the switch at the next restart.
 
 ![Help](screenshots/7-help.png)
 
-**Enhanced Troubleshooting** comes first where Homebrew is installed: it sets
-up an AI assistant that can read your logs, services, and network to help
-work out what's wrong, then launches it. The premade configuration chooses no
-AI service; select one in Goose, and the row names the service you configured.
-Setup shows activity while it runs and wires the recognized diagnostic entry
-to fixed tools with SSH-key discovery disabled. It can repair that entry in
-your existing Goose configuration while preserving provider, model and unrelated
-settings. Already-usable configuration is left alone; unsafe or ambiguous
-policies are refused rather than silently replaced.
+**Troubleshooting**, the AI troubleshooting assistant, is on the Agents page.
 
 Three links, each shown only when it is configured: **Visit project
 website**, **Report a problem** (the `issues` URL, where bug reports go), and
