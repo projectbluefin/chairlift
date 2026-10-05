@@ -264,6 +264,49 @@ def launch_app(context, binary):
             raise RuntimeError("the main window never published its setup content and footer")
     elif not atspi.poll(lambda: atspi.sidebar_rows(context.app), timeout=STARTUP_TIMEOUT):
         raise RuntimeError("the main window never published its navigation sidebar")
+    focus_in_gnome_shell(context)
+
+
+def shell_eval(script):
+    """Run script in GNOME Shell; None when no Shell owns the session bus."""
+    result = subprocess.run(
+        [
+            "gdbus", "call", "--session",
+            "--dest", "org.gnome.Shell",
+            "--object-path", "/org/gnome/Shell",
+            "--method", "org.gnome.Shell.Eval", script,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    if result.returncode != 0 and "ServiceUnknown" in result.stderr:
+        return None
+    return result.stdout
+
+
+def focus_in_gnome_shell(context):
+    """Give the new window keyboard focus when it runs in a GNOME session.
+
+    In a GNOME Shell session (the lab's run-chairlift-wayland-tests lane),
+    Mutter's focus-stealing prevention leaves a window mapped without an
+    activation token unfocused once the session has seen input, so every
+    key the suite sends reaches no window. Activate it the way a click on it
+    would; the lane runs Shell with --unsafe-mode, which Shell.Eval needs.
+    The bare headless Mutter run_atspi.sh starts has no Shell on the bus and
+    needs none of this.
+    """
+    script = (
+        "let w = global.get_window_actors().map(a => a.meta_window)"
+        f".find(m => m.get_pid() === {context.app_process.pid});"
+        " if (w) Main.activateWindow(w);"
+        " !!w && global.display.focus_window === w"
+    )
+    if shell_eval(script) is None:
+        return
+    if not atspi.poll(lambda: "(true, 'true')" in (shell_eval(script) or ""), timeout=STARTUP_TIMEOUT, interval=0.5):
+        raise RuntimeError("GNOME Shell never gave the ChairLift window keyboard focus")
 
 
 def read_log(context):
