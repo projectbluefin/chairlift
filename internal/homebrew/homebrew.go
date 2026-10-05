@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -223,6 +224,9 @@ func runBrewCommandCtx(ctx context.Context, args ...string) (string, error) {
 // with it rather than being orphaned. cmd.Run still reaps the child.
 func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, exe, args...)
+	// brew's own children (a cask preflight's rpm2cpio | cpio) resolve
+	// tools on $PATH, which a direct launch does not give Homebrew.
+	cmd.Env = WithBrewPath(os.Environ(), exe)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

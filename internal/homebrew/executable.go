@@ -3,6 +3,9 @@ package homebrew
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
 )
 
 // linuxbrewExecutable is Homebrew's supported install location on Linux — the
@@ -82,4 +85,44 @@ func brewExecutable() string {
 		return path
 	}
 	return "brew"
+}
+
+// WithBrewPath returns env with the directory of brew (an absolute
+// executable path) at the front of PATH, unless PATH already lists it.
+//
+// A direct launch — the desktop entry, or `chairlift` from a shell —
+// carries no Homebrew on $PATH, and brew's children inherit that: a cask's
+// preflight that pipes through `rpm2cpio | cpio` then fails with
+// "command not found" even though both are installed beside brew. That was
+// the goose-linux install's "RPM error". Every brew command ChairLift runs,
+// and every launch of a Homebrew program that itself looks others up on
+// $PATH, goes through this. A relative or empty brew changes nothing.
+func WithBrewPath(env []string, brew string) []string {
+	if !filepath.IsAbs(brew) {
+		return env
+	}
+	dir := filepath.Dir(brew)
+	out := make([]string, 0, len(env)+1)
+	found := false
+	for _, kv := range env {
+		value, ok := strings.CutPrefix(kv, "PATH=")
+		if !ok {
+			out = append(out, kv)
+			continue
+		}
+		found = true
+		if slices.Contains(filepath.SplitList(value), dir) {
+			out = append(out, kv)
+			continue
+		}
+		if value == "" {
+			out = append(out, "PATH="+dir)
+		} else {
+			out = append(out, "PATH="+dir+string(filepath.ListSeparator)+value)
+		}
+	}
+	if !found {
+		out = append(out, "PATH="+dir)
+	}
+	return out
 }

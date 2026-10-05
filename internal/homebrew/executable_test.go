@@ -1,6 +1,7 @@
 package homebrew
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
@@ -223,5 +224,43 @@ func TestHostResolutionIsRestored(t *testing.T) {
 	}
 	if linuxbrewExecutable != originalFallback {
 		t.Errorf("linuxbrewExecutable = %q after the substituting subtest ended, want %q", linuxbrewExecutable, originalFallback)
+	}
+}
+
+func TestWithBrewPathPutsBrewsDirectoryFirstOnce(t *testing.T) {
+	tests := []struct {
+		name string
+		env  []string
+		brew string
+		want []string
+	}{
+		{"prepends", []string{"HOME=/h", "PATH=/usr/bin"}, "/lb/bin/brew", []string{"HOME=/h", "PATH=/lb/bin:/usr/bin"}},
+		{"already listed", []string{"PATH=/usr/bin:/lb/bin"}, "/lb/bin/brew", []string{"PATH=/usr/bin:/lb/bin"}},
+		{"no PATH at all", []string{"HOME=/h"}, "/lb/bin/brew", []string{"HOME=/h", "PATH=/lb/bin"}},
+		{"empty PATH", []string{"PATH="}, "/lb/bin/brew", []string{"PATH=/lb/bin"}},
+		{"bare name changes nothing", []string{"PATH=/usr/bin"}, "brew", []string{"PATH=/usr/bin"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := WithBrewPath(tt.env, tt.brew); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("WithBrewPath = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A cask preflight runs tools that live beside brew by bare name. Under a
+// direct launch $PATH has no Homebrew, and that was the goose-linux cask's
+// "cpio: command not found". brew's children must find its siblings anyway.
+func TestBrewChildrenFindToolsBesideBrew(t *testing.T) {
+	script, _ := fakeBrewExecutable(t, "exec sibling-tool")
+	sibling := filepath.Join(filepath.Dir(script), "sibling-tool")
+	if err := os.WriteFile(sibling, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", "/usr/bin:/bin")
+
+	if _, err := runBrewCommandAt(context.Background(), script, "install", "--cask", "x"); err != nil {
+		t.Fatalf("brew's child could not find a tool beside brew: %v", err)
 	}
 }
