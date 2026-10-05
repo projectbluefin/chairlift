@@ -228,3 +228,11 @@ func TrustPackages(tap UntrustedTap) error {
 	}
 	return nil
 }
+
+// TrustFormula trusts exactly one tap formula, by its qualified name, with
+// `brew trust --formula`. Its tap must already be tapped. Per-user, like
+// TrustPackages.
+func TrustFormula(name string) error {
+	_, err := runBrewCommand("trust", "--formula", name)
+	return err
+}

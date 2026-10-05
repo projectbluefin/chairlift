@@ -390,3 +390,24 @@ func TestStoredModelIdentityUsesCanonicalRepository(t *testing.T) {
 		})
 	}
 }
+
+// llmman stores a pulled model under its registry-qualified name, not the
+// reference it was asked for. A pull that worked must verify as stored.
+func TestPullVerifiesTheRegistryQualifiedName(t *testing.T) {
+	newHost(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"memory":67180617728,"loaded":{},"stored":{"hf.co/unsloth/Qwen3-0.6B-GGUF:Q4_K_M":396705472}}`))
+	}))
+	defer srv.Close()
+	origNodeURL := nodeURL
+	nodeURL = srv.URL
+	defer func() { nodeURL = origNodeURL }()
+
+	if err := PullModel(context.Background(), "unsloth/Qwen3-0.6B-GGUF:Q4_K_M"); err != nil {
+		t.Fatalf("PullModel reported a stored model as missing: %v", err)
+	}
+	if err := VerifyModelStored(context.Background(), "unsloth/Other-GGUF:Q4_K_M"); err == nil {
+		t.Fatal("VerifyModelStored accepted a model that was never stored")
+	}
+}

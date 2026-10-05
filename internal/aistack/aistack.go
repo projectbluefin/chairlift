@@ -47,8 +47,11 @@ const ServiceName = "chairlift-llmman.service"
 // to sessions started after Agent Mode is enabled.
 const EnvFragmentName = "10-chairlift-llmman.conf"
 
+// Tap is the Homebrew tap llmman is published in.
+const Tap = "llmmanorg/tap"
+
 // Formula is the Homebrew formula that provides llmman.
-const Formula = "llmmanorg/tap/llmman"
+const Formula = Tap + "/llmman"
 
 // State is Agent Mode's lifecycle state, as ADR-0015 defines it.
 type State int
@@ -118,7 +121,7 @@ func Brewfile(haveLLMMan bool) string {
 	if haveLLMMan {
 		return ""
 	}
-	return "tap \"llmmanorg/tap\"\nbrew \"" + Formula + "\"\n"
+	return "tap \"" + Tap + "\"\nbrew \"" + Formula + "\"\n"
 }
 
 // RenderUnit returns the systemd user unit for the llmman executable at exe.
@@ -158,9 +161,15 @@ var (
 	lookPath      = exec.LookPath
 	brewPath      = homebrew.ExecutablePath
 	installBundle = homebrew.BundleInstall
+	tapRepo       = homebrew.Tap
+	trustFormula  = homebrew.TrustFormula
 	run           = execCommand
 	nodeURL       = "http://" + Address + "/llmman/node"
 )
+
+// WebUIURL is llmman's built-in web UI — chat, model pulls and removal —
+// served by the Agent Mode daemon itself.
+func WebUIURL() string { return "http://" + Address + "/" }
 
 func execCommand(ctx context.Context, name string, args ...string) (string, error) {
 	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
@@ -339,10 +348,27 @@ func Enable(ctx context.Context) error {
 	return nil
 }
 
+// installRuntime installs llmman with one Brewfile.
+//
+// Homebrew refuses to load a formula from a tap the user has not trusted,
+// and llmmanorg/tap is not trusted on a stock host, so the bundle failed
+// with "Refusing to load formula llmmanorg/tap/llmman from untrusted tap".
+// Turning Agent Mode on is the user's consent to install that one formula,
+// so it trusts exactly that formula — not the tap — after tapping and
+// before the bundle loads it. Trust is per-user; nothing here is privileged.
 func installRuntime() error {
-	bundle := Brewfile(Executable() != "")
+	haveLLMMan := Executable() != ""
+	bundle := Brewfile(haveLLMMan)
 	if bundle == "" {
 		return nil
+	}
+	if !haveLLMMan {
+		if err := tapRepo(Tap); err != nil {
+			return err
+		}
+		if err := trustFormula(Formula); err != nil {
+			return err
+		}
 	}
 	file, err := os.CreateTemp("", "agent-mode-*.Brewfile")
 	if err != nil {
