@@ -136,15 +136,26 @@ def step_log_would(context, verb):
 # ---------------------------------------------------------------- stubs
 
 
+def asked(lines, args):
+    """The recorded invocations whose leading words are exactly args.
+
+    A plain prefix match let "tap" match ChairLift's read-only startup
+    `brew tap-info --installed --json`, so a scenario failed or passed on
+    whether that read had landed before the step ran.
+    """
+    words = args.split()
+    return [line for line in lines if line.split()[: len(words)] == words]
+
+
 @then('llmman was never asked to "{args}"')
 def step_llmman_never(context, args):
-    hits = [line for line in calls(context, "llmman") if line.startswith(args)]
+    hits = asked(calls(context, "llmman"), args)
     assert not hits, f"llmman ran {hits}"
 
 
 @then('brew was never asked to "{args}"')
 def step_brew_never(context, args):
-    hits = [line for line in calls(context, "brew") if line.startswith(args)]
+    hits = asked(calls(context, "brew"), args)
     assert not hits, f"brew ran {hits}"
 
 
@@ -181,7 +192,7 @@ def step_node_probed(context):
 
 @then('dconf was never asked to "{args}"')
 def step_dconf_never(context, args):
-    hits = [line for line in calls(context, "dconf") if line.startswith(args)]
+    hits = asked(calls(context, "dconf"), args)
     assert not hits, f"dconf ran {hits}"
 
 
