@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -34,7 +35,18 @@ const (
 	// AskBluefinDispatchCommand is the entry the distro is expected to ship in
 	// place of the web link; both are ChairLift's owned identity.
 	AskBluefinDispatchCommand = "chairlift --ask-bluefin"
+
+	// AskBluefinWrapperCommand is the dispatcher entry as Bluefin's distro
+	// layer ships it (projectbluefin/common#1396): the Homebrew wrapper by
+	// absolute path, because a GNOME Shell extension's command runs without
+	// Homebrew on $PATH. ChairLift recognizes it and never rewrites it.
+	AskBluefinWrapperCommand = "/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin"
 )
+
+// askBluefinCommands are the commands an Ask Bluefin entry may carry and
+// still be the one ChairLift shows or hides. A label alone is not enough: a
+// user who repointed the slot at their own script owns it.
+var askBluefinCommands = []string{AskBluefinCommand, AskBluefinDispatchCommand, AskBluefinWrapperCommand}
 
 // Entry represents a Custom Command Menu tuple: (label, command, icon, visible).
 type Entry struct {
@@ -56,7 +68,7 @@ func IsDeveloperLabel(label string) bool {
 
 // IsAskBluefin reports whether an Entry matches ChairLift's owned Ask Bluefin identity.
 func IsAskBluefin(e Entry) bool {
-	return e.Label == AskBluefinLabel && (e.Command == AskBluefinCommand || e.Command == AskBluefinDispatchCommand)
+	return e.Label == AskBluefinLabel && slices.Contains(askBluefinCommands, e.Command)
 }
 
 // runCommand is an injection seam for external command execution.

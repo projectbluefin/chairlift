@@ -802,3 +802,37 @@ func TestAskBluefinIdentityAcceptsTheDispatcherEntry(t *testing.T) {
 		t.Fatal("a user-customised Ask Bluefin slot was claimed")
 	}
 }
+
+// Bluefin's distro layer ships the dispatcher through the Homebrew wrapper
+// by absolute path (projectbluefin/common#1396), because the menu's command
+// runs without Homebrew on $PATH. The switch must still find that entry —
+// and hide or reveal it without touching its command.
+func TestAskBluefinIdentityAcceptsTheDistroWrapperEntry(t *testing.T) {
+	const distro = "/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin"
+	if !IsAskBluefin(Entry{Label: AskBluefinLabel, Command: distro}) {
+		t.Fatal("the distro's chairlift-wrapper --ask-bluefin entry is not recognised as Ask Bluefin")
+	}
+	if IsAskBluefin(Entry{Label: "Something else", Command: distro}) {
+		t.Fatal("an entry with another label was claimed")
+	}
+
+	origLookPath, origRunCommand := lookPath, runCommand
+	t.Cleanup(func() { lookPath, runCommand = origLookPath, origRunCommand })
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	mock := newMockDconf()
+	key := DconfPath + "command11"
+	mock.defaults[key] = "('Ask Bluefin', '" + distro + "', 'ask-bluefin-symbolic', true)"
+	runCommand = mock.runCommand
+
+	avail, vis, err := AskBluefinState(context.Background())
+	if err != nil || !avail || !vis {
+		t.Fatalf("AskBluefinState() = (%v, %v, %v), want (true, true, nil)", avail, vis, err)
+	}
+	if err := SetAskBluefinVisible(context.Background(), false); err != nil {
+		t.Fatalf("SetAskBluefinVisible(false) error: %v", err)
+	}
+	got := mock.user[key]
+	if !strings.Contains(got, distro) || !strings.Contains(got, "false") {
+		t.Errorf("user override = %q, want the distro command kept and visible=false", got)
+	}
+}
