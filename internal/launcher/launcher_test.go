@@ -44,6 +44,28 @@ func TestStartReturnsSynchronousStartError(t *testing.T) {
 	}
 }
 
+// A long-lived launch (a troubleshooting session) is tracked until it ends;
+// a clean exit must still be reported, or the caller's "session open" state
+// would never clear.
+func TestRunReportsACleanExit(t *testing.T) {
+	trueBin, err := exec.LookPath("true")
+	if err != nil {
+		t.Skip("no true(1) on this host")
+	}
+	exited := make(chan error, 1)
+	if err := Run(exec.Command(trueBin), func(err error) { exited <- err }); err != nil {
+		t.Fatalf("Run() returned start error: %v", err)
+	}
+	select {
+	case err := <-exited:
+		if err != nil {
+			t.Fatalf("onExit(%v), want nil for a clean exit", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Run() never reported the clean exit")
+	}
+}
+
 func TestLauncherHelperProcess(t *testing.T) {
 	if os.Getenv("CHAIRLIFT_LAUNCHER_TEST_HELPER") != "1" {
 		return

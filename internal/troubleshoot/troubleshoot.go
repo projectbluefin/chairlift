@@ -1,223 +1,150 @@
-// Package troubleshoot implements ChairLift's Enhanced Troubleshooting: an
-// AI agent that can read this machine's live state — logs, services,
-// processes, network — and answer questions about it.
+// Package troubleshoot is the engine behind Ask Bluefin, the Agents page's
+// Goose row: the Goose desktop app, running on the Agent Mode model, with
+// read-only tools for this machine's live state and the Project Bluefin
+// knowledge base. Knowledge searches go online, so nothing here claims a
+// session's questions stay on this computer.
 //
-// It is a port of Bluefin's `ujust probe` recipe
-// (projectbluefin/dakota, files/just-overrides/default.just) into one row.
-// The pieces are all Homebrew packages: `linux-mcp-server` from ublue-os/tap
-// exposes the system as MCP tools, it depends on `block-goose-cli` for the
-// agent itself, and the `goose-linux` cask from the same tap provides the
-// desktop app ChairLift launches.
+// Everything is installed with Homebrew and everything Goose reads is
+// ChairLift's own. The session runs in a dedicated Goose profile under
+// $XDG_DATA_HOME/chairlift/troubleshooting: GOOSE_PATH_ROOT points Goose's
+// config, data, and state there, and XDG_CONFIG_HOME points the desktop
+// app's Electron profile (and with it the single-instance lock) at a
+// sibling directory. A user's own ~/.config/goose and a Goose window they
+// already have open are never read, written, or handed this launch.
+//
+// llmman wraps the launch: `llmman launch goose-desktop --model <alias>`
+// hands Goose its provider through the environment, so no provider, model,
+// or key is written to disk by anyone.
 //
 // Nothing here is privileged. Every package is a user-scope Homebrew
-// install and the agent runs as the invoking user. The shipped configuration
-// explicitly selects fixed Linux diagnostic tools without SSH-key discovery.
+// install, the agent runs as the invoking user, and linux-mcp-server runs
+// with its fixed, read-only, local-only toolset. internal/agentmode decides
+// readiness and owns the launch; this package supplies its pieces.
 package troubleshoot
 
 import (
-	"bytes"
+	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"gopkg.in/yaml.v3"
 )
 
-// The packages the feature is assembled from. Both live in ublue-os/tap,
-// which brew requires be tapped explicitly before either can be installed
-// by its qualified name.
+// The packages the feature is assembled from.
 const (
+	// Tap holds linux-mcp-server and the Goose desktop cask. brew requires
+	// it be tapped before either qualified name resolves.
 	Tap = "ublue-os/tap"
-	// ServerFormula also pulls block-goose-cli, so installing it installs
-	// the agent as well.
+	// ServerFormula is the MCP server that exposes this system's state.
 	ServerFormula = "ublue-os/tap/linux-mcp-server"
-	// DesktopCask is the Goose desktop app. Its binary is `goose-desktop`,
-	// distinct from the formula's `goose`, so the two coexist.
+	// ExtractorFormula supplies the `cpio` the desktop cask's preflight
+	// pipes the upstream RPM into. The cask declares only rpm2cpio, and
+	// Bluefin images ship no cpio, so without this the cask install fails
+	// partway through unpacking.
+	ExtractorFormula = "cpio"
+	// DesktopCask is the Goose desktop app. Its binary is `goose-desktop`.
+	// Upstream publishes it for x86_64 only.
 	DesktopCask = "ublue-os/tap/goose-linux"
-	// DesktopFile is where the cask installs its launcher.
-	DesktopFile = "Goose.desktop"
 )
 
-// defaultConfigPath is the premade configuration shipped by Common.
-var defaultConfigPath = "/usr/share/ublue-os/goose/config.yaml"
+// The executables Detect looks for.
+const (
+	serverBinary  = "linux-mcp-server"
+	desktopBinary = "goose-desktop"
+	llmmanBinary  = "llmman"
+)
 
-var diagnosticExtensionKeys = [...]string{"linux-mcp-server", "linux-tools"}
+// KnowledgeURI is the Project Bluefin knowledge MCP server: a public,
+// read-only index of the project's Hive knowledge base.
+const KnowledgeURI = "https://mcp.projectbluefin.io/mcp"
+
+// knowledgeTool is the one knowledge-server tool a troubleshooting session
+// needs. The server's factory-status and work-queue tools are for
+// contributors and would only distract a small model.
+const knowledgeTool = "search_knowledge"
+
+// ServerArgs confines linux-mcp-server to its fixed read-only toolset on
+// this machine only: no script execution, no remote hosts, and no SSH key
+// discovery.
+var ServerArgs = []string{"--toolset", "FIXED", "--host-mode", "LOCAL_ONLY", "--no-search-for-ssh-key"}
+
+//go:embed hints.md
+var hints string
+
+// Hints returns the instructions every session starts with.
+func Hints() string { return hints }
 
 // State is what ChairLift knows about the feature on this host.
 type State struct {
-	// ServerInstalled reports whether linux-mcp-server is on $PATH.
-	ServerInstalled bool
-	// AgentInstalled reports whether the goose CLI is on $PATH.
-	AgentInstalled bool
-	// DesktopInstalled reports whether the Goose desktop app is available.
-	DesktopInstalled bool
-	// Wired reports whether an enabled Linux diagnostic extension uses the
-	// explicit fixed-tool policy. Detect also checks its command availability.
-	Wired    bool
-	commands [len(diagnosticExtensionKeys)]string
-	// Provider is the LLM provider Goose is configured to use, empty when
-	// none is set. ChairLift does not select or replace the user's provider.
-	Provider string
-	// ModelSelected reports a model name, not credentials or service readiness.
-	ModelSelected bool
+	// Supported reports whether the desktop app exists for this
+	// architecture.
+	Supported bool
+	// ServerPath is linux-mcp-server's absolute path, empty when absent.
+	ServerPath string
+	// DesktopPath is goose-desktop's absolute path, empty when absent.
+	DesktopPath string
+	// LLMManPath is llmman's absolute path, empty when absent. Agent Mode
+	// installs it; this feature never does.
+	LLMManPath string
 }
 
-// Ready reports whether the installed diagnostic tools are connected. It does
-// not verify a model provider, credentials, or the provider's reachability.
+// Installed reports whether every package this feature installs is present.
+func (s State) Installed() bool {
+	return s.ServerPath != "" && s.DesktopPath != ""
+}
+
+// Ready reports whether a session can be launched, model aside: the model
+// is Agent Mode's, and the caller checks it there.
 func (s State) Ready() bool {
-	return s.ServerInstalled && s.AgentInstalled && s.Wired
+	return s.Supported && s.Installed() && s.LLMManPath != ""
 }
 
-// ConfigPath returns Goose's configuration file.
-func ConfigPath() (string, error) {
-	config, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(config, "goose", "config.yaml"), nil
-}
+// lookPath is an injection seam for binary detection.
+var lookPath = exec.LookPath
 
-// ParseConfig recognizes the shipped and legacy diagnostic extension keys.
-// Malformed YAML and extensions without explicit fixed tools are not wired.
-func ParseConfig(data []byte) State {
-	document, err := decodeConfig(data)
-	if err != nil {
-		return State{}
-	}
-	var cfg gooseConfig
-	if err := document.Decode(&cfg); err != nil {
-		return State{}
-	}
+// brewExecutable is an injection seam for the Homebrew resolution.
+var brewExecutable = homebrew.ExecutablePath
 
-	state := State{Provider: cfg.Provider, ModelSelected: strings.TrimSpace(cfg.Model) != ""}
-	for i, key := range diagnosticExtensionKeys {
-		ext, ok := cfg.Extensions[key]
-		if !ok || !ext.enabled() {
-			continue
-		}
-		if !ext.valid() {
-			state.Wired = false
-			return state
-		}
-		state.Wired, state.commands[i] = true, ext.Cmd
-	}
-	return state
-}
+// goarch is an injection seam for the architecture check.
+var goarch = runtime.GOARCH
 
-// gooseConfig reads only the provider and diagnostic extension definitions.
-type gooseConfig struct {
-	Provider   string              `yaml:"GOOSE_PROVIDER"`
-	Model      string              `yaml:"GOOSE_MODEL"`
-	Extensions map[string]gooseExt `yaml:"extensions"`
-}
-
-// gooseExt contains the fields needed to verify the diagnostic tool policy.
-type gooseExt struct {
-	Enabled *bool             `yaml:"enabled"`
-	Type    string            `yaml:"type"`
-	Cmd     string            `yaml:"cmd"`
-	Args    []string          `yaml:"args"`
-	Envs    map[string]string `yaml:"envs"`
-}
-
-// enabled reports whether the extension is active. Goose enables an extension
-// unless `enabled` is explicitly false, so an absent flag still counts as on.
-func (e gooseExt) enabled() bool {
-	return e.Enabled == nil || *e.Enabled
-}
-
-// valid requires the fixed diagnostic tools and explicit SSH-key opt-out.
-func (e gooseExt) valid() bool {
-	if e.Type != "stdio" || filepath.Base(e.Cmd) != "linux-mcp-server" || e.Envs["LINUX_MCP_SSH_KEY_PATH"] != "" {
-		return false
-	}
-	fixed, noSearch := false, false
-	for i := 0; i < len(e.Args); i++ {
-		switch e.Args[i] {
-		case "--toolset":
-			if fixed || i+1 == len(e.Args) || e.Args[i+1] != "FIXED" {
-				return false
-			}
-			fixed = true
-			i++
-		case "--no-search-for-ssh-key":
-			noSearch = true
-		case "--search-for-ssh-key", "--no-verify-host-keys", "--ssh-key-path":
-			return false
-		default:
-			if strings.HasPrefix(e.Args[i], "--toolset=") || strings.HasPrefix(e.Args[i], "--ssh-key-path=") {
-				return false
-			}
-		}
-	}
-	return fixed && noSearch
-}
-
-// lookPath is the binary-detection seam. Homebrew's existing resolution
-// supplies its bin directory when a desktop launch has no brew on PATH.
-var lookPath = defaultLookPath
-
-func defaultLookPath(name string) bool {
-	return resolveTool(name) != ""
-}
-
-func resolveTool(name string) string {
-	if path, err := exec.LookPath(name); err == nil {
+// resolve finds an executable on $PATH, or beside brew when $PATH lacks
+// Homebrew's bin directory — a direct launch that bypassed the wrapper.
+func resolve(name string) string {
+	if path, err := lookPath(name); err == nil && filepath.IsAbs(path) {
 		return path
 	}
-	if filepath.IsAbs(name) {
-		return ""
-	}
-	brew := homebrew.ExecutablePath()
-	if brew == "" {
-		return ""
-	}
-	path, err := exec.LookPath(filepath.Join(filepath.Dir(brew), name))
-	if err != nil {
-		return ""
-	}
-	return path
-}
-
-// readConfig is an injection seam for the configuration read.
-var readConfig = defaultReadConfig
-
-func defaultReadConfig() ([]byte, error) {
-	path, err := ConfigPath()
-	if err != nil {
-		return nil, err
-	}
-	return os.ReadFile(path)
-}
-
-// Detect reports the feature's state on this host.
-func Detect() State {
-	var state State
-	if data, err := readConfig(); err == nil {
-		state = ParseConfig(data)
-	}
-
-	state.ServerInstalled = lookPath("linux-mcp-server")
-	state.AgentInstalled = lookPath("goose")
-	state.DesktopInstalled = lookPath("goose-desktop")
-	if state.Wired {
-		for _, command := range state.commands {
-			if command != "" && !lookPath(command) {
-				state.Wired = false
-				break
-			}
+	if brew := brewExecutable(); brew != "" {
+		candidate := filepath.Join(filepath.Dir(brew), name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
 		}
 	}
-	return state
+	return ""
+}
+
+// Detect reports the feature's state on this host. It only resolves paths,
+// so it is cheap, but callers still run it off the GTK main thread.
+func Detect() State {
+	return State{
+		Supported:   goarch == "amd64",
+		ServerPath:  resolve(serverBinary),
+		DesktopPath: resolve(desktopBinary),
+		LLMManPath:  resolve(llmmanBinary),
+	}
 }
 
 // tapPackage and installPackage are injection seams for the Homebrew
-// operations, so the setup sequence is testable without shelling out. A test
-// that reached real brew would tap a repository on the machine running it.
+// operations, so the setup sequence is testable without shelling out.
 var (
 	tapPackage     = homebrew.Tap
 	installPackage = homebrew.Install
@@ -234,152 +161,43 @@ type Step struct {
 	Needed func(State) bool
 }
 
-// Steps returns the setup sequence, in order. It mirrors `ujust probe`:
-// tap, install, wire up. The desktop app is included because ChairLift is a
-// GUI and launching a terminal agent from one means guessing at a terminal
-// emulator.
+// Steps returns the setup sequence, in order.
 func Steps() []Step {
 	return []Step{
 		{
 			Name:   "Adding the ublue-os tap",
-			Needed: func(State) bool { return true },
+			Needed: func(s State) bool { return !s.Installed() },
 			Run:    func() error { return tapPackage(Tap) },
 		},
 		{
-			Name:   "Installing linux-mcp-server",
-			Needed: func(s State) bool { return !s.ServerInstalled || !s.AgentInstalled },
+			Name:   "Installing the system inspection tools",
+			Needed: func(s State) bool { return s.ServerPath == "" },
 			Run:    func() error { return installPackage(ServerFormula, false) },
 		},
 		{
 			Name:   "Installing the Goose app",
-			Needed: func(s State) bool { return !s.DesktopInstalled },
-			Run:    func() error { return installPackage(DesktopCask, true) },
+			Needed: func(s State) bool { return s.DesktopPath == "" },
+			Run: func() error {
+				if err := installPackage(ExtractorFormula, false); err != nil {
+					return err
+				}
+				return installPackage(DesktopCask, true)
+			},
 		},
-		{
-			Name:   "Connecting it to this system",
-			Needed: func(s State) bool { return !s.Wired },
-			Run:    func() error { return runSetup() },
-		},
 	}
 }
 
-// ExtensionStatus represents the classification of the Linux diagnostic extension
-// in Goose's configuration.
-type ExtensionStatus int
-
-const (
-	// ExtensionStatusMissing: No Goose config or extension is not defined.
-	ExtensionStatusMissing ExtensionStatus = iota
-	// ExtensionStatusMalformed: Config exists but contains invalid YAML or invalid mapping.
-	ExtensionStatusMalformed
-	// ExtensionStatusUnsafe: Extension exists but violates security policies (SSH key, not stdio, missing FIXED toolset).
-	ExtensionStatusUnsafe
-	// ExtensionStatusValid: Extension exists, is enabled, stdio, points to linux-mcp-server with --toolset FIXED and no SSH.
-	ExtensionStatusValid
-)
-
-// ClassifyConfig evaluates raw Goose configuration YAML bytes and returns its ExtensionStatus.
-func ClassifyConfig(data []byte, fileExists bool) ExtensionStatus {
-	if !fileExists || len(bytes.TrimSpace(data)) == 0 {
-		return ExtensionStatusMissing
-	}
-	document, err := decodeConfig(data)
-	if err != nil {
-		return ExtensionStatusMalformed
-	}
-	var cfg gooseConfig
-	if err := document.Decode(&cfg); err != nil {
-		return ExtensionStatusMalformed
-	}
-	for _, key := range diagnosticExtensionKeys {
-		ext, ok := cfg.Extensions[key]
-		if !ok {
-			continue
-		}
-		if !ext.enabled() || !ext.valid() {
-			return ExtensionStatusUnsafe
-		}
-		return ExtensionStatusValid
-	}
-	return ExtensionStatusMissing
-}
-
-// VerifyExtensionOnDisk checks the current user's Goose configuration file and
-// verifies that the Linux diagnostic extension is configured and its command resolves.
-func VerifyExtensionOnDisk() ExtensionStatus {
-	data, err := readConfig()
-	if err != nil {
-		if os.IsNotExist(err) {
-			return ExtensionStatusMissing
-		}
-		return ExtensionStatusMalformed
-	}
-	status := ClassifyConfig(data, true)
-	if status != ExtensionStatusValid {
-		return status
-	}
-	parsed := ParseConfig(data)
-	for _, cmd := range parsed.commands {
-		if cmd != "" && !lookPath(cmd) {
-			return ExtensionStatusUnsafe
-		}
-	}
-	return ExtensionStatusValid
-}
-
-// EnsureDiagnosticsConfigured writes the hardened Linux diagnostic extension into
-// Goose's configuration, preserving existing user settings, models, providers, and
-// other extensions. It verifies the written configuration before returning.
-func EnsureDiagnosticsConfigured() error {
-	path, err := ConfigPath()
-	if err != nil {
-		return err
-	}
-	data, info, err := readUserConfig(path)
-	if err != nil {
-		return fmt.Errorf("reading Goose configuration: %w", err)
-	}
-	if dryrun.Enabled() && info == nil {
-		log.Printf("[DRY-RUN] would copy Goose configuration from %s", defaultConfigPath)
-		return nil
-	}
-	if info == nil {
-		data, err = os.ReadFile(defaultConfigPath)
-		if err != nil {
-			return fmt.Errorf("reading the shipped Goose configuration: %w", err)
-		}
-	}
-	prepared, err := prepareDiagnostics(data, info != nil)
-	if err != nil {
-		return fmt.Errorf("the Goose configuration was kept unchanged: %w", err)
-	}
-	if info != nil && bytes.Equal(data, prepared) {
-		return nil
-	}
-	if dryrun.Enabled() {
-		log.Print("[DRY-RUN] would connect read-only Linux tools in existing Goose configuration")
-		return nil
-	}
-	if err := writeUserConfig(path, data, info, prepared); err != nil {
-		return fmt.Errorf("saving Goose configuration: %w", err)
-	}
-	observed, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	if !ParseConfig(observed).Wired {
-		return fmt.Errorf("linux tools could not be verified in Goose; check its configuration")
-	}
-	return nil
-}
-
-// runSetup is an injection seam for connecting the diagnostic extension.
-var runSetup = EnsureDiagnosticsConfigured
+// ErrUnsupported is returned when the desktop app does not exist for this
+// architecture.
+var ErrUnsupported = errors.New("the Goose app is only published for x86_64")
 
 // Setup runs every step that still has work to do, reporting progress as it
 // goes. It returns the state afterwards so a caller can tell whether the run
 // actually left the feature usable.
 func Setup(state State, progress func(string)) (State, error) {
+	if !state.Supported {
+		return state, ErrUnsupported
+	}
 	for _, step := range Steps() {
 		if !step.Needed(state) {
 			continue
@@ -391,9 +209,257 @@ func Setup(state State, progress func(string)) (State, error) {
 			return Detect(), fmt.Errorf("%s: %w", strings.ToLower(step.Name), err)
 		}
 	}
-	after := Detect()
-	if !dryrun.Enabled() && (!after.Ready() || !after.DesktopInstalled) {
-		return after, fmt.Errorf("setup finished, but Goose or its Linux tools are still unavailable")
+	return Detect(), nil
+}
+
+// Profile is the dedicated Goose profile a session runs in.
+type Profile struct {
+	// Root is the profile's own directory.
+	Root string
+}
+
+// ProfileAt returns the profile rooted in dataHome ($XDG_DATA_HOME).
+func ProfileAt(dataHome string) Profile {
+	return Profile{Root: filepath.Join(dataHome, "chairlift", "troubleshooting")}
+}
+
+// DefaultProfile returns the profile under the user's $XDG_DATA_HOME.
+func DefaultProfile() (Profile, error) {
+	if dir := os.Getenv("XDG_DATA_HOME"); filepath.IsAbs(dir) {
+		return ProfileAt(dir), nil
 	}
-	return after, nil
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return Profile{}, err
+	}
+	return ProfileAt(filepath.Join(home, ".local", "share")), nil
+}
+
+// GooseRoot is the GOOSE_PATH_ROOT: Goose keeps config/, data/, and
+// state/ beneath it.
+func (p Profile) GooseRoot() string { return filepath.Join(p.Root, "goose") }
+
+// DesktopConfigHome is the XDG_CONFIG_HOME the desktop app runs with, so
+// its Electron profile and single-instance lock are this profile's own.
+func (p Profile) DesktopConfigHome() string { return filepath.Join(p.Root, "desktop") }
+
+// ConfigPath is the profile's Goose configuration file.
+func (p Profile) ConfigPath() string {
+	return filepath.Join(p.GooseRoot(), "config", "config.yaml")
+}
+
+// HintsPath is the profile's global hints file, which Goose adds to every
+// session's instructions.
+func (p Profile) HintsPath() string {
+	return filepath.Join(p.GooseRoot(), "config", ".goosehints")
+}
+
+// profileConfig is the whole of the profile's config.yaml. The provider is
+// absent on purpose: llmman supplies it through the environment.
+type profileConfig struct {
+	Telemetry  bool           `yaml:"GOOSE_TELEMETRY_ENABLED"`
+	NoKeyring  bool           `yaml:"GOOSE_DISABLE_KEYRING"`
+	Extensions map[string]any `yaml:"extensions"`
+}
+
+// disabledPlatformExtensions are Goose's own built-in extensions, each
+// written disabled. Goose adds any platform extension missing from the
+// file at startup with its own default — `developer`, which runs shell
+// commands, and `extensionmanager`, which can turn other extensions on,
+// both default to on — but keeps an `enabled` value already present. This
+// list covers Goose 1.53 on a first launch; on every later launch
+// RenderConfig also disables whatever extension Goose wrote into the
+// profile since, so one a later Goose adds is on for one session at most.
+var disabledPlatformExtensions = []string{
+	"analyze", "apps", "chatrecall", "code_execution", "developer",
+	"extensionmanager", "orchestrator", "scheduler", "skills", "summarize",
+	"summon", "todo", "tom",
+}
+
+// disabledPlatform is the smallest entry Goose's migration accepts; it
+// fills in the description and display name itself.
+type disabledPlatform struct {
+	Enabled bool   `yaml:"enabled"`
+	Type    string `yaml:"type"`
+	Name    string `yaml:"name"`
+}
+
+// profileExtension is one Goose extension entry.
+type profileExtension struct {
+	Enabled        bool     `yaml:"enabled"`
+	Type           string   `yaml:"type"`
+	Name           string   `yaml:"name"`
+	Description    string   `yaml:"description"`
+	Cmd            string   `yaml:"cmd,omitempty"`
+	Args           []string `yaml:"args,omitempty"`
+	URI            string   `yaml:"uri,omitempty"`
+	AvailableTools []string `yaml:"available_tools,omitempty"`
+	Timeout        int      `yaml:"timeout"`
+	Bundled        bool     `yaml:"bundled"`
+}
+
+// RenderConfig returns the profile's config.yaml for a linux-mcp-server at
+// serverPath. It is the complete extension set: a session can inspect this
+// machine and search the Bluefin knowledge base, and nothing else. current
+// is the profile's config as it stands, or nil: every extension in it other
+// than the two enabled here is carried over disabled.
+func RenderConfig(serverPath string, current []byte) ([]byte, error) {
+	if !filepath.IsAbs(serverPath) {
+		return nil, fmt.Errorf("linux-mcp-server path %q is not absolute", serverPath)
+	}
+	extensions := map[string]any{}
+	var previous struct {
+		Extensions map[string]map[string]any `yaml:"extensions"`
+	}
+	// The file is ChairLift's own; an unreadable one is simply replaced.
+	if yaml.Unmarshal(current, &previous) == nil {
+		for name, entry := range previous.Extensions {
+			if entry == nil {
+				continue
+			}
+			entry["enabled"] = false
+			extensions[name] = entry
+		}
+	}
+	allowed := map[string]any{
+		"linux-tools": profileExtension{
+			Enabled:     true,
+			Type:        "stdio",
+			Name:        "linux-tools",
+			Description: "Read-only inspection of this computer: logs, services, processes, storage, and network",
+			Cmd:         serverPath,
+			Args:        ServerArgs,
+			Timeout:     300,
+		},
+		"bluefin-knowledge": profileExtension{
+			Enabled:        true,
+			Type:           "streamable_http",
+			Name:           "bluefin-knowledge",
+			Description:    "Search the Project Bluefin knowledge base for known issues and fixes",
+			URI:            KnowledgeURI,
+			AvailableTools: []string{knowledgeTool},
+			Timeout:        60,
+		},
+	}
+	extensions["linux-tools"] = allowed["linux-tools"]
+	extensions["bluefin-knowledge"] = allowed["bluefin-knowledge"]
+	for _, name := range disabledPlatformExtensions {
+		if _, seen := extensions[name]; !seen {
+			extensions[name] = disabledPlatform{Type: "platform", Name: name}
+		}
+	}
+	cfg := profileConfig{NoKeyring: true, Extensions: extensions}
+	body, err := yaml.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte("# Written by "+branding.AppName+" for Ask Bluefin; rewritten on every launch.\n"), body...), nil
+}
+
+// writeFile is an injection seam for the profile writes.
+var writeFile = writeAtomic
+
+// Write lays the profile down for a linux-mcp-server at serverPath. The
+// profile is ChairLift's alone, so it is rewritten whole on every launch:
+// a moved Homebrew prefix or a hand edit cannot leave a session with stale
+// tools.
+func (p Profile) Write(serverPath string) error {
+	current, err := os.ReadFile(p.ConfigPath())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	config, err := RenderConfig(serverPath, current)
+	if err != nil {
+		return err
+	}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would write %s and %s", p.ConfigPath(), p.HintsPath())
+		return nil
+	}
+	if err := writeFile(p.ConfigPath(), config); err != nil {
+		return err
+	}
+	if err := writeFile(p.HintsPath(), []byte(Hints())); err != nil {
+		return err
+	}
+	if user, err := userConfigDir(); err == nil {
+		return p.linkDesktopSettings(user)
+	}
+	return nil
+}
+
+// userConfigDir is an injection seam for the user's own XDG_CONFIG_HOME.
+var userConfigDir = os.UserConfigDir
+
+// sharedDesktopSettings are the user's settings the desktop app still has
+// to see from inside its own XDG_CONFIG_HOME: the default-application
+// choices `xdg-open` reads, so a link opened from a session goes to the
+// user's browser, and the dconf database GTK and GSettings read.
+var sharedDesktopSettings = []string{"mimeapps.list", "dconf"}
+
+// linkDesktopSettings symlinks each shared setting from the user's config
+// directory into the desktop config home. Moving XDG_CONFIG_HOME is what
+// isolates Electron's profile and lock, but it moves these with it. A
+// name already present in the desktop config home is left as it is.
+func (p Profile) linkDesktopSettings(userConfig string) error {
+	if err := os.MkdirAll(p.DesktopConfigHome(), 0o700); err != nil {
+		return err
+	}
+	for _, name := range sharedDesktopSettings {
+		target := filepath.Join(userConfig, name)
+		if _, err := os.Stat(target); err != nil {
+			continue
+		}
+		link := filepath.Join(p.DesktopConfigHome(), name)
+		if _, err := os.Lstat(link); err == nil {
+			continue
+		}
+		if err := os.Symlink(target, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeAtomic replaces dest with data through a temporary file in the same
+// directory, so a reader never sees a partial file.
+func writeAtomic(dest string, data []byte) error {
+	dir := filepath.Dir(dest)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".troubleshoot-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), dest)
+}
+
+// Command returns the launch: llmman starts Goose's desktop app pointed at
+// model, inside the profile. The environment is the caller's plus the two
+// profile roots.
+func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
+	if !state.Ready() {
+		return nil, errors.New("goose and its tools are not set up")
+	}
+	if model == "" {
+		return nil, errors.New("no Agent Mode model is selected")
+	}
+	cmd := exec.Command(state.LLMManPath, "launch", "goose-desktop", "--model", model)
+	// llmman finds goose-desktop on $PATH, which a direct launch of
+	// ChairLift does not give Homebrew.
+	env := homebrew.WithBrewPath(os.Environ(), brewExecutable())
+	cmd.Env = append(env,
+		"GOOSE_PATH_ROOT="+profile.GooseRoot(),
+		"XDG_CONFIG_HOME="+profile.DesktopConfigHome(),
+	)
+	return cmd, nil
 }

@@ -167,6 +167,10 @@ var (
 	nodeURL       = "http://" + Address + "/llmman/node"
 )
 
+// WebUIURL is llmman's built-in web UI — chat, model pulls and removal —
+// served by the Agent Mode daemon itself.
+func WebUIURL() string { return "http://" + Address + "/" }
+
 func execCommand(ctx context.Context, name string, args ...string) (string, error) {
 	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 	trimmed := strings.TrimSpace(string(output))

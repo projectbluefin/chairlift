@@ -135,3 +135,50 @@ func TestLegacySystemPageInvalidInputStillFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+// troubleshooting_group (Ask Bluefin's Goose row) moved from Help to the Agents page. An
+// administrator file that disabled it at the old address must keep it
+// disabled, and a current setting must win over the old one.
+func TestTroubleshootingGroupMovedFromHelp(t *testing.T) {
+	tests := []struct {
+		data string
+		want bool
+	}{
+		{"help_page: {troubleshooting_group: {enabled: false}}", false},
+		{"help_page: {troubleshooting_group: {enabled: false}}\nagents_page: {troubleshooting_group: {enabled: true}}", true},
+		{"agents_page: {troubleshooting_group: {enabled: false}}\nhelp_page: {troubleshooting_group: {enabled: true}}", false},
+		{"help_page: {troubleshooting_group: null}", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.data, func(t *testing.T) {
+			cfg, err := loadFromPath(writeConfigFile(t, tt.data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.IsGroupEnabled("agents_page", "troubleshooting_group"); got != tt.want {
+				t.Errorf("agents_page.troubleshooting_group enabled = %v, want %v", got, tt.want)
+			}
+			if _, stale := cfg.HelpPage["troubleshooting_group"]; stale {
+				t.Error("the moved group is still present under help_page")
+			}
+		})
+	}
+}
+
+func TestTroubleshootingGroupAtItsOldAddressStillFailsClosed(t *testing.T) {
+	for _, data := range []string{
+		"help_page: {troubleshooting_group: {enabeld: false}}",
+		"help_page: {troubleshooting_group: []}",
+		"help_page: {troubleshooting_group: {actions: [{title: t, script: /bin/t, sudo: true}]}}",
+	} {
+		t.Run(data, func(t *testing.T) {
+			path := writeConfigFile(t, data)
+			withConfigPaths(t, []string{path, "must-not-read.yml"})
+			cfg, err := Load()
+			if err == nil || err.Path != path {
+				t.Fatalf("error = %v, want authoritative failure", err)
+			}
+			assertAllKnownGroupsDisabled(t, cfg)
+		})
+	}
+}

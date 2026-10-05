@@ -6,7 +6,24 @@ import (
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
 )
 
+const testModel = "unsloth/Qwen3-8B-GGUF:Q4_K_M"
+
+// installedTools is a supported host with every package present.
+func installedTools() troubleshoot.State {
+	return troubleshoot.State{
+		Supported:   true,
+		ServerPath:  "/home/linuxbrew/.linuxbrew/bin/linux-mcp-server",
+		DesktopPath: "/home/linuxbrew/.linuxbrew/bin/goose-desktop",
+		LLMManPath:  "/home/linuxbrew/.linuxbrew/bin/llmman",
+	}
+}
+
 func TestDispatchAskBluefin(t *testing.T) {
+	without := func(edit func(*troubleshoot.State)) troubleshoot.State {
+		tools := installedTools()
+		edit(&tools)
+		return tools
+	}
 	tests := []struct {
 		name       string
 		facts      ReadinessFacts
@@ -16,102 +33,46 @@ func TestDispatchAskBluefin(t *testing.T) {
 		wantReason string
 	}{
 		{
-			name: "all ready -> dispatch launch",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  true,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusValid,
-			},
+			name:       "all ready -> dispatch launch",
+			facts:      ReadinessFacts{DaemonHealthy: true, ActiveModel: testModel, Tools: installedTools()},
 			wantAction: DispatchLaunch,
-			wantModel:  "unsloth/Qwen3-8B-GGUF:Q4_K_M",
+			wantModel:  testModel,
 			wantState:  StateReady,
-			wantReason: "",
 		},
 		{
-			name: "daemon unavailable -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   false,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  true,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusValid,
-			},
+			name:       "daemon unavailable -> present agents",
+			facts:      ReadinessFacts{ActiveModel: testModel, Tools: installedTools()},
 			wantAction: DispatchPresentAgents,
-			wantModel:  "",
 			wantState:  StateDaemonUnavailable,
 			wantReason: "Agent Mode is not running.",
 		},
 		{
-			name: "model unavailable -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "",
-				GooseInstalled:  true,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusValid,
-			},
+			name:       "model unavailable -> present agents",
+			facts:      ReadinessFacts{DaemonHealthy: true, Tools: installedTools()},
 			wantAction: DispatchPresentAgents,
-			wantModel:  "",
 			wantState:  StateModelUnavailable,
 			wantReason: "No model is selected in Agent Mode.",
 		},
 		{
-			name: "goose missing -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  false,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusValid,
-			},
+			name:       "goose missing -> present agents",
+			facts:      ReadinessFacts{DaemonHealthy: true, ActiveModel: testModel, Tools: without(func(s *troubleshoot.State) { s.DesktopPath = "" })},
 			wantAction: DispatchPresentAgents,
-			wantModel:  "",
 			wantState:  StatePackagesMissing,
 			wantReason: "Goose Desktop or linux-mcp-server is not installed.",
 		},
 		{
-			name: "linux-mcp-server missing -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  true,
-				ServerInstalled: false,
-				ExtensionStatus: troubleshoot.ExtensionStatusValid,
-			},
+			name:       "linux-mcp-server missing -> present agents",
+			facts:      ReadinessFacts{DaemonHealthy: true, ActiveModel: testModel, Tools: without(func(s *troubleshoot.State) { s.ServerPath = "" })},
 			wantAction: DispatchPresentAgents,
-			wantModel:  "",
 			wantState:  StatePackagesMissing,
 			wantReason: "Goose Desktop or linux-mcp-server is not installed.",
 		},
 		{
-			name: "extension missing -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  true,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusMissing,
-			},
+			name:       "unsupported architecture -> present agents",
+			facts:      ReadinessFacts{DaemonHealthy: true, ActiveModel: testModel, Tools: without(func(s *troubleshoot.State) { s.Supported = false })},
 			wantAction: DispatchPresentAgents,
-			wantModel:  "",
-			wantState:  StateExtensionMissing,
-			wantReason: "Linux tools extension in Goose is not configured.",
-		},
-		{
-			name: "extension unsafe -> present agents",
-			facts: ReadinessFacts{
-				DaemonHealthy:   true,
-				ActiveModel:     "unsloth/Qwen3-8B-GGUF:Q4_K_M",
-				GooseInstalled:  true,
-				ServerInstalled: true,
-				ExtensionStatus: troubleshoot.ExtensionStatusUnsafe,
-			},
-			wantAction: DispatchPresentAgents,
-			wantModel:  "",
-			wantState:  StateExtensionUnsafe,
-			wantReason: "Linux tools extension in Goose is unsafe.",
+			wantState:  StateUnsupported,
+			wantReason: "Goose Desktop is only published for x86_64 computers.",
 		},
 	}
 

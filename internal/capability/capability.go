@@ -254,6 +254,7 @@ var prerequisites = []Prerequisite{
 
 	// Agents.
 	{Page: "agents_page", Group: "agents_group", AnyOf: []Capability{Homebrew}},
+	{Page: "agents_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
 	// Features.
 	{Page: "features_page", Group: "dx_group", AnyOf: []Capability{ImageDescriptor}},
@@ -261,7 +262,6 @@ var prerequisites = []Prerequisite{
 	{Page: "features_page", Group: "desktop_integrations_group"},
 	{Page: "features_page", Group: "gaming_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "features_page", Group: "printers_group", AnyOf: []Capability{Podman}},
-	{Page: "help_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
 	// Livery.
 	{Page: "livery_page", Group: "account_group"},

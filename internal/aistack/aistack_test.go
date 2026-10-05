@@ -385,3 +385,14 @@ func TestExecutablePrefersPathThenBrewSibling(t *testing.T) {
 		t.Errorf("no brew, no PATH: got %q", got)
 	}
 }
+
+// The Models and Chat row opens llmman's own web UI on the loopback address
+// the unit binds, never another host.
+func TestWebUIURLIsTheLoopbackDaemon(t *testing.T) {
+	if got, want := WebUIURL(), "http://"+Address+"/"; got != want {
+		t.Errorf("WebUIURL() = %q, want %q", got, want)
+	}
+	if !strings.HasPrefix(Address, "127.0.0.1:") {
+		t.Errorf("Address %q is not loopback", Address)
+	}
+}

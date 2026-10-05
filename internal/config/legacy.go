@@ -17,6 +17,30 @@ func validateLegacySystemPage(src configSource, value *yaml.Node) *LoadError {
 	}, value)
 }
 
+// legacyGroups are groups a current page still accepts under their old
+// configuration home, each validated with that page's ordinary group rules
+// and then moved by migrateLegacyGroups. troubleshooting_group (Ask
+// Bluefin's Goose row) moved from Help to the Agents page, beside the model
+// it runs on.
+var legacyGroups = []legacyGroup{
+	{From: "help_page", To: "agents_page", Group: "troubleshooting_group"},
+}
+
+type legacyGroup struct {
+	From, To, Group string
+}
+
+// acceptedGroups returns the groups a page's mapping may name: its schema
+// groups plus any legacy group whose old home it is.
+func acceptedGroups(page string, groups []string) []string {
+	for _, legacy := range legacyGroups {
+		if legacy.From == page {
+			groups = append(groups, legacy.Group)
+		}
+	}
+	return groups
+}
+
 // migrateLegacySystemPage runs only after source-graph and schema validation.
 // The effective tree is alias-free and privately owned. Move surviving groups
 // to Updates, preserving explicit false values. Current non-null fields win;
@@ -27,33 +51,63 @@ func migrateLegacySystemPage(top *yaml.Node) {
 	if legacy == nil || legacy.Kind != yaml.MappingNode {
 		return
 	}
-	updates := mappingValue(top, "updates_page")
 	for _, name := range []string{"bootc_status_group", "channel_group"} {
-		group := mappingValue(legacy, name)
-		if group == nil || group.Kind != yaml.MappingNode {
+		moveGroup(top, legacy, "updates_page", name)
+	}
+}
+
+// migrateLegacyGroups moves each legacy group to its current page with the
+// same precedence as migrateLegacySystemPage, then drops it from its old
+// home so it never reaches the runtime Config twice.
+func migrateLegacyGroups(top *yaml.Node) {
+	for _, legacy := range legacyGroups {
+		from := mappingValue(top, legacy.From)
+		if from == nil || from.Kind != yaml.MappingNode {
 			continue
 		}
-		if updates == nil {
-			updates = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-			top.Content = append(top.Content, stringKey("updates_page"), updates)
-		} else if updates.Kind != yaml.MappingNode {
-			*updates = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-		}
-		current := mappingValue(updates, name)
-		if current == nil {
-			updates.Content = append(updates.Content, stringKey(name), group)
-		} else if current.Kind != yaml.MappingNode {
-			*current = *group
-		} else {
-			for i := 0; i < len(group.Content); i += 2 {
-				key, value := group.Content[i], group.Content[i+1]
-				field := mappingValue(current, key.Value)
-				if field == nil {
-					current.Content = append(current.Content, key, value)
-				} else if field.Tag == "!!null" {
-					*field = *value
-				}
+		moveGroup(top, from, legacy.To, legacy.Group)
+		removeKey(from, legacy.Group)
+	}
+}
+
+// moveGroup merges from's group name into page's group of the same name:
+// current non-null fields win, and a null current field takes the legacy
+// value.
+func moveGroup(top, from *yaml.Node, page, name string) {
+	group := mappingValue(from, name)
+	if group == nil || group.Kind != yaml.MappingNode {
+		return
+	}
+	target := mappingValue(top, page)
+	if target == nil {
+		target = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		top.Content = append(top.Content, stringKey(page), target)
+	} else if target.Kind != yaml.MappingNode {
+		*target = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	}
+	current := mappingValue(target, name)
+	if current == nil {
+		target.Content = append(target.Content, stringKey(name), group)
+	} else if current.Kind != yaml.MappingNode {
+		*current = *group
+	} else {
+		for i := 0; i < len(group.Content); i += 2 {
+			key, value := group.Content[i], group.Content[i+1]
+			field := mappingValue(current, key.Value)
+			if field == nil {
+				current.Content = append(current.Content, key, value)
+			} else if field.Tag == "!!null" {
+				*field = *value
 			}
+		}
+	}
+}
+
+func removeKey(node *yaml.Node, name string) {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == name {
+			node.Content = append(node.Content[:i], node.Content[i+2:]...)
+			return
 		}
 	}
 }

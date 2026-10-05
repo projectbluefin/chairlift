@@ -169,6 +169,27 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "ask_bluefin.go",
+			required: []string{
+				"pageview.AskBluefinGroupDescription()",
+				"pageview.GooseRow(",
+				"pageview.GooseSetupToast(",
+				// Readiness and the launch both belong to agentmode, which
+				// writes ChairLift's own Goose profile before launching.
+				"agentmode.ObserveLive(",
+				"agentmode.Launch(",
+				"troubleshoot.Setup(",
+			},
+			// The Goose row is the one surface: no gtk-launch of the cask's
+			// desktop file (which would bypass the profile), and no second
+			// Enhanced Troubleshooting row.
+			retired: []string{
+				"launchApp(",
+				"Enhanced Troubleshooting",
+				"EnsureDiagnosticsConfigured",
+			},
+		},
+		{
 			file: "recovery.go",
 			required: []string{
 				"pageview.BootcRollbackRow(",
