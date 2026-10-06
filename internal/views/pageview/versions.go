@@ -26,11 +26,13 @@ func CatalogStream(tag string) string {
 
 // PublishedVersionsRow returns the Recovery row that lists the stream's
 // published versions, before anything has been read. The read is a network
-// request to the image registry, so the subtitle says so.
+// request to the image registry, so the subtitle says so. The stream is
+// quoted as a name: Dakota's stream is "latest", and "the latest versions"
+// read as a claim about recency rather than the stream being listed.
 func PublishedVersionsRow(stream string) Row {
 	return Row{
 		Title: "Published versions",
-		Subtitle: fmt.Sprintf("See the %s versions the image registry still offers from the last %d days. This asks the registry each time.",
+		Subtitle: fmt.Sprintf("See the versions of the “%s” stream the image registry still offers from the last %d days. This asks the registry each time.",
 			stream, PublishedVersionsDays),
 	}
 }
@@ -39,11 +41,11 @@ func PublishedVersionsRow(stream string) Row {
 func PublishedVersionsSummary(count int, stream string) string {
 	switch count {
 	case 0:
-		return fmt.Sprintf("The registry lists no %s versions from the last %d days", stream, PublishedVersionsDays)
+		return fmt.Sprintf("The registry lists no versions of the “%s” stream from the last %d days", stream, PublishedVersionsDays)
 	case 1:
-		return fmt.Sprintf("1 %s version from the last %d days", stream, PublishedVersionsDays)
+		return fmt.Sprintf("1 version of the “%s” stream from the last %d days", stream, PublishedVersionsDays)
 	default:
-		return fmt.Sprintf("%d %s versions from the last %d days", count, stream, PublishedVersionsDays)
+		return fmt.Sprintf("%d versions of the “%s” stream from the last %d days", count, stream, PublishedVersionsDays)
 	}
 }
 

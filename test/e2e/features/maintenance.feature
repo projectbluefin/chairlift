@@ -184,9 +184,9 @@ Feature: Maintenance and its Powerwash detail
     And I click the "Check" button in the "Published versions" row
     Then I see "Could not read the published versions from the image registry"
     And the application log contains "published versions: "
-    And the "Published versions" row says "See the latest versions the image registry still offers from the last 90 days."
+    And the "Published versions" row says "See the versions of the “latest” stream the image registry still offers from the last 90 days."
     And the "Check Again" button in the "Published versions" row is sensitive
-    And I do not see "versions from the last 90 days"
+    And I do not see "stream from the last 90 days"
     And the action journal is empty
 
   @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_published_versions
