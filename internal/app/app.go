@@ -176,12 +176,14 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 				launchErr := agentmode.Launch(ctx, facts, func(asyncErr error) {
 					log.Printf("app: goose desktop exited with error: %v", asyncErr)
 				})
-				if launchErr == nil {
+				switch launchErr {
+				case nil:
 					sgtk.RunOnMainThread(a.Release)
 					return
+				default:
+					log.Printf("app: launch goose desktop failed: %v", launchErr)
+					decision.Reason = "Failed to launch Goose Desktop."
 				}
-				log.Printf("app: launch goose desktop failed: %v", launchErr)
-				decision.Reason = "Failed to launch Goose Desktop."
 			}
 
 			// Launch is plain exec, so it runs here; only GTK work goes to
