@@ -744,8 +744,10 @@ failure or preview must not request the opposite mutation.
 
 Restart is the run's only privileged surface of its own. `PhaseRestartRequired`
 is reached only when a source reports that a restart is required — the OS
-provider reads it from `bootc status`'s staged deployment, because the stage
-script is idempotent and exits 0 on an already-current system — and the
+provider reads it from `bootc status`'s staged deployment, because staging an
+already-current system succeeds without staging anything (on composefs
+`bootc.StageUpdate` answers from the registry and skips the script, whose
+`bootc upgrade` fails on a current system) — and the
 status panel clears its title, description, banner, and primary button.
 `Presentation.ShowStatus` then hides the empty `AdwStatusPage` entirely:
 clearing text alone retains its internal padding. The shell uses 12px

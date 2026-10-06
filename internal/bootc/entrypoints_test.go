@@ -151,3 +151,51 @@ func TestEntryPointsOnComposefsNeverRunBootc(t *testing.T) {
 		t.Fatal("bootc was executed on a composefs host")
 	}
 }
+
+// A composefs `bootc upgrade` on a current system fails instead of exiting 0,
+// so staging must not run the script when the registry reports nothing newer
+// than the booted (or already staged) deployment. Every other answer, and
+// every other host, still runs it.
+func TestStageUpdateSkipsTheScriptOnlyWhenComposefsIsCurrent(t *testing.T) {
+	created := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name      string
+		host      fs.FS
+		digest    string
+		lookupErr error
+		wantStage bool
+	}{
+		{"composefs host on the published image", dakotaHost(), bootedDigest, nil, false},
+		{"composefs host with the published image already staged", dakotaHost(), stagedDigest, nil, false},
+		{"composefs host behind the registry", dakotaHost(), "sha256:newer", nil, true},
+		{"composefs host whose registry check fails", dakotaHost(), "", errors.New("registry down"), true},
+		{"host that is not composefs", fstest.MapFS{"proc/cmdline": {Data: []byte("root=UUID=1 ostree=/ostree/boot.1/x\n")}}, bootedDigest, nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withHostRoot(t, tc.host)
+			withRegistryTag(t, func(context.Context, string, string) (registrytags.Tag, error) {
+				return registrytags.Tag{Digest: tc.digest, Created: created}, tc.lookupErr
+			})
+			staged := false
+			ch := make(chan ProgressEvent, 4)
+			err := stageUpdate(testContext(t), ch, func(_ context.Context, ch chan<- ProgressEvent) error {
+				staged = true
+				close(ch)
+				return nil
+			})
+			if err != nil {
+				t.Fatalf("stageUpdate: %v", err)
+			}
+			if staged != tc.wantStage {
+				t.Fatalf("stage script ran = %v, want %v", staged, tc.wantStage)
+			}
+			var events []ProgressEvent
+			for ev := range ch {
+				events = append(events, ev)
+			}
+			if !tc.wantStage && (len(events) != 1 || events[0].Type != EventComplete) {
+				t.Errorf("events = %+v, want one completion", events)
+			}
+		})
+	}
+}

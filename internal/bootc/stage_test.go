@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
@@ -23,6 +24,8 @@ func writeScript(t *testing.T, body string) string {
 func TestStageUpdateDryRunUsesFixedPath(t *testing.T) {
 	dryrun.Set(true)
 	t.Cleanup(func() { dryrun.Set(false) })
+	// A non-composefs host, so the test does not ask this machine's registry.
+	withHostRoot(t, fstest.MapFS{})
 
 	ch := make(chan ProgressEvent)
 	done := make(chan error, 1)

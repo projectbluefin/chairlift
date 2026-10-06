@@ -323,9 +323,10 @@ An agent must not break these:
   "Restart now" suffix that calls `UpdateShell.StartRestart` and in turn
   `ublue.Restart`. That
   phase is reached only when a source genuinely reports a restart is
-  required — the stage script is idempotent and exits 0 on an already-current
-  system, so a successful OS source is not by itself evidence anything
-  changed.
+  required — staging an already-current system completes without staging
+  anything (on composefs `bootc.StageUpdate` asks the registry first and does
+  not run the script, whose `bootc upgrade` fails there instead of exiting 0),
+  so a successful OS source is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
   binary.** `chairlift-helper` carries fourteen subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,

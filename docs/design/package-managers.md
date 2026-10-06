@@ -93,7 +93,9 @@ Adapter completion is source-specific:
 - bootc performs a read-only check and reads status for restart state. Apply
   rejects unknown item scopes, stages through the fixed helper, then re-reads
   status. Restart is based on an actual staged deployment, not exit 0; the
-  OS-shipped stager is idempotent and can succeed without staging anything.
+  OS-shipped stager is idempotent and can succeed without staging anything;
+  on composefs, where its `bootc upgrade` fails on a current system,
+  `bootc.StageUpdate` asks the registry first and skips it.
 
 [`updateproviders/item.go`](../../internal/updateproviders/item.go) owns
 individual application/tool updates. `UpdateItem` validates Flatpak ID/scope

@@ -32,11 +32,34 @@ func StageScriptAvailable() bool {
 // StageUpdate checks for and stages a system update by running the stage
 // script via pkexec. Output lines stream to progressCh as EventMessage
 // events; EventComplete is sent on success. progressCh is closed when done.
-// The script is idempotent: it exits 0 without staging when already current.
+//
+// On a composefs host the registry is asked first, and an already-current
+// system completes without running the script: composefs `bootc upgrade`
+// fails ("Target image has the same fs-verity digest as the existing
+// Booted deployment") instead of exiting 0, and an administrator password
+// prompt for nothing to do is no better. A check that cannot answer falls
+// through to the script. Elsewhere the script is idempotent itself.
 //
 // The execution, dry-run, and error contract lives in stageexec.Stage; the
 // returned error is a *stageexec.Error (aliased here as *Error) or
 // *stageexec.NotFoundError (aliased as *NotFoundError).
 func StageUpdate(ctx context.Context, progressCh chan<- ProgressEvent) error {
-	return stageexec.Stage(ctx, progressCh, pkexec.Command, StageScriptPath)
+	return stageUpdate(ctx, progressCh, func(ctx context.Context, progressCh chan<- ProgressEvent) error {
+		return stageexec.Stage(ctx, progressCh, pkexec.Command, StageScriptPath)
+	})
+}
+
+func stageUpdate(ctx context.Context, progressCh chan<- ProgressEvent, stage func(context.Context, chan<- ProgressEvent) error) error {
+	if status, err := readComposefsStatus(hostRoot); err == nil {
+		if update, err := checkFromRegistry(ctx, status, registryTag); err == nil && !update.Available {
+			defer close(progressCh)
+			select {
+			case progressCh <- ProgressEvent{Type: EventComplete, Message: "Already up to date"}:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return stage(ctx, progressCh)
 }
