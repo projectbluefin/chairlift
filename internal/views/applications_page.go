@@ -129,7 +129,11 @@ func newBundleRow(bundle homebrew.Bundle) (*adw.ActionRow, *gtk.Button, *gtk.Pro
 	row.SetUseMarkup(false)
 	row.SetSubtitle(collection.Subtitle)
 
-	installBtn := gtk.NewButtonWithLabel("Install")
+	// ConnectBundleInstall gives the button its label-and-spinner child. A
+	// button built with a label and then given another child publishes an
+	// empty accessible name even with an explicit LABEL property (GTK 4.24,
+	// reproduced without ChairLift), so it starts empty.
+	installBtn := gtk.NewButton()
 	installBtn.SetValign(gtk.AlignCenterValue)
 	progress := newInstallProgress("Installing collection…")
 	controls := gtk.NewBox(gtk.OrientationVerticalValue, 6)

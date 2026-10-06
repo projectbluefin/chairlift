@@ -274,7 +274,10 @@ def step_controls_accessible(context):
     # A page with no operable control at all is a failure, not a vacuous
     # pass: a blank destination is exactly what this check exists to catch.
     assert controls, "no focusable action controls on the content side"
-    nameless = [atspi.role(c) for c in controls if not atspi.label_text(c)]
+    # The control's own accessible name, not label_text: label_text falls back
+    # to descendant text, which hid collection Install buttons that publish
+    # an empty name to assistive technologies.
+    nameless = [f"{atspi.role(c)}:{atspi.label_text(c)!r}" for c in controls if not atspi.name(c)]
     inert = [atspi.label_text(c) for c in controls if not atspi.actions(c)]
     assert not nameless, f"{len(nameless)} action controls have no accessible name: {nameless}"
     assert not inert, f"action controls expose no action: {inert}"
