@@ -107,22 +107,25 @@ func runChannelSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 		return
 	}
 
+	switchImage(ctx, args, "bootc switch failed")
+}
+
+// switchImage runs a derived `bootc switch` argv. Switching back to the image
+// the host just left is a switch to the rollback deployment, which a composefs
+// `bootc switch` refuses ("Target image has the same fs-verity digest as the
+// existing Some(Rollback) deployment"); making that deployment the next boot
+// with the fixed rollback argv is the switch the person asked for.
+func switchImage(ctx context.Context, args []string, failure string) {
 	target := args[len(args)-1]
 	if err := run(ctx, "bootc", args...); err != nil {
-		// Switching back to the channel the host just left is a switch to
-		// the rollback deployment, which a composefs `bootc switch` refuses
-		// ("Target image has the same fs-verity digest as the existing
-		// Some(Rollback) deployment"). Making that deployment the next boot
-		// is the switch the person asked for.
 		if status, statusErr := bootc.GetStatus(ctx); statusErr == nil && status.Status.Rollback.ImageRef() == target {
-			rollback := ubluehelper.RollbackArgs()
-			if rerr := run(ctx, "bootc", rollback...); rerr != nil {
-				fatal(fmt.Sprintf("bootc switch failed: %v; rollback to %s failed: %v", err, target, rerr))
+			if rerr := run(ctx, "bootc", ubluehelper.RollbackArgs()...); rerr != nil {
+				fatal(fmt.Sprintf("%s: %v; rollback to %s failed: %v", failure, err, target, rerr))
 			}
 			fmt.Printf("switched to %s (the previous deployment) — restart to apply\n", target)
 			return
 		}
-		fatal(fmt.Sprintf("bootc switch failed: %v", err))
+		fatal(fmt.Sprintf("%s: %v", failure, err))
 	}
 	fmt.Printf("switched to %s — restart to apply\n", target)
 }
@@ -147,10 +150,7 @@ func runDriverSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 		return
 	}
 
-	if err := run(ctx, "bootc", args...); err != nil {
-		fatal(fmt.Sprintf("driver switch failed: %v", err))
-	}
-	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+	switchImage(ctx, args, "driver switch failed")
 }
 
 // runPin supplies only the system descriptor and single-tag registry resolver;
