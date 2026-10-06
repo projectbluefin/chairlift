@@ -226,10 +226,10 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     And I open the Powerwash detail
     Then I see "Return to stream"
-    And the "Return to stream" row says "Switch back to the latest updates on the latest stream"
+    And the "Return to stream" row says "Switch back to the newest updates on the “latest” stream"
     When I click the "Return to Stream" button in the "Return to stream" row
     Then a dialog titled "Return to Stream?" is shown
-    And the dialog says "This stages a switch back to regular updates on the latest stream. The change applies the next time you restart."
+    And the dialog says "This stages a switch back to regular updates on the “latest” stream. The change applies the next time you restart."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the "Return to Stream" button in the "Return to stream" row is sensitive

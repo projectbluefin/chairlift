@@ -110,13 +110,13 @@ func PinConfirmation(date string) (title, body string) {
 // shown before returning to the regular release stream.
 func UnpinConfirmation(stream string) (title, body string) {
 	title = "Return to Stream?"
-	body = fmt.Sprintf("This stages a switch back to regular updates on the %s stream. The change applies the next time you restart.", stream)
+	body = fmt.Sprintf("This stages a switch back to regular updates on the “%s” stream. The change applies the next time you restart.", stream)
 	return title, body
 }
 
 // UnpinRow returns the title and subtitle for the Return to stream row.
 func UnpinRow(stream string, supported bool) Row {
-	subtitle := fmt.Sprintf("Switch back to the latest updates on the %s stream", stream)
+	subtitle := fmt.Sprintf("Switch back to the newest updates on the “%s” stream", stream)
 	if !supported {
 		subtitle = "Returning to the stream is not supported on this system"
 	}
