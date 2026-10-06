@@ -622,7 +622,11 @@ Two inputs deliberately never cross the pkexec boundary as arguments:
   resolves the concrete reference itself, from the read-only image descriptor
   at `internal/imageinfo.DescriptorPath` and the channel table below. An
   authenticated caller therefore cannot direct `bootc switch` at an arbitrary
-  registry.
+  registry. When `bootc switch` fails and the derived target is the image of
+  the rollback deployment — switching back to the channel the host just left,
+  which composefs refuses as a duplicate fs-verity digest — `channel-switch`
+  runs the fixed `bootc rollback` argv instead, so the request still lands on
+  that channel at the next boot.
 - **The username.** The helper resolves it from the `PKEXEC_UID` that pkexec
   sets on the invoking session (`internal/ubluehelper.TargetUID`, which
   rejects an absent, non-numeric, or root value), so an authenticated caller
