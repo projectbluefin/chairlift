@@ -34,6 +34,13 @@ Feature: Main menu, shortcuts and About
     When I press "<Control><Shift>slash"
     Then a window titled "Keyboard Shortcuts" is shown
 
+  Scenario: Escape closes the shortcuts window
+    Given ChairLift is running
+    When I press "<Control><Shift>slash"
+    Then a window titled "Keyboard Shortcuts" is shown
+    When I press "Escape"
+    Then no window titled "Keyboard Shortcuts" is shown
+
   Scenario: The About dialog announces the product
     Given ChairLift is running
     When I open the main menu

@@ -484,6 +484,14 @@ def step_window_shown(context, title):
     context.window = atspi.top_level(app(context), title)
 
 
+@then('no window titled "{title}" is shown')
+def step_window_gone(context, title):
+    gone = atspi.poll(
+        lambda: not any(atspi.name(w) == title and atspi.showing(w) for w in atspi.children(app(context)))
+    )
+    assert gone, f"window {title!r} is still showing"
+
+
 @then('the "{title}" window lists "{text}"')
 def step_window_lists(context, title, text):
     wait_for_text(context, atspi.top_level(app(context), title), text)

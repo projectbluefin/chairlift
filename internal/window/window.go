@@ -404,6 +404,8 @@ func (w *Window) buildMenuButton() *gtk.MenuButton {
 	menuButton := gtk.NewMenuButton()
 	menuButton.SetIconName("open-menu-symbolic")
 	menuButton.SetMenuModel(&menu.MenuModel)
+	// The primary menu: F10 opens it, as in every GNOME app.
+	menuButton.SetPrimary(true)
 	menuButton.SetTooltipText("Main Menu")
 	views.SetAccessibleLabel(menuButton, "Main Menu")
 
@@ -616,6 +618,10 @@ func (w *Window) onShowShortcuts() {
 	toolbarView.SetContent(&scrolled.Widget)
 
 	dialog.SetContent(&toolbarView.Widget)
+	// An AdwWindow, unlike AdwDialog, does not close on Escape by itself.
+	escape := gtk.NewShortcutController()
+	escape.AddShortcut(gtk.NewShortcut(gtk.ShortcutTriggerParseString("Escape"), &gtk.NewNamedAction("window.close").ShortcutAction))
+	dialog.AddController(&escape.EventController)
 	dialog.Present()
 }
 

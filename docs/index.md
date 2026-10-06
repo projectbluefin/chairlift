@@ -39,10 +39,13 @@ always retained so the window always has a valid destination.
 
 | Shortcut | Action |
 |----------|--------|
+| `Ctrl+,` | Preferences |
 | `Ctrl+Q` | Quit |
 | `Ctrl+?` | Show shortcuts dialog |
 | `Alt+1` … `Alt+N` | Open the first through Nth visible page in sidebar order; omitted pages leave no gaps |
 | `F1` | Help |
+| `F10` | Open the main menu |
+| `Escape` | Close the shortcuts dialog |
 
 ## Command-Line Flags
 

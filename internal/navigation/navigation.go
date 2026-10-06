@@ -227,6 +227,7 @@ var routes = []Item{
 }
 
 var generalShortcuts = []Shortcut{
+	{Action: "win.show-preferences", Accelerator: "<Primary>comma", Display: "Ctrl+,", Title: "Preferences", Group: GroupGeneral},
 	{Action: "win.show-shortcuts", Accelerator: "<Primary>question", Display: "Ctrl+?", Title: "Keyboard Shortcuts", Group: GroupGeneral},
 	{Action: "app.quit", Accelerator: "<Primary>q", Display: "Ctrl+Q", Title: "Quit", Group: GroupGeneral},
 	{Action: "win.navigate-help", Accelerator: "F1", Display: "F1", Title: "Help", Group: GroupGeneral},
