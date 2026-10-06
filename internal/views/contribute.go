@@ -83,7 +83,9 @@ func (uh *UserHome) onContributeClicked() {
 	}
 
 	cmd := contribute.Command("", "", "")
-	err := launcher.Start(cmd, func(exitErr error) {
+	// Run, not Start: Start reports only failures, so a session that ended
+	// cleanly never re-enabled the button.
+	err := launcher.Run(cmd, func(exitErr error) {
 		sgtk.RunOnMainThread(func() {
 			uh.contributeGate.Reset()
 			if uh.contributeButton != nil {
