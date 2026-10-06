@@ -1159,7 +1159,9 @@ An agent must not break these:
   Powerwash needs no privilege (both steps run in the invoking account, like
   gaming mode); Factory Reset is the new `factory-reset` action on
   `chairlift-helper` and takes no argument, since it has exactly one
-  target — the image already booted.
+  target — the image already booted. It is not offered on a composefs host
+  (`bootc.ComposefsBooted`): `bootc install reset` needs OSTree storage and
+  fails there after authentication.
 - **The product name and the code name are different strings, and only one of
   them has an owner.** The application ships in Bluefin as **Control Center**;
   ChairLift remains the code name for the repository, the Go module, the

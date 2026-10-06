@@ -294,3 +294,10 @@ func checkFromRegistry(ctx context.Context, status *Status, resolve tagResolver)
 	}
 	return update, nil
 }
+
+// ComposefsBooted reports whether the kernel booted a composefs deployment.
+// It reads only the kernel command line, so it is safe on the GTK thread.
+func ComposefsBooted() bool {
+	_, err := composefsBootedID(hostRoot)
+	return err == nil
+}

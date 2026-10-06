@@ -151,3 +151,14 @@ func TestEntryPointsOnComposefsNeverRunBootc(t *testing.T) {
 		t.Fatal("bootc was executed on a composefs host")
 	}
 }
+
+func TestComposefsBootedReadsTheKernelCommandLine(t *testing.T) {
+	withHostRoot(t, dakotaHost())
+	if !ComposefsBooted() {
+		t.Error("ComposefsBooted() = false on a composefs host")
+	}
+	withHostRoot(t, fstest.MapFS{"proc/cmdline": {Data: []byte("root=UUID=1 ostree=/ostree/boot.1/x\n")}})
+	if ComposefsBooted() {
+		t.Error("ComposefsBooted() = true on an ostree host")
+	}
+}

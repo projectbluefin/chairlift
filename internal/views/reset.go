@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/distrobox"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
@@ -72,7 +73,9 @@ func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 
 	// Factory Reset runs the helper; an image that does not provide the
 	// command gets no row rather than one that fails after authentication.
-	if ublue.StatusCached().Supports(ubluehelper.CommandFactoryReset) {
+	// Neither does a composefs host: `bootc install reset` needs OSTree
+	// storage and fails there with "OSTree storage not initialized".
+	if ublue.StatusCached().Supports(ubluehelper.CommandFactoryReset) && !bootc.ComposefsBooted() {
 		resetRow := adw.NewActionRow()
 		resetPresentation := pageview.FactoryResetRow()
 		resetRow.SetTitle(resetPresentation.Title)
