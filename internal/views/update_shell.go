@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -69,10 +70,11 @@ type UpdateShell struct {
 	systemGroup         *adw.PreferencesGroup
 	appsGroup           *adw.PreferencesGroup
 	breakpointBin       *adw.BreakpointBin
-	// content is the vertical box inside the shell's clamp and scroller.
+	// page holds the shell's inset sections and, beside them, the secondary
+	// preferences page, inside the shell's clamp and scroller.
 	// SetSecondaryContent appends to it rather than building a second
 	// scroller, so the whole page scrolls as one.
-	content *gtk.Box
+	page *gtk.Box
 	// secondary is whatever SetSecondaryContent last parented, kept so a
 	// repeat call replaces it instead of adding a second copy.
 	secondary        *gtk.Widget
@@ -141,7 +143,7 @@ func (s *UpdateShell) ToolbarView() *adw.ToolbarView {
 // when it is added again. Nothing is connected here; the page's own handlers
 // were connected once, at build time.
 func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
-	if s == nil || s.content == nil || page == nil {
+	if s == nil || s.page == nil || page == nil {
 		return
 	}
 	widget := &page.Widget
@@ -149,7 +151,7 @@ func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
 		return
 	}
 	if s.secondary != nil {
-		s.content.Remove(s.secondary)
+		s.page.Remove(s.secondary)
 		s.secondary = nil
 	}
 	// views.createPage builds every preferences page inside a scroller of
@@ -162,8 +164,33 @@ func (s *UpdateShell) SetSecondaryContent(page *adw.PreferencesPage) {
 		gtk.ViewportNewFromInternalPtr(parent.GoPointer()).SetChild(nil)
 	}
 	growWithContent(widget)
-	s.content.Append(widget)
+	unclampPreferencesPage(widget)
+	s.page.Append(widget)
 	s.secondary = widget
+}
+
+// unclampPreferencesPage lets a mounted AdwPreferencesPage take the shell's
+// width. The page clamps its groups again inside the shell's own clamp, so
+// its rows came out narrower and further inset than the source rows above
+// them. Its built-in 12px side padding is what the shell's content inset
+// matches; only the second clamp is lifted. Any other child shape is left
+// untouched.
+func unclampPreferencesPage(widget *gtk.Widget) {
+	scroller := widget.GetFirstChild()
+	if scroller == nil || scroller.GetCssName() != "scrolledwindow" {
+		return
+	}
+	viewport := scroller.GetFirstChild()
+	if viewport == nil || viewport.GetCssName() != "viewport" {
+		return
+	}
+	inner := viewport.GetFirstChild()
+	if inner == nil || inner.GetCssName() != "clamp" {
+		return
+	}
+	clamp := adw.ClampNewFromInternalPtr(inner.GoPointer())
+	clamp.SetMaximumSize(math.MaxInt32)
+	clamp.SetTighteningThreshold(math.MaxInt32)
 }
 
 // growWithContent stops a widget that scrolls internally from doing so, so
@@ -567,10 +594,16 @@ func (s *UpdateShell) build() {
 
 	content := gtk.NewBox(gtk.OrientationVerticalValue, 12)
 	content.SetMarginTop(12)
-	content.SetMarginBottom(24)
+	content.SetMarginBottom(12)
 	content.SetMarginStart(12)
 	content.SetMarginEnd(12)
-	s.content = content
+	// The secondary preferences page sits beside content, not inside it:
+	// its own 12px side padding then lines its rows up with the sections
+	// content insets by the same 12px.
+	pageBox := gtk.NewBox(gtk.OrientationVerticalValue, 0)
+	pageBox.SetMarginBottom(12)
+	pageBox.Append(&content.Widget)
+	s.page = pageBox
 
 	s.wordmark = gtk.NewPicture()
 	s.wordmark.SetCanShrink(true)
@@ -676,7 +709,7 @@ func (s *UpdateShell) build() {
 	scrolled.SetVexpand(true)
 	clamp := adw.NewClamp()
 	clamp.SetMaximumSize(720)
-	clamp.SetChild(&content.Widget)
+	clamp.SetChild(&pageBox.Widget)
 	scrolled.SetChild(&clamp.Widget)
 	// The breakpoint bin wraps the scroller, not the other way round. An
 	// AdwBreakpointBin never asks for more height than its size request, so
