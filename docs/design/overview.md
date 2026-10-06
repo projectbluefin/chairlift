@@ -758,7 +758,8 @@ sends `ublue.Restart` through the `chairlift-helper` `restart` subcommand.
 Its argv is the fixed `systemctl reboot` (`ubluehelper.RestartArgs`) with no
 delay and no target; scheduled restarts would each need their own action.
 
-After a live run, `UserHome.OnUpdateFinished` refreshes the installed Homebrew
+After a live run or a live single-row update (which reports its one source
+as completed), `UserHome.OnUpdateFinished` refreshes the installed Homebrew
 inventory when its source completed and, when the OS source completed,
 re-reads status to refresh Compare references. The coordinator remains the
 badge owner. A preview refreshes nothing.

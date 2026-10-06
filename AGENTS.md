@@ -613,7 +613,8 @@ An agent must not break these:
   Both dedicated staging and a live unified run whose operating-system source
   completed refresh the changelog's Compare references from observed status.
   `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
-  its source completed and Compare when the OS source completed; the coordinator
+  its source completed and Compare when the OS source completed — after a
+  unified run and after a live single-row update alike; the coordinator
   snapshot remains the only badge owner.
   A changed pinned image pair clears old diff rows; an in-flight comparison
   for the old pair must not render after the refresh.

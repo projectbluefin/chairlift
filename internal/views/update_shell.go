@@ -296,7 +296,7 @@ func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflo
 	if source == updateflow.DeveloperTools {
 		message = actionmsg.Upgrade(dryrun.Enabled(), item.Name)
 	}
-	s.startIndividualUpdate(row, func(ctx context.Context) (updateflow.ApplyResult, error) {
+	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
 		result, err := updateproviders.UpdateItem(ctx, source, item)
 		var trustErr *homebrew.UntrustedTapError
 		if errors.As(err, &trustErr) {
@@ -311,11 +311,14 @@ func (s *UpdateShell) startToolRefresh() {
 	if row == nil {
 		return
 	}
-	s.startIndividualUpdate(row.row, updateproviders.RefreshDeveloperTools,
+	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, updateproviders.RefreshDeveloperTools,
 		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"))
 }
 
-func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string) {
+// startIndividualUpdate runs one row's update. A live change reports source
+// as completed through the same finished hook an Update All run uses, so the
+// Apps inventory refreshes after a single Homebrew upgrade too.
+func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string) {
 	if !s.beginMutation() {
 		return
 	}
@@ -355,6 +358,9 @@ func (s *UpdateShell) startIndividualUpdate(row *adw.ActionRow, run func(context
 				s.renderSources(s.snapshot.Sources)
 			} else {
 				s.StartCheck()
+				if s.onUpdateFinished != nil {
+					s.onUpdateFinished(updateflow.Snapshot{CompletedSources: []updateflow.SourceID{source}})
+				}
 			}
 		})
 	}()
