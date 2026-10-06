@@ -6,11 +6,11 @@ import (
 	"errors"
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
 )
 
@@ -125,14 +125,14 @@ func TestTranscodeWebPToPNGReportsTooLargeWhenNoRungFitsTheCeiling(t *testing.T)
 // as a valid 384x384 PNG within budget.
 //
 // downsampleCeiling was measured through transcodeWebPToPNG itself with
-// png.BestCompression, and remeasured once the centred-square crop landed:
-// the katharina.webp full-size attempt encodes to 240,217 bytes and the 384
-// rung to 147,466, so 184,000 sits 23% below the former and 25% above the
+// png.BestCompression, and remeasured once the circle fit landed: the
+// katharina.webp full-size attempt encodes to 132,282 bytes and the 384
+// rung to 79,753, so 105,000 sits 21% below the former and 32% above the
 // latter — ordinary deflate drift between Go releases cannot flip either
 // comparison unnoticed, and a change large enough to do so fails this test
 // loudly and the constant gets remeasured.
 func TestTranscodeWebPToPNGDownsamplesWhenTheFullSizeEncodeExceedsTheCeiling(t *testing.T) {
-	const downsampleCeiling = 184_000 // straddles katharina's full-size (240,217) and 384-rung (147,466) attempts
+	const downsampleCeiling = 105_000 // straddles katharina's full-size (132,282) and 384-rung (79,753) attempts
 	payload := readWebPSample(t, "katharina.webp")
 	out, err := transcodeWebPToPNG(bytes.NewReader(payload), downsampleCeiling)
 	if err != nil {
@@ -150,53 +150,45 @@ func TestTranscodeWebPToPNGDownsamplesWhenTheFullSizeEncodeExceedsTheCeiling(t *
 	}
 }
 
-// TestCentredSquareTakesTheLargestCentredSquare pins the crop geometry on its
-// own: the square is always the shorter edge, it stays inside the source, and
-// the leftover from an odd difference falls on the high side so the result
-// cannot drift off centre by a whole pixel in either direction.
-func TestCentredSquareTakesTheLargestCentredSquare(t *testing.T) {
-	cases := []struct {
-		name   string
-		bounds image.Rectangle
-		want   image.Rectangle
-	}{
-		{"already square", image.Rect(0, 0, 512, 512), image.Rect(0, 0, 512, 512)},
-		{"wide even difference", image.Rect(0, 0, 1392, 1070), image.Rect(161, 0, 1231, 1070)},
-		{"wide even difference, sample dimensions", image.Rect(0, 0, 440, 412), image.Rect(14, 0, 426, 412)},
-		{"wide odd difference", image.Rect(0, 0, 441, 412), image.Rect(14, 0, 426, 412)},
-		{"tall", image.Rect(0, 0, 64, 96), image.Rect(0, 16, 64, 80)},
-		{"non-zero origin", image.Rect(10, 20, 110, 80), image.Rect(30, 20, 90, 80)},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := centredSquare(tc.bounds)
-			if got != tc.want {
-				t.Fatalf("centredSquare(%v) = %v, want %v", tc.bounds, got, tc.want)
+// TestFitInCircleKeepsEveryCornerInsideTheCircle pins the geometry: the
+// destination keeps the content's aspect ratio, is centred, and its diagonal
+// never exceeds the canvas edge, so a circular clip cannot cut a corner.
+func TestFitInCircleKeepsEveryCornerInsideTheCircle(t *testing.T) {
+	for _, content := range []image.Rectangle{
+		image.Rect(0, 0, 512, 512),
+		image.Rect(0, 0, 1392, 1070),
+		image.Rect(0, 0, 64, 96),
+		image.Rect(10, 20, 110, 80),
+		image.Rect(0, 0, 1000, 10),
+	} {
+		for _, edge := range []int{AvatarSize, AvatarSize / 2} {
+			got := fitInCircle(content, edge)
+			if d := math.Hypot(float64(got.Dx()), float64(got.Dy())); d > float64(edge) {
+				t.Errorf("fitInCircle(%v, %d) = %v, diagonal %.1f exceeds the %d circle", content, edge, got, d, edge)
 			}
-			if got.Dx() != got.Dy() {
-				t.Errorf("result %v is not square", got)
+			want := float64(content.Dx()) / float64(content.Dy())
+			if ratio := float64(got.Dx()) / float64(got.Dy()); math.Abs(ratio-want)/want > 0.02 && got.Dy() > 50 {
+				t.Errorf("fitInCircle(%v, %d) = %v, aspect %.3f, want %.3f", content, edge, got, ratio, want)
 			}
-			if !got.In(tc.bounds) {
-				t.Errorf("result %v escapes the source bounds %v", got, tc.bounds)
+			if l, r := got.Min.X, edge-got.Max.X; l-r > 1 || r-l > 1 {
+				t.Errorf("fitInCircle(%v, %d) = %v is not horizontally centred", content, edge, got)
 			}
-		})
+			if top, bottom := got.Min.Y, edge-got.Max.Y; top-bottom > 1 || bottom-top > 1 {
+				t.Errorf("fitInCircle(%v, %d) = %v is not vertically centred", content, edge, got)
+			}
+		}
 	}
 }
 
-// TestTranscodeWebPToPNGCropsNonSquareSourcesInsteadOfStretching is the
-// anti-distortion pin. dakota.webp is 1392x1070, so scaling its full bounds
-// into a square would compress it horizontally by 23%. The result must match
-// a scale of the centred square computed independently here, and must not
-// match a scale of the full bounds — the second half is what actually fails
-// if the crop is dropped and the stretch comes back.
-func TestTranscodeWebPToPNGCropsNonSquareSourcesInsteadOfStretching(t *testing.T) {
+// TestTranscodeWebPToPNGKeepsTheWholeCharacterInsideTheAvatarCircle is the
+// regression for a profile picture whose head and tail were cut off: GNOME
+// clips avatars to a circle, so no visible pixel of a transcoded catalog
+// character may fall outside it, and the character must not be stretched.
+func TestTranscodeWebPToPNGKeepsTheWholeCharacterInsideTheAvatarCircle(t *testing.T) {
 	payload := readWebPSample(t, "dakota.webp")
 	src, err := webp.Decode(bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("decoding the sample directly: %v", err)
-	}
-	if src.Bounds().Dx() == src.Bounds().Dy() {
-		t.Fatalf("sample bounds %v are square; this case can no longer tell a crop from a stretch", src.Bounds())
 	}
 	out, err := TranscodeWebPToPNG(bytes.NewReader(payload))
 	if err != nil {
@@ -206,37 +198,20 @@ func TestTranscodeWebPToPNGCropsNonSquareSourcesInsteadOfStretching(t *testing.T
 	if err != nil {
 		t.Fatalf("decoding the result as PNG: %v", err)
 	}
-	scaled := func(from image.Rectangle) *image.NRGBA {
-		dst := image.NewNRGBA(image.Rect(0, 0, AvatarSize, AvatarSize))
-		draw.CatmullRom.Scale(dst, dst.Bounds(), src, from, draw.Src, nil)
-		return dst
-	}
-	b := src.Bounds()
-	cropped := scaled(image.Rect(b.Min.X+(b.Dx()-b.Dy())/2, b.Min.Y, b.Min.X+(b.Dx()-b.Dy())/2+b.Dy(), b.Max.Y))
-	if !sameNRGBA(got, cropped) {
-		t.Error("result does not match a scale of the centred square of the source")
-	}
-	if sameNRGBA(got, scaled(b)) {
-		t.Error("result matches a scale of the full source bounds; the non-square source was stretched, not cropped")
-	}
-}
-
-// sameNRGBA reports whether img covers exactly reference's bounds and carries
-// the same colour at every pixel.
-func sameNRGBA(img image.Image, reference *image.NRGBA) bool {
-	if img.Bounds() != reference.Bounds() {
-		return false
-	}
-	for y := reference.Bounds().Min.Y; y < reference.Bounds().Max.Y; y++ {
-		for x := reference.Bounds().Min.X; x < reference.Bounds().Max.X; x++ {
-			r1, g1, b1, a1 := img.At(x, y).RGBA()
-			r2, g2, b2, a2 := reference.At(x, y).RGBA()
-			if r1 != r2 || g1 != g2 || b1 != b2 || a1 != a2 {
-				return false
+	edge := got.Bounds().Dx()
+	centre, radius := float64(edge)/2, float64(edge)/2+1
+	for y := range edge {
+		for x := range edge {
+			if _, _, _, a := got.At(x, y).RGBA(); a != 0 && math.Hypot(float64(x)+0.5-centre, float64(y)+0.5-centre) > radius {
+				t.Fatalf("visible pixel at (%d,%d) lies outside the avatar circle", x, y)
 			}
 		}
 	}
-	return true
+	in, outBox := visibleBounds(src), visibleBounds(got)
+	want := float64(in.Dx()) / float64(in.Dy())
+	if ratio := float64(outBox.Dx()) / float64(outBox.Dy()); math.Abs(ratio-want)/want > 0.03 {
+		t.Errorf("visible aspect %.3f, source %.3f: the character was stretched", ratio, want)
+	}
 }
 
 // vp8lHeaderOnly builds a RIFF/WEBP container holding one VP8L chunk whose

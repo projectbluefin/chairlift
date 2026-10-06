@@ -37,7 +37,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/capability/ What this host can back a page or group with, from non-blocking probes
         ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
         ├── internal/legacydesktop/ Asynchronous startup cleanup of obsolete frostyard desktop launchers
-        ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (centred square crop to 512x512, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
+        ├── internal/avatar/    Dinosaur avatar catalog, pinned fetch seam, and pure-Go WebP-to-PNG avatar transcoder (whole character fitted inside the 512x512 avatar circle, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/developerfeeds/ Pure-Go developer feed OPML catalog (go:embed) and offline validator
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)

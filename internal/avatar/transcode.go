@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"math"
 
 	"golang.org/x/image/draw"
 	"golang.org/x/image/webp"
@@ -45,9 +46,9 @@ var ErrAvatarTooLarge = errors.New("avatar: transcoded PNG exceeds the byte ceil
 var ErrSourceTooLarge = errors.New("avatar: source WebP exceeds the input bounds")
 
 // TranscodeWebPToPNG reads one WebP image from r (lossy VP8, lossless VP8L,
-// or extended VP8X — whatever golang.org/x/image/webp decodes), takes the
-// largest centred square of the decoded frame, scales that square to
-// AvatarSize x AvatarSize, and encodes it as PNG. It returns the encoded
+// or extended VP8X — whatever golang.org/x/image/webp decodes), fits the
+// artwork inside the circle inscribed in an AvatarSize x AvatarSize
+// transparent canvas, and encodes it as PNG. It returns the encoded
 // bytes when the PNG fits under MaxPNGBytes, ErrSourceTooLarge when r runs
 // past MaxWebPBytes or declares more than MaxSourcePixels pixels, a wrapped
 // decode error when r does not hold a decodable WebP image, and
@@ -55,11 +56,11 @@ var ErrSourceTooLarge = errors.New("avatar: source WebP exceeds the input bounds
 // ceiling. The 1 MiB bound is what lets an avatar be handed to
 // AccountsService as one bounded write instead of a streamed unknown.
 //
-// Cropping to a centred square is what keeps a non-square source — the
-// catalog's header artwork is wider than it is tall — from reaching the
-// square canvas anisotropically stretched. Content outside the square is
-// dropped rather than squashed, which is the usual reading of a 512x512
-// avatar.
+// GNOME draws every avatar — login, lock screen, Quick Settings, this
+// page's AdwAvatar — clipped to a circle. A centred-square crop cut the
+// catalog's characters at the head and tail, and the circle then cut them
+// again, so the artwork's visible content (its non-transparent bounding box)
+// is scaled, without stretching, until its diagonal fits the circle.
 func TranscodeWebPToPNG(r io.Reader) ([]byte, error) {
 	return transcodeWebPToPNG(r, MaxPNGBytes)
 }
@@ -92,11 +93,11 @@ func transcodeWebPToPNG(r io.Reader, ceiling int) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("avatar: decoding WebP: %w", err)
 	}
-	square := centredSquare(src.Bounds())
+	content := visibleBounds(src)
 	enc := png.Encoder{CompressionLevel: png.BestCompression}
 	for _, edge := range [3]int{AvatarSize, AvatarSize * 3 / 4, AvatarSize / 2} {
 		dst := image.NewNRGBA(image.Rect(0, 0, edge, edge))
-		draw.CatmullRom.Scale(dst, dst.Bounds(), src, square, draw.Src, nil)
+		draw.CatmullRom.Scale(dst, fitInCircle(content, edge), src, content, draw.Src, nil)
 		var buf bytes.Buffer
 		if err := enc.Encode(&buf, dst); err != nil {
 			return nil, fmt.Errorf("avatar: encoding PNG: %w", err)
@@ -125,16 +126,33 @@ func readBoundedWebP(r io.Reader) ([]byte, error) {
 	return encoded, nil
 }
 
-// centredSquare returns the largest square inside bounds, centred on it. When
-// one edge exceeds the other by an odd number the leftover pixel falls on the
-// high side: a 441x412 frame keeps columns 14..425, leaving 14 columns on the
-// left and 15 on the right.
-func centredSquare(bounds image.Rectangle) image.Rectangle {
-	edge := bounds.Dx()
-	if bounds.Dy() < edge {
-		edge = bounds.Dy()
+// visibleBounds is the bounding box of src's non-transparent pixels, so
+// transparent margins in the artwork do not shrink the character. A fully
+// transparent frame keeps its whole bounds.
+func visibleBounds(src image.Image) image.Rectangle {
+	b := src.Bounds()
+	box := image.Rectangle{}
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := src.At(x, y).RGBA(); a != 0 {
+				box = box.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
 	}
-	x := bounds.Min.X + (bounds.Dx()-edge)/2
-	y := bounds.Min.Y + (bounds.Dy()-edge)/2
-	return image.Rect(x, y, x+edge, y+edge)
+	if box.Empty() {
+		return b
+	}
+	return box
+}
+
+// fitInCircle returns the destination rectangle, centred on an edge x edge
+// canvas, that holds content at its own aspect ratio with its diagonal no
+// longer than the canvas's inscribed circle, so no corner of the artwork
+// falls outside a circular clip.
+func fitInCircle(content image.Rectangle, edge int) image.Rectangle {
+	w, h := float64(content.Dx()), float64(content.Dy())
+	scale := float64(edge) / math.Hypot(w, h)
+	dw, dh := int(w*scale), int(h*scale)
+	x, y := (edge-dw)/2, (edge-dh)/2
+	return image.Rect(x, y, x+dw, y+dh)
 }
