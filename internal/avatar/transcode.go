@@ -152,7 +152,9 @@ func visibleBounds(src image.Image) image.Rectangle {
 func fitInCircle(content image.Rectangle, edge int) image.Rectangle {
 	w, h := float64(content.Dx()), float64(content.Dy())
 	scale := float64(edge) / math.Hypot(w, h)
-	dw, dh := int(w*scale), int(h*scale)
+	// A sliver of visible content still gets one pixel each way rather than
+	// an empty rectangle that would paint a blank avatar.
+	dw, dh := max(1, int(w*scale)), max(1, int(h*scale))
 	x, y := (edge-dw)/2, (edge-dh)/2
 	return image.Rect(x, y, x+dw, y+dh)
 }

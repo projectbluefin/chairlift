@@ -160,9 +160,13 @@ func TestFitInCircleKeepsEveryCornerInsideTheCircle(t *testing.T) {
 		image.Rect(0, 0, 64, 96),
 		image.Rect(10, 20, 110, 80),
 		image.Rect(0, 0, 1000, 10),
+		image.Rect(0, 0, 1000, 1), // a sliver must not fit to an empty rectangle
 	} {
 		for _, edge := range []int{AvatarSize, AvatarSize / 2} {
 			got := fitInCircle(content, edge)
+			if got.Empty() {
+				t.Errorf("fitInCircle(%v, %d) = %v is empty; the avatar would be blank", content, edge, got)
+			}
 			if d := math.Hypot(float64(got.Dx()), float64(got.Dy())); d > float64(edge) {
 				t.Errorf("fitInCircle(%v, %d) = %v, diagonal %.1f exceeds the %d circle", content, edge, got, d, edge)
 			}
