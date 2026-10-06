@@ -447,8 +447,8 @@ func GraphicsDriverResultSubtitle(driver string) string {
 // PowerwashRow returns the Powerwash row text.
 func PowerwashRow() Row {
 	return Row{
-		Title:    "Remove apps you installed",
-		Subtitle: "Removes the apps you installed and your development containers. Your files, settings, and the system itself stay as they are.",
+		Title:    "Remove Flatpak apps and containers",
+		Subtitle: "Removes every Flatpak app and Distrobox container in your account. Homebrew packages, your files, settings, and the system itself stay as they are.",
 	}
 }
 
@@ -464,7 +464,7 @@ func PowerwashResultSubtitle(succeeded, failed int) string {
 	case failed > 0:
 		return "Nothing could be removed — see the system logs for details"
 	case succeeded > 0:
-		return "Removed the apps you installed"
+		return "Removed your Flatpak apps and containers"
 	default:
 		return "There was nothing installed to remove"
 	}
@@ -474,7 +474,7 @@ func PowerwashResultSubtitle(succeeded, failed int) string {
 // dialog Powerwash must show before it runs, since removing every installed
 // application and container cannot be undone from within ChairLift.
 func PowerwashConfirmation() (title, body string) {
-	return "Remove Everything I Installed?",
+	return "Remove Flatpak Apps and Containers?",
 		"This removes every Flatpak application and every Distrobox container " +
 			"for your account. It does not touch the system image or your files. " +
 			"This cannot be undone."
@@ -506,3 +506,8 @@ func FactoryResetConfirmation() (title, body string) {
 func FactoryResetResultSubtitle() string {
 	return "Factory reset applied — restart to complete it"
 }
+
+// KVMAccessNeedsNewLogin is shown after virtualization access was granted to
+// an account whose current session cannot use it yet. devtools.ErrNewLogin's
+// own text is a Go error string, lower-case and phrased for a log.
+const KVMAccessNeedsNewLogin = "Virtualization access granted. Log out and back in, then turn on WSL Mode again."

@@ -101,7 +101,7 @@ func (uh *UserHome) onPowerwashClicked(button *gtk.Button, row *adw.ActionRow) {
 	title, body := pageview.PowerwashConfirmation()
 	dialog := adw.NewAlertDialog(title, body)
 	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Remove Everything")
+	dialog.AddResponse("confirm", "Remove Apps and Containers")
 	dialog.SetResponseAppearance("confirm", adw.ResponseDestructiveValue)
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {

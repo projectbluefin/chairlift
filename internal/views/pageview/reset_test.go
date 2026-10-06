@@ -13,7 +13,7 @@ func TestPowerwashRowStatesItsRealScope(t *testing.T) {
 	if strings.Contains(strings.ToLower(row.Title), "everything") {
 		t.Errorf("PowerwashRow().Title = %q, want it not to claim it removes everything", row.Title)
 	}
-	for _, want := range []string{"apps you installed", "containers"} {
+	for _, want := range []string{"Flatpak", "Distrobox", "Homebrew packages"} {
 		if !strings.Contains(row.Subtitle, want) {
 			t.Errorf("PowerwashRow().Subtitle = %q, want it to name %q", row.Subtitle, want)
 		}
@@ -32,7 +32,7 @@ func TestPowerwashResultSubtitleNeverOverstatesTheRun(t *testing.T) {
 		failed    int
 		want      string
 	}{
-		{"all removed", 2, 0, "Removed the apps you installed"},
+		{"all removed", 2, 0, "Removed your Flatpak apps and containers"},
 		{"partial failure", 1, 1, "Some apps could not be removed — see the system logs for details"},
 		{"total failure", 0, 2, "Nothing could be removed — see the system logs for details"},
 		{"nothing installed", 0, 0, "There was nothing installed to remove"},
@@ -51,7 +51,7 @@ func TestPowerwashResultSubtitleNeverOverstatesTheRun(t *testing.T) {
 // and does not touch the image; both facts must be present.
 func TestPowerwashConfirmationStatesWhatItDoesAndDoesNot(t *testing.T) {
 	title, body := PowerwashConfirmation()
-	if !strings.Contains(title, "Remove Everything") {
+	if !strings.Contains(title, "Flatpak Apps and Containers") {
 		t.Errorf("PowerwashConfirmation() title = %q, want it to name the action", title)
 	}
 	for _, want := range []string{"Flatpak", "Distrobox", "cannot be undone"} {

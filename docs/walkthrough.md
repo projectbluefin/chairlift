@@ -294,7 +294,7 @@ spinner remains visible while cleanup is running. Below it sit any
 **Maintenance tasks** whoever set up this computer added. **Powerwash**
 holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
 returns to the previous system version if an update went badly, **Powerwash**
-removes the apps you installed and your development containers, and **Factory Reset**
+removes your Flatpak apps and Distrobox containers (Homebrew packages stay), and **Factory Reset**
 reinstalls the system from scratch.
 Those stay hidden normally until turned on or until a rollback exists.
 Powerwash also has **Published versions**, which asks the image registry for

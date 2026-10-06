@@ -18,6 +18,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
 type developerOptionRow struct {
@@ -422,7 +423,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 					}
 				}
 				if errors.Is(err, devtools.ErrNewLogin) {
-					item.row.SetSubtitle(err.Error())
+					item.row.SetSubtitle(pageview.KVMAccessNeedsNewLogin)
 				} else if err != nil {
 					item.row.SetSubtitle(item.row.GetSubtitle() + " Last action failed: " + strings.TrimSpace(err.Error()))
 				} else if item.kind == "tool" && stateErr == nil && !packagePresent(packages, item.tool.Package) {
@@ -430,7 +431,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 				}
 			}
 			if errors.Is(err, devtools.ErrNewLogin) {
-				uh.toastAdder.ShowToast(err.Error())
+				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
 			} else if err != nil {
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s: %v", item.row.GetTitle(), err))
 			}

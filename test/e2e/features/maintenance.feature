@@ -77,14 +77,14 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    And I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
     And the dialog says "This removes every Flatpak application and every Distrobox container for your account. It does not touch the system image or your files. This cannot be undone."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
-    And the "Remove…" button in the "Remove apps you installed" row is sensitive
-    When I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
+    When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the application log does not contain "Would execute: flatpak uninstall"
@@ -99,20 +99,20 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    And I click the "Remove…" button in the "Remove apps you installed" row
-    And I choose "Remove Everything" in the dialog
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    And I choose "Remove Apps and Containers" in the dialog
     Then I see "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made"
     And no dialog is shown
     And the application log contains "[DRY-RUN] Would execute: flatpak uninstall --user --all -y"
     And the application log contains "[DRY-RUN] would execute: distrobox rm --all --force"
     And the stubbed "flatpak" never ran "uninstall"
     And the stubbed "distrobox" never ran "rm"
-    And the "Remove apps you installed" row says "Your files, settings, and the system itself stay as they are."
-    And I do not see "Removed the apps you installed"
-    And the "Remove…" button in the "Remove apps you installed" row is sensitive
+    And the "Remove Flatpak apps and containers" row says "Homebrew packages, your files, settings, and the system itself stay as they are."
+    And I do not see "Removed your Flatpak apps and containers"
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
     And the action journal is empty
-    When I click the "Remove…" button in the "Remove apps you installed" row
-    Then a dialog titled "Remove Everything I Installed?" is shown
+    When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
 
   # --------------------------------------------------------- Factory Reset
 
@@ -253,7 +253,7 @@ Feature: Maintenance and its Powerwash detail
     When I open the Powerwash detail
     Then I see "Go back to the previous version"
     And I do not see "Reset the system"
-    And I do not see "Remove apps you installed"
+    And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,brew,podman,bootc-stage
@@ -264,7 +264,7 @@ Feature: Maintenance and its Powerwash detail
     And I open the Powerwash detail
     Then I see "Go back to the previous version"
     And I do not see "Reset the system"
-    And I do not see "Remove apps you installed"
+    And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 
   @config.maintenance-shipped @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman
