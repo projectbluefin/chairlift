@@ -371,3 +371,53 @@ func TestPhaseRestartRequiredClearsStatusPanel(t *testing.T) {
 		}
 	}
 }
+
+// The Roll Back heading belongs to the rollback row alone (#490). It used to
+// share a group with Return to stream and Published versions, so a host with
+// no previous deployment hid the row and left the heading standing over
+// unrelated rows. The group now holds only the rollback row and is what the
+// status loader shows and hides.
+func TestRollBackHeadingHidesWithItsRow(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	path := filepath.Join(filepath.Dir(filename), "..", "recovery.go")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := token.NewFileSet()
+	parsed, err := parser.ParseFile(set, path, source, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bodies := map[string]string{}
+	for _, declaration := range parsed.Decls {
+		if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Body != nil {
+			bodies[fn.Name.Name] = string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+		}
+	}
+
+	build := bodies["buildRecoveryRollbackGroup"]
+	for _, required := range []string{`group.SetTitle("Roll Back")`, "group.SetVisible(false)", "uh.bootcRollbackGroup = group"} {
+		if !strings.Contains(build, required) {
+			t.Errorf("buildRecoveryRollbackGroup no longer builds a hidden, owned Roll Back group: missing %q", required)
+		}
+	}
+	for _, banned := range []string{"buildReturnToStreamRow(", "buildPublishedVersionsRow("} {
+		if strings.Contains(build, banned) {
+			t.Errorf("buildRecoveryRollbackGroup puts %s under the Roll Back heading", banned)
+		}
+	}
+
+	load := bodies["loadBootcRollbackStatus"]
+	for _, required := range []string{"uh.bootcRollbackGroup.SetVisible(false)", "uh.bootcRollbackGroup.SetVisible(true)"} {
+		if !strings.Contains(load, required) {
+			t.Errorf("loadBootcRollbackStatus must show and hide the whole Roll Back group: missing %q", required)
+		}
+	}
+	if strings.Contains(load, "uh.bootcRollbackRow.SetVisible(") {
+		t.Error("loadBootcRollbackStatus hides only the row, leaving the Roll Back heading orphaned")
+	}
+}

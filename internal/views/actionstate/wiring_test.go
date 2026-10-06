@@ -65,13 +65,16 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 		"versions.go":     {"pinGate"},
 		"recovery.go":     {"unpinGate"},
 		"agents_page.go":  {"agentPresetGate"},
+		// Free up space is offered again after every run (#488).
+		"maintenance_page.go": {"freeUpSpaceGate"},
 		// Set Up and Launch share one gate, and both are offered again.
 		"troubleshoot.go": {"gooseGate", "askBluefinGate"},
 		// The developer switch and the optional feed setup behind it are
 		// both repeatable: the switch is used again after every toggle, and
 		// the setup gate has to reopen when its worker finishes or a second
-		// enable could never install anything.
-		"features_page.go": {"developerGate", "developerFeedGate"},
+		// enable could never install anything. Update Features is offered
+		// again after every run (#488).
+		"features_page.go": {"developerGate", "developerFeedGate", "updateFeaturesGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {
@@ -153,5 +156,30 @@ func TestLiveryPanelToggleDoesNotMutateInMemoryStateUnderDryRun(t *testing.T) {
 		if !strings.Contains(text, snippet) {
 			t.Errorf("panel %s mirror bypasses its dry-run mutation decision", name)
 		}
+	}
+}
+
+// A rotate switch's sensitivity follows its section's confirmed on/off state.
+// Selection work captured that state when it started and re-applied it when
+// it published, so a section enabled while the selection ran was locked out of
+// rotation again until the page reloaded (#496). Publishers read the confirmed
+// state at publish time, and the toggle commit records the new state before
+// recomputing its dependents.
+func TestLiveryRotateSensitivityReadsConfirmedSectionState(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if strings.Contains(text, "uh.syncLiveryRotateSensitive(surface, enabled)") {
+		t.Error("a selection publisher recomputes rotate sensitivity from on/off state captured before its work ran")
+	}
+	commit := "\t\t\tuh.setLiveryToggleState(s, enabled)\n\t\t\tuh.setLiverySectionSensitive(s, enabled)\n"
+	if !strings.Contains(text, commit) {
+		t.Error("finishLiveryToggle no longer records the committed state before recomputing the section's rotate switch")
 	}
 }

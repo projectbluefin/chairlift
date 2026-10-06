@@ -73,17 +73,62 @@ func defaultConfigHome() (string, error) {
 // executablePath is an injection seam for the binary the unit invokes.
 var executablePath = os.Executable
 
-// RunsFromSystemPrefix reports whether this binary lives somewhere a login
-// will still find it.
+// unitExecutable returns the path the rotation unit records as ExecStart.
+//
+// os.Executable resolves symlinks, so a Homebrew cask install reports the
+// versioned `<prefix>/Caskroom/<token>/<version>/<name>`, a directory the
+// next `brew upgrade` deletes — after which the unit fails at every login and
+// says so only in the journal (#491). The cask links that binary as
+// `<prefix>/bin/<name>`, which every upgrade repoints, so the unit names the
+// link instead. The prefix comes from the executable's own path, not from
+// $PATH or a brew lookup, because the GUI may run without Homebrew on $PATH.
+func unitExecutable() (string, error) {
+	exe, err := executablePath()
+	if err != nil {
+		return "", err
+	}
+	return stableExecutable(exe), nil
+}
+
+// stableExecutable maps a versioned Caskroom binary to the prefix's bin link
+// when that link resolves to the same file, and returns exe unchanged
+// otherwise. A link that points elsewhere — another build installed over it —
+// is not this binary, so the unit keeps the path that is.
+func stableExecutable(exe string) string {
+	caskroom := filepath.Dir(filepath.Dir(filepath.Dir(exe)))
+	if filepath.Base(caskroom) != "Caskroom" {
+		return exe
+	}
+	link := filepath.Join(filepath.Dir(caskroom), "bin", filepath.Base(exe))
+	linked, err := os.Stat(link)
+	if err != nil {
+		return exe
+	}
+	running, err := os.Stat(exe)
+	if err != nil || !os.SameFile(linked, running) {
+		return exe
+	}
+	return link
+}
+
+// isCaskroomVersionPath reports whether path names a binary inside a
+// versioned Caskroom directory, which a cask upgrade removes.
+func isCaskroomVersionPath(path string) bool {
+	return filepath.Base(filepath.Dir(filepath.Dir(filepath.Dir(path)))) == "Caskroom"
+}
+
+// RunsFromStablePath reports whether the unit's ExecStart will still exist
+// at a later login.
 //
 // The rotation unit records an absolute ExecStart. For an installed build
-// that is /usr/bin/chairlift and stable. For a source build it is whatever
-// build/ directory happened to produce it, which a later rebuild, clean, or
-// move invalidates — and systemd reports that failure to the journal, where
-// nobody is looking, while the UI keeps claiming rotation is on. The page
-// says so instead of letting it fail quietly.
-func RunsFromSystemPrefix() bool {
-	exe, err := executablePath()
+// that is /usr/bin/chairlift, and for a Homebrew cask it is the prefix's
+// bin link (see unitExecutable); both survive upgrades. For a source build
+// it is whatever build/ directory happened to produce it, which a later
+// rebuild, clean, or move invalidates — and systemd reports that failure to
+// the journal, where nobody is looking, while the UI keeps claiming rotation
+// is on. The page says so instead of letting it fail quietly.
+func RunsFromStablePath() bool {
+	exe, err := unitExecutable()
 	if err != nil {
 		return false
 	}
@@ -92,7 +137,8 @@ func RunsFromSystemPrefix() bool {
 			return true
 		}
 	}
-	return false
+	raw, err := executablePath()
+	return err == nil && exe != raw
 }
 
 // UnitPath returns the absolute path of the rotation unit.
@@ -104,17 +150,16 @@ func UnitPath() (string, error) {
 	return filepath.Join(dir, "systemd", "user", UnitName), nil
 }
 
-// InstallRotation writes and enables the rotation unit. It is idempotent:
-// rewriting an identical unit and re-enabling an enabled unit are both no-ops
-// as far as the user can observe.
-func InstallRotation(ctx context.Context) (result error) {
-	exe, err := executablePath()
+// renderRotationUnit returns the unit's path and the bytes InstallRotation
+// would write there for this process.
+func renderRotationUnit() (path, unit string, err error) {
+	exe, err := unitExecutable()
 	if err != nil {
-		return fmt.Errorf("livery: locating the application executable: %w", err)
+		return "", "", fmt.Errorf("livery: locating the application executable: %w", err)
 	}
-	path, err := UnitPath()
+	path, err = UnitPath()
 	if err != nil {
-		return err
+		return "", "", err
 	}
 	// An installed build finds its schema in /usr/share/glib-2.0/schemas. A
 	// source build does not, and systemd starts the unit with none of the
@@ -125,18 +170,27 @@ func InstallRotation(ctx context.Context) (result error) {
 	if dir := os.Getenv("GSETTINGS_SCHEMA_DIR"); dir != "" {
 		quoted, err := systemdQuote("GSETTINGS_SCHEMA_DIR=" + dir)
 		if err != nil {
-			return fmt.Errorf("livery: carrying GSETTINGS_SCHEMA_DIR into the rotation unit: %w", err)
+			return "", "", fmt.Errorf("livery: carrying GSETTINGS_SCHEMA_DIR into the rotation unit: %w", err)
 		}
 		env = "Environment=" + quoted + "\n"
 	}
 	quotedExe, err := systemdQuote(exe)
 	if err != nil {
-		return fmt.Errorf("livery: writing the rotation unit's ExecStart: %w", err)
+		return "", "", fmt.Errorf("livery: writing the rotation unit's ExecStart: %w", err)
 	}
-	unit := fmt.Sprintf(unitTemplate, branding.AppName, env, quotedExe, RotateFlag)
+	return path, fmt.Sprintf(unitTemplate, branding.AppName, env, quotedExe, RotateFlag), nil
+}
+
+// InstallRotation writes and enables the rotation unit. It is idempotent:
+// rewriting an identical unit and re-enabling an enabled unit are both no-ops
+// as far as the user can observe.
+func InstallRotation(ctx context.Context) (result error) {
+	path, unit, err := renderRotationUnit()
+	if err != nil {
+		return err
+	}
 	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would write %s and enable it", path)
-		_ = unit
 		return nil
 	}
 	previous, readErr := os.ReadFile(path)
@@ -165,6 +219,35 @@ func InstallRotation(ctx context.Context) (result error) {
 	return nil
 }
 
+// ReconcileRotationUnit rewrites an installed rotation unit whose ExecStart
+// names a binary inside a versioned Caskroom directory, as units written
+// before #491 do. A cask upgrade deletes that directory, so such a unit fails
+// at every login. Nothing else is touched: a missing unit, one that already
+// matches, or one naming any other path is left alone — a source build's
+// path is the developer's choice, and the switches still own whether the unit
+// exists at all.
+func ReconcileRotationUnit(ctx context.Context) error {
+	path, unit, err := renderRotationUnit()
+	if err != nil {
+		return err
+	}
+	existing, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if string(existing) == unit {
+		return nil
+	}
+	recorded, ok := unitExecStart(string(existing))
+	if !ok || !isCaskroomVersionPath(recorded) {
+		return nil
+	}
+	return InstallRotation(ctx)
+}
+
 // systemdQuote renders one value as a double-quoted systemd token.
 //
 // Both values the unit interpolates are paths the process discovers at
@@ -182,6 +265,24 @@ func systemdQuote(value string) (string, error) {
 	}
 	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%")
 	return `"` + replacer.Replace(value) + `"`, nil
+}
+
+// unitExecStart recovers the executable path systemdQuote wrote into a
+// rotation unit's ExecStart line.
+func unitExecStart(unit string) (string, bool) {
+	for _, line := range strings.Split(unit, "\n") {
+		quoted, ok := strings.CutPrefix(line, "ExecStart=")
+		if !ok {
+			continue
+		}
+		quoted, ok = strings.CutSuffix(quoted, " "+RotateFlag)
+		if !ok || len(quoted) < 2 || quoted[0] != '"' || quoted[len(quoted)-1] != '"' {
+			return "", false
+		}
+		unescape := strings.NewReplacer(`\\`, `\`, `\"`, `"`, "%%", "%")
+		return unescape.Replace(quoted[1 : len(quoted)-1]), true
+	}
+	return "", false
 }
 
 // RemoveRotation disables and deletes the rotation unit.

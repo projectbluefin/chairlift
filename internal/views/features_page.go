@@ -285,8 +285,13 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 	}()
 }
 
-// onUpdateFeaturesClicked handles the Update button click
+// onUpdateFeaturesClicked handles the Update button click. updateFeaturesGate
+// admits one run at a time and is reset on every completion, because the
+// button is offered again after each run.
 func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
+	if !uh.updateFeaturesGate.TryStart() {
+		return
+	}
 	button.SetSensitive(false)
 	button.SetLabel("Updating…")
 
@@ -297,6 +302,7 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 		err := updex.UpdateFeatures(ctx)
 
 		sgtk.RunOnMainThread(func() {
+			defer uh.updateFeaturesGate.Reset()
 			button.SetSensitive(true)
 			button.SetLabel("Update")
 
@@ -529,7 +535,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 		ctx, cancel := ublue.DefaultContext()
 		defer cancel()
 
-		err := ublue.SetDeveloperMode(ctx, enabled)
+		skipped, err := ublue.SetDeveloperMode(ctx, enabled)
 		succeeded := err == nil
 
 		var menuErr error
@@ -555,12 +561,16 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Custom Command Menu update failed: %v", menuErr))
 			}
 
-			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled)
+			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled, skipped)
 			toggle.set(decision.Confirm == enabled)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
-			uh.toastAdder.ShowToast(decision.Toast)
+			if decision.Warn {
+				uh.toastAdder.ShowErrorToast(decision.Toast)
+			} else {
+				uh.toastAdder.ShowToast(decision.Toast)
+			}
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
@@ -568,7 +578,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 	}()
 }
 
-// openDeveloperOnboarding opens the developer onboarding tabs for a confirmed
+// openDeveloperOnboarding opens the developer onboarding page for a confirmed
 // live enable, and runs on the GTK main thread from the one branch of
 // onDeveloperToggled that reached a successful promotion.
 func (uh *UserHome) openDeveloperOnboarding(enabled, succeeded bool) {

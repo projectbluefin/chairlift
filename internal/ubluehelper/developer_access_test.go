@@ -1,6 +1,7 @@
 package ubluehelper
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -48,5 +49,22 @@ func TestDockerLifecycleStopsSocketActivationAsWellAsDaemon(t *testing.T) {
 	}
 	if _, ok := DockerArgs(CommandKVMEnable); ok {
 		t.Fatal("unrelated command accepted")
+	}
+}
+
+// The helper's skip report and the GUI's parser must agree (#495), and only
+// known developer groups may come back out, in DevGroups order.
+func TestSkippedGroupsReadsTheHelpersReport(t *testing.T) {
+	output := "usermod: group 'docker' does not exist\n" +
+		SkippedGroupLine("incus-admin", errors.New("exit status 6")) + "\n" +
+		SkippedGroupLine("docker", errors.New("exit status 6")) + "\n" +
+		SkippedGroupLine("wheel", errors.New("exit status 6")) + "\n" +
+		"skipped group dialout\n"
+	got := SkippedGroups(output)
+	if want := []string{"docker", "incus-admin"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("SkippedGroups() = %v, want %v", got, want)
+	}
+	if got := SkippedGroups("dx-enable applied to 4 group(s) for user\n"); len(got) != 0 {
+		t.Errorf("SkippedGroups(clean run) = %v, want none", got)
 	}
 }

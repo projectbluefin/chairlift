@@ -173,9 +173,18 @@ type UserHome struct {
 	bootcStageBtn      *gtk.Button
 	bootcActivityRow   *adw.ActionRow
 	bootcLogExpander   *adw.ExpanderRow
+	// The Roll Back group holds only the rollback row and is hidden with
+	// it, so a host with no previous deployment shows no orphaned heading.
+	bootcRollbackGroup *adw.PreferencesGroup
 	bootcRollbackRow   *adw.ActionRow
 	bootcRollbackBtn   *gtk.Button
 	bootcRollbackGate  actionstate.Gate
+
+	// Free up space admits one cleanup run at a time.
+	freeUpSpaceGate actionstate.Gate
+
+	// updateFeaturesGate admits one updex feature update at a time (#488).
+	updateFeaturesGate actionstate.Gate
 
 	// Bluefin-family (channel / developer mode / gaming) references
 	channelGroup       *adw.PreferencesGroup
@@ -223,7 +232,7 @@ type UserHome struct {
 	changelogGate     actionstate.Gate
 
 	// Published versions (the dated-build catalog, ADR-0013), listed on
-	// the Powerwash page under Roll Back. runningVersion and
+	// the Powerwash page below Roll Back, in its own group. runningVersion and
 	// previousVersion are the bootc versions of the booted and rollback
 	// deployments, recorded by loadBootcRollbackStatus.
 	publishedVersionsRow    *adw.ExpanderRow

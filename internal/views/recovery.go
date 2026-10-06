@@ -91,15 +91,18 @@ func (uh *UserHome) buildRecoveryPage() {
 
 	// Roll Back: gated by the OS provider group, built hidden, revealed
 	// asynchronously once a previous deployment is confirmed to exist.
+	// Return to stream and Published versions sit in their own group so
+	// the Roll Back heading never stands over rows that are not a rollback.
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		uh.buildRecoveryRollbackGroup(page)
+		uh.buildRecoveryVersionsGroup(page)
 		go uh.loadBootcRollbackStatus()
 	}
 }
 
-// buildRecoveryRollbackGroup builds the bootc Roll Back row on the Powerwash
-// page. It is built hidden and revealed asynchronously, so a fresh install
-// never offers a rollback to nothing.
+// buildRecoveryRollbackGroup builds the bootc Roll Back group on the Powerwash
+// page. The whole group is built hidden and revealed asynchronously, so a
+// fresh install shows neither a rollback to nothing nor its heading.
 func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	// bootc Roll Back returns to the deployment bootc records as the
 	// rollback target. Hidden until that deployment is confirmed to exist.
@@ -114,20 +117,27 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	}
 	uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
-	uh.bootcRollbackRow.SetVisible(false)
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
 	group.SetDescription("Return to the previous system version if an update went badly")
 	group.Add(&uh.bootcRollbackRow.Widget)
-	// The return to stream row is offered when booted on a dated tag.
-	// The published-versions list is a bootc image concept: it reads the
-	// registry the booted image comes from.
-	if uh.groupEnabled("updates_page", "bootc_updates_group") {
-		uh.buildReturnToStreamRow(group)
-		uh.buildPublishedVersionsRow(group)
-	}
+	group.SetVisible(false)
 	page.Add(group)
+	uh.bootcRollbackGroup = group
+}
+
+// buildRecoveryVersionsGroup builds the Return to stream row (offered when
+// booted on a dated tag) and the Published versions row (a bootc image
+// concept: it reads the registry the booted image comes from) in their own
+// group. The group is added only when at least one of them was built.
+func (uh *UserHome) buildRecoveryVersionsGroup(page *adw.PreferencesPage) {
+	group := adw.NewPreferencesGroup()
+	uh.buildReturnToStreamRow(group)
+	uh.buildPublishedVersionsRow(group)
+	if uh.unpinRow != nil || uh.publishedVersionsRow != nil {
+		page.Add(group)
+	}
 }
 
 // buildReturnToStreamRow builds the Return to stream row on the Powerwash
@@ -223,10 +233,10 @@ func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 	}()
 }
 
-// loadBootcRollbackStatus reveals the Roll Back row when bootc records a
+// loadBootcRollbackStatus reveals the Roll Back group when bootc records a
 // rollback deployment. A host with no previous image — a fresh install, or
-// one whose rollback slot has been pruned — leaves the row hidden rather than
-// showing an inert control.
+// one whose rollback slot has been pruned — leaves the whole group hidden
+// rather than showing an inert control or an orphaned heading.
 func (uh *UserHome) loadBootcRollbackStatus() {
 	ctx, cancel := bootc.DefaultContext()
 	defer cancel()
@@ -242,18 +252,18 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 			uh.runningVersion = status.Status.Booted.Version()
 			uh.previousVersion = status.Status.Rollback.Version()
 		}
-		if uh.bootcRollbackRow == nil {
+		if uh.bootcRollbackRow == nil || uh.bootcRollbackGroup == nil {
 			return
 		}
 		if err != nil || status.Status.Rollback == nil || !helperSupported {
-			uh.bootcRollbackRow.SetVisible(false)
+			uh.bootcRollbackGroup.SetVisible(false)
 			return
 		}
 
 		deployment := status.Status.Rollback
 		presentation := pageview.BootcRollbackRow(deployment.Version(), deployment.Timestamp())
 		uh.bootcRollbackRow.SetSubtitle(presentation.Subtitle)
-		uh.bootcRollbackRow.SetVisible(true)
+		uh.bootcRollbackGroup.SetVisible(true)
 		log.Printf("views: bootc rollback available version=%q", deployment.Version())
 	})
 }

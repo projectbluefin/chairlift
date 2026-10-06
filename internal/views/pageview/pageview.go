@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 )
 
@@ -404,6 +405,12 @@ func AutomaticUpdatesResultSubtitle(enabled bool) string {
 // what a driver switch buys varies per machine, and this row cannot know.
 func GraphicsDriverRow(current, hardware, recommended string) Row {
 	row := Row{Title: "Graphics driver"}
+	// gpu.Set.Describe answers with a sentence, not a name, when nothing
+	// was detected (a virtual machine); interpolating it produced "for your
+	// No graphics hardware detected graphics".
+	if hardware == (gpu.Set{}).Describe() {
+		hardware = ""
+	}
 	switch {
 	case recommended != "" && hardware != "":
 		row.Subtitle = fmt.Sprintf("Switch to the %s driver for your %s graphics. Replaces the operating system and needs a restart.", recommended, hardware)
@@ -411,6 +418,8 @@ func GraphicsDriverRow(current, hardware, recommended string) Row {
 		row.Subtitle = fmt.Sprintf("Switch to the %s driver. Replaces the operating system and needs a restart.", recommended)
 	case current != "" && hardware != "":
 		row.Subtitle = fmt.Sprintf("Using the %s driver for your %s graphics", current, hardware)
+	case current != "":
+		row.Subtitle = fmt.Sprintf("Using the %s driver", current)
 	case hardware != "":
 		row.Subtitle = fmt.Sprintf("Your graphics hardware: %s", hardware)
 	default:

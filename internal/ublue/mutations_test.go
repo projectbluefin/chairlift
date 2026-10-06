@@ -71,12 +71,12 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 		},
 		{
 			name:     "SetDeveloperMode enabled",
-			call:     func(ctx context.Context) error { return SetDeveloperMode(ctx, true) },
+			call:     func(ctx context.Context) error { _, err := SetDeveloperMode(ctx, true); return err },
 			wantArgs: []string{ubluehelper.CommandDXEnable},
 		},
 		{
 			name:     "SetDeveloperMode disabled",
-			call:     func(ctx context.Context) error { return SetDeveloperMode(ctx, false) },
+			call:     func(ctx context.Context) error { _, err := SetDeveloperMode(ctx, false); return err },
 			wantArgs: []string{ubluehelper.CommandDXDisable},
 		},
 		{name: "EnableKVMAccess", call: EnableKVMAccess, wantArgs: []string{ubluehelper.CommandKVMEnable}},

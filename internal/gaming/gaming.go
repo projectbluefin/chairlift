@@ -316,8 +316,15 @@ func Status() (State, error) {
 	return Derive(scope), nil
 }
 
+// ensureUserRemote is the seam for making Flathub resolvable from the user
+// installation before a user-scope install.
+var ensureUserRemote = flatpak.EnsureUserFlathub
+
 // Enable installs only selected missing components into the user scope.
-// A component failure does not abort the remaining selected entries.
+// A component failure does not abort the remaining selected entries. When
+// anything is to be installed, a user Flathub remote is ensured first: an
+// image that configures Flathub only system-wide cannot resolve a --user
+// install otherwise (#501), and without it every install would fail alike.
 func Enable(selected []string) (installed []string, failures []error) {
 	if err := validSelection(selected); err != nil {
 		return nil, []error{err}
@@ -327,10 +334,20 @@ func Enable(selected []string) (installed []string, failures []error) {
 		return nil, []error{err}
 	}
 
+	var pending []string
 	for _, id := range state.Missing {
-		if !slices.Contains(selected, id) {
-			continue
+		if slices.Contains(selected, id) {
+			pending = append(pending, id)
 		}
+	}
+	if len(pending) == 0 {
+		return nil, nil
+	}
+	if err := ensureUserRemote(); err != nil {
+		return nil, []error{fmt.Errorf("adding the Flathub remote for your account: %w", err)}
+	}
+
+	for _, id := range pending {
 		if err := flatpak.Install(id, true); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", id, err))
 			continue

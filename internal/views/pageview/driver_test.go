@@ -3,6 +3,8 @@ package pageview
 import (
 	"strings"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/gpu"
 )
 
 func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
@@ -56,6 +58,22 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 					test.current, test.hardware, test.recommended, row.Subtitle, test.wantHas)
 			}
 		})
+	}
+}
+
+// A virtual machine has no graphics hardware, and gpu.Set.Describe answers
+// with a sentence for that case. The row used to interpolate it into "for
+// your No graphics hardware detected graphics" (#489).
+func TestGraphicsDriverRowWithoutDetectedHardware(t *testing.T) {
+	none := (gpu.Set{}).Describe()
+	if got, want := GraphicsDriverRow("Standard", none, "").Subtitle, "Using the Standard driver"; got != want {
+		t.Errorf("GraphicsDriverRow(%q, %q, \"\").Subtitle = %q, want %q", "Standard", none, got, want)
+	}
+	if got, want := GraphicsDriverRow("", none, "").Subtitle, "No graphics hardware was detected"; got != want {
+		t.Errorf("GraphicsDriverRow(\"\", %q, \"\").Subtitle = %q, want %q", none, got, want)
+	}
+	if got := GraphicsDriverRow("Standard", none, "NVIDIA (proprietary)").Subtitle; strings.Contains(got, none) {
+		t.Errorf("offering subtitle %q interpolates the no-hardware sentence", got)
 	}
 }
 

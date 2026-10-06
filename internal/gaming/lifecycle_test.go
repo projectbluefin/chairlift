@@ -452,3 +452,51 @@ func TestGamingRemovalLeavesUnselectedUserComponents(t *testing.T) {
 		t.Fatalf("removed unselected component: %v", calls)
 	}
 }
+
+// Issue #501: on a host whose Flathub is system-only, a --user install fails
+// with "No remote refs found". The user remote is ensured once, before any
+// install.
+func TestEnableEnsuresTheUserRemoteBeforeInstalling(t *testing.T) {
+	stubInstalled(t, nil, nil)
+	log := fakeFlatpak(t, "exit 0")
+	ensured := 0
+	stubUserRemote(t, func() error {
+		if calls := invocations(t, log); len(calls) != 0 {
+			t.Errorf("user remote ensured after %v, want before any install", calls)
+		}
+		ensured++
+		return nil
+	})
+
+	if _, failures := Enable([]string{flatseal, protonUp}); len(failures) != 0 {
+		t.Fatalf("Enable() failures = %v, want none", failures)
+	}
+	if ensured != 1 {
+		t.Errorf("user remote ensured %d times, want 1", ensured)
+	}
+}
+
+func TestEnableSkipsTheUserRemoteWhenNothingIsMissing(t *testing.T) {
+	stubInstalled(t, allComponentIDs(), nil)
+	fakeFlatpak(t, "exit 0")
+	stubUserRemote(t, func() error {
+		t.Error("user remote ensured with nothing to install")
+		return nil
+	})
+
+	Enable(allComponentIDs())
+}
+
+func TestEnableInstallsNothingWhenTheUserRemoteCannotBeAdded(t *testing.T) {
+	stubInstalled(t, nil, nil)
+	log := fakeFlatpak(t, "exit 0")
+	stubUserRemote(t, func() error { return os.ErrPermission })
+
+	installed, failures := Enable([]string{flatseal})
+	if len(installed) != 0 || len(failures) != 1 || !strings.Contains(failures[0].Error(), "Flathub") {
+		t.Fatalf("Enable() = (%v, %v), want one Flathub failure and no installs", installed, failures)
+	}
+	if calls := invocations(t, log); len(calls) != 0 {
+		t.Errorf("Enable() ran %v after the remote failed, want nothing", calls)
+	}
+}

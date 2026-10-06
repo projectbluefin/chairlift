@@ -121,6 +121,11 @@ func (uh *UserHome) buildFreeSpaceGroup(page *adw.PreferencesPage) {
 // difference is small enough to be ordinary system noise, the result says
 // the cleanup finished and names no number at all.
 func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow, spinner *gtk.Spinner) {
+	// One cleanup at a time: a second activation queued before the button
+	// went insensitive must not start an overlapping run.
+	if !uh.freeUpSpaceGate.TryStart() {
+		return
+	}
 	button.SetSensitive(false)
 	button.SetLabel(cleanupview.BusyLabel)
 	setActivitySpinner(spinner, true)
@@ -149,6 +154,7 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow,
 		})
 
 		sgtk.RunOnMainThread(func() {
+			uh.freeUpSpaceGate.Reset()
 			setActivitySpinner(spinner, false)
 			button.SetSensitive(true)
 			button.SetLabel(cleanupview.ButtonLabel)

@@ -36,7 +36,7 @@ func TestChannelSwitchConfirmsAndNamesTheChannel(t *testing.T) {
 
 func TestDeveloperModeNeverConfirmsUnderDryRun(t *testing.T) {
 	for _, enable := range []bool{true, false} {
-		decision := DeveloperMode(true, enable)
+		decision := DeveloperMode(true, enable, []string{"docker"})
 		if decision.Confirm {
 			t.Errorf("DeveloperMode(true, %v).Confirm = true, want false", enable)
 		}
@@ -48,13 +48,33 @@ func TestDeveloperModeNeverConfirmsUnderDryRun(t *testing.T) {
 
 func TestDeveloperModeLiveToastsAskForARelogin(t *testing.T) {
 	for _, enable := range []bool{true, false} {
-		decision := DeveloperMode(false, enable)
+		decision := DeveloperMode(false, enable, nil)
 		if !decision.Confirm {
 			t.Errorf("DeveloperMode(false, %v).Confirm = false, want true", enable)
 		}
 		if !strings.Contains(decision.Toast, "Log out") {
 			t.Errorf("DeveloperMode(false, %v).Toast = %q, want it to ask for a re-login", enable, decision.Toast)
 		}
+	}
+}
+
+// Issue #495: an enable whose helper skipped groups must warn and name each
+// group not granted, not read as a complete grant.
+func TestDeveloperModeWarnsAboutSkippedGroups(t *testing.T) {
+	decision := DeveloperMode(false, true, []string{"docker", "incus-admin"})
+	if !decision.Confirm || !decision.Warn {
+		t.Errorf("DeveloperMode(partial enable) = %+v, want a confirmed warning", decision)
+	}
+	for _, group := range []string{"docker", "incus-admin"} {
+		if !strings.Contains(decision.Toast, group) {
+			t.Errorf("DeveloperMode(partial enable).Toast = %q, want it to name %s", decision.Toast, group)
+		}
+	}
+	if full := DeveloperMode(false, true, nil); full.Warn {
+		t.Errorf("DeveloperMode(full enable) = %+v, want no warning", full)
+	}
+	if disable := DeveloperMode(false, false, []string{"docker"}); disable.Warn {
+		t.Errorf("DeveloperMode(disable, skipped) = %+v, want no warning", disable)
 	}
 }
 

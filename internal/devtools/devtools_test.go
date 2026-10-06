@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/journal"
@@ -390,5 +391,24 @@ func TestResolveBackendFollowsAnExistingMachine(t *testing.T) {
 		if got := ResolveBackend(tc.configured, tc.nslExists, tc.limaOK); got != tc.want {
 			t.Errorf("ResolveBackend(%q, %v, %v) = %q, want %q", tc.configured, tc.nslExists, tc.limaOK, got, tc.want)
 		}
+	}
+}
+
+// Issue #487: a status read that stalls must end at statusTimeout with an
+// error, so the developer option worker reaches its completion and the view
+// releases its gate and controls.
+func TestStalledStatusProbeEndsAtItsBound(t *testing.T) {
+	fakeNSL(t, "exec /usr/bin/sleep 30\n")
+	previous := statusTimeout
+	statusTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { statusTimeout = previous })
+
+	start := time.Now()
+	_, err := WSLStatus(context.Background(), BackendNSL)
+	if err == nil {
+		t.Fatal("WSLStatus on a stalled probe returned no error")
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("WSLStatus took %v, want it bounded near statusTimeout", elapsed)
 	}
 }

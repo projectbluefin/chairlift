@@ -344,6 +344,15 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 	title := item.row.GetTitle()
 	backend := uh.wslBackend
 	go func() {
+		// The worker carries no overall deadline on purpose: an nsl or Lima
+		// first start downloads for longer than any read budget, and a
+		// privileged helper call must not be cut mid-flight. Every step
+		// instead carries its own bound — devtools and Homebrew commands
+		// their read/mutation class timeout, and each status probe below
+		// devtools' statusTimeout — so the completion below, which resets
+		// developerGate and restores the controls, is reached without user
+		// action except for an authentication prompt, which the user answers
+		// or dismisses (#487).
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		progress := func(stage string) { sgtk.RunOnMainThread(func() { item.row.SetSubtitle(stage) }) }

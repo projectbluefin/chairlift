@@ -32,7 +32,10 @@
 // command.
 package actionmsg
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // BundleDump returns the toast text for exporting the installed package list.
 // When dryRun is true, homebrew.BundleDump itself never runs `brew bundle
@@ -236,6 +239,9 @@ type FeatureToggleDecision struct {
 	Confirm bool
 	// Toast is the completion message to show immediately.
 	Toast string
+	// Warn is true when the action succeeded only in part, so the caller
+	// must keep the toast visible as a warning rather than a passing note.
+	Warn bool
 }
 
 // FeatureToggle decides whether toggling a system feature's switch should
@@ -352,7 +358,14 @@ func ChannelSwitch(dryRun bool, toTesting bool) FeatureToggleDecision {
 // new state, and what toast to show. The live toasts name the re-login
 // requirement because supplementary group membership only takes effect in a
 // new session — the switch flipping is not the whole story.
-func DeveloperMode(dryRun bool, enable bool) FeatureToggleDecision {
+//
+// skipped lists the developer groups the helper reported it could not
+// change. An enable that skipped some is a partial grant: it still confirms
+// (the account did join the others) but warns, naming each group not
+// granted, so the user does not assume access to Docker or Incus they lack
+// (#495). A disable that skips a group the account was never in has nothing
+// to warn about.
+func DeveloperMode(dryRun bool, enable bool, skipped []string) FeatureToggleDecision {
 	verb := "disabled"
 	if enable {
 		verb = "enabled"
@@ -363,10 +376,25 @@ func DeveloperMode(dryRun bool, enable bool) FeatureToggleDecision {
 			Toast:   fmt.Sprintf("[DRY-RUN] Preview: developer mode would be %s — no changes made", verb),
 		}
 	}
+	if enable && len(skipped) > 0 {
+		return FeatureToggleDecision{
+			Confirm: true,
+			Toast: fmt.Sprintf("Developer mode enabled, but your account was not added to %s; this system may not provide %s. Log out and back in to apply the rest.",
+				strings.Join(skipped, ", "), pluralIt(len(skipped))),
+			Warn: true,
+		}
+	}
 	return FeatureToggleDecision{
 		Confirm: true,
 		Toast:   fmt.Sprintf("Developer mode %s. Log out and back in to apply.", verb),
 	}
+}
+
+func pluralIt(n int) string {
+	if n == 1 {
+		return "it"
+	}
+	return "them"
 }
 
 // GamingMode decides whether the Gaming Mode switch should confirm its new

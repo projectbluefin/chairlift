@@ -13,6 +13,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/settings"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
@@ -663,15 +664,30 @@ func (w *Window) ShowToast(message string) {
 // and the message itself is length-bounded at the source.
 const errorToastWidthChars = 48
 
+// authCancelledToast replaces a dismissed PolicyKit prompt's error. The
+// helper never ran, so there is nothing to diagnose and no raw pkexec
+// stderr worth pinning to the window (#492).
+const authCancelledToast = "Authentication cancelled"
+
 // ShowErrorToast shows an error toast immediately, keeping older errors queued
 // until dismissed. It wraps the failing command's diagnosis instead of hiding
 // subsequent failures behind an indefinitely displayed earlier toast.
+//
+// A message carrying pkexec's dismissal text is not an error: the user
+// cancelled the authentication prompt. Every privileged view reports through
+// here, so this is the one place that turns it into a brief, self-expiring
+// toast; the caller has already restored its control.
 //
 // The toast is still constructed with the message as its plain title.
 // adw_toast_set_custom_title clears that title itself, so this costs nothing,
 // and it keeps the message visible rather than blank should the custom title
 // ever fail to apply.
 func (w *Window) ShowErrorToast(message string) {
+	if pkexec.MessageIsAuthDismissed(message) {
+		log.Printf("window: authentication dismissed: %s", message)
+		w.ShowToast(authCancelledToast)
+		return
+	}
 	toast := adw.NewToast(message)
 	toast.SetUseMarkup(false)
 	toast.SetTimeout(0) // Persist until dismissed

@@ -29,7 +29,7 @@ const publishedVersionsTimeout = time.Minute
 // failed read is never cached (ADR-0013).
 var listPublishedBuilds = (&registrytags.Catalog{}).Builds
 
-// buildPublishedVersionsRow adds the Published versions row to the Roll Back
+// buildPublishedVersionsRow adds the Published versions row to its preferences
 // group: the dated builds the registry still offers for the stream this
 // machine follows. It is read-only — nothing it lists reaches a privileged
 // path — and it reads the registry only when pressed, never on page load.

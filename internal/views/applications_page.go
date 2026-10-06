@@ -249,6 +249,15 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetTitle(presentation.Title)
 					row.SetSubtitle(presentation.Subtitle)
 
+					// The running application's own cask stays listed but
+					// offers no Uninstall: removing it here would delete the
+					// app from under the person using it (issue #493).
+					if pageview.IsSelfCask(pkg.Name) {
+						uh.installedCasks.Add(&row.Widget)
+						uh.caskRows.Add(row)
+						continue
+					}
+
 					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")

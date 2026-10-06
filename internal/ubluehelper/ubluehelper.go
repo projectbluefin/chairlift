@@ -26,6 +26,7 @@ package ubluehelper
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
@@ -377,6 +378,39 @@ func GroupArgs(command, username, group string) (string, []string, bool) {
 	default:
 		return "", nil, false
 	}
+}
+
+// skippedGroupPrefix starts the line the helper writes to stderr for a
+// developer group it could not change (usually one this image does not
+// define). The GUI reads these lines back with SkippedGroups.
+const skippedGroupPrefix = "skipped group "
+
+// SkippedGroupLine formats the helper's report of a group it skipped.
+func SkippedGroupLine(group string, err error) string {
+	return fmt.Sprintf("%s%s: %v", skippedGroupPrefix, group, err)
+}
+
+// SkippedGroups returns, in DevGroups order, the developer groups the helper
+// reported skipping in output. Only names in DevGroups are returned, so
+// arbitrary helper output cannot inject text into the GUI's warning.
+func SkippedGroups(output string) []string {
+	reported := map[string]bool{}
+	for _, line := range strings.Split(output, "\n") {
+		rest, ok := strings.CutPrefix(strings.TrimSpace(line), skippedGroupPrefix)
+		if !ok {
+			continue
+		}
+		if name, _, ok := strings.Cut(rest, ":"); ok {
+			reported[name] = true
+		}
+	}
+	var skipped []string
+	for _, group := range DevGroups() {
+		if reported[group] {
+			skipped = append(skipped, group)
+		}
+	}
+	return skipped
 }
 
 // AccessArgs grants only the one group authorized by each developer option.

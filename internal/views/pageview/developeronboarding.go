@@ -7,38 +7,32 @@ type DeveloperOnboardingLink struct {
 	URL   string
 }
 
-// developerOnboardingLinks is the ordered set of tabs a live enable opens.
+// developerOnboardingLinks is what a live enable opens: one page.
 //
 // The set lives here, in a package that imports no puregotk, so the exact
-// collection and its order can be asserted headlessly — see
-// docs/agents/skills/gtk-headless-tests.md. Order is part of the contract:
-// tabs open left to right in this order, so the developer documentation the
-// user is expected to read first is listed first.
+// collection can be asserted headlessly — see
+// docs/agents/skills/gtk-headless-tests.md.
 //
-// The training catalog is named as the redirect target rather than the
-// Linux Foundation host it lands on, because training.projectbluefin.io is
-// the stable address and the redirect destination is not.
+// It once held three links (this page, the training catalog, and the GNOME
+// Developer Center), and flipping the switch opened all three at once; on a
+// desktop with no default browser yet that stacked three app-choosers
+// (#494). One switch flip opens at most one page now. The Bluefin developer
+// documentation is the one kept because it describes exactly what the
+// switch just changed and is the hub that links onward to the training and
+// platform material; opening nothing would leave a new developer with no
+// pointer at all.
 var developerOnboardingLinks = []DeveloperOnboardingLink{
 	{
 		Title: "Bluefin Developer Documentation",
 		URL:   "https://docs.projectbluefin.io/bluefin-dx/",
 	},
-	{
-		Title: "Project Bluefin Training Catalog",
-		URL:   "https://training.projectbluefin.io",
-	},
-	{
-		Title: "GNOME Developer Center",
-		URL:   "https://developer.gnome.org/",
-	},
 }
 
-// DeveloperOnboardingTargets returns the onboarding destinations a Developer
-// Mode toggle should open, in the order they should be opened.
+// DeveloperOnboardingTargets returns the onboarding destination a Developer
+// Mode toggle should open — never more than one.
 //
-// Opening three tabs at once is deliberate but potentially distracting, so
-// the admission rule is deliberately narrow. Every one of the three
-// arguments must line up:
+// Opening a browser from a switch is a side effect, so the admission rule is
+// deliberately narrow. Every one of the three arguments must line up:
 //
 //   - dryRun is true when the process is previewing under --dry-run. The
 //     capture run is headless and must not spawn browser processes, so a

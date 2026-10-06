@@ -5,10 +5,12 @@ import (
 	"testing"
 )
 
-// The three onboarding URLs and their order are a product decision recorded
-// in issue #240, not an implementation detail. Asserting them verbatim is
-// the point: a reordered or dropped link changes what a user sees the moment
-// they switch Developer Mode on, and no other gate would notice.
+// The onboarding URL is a product decision (#240, narrowed to one page by
+// #494), not an implementation detail. Asserting it verbatim is the point:
+// a changed or added link changes what a user sees the moment they switch
+// Developer Mode on, and no other gate would notice. A single switch flip
+// must never open more than one browser page: three at once stacked three
+// app-choosers on a desktop with no default browser.
 func TestDeveloperOnboardingTargetsConfirmedLiveEnable(t *testing.T) {
 	got := DeveloperOnboardingTargets(false, true, true)
 
@@ -17,18 +19,13 @@ func TestDeveloperOnboardingTargetsConfirmedLiveEnable(t *testing.T) {
 			Title: "Bluefin Developer Documentation",
 			URL:   "https://docs.projectbluefin.io/bluefin-dx/",
 		},
-		{
-			Title: "Project Bluefin Training Catalog",
-			URL:   "https://training.projectbluefin.io",
-		},
-		{
-			Title: "GNOME Developer Center",
-			URL:   "https://developer.gnome.org/",
-		},
 	}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("DeveloperOnboardingTargets(false, true, true) = %+v, want %+v", got, want)
+	}
+	if len(got) > 1 {
+		t.Errorf("a Developer Mode enable opens %d pages, want at most one", len(got))
 	}
 }
 

@@ -112,7 +112,7 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	uh.buildLiveryFoundationGrid(group)
 
 	uh.liveryPanelRotateSpinner = newActivitySpinner()
-	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
+	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromStablePath()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Panel, state)
 	}, uh.liveryPanelRotateSpinner)
 	group.Add(&rotateRow.Widget)
@@ -160,7 +160,7 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	uh.liveryDockSelectedRow = projectRow
 
 	uh.liveryDockRotateSpinner = newActivitySpinner()
-	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromSystemPrefix()), func(state bool) {
+	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromStablePath()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Dock, state)
 	}, uh.liveryDockRotateSpinner)
 	group.Add(&rotateRow.Widget)
@@ -232,6 +232,12 @@ func (uh *UserHome) refreshLiveryState() {
 	appGridAvailable, appGridErr := livery.AppGridAvailable()
 	if appGridErr != nil {
 		log.Printf("livery: checking app-grid availability: %v", appGridErr)
+	}
+	// A unit written before #491 names a versioned Caskroom binary that the
+	// next cask upgrade deletes. Repointing it is the page's one load-time
+	// write, and it never touches a setting or a unit naming any other path.
+	if err := livery.ReconcileRotationUnit(ctx); err != nil {
+		log.Printf("livery: repointing the rotation unit: %v", err)
 	}
 
 	sgtk.RunOnMainThread(func() {

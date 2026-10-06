@@ -109,10 +109,11 @@ type Application struct {
 
 // stateChangingCommands are commands that modify system state
 var stateChangingCommands = map[string]bool{
-	"install":   true,
-	"uninstall": true,
-	"remove":    true,
-	"update":    true,
+	"install":    true,
+	"uninstall":  true,
+	"remove":     true,
+	"update":     true,
+	"remote-add": true,
 }
 
 // commandTimeout returns the timeout class for a flatpak invocation: the
@@ -353,6 +354,49 @@ func InstallFromRemote(appID, remote string, user bool) error {
 	args = append(args, appID)
 
 	_, err := runFlatpakCommand(args...)
+	return err
+}
+
+// Flathub is the remote user-scope installs resolve against, and
+// FlathubRepoURL the descriptor `flatpak remote-add` reads it from.
+const (
+	Flathub        = "flathub"
+	FlathubRepoURL = "https://dl.flathub.org/repo/flathub.flatpakrepo"
+)
+
+// userRemoteListArgs lists the user installation's remote names, one per line.
+var userRemoteListArgs = []string{"remotes", "--user", "--columns=name"}
+
+// userFlathubAddArgs adds Flathub to the user installation. --if-not-exists
+// keeps it idempotent if the remote appears between the list and the add.
+var userFlathubAddArgs = []string{"remote-add", "--user", "--if-not-exists", Flathub, FlathubRepoURL}
+
+// HasRemote reports whether `flatpak remotes --columns=name` output names
+// remote.
+func HasRemote(output, remote string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		if strings.TrimSpace(line) == remote {
+			return true
+		}
+	}
+	return false
+}
+
+// EnsureUserFlathub makes Flathub resolvable from the user installation.
+// Many images configure Flathub only system-wide, and a `--user` install
+// cannot resolve a ref against a system remote ("No remote refs found");
+// an unprivileged user also cannot refresh a system remote's appstream. A
+// user remote already present is left alone. The add is state-changing, so
+// the shared runner previews it under --dry-run.
+func EnsureUserFlathub() error {
+	output, err := runFlatpakCommand(userRemoteListArgs...)
+	if err != nil {
+		return err
+	}
+	if HasRemote(output, Flathub) {
+		return nil
+	}
+	_, err = runFlatpakCommand(userFlathubAddArgs...)
 	return err
 }
 

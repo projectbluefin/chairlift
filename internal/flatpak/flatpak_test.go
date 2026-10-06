@@ -440,9 +440,98 @@ func TestParseUpdateList(t *testing.T) {
 	}
 }
 
+func TestHasRemoteMatchesWholeNames(t *testing.T) {
+	tests := []struct {
+		output string
+		want   bool
+	}{
+		{output: "", want: false},
+		{output: "fedora\n", want: false},
+		{output: "flathub-beta\n", want: false},
+		{output: "fedora\nflathub\n", want: true},
+		{output: "  flathub  \n", want: true},
+	}
+	for _, tt := range tests {
+		if got := HasRemote(tt.output, Flathub); got != tt.want {
+			t.Errorf("HasRemote(%q) = %v, want %v", tt.output, got, tt.want)
+		}
+	}
+}
+
+// fakeFlatpakLog installs a flatpak stand-in that appends each invocation's
+// argument line to a log and answers `remotes` with remotes.
+func fakeFlatpakLog(t *testing.T, remotes string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "log")
+	source := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CHAIRLIFT_FLATPAK_LOG\"\n" +
+		"if [ \"$1\" = remotes ]; then printf '" + remotes + "'; fi\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("CHAIRLIFT_FLATPAK_LOG", logPath)
+	return logPath
+}
+
+func loggedCalls(t *testing.T, logPath string) []string {
+	t.Helper()
+	data, err := os.ReadFile(logPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	return strings.Split(strings.TrimSpace(string(data)), "\n")
+}
+
+// Issue #501: with Flathub configured only system-wide, a --user install
+// failed with "No remote refs found". The user remote must be added first.
+func TestEnsureUserFlathubAddsAMissingUserRemote(t *testing.T) {
+	dryrun.Set(false)
+	logPath := fakeFlatpakLog(t, "")
+
+	if err := EnsureUserFlathub(); err != nil {
+		t.Fatalf("EnsureUserFlathub() error = %v", err)
+	}
+	want := []string{
+		"remotes --user --columns=name",
+		"remote-add --user --if-not-exists flathub " + FlathubRepoURL,
+	}
+	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
+		t.Errorf("EnsureUserFlathub() ran %q, want %q", got, want)
+	}
+}
+
+func TestEnsureUserFlathubLeavesAnExistingUserRemote(t *testing.T) {
+	dryrun.Set(false)
+	logPath := fakeFlatpakLog(t, "flathub\\n")
+
+	if err := EnsureUserFlathub(); err != nil {
+		t.Fatalf("EnsureUserFlathub() error = %v", err)
+	}
+	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, []string{"remotes --user --columns=name"}) {
+		t.Errorf("EnsureUserFlathub() ran %q, want only the remote listing", got)
+	}
+}
+
+func TestEnsureUserFlathubPreviewsTheAddUnderDryRun(t *testing.T) {
+	dryrun.Set(true)
+	t.Cleanup(func() { dryrun.Set(false) })
+	logPath := fakeFlatpakLog(t, "")
+
+	if err := EnsureUserFlathub(); err != nil {
+		t.Fatalf("EnsureUserFlathub() error = %v", err)
+	}
+	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, []string{"remotes --user --columns=name"}) {
+		t.Errorf("EnsureUserFlathub() under dry-run ran %q, want only the read", got)
+	}
+}
+
 func TestCommandTimeout(t *testing.T) {
-	if len(stateChangingCommands) != 4 {
-		t.Fatalf("stateChangingCommands has %d entries, want 4: update this test when the map changes", len(stateChangingCommands))
+	if len(stateChangingCommands) != 5 {
+		t.Fatalf("stateChangingCommands has %d entries, want 5: update this test when the map changes", len(stateChangingCommands))
 	}
 
 	for cmd := range stateChangingCommands {

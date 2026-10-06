@@ -107,8 +107,9 @@ Provider-specific safety remains with each live owner:
 - Homebrew uninstall/pin actions confirm intent and retain typed target
   identity. Failure and preview restore controls; refresh
   generations reject stale workers. Visible retryable controls reset their gates.
-- Developer Mode opens onboarding tabs and optional Pulp/feed work only after a
-  confirmed live enable. `install_pulp` and `stage_feeds` are opt-in user-scope
+- Developer Mode opens one onboarding page and optional Pulp/feed work only after a
+  confirmed live enable; developer groups the helper skipped are named in a
+  warning. `install_pulp` and `stage_feeds` are opt-in user-scope
   work; their failures do not reverse or misreport the permission promotion.
   WSL defaults to nsl (Linux amd64), with Lima available explicitly and retained
   for an existing Lima-only machine. Both need KVM access; Docker requires an

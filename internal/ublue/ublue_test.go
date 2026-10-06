@@ -703,3 +703,29 @@ func TestPinAndUnpinWrappersExecutePkexec(t *testing.T) {
 		}
 	})
 }
+
+// Issue #495: the helper exits 0 after skipping a developer group the image
+// does not define, so the skipped groups must reach the caller rather than
+// the enable reading as a complete grant.
+func TestSetDeveloperModeReportsSkippedGroups(t *testing.T) {
+	fake := filepath.Join(t.TempDir(), "pkexec")
+	script := "#!/bin/sh\n" +
+		"echo \"usermod: group 'docker' does not exist\" >&2\n" +
+		"echo 'skipped group docker: exit status 6' >&2\n" +
+		"echo 'skipped group incus-admin: exit status 6' >&2\n" +
+		"echo 'dx-enable applied to 2 group(s) for user'\n"
+	if err := os.WriteFile(fake, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake pkexec: %v", err)
+	}
+	oldPkexec := pkexecCommand
+	pkexecCommand = fake
+	t.Cleanup(func() { pkexecCommand = oldPkexec })
+
+	skipped, err := SetDeveloperMode(context.Background(), true)
+	if err != nil {
+		t.Fatalf("SetDeveloperMode error = %v, want nil", err)
+	}
+	if want := []string{"docker", "incus-admin"}; !reflect.DeepEqual(skipped, want) {
+		t.Errorf("SetDeveloperMode skipped = %v, want %v", skipped, want)
+	}
+}

@@ -221,6 +221,17 @@ func stubScope(t *testing.T, scope Scope, err error) {
 	previous := listInstalled
 	listInstalled = func() (Scope, error) { return scope, err }
 	t.Cleanup(func() { listInstalled = previous })
+	stubUserRemote(t, func() error { return nil })
+}
+
+// stubUserRemote replaces the user-Flathub step so install tests count only
+// the installs; TestEnableEnsuresTheUserRemoteBeforeInstalling covers it.
+func stubUserRemote(t *testing.T, ensure func() error) {
+	t.Helper()
+
+	previous := ensureUserRemote
+	ensureUserRemote = ensure
+	t.Cleanup(func() { ensureUserRemote = previous })
 }
 
 func TestStatusUsesTheFlatpakQuery(t *testing.T) {

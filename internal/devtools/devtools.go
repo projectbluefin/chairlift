@@ -255,11 +255,20 @@ func ParseNSLList(output string) WSLState {
 	return state
 }
 
+// statusTimeout bounds one whole status probe — every command it runs and the
+// Docker socket ping together — so a stalled read cannot hold a developer
+// option's controls insensitive (#487). It bounds reads only; mutations keep
+// their own per-command class timeout and privileged helper calls are never
+// cut mid-flight.
+var statusTimeout = 45 * time.Second
+
 // NSLStatus reads the state of nsl machines and VM.
 func NSLStatus(ctx context.Context) (WSLState, error) {
 	if !NSLInstalled() {
 		return WSLState{}, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
 	output, err := command(ctx, false, "nsl", "list")
 	if err != nil {
 		return WSLState{}, err
@@ -277,6 +286,8 @@ func LimaStatus(ctx context.Context) (WSLState, error) {
 	if !LimaInstalled() {
 		return WSLState{}, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
 	output, err := command(ctx, false, "limactl", "list", "--json")
 	if err != nil {
 		return WSLState{}, err
@@ -548,6 +559,8 @@ func DockerStatus(ctx context.Context) (DockerState, error) {
 }
 
 func dockerStatus(ctx context.Context, socket string) (DockerState, error) {
+	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
 	output, err := command(ctx, false, "systemctl", "show", "docker.service", "--property=LoadState,ActiveState")
 	if err != nil {
 		return DockerState{}, err

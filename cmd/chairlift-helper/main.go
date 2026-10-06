@@ -191,7 +191,7 @@ func runDevGroups(ctx context.Context, invocation ubluehelper.Invocation) {
 		if err := run(ctx, name, args...); err != nil {
 			// usermod/gpasswd fail on a group this image does not define;
 			// report it and carry on with the rest.
-			fmt.Fprintf(os.Stderr, "skipped group %s: %v\n", group, err)
+			fmt.Fprintln(os.Stderr, ubluehelper.SkippedGroupLine(group, err))
 			continue
 		}
 		applied++

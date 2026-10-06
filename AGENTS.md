@@ -426,6 +426,12 @@ An agent must not break these:
   always pass `pkexec.Command`. `internal/installcheck`'s
   `TestPkexecCommandHasOneOwner` parses every non-test file under `internal/`
   and `cmd/` and fails on any other occurrence; it takes no exemptions.
+  The same package owns what a dismissed authentication looks like
+  (`IsAuthDismissed`, `MessageIsAuthDismissed`: exit 126 or pkexec's
+  "Request dismissed"; 127 is a real failure). `Window.ShowErrorToast`
+  turns such a message into a brief "Authentication cancelled" toast instead
+  of a persistent raw-stderr error, so every privileged view gets it; the
+  view still restores its control on that path.
 - **Privileged integration ships in the release archive.** The Homebrew cask
   installs the GUI in user scope and cannot place root-owned files, so the
   release archive also carries the fixed-path updex and ublue helpers, the
@@ -588,6 +594,8 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  ChairLift's own cask (`pageview.IsSelfCask`) stays listed without an
+  Uninstall button, so the page cannot delete the running application.
   Package-list export likewise holds an `actionstate.Gate`, shows a spinner
   and `Exporting…`, and restores the Export action after every outcome.
   A destructive `run*` entry point added to `internal/views` belongs in
@@ -1082,7 +1090,13 @@ An agent must not break these:
   the dock's fetch is retried in-process (`rotateRetryDelays`) while the
   failure still looks like a network that is not up yet: a user manager cannot
   order against `network-online.target`, so a login that beats connectivity
-  would otherwise rotate nothing and say so only in the journal. Only the two foundation sections rotate; the app-grid mark
+  would otherwise rotate nothing and say so only in the journal. The unit's
+  `ExecStart` must survive upgrades: `os.Executable` resolves a cask install
+  to `<prefix>/Caskroom/chairlift/<version>/chairlift`, which the next
+  `brew upgrade` deletes, so `livery.unitExecutable` names the prefix's
+  `bin/` link instead when it resolves to the same file, deriving the prefix
+  from the executable's path rather than `$PATH` (#491).
+  Only the two foundation sections rotate; the app-grid mark
   is the user's own brand and is set once. ChairLift ships GSettings schemas:
   `io.projectbluefin.chairlift.livery` (appearance preferences),
   `io.projectbluefin.chairlift.updates` (user source toggles for updates), and
@@ -1105,7 +1119,11 @@ An agent must not break these:
   `liveryState` — seeded with the *resolved* combo ids, since an empty stored
   value resolves to index 0 and maps back to `cncf` — before touching a
   widget, holds `liverySuppress` across the restore, and arms `liveryLoaded`
-  only at the end, including on the failure path. `internal/livery.Fetch` is
+  only at the end, including on the failure path. Its one load-time write is
+  `livery.ReconcileRotationUnit`, which rewrites an existing rotation unit
+  only when its `ExecStart` names a versioned Caskroom binary; it never
+  creates a unit, touches a setting, or repoints any other path, and it is
+  dry-run gated like every install. `internal/livery.Fetch` is
   the page's single network round trip, following `internal/sbom`'s shape so
   the package's tests point it at a loopback `httptest` server and no gated
   test makes an outbound request; slugs are validated against a closed

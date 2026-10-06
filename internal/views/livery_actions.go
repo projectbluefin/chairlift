@@ -332,7 +332,10 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 				uh.liveryPanelMarkRow.SetSubtitle(
 					pageview.LiverySelectedFoundationRow(id, uh.liveryState.PanelCustom).Subtitle)
 			}
-			uh.syncLiveryRotateSensitive(surface, enabled)
+			// Read the section's confirmed state now, not the value captured
+			// when the selection started: a toggle that committed while this
+			// work ran must not be overwritten by a stale "off" (#496).
+			uh.restoreLiveryRotateSensitive(surface)
 		})
 	})
 }
@@ -468,7 +471,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 			}
 			uh.showLiveryCustomPath(surface, path)
 			if surface != livery.AppGrid {
-				uh.syncLiveryRotateSensitive(surface, enabled)
+				uh.restoreLiveryRotateSensitive(surface)
 			}
 		})
 	})

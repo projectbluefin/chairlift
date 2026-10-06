@@ -273,14 +273,19 @@ func SwitchChannel(ctx context.Context, channel imageinfo.Channel) error {
 
 // SetDeveloperMode adds or removes the invoking user's developer-group
 // membership. No username crosses the pkexec boundary; the helper resolves
-// it from PKEXEC_UID.
-func SetDeveloperMode(ctx context.Context, enabled bool) error {
+// it from PKEXEC_UID. A successful run still reports, in skipped, every
+// developer group the helper could not change — typically one this image
+// does not define — so a partial grant is not presented as complete.
+func SetDeveloperMode(ctx context.Context, enabled bool) (skipped []string, err error) {
 	command := ubluehelper.CommandDXDisable
 	if enabled {
 		command = ubluehelper.CommandDXEnable
 	}
-	_, _, err := runHelper(ctx, pkexecCommand, command)
-	return err
+	_, stderr, err := runHelper(ctx, pkexecCommand, command)
+	if err != nil {
+		return nil, err
+	}
+	return ubluehelper.SkippedGroups(stderr), nil
 }
 
 // EnableKVMAccess grants this account access to hardware virtualization.
