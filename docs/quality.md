@@ -79,8 +79,7 @@ The command definitions live in [`Makefile`](../Makefile).
 make ci
 ```
 
-To inspect the same coverage scope locally without relying on the external
-upload, run:
+To inspect the unit coverage scope locally, run:
 
 ```bash
 go test ./internal/... \

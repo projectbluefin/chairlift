@@ -434,8 +434,7 @@ runtime dependencies and runs the same target. The unit gate also scans every
 workflow and rejects external GitHub Actions references that are not pinned to
 full commit SHAs.
 
-Codecov rejects project coverage regressions greater than one percentage point.
-Coverage expectations otherwise remain risk-based, not a repository-wide
+Coverage expectations remain risk-based, not a repository-wide
 percentage target: command wrappers must cover argument construction, dry-run,
 parsing, and failure propagation; configuration and privileged paths must keep
 exhaustive consistency tests; and GTK-independent view state belongs in
