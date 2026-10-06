@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"gopkg.in/yaml.v3"
@@ -373,5 +374,32 @@ func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 	}
 	if _, err := Command(ready, ProfileAt("/data"), ""); err == nil {
 		t.Error("Command succeeded with no model")
+	}
+}
+
+// TestRunningIgnoresALockFromBeforeBoot pins the reboot case: the profile
+// keeps a lock Goose never removed, and its pid may now name an unrelated
+// live process. Handing the launch to it would skip the profile write and
+// llmman's environment, so only a lock written during this boot counts.
+func TestRunningIgnoresALockFromBeforeBoot(t *testing.T) {
+	profile := ProfileAt(t.TempDir())
+	dir := filepath.Join(profile.DesktopConfigHome(), "Goose")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("host-4242", filepath.Join(dir, "SingletonLock")); err != nil {
+		t.Fatal(err)
+	}
+	oldOwner, oldBoot := lockOwner, bootTime
+	t.Cleanup(func() { lockOwner, bootTime = oldOwner, oldBoot })
+	lockOwner = func(string) bool { return true }
+
+	bootTime = func() time.Time { return time.Now().Add(-time.Hour) }
+	if !profile.Running() {
+		t.Error("Running() = false for a live lock written this boot")
+	}
+	bootTime = func() time.Time { return time.Now().Add(time.Hour) }
+	if profile.Running() {
+		t.Error("Running() = true for a lock written before this boot")
 	}
 }

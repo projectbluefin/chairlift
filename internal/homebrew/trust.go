@@ -232,7 +232,25 @@ func TrustPackages(tap UntrustedTap) error {
 // TrustFormula trusts exactly one tap formula, by its qualified name, with
 // `brew trust --formula`. Its tap must already be tapped. Per-user, like
 // TrustPackages.
+//
+// It asks `brew tap-info --json` first and trusts only when brew reports the
+// tap untrusted. Homebrew before 6 has no tap trust and no `brew trust`
+// command — its tap-info carries no "trusted" key — so there the formula
+// loads as is and running `brew trust` would only fail with an unknown
+// command, aborting the install that needed nothing.
 func TrustFormula(name string) error {
-	_, err := runBrewCommand("trust", "--formula", name)
+	i := strings.LastIndex(name, "/")
+	if i <= 0 {
+		return &Error{Message: fmt.Sprintf("not a qualified tap formula: %q", name)}
+	}
+	output, err := runBrewCommand("tap-info", "--json", name[:i])
+	if err != nil {
+		return err
+	}
+	untrusted, err := parseUntrustedTapNames([]byte(output))
+	if err != nil || len(untrusted) == 0 {
+		return err
+	}
+	_, err = runBrewCommand("trust", "--formula", name)
 	return err
 }

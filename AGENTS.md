@@ -765,7 +765,8 @@ An agent must not break these:
   then `cpio` before the `goose-linux` cask, whose preflight pipes the RPM
   through a `cpio` Bluefin does not ship; `ErrUnsupported` off x86_64).
   When Goose is already running in the profile (its `SingletonLock` names a
-  live process on this host), `agentmode.Launch` opens Goose the ordinary
+  live process on this host and was written during this boot, so a reused
+  pid after a reboot does not count), `agentmode.Launch` opens Goose the ordinary
   way instead — `troubleshoot.ReopenCommand` starts `goose-desktop` in the
   same profile and Goose's lock hands it to the running session, so no
   second Goose starts; llmman would refuse a launch while that lock is held.
@@ -844,7 +845,9 @@ An agent must not break these:
   only `OLLAMA_HOST=127.0.0.1:17434`; no OpenAI key or endpoint is exported.
   llmman owns models and engine selection; Homebrew owns its binary. When
   llmman is missing, installing it taps `llmmanorg/tap` and trusts exactly
-  `brew trust --formula llmmanorg/tap/llmman` before the bundle loads it:
+  `brew trust --formula llmmanorg/tap/llmman` before the bundle loads it,
+  when `brew tap-info --json` reports the tap untrusted (Homebrew before 6
+  has no tap trust and no `brew trust`, so nothing runs there):
   Homebrew refuses a formula from an untrusted tap, and turning Agent Mode
   on is consent to that one formula, not the tap.
   The unit uses the absolute resolved executable, binds loopback, and sets

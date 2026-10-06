@@ -190,9 +190,9 @@ func (uh *UserHome) setUpGoose() {
 	}()
 }
 
-// launchGoose re-reads readiness, then launches a session through
-// agentmode.Launch, which writes ChairLift's Goose profile first and refuses
-// a second session while one is open. Both run off the main thread.
+// launchGoose re-reads readiness, then launches through agentmode.Launch,
+// which writes ChairLift's Goose profile before a fresh session and hands a
+// launch to the session already open. Both run off the main thread.
 func (uh *UserHome) launchGoose() {
 	if uh.gooseLaunchBtn == nil || !uh.gooseGate.TryStart() {
 		return

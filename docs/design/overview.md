@@ -838,8 +838,9 @@ Enabling:
 1. Renders `Brewfile(haveLLMMan)`, with `tap "llmmanorg/tap"` and
    `brew "llmmanorg/tap/llmman"` only when no executable resolves. In that
    case it first taps `llmmanorg/tap` and trusts exactly that formula
-   (`brew trust --formula llmmanorg/tap/llmman`) — Homebrew refuses a
-   formula from an untrusted tap — then runs the bundle through
+   (`brew trust --formula llmmanorg/tap/llmman`) when `brew tap-info --json`
+   reports the tap untrusted — Homebrew refuses a formula from an untrusted
+   tap, and Homebrew before 6 has neither tap trust nor `brew trust` — then runs the bundle through
    `homebrew.BundleInstall`. Runtime provisioning installs no chat
    client; Goose setup is the Goose row's Set Up.
 2. Resolves `llmman` (`$PATH`, then beside `homebrew.ExecutablePath()`), and
@@ -1428,7 +1429,7 @@ Readiness (`agentmode.Evaluate`), in the order the Goose row reports it:
 
 Nothing on disk is verified: the profile is ChairLift's and is written at launch.
 
-Once set up, Ask Bluefin just opens Goose. With no session running, `agentmode.Launch` writes the profile and starts Goose through llmman. With one running — the profile's Chromium `SingletonLock` names a live process on this host — it starts `goose-desktop` again in the same profile (`troubleshoot.ReopenCommand`), and Goose's single-instance lock hands that request to the running session, so no second Goose starts. Whether the window is raised is the compositor's call: no activation token is passed, and on GNOME a minimized window stayed minimized while the Shell showed a "Goose is ready" notification instead (lab run `chairlift-wayland-lane-n7fsg`). llmman is not involved there: it refuses a launch while the lock is held.
+Once set up, Ask Bluefin just opens Goose. With no session running, `agentmode.Launch` writes the profile and starts Goose through llmman. With one running — the profile's Chromium `SingletonLock` names a live process on this host and was written during this boot (a lock left by a crash before a reboot may name a reused pid) — it starts `goose-desktop` again in the same profile (`troubleshoot.ReopenCommand`), and Goose's single-instance lock hands that request to the running session, so no second Goose starts. Whether the window is raised is the compositor's call: no activation token is passed, and on GNOME a minimized window stayed minimized while the Shell showed a "Goose is ready" notification instead (lab run `chairlift-wayland-lane-n7fsg`). llmman is not involved there: it refuses a launch while the lock is held.
 
 `chairlift --ask-bluefin` is the entry point for Bluefin's Custom Command Menu and desktop shortcut. Cold invocations and running-application remote invocations behave identically:
 - When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.

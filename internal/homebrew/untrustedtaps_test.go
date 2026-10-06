@@ -212,3 +212,33 @@ func TestBrewPrefixWithoutBrewReportsNotFound(t *testing.T) {
 		t.Errorf("brewPrefix() = %q, want empty prefix alongside the error", prefix)
 	}
 }
+
+// TestTrustFormulaTrustsOnlyAnUntrustedTap pins when `brew trust` runs. Only
+// a tap brew reports untrusted needs it; a trusted tap already loads, and a
+// Homebrew older than 6 reports no "trusted" key and has no `brew trust`
+// command at all, so running it there failed Agent Mode's install.
+func TestTrustFormulaTrustsOnlyAnUntrustedTap(t *testing.T) {
+	for _, tc := range []struct {
+		name, tapInfo string
+		want          []string
+	}{
+		{"untrusted", `[{"name":"llmmanorg/tap","trusted":false}]`,
+			[]string{"tap-info --json llmmanorg/tap", "trust --formula llmmanorg/tap/llmman"}},
+		{"trusted", `[{"name":"llmmanorg/tap","trusted":true}]`,
+			[]string{"tap-info --json llmmanorg/tap"}},
+		{"homebrew before 6", `[{"name":"llmmanorg/tap"}]`,
+			[]string{"tap-info --json llmmanorg/tap"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			argvLog := fakeBrewOnPath(t, "case \"$1\" in\n"+
+				"tap-info) printf '%s' '"+tc.tapInfo+"' ;;\n"+
+				"trust) ;;\n"+
+				"*) echo \"unexpected: $*\" >&2; exit 1 ;;\n"+
+				"esac")
+			if err := TrustFormula("llmmanorg/tap/llmman"); err != nil {
+				t.Fatalf("TrustFormula: %v", err)
+			}
+			assertArgv(t, argvLog, tc.want)
+		})
+	}
+}

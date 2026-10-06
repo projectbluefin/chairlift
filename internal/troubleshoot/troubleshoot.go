@@ -35,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -265,11 +266,40 @@ var lockOwner = func(target string) bool {
 	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
+// bootTime is an injection seam: when this host booted, from /proc/stat's
+// btime. The zero time, when it cannot be read, disables the boot check.
+var bootTime = func() time.Time {
+	data, err := os.ReadFile("/proc/stat")
+	if err != nil {
+		return time.Time{}
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, "btime "); ok {
+			if s, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil {
+				return time.Unix(s, 0)
+			}
+		}
+	}
+	return time.Time{}
+}
+
 // Running reports whether a Goose desktop session holds this profile's
-// single-instance lock, so a new launch would be handed to it.
+// single-instance lock, so a new launch would be handed to it. The profile
+// persists across reboots and so can a lock Goose never removed; a lock
+// written before this boot is stale whatever its pid now names, or a reused
+// pid would hand the launch to an unrelated process and skip the profile
+// write and llmman's environment.
 func (p Profile) Running() bool {
-	target, err := os.Readlink(filepath.Join(p.DesktopConfigHome(), "Goose", "SingletonLock"))
-	return err == nil && lockOwner(target)
+	lock := filepath.Join(p.DesktopConfigHome(), "Goose", "SingletonLock")
+	target, err := os.Readlink(lock)
+	if err != nil {
+		return false
+	}
+	info, err := os.Lstat(lock)
+	if err != nil || info.ModTime().Before(bootTime()) {
+		return false
+	}
+	return lockOwner(target)
 }
 
 // ConfigPath is the profile's Goose configuration file.

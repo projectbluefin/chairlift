@@ -631,8 +631,10 @@ container stack or Homebrew service. The Homebrew capability floors
 Goose row — Set Up, then Launch — and Ask Bluefin menu visibility; runtime
 enable does not itself install Goose. When llmman is missing, enable taps
 `llmmanorg/tap` and trusts exactly `brew trust --formula
-llmmanorg/tap/llmman` before the bundle, because Homebrew refuses a formula
-from an untrusted tap. Rationale: [ADR-0015](../adr/0015-agent-mode-llmman.md).
+llmmanorg/tap/llmman` before the bundle when `brew tap-info --json` reports
+the tap untrusted, because Homebrew refuses a formula from an untrusted tap;
+Homebrew before 6 has no tap trust, so nothing is trusted there.
+Rationale: [ADR-0015](../adr/0015-agent-mode-llmman.md).
 
 [`aistack.go`](../../internal/aistack/aistack.go) owns three filesystem
 artifacts and their removal policies:
