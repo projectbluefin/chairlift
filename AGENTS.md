@@ -610,8 +610,10 @@ An agent must not break these:
   live click completes its gate and leaves its button insensitive; only a
   failure or preview resets it. `internal/views/actionstate`'s wiring tests
   guard both lifetimes.
-  Both dedicated staging and a live unified run whose operating-system source
-  completed refresh the changelog's Compare references from observed status.
+  Dedicated staging, a live unified run whose operating-system source
+  completed, and a live channel or driver switch refresh the changelog's
+  Compare references from observed status (a switch also re-checks, so the
+  Operating system row offers Restart now).
   `UserHome.OnUpdateFinished` refreshes the installed Homebrew inventory when
   its source completed and Compare when the OS source completed; the coordinator
   snapshot remains the only badge owner.

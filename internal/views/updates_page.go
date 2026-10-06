@@ -12,6 +12,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/progresslog"
@@ -682,6 +683,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 			if decision.Confirm {
 				row.SetSubtitle(pageview.GraphicsDriverResultSubtitle(driver.DisplayName()))
 				button.SetVisible(false)
+				uh.refreshAfterOSSwitch()
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
@@ -718,8 +720,22 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			toggle.set(decision.Confirm == toTesting)
 			if decision.Confirm {
 				row.SetSubtitle(pageview.ChannelSwitchResultSubtitle(toTesting))
+				uh.refreshAfterOSSwitch()
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()
+}
+
+// refreshAfterOSSwitch re-reads what a live channel or driver switch staged,
+// the way a dedicated stage does: the Operating system row learns a restart
+// is due and offers Restart now, and Compare learns the new pending image.
+// Without it both kept describing the system before the switch until the
+// next manual check.
+func (uh *UserHome) refreshAfterOSSwitch() {
+	if dryrun.Enabled() {
+		return
+	}
+	uh.updateShell.StartCheck()
+	uh.OnUpdateFinished(updateflow.Snapshot{CompletedSources: []updateflow.SourceID{updateflow.OperatingSystem}})
 }
