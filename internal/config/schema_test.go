@@ -76,22 +76,6 @@ func TestAppsSchemaContainsOnlyHomebrewGroups(t *testing.T) {
 	}
 }
 
-func TestAppsRetiredGroupsAreRejected(t *testing.T) {
-	for _, group := range []string{
-		"applications_installed_group",
-		"flatpak_user_group",
-		"flatpak_system_group",
-		"brew_search_group",
-	} {
-		t.Run(group, func(t *testing.T) {
-			path := writeConfigFile(t, "applications_page:\n  "+group+":\n    enabled: true\n")
-			if _, err := loadFromPath(path); err == nil {
-				t.Fatalf("retired Apps group %q was accepted", group)
-			}
-		})
-	}
-}
-
 // TestSchemaGroupsMatchesDefaultConfigForEveryPage loops over every page
 // from SchemaPages(), calls SchemaGroups(page), and asserts the result is
 // exactly the key set of pagesOf(defaultConfig())[page]: equal lengths,

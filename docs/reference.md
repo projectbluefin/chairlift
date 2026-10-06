@@ -96,7 +96,7 @@ Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
 do not appear in the inventory. Apps has no Flatpak inventory, external catalog
 launcher, or package search. The retired `applications_installed_group`,
 `flatpak_user_group`, `flatpak_system_group`, and `brew_search_group` keys are
-rejected; remove them as described in [CONFIG.md](../CONFIG.md).
+accepted and ignored for compatibility, as described in [CONFIG.md](../CONFIG.md).
 
 `brew_bundles_group` supports:
 

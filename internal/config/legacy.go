@@ -64,6 +64,20 @@ var legacyFeaturesGroups = []string{
 	"troubleshooting_group",
 }
 
+// legacyApplicationsGroups names the applications_page entries retired when
+// Apps became Homebrew-only (the external catalog launcher, Homebrew search,
+// and the user/system Flatpak inventories). projectbluefin/common's shipped
+// /usr/share/chairlift/config.yml still carries all four, so rejecting them
+// would fail closed and disable every group on those hosts. Accepting the
+// names without activating any behavior keeps them runnable; the historical
+// app_id field remains a GroupConfig field, so it still type-checks.
+var legacyApplicationsGroups = []string{
+	"applications_installed_group",
+	"flatpak_user_group",
+	"flatpak_system_group",
+	"brew_search_group",
+}
+
 // legacyGroupFieldTypes returns the retired fields a legacy group accepted
 // in pre-26.09 releases, keyed by YAML name with their historical Go types,
 // so validation can type-check them. Only ai_group carried such fields
@@ -90,18 +104,20 @@ func legacyGroupNames(page string) []string {
 		return legacyUpdatesGroups
 	case "features_page":
 		return legacyFeaturesGroups
+	case "applications_page":
+		return legacyApplicationsGroups
 	default:
 		return nil
 	}
 }
 
-// stripLegacyGroups removes retired maintenance_page, updates_page, and
-// features_page groups from the AST prior to decoding so they never reach
+// stripLegacyGroups removes retired maintenance_page, updates_page,
+// features_page, and applications_page groups from the AST prior to decoding so they never reach
 // runtime Config. Validation has already accepted them as known, so the
 // strip cannot hide a shape or value error; an undeclared field under a
 // retired group name still fails closed before this runs.
 func stripLegacyGroups(top *yaml.Node) {
-	for _, page := range []string{"maintenance_page", "updates_page", "features_page"} {
+	for _, page := range []string{"maintenance_page", "updates_page", "features_page", "applications_page"} {
 		stripLegacyGroupFromPage(top, page, legacyGroupNames(page))
 	}
 }

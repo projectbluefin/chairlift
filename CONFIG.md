@@ -77,7 +77,7 @@ retired or superseded values. Unknown names still fail closed. No file is
 rewritten: administrators can move the two surviving groups to `updates_page`
 and remove `system_page` when convenient.
 
-## Legacy Maintenance, Updates, and Features group compatibility
+## Legacy Maintenance, Updates, Features, and Apps group compatibility
 
 Older files carried by pre-26.09 Bluefin releases (the v0.12.x series) and
 removed by the 26.09-alpha Control Center reorganisation may still specify
@@ -88,6 +88,10 @@ groups whose current schema no longer names:
   `ai_model` fields), `troubleshooting_group`
 - `maintenance_page`: `maintenance_brew_group`, `maintenance_flatpak_group`,
   `maintenance_optimization_group`
+- `applications_page`: `applications_installed_group` (including its
+  `app_id` field), `flatpak_user_group`, `flatpak_system_group`,
+  `brew_search_group` — retired when Apps became Homebrew-only;
+  projectbluefin/common's shipped `config.yml` still carries them
 
 These retired groups are accepted as known names, undergo the same field,
 type, and `sudo` validation as the current groups on the same page, and are
@@ -126,10 +130,10 @@ Apps contains Homebrew app collections first, installed casks and explicitly
 requested formulae second, then the Brewfile exporter. It has no Flatpak
 inventory, external catalog launcher, or package search.
 
-Existing configurations must remove `applications_installed_group`,
-`flatpak_user_group`, `flatpak_system_group`, and `brew_search_group`.
-These retired names are rejected; leaving them in a file triggers the
-normal fail-closed configuration error.
+The retired `applications_installed_group`, `flatpak_user_group`,
+`flatpak_system_group`, and `brew_search_group` keys are still accepted,
+validated, and stripped with no runtime effect (see the legacy compatibility
+section above); administrators can remove them when convenient.
 
 - `brew_group`: Installed Homebrew casks and explicitly requested formulae,
   with uninstall actions and formula pin/unpin actions, plus the Brewfile exporter

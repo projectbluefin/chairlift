@@ -373,6 +373,68 @@ func TestLegacyFeaturesGroupsOnlyAreStripped(t *testing.T) {
 	}
 }
 
+// TestLegacyApplicationsGroupsIgnoredWithoutSchemaError covers the Apps groups
+// retired by the Homebrew-only Apps page, in the shape
+// projectbluefin/common's shipped config.yml still carries: each loads
+// without error, never reaches runtime Config, and leaves the current
+// Homebrew groups untouched.
+func TestLegacyApplicationsGroupsIgnoredWithoutSchemaError(t *testing.T) {
+	data := `applications_page:
+  applications_installed_group:
+    enabled: true
+    app_id: io.github.kolunmi.Bazaar
+  flatpak_user_group:
+    enabled: true
+  flatpak_system_group:
+    enabled: true
+  brew_group:
+    enabled: false
+  brew_search_group:
+    enabled: true
+  brew_bundles_group:
+    enabled: true
+`
+	cfg, err := loadFromPath(writeConfigFile(t, data))
+	if err != nil {
+		t.Fatalf("loadFromPath failed: %v", err)
+	}
+	for _, retired := range legacyApplicationsGroups {
+		if _, present := cfg.ApplicationsPage[retired]; present {
+			t.Errorf("legacy applications group %q reached runtime Config", retired)
+		}
+	}
+	if cfg.ApplicationsPage["brew_group"].Enabled {
+		t.Fatal("brew_group was not set to false")
+	}
+	if !cfg.ApplicationsPage["brew_bundles_group"].Enabled {
+		t.Fatal("brew_bundles_group should remain enabled")
+	}
+}
+
+// TestLegacyApplicationsGroupsUnknownFieldsStillFailClosed verifies that
+// unknown fields or bad shapes under a retired Apps group, and a typo of a
+// retired name, still fail closed.
+func TestLegacyApplicationsGroupsUnknownFieldsStillFailClosed(t *testing.T) {
+	for _, data := range []string{
+		"applications_page: {brew_serch_group: {enabled: true}}",
+		"applications_page: {brew_search_group: {unknown: true}}",
+		"applications_page: {flatpak_user_group: []}",
+		"applications_page: {flatpak_system_group: {enabled: []}}",
+		"applications_page: {applications_installed_group: {app_id: []}}",
+		"features_page: {brew_search_group: {enabled: true}}",
+	} {
+		t.Run(data, func(t *testing.T) {
+			path := writeConfigFile(t, data)
+			withConfigPaths(t, []string{path, "must-not-read.yml"})
+			cfg, err := Load()
+			if err == nil || err.Path != path {
+				t.Fatalf("error = %v, want authoritative failure", err)
+			}
+			assertAllKnownGroupsDisabled(t, cfg)
+		})
+	}
+}
+
 // TestLegacyGroupsAcrossPagesDoNotInterfere ensures the per-page allowlist
 // does not let a retired name leak into a different page: e.g.
 // update_all_group inside updates_page is accepted, but update_all_group

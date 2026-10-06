@@ -250,7 +250,11 @@ groups (`maintenance_brew_group`, `maintenance_flatpak_group`,
 (`update_all_group`, `sysupdate_updates_group`), and `features_page` groups
 (`ai_group` with its retired `ai_images`/`ai_model` fields,
 `troubleshooting_group`) carried by pre-26.09 Bluefin releases (v0.12.x) and
-removed by the 26.09-alpha Control Center reorganisation are recognized as
+removed by the 26.09-alpha Control Center reorganisation, plus the
+`applications_page` groups retired when Apps became Homebrew-only
+(`applications_installed_group`, `flatpak_user_group`,
+`flatpak_system_group`, `brew_search_group`, still shipped by
+projectbluefin/common's `config.yml`), are recognized as
 known group names, validated alongside their canonical siblings, and stripped
 prior to runtime decoding so existing host files do not fail closed;
 `troubleshooting_group` first supplies omitted/null `help_page` fields and then

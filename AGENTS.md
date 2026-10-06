@@ -652,8 +652,11 @@ An agent must not break these:
   `updates_page` groups (`update_all_group`, `sysupdate_updates_group`), and
   `features_page` groups (`ai_group` with its retired `ai_images`/`ai_model`
   fields, `troubleshooting_group`) carried by pre-26.09 Bluefin releases
-  (v0.12.x) and removed by the 26.09-alpha Control Center reorganisation are
-  accepted by the same per-page rule, validated for shape/typo/sudo, and
+  (v0.12.x) and removed by the 26.09-alpha Control Center reorganisation, and
+  the `applications_page` groups retired by Homebrew-only Apps
+  (`applications_installed_group`, `flatpak_user_group`,
+  `flatpak_system_group`, `brew_search_group`, still in projectbluefin/common's
+  shipped `config.yml`), are accepted by the same per-page rule, validated for shape/typo/sudo, and
   stripped prior to runtime decoding so they never re-enable removed behavior.
   `troubleshooting_group` first supplies omitted/null `help_page` fields,
   then moves on to `agents_page` with the old Help address.
