@@ -33,8 +33,11 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 		row := adw.NewSwitchRow()
 		row.SetTitle(preference.Title)
 		row.SetSubtitle(pageview.UpdateSourcePreferenceSubtitle(states, ready, preference.ID))
-		row.SetSensitive(pageview.UpdateSourcePreferenceSensitive(states, ready, preference.ID))
+		// Bind first: the default GSettings binding sets sensitivity from
+		// the key's writability (dconf lockdown), which overwrote an
+		// earlier "unavailable" decision. Narrow what the bind left.
 		store.BindBoolean(preference.Key, &row.Object)
+		row.SetSensitive(row.GetSensitive() && pageview.UpdateSourcePreferenceSensitive(states, ready, preference.ID))
 		sourcesGroup.Add(&row.Widget)
 	}
 	page.Add(sourcesGroup)

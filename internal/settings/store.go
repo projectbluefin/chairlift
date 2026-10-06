@@ -71,14 +71,10 @@ func (s *Store) Values() userprefs.Values {
 	}
 }
 
-// BindBoolean binds a boolean GSettings key to an object's active property if
-// available. The binding leaves sensitivity alone: GSettings' default flags
-// also bind it to the key's writability, which made every Preferences source
-// switch sensitive again right after the caller locked an unavailable or
-// administrator-disabled source.
+// BindBoolean binds a boolean GSettings key to an object's active property if available.
 func (s *Store) BindBoolean(key string, object *gobject.Object) {
 	if s == nil || s.settings == nil {
 		return
 	}
-	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue|gio.GSettingsBindNoSensitivityValue)
+	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue)
 }
