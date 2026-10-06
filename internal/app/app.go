@@ -170,37 +170,20 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 			_, facts, _ := agentmode.ObserveLive(ctx)
 			cancel()
 			decision := agentmode.Dispatch(facts)
-			// The launch writes Goose's profile, which is file I/O, so it
-			// runs here rather than on the GTK main thread.
+			// Launch is plain exec and profile write, so it runs here; only
+			// GTK work goes to the main thread. Its context only gates the
+			// start, and the probe's context is already spent.
 			if decision.Action == agentmode.DispatchLaunch {
-				launchErr := agentmode.Launch(ctx, facts, func(asyncErr error) {
-					log.Printf("app: goose desktop exited with error: %v", asyncErr)
-				})
-				switch launchErr {
-				case nil:
-					sgtk.RunOnMainThread(a.Release)
-					return
-				default:
-					log.Printf("app: launch goose desktop failed: %v", launchErr)
-					decision.Reason = "Failed to launch Goose Desktop."
-				}
-			}
-
-			// Launch is plain exec, so it runs here; only GTK work goes to
-			// the main thread. Its context only gates the start, and the
-			// probe's context is already spent.
-			if decision.Action == agentmode.DispatchLaunch {
-				launchErr := agentmode.Launch(context.Background(), decision.Model, func(asyncErr error) {
+				launchErr := agentmode.Launch(context.Background(), facts, func(asyncErr error) {
 					log.Printf("app: goose desktop exited with error: %v", asyncErr)
 				})
 				if launchErr == nil {
 					sgtk.RunOnMainThread(a.Release)
 					return
 				}
-				log.Printf("app: launching goose desktop: %v", launchErr)
+				log.Printf("app: launch goose desktop failed: %v", launchErr)
 				decision.Reason = "Failed to launch Goose Desktop."
 			}
-
 			sgtk.RunOnMainThread(func() {
 				defer a.Release()
 				a.askBluefinRequested = true

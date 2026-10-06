@@ -306,6 +306,15 @@ Feature: Agents page
     Then the "Agents" page is shown
     And I see "Agent Mode is not running."
 
+  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose
+  Scenario: A second invocation with ask-bluefin launches Goose when Agent Mode is ready
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I run a second invocation with "--dry-run --ask-bluefin"
+    Then the application log contains "[DRY-RUN] would launch Goose Desktop with model unsloth/Qwen3-8B-GGUF:Q4_K_M via llmman"
+    And the "Apps" page is shown
+    And llmman was never asked to "launch"
+
   Scenario: A second invocation with ask-bluefin names missing Goose packages
     Given ChairLift is running
     When I open the "Apps" page
