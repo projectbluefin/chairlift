@@ -10,7 +10,6 @@ import (
 	"sync/atomic"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
-	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/commands"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
@@ -26,7 +25,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
-	"codeberg.org/puregotk/puregotk/v4/gio"
 	"codeberg.org/puregotk/puregotk/v4/glib"
 	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
@@ -551,18 +549,6 @@ func (s *UpdateShell) build() {
 	s.refresh.SetActionName(commands.CheckAction)
 	header.PackStart(&s.refresh.Widget)
 
-	menu := gio.NewMenu()
-	menu.Append("Preferences", commands.PreferencesAction)
-	menu.Append("Keyboard Shortcuts", commands.ShowShortcutsAction)
-	menu.Append("Help", commands.HelpAction)
-	menu.Append("About "+branding.AppName, commands.ShowAboutAction)
-	menu.Append("Quit", commands.QuitAction)
-	menuButton := gtk.NewMenuButton()
-	menuButton.SetIconName("open-menu-symbolic")
-	menuButton.SetTooltipText("Main Menu")
-	SetAccessibleLabel(menuButton, "Main Menu")
-	menuButton.SetMenuModel(&menu.MenuModel)
-	header.PackEnd(&menuButton.Widget)
 	s.toolbarView.AddTopBar(&header.Widget)
 
 	content := gtk.NewBox(gtk.OrientationVerticalValue, 12)
