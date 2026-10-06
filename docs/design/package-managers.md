@@ -249,6 +249,10 @@ Inline install progress pulses rather than inventing a percentage.
 `<prefix>/Caskroom/<token>/.metadata/INSTALL_RECEIPT.json`, reading `source.tap`.
 Only untrusted taps with installed packages are actionable. A missing `trusted`
 field on older Homebrew is treated as trusted, not false.
+Every `tap-info` call runs with `HOMEBREW_NO_GITHUB_API=1`: its JSON also
+reports whether each tap is private, which brew asks the GitHub API, and on
+Linux that credential probe intermittently kills the command with
+`Error: Broken pipe`. Trust is local, so nothing ChairLift reads is lost.
 
 `TrustPackages` runs `brew trust --formula ...` and/or `--cask ...` with
 qualified installed package names. Trust is per-user, never pkexec.

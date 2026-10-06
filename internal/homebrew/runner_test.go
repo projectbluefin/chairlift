@@ -79,6 +79,34 @@ func awaitErr(t *testing.T, done <-chan error) error {
 	}
 }
 
+// TestRunBrewCommandAtKeepsTapInfoOffTheGitHubAPI pins the workaround for
+// Homebrew's intermittent "Error: Broken pipe" from tap-info on Linux: only
+// tap-info runs with HOMEBREW_NO_GITHUB_API, so its "trusted" read is local,
+// and no other command loses GitHub access.
+func TestRunBrewCommandAtKeepsTapInfoOffTheGitHubAPI(t *testing.T) {
+	t.Setenv("HOMEBREW_NO_GITHUB_API", "")
+	script := fakeBrew(t, `printf '%s' "$HOMEBREW_NO_GITHUB_API"`)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"tap-info", "--installed", "--json"}, "1"},
+		{[]string{"tap-info", "--json", "vendor/tap"}, "1"},
+		{[]string{"info", "--installed", "--json=v2"}, ""},
+		{[]string{"outdated", "--json=v2"}, ""},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		out, err := runBrewCommandAt(ctx, script, tc.args...)
+		cancel()
+		if err != nil {
+			t.Fatalf("runBrewCommandAt(%v): %v", tc.args, err)
+		}
+		if out != tc.want {
+			t.Errorf("runBrewCommandAt(%v) saw HOMEBREW_NO_GITHUB_API=%q, want %q", tc.args, out, tc.want)
+		}
+	}
+}
+
 func TestRunBrewCommandAt(t *testing.T) {
 	t.Run("success captures stdout", func(t *testing.T) {
 		script := fakeBrew(t, `echo "hello from brew"`)

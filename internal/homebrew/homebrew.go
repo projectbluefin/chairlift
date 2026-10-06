@@ -208,6 +208,15 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 	// brew's own children (a cask preflight's rpm2cpio | cpio) resolve
 	// tools on $PATH, which a direct launch does not give Homebrew.
 	cmd.Env = WithBrewPath(os.Environ(), exe)
+	if len(args) > 0 && args[0] == "tap-info" {
+		// tap-info's JSON includes each tap's "private" flag, which brew
+		// looks up on the GitHub API. On Linux its credential probe pipes
+		// into `git credential-osxkeychain`, which does not exist, and brew
+		// intermittently dies with "Error: Broken pipe" (Homebrew 7.0.8;
+		// 2 of 6 ChairLift launches on Dakota). ChairLift reads only
+		// "trusted", which is local, so the API lookup is switched off.
+		cmd.Env = append(cmd.Env, "HOMEBREW_NO_GITHUB_API=1")
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
