@@ -47,12 +47,9 @@ go test ./internal/<pkg>/ -run "^Test[^I]" -skip "Integration" -cover
 
 That is the filter `Makefile`'s `ci` target applies to both its `unit tests`
 and `race detector` steps, and the one `.github/workflows/test.yml` applies
-in both the `Unit Tests` job — whose run also produces the `coverage.out`
-uploaded to Codecov — and the `Race Detection` job. A bare `go test -cover`
+in both the `Unit Tests` job and the `Race Detection` job. A bare `go test -cover`
 counts statements executed by tests no gate runs, so it reports a higher
-number about a different artifact; `codecov.yml`'s `project.default`
-(`target: auto`, 1% threshold) scores the filtered profile, so an unfiltered
-figure cannot predict that status. Establish the baseline the same way —
+number about a different artifact. Establish the baseline the same way —
 remove the new test file, re-run the identical filtered command, restore it,
 run it again — rather than quoting a remembered or previously-reported
 "before". A coverage claim is a factual claim about a gate's output and

@@ -6,7 +6,6 @@ that would immediately become stale. The [public metrics catalog](metrics/)
 collects those read-only sources and their interpretation boundaries.
 
 [![Tests](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml?query=branch%3Amain)
-[![Codecov](https://codecov.io/gh/projectbluefin/chairlift/branch/main/graph/badge.svg)](https://app.codecov.io/gh/projectbluefin/chairlift)
 
 ## Live signals
 
@@ -19,20 +18,8 @@ collects those read-only sources and their interpretation boundaries.
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
 | Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
-| Coverage | Filtered `internal/...` unit coverage plus a separate `e2e` profile from instrumented executables | [Codecov](https://app.codecov.io/gh/projectbluefin/chairlift) |
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
 | Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
-
-`codecov.yml` compares project coverage with the pull request's base and fails
-its project status only when coverage drops by more than one percentage point.
-It deliberately has no fixed project target or patch target. The upload step
-remains non-blocking, so a missing Codecov report does not mean tests failed,
-and a green Tests workflow does not prove that coverage was uploaded. Use the
-workflow's **Unit Tests** log to distinguish those outcomes.
-
-The E2E job also uploads `e2e-coverage.out` under the `e2e` flag, independently
-and non-blockingly. Its executed paths are not the same as the unit profile;
-inspect both upload logs before drawing conclusions about missing GTK coverage.
 
 ## Enforced checks
 
@@ -86,8 +73,7 @@ into the gate.
 `make ci` mirrors the **host-independent** checks locally in fail-fast order
 and also rebuilds native binaries at the end. It does not run E2E or AT-SPI;
 use `make e2e` and `make e2e-atspi` separately on a host with podman and Go.
-Codecov's remote project status is additional and cannot be reproduced by
-that target. The command definitions live in [`Makefile`](../Makefile).
+The command definitions live in [`Makefile`](../Makefile).
 
 ```bash
 make ci

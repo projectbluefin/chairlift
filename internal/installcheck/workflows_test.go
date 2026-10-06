@@ -179,9 +179,9 @@ func TestWorkflowUsesLeastPrivilege(t *testing.T) {
 
 	expected := map[string]map[string]string{
 		"lint":         {"contents": "read"},
-		"unit-test":    {"contents": "read", "id-token": "write"},
+		"unit-test":    {"contents": "read"},
 		"race-test":    {"contents": "read"},
-		"e2e":          {"contents": "read", "id-token": "write"},
+		"e2e":          {"contents": "read"},
 		"atspi":        {"contents": "read"},
 		"verify":       {"contents": "read"},
 		"build":        {"contents": "read"},

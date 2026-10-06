@@ -112,10 +112,7 @@ host-independent checks in the repository's `Tests` workflow:
 | Build | Linux amd64, Linux arm64, and the native binaries compile |
 
 The hosted workflow additionally runs `make e2e` and the sharded
-`make e2e-atspi` accessibility suite inside isolated Dakota sessions. Codecov
-receives the filtered internal unit profile and a separately flagged E2E
-profile, and rejects project coverage regressions greater than one percentage
-point; that remote signal is not reproduced by `make ci`. See the
+`make e2e-atspi` accessibility suite inside isolated Dakota sessions. See the
 [quality dashboard](docs/quality.md) for the
 canonical description of every signal.
 

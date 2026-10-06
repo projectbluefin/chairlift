@@ -53,8 +53,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # Codecov's tokenless OIDC upload needs this job-scoped permission.
-      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,14 +67,6 @@ jobs:
 
       - name: Run unit tests with coverage
         run: go test -v ./internal/... -coverprofile=coverage.out -covermode=atomic -run "^Test[^I]" -skip "Integration"
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
-        with:
-          files: ./coverage.out
-          fail_ci_if_error: false
-          verbose: true
-        continue-on-error: true
 
   race-test:
     name: Race Detection
@@ -103,7 +93,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -127,15 +116,6 @@ jobs:
           CHAIRLIFT_SCHEMA_DIR: ${{ github.workspace }}/build/schemas
           E2E_COVERDIR: ${{ github.workspace }}/covdata-e2e
         run: make e2e
-
-      - name: Upload E2E coverage to Codecov
-        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v6.0.2
-        with:
-          files: ./e2e-coverage.out
-          flags: e2e
-          fail_ci_if_error: false
-          verbose: true
-        continue-on-error: true
 
       - name: Upload walkthrough screenshots
         if: always()

@@ -14,7 +14,7 @@ then inspect the changed code in context rather than reviewing the diff alone.
 | Correctness | Success, failure, dry-run, retry, and disabled-feature paths behave consistently. Errors remain visible instead of being silently converted into success or invented state. |
 | Repository invariants | The privilege boundary, GTK main-thread rule, async generation guards, config-driven visibility, navigation authority, and known-state ownership rules in `AGENTS.md` remain intact. |
 | Tests | Changed behavior has regression coverage in a CI-enforced scope. Tests avoid puregotk packages, do not begin with `TestI` or contain `Integration` unless they intentionally require the separately enforced environment, and cover the reported failure mode rather than only a happy path. |
-| Quality gates | Required pull request checks pass. For source changes, `make ci` is the local equivalent of the host-independent checks; review Codecov separately for an unexpected coverage regression. |
+| Quality gates | Required pull request checks pass. For source changes, `make ci` is the local equivalent of the host-independent checks. |
 | Documentation | User-visible behavior, configuration, dependencies, installation layout, and repository invariants are documented where relevant. Current-state claims agree with source, config, `go.mod`, and packaging files. |
 | Maintainability | The change follows existing package boundaries and naming, reuses established helpers, keeps type and error handling explicit, and avoids adding a second source of truth. |
 

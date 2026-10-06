@@ -168,7 +168,6 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"../metrics.md",
 			"actions/workflows/test.yml",
 			"actions/workflows/nightly-compliance.yml",
-			"app.codecov.io/gh/projectbluefin/chairlift",
 			"https://api.github.com/repos/projectbluefin/chairlift",
 			"does not currently attach a reliable provenance marker",
 			"does not collect application usage telemetry",
