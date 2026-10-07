@@ -96,7 +96,7 @@ Feature: Maintenance and its Powerwash detail
     And the stubbed "distrobox" never ran "rm"
     And the action journal is empty
 
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_powerwash_inventory
+  @stub.maintenance_bootc_rollback @stub.maintenance_powerwash_inventory
   Scenario: Confirming Powerwash previews both removals, claims nothing, and can run again
     Given ChairLift is running
     When I open the "Maintenance" page
@@ -262,7 +262,7 @@ Feature: Maintenance and its Powerwash detail
     And the journalled action carries no argument
     And the "Return to Stream" button in the "Return to stream" row is sensitive
 
-  @stub.maintenance_bootc_pinned @stub.maintenance_package_tools @stub.maintenance_published_versions
+  @stub.maintenance_package_tools @stub.maintenance_published_versions
   @stub.maintenance_unlisted_image
   Scenario: An image outside the channel table is offered neither pin nor return to stream
     Given ChairLift is running

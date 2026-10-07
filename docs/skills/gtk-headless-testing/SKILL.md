@@ -198,6 +198,15 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
   image descriptor or disable Gaming, rather than treating a legitimate
   Gaming read as evidence the Apps page still manages Flatpaks.
+- **Stub tags apply in no guaranteed order.** behave hands a scenario's
+  effective tags over as a set, so `@stub.a @stub.b` can run `b` before `a`.
+  A stub that refines another (replaces its fake or descriptor) calls the base
+  stub itself and the scenario lists only the refining tag; see
+  `maintenance_powerwash_inventory` and `maintenance_unlisted_image`.
+- **A switch cannot be moved back inside its own `state-set` emission.**
+  `guardedSwitch.set` called synchronously from the user-change handler is
+  overridden when the emission finishes, so a refused toggle stays on. Revert
+  through `sgtk.RunOnMainThread` (the refused branch of `onChannelToggled`).
 - **dogtail.tree connects to the bus at import.** The helper library imports
   it lazily so `TestATSPIFeaturesHaveNoUndefinedSteps` (behave `--dry-run`)
   needs no display. dogtail's `checkForA11y` must be off before import: the
