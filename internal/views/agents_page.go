@@ -327,6 +327,11 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 			}
 			toggle.set(state.On())
 			uh.showAgentModeState(state)
+			if enabled && !dryRun {
+				// Enabling installs llmman through Homebrew when it is
+				// missing, possibly before a later step fails.
+				uh.homebrewInventoryChanged()
+			}
 			if err != nil {
 				log.Printf("views: agent mode toggle to %v failed: %v", enabled, err)
 				uh.toastAdder.ShowErrorToast(pageview.AgentModeFailureToast(enabled))

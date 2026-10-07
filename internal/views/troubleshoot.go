@@ -175,6 +175,11 @@ func (uh *UserHome) setUpGoose() {
 		state, facts, _ := agentmode.ObserveLive(ctx)
 		sgtk.RunOnMainThread(func() {
 			uh.finishGooseAction(state, facts)
+			if !dryrun.Enabled() {
+				// Setup installs Homebrew packages Apps lists, and can
+				// stop partway, so the inventory is re-read on any outcome.
+				uh.homebrewInventoryChanged()
+			}
 			if err != nil {
 				log.Printf("views: goose setup failed: %v", err)
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Setup failed: %v", err))

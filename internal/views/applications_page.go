@@ -147,6 +147,16 @@ func newBundleRow(bundle homebrew.Bundle) (*adw.ActionRow, *gtk.Button, *gtk.Pro
 	return row, installBtn, progress
 }
 
+// homebrewInventoryChanged re-reads what a Homebrew install anywhere in
+// ChairLift can change on the Apps page: the installed lists and which
+// collections the system already holds. It must be called on the GTK main
+// thread and is safe when either Apps group is disabled, because both
+// readers guard their own widgets.
+func (uh *UserHome) homebrewInventoryChanged() {
+	go uh.loadHomebrewPackages()
+	uh.refreshBundleStatuses()
+}
+
 // loadHomebrewPackages loads installed Homebrew packages asynchronously
 func (uh *UserHome) loadHomebrewPackages() {
 	generation := uh.brewPackagesRefresh.Begin()

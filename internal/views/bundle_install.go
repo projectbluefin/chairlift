@@ -152,8 +152,9 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)
 				// Part of it, or of a collection sharing its items, may
-				// have been installed before it stopped.
-				uh.refreshBundleStatuses()
+				// have been installed before it stopped: `brew bundle`
+				// carries on past a failed entry.
+				uh.homebrewInventoryChanged()
 				var trustErr *homebrew.UntrustedTapError
 				if errors.As(err, &trustErr) {
 					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title, trustErr.Tap))
@@ -178,8 +179,7 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 				// items, and a check begun before this install must not
 				// publish over it. Under dry-run decision.Complete is
 				// false — nothing was changed — so both stay put.
-				go uh.loadHomebrewPackages()
-				uh.refreshBundleStatuses()
+				uh.homebrewInventoryChanged()
 			} else {
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)
