@@ -972,7 +972,7 @@ a contributor session from the Agents page. It launches Common's merged `ujust
 contribute` recipe through `xdg-terminal-exec`, running the foreground
 contributor container appliance.
 
-Preflight is read-only, uses injectable probe seams, and executes off the GTK thread (`Preflight`):
+Preflight is read-only, uses injectable probe seams, and executes off the GTK thread (`Preflight`) at build and again each time the group is shown, so a requirement the user fixes outside ChairLift — registering with Hive, installing Podman — is picked up without a restart. A read is generation-guarded and stands aside while a session holds the action gate:
 1. `xdg-terminal-exec` on `$PATH` to launch the terminal emulator.
 2. `ujust` on `$PATH`.
 3. `ujust --summary` containing the `contribute` recipe.
@@ -982,8 +982,8 @@ Preflight is read-only, uses injectable probe seams, and executes off the GTK th
 When any check fails, the row displays an actionable subtitle and leaves the
 action button insensitive. A missing registration file also shows a
 **Registration Guide** button (`Result.HelpURL`) that opens the registration
-setup page; the URL is not spelled out as unclickable subtitle text. Ready actions invoke `launcher.Start`, reporting
-launch failures asynchronously through the UI toast surface. Previews under
+setup page; the URL is not spelled out as unclickable subtitle text. Ready actions invoke `launcher.Run`, reporting
+launch failures asynchronously through the UI toast surface; when the session ends or fails to start, the button returns through a fresh preflight. Previews under
 `--dry-run` log the launch command without opening a terminal or spawning a worker.
 
 ### Printers (`internal/printerapp`)

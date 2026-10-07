@@ -316,12 +316,17 @@ type UserHome struct {
 	askBluefinMapped  func(gtk.Widget)
 	askBluefinProbed  bool
 
-	// Contribute to Bluefin (agents_page)
+	// Contribute to Bluefin (agents_page). contributeMapped, connected once
+	// at build, re-runs preflight each time the group is shown;
+	// contributeRefresh drops a read a newer one or a session start
+	// superseded.
 	contributeRow     *adw.ActionRow
 	contributeButton  *gtk.Button
 	contributeGuide   *gtk.Button
 	contributeSpinner *gtk.Spinner
 	contributeGate    actionstate.Gate
+	contributeRefresh actionstate.RefreshGate
+	contributeMapped  func(gtk.Widget)
 
 	// Powerwash / Factory Reset (maintenance_page reset_group)
 	powerwashGate    actionstate.Gate

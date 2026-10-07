@@ -777,8 +777,10 @@ when its slot is listed there too, and showing it appends a missing slot.
 The same Agents page's **Contribute to Bluefin** action uses
 [`internal/contribute`](../../internal/contribute/contribute.go) to check
 `xdg-terminal-exec`, `ujust`, the `contribute` recipe, Podman and an existing
-Hive registration file. Readiness launches `xdg-terminal-exec ujust contribute`
-through the async launcher; a missing prerequisite leaves an explained,
+Hive registration file, again each time the group is shown so a requirement
+fixed outside ChairLift is picked up without a restart. Readiness launches
+`xdg-terminal-exec ujust contribute` through the async launcher; a missing
+prerequisite leaves an explained,
 insensitive action, and missing registration adds a **Registration Guide**
 button that opens the contributor configuration documentation. Registration is not created or validated with Hive here,
 and dry-run launches nothing.

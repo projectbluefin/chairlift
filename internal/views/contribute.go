@@ -57,21 +57,35 @@ func (uh *UserHome) buildContributeGroup(page *adw.PreferencesPage) {
 	uh.contributeButton = button
 	uh.contributeGuide = guide
 
+	// Preflight runs whenever the group is shown, not once at build: the
+	// row names a requirement — Hive registration, Podman, the recipe — that
+	// the user fixes outside ChairLift, and a one-time read kept the button
+	// insensitive until restart. The handler is connected once, here.
+	uh.contributeMapped = func(gtk.Widget) { uh.refreshContributePreflight() }
+	group.ConnectMap(&uh.contributeMapped)
 	uh.refreshContributePreflight()
 }
 
+// refreshContributePreflight re-reads the requirements off the main thread.
+// It is passive: it stands aside while a session holds the gate, and a
+// session start begins a new generation, so a read that started earlier can
+// never re-enable the button under a running session.
 func (uh *UserHome) refreshContributePreflight() {
-	if uh.contributeRow == nil || uh.contributeButton == nil {
+	if uh.contributeRow == nil || uh.contributeButton == nil || uh.contributeGate.Running() {
 		return
 	}
+	generation := uh.contributeRefresh.Begin()
 	setActivitySpinner(uh.contributeSpinner, true)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		result := contribute.Preflight(ctx, contribute.RealProber())
 		sgtk.RunOnMainThread(func() {
+			if !uh.contributeRefresh.IsCurrent(generation) {
+				return
+			}
 			setActivitySpinner(uh.contributeSpinner, false)
-			if uh.contributeRow == nil || uh.contributeButton == nil {
+			if uh.contributeRow == nil || uh.contributeButton == nil || uh.contributeGate.Running() {
 				return
 			}
 			uh.contributeRow.SetSubtitle(result.Subtitle)
@@ -95,19 +109,22 @@ func (uh *UserHome) onContributeClicked() {
 		return
 	}
 
+	// A preflight read still in flight must not re-enable the button under
+	// the session this click starts.
+	uh.contributeRefresh.Begin()
+	setActivitySpinner(uh.contributeSpinner, false)
 	if uh.contributeButton != nil {
 		uh.contributeButton.SetSensitive(false)
 	}
 
 	cmd := contribute.Command("", "", "")
 	// Run, not Start: Start reports only failures, so a session that ended
-	// cleanly never re-enabled the button.
+	// cleanly never re-enabled the button. The button comes back through a
+	// fresh preflight rather than a blind re-enable.
 	err := launcher.Run(cmd, func(exitErr error) {
 		sgtk.RunOnMainThread(func() {
 			uh.contributeGate.Reset()
-			if uh.contributeButton != nil {
-				uh.contributeButton.SetSensitive(true)
-			}
+			uh.refreshContributePreflight()
 			if exitErr != nil {
 				log.Printf("views: contribute session exited with error: %v", exitErr)
 				uh.toastAdder.ShowErrorToast("Contribute session exited with an error.")
@@ -116,9 +133,7 @@ func (uh *UserHome) onContributeClicked() {
 	})
 	if err != nil {
 		uh.contributeGate.Reset()
-		if uh.contributeButton != nil {
-			uh.contributeButton.SetSensitive(true)
-		}
+		uh.refreshContributePreflight()
 		log.Printf("views: launch contribute failed: %v", err)
 		uh.toastAdder.ShowErrorToast("Could not launch Contribute to Bluefin.")
 	}
