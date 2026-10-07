@@ -271,16 +271,19 @@ to a hidden control. Bundle failures use `trustmsg.BundleMessage` instead.
 Flatpak retains installation scope and ref kind. `KindApplication` and
 `KindRuntime` select mutually exclusive `--app`/`--runtime` listings; the kind
 is stamped from the query, not inferred from optional parsed columns.
-`Application` carries name, ID, version, installation and kind.
+`Application` carries name, ID, version, branch, installation and kind.
 `UpdateInfo` carries application ID, display name, new version and installation.
 
 | API | Scope / command |
 | --- | --- |
-| `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version` |
+| `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version,branch` |
 | `ListUserRuntimes()` / `ListSystemRuntimes()` | Same query with `--runtime` |
 | `ListUpdates(ctx, user)` | `remote-ls --updates --app --columns=name,application,version` in the selected scope |
 | `Install(appID, user)` / `InstallFromRemote(appID, remote, user)` | `install -y` in explicit scope, optionally naming a remote |
 | `Uninstall(appID, user)` | `uninstall -y` in explicit scope |
+| `AppRuntime(appID)` | `info --show-runtime <appID>` in any installation |
+| `RemoteAppRuntime(remote, appID, user)` | `remote-info --user/--system --app --show-runtime <remote> <appID>` |
+| `RefBranch(ref)` | Pure: last segment of `ID/ARCH/BRANCH` or `KIND/ID/ARCH/BRANCH` |
 | `Update(ctx, appID, user)` | `update -y` in explicit scope; empty ID updates that scope |
 | `UninstallUnused()` | Independently `uninstall --unused -y --user` and `--system`; errors joined |
 | `RemoveAllUser()` | `uninstall --user --all -y`; Powerwash step, not routine cleanup |

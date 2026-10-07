@@ -677,6 +677,18 @@ shape one level up: every (scope, kind) query must answer, because an
 unreadable scope could hide a copy and reporting its components missing is
 exactly the loop that bug was.
 
+MangoHud is also the one multi-branch component: Flathub publishes the layer
+once per Platform release (21.08 through 26.08 today), so a bare
+`flatpak install -y` or `uninstall -y` of its ID stops at flatpak's
+"Which do you want to use?" prompt and, with no stdin, fails with "No ref
+chosen". Its `Component.BranchOf` names Steam, which loads the layer: Enable
+installs `ID//BRANCH` with the branch of the runtime Steam runs on
+(`flatpak info --show-runtime`, or `flatpak remote-info --system --app
+--show-runtime flathub` when Steam is not installed), and fails that one
+component rather than guess when neither answers. The inventory records each
+ref's installed branches per scope (`flatpak list --columns=…,branch`), and
+Disable removes every installed branch by its qualified ref.
+
 The Features page offers individual selections, not a single all-or-nothing
 switch. Enable and Disable validate the selected IDs before mutation. Enable
 installs only components missing from both scopes, so a copy an earlier

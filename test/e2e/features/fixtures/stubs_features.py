@@ -58,8 +58,16 @@ def _recorder(context):
     return f'printf "%s\\n" "$(basename "$0") $*" >> "{log}"\n'
 
 
+# The branch Steam's runtime is on, which MangoHud is installed in.
+STEAM_PLATFORM_BRANCH = "26.08"
+
+
 def _listing(components):
-    return "".join(f"{name}\t{app_id}\t1.0\n" for name, app_id, _ in components)
+    """`flatpak list --columns=name,application,version,branch` rows."""
+    return "".join(
+        f"{name}\t{app_id}\t1.0\t{STEAM_PLATFORM_BRANCH if kind == 'runtime' else 'stable'}\n"
+        for name, app_id, kind in components
+    )
 
 
 def _fake_flatpak(context, user=(), system=(), list_fails=False):
@@ -99,6 +107,7 @@ case "$1" in
   --version) echo "Flatpak 1.16.0" ;;
   list) {list_branch}
     ;;
+  info|remote-info) echo "org.freedesktop.Platform/x86_64/{STEAM_PLATFORM_BRANCH}" ;;
 esac
 exit 0
 """,

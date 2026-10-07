@@ -46,13 +46,38 @@ func invocations(t *testing.T, log string) []string {
 	return lines
 }
 
-// listRow renders one row of `flatpak list --columns=name,application,version,branch,origin,ref`.
-func listRow(id, kindFlag string) string {
-	prefix := "app"
-	if kindFlag == "--runtime" {
-		prefix = "runtime"
+// listRow renders one row of `flatpak list --columns=name,application,version,branch`.
+// An entry may name its branch as "ID//BRANCH"; otherwise an application is on
+// "stable" and a runtime on the Platform branch "25.08".
+func listRow(entry, kindFlag string) string {
+	id, branch, qualified := strings.Cut(entry, "//")
+	if !qualified {
+		branch = "stable"
+		if kindFlag == "--runtime" {
+			branch = "25.08"
+		}
 	}
-	return strings.Join([]string{id, id, "1.0", "stable", "flathub", prefix + "/" + id + "/x86_64/stable"}, "\t")
+	return strings.Join([]string{id, id, "1.0", branch}, "\t")
+}
+
+// steamRuntime is what `flatpak info --show-runtime` and `flatpak remote-info
+// --show-runtime` print for Steam.
+const steamRuntime = "org.freedesktop.Platform/x86_64/26.08"
+
+// answersRuntime is a fake flatpak body that succeeds at every mutation and
+// reports Steam's runtime, which is what Enable reads MangoHud's branch from.
+const answersRuntime = "case \"$1\" in info|remote-info) echo '" + steamRuntime + "' ;; esac\nexit 0\n"
+
+// installs returns the install commands among calls, dropping the runtime
+// reads that precede a branch-qualified install.
+func installs(calls []string) []string {
+	var result []string
+	for _, call := range calls {
+		if strings.HasPrefix(call, "install ") {
+			result = append(result, call)
+		}
+	}
+	return result
 }
 
 // listing is what the fake `flatpak list` answers for each of the four
@@ -284,8 +309,8 @@ func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 		t.Fatalf("Disable() removed = %v, want both user-scope refs including the runtime extension", removed)
 	}
 	calls := invocations(t, log)
-	if !slices.Contains(calls, "uninstall -y --user "+mangohud) {
-		t.Errorf("Disable() invocations = %v, want an unprivileged user-scope uninstall of %q", calls, mangohud)
+	if !slices.Contains(calls, "uninstall -y --user "+mangohud+"//25.08") {
+		t.Errorf("Disable() invocations = %v, want an unprivileged user-scope uninstall of %q's installed branch", calls, mangohud)
 	}
 	for _, call := range calls {
 		if strings.HasPrefix(call, "uninstall -y --system ") {
@@ -303,7 +328,7 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) 
 		Installed: refsOf(steam),
 		User:      refsOf(steam),
 	}, nil)
-	log := fakeFlatpak(t, "exit 0")
+	log := fakeFlatpak(t, answersRuntime)
 
 	installed, failures := Enable(allComponentIDs())
 	if len(failures) != 0 {
@@ -315,14 +340,113 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) 
 		t.Errorf("Enable() installed = %v, want %v", installed, want)
 	}
 
-	calls := invocations(t, log)
+	calls := installs(invocations(t, log))
 	if len(calls) != len(want) {
-		t.Fatalf("Enable() ran %d flatpak commands (%v), want %d — the per-user copy must not be reinstalled system-wide", len(calls), calls, len(want))
+		t.Fatalf("Enable() ran %d flatpak installs (%v), want %d — the per-user copy must not be reinstalled system-wide", len(calls), calls, len(want))
 	}
 	for i, call := range calls {
-		if call != "install -y --system "+want[i] {
-			t.Errorf("Enable() call %d = %q, want %q", i, call, "install -y --system "+want[i])
+		ref := want[i]
+		if ref == mangohud {
+			ref += "//26.08"
 		}
+		if call != "install -y --system "+ref {
+			t.Errorf("Enable() call %d = %q, want %q", i, call, "install -y --system "+ref)
+		}
+	}
+}
+
+// fakeRealFlatpak behaves like flatpak 1.18 against Flathub, which publishes
+// MangoHud in one branch per Platform release: a bare MangoHud ref is
+// ambiguous, so install and uninstall stop at flatpak's "Which do you want to
+// use?" prompt and, with no stdin, fail with "No ref chosen". info answers
+// only when steamInstalled; remote-info answers when remoteAnswers.
+func fakeRealFlatpak(t *testing.T, l listing, steamInstalled, remoteAnswers bool) string {
+	t.Helper()
+	info := "echo 'error: com.valvesoftware.Steam/*unspecified*/*unspecified* not installed' >&2; exit 1"
+	if steamInstalled {
+		info = "echo '" + steamRuntime + "'; exit 0"
+	}
+	remote := "echo 'error: Unable to load summary from remote flathub' >&2; exit 1"
+	if remoteAnswers {
+		remote = "echo 'org.freedesktop.Platform/x86_64/25.08'; exit 0"
+	}
+	return fakeFlatpak(t, "case \"$1\" in\n"+
+		"info) "+info+" ;;\n"+
+		"remote-info) "+remote+" ;;\n"+
+		"install|uninstall) if [ \"$4\" = "+mangohud+" ]; then echo \"error: No ref chosen to resolve matches for '$4'\" >&2; exit 1; fi; exit 0 ;;\n"+
+		"esac\n"+listingScript(l))
+}
+
+// Flathub publishes MangoHud in several branches, so the bare ID never
+// installs. Enable installs the branch Steam runs on: the installed Steam's,
+// or — when Steam is not installed — the one Flathub publishes Steam against.
+func TestEnableInstallsMangoHudInTheBranchSteamRunsOn(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		steamInstalled bool
+		want           string
+	}{
+		{name: "installed Steam", steamInstalled: true, want: mangohud + "//26.08"},
+		{name: "Steam on Flathub", steamInstalled: false, want: mangohud + "//25.08"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			l := listing{}
+			if tt.steamInstalled {
+				l.systemApps = []string{steam}
+			}
+			log := fakeRealFlatpak(t, l, tt.steamInstalled, true)
+
+			installed, failures := Enable([]string{mangohud})
+			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{mangohud}) {
+				t.Fatalf("Enable(MangoHud) = %v, %v; want it installed", installed, failures)
+			}
+			if calls := installs(invocations(t, log)); !reflect.DeepEqual(calls, []string{"install -y --system " + tt.want}) {
+				t.Errorf("Enable(MangoHud) installed %q, want %q", calls, "install -y --system "+tt.want)
+			}
+		})
+	}
+}
+
+// A branch that cannot be read is a MangoHud failure, never a bare-ID install
+// that would stop at flatpak's prompt anyway.
+func TestEnableReportsAnUnreadableMangoHudBranchAsAFailure(t *testing.T) {
+	log := fakeRealFlatpak(t, listing{}, false, false)
+
+	installed, failures := Enable([]string{mangohud})
+	if len(installed) != 0 || len(failures) != 1 || !strings.Contains(failures[0].Error(), mangohud) {
+		t.Fatalf("Enable(MangoHud) = %v, %v; want one failure naming %q", installed, failures, mangohud)
+	}
+	if calls := installs(invocations(t, log)); len(calls) != 0 {
+		t.Errorf("Enable(MangoHud) ran %q, want no install without a branch", calls)
+	}
+}
+
+// Several MangoHud branches can be installed at once, and then the bare ID is
+// ambiguous to uninstall as well. Disable removes every installed branch, in
+// every scope, by qualified ref.
+func TestDisableRemovesEveryInstalledMangoHudBranchByQualifiedRef(t *testing.T) {
+	log := fakeRealFlatpak(t, listing{
+		userRuntimes:   []string{mangohud + "//25.08", mangohud + "//26.08"},
+		systemRuntimes: []string{mangohud + "//26.08"},
+	}, false, false)
+
+	removed, kept, failures := Disable([]string{mangohud})
+	if len(failures) != 0 || len(kept) != 0 || !reflect.DeepEqual(removed, []string{mangohud}) {
+		t.Fatalf("Disable(MangoHud) = %v, %v, %v; want it removed", removed, kept, failures)
+	}
+	want := []string{
+		"uninstall -y --user " + mangohud + "//25.08",
+		"uninstall -y --user " + mangohud + "//26.08",
+		"uninstall -y --system " + mangohud + "//26.08",
+	}
+	var got []string
+	for _, call := range invocations(t, log) {
+		if strings.HasPrefix(call, "uninstall ") {
+			got = append(got, call)
+		}
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Disable(MangoHud) ran %q, want %q", got, want)
 	}
 }
 
@@ -444,12 +568,16 @@ func TestGamingSelectionMutatesOnlyChosenComponents(t *testing.T) {
 	for _, component := range components {
 		t.Run(component.ID, func(t *testing.T) {
 			stubInstalled(t, nil, nil)
-			log := fakeFlatpak(t, "exit 0")
+			log := fakeFlatpak(t, answersRuntime)
 			installed, failures := Enable([]string{component.ID, component.ID})
 			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{component.ID}) {
 				t.Fatalf("selection result = %v %v", installed, failures)
 			}
-			if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"install -y --system " + component.ID}) {
+			want := component.ID
+			if component.BranchOf != "" {
+				want += "//26.08"
+			}
+			if calls := installs(invocations(t, log)); !reflect.DeepEqual(calls, []string{"install -y --system " + want}) {
 				t.Fatalf("selection installed unchosen or duplicate components: %v", calls)
 			}
 		})

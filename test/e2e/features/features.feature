@@ -107,6 +107,19 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the fake flatpak was never asked to "install"
     And the action journal is empty
 
+  # Flathub publishes MangoHud once per Platform release, so a bare ID stops
+  # at flatpak's "Which do you want to use?" prompt and fails.
+  @stub.features-gaming-none
+  Scenario: MangoHud is installed in the branch Steam's runtime uses
+    Given ChairLift is running
+    When I open the "Features" page
+    And I select the "MangoHud" gaming component
+    And I click the "Install Selected" button
+    Then the gaming preview installs only "MangoHud" into the system scope
+    And the application log contains "[DRY-RUN] Would execute: flatpak install -y --system org.freedesktop.Platform.VulkanLayer.MangoHud//26.08"
+    And the fake flatpak was never asked to "install"
+    And the action journal is empty
+
   @stub.features-gaming-partial
   Scenario: A selected already-installed component is not reinstalled
     Given ChairLift is running
