@@ -214,6 +214,30 @@ func parseChannel(word string) (imageinfo.Channel, bool) {
 	}
 }
 
+const (
+	// DefaultTimeout bounds a helper command that does not pull an image.
+	DefaultTimeout = 10 * time.Minute
+
+	// ImageSwitchTimeout bounds a command that runs `bootc switch`. A switch
+	// to another channel, driver variant, or dated build pulls the same
+	// multi-gigabyte image an OS update stages, so it gets the OS staging
+	// budget (bootc.DefaultTimeout) rather than the default: at ten minutes a
+	// slow link had its pull killed mid-transfer.
+	ImageSwitchTimeout = 30 * time.Minute
+)
+
+// Timeout returns how long the helper lets command run. The GUI's context
+// for the same command must outlast it (see ublue), so the helper reports
+// its own outcome instead of the caller giving up first.
+func Timeout(command string) time.Duration {
+	switch command {
+	case CommandChannelSwitch, CommandDriverSwitch, CommandPin, CommandUnpin:
+		return ImageSwitchTimeout
+	default:
+		return DefaultTimeout
+	}
+}
+
 // RestartArgs returns the argv that restarts the machine.
 //
 // `systemctl reboot` takes no target, no delay, and no options here: the only

@@ -237,7 +237,7 @@ func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 	button.SetLabel("Returning…")
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.Unpin(ctx)

@@ -24,15 +24,12 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
-	"time"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
-
-const defaultTimeout = 10 * time.Minute
 
 func main() {
 	invocation, err := ubluehelper.ParseInvocation(os.Args[1:])
@@ -50,7 +47,7 @@ func main() {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), ubluehelper.Timeout(invocation.Command))
 	defer cancel()
 
 	switch invocation.Command {

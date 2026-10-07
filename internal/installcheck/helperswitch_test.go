@@ -66,3 +66,69 @@ func TestHelperImageSwitchesGoThroughSwitchImage(t *testing.T) {
 		}
 	}
 }
+
+// TestViewsRunImageSwitchesUnderTheImageSwitchContext holds every view that
+// calls an image-switching ublue mutation to ublue.ImageSwitchContext. Those
+// commands pull a full image under the helper's 30-minute budget; a caller
+// on DefaultContext gives up after 15 minutes and reports a timeout (and
+// restores its control) while the helper is still pulling.
+func TestViewsRunImageSwitchesUnderTheImageSwitchContext(t *testing.T) {
+	switchers := map[string]bool{"SwitchChannel": true, "SwitchDriver": true, "Pin": true, "Unpin": true}
+	dir := filepath.Join(RepoRoot(), "internal", "views")
+	matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	found := 0
+	for _, path := range matches {
+		file, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			lit, ok := n.(*ast.FuncLit)
+			if !ok {
+				return true
+			}
+			var switching []string
+			var contexts []string
+			for _, stmt := range lit.Body.List {
+				ast.Inspect(stmt, func(n ast.Node) bool {
+					if _, nested := n.(*ast.FuncLit); nested {
+						return false
+					}
+					call, ok := n.(*ast.CallExpr)
+					if !ok {
+						return true
+					}
+					sel, ok := call.Fun.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "ublue" {
+						return true
+					}
+					switch {
+					case switchers[sel.Sel.Name]:
+						switching = append(switching, sel.Sel.Name)
+					case sel.Sel.Name == "ImageSwitchContext" || sel.Sel.Name == "DefaultContext":
+						contexts = append(contexts, sel.Sel.Name)
+					}
+					return true
+				})
+			}
+			for _, name := range switching {
+				found++
+				if len(contexts) != 1 || contexts[0] != "ImageSwitchContext" {
+					t.Errorf("%s: ublue.%s runs under %v, want ublue.ImageSwitchContext",
+						fset.Position(lit.Pos()), name, contexts)
+				}
+			}
+			return true
+		})
+	}
+	if found < len(switchers) {
+		t.Errorf("found %d image-switch calls in internal/views, want at least %d; did the call shape change?", found, len(switchers))
+	}
+}
