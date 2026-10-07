@@ -436,7 +436,10 @@ An agent must not break these:
   "Request dismissed"; 127 is a real failure). `Window.ShowErrorToast`
   turns such a message into a brief "Authentication cancelled" toast instead
   of a persistent raw-stderr error, so every privileged view gets it; the
-  view still restores its control on that path.
+  view still restores its control on that path. A configured `sudo` maintenance
+  script's runner captures no stderr, so `actionmsg.MaintenanceScriptFailure`
+  classifies its exit status with `IsAuthDismissed` and shows
+  `pkexec.CancelledMessage` the same way.
 - **Privileged integration ships in the release archive.** The Homebrew cask
   installs the GUI in user scope and cannot place root-owned files, so the
   release archive also carries the fixed-path updex and ublue helpers, the

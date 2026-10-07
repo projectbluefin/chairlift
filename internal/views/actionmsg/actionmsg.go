@@ -35,6 +35,8 @@ package actionmsg
 import (
 	"fmt"
 	"strings"
+
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 )
 
 // BundleDump returns the toast text for exporting the installed package list.
@@ -222,6 +224,20 @@ func MaintenanceScript(dryRun bool, title string) ScriptDecision {
 		Execute: true,
 		Toast:   fmt.Sprintf("%s completed", title),
 	}
+}
+
+// MaintenanceScriptFailure words a failed configured maintenance script.
+// A sudo script runs through pkexec, and pkexec exits 126 when the user
+// dismissed the authentication prompt; the script never ran, so that is the
+// brief "Authentication cancelled" toast (isError false) every other
+// privileged view shows, not a pinned "failed: exit status 126". The script
+// runner captures no stderr, so the exit status is the only signal. A script
+// run without pkexec owns its own exit statuses, so its 126 stays a failure.
+func MaintenanceScriptFailure(title string, sudo bool, err error) (text string, isError bool) {
+	if sudo && pkexec.IsAuthDismissed(err) {
+		return pkexec.CancelledMessage, false
+	}
+	return fmt.Sprintf("%s failed: %v", title, err), true
 }
 
 // FeatureToggleDecision is the result of deciding whether toggling a system
