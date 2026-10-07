@@ -186,10 +186,13 @@ tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
 Use **WSL Backend** to choose nsl or Lima. An existing Lima Ubuntu machine is
 kept as the choice when no nsl machine exists, rather than creating a second one.
-**Gaming** lets you select individual applications and tools. Installed states
-distinguish applications from runtime extensions and user from system scope.
-Only selected user-scope entries can be removed. Partial failures stay visible
-instead of being reported as an all-or-nothing success.
+**Gaming** lets you select individual applications and tools, and installs
+them system-wide for every account on the computer, which may ask for an
+administrator password. Each row says whether that app is installed
+system-wide, for your account only (as earlier releases installed it), or
+both. **Remove Selected** asks first, then removes each selected app wherever
+it is installed. Partial failures stay visible instead of being reported as
+an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — for printers that need more than built-in
 driverless printing. Each runs as a small container in your own account,

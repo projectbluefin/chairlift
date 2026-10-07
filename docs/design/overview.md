@@ -651,10 +651,15 @@ children; it is an audit aid, not independent proof of execution.
 `chairlift-updex-helper` calls the updex library in-process and runs no
 subprocess, so its outcome records carry no `executed` list.
 
-Gaming mode, the third Bluefin-family feature, crosses no privilege boundary
-at all: every component is a user-scope Flatpak installed with
-`flatpak install --user`, the same reasoning that keeps Homebrew tap trust
-unprivileged.
+Gaming mode, the third Bluefin-family feature, adds no ChairLift privilege
+route: every component is installed as a **system-scope** Flatpak with
+`flatpak install --system` (#503), from the Flathub remote Bluefin-family
+images configure system-wide — a `--user` install cannot resolve a ref there
+at all (#501). The `flatpak` CLI authorizes system installs and uninstalls
+itself through Flatpak's own PolicyKit actions
+(`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
+`-uninstall` counterparts), so there is no `pkexec`, helper subcommand, or
+ChairLift PolicyKit action for gaming mode, and none may be added.
 
 Its components are not all applications, and `internal/gaming` models the
 difference rather than assuming it away. Each entry in the stack carries a
@@ -667,15 +672,21 @@ mutually exclusive filters, so the inventory runs one query per
 `gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
 inventory reported MangoHud missing however it had been installed, which
 made Enable reinstall it on every run and left Disable unable to remove the
-user-scope ref ChairLift had put there (issue #75). Failure handling follows
-the same shape one level up: a scope that cannot be listed is tolerated, but
-a *kind* that answered in neither scope is fatal, because reporting its
-components missing is exactly the loop that bug was.
+ref ChairLift had put there (issue #75). Failure handling follows the same
+shape one level up: every (scope, kind) query must answer, because an
+unreadable scope could hide a copy and reporting its components missing is
+exactly the loop that bug was.
 
 The Features page offers individual selections, not a single all-or-nothing
-switch. Enable and Disable validate the selected IDs before mutation. System
-entries are never removed, partial outcomes stay visible, and a dry-run keeps
-the confirmed inventory unchanged.
+switch. Enable and Disable validate the selected IDs before mutation. Enable
+installs only components missing from both scopes, so a copy an earlier
+release installed per-user is not duplicated system-wide. Disable removes a
+selected component from exactly the scopes it is installed in — `--user` for
+a per-user copy, `--system` for a system copy, both when both exist — and
+never touches an unselected component; its confirmation dialog says that a
+system-wide copy goes for every account, including one the image shipped. A
+component with a copy left is reported as a failure, partial outcomes stay
+visible, and a dry-run keeps the confirmed inventory unchanged.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
@@ -1396,7 +1407,7 @@ is handled by the migration described above, not a current System namespace.
 - `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
 - Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
 - Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with Flathub for selected user-scope gaming components and optional Pulp installation
+- Flatpak with a system-scope Flathub remote for selected gaming components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
 - GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
 
 ### Key external Go dependencies

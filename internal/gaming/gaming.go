@@ -1,13 +1,17 @@
-// Package gaming implements selective user-scope gaming application management
-// for the Bluefin family (Bluefin, Bluefin LTS, and Dakota).
+// Package gaming implements selective gaming application management for the
+// Bluefin family (Bluefin, Bluefin LTS, and Dakota).
 //
-// Unlike the release-channel switch and developer mode, gaming mode crosses
-// no privilege boundary. Every component is a user-scope Flatpak, installed
-// with `flatpak install --user`, so the whole feature runs as the invoking
-// user with no pkexec, no PolicyKit action, and no privileged helper — the
-// same reasoning that keeps Homebrew tap trust unprivileged. That is also
-// why it is safe on a bootc host: nothing is layered onto the image, so a
-// system update never has to reconcile it.
+// Every component is a system-scope Flatpak, installed with
+// `flatpak install --system` from the Flathub remote the images configure
+// system-wide (#503). Bluefin's policy is that Flatpaks are installed
+// system-wide, so runtimes are shared and the system update services keep
+// them current for every account; an image that ships Flathub only as a
+// system remote also cannot resolve a `--user` install at all (#501). The
+// flatpak CLI authorizes a system install itself through Flatpak's own
+// PolicyKit actions (org.freedesktop.Flatpak.app-install and its runtime and
+// uninstall counterparts), so ChairLift adds no pkexec route, no PolicyKit
+// action of its own, and no privileged helper for gaming mode. Nothing is
+// layered onto the image either, so a bootc update never has to reconcile it.
 //
 // The stack is not uniformly applications. MangoHud is published as a
 // Vulkan-layer extension of the freedesktop Platform runtime, so the
@@ -145,14 +149,16 @@ func validSelection(selected []string) error {
 }
 
 // Scope records where each installed component lives. ChairLift installs
-// into the user scope; an image may preinstall a component system-wide.
+// into the system scope; an earlier ChairLift release installed per-user, and
+// a user may have installed a component for their own account, so both
+// scopes are inventoried.
 type Scope struct {
 	// Installed is every installed ref, either scope.
 	Installed map[Ref]bool
-	// User is the subset installed in the user scope — the only components
-	// ChairLift can remove, because removing a system-wide Flatpak needs
-	// privilege ChairLift deliberately does not take for gaming mode.
+	// User is the subset installed in the user scope.
 	User map[Ref]bool
+	// System is the subset installed in the system scope.
+	System map[Ref]bool
 }
 
 // State is the derived status of gaming mode on this host.
@@ -161,14 +167,12 @@ type State struct {
 	Enabled bool
 	// Installed lists the installed component IDs, in stack order.
 	Installed []string
-	// UserInstalled lists the installed component IDs ChairLift can
-	// remove, in stack order.
+	// UserInstalled lists the installed component IDs with a copy in the
+	// user scope, in stack order.
 	UserInstalled []string
-	// SystemOnly lists installed component IDs that exist only in the
-	// system scope. They count toward Enabled — the components are present
-	// and usable — but Disable skips them rather than failing on an
-	// uninstall it has no standing to perform.
-	SystemOnly []string
+	// SystemInstalled lists the installed component IDs with a copy in the
+	// system scope, in stack order. A component may appear in both lists.
+	SystemInstalled []string
 	// Missing lists the not-yet-installed component IDs, in stack order.
 	Missing []string
 	// MissingCore lists only the missing core component IDs. A non-empty
@@ -203,8 +207,9 @@ func Derive(scope Scope) State {
 			state.Installed = append(state.Installed, ref.ID)
 			if scope.User[ref] {
 				state.UserInstalled = append(state.UserInstalled, ref.ID)
-			} else {
-				state.SystemOnly = append(state.SystemOnly, ref.ID)
+			}
+			if scope.System[ref] {
+				state.SystemInstalled = append(state.SystemInstalled, ref.ID)
 			}
 			continue
 		}
@@ -217,48 +222,12 @@ func Derive(scope Scope) State {
 	return state
 }
 
-// kindOf returns the ref kind the stack declares for id. An ID that is not
-// part of the stack is treated as an application, which is what an
-// unrelated Flatpak in an inventory almost always is and, either way, cannot
-// match a component.
-func kindOf(id string) flatpak.Kind {
-	for _, component := range components {
-		if component.ID == id {
-			return component.Kind
-		}
-	}
-	return flatpak.KindApplication
-}
-
-// UserScope builds a Scope in which every listed ID is user-installed, each
-// under the kind the stack declares for it. It is the convenience form for
-// callers and tests that do not care about the user/system split.
-func UserScope(ids []string) Scope {
-	refs := make([]Ref, 0, len(ids))
-	for _, id := range ids {
-		refs = append(refs, Ref{Kind: kindOf(id), ID: id})
-	}
-	return UserRefScope(refs)
-}
-
-// UserRefScope builds a Scope in which every listed ref is user-installed.
-func UserRefScope(refs []Ref) Scope {
-	scope := Scope{
-		Installed: make(map[Ref]bool, len(refs)),
-		User:      make(map[Ref]bool, len(refs)),
-	}
-	for _, ref := range refs {
-		scope.Installed[ref] = true
-		scope.User[ref] = true
-	}
-	return scope
-}
-
 // listInstalled is an injection seam for the Flatpak query, so Status's
 // error handling and derivation can be tested without a Flatpak
 // installation. Its production value queries both scopes: ChairLift installs
-// to the user scope, but a component preinstalled system-wide by the image
-// still counts as present — and must not be removed.
+// to the system scope, but a copy an earlier release or the user put in the
+// user scope still counts as present, so it is neither reinstalled nor
+// hidden from removal.
 var listInstalled = installedComponents
 
 // inventoryQuery is one `flatpak list` call: one installation scope, one ref
@@ -279,7 +248,7 @@ var inventoryQueries = []inventoryQuery{
 }
 
 func installedComponents() (Scope, error) {
-	scope := Scope{Installed: map[Ref]bool{}, User: map[Ref]bool{}}
+	scope := Scope{Installed: map[Ref]bool{}, User: map[Ref]bool{}, System: map[Ref]bool{}}
 
 	failures := map[flatpak.Kind][]error{}
 	for _, query := range inventoryQueries {
@@ -295,6 +264,8 @@ func installedComponents() (Scope, error) {
 			scope.Installed[ref] = true
 			if query.user {
 				scope.User[ref] = true
+			} else {
+				scope.System[ref] = true
 			}
 		}
 	}
@@ -316,15 +287,9 @@ func Status() (State, error) {
 	return Derive(scope), nil
 }
 
-// ensureUserRemote is the seam for making Flathub resolvable from the user
-// installation before a user-scope install.
-var ensureUserRemote = flatpak.EnsureUserFlathub
-
-// Enable installs only selected missing components into the user scope.
-// A component failure does not abort the remaining selected entries. When
-// anything is to be installed, a user Flathub remote is ensured first: an
-// image that configures Flathub only system-wide cannot resolve a --user
-// install otherwise (#501), and without it every install would fail alike.
+// Enable installs only selected missing components into the system scope.
+// A component already present in either scope is not reinstalled, and a
+// component failure does not abort the remaining selected entries.
 func Enable(selected []string) (installed []string, failures []error) {
 	if err := validSelection(selected); err != nil {
 		return nil, []error{err}
@@ -334,21 +299,11 @@ func Enable(selected []string) (installed []string, failures []error) {
 		return nil, []error{err}
 	}
 
-	var pending []string
 	for _, id := range state.Missing {
-		if slices.Contains(selected, id) {
-			pending = append(pending, id)
+		if !slices.Contains(selected, id) {
+			continue
 		}
-	}
-	if len(pending) == 0 {
-		return nil, nil
-	}
-	if err := ensureUserRemote(); err != nil {
-		return nil, []error{fmt.Errorf("adding the Flathub remote for your account: %w", err)}
-	}
-
-	for _, id := range pending {
-		if err := flatpak.Install(id, true); err != nil {
+		if err := flatpak.Install(id, false); err != nil {
 			failures = append(failures, fmt.Errorf("%s: %w", id, err))
 			continue
 		}
@@ -357,30 +312,43 @@ func Enable(selected []string) (installed []string, failures []error) {
 	return installed, failures
 }
 
-// Disable removes only selected user-scope components. System copies stay.
-func Disable(selected []string) (removed []string, skipped []string, failures []error) {
+// Disable removes each selected component from exactly the scopes the
+// inventory observed it in, and nothing else: a user-scope copy (an earlier
+// ChairLift release installed per-user) is removed with `--user` and needs no
+// authorization, a system-scope copy with `--system` under Flatpak's own
+// PolicyKit. Unselected components, and scopes a selected component is not
+// installed in, are never touched. A component counts as removed only when
+// every one of its copies was; otherwise it is one failure naming each scope
+// that could not be removed.
+func Disable(selected []string) (removed []string, failures []error) {
 	if err := validSelection(selected); err != nil {
-		return nil, nil, []error{err}
+		return nil, []error{err}
 	}
 	state, err := Status()
 	if err != nil {
-		return nil, nil, []error{err}
+		return nil, []error{err}
 	}
 
-	for _, id := range state.UserInstalled {
+	for _, id := range state.Installed {
 		if !slices.Contains(selected, id) {
 			continue
 		}
-		if err := flatpak.Uninstall(id, true); err != nil {
-			failures = append(failures, fmt.Errorf("%s: %w", id, err))
+		var errs []error
+		if slices.Contains(state.UserInstalled, id) {
+			if err := flatpak.Uninstall(id, true); err != nil {
+				errs = append(errs, fmt.Errorf("user scope: %w", err))
+			}
+		}
+		if slices.Contains(state.SystemInstalled, id) {
+			if err := flatpak.Uninstall(id, false); err != nil {
+				errs = append(errs, fmt.Errorf("system scope: %w", err))
+			}
+		}
+		if len(errs) != 0 {
+			failures = append(failures, fmt.Errorf("%s: %w", id, errors.Join(errs...)))
 			continue
 		}
 		removed = append(removed, id)
 	}
-	for _, id := range state.SystemOnly {
-		if slices.Contains(selected, id) {
-			skipped = append(skipped, id)
-		}
-	}
-	return removed, skipped, failures
+	return removed, failures
 }

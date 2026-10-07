@@ -221,15 +221,20 @@ def step_gaming_component_status(context, status):
         assert atspi.poll(observed), name + " never reported " + status
 
 
-@then('the gaming preview {operation:w} only "{name}"')
-def step_gaming_selected_preview(context, operation, name):
+@then('the gaming preview {operation:w} only "{name}" {preposition:w} the {scope:w} scope')
+def step_gaming_selected_preview(context, operation, name, preposition, scope):
     verb = {"installs": "install", "removes": "uninstall"}[operation]
+    if scope not in ("system", "user"):
+        raise NotImplementedError(f"unknown Flatpak scope {scope!r}")
     chosen = next(app_id for title, app_id, _ in GAMING_COMPONENTS if title == name)
-    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --user {chosen}"
+    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --{scope} {chosen}"
     assert atspi.poll(lambda: expected in _log(context)), "chosen app was not previewed"
+    other = "user" if scope == "system" else "system"
+    assert f"flatpak {verb} -y --{other} {chosen}" not in _log(context), f"chosen app was mutated in the {other} scope"
     for _, app_id, _ in GAMING_COMPONENTS:
         if app_id != chosen:
-            assert f"flatpak {verb} -y --user {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
+            for each in ("user", "system"):
+                assert f"flatpak {verb} -y --{each} {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
 
 
 @then("the developer editor choices match the documented catalog")

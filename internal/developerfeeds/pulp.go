@@ -26,43 +26,61 @@ const (
 // the staged bytes without re-embedding.
 var opmlContent = string(Asset())
 
-// IsInstalled reports whether Pulp is present in the user scope. It queries
-// flatpak, never Pulp's sandboxed store. A flatpak query error is returned so
-// the caller can decide whether to proceed or fail closed.
+// pulpScopes are the installations IsInstalled consults, user first. Pulp is
+// installed system-wide now (#503), but an earlier ChairLift release installed
+// it per-user, and either copy means there is nothing to install.
+var pulpScopes = []struct {
+	name string
+	list func() ([]flatpak.Application, error)
+}{
+	{name: "user", list: flatpak.ListUserApplications},
+	{name: "system", list: flatpak.ListSystemApplications},
+}
+
+// IsInstalled reports whether Pulp is present in either Flatpak scope. It
+// queries flatpak, never Pulp's sandboxed store. A flatpak query error is
+// returned so the caller fails closed rather than installing a second copy
+// beside one it could not see.
 func IsInstalled() (bool, error) {
-	apps, err := flatpak.ListUserApplications()
-	if err != nil {
-		return false, fmt.Errorf("listing user flatpaks: %w", err)
-	}
-	for _, app := range apps {
-		if app.ApplicationID == PulpID {
-			return true, nil
+	for _, scope := range pulpScopes {
+		apps, err := scope.list()
+		if err != nil {
+			return false, fmt.Errorf("listing %s flatpaks: %w", scope.name, err)
+		}
+		for _, app := range apps {
+			if app.ApplicationID == PulpID {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
 }
 
-// Provision installs Pulp into the user scope from flathub if it is not
-// already present. Detection runs first so an already-installed Pulp never
-// triggers a redundant install. The install itself enforces dryrun through
-// the flatpak runner (install is a state-changing command); here we short
-// circuit and log so dry-run does not even issue the query-driven install.
+// Provision installs Pulp into the system scope from flathub if it is not
+// already present in either scope. Bluefin and Dakota configure Flathub only
+// as a system remote, so a user-scope install cannot resolve it (#501, #503);
+// the flatpak CLI authorizes the system install through Flatpak's own
+// PolicyKit, and ChairLift adds no pkexec route. Detection runs first so an
+// already-installed Pulp never triggers a redundant install. The install
+// itself enforces dryrun through the flatpak runner (install is a
+// state-changing command); here we short circuit and log so dry-run does not
+// even issue the query-driven install.
 func Provision() error {
 	installed, err := IsInstalled()
 	if err != nil {
 		return err
 	}
 	if installed {
-		log.Printf("[developerfeeds] %s already installed in user scope", PulpID)
+		log.Printf("[developerfeeds] %s already installed", PulpID)
 		return nil
 	}
 
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] Would install %s from %s (user scope)", PulpID, feedRemote)
+		log.Printf("[DRY-RUN] Would install %s from %s (system scope)", PulpID, feedRemote)
 		return nil
 	}
 
-	return flatpak.InstallFromRemote(PulpID, feedRemote, true)
+	return flatpak.InstallFromRemote(PulpID, feedRemote, false)
 }
 
 // dataDir returns ~/.local/share/chairlift.

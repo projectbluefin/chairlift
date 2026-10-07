@@ -401,15 +401,10 @@ func pluralIt(n int) string {
 // state, and what toast to show.
 //
 // Gaming mode differs from the other two toggles in one way that matters
-// here: it installs user-scope Flatpaks one at a time, so a live run can
-// partly succeed. Confirm therefore is not simply !dryRun — a live run that
-// changed nothing, or whose every component failed, must not confirm either.
-//
-// skipped counts components the image preinstalled system-wide, which
-// removal leaves alone. Those are neither a change nor a failure, so they
-// are reported separately: telling a user "0 removed" with no explanation
-// when the components are still visibly installed is the confusing outcome.
-func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureToggleDecision {
+// here: it installs or removes Flatpaks one at a time, so a live run can
+// partly succeed. Confirm therefore is not simply !dryRun — a live run whose
+// every component failed must not confirm either.
+func GamingMode(dryRun bool, enable bool, changed, failed int) FeatureToggleDecision {
 	verb := "removed"
 	if enable {
 		verb = "installed"
@@ -417,43 +412,24 @@ func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureT
 
 	if dryRun {
 		// A preview confirms nothing, but it still reports what the run
-		// would do: a removal whose every component belongs to the system
-		// image would remove nothing, and saying "would be removed" there
-		// promises a change the live run will not make.
+		// would do.
 		var toast string
 		switch {
 		case changed == 0 && failed > 0:
 			toast = fmt.Sprintf("[DRY-RUN] Preview: no gaming components could be %s (%d failed) — no changes made", verb, failed)
-		case changed == 0 && skipped > 0:
-			toast = fmt.Sprintf("[DRY-RUN] Preview: nothing to remove — %d component(s) installed system-wide would be left in place", skipped)
 		case changed == 0:
 			toast = "[DRY-RUN] Preview: gaming mode is already in the requested state — no changes made"
 		default:
 			toast = fmt.Sprintf("[DRY-RUN] Preview: gaming components would be %s — no changes made", verb)
-			if skipped > 0 {
-				toast += fmt.Sprintf(". %d component(s) installed system-wide would be left in place", skipped)
-			}
 		}
 		return FeatureToggleDecision{Confirm: false, Toast: toast}
-	}
-
-	suffix := ""
-	if skipped > 0 {
-		suffix = fmt.Sprintf(" %d component(s) installed system-wide were left in place.", skipped)
 	}
 
 	switch {
 	case changed == 0 && failed > 0:
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   fmt.Sprintf("No gaming components could be %s (%d failed).%s", verb, failed, suffix),
-		}
-	case changed == 0 && skipped > 0:
-		// Nothing was removed, but only because everything present belongs
-		// to the system image. The switch must not claim gaming mode is off.
-		return FeatureToggleDecision{
-			Confirm: false,
-			Toast:   fmt.Sprintf("Nothing to remove.%s", suffix),
+			Toast:   fmt.Sprintf("No gaming components could be %s (%d failed).", verb, failed),
 		}
 	case changed == 0:
 		return FeatureToggleDecision{
@@ -463,12 +439,12 @@ func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureT
 	case failed > 0:
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("%d gaming component(s) %s, %d failed.%s", changed, verb, failed, suffix),
+			Toast:   fmt.Sprintf("%d gaming component(s) %s, %d failed.", changed, verb, failed),
 		}
 	default:
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("%d gaming component(s) %s.%s", changed, verb, suffix),
+			Toast:   fmt.Sprintf("%d gaming component(s) %s.", changed, verb),
 		}
 	}
 }

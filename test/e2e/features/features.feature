@@ -1,7 +1,8 @@
 @features
 Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, and Printers
-  Optional tools are explicit choices. Gaming mutations are user-scope only;
-  the fixed helper grants only the access each developer option needs.
+  Optional tools are explicit choices. Gaming installs system-wide and removes
+  a selected app from every scope it is in; the fixed helper grants only the
+  access each developer option needs.
   Dry runs restore every control and preserve observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
@@ -9,7 +10,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Given ChairLift is running
     When I open the "Features" page
     Then the Developer Mode switch shows this account's developer-group membership
-    And each gaming component says "Installed for your account"
+    And each gaming component says "Installed system-wide"
     And no gaming component is selected
     And the action journal is empty
     And the fake flatpak was never asked to "install"
@@ -100,7 +101,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     And I select the "Steam" gaming component
     And I click the "Install Selected" button
-    Then the gaming preview installs only "Steam"
+    Then the gaming preview installs only "Steam" into the system scope
     And the "Install Selected" button is sensitive
     And each gaming component says "Not installed"
     And the fake flatpak was never asked to "install"
@@ -123,22 +124,23 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And I click the "Remove Selected" button
     Then a dialog titled "Remove selected gaming apps?" is shown
     When I choose "Remove" in the dialog
-    Then the gaming preview removes only "ProtonUp-Qt"
-    And each gaming component says "Installed for your account"
+    Then the gaming preview removes only "ProtonUp-Qt" from the system scope
+    And each gaming component says "Installed system-wide"
     And the "Remove Selected" button is sensitive
     And the fake flatpak was never asked to "uninstall"
 
-  @stub.features-gaming-system
-  Scenario: Selected system gaming apps are left in place
+  @stub.features-gaming-user
+  Scenario: Per-user gaming apps an earlier release installed are removed from your account
     Given ChairLift is running
     When I open the "Features" page
-    Then each gaming component says "Installed system-wide; left in place"
+    Then each gaming component says "Installed for your account"
     When I select the "Steam" gaming component
     And I click the "Remove Selected" button
     And I choose "Remove" in the dialog
-    Then the Gaming inventory is read again after the change
-    And the application log does not contain "flatpak uninstall"
-    And each gaming component says "Installed system-wide; left in place"
+    Then the gaming preview removes only "Steam" from the user scope
+    And the Gaming inventory is read again after the change
+    And each gaming component says "Installed for your account"
+    And the fake flatpak was never asked to "uninstall"
 
   @stub.features-gaming-unlistable
   Scenario: Gaming fails closed when installed components cannot be listed
@@ -150,11 +152,11 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
-  @stub.features-gaming-image @stub.features-gaming-system
-  Scenario: A gaming image still lists verified system-managed components
+  @stub.features-gaming-image @stub.features-gaming-installed
+  Scenario: A gaming image lists its system-wide components
     Given ChairLift is running
     When I open the "Features" page
-    Then each gaming component says "Installed system-wide; left in place"
+    Then each gaming component says "Installed system-wide"
     And I see "Gaming Mode"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none

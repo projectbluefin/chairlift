@@ -147,12 +147,12 @@ func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
 			t.Errorf("scope.Installed[%q] = false, want true — present in either scope counts as installed", id)
 		}
 	}
-	if !scope.User[refOf(protonUp)] {
-		t.Errorf("scope.User[%q] = false, want true", protonUp)
+	if !scope.User[refOf(protonUp)] || scope.System[refOf(protonUp)] {
+		t.Errorf("scope of %q = user %v, system %v; want user only", protonUp, scope.User[refOf(protonUp)], scope.System[refOf(protonUp)])
 	}
 	for _, id := range []string{steam, mangohud} {
-		if scope.User[refOf(id)] {
-			t.Errorf("scope.User[%q] = true, want false — a system-wide component is not ChairLift's to remove", id)
+		if scope.User[refOf(id)] || !scope.System[refOf(id)] {
+			t.Errorf("scope of %q = user %v, system %v; want system only", id, scope.User[refOf(id)], scope.System[refOf(id)])
 		}
 	}
 }
@@ -160,7 +160,8 @@ func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
 // The bug this guards: MangoHud is a runtime extension, so an inventory built
 // only from `flatpak list --app` never sees it however it was installed. It
 // was therefore reported missing on every refresh — Enable reinstalled it
-// each time it ran, and Disable never removed the ref ChairLift had put there.
+// each time it ran, and Disable never removed the ref an earlier, per-user
+// ChairLift release had put there.
 func TestGamingInventorySeesAUserInstalledRuntimeExtension(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
 		userApps:     []string{steam, protonUp},
@@ -178,14 +179,14 @@ func TestGamingInventorySeesAUserInstalledRuntimeExtension(t *testing.T) {
 		t.Errorf("Status().Installed = %v, want it to contain %q", state.Installed, mangohud)
 	}
 	if !slices.Contains(state.UserInstalled, mangohud) {
-		t.Errorf("Status().UserInstalled = %v, want %q — ChairLift installed it user-scoped and can remove it",
+		t.Errorf("Status().UserInstalled = %v, want %q — a per-user copy stays visible and removable",
 			state.UserInstalled, mangohud)
 	}
 }
 
 // The other half of the same bug: an application listing must not be read as
 // the runtime inventory. A runtime extension present only system-wide counts
-// as installed but is not ChairLift's to remove.
+// as installed in the system scope and nowhere else.
 func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
 		userApps:       []string{steam, protonUp},
@@ -196,8 +197,8 @@ func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Status() error = %v, want nil", err)
 	}
-	if !slices.Contains(state.SystemOnly, mangohud) {
-		t.Errorf("Status().SystemOnly = %v, want %q", state.SystemOnly, mangohud)
+	if !slices.Contains(state.SystemInstalled, mangohud) {
+		t.Errorf("Status().SystemInstalled = %v, want %q", state.SystemInstalled, mangohud)
 	}
 	if slices.Contains(state.UserInstalled, mangohud) {
 		t.Errorf("Status().UserInstalled = %v, want it not to contain the system-scope %q", state.UserInstalled, mangohud)
@@ -267,31 +268,37 @@ func TestStatusDerivesFromTheRealFlatpakQuery(t *testing.T) {
 }
 
 // Disable runs against the real inventory seam so the reported symptom is
-// covered end to end: the user-scope MangoHud ref ChairLift installed is the
-// one it removes.
+// covered end to end: the user-scope MangoHud ref an earlier ChairLift release
+// installed is removed from the user scope, without authorization.
 func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 	log := fakeFlatpak(t, listingScript(listing{
 		userApps:     []string{steam},
 		userRuntimes: []string{mangohud},
 	}))
 
-	removed, skipped, failures := Disable(allComponentIDs())
+	removed, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
-	}
-	if len(skipped) != 0 {
-		t.Errorf("Disable() skipped = %v, want none — both refs are user-scope", skipped)
 	}
 	if !reflect.DeepEqual(removed, []string{steam, mangohud}) {
 		t.Fatalf("Disable() removed = %v, want both user-scope refs including the runtime extension", removed)
 	}
-	if !slices.Contains(invocations(t, log), "uninstall -y --user "+mangohud) {
-		t.Errorf("Disable() invocations = %v, want an unprivileged user-scope uninstall of %q",
-			invocations(t, log), mangohud)
+	calls := invocations(t, log)
+	if !slices.Contains(calls, "uninstall -y --user "+mangohud) {
+		t.Errorf("Disable() invocations = %v, want an unprivileged user-scope uninstall of %q", calls, mangohud)
+	}
+	for _, call := range calls {
+		if strings.HasPrefix(call, "uninstall -y --system ") {
+			t.Errorf("Disable() ran %q, want no system uninstall for components installed only per-user", call)
+		}
 	}
 }
 
-func TestEnableInstallsOnlyTheMissingComponentsIntoTheUserScope(t *testing.T) {
+// Issues #501 and #503: Bluefin and Dakota configure Flathub only as a system
+// remote, so a `--user` install cannot resolve the ref at all. Enable installs
+// system-wide, through Flatpak's own PolicyKit, and nothing else — no user
+// remote is added and no user-scope command runs.
+func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) {
 	stubScope(t, Scope{
 		Installed: refsOf(steam),
 		User:      refsOf(steam),
@@ -310,14 +317,11 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheUserScope(t *testing.T) {
 
 	calls := invocations(t, log)
 	if len(calls) != len(want) {
-		t.Fatalf("Enable() ran %d flatpak commands (%v), want %d — the present component must not be reinstalled", len(calls), calls, len(want))
+		t.Fatalf("Enable() ran %d flatpak commands (%v), want %d — the per-user copy must not be reinstalled system-wide", len(calls), calls, len(want))
 	}
 	for i, call := range calls {
-		if !strings.HasPrefix(call, "install -y --user ") {
-			t.Errorf("Enable() call %d = %q, want an unprivileged user-scope install", i, call)
-		}
-		if !strings.HasSuffix(call, want[i]) {
-			t.Errorf("Enable() call %d = %q, want it to install %q", i, call, want[i])
+		if call != "install -y --system "+want[i] {
+			t.Errorf("Enable() call %d = %q, want %q", i, call, "install -y --system "+want[i])
 		}
 	}
 }
@@ -355,48 +359,67 @@ func TestEnableReportsNothingWhenEveryComponentIsPresent(t *testing.T) {
 	}
 }
 
-func TestDisableRemovesUserScopeComponentsUnprivileged(t *testing.T) {
+// Disable removes a selected component from exactly the scopes it is
+// installed in: both copies of a component present twice, the user copy of a
+// per-user component, and the system copy of a system-wide one. A component
+// that is not installed runs nothing.
+func TestDisableRemovesEachComponentFromTheScopesItIsIn(t *testing.T) {
 	stubScope(t, Scope{
 		Installed: refsOf(steam, protonUp, flatseal),
 		User:      refsOf(steam, protonUp),
+		System:    refsOf(steam, flatseal),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, skipped, failures := Disable(allComponentIDs())
+	removed, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
-	if !reflect.DeepEqual(removed, []string{steam, protonUp}) {
-		t.Errorf("Disable() removed = %v, want the user-scope components", removed)
-	}
-	if !reflect.DeepEqual(skipped, []string{flatseal}) {
-		t.Errorf("Disable() skipped = %v, want the system-scope component", skipped)
+	if !reflect.DeepEqual(removed, []string{steam, protonUp, flatseal}) {
+		t.Errorf("Disable() removed = %v, want every installed component", removed)
 	}
 
-	calls := invocations(t, log)
-	if len(calls) != 2 {
-		t.Fatalf("Disable() ran %v, want one uninstall per user-scope component", calls)
+	want := []string{
+		"uninstall -y --user " + steam,
+		"uninstall -y --system " + steam,
+		"uninstall -y --user " + protonUp,
+		"uninstall -y --system " + flatseal,
 	}
-	for i, call := range calls {
-		if !strings.HasPrefix(call, "uninstall -y --user ") {
-			t.Errorf("Disable() call %d = %q, want an unprivileged user-scope uninstall", i, call)
-		}
+	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
+		t.Errorf("Disable() ran %q, want %q", calls, want)
+	}
+}
+
+// A component whose system copy could not be removed — a dismissed Flatpak
+// authorization, say — is still installed, so it is a failure naming the
+// scope, not a removal, even though its user copy went.
+func TestDisableReportsAComponentWithACopyLeftAsFailed(t *testing.T) {
+	stubScope(t, Scope{
+		Installed: refsOf(steam),
+		User:      refsOf(steam),
+		System:    refsOf(steam),
+	}, nil)
+	log := fakeFlatpak(t, "if [ \"$3\" = --system ]; then echo 'error: not allowed' >&2; exit 1; fi\nexit 0\n")
+
+	removed, failures := Disable([]string{steam})
+	if len(removed) != 0 {
+		t.Errorf("Disable() removed = %v, want none — the system copy is still installed", removed)
+	}
+	if len(failures) != 1 || !strings.Contains(failures[0].Error(), steam) || !strings.Contains(failures[0].Error(), "system scope") {
+		t.Fatalf("Disable() failures = %v, want one naming %q and the system scope", failures, steam)
+	}
+	if calls := invocations(t, log); !slices.Contains(calls, "uninstall -y --user "+steam) {
+		t.Errorf("Disable() ran %v, want the user copy removed regardless", calls)
 	}
 }
 
 func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
-	stubScope(t, Scope{
-		Installed: refsOf(steam, protonUp),
-		User:      refsOf(steam, protonUp),
-	}, nil)
+	stubInstalled(t, []string{steam, protonUp}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")
 
-	removed, skipped, failures := Disable(allComponentIDs())
+	removed, failures := Disable(allComponentIDs())
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none", removed)
-	}
-	if len(skipped) != 0 {
-		t.Errorf("Disable() skipped = %v, want none — both components are user-scope", skipped)
 	}
 	if len(failures) != 2 {
 		t.Fatalf("Disable() failures = %v, want one per attempted component", failures)
@@ -423,7 +446,7 @@ func TestGamingSelectionMutatesOnlyChosenComponents(t *testing.T) {
 			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{component.ID}) {
 				t.Fatalf("selection result = %v %v", installed, failures)
 			}
-			if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"install -y --user " + component.ID}) {
+			if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"install -y --system " + component.ID}) {
 				t.Fatalf("selection installed unchosen or duplicate components: %v", calls)
 			}
 		})
@@ -441,62 +464,14 @@ func TestGamingSelectionRejectsUnknownBeforeAnyMutation(t *testing.T) {
 	}
 }
 
-func TestGamingRemovalLeavesUnselectedUserComponents(t *testing.T) {
+func TestGamingRemovalLeavesUnselectedComponents(t *testing.T) {
 	stubInstalled(t, []string{steam, protonUp}, nil)
 	log := fakeFlatpak(t, "exit 0")
-	removed, _, failures := Disable([]string{protonUp})
+	removed, failures := Disable([]string{protonUp})
 	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{protonUp}) {
 		t.Fatalf("removal = %v %v", removed, failures)
 	}
-	if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"uninstall -y --user " + protonUp}) {
+	if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"uninstall -y --system " + protonUp}) {
 		t.Fatalf("removed unselected component: %v", calls)
-	}
-}
-
-// Issue #501: on a host whose Flathub is system-only, a --user install fails
-// with "No remote refs found". The user remote is ensured once, before any
-// install.
-func TestEnableEnsuresTheUserRemoteBeforeInstalling(t *testing.T) {
-	stubInstalled(t, nil, nil)
-	log := fakeFlatpak(t, "exit 0")
-	ensured := 0
-	stubUserRemote(t, func() error {
-		if calls := invocations(t, log); len(calls) != 0 {
-			t.Errorf("user remote ensured after %v, want before any install", calls)
-		}
-		ensured++
-		return nil
-	})
-
-	if _, failures := Enable([]string{flatseal, protonUp}); len(failures) != 0 {
-		t.Fatalf("Enable() failures = %v, want none", failures)
-	}
-	if ensured != 1 {
-		t.Errorf("user remote ensured %d times, want 1", ensured)
-	}
-}
-
-func TestEnableSkipsTheUserRemoteWhenNothingIsMissing(t *testing.T) {
-	stubInstalled(t, allComponentIDs(), nil)
-	fakeFlatpak(t, "exit 0")
-	stubUserRemote(t, func() error {
-		t.Error("user remote ensured with nothing to install")
-		return nil
-	})
-
-	Enable(allComponentIDs())
-}
-
-func TestEnableInstallsNothingWhenTheUserRemoteCannotBeAdded(t *testing.T) {
-	stubInstalled(t, nil, nil)
-	log := fakeFlatpak(t, "exit 0")
-	stubUserRemote(t, func() error { return os.ErrPermission })
-
-	installed, failures := Enable([]string{flatseal})
-	if len(installed) != 0 || len(failures) != 1 || !strings.Contains(failures[0].Error(), "Flathub") {
-		t.Fatalf("Enable() = (%v, %v), want one Flathub failure and no installs", installed, failures)
-	}
-	if calls := invocations(t, log); len(calls) != 0 {
-		t.Errorf("Enable() ran %v after the remote failed, want nothing", calls)
 	}
 }

@@ -411,7 +411,7 @@ type gamingComponentRow struct {
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Choose the apps to install for your account. System-managed copies are left alone.")
+	group.SetDescription("Choose the apps to install. They are installed system-wide for every account on this computer, which may ask for an administrator password.")
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
@@ -461,12 +461,10 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 
 func (uh *UserHome) applyGamingState(state gaming.State) {
 	for _, item := range uh.gamingComponents {
-		status := "Not installed"
-		if slices.Contains(state.UserInstalled, item.component.ID) {
-			status = "Installed for your account"
-		} else if slices.Contains(state.SystemOnly, item.component.ID) {
-			status = "Installed system-wide; left in place"
-		}
+		status := pageview.GamingComponentStatus(
+			slices.Contains(state.UserInstalled, item.component.ID),
+			slices.Contains(state.SystemInstalled, item.component.ID),
+		)
 		item.row.SetSubtitle(item.component.Description + " — " + status)
 	}
 }
@@ -499,7 +497,7 @@ func (uh *UserHome) confirmGamingRemoval() {
 		return
 	}
 	uh.setGamingSensitive(false)
-	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "Only the selected apps installed for your account will be removed. System-managed copies and game data are kept.")
+	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, including ones that came with the system, and copies installed only for your account. Game data is kept.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("remove", "Remove")
 	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
@@ -685,12 +683,12 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 	setActivitySpinner(uh.gamingSpinner, true)
 	go func() {
-		var changed, skipped []string
+		var changed []string
 		var failures []error
 		if enabled {
 			changed, failures = gaming.Enable(selected)
 		} else {
-			changed, skipped, failures = gaming.Disable(selected)
+			changed, failures = gaming.Disable(selected)
 		}
 		for _, failure := range failures {
 			log.Printf("views: gaming component failed: %v", failure)
@@ -703,14 +701,11 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 			defer uh.gamingGate.Reset()
 			setActivitySpinner(uh.gamingSpinner, false)
 			uh.setGamingSensitive(true)
-			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
+			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures))
 			if dryrun.Enabled() {
 				row.SetSubtitle(before)
 			} else {
 				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
-				if len(skipped) > 0 {
-					result += fmt.Sprintf(" %d system-managed app(s) left in place.", len(skipped))
-				}
 				if len(failures) > 0 {
 					result += " Details are in the application log."
 				}

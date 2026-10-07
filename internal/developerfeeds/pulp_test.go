@@ -11,19 +11,20 @@ import (
 )
 
 // fakeFlatpak writes a shell script standing in for the flatpak executable,
-// following the fake-runner pattern of internal/flatpak's tests. The read
-// command prints a canned list output; state-changing commands record their
-// arguments to CHAIRLIFT_FLATPAK_ARGS. This drives IsInstalled/Provision
-// without a real Flatpak installation.
-func fakeFlatpak(t *testing.T, listOutput, installBody string) string {
+// following the fake-runner pattern of internal/flatpak's tests. `list`
+// prints userList or systemList by the scope flag it was given;
+// state-changing commands record their arguments to the returned path. This
+// drives IsInstalled/Provision without a real Flatpak installation.
+func fakeFlatpak(t *testing.T, userList, systemList, installBody string) string {
 	t.Helper()
 	dir := t.TempDir()
 	capture := filepath.Join(dir, "args")
 	script := filepath.Join(dir, "flatpak")
 	source := "#!/bin/sh\n" +
-		"case \"$1\" in\n" +
-		"install) printf '%s\\n' \"$@\" > \"" + capture + "\" ;;\n" +
-		"list) printf '%s' \"" + listOutput + "\" ;;\n" +
+		"case \"$1 $2\" in\n" +
+		"install*) printf '%s\\n' \"$@\" > \"" + capture + "\" ;;\n" +
+		"'list --user') printf '%s' \"" + userList + "\" ;;\n" +
+		"'list --system') printf '%s' \"" + systemList + "\" ;;\n" +
 		"esac\n" +
 		installBody +
 		"\n"
@@ -46,52 +47,48 @@ func capturedInstallArgs(t *testing.T, path string) ([]string, bool) {
 	return strings.Split(strings.TrimSpace(string(data)), "\n"), true
 }
 
+const (
+	pulpRow    = "Pulp\torg.gnome.gitlab.cheywood.Pulp\t3.22.0\tstable\tflathub\tapp/org.gnome.gitlab.cheywood.Pulp/x86_64/stable\n"
+	firefoxRow = "Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp/org.mozilla.firefox/x86_64/stable\n"
+)
+
+// Pulp counts as present in either scope: Provision installs it system-wide
+// now, and an earlier ChairLift release installed it per-user.
 func TestDetectsPulp(t *testing.T) {
-	t.Run("present detects Pulp", func(t *testing.T) {
-		list := "Pulp\torg.gnome.gitlab.cheywood.Pulp\t3.22.0\tstable\tflathub\tapp/org.gnome.gitlab.cheywood.Pulp/x86_64/stable\n" +
-			"Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp/org.mozilla.firefox/x86_64/stable\n"
-		fakeFlatpak(t, list, "")
+	tests := []struct {
+		name       string
+		userList   string
+		systemList string
+		want       bool
+	}{
+		{name: "system copy", systemList: pulpRow + firefoxRow, want: true},
+		{name: "per-user copy from an earlier release", userList: pulpRow, systemList: firefoxRow, want: true},
+		{name: "absent from both scopes", userList: firefoxRow, systemList: firefoxRow, want: false},
+		{name: "empty lists", want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fakeFlatpak(t, test.userList, test.systemList, "")
 
-		got, err := IsInstalled()
-		if err != nil {
-			t.Fatalf("IsInstalled() error = %v", err)
-		}
-		if !got {
-			t.Fatalf("IsInstalled() = false, want true when Pulp is listed")
-		}
-	})
-
-	t.Run("absent returns false", func(t *testing.T) {
-		fakeFlatpak(t, "Firefox\torg.mozilla.firefox\t120.0\tstable\tflathub\tapp\n", "")
-
-		got, err := IsInstalled()
-		if err != nil {
-			t.Fatalf("IsInstalled() error = %v", err)
-		}
-		if got {
-			t.Fatalf("IsInstalled() = true, want false when Pulp is not listed")
-		}
-	})
-
-	t.Run("empty list is absent", func(t *testing.T) {
-		fakeFlatpak(t, "", "")
-
-		got, err := IsInstalled()
-		if err != nil {
-			t.Fatalf("IsInstalled() error = %v", err)
-		}
-		if got {
-			t.Fatalf("IsInstalled() = true, want false for an empty list")
-		}
-	})
+			got, err := IsInstalled()
+			if err != nil {
+				t.Fatalf("IsInstalled() error = %v", err)
+			}
+			if got != test.want {
+				t.Fatalf("IsInstalled() = %v, want %v", got, test.want)
+			}
+		})
+	}
 }
 
-func TestProvisionInstallsWhenMissing(t *testing.T) {
+// Issue #503: Bluefin and Dakota configure Flathub only as a system remote,
+// so Pulp is installed system-wide from it.
+func TestProvisionInstallsSystemWideWhenMissing(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
 
-	// Empty list: Pulp is missing, so Provision must install it.
-	capture := fakeFlatpak(t, "", "")
+	// Empty lists: Pulp is missing, so Provision must install it.
+	capture := fakeFlatpak(t, "", "", "")
 
 	if err := Provision(); err != nil {
 		t.Fatalf("Provision() error = %v", err)
@@ -101,23 +98,30 @@ func TestProvisionInstallsWhenMissing(t *testing.T) {
 	if !issued {
 		t.Fatal("Provision did not issue a flatpak install")
 	}
-	want := []string{"install", "-y", "--user", "flathub", PulpID}
+	want := []string{"install", "-y", "--system", "flathub", PulpID}
 	if got := strings.Join(args, "\n"); got != strings.Join(want, "\n") {
 		t.Fatalf("install args = %v, want %v", args, want)
 	}
 }
 
-func TestProvisionSkipsWhenPresent(t *testing.T) {
+func TestProvisionSkipsWhenPresentInEitherScope(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
 
-	capture := fakeFlatpak(t, "Pulp\torg.gnome.gitlab.cheywood.Pulp\t3.22.0\tstable\tflathub\tapp\n", "")
+	for name, lists := range map[string][2]string{
+		"user":   {pulpRow, ""},
+		"system": {"", pulpRow},
+	} {
+		t.Run(name, func(t *testing.T) {
+			capture := fakeFlatpak(t, lists[0], lists[1], "")
 
-	if err := Provision(); err != nil {
-		t.Fatalf("Provision() error = %v", err)
-	}
-	if _, issued := capturedInstallArgs(t, capture); issued {
-		t.Fatal("Provision issued an install even though Pulp was already present")
+			if err := Provision(); err != nil {
+				t.Fatalf("Provision() error = %v", err)
+			}
+			if _, issued := capturedInstallArgs(t, capture); issued {
+				t.Fatal("Provision issued an install even though Pulp was already present")
+			}
+		})
 	}
 }
 
@@ -125,8 +129,8 @@ func TestProvisionDryRunDoesNotInstall(t *testing.T) {
 	dryrun.Set(true)
 	t.Cleanup(func() { dryrun.Set(false) })
 
-	// Empty list would normally trigger an install; dry-run must not.
-	capture := fakeFlatpak(t, "", "")
+	// Empty lists would normally trigger an install; dry-run must not.
+	capture := fakeFlatpak(t, "", "", "")
 
 	if err := Provision(); err != nil {
 		t.Fatalf("Provision() error = %v", err)
@@ -136,23 +140,27 @@ func TestProvisionDryRunDoesNotInstall(t *testing.T) {
 	}
 }
 
+// A scope that cannot be listed might hold Pulp, so Provision fails closed
+// rather than installing a second copy. Each scope is checked on its own.
 func TestProvisionPropagatesQueryError(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
 
-	// list exits non-zero with stderr; the error must propagate and no
-	// install must be attempted.
-	capture := fakeFlatpak(t, "", "exit 7")
+	for _, scope := range []string{"user", "system"} {
+		t.Run(scope, func(t *testing.T) {
+			capture := fakeFlatpak(t, "", "", "if [ \"$1 $2\" = 'list --"+scope+"' ]; then exit 7; fi")
 
-	err := Provision()
-	if err == nil {
-		t.Fatal("Provision() = nil error, want the propagated query error")
-	}
-	if _, issued := capturedInstallArgs(t, capture); issued {
-		t.Fatal("Provision attempted an install after a query failure")
-	}
-	if !strings.Contains(err.Error(), "listing user flatpaks") {
-		t.Errorf("Provision() error = %v, want it wrapped with the list step", err)
+			err := Provision()
+			if err == nil {
+				t.Fatal("Provision() = nil error, want the propagated query error")
+			}
+			if _, issued := capturedInstallArgs(t, capture); issued {
+				t.Fatal("Provision attempted an install after a query failure")
+			}
+			if !strings.Contains(err.Error(), "listing "+scope+" flatpaks") {
+				t.Errorf("Provision() error = %v, want it wrapped with the %s list step", err, scope)
+			}
+		})
 	}
 }
 

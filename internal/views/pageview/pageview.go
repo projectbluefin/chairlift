@@ -309,6 +309,23 @@ func GamingWorkingSubtitle(enabled bool) string {
 	return "Removing…"
 }
 
+// GamingComponentStatus returns where one gaming component is installed, for
+// its row's subtitle. ChairLift installs system-wide; a copy installed only
+// for this account is one an earlier release (or the user) put there. Both
+// copies may exist, and Remove Selected removes each one it finds.
+func GamingComponentStatus(user, system bool) string {
+	switch {
+	case user && system:
+		return "Installed system-wide and for your account"
+	case system:
+		return "Installed system-wide"
+	case user:
+		return "Installed for your account"
+	default:
+		return "Not installed"
+	}
+}
+
 // GamingResultSubtitle returns the subtitle after a gaming toggle completes.
 // changed is the number of apps installed or removed, and failed the number
 // that could not be.

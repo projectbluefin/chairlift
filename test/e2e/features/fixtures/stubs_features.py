@@ -113,20 +113,20 @@ def gaming_none(context):
 
 @stub("features-gaming-installed")
 def gaming_installed(context):
-    """Every gaming component installed in the user scope."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS)
+    """Every gaming component installed system-wide, where ChairLift puts it."""
+    _fake_flatpak(context, system=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-partial")
 def gaming_partial(context):
     """Only Steam installed: one core component of two, so gaming is off."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS[:1])
+    _fake_flatpak(context, system=GAMING_COMPONENTS[:1])
 
 
-@stub("features-gaming-system")
-def gaming_system(context):
-    """Every gaming component preinstalled system-wide by the image."""
-    _fake_flatpak(context, system=GAMING_COMPONENTS)
+@stub("features-gaming-user")
+def gaming_user(context):
+    """Every gaming component installed per-user, as earlier releases did."""
+    _fake_flatpak(context, user=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-unlistable")

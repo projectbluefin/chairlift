@@ -87,35 +87,27 @@ func TestGamingModeConfirmsOnlyWhenSomethingChanged(t *testing.T) {
 		enable      bool
 		changed     int
 		failed      int
-		skipped     int
 		wantConfirm bool
 		wantToast   string
 	}{
 		{name: "dry run", dryRun: true, enable: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be installed"},
 		{name: "dry run removal", dryRun: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be removed"},
-		// Issue #352: every component is system-wide, so a preview must not
-		// promise a removal the live run would not make.
-		{name: "dry run with only system-wide components", dryRun: true, skipped: 6, wantToast: "[DRY-RUN] Preview: nothing to remove — 6 component(s) installed system-wide would be left in place"},
-		{name: "dry run partial removal names the skipped ones", dryRun: true, changed: 3, skipped: 1, wantToast: "1 component(s) installed system-wide would be left in place"},
 		{name: "dry run with nothing to do", dryRun: true, enable: true, wantToast: "already in the requested state"},
 		{name: "dry run that could not read the inventory", dryRun: true, enable: true, failed: 1, wantToast: "could be installed (1 failed)"},
 		{name: "full install", enable: true, changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) installed"},
 		{name: "full removal", changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) removed"},
 		{name: "partial install still confirms", enable: true, changed: 4, failed: 2, wantConfirm: true, wantToast: "2 failed"},
 		{name: "total failure does not confirm", enable: true, changed: 0, failed: 6, wantConfirm: false, wantToast: "No gaming components could be installed"},
+		{name: "total removal failure does not confirm", changed: 0, failed: 2, wantConfirm: false, wantToast: "No gaming components could be removed"},
 		{name: "nothing to do still confirms", enable: true, changed: 0, wantConfirm: true, wantToast: "already in the requested state"},
-		// Everything present belongs to the system image, so removal is a
-		// no-op and the switch must not claim gaming mode is now off.
-		{name: "only system-wide components", changed: 0, skipped: 2, wantConfirm: false, wantToast: "left in place"},
-		{name: "partial removal names the skipped ones", changed: 3, skipped: 1, wantConfirm: true, wantToast: "left in place"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			decision := GamingMode(test.dryRun, test.enable, test.changed, test.failed, test.skipped)
+			decision := GamingMode(test.dryRun, test.enable, test.changed, test.failed)
 			if decision.Confirm != test.wantConfirm {
-				t.Errorf("GamingMode(%v, %v, %d, %d, %d).Confirm = %v, want %v",
-					test.dryRun, test.enable, test.changed, test.failed, test.skipped, decision.Confirm, test.wantConfirm)
+				t.Errorf("GamingMode(%v, %v, %d, %d).Confirm = %v, want %v",
+					test.dryRun, test.enable, test.changed, test.failed, decision.Confirm, test.wantConfirm)
 			}
 			if !strings.Contains(decision.Toast, test.wantToast) {
 				t.Errorf("GamingMode(...).Toast = %q, want it to contain %q", decision.Toast, test.wantToast)

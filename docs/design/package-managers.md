@@ -612,12 +612,21 @@ account's access. View mutations share `developerGate` and render post-action
 observations instead of assuming the requested state.
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages explicitly
-selected refs from `Components()`, in user scope only. Its inventory queries
-application/runtime kinds in both scopes; system copies are neither shadowed
-nor removed. Invalid selections fail before mutation, duplicates run once,
-and per-item failures preserve partial outcomes. The Features view serializes
-action/refresh with `gamingGate`; failed refreshes preserve last known state.
-Neither gaming nor per-user Homebrew trust adds privilege.
+selected refs from `Components()`. Enable installs missing refs in the
+**system** scope (`Install(id, false)`, #503): Bluefin-family images
+configure Flathub only as a system remote, and their policy is system-wide
+Flatpaks. The `flatpak` CLI authorizes that through Flatpak's own PolicyKit
+(`org.freedesktop.Flatpak.app-install`/`runtime-install`), not ChairLift's
+`pkexec` boundary. Its inventory queries application/runtime kinds in both
+scopes, so a per-user copy from an earlier release counts as installed and is
+not duplicated. Disable removes each selected ref from exactly the scopes it
+is observed in (`Uninstall(id, true)` for a user copy, `Uninstall(id, false)`
+for a system copy); unselected refs are never touched, and a ref with a copy
+left is a failure. Invalid selections fail before mutation, duplicates run
+once, and per-item failures preserve partial outcomes. The Features view
+serializes action/refresh with `gamingGate`; failed refreshes preserve last
+known state. Neither gaming nor per-user Homebrew trust adds a ChairLift
+privilege route.
 
 ## Agent Mode (`internal/aistack`)
 

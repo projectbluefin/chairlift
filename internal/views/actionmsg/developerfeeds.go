@@ -9,8 +9,9 @@ import (
 //
 // Enabling Developer Mode makes one privileged helper call and then, only in
 // the branch that reached a confirmed live promotion, may run two optional
-// user-scope steps: install Pulp, and stage the curated OPML catalog for the
-// user to import. Both are opt-in through `dx_group`'s install_pulp and
+// steps: install Pulp system-wide (Flatpak's own PolicyKit authorizes it; no
+// pkexec route), and stage the curated OPML catalog for the user to import.
+// Both are opt-in through `dx_group`'s install_pulp and
 // stage_feeds keys, both default to false, and neither is a prerequisite for
 // developer access.
 //
@@ -65,8 +66,8 @@ func DeveloperFeedSetupPlan(dryRun, enabled, succeeded, installPulp, stageFeeds 
 // DeveloperFeedFeedback is allowed to describe: an outcome word is never set
 // by inference from configuration.
 type DeveloperFeedOutcome struct {
-	// PulpReady reports that Pulp is present in the user scope at the end of
-	// the run, whether this run installed it or found it already there.
+	// PulpReady reports that Pulp is present in either Flatpak scope at the
+	// end of the run, whether this run installed it or found it already there.
 	PulpReady bool
 	// FeedsStaged reports that the catalog was written to StagedPath.
 	FeedsStaged bool
