@@ -299,11 +299,17 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		{"updates_page.go", "renderSystemVersion", []string{"uh.systemVersionRefresh.IsCurrent(generation)", "uh.systemVersionRows.Clear(", "uh.systemVersionRow == nil"}},
 		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
 		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},
+		// W3-15: a preference changed while a check ran is re-checked once
+		// that check returns, and after a mutation that refused the check.
+		{"update_shell.go", "StartCheck", []string{"sgtk.RunOnMainThread(s.checkFinished)"}},
+		{"update_shell.go", "checkFinished", []string{"updatepresent.RecheckAfterCheck(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
+		{"update_shell.go", "PreferencesChanged", []string{"updatepresent.RecheckForPreferences(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
+		{"update_shell.go", "finishMutation", []string{"s.PreferencesChanged()"}},
 	} {
 		body := functionBody(check.file, check.function)
 		for _, assertion := range check.required {
 			if !strings.Contains(body, assertion) {
-				t.Errorf("%s.%s no longer preserves staged Compare/badge refresh: %s", check.file, check.function, assertion)
+				t.Errorf("%s.%s no longer carries required update wiring: %s", check.file, check.function, assertion)
 			}
 		}
 	}
