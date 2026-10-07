@@ -223,6 +223,18 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "contribute.go",
+			// Preflight re-runs whenever the group is shown, so a requirement
+			// the user fixed elsewhere (Hive registration, Podman) does not
+			// leave the button insensitive until restart; reads are
+			// generation-guarded against a running session.
+			required: []string{
+				"ConnectMap(&uh.contributeMapped)",
+				"uh.contributeRefresh.IsCurrent(generation)",
+				"uh.contributeGate.Running()",
+			},
+		},
+		{
 			file: "recovery.go",
 			required: []string{
 				"pageview.BootcRollbackRow(",

@@ -78,6 +78,15 @@ def step_artifact_absent(context, artifact):
     assert not os.path.exists(path), f"{artifact} {path} was written"
 
 
+@step("this machine registers with Hive")
+def step_register_with_hive(context):
+    """The user follows the Registration Guide outside ChairLift."""
+    stubs_agents.write_file(
+        stubs_agents.registration_path(context),
+        "HIVE_HUB=https://example.com/api/contribute/ws\n",
+    )
+
+
 @then("the Agent Mode switch settles {state:w} and sensitive")
 def step_switch_settles(context, state):
     """The switch is back in a known state and operable again after an action."""

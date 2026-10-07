@@ -289,6 +289,17 @@ Feature: Agents page
     When I click the "Registration Guide" button in the "Contribute to Bluefin" row
     Then xdg-open was asked to open "https://github.com/projectbluefin/contribute#configuration"
 
+  @stub.agents.contribute.noreg
+  Scenario: Contribute to Bluefin re-checks its requirements when Agents is shown again
+    Given ChairLift is running
+    When I open the "Agents" page
+    Then the "Contribute to Bluefin" row says "Register this machine with Hive first."
+    When this machine registers with Hive
+    And I open the "Help" page
+    And I open the "Agents" page
+    Then the "Contribute to Bluefin" row says "Run the Hive contributor appliance in a terminal."
+    And the "Contribute" button in the "Contribute to Bluefin" row is sensitive
+
   @stub.agents.devmenu
   Scenario: Show Ask Bluefin in menu dry-run toggle previews and restores without writing dconf
     Given ChairLift is running
