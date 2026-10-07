@@ -636,7 +636,8 @@ An agent must not break these:
   for the old pair must not render after the refresh.
 - **Update inventory and badge have one state owner.** The pure
   `internal/updateflow.Coordinator` owns all source inventory and the badge;
-  the shell renders snapshots and manual update actions share its admission.
+  the shell renders snapshots and manual update actions — and the channel and
+  driver switches, which replace the OS — share its admission.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Developer options remain discoverable without privileged support.** WSL

@@ -320,12 +320,29 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		{"update_shell.go", "checkFinished", []string{"updatepresent.RecheckAfterCheck(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
 		{"update_shell.go", "PreferencesChanged", []string{"updatepresent.RecheckForPreferences(s.snapshot, s.currentPreferences())", "s.StartCheck()"}},
 		{"update_shell.go", "finishMutation", []string{"s.PreferencesChanged()"}},
+		// W4: every action that stages or replaces the operating system is
+		// admitted by the update shell, so none races an update run's own
+		// staging; a refusal says why, and the admission ends before the
+		// follow-up check the shell would otherwise refuse.
+		{"updates_page.go", "onBootcStageClicked", []string{"if !uh.updateShell.beginMutation() {", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"if !uh.updateShell.beginMutation() {", "uh.driverGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onChannelToggled", []string{"if !uh.updateShell.beginMutation() {", "toggle.set(!toTesting)", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
 	} {
 		body := functionBody(check.file, check.function)
 		for _, assertion := range check.required {
 			if !strings.Contains(body, assertion) {
 				t.Errorf("%s.%s no longer carries required update wiring: %s", check.file, check.function, assertion)
 			}
+		}
+	}
+	// refreshAfterOSSwitch starts a check, which the shell refuses while the
+	// switch still holds its admission.
+	for _, function := range []string{"onDriverSwitchClicked", "onChannelToggled"} {
+		body := functionBody("updates_page.go", function)
+		finish := strings.Index(body, "uh.updateShell.finishMutation()")
+		refresh := strings.Index(body, "uh.refreshAfterOSSwitch()")
+		if finish < 0 || refresh < 0 || finish > refresh {
+			t.Errorf("updates_page.go.%s must end its update-shell admission before refreshAfterOSSwitch", function)
 		}
 	}
 }
