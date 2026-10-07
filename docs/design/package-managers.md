@@ -351,7 +351,7 @@ state through the `hostRoot` filesystem seam:
 | Staged deployment | `depl_id` in `/run/composefs/staged-deployment` |
 | Reference and manifest digest | `/sysroot/state/deploy/<id>/<id>.origin` |
 | Booted version | `IMAGE_VERSION`, falling back to `VERSION_ID`, in `/usr/lib/os-release` |
-| Rollback identity/date | Newest non-booted/non-staged origin; its modification time |
+| Rollback identity | Newest non-booted/non-staged origin by modification time |
 
 A broken booted/staged read is an error, not evidence the system is current.
 Deployment IDs are validated before building paths. A missing/unreadable
@@ -366,7 +366,11 @@ against **both** booted and staged digests. No difference means no pending
 update. A missing platform digest or an untagged/digest reference is an error.
 When present, the created annotation supplies the available build date.
 Staged/rollback version labels unavailable to the account remain absent rather
-than introducing a privileged read.
+than introducing a privileged read. The rollback's origin mtime only selects
+it: it is the deploy time, not a release date, so the rollback carries no
+timestamp and the Roll Back row reads "Return to the previous version the
+next time you restart" — a row shown only when the deployment exists never
+says nothing is kept (#521).
 
 `Status.Booted()` inspects the booted entry; exit 0 alone is not the gate.
 `IsBootcBootedCached()` reads once under five seconds. A sentinel such as
