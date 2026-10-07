@@ -405,9 +405,9 @@ func defaultConfig() *Config {
 		HelpPage: PageConfig{
 			"help_resources_group": GroupConfig{
 				Enabled: true,
-				Website: "https://projectbluefin.io",
+				Website: "https://docs.projectbluefin.io/",
 				Issues:  "https://github.com/projectbluefin/dakota/issues",
-				Chat:    "https://docs.projectbluefin.io/",
+				Chat:    "https://ask.projectbluefin.io/",
 			},
 		},
 	}

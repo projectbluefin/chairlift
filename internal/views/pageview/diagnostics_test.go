@@ -50,6 +50,32 @@ func TestFormatScrubbedDiagnostics(t *testing.T) {
 	}
 }
 
+// The Updates page's Details row tells a user its identifiers are the ones
+// to quote when asking for help; the clipboard copy Help offers for exactly
+// that purpose must carry them, and the digest must be whole — a truncated
+// digest cannot be matched against a registry.
+func TestFormatScrubbedDiagnosticsNamesTheBootedBuild(t *testing.T) {
+	digest := "sha256:110fdf396bd1c0ffee00000000000000000000000000000000000000000000ab"
+	formatted := FormatScrubbedDiagnostics(DiagnosticsData{
+		OSName:        "dakota",
+		OSVersion:     "testing",
+		ImageRef:      "ghcr.io/projectbluefin/dakota",
+		SystemVersion: "testing-20261006",
+		Digest:        digest,
+	}, "", "")
+	if !strings.Contains(formatted, "Version: testing-20261006\n") {
+		t.Errorf("formatted text missing system version: %q", formatted)
+	}
+	if !strings.Contains(formatted, "Build ID: "+digest+"\n") {
+		t.Errorf("formatted text missing full digest: %q", formatted)
+	}
+
+	absent := FormatScrubbedDiagnostics(DiagnosticsData{OSName: "dakota"}, "", "")
+	if strings.Contains(absent, "Version:") || strings.Contains(absent, "Build ID:") {
+		t.Errorf("unknown version or digest must be omitted, not printed empty: %q", absent)
+	}
+}
+
 func TestFormatScrubbedDiagnosticsScrubbing(t *testing.T) {
 	data := DiagnosticsData{
 		OSName:     "Bluefin",
@@ -69,23 +95,27 @@ func TestFormatScrubbedDiagnosticsScrubbing(t *testing.T) {
 	}
 }
 
+// Each title names what its configured key holds in the distribution's
+// shipped configuration: website is the documentation site, chat is the
+// Ask Bluefin assistant (projectbluefin/common's help_resources_group).
 func TestHelpResourcesHumanActionTitles(t *testing.T) {
 	resources := HelpResources(
-		"https://projectbluefin.io",
-		"https://github.com/projectbluefin/dakota/issues",
-		"https://docs.projectbluefin.io",
+		"https://docs.projectbluefin.io/",
+		"https://issues.projectbluefin.io/",
+		"https://ask.projectbluefin.io/",
 	)
 
-	if len(resources) != 3 {
-		t.Fatalf("len(resources) = %d, want 3", len(resources))
+	want := []HelpResource{
+		{Title: "Browse documentation", URL: "https://docs.projectbluefin.io/"},
+		{Title: "Report a problem", URL: "https://issues.projectbluefin.io/"},
+		{Title: "Ask for help", URL: "https://ask.projectbluefin.io/"},
 	}
-	if resources[0].Title != "Visit project website" {
-		t.Errorf("resources[0].Title = %q, want 'Visit project website'", resources[0].Title)
+	if len(resources) != len(want) {
+		t.Fatalf("len(resources) = %d, want %d", len(resources), len(want))
 	}
-	if resources[1].Title != "Report a problem" {
-		t.Errorf("resources[1].Title = %q, want 'Report a problem'", resources[1].Title)
-	}
-	if resources[2].Title != "Browse documentation" {
-		t.Errorf("resources[2].Title = %q, want 'Browse documentation'", resources[2].Title)
+	for i := range want {
+		if resources[i] != want[i] {
+			t.Errorf("resources[%d] = %#v, want %#v", i, resources[i], want[i])
+		}
 	}
 }

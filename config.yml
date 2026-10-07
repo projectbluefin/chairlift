@@ -127,8 +127,10 @@ livery_page:
     enabled: true
 
 help_page:
+  # website is titled "Browse documentation" and chat "Ask for help", matching
+  # projectbluefin/common's shipped configuration.
   help_resources_group:
     enabled: true
-    website: https://projectbluefin.io
+    website: https://docs.projectbluefin.io/
     issues: https://github.com/projectbluefin/dakota/issues
-    chat: https://docs.projectbluefin.io/
+    chat: https://ask.projectbluefin.io/
