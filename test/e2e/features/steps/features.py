@@ -326,10 +326,7 @@ PRINTERS_GROUP = "Printers"
 
 # pageview.PrinterAppSubtitle for printerapp.StateBlocked: the ADR-0016
 # condition as a person meets it.
-PRINTER_BLOCKED_SUBTITLE = (
-    "Can't be turned on yet. This printer application's administration page cannot be "
-    "secured until its image accepts an administrator credential; the switch unlocks once it does."
-)
+PRINTER_BLOCKED_SUBTITLE = "Can't be turned on until its settings page can be password-protected."
 
 
 def _printer_rows(context):
