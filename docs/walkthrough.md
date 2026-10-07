@@ -313,7 +313,8 @@ Powerwash entry's subtitle names only what the detail currently offers, and
 when the reset actions are off the detail says so at the top.
 Powerwash also has **Published versions**, which asks the image registry for
 the versions of your release stream from the last 90 days and lists one per
-day, marking the one you are running and the one Roll Back returns to. Each
+day, marking the one you are running and, where the system records its
+version, the one Roll Back returns to. Each
 published build offers a **Pin** button to freeze updates at that specific
 dated version. When booted on a dated version, Powerwash offers **Return to stream**
 to switch back to receiving regular stream updates. Both pin and return-to-stream

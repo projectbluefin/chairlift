@@ -186,3 +186,21 @@ func TestPublishedVersionsRowStatesTheReuseWindow(t *testing.T) {
 		t.Errorf("PublishedVersionsRow().Subtitle = %q, want it to name the stream and %q", subtitle, window)
 	}
 }
+
+// Dakota's composefs hosts report os-release IMAGE_VERSION, a bare day
+// ("20261005" in ghcr.io/projectbluefin/dakota:testing), and its dated tags
+// use the dotted spelling. The running day must still be marked; a bare
+// string that is not a real calendar day marks nothing.
+func TestPublishedVersionsMarksABareDatedVersion(t *testing.T) {
+	builds := registrytags.Builds([]string{"latest.20260920", "latest.20260913"}, time.Time{})
+	got := PublishedVersions(builds, "latest", "20260920", "20261399")
+	if len(got) != 2 {
+		t.Fatalf("PublishedVersions() = %#v, want two rows", got)
+	}
+	if got[0].Subtitle != "Running now · Published as latest.20260920" {
+		t.Errorf("rows[0].Subtitle = %q, want the running day marked", got[0].Subtitle)
+	}
+	if got[1].Subtitle != "Published as latest.20260913" {
+		t.Errorf("rows[1].Subtitle = %q, want it unmarked", got[1].Subtitle)
+	}
+}

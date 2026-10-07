@@ -2,6 +2,7 @@ package pageview
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/registrytags"
@@ -65,7 +66,9 @@ type PublishedVersion struct {
 // the same stream on one day collapse into the first.
 //
 // running and previous are the bootc image versions of the booted and
-// rollback deployments ("44.20260908"); either may be empty. A day matching
+// rollback deployments ("44.20260908", or a bare "20261005" on composefs);
+// either may be empty — a composefs host cannot read its rollback
+// deployment's version without root. A day matching
 // one of them is marked, so the list says where the machine is and where
 // Roll Back would take it.
 func PublishedVersions(builds []registrytags.Build, stream, running, previous string) []PublishedVersion {
@@ -196,12 +199,20 @@ func PinButton(offered, alreadyPinned bool, day, pinning string, busy bool) PinB
 }
 
 // versionDay reads the build day out of a bootc image version. Bluefin's
-// versions use the dated-tag grammar ("44.20260908"); anything else has no
-// day to match.
+// versions use the dated-tag grammar ("44.20260908"); Dakota's composefs
+// hosts report os-release IMAGE_VERSION, a bare day ("20261005"). Anything
+// else has no day to match. The bare form is parsed here, for versions only,
+// so the tag grammar in registrytags stays exact.
 func versionDay(version string) (time.Time, bool) {
-	build, ok := registrytags.ParseBuild(version)
-	if !ok {
+	if build, ok := registrytags.ParseBuild(version); ok {
+		return build.Date, true
+	}
+	if len(version) != len("20060102") || strings.ContainsFunc(version, func(r rune) bool { return r < '0' || r > '9' }) {
 		return time.Time{}, false
 	}
-	return build.Date, true
+	day, err := time.Parse("20060102", version)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return day, true
 }
