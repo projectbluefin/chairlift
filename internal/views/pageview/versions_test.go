@@ -1,6 +1,7 @@
 package pageview
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -170,5 +171,18 @@ func TestPinButtonFollowsTheRecoverySwitchInFlight(t *testing.T) {
 				t.Errorf("PinButton() = %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+// The catalog serves a repeat read from cache for registrytags.DefaultTTL, so
+// the row must not promise a fresh registry request on every press.
+func TestPublishedVersionsRowStatesTheReuseWindow(t *testing.T) {
+	subtitle := PublishedVersionsRow("latest").Subtitle
+	if strings.Contains(subtitle, "each time") {
+		t.Errorf("PublishedVersionsRow().Subtitle = %q, promises a registry request on every press", subtitle)
+	}
+	window := fmt.Sprintf("within %d minutes", int(registrytags.DefaultTTL/time.Minute))
+	if !strings.Contains(subtitle, window) || !strings.Contains(subtitle, "“latest” stream") {
+		t.Errorf("PublishedVersionsRow().Subtitle = %q, want it to name the stream and %q", subtitle, window)
 	}
 }
