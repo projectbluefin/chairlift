@@ -3,6 +3,8 @@
 package updatepresent
 
 import (
+	"strings"
+
 	"github.com/leonelquinteros/gotext"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
@@ -101,11 +103,49 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.RestartRequired:
 		return title, gotext.Get("Deployment staged")
 	case len(state.Items) > 0:
+		if item, ok := soleSelfItem(state); ok {
+			return title, soleItemSubtitle(item)
+		}
 		return title, gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
 	case state.Completed:
 		return title, gotext.Get("Updated")
 	default:
 		return title, gotext.Get("Up to date")
+	}
+}
+
+// ItemRows returns the pending items that get their own row beneath a
+// source row. A source whose only pending item names the source itself — the
+// operating system's one deployment — carries that item's versions on its own
+// row (see Source), so no child row repeats the source's name for one fact.
+func ItemRows(state updateflow.SourceState) []updateflow.Item {
+	if _, ok := soleSelfItem(state); ok {
+		return nil
+	}
+	return state.Items
+}
+
+// soleSelfItem reports the source's only pending item when that item is the
+// source itself. The match is on the locale-independent source ID
+// ("operating-system" ↔ "Operating system"), not on translated copy.
+func soleSelfItem(state updateflow.SourceState) (updateflow.Item, bool) {
+	if len(state.Items) != 1 {
+		return updateflow.Item{}, false
+	}
+	item := state.Items[0]
+	return item, strings.EqualFold(strings.ReplaceAll(string(state.ID), "-", " "), item.Name)
+}
+
+// soleItemSubtitle is the source row's subtitle when its one pending item is
+// folded into it.
+func soleItemSubtitle(item updateflow.Item) string {
+	switch {
+	case item.CurrentVersion != "" && item.AvailableVersion != "":
+		return gotext.Get("Update available: %s → %s", item.CurrentVersion, item.AvailableVersion)
+	case item.AvailableVersion != "":
+		return gotext.Get("Update available: %s", item.AvailableVersion)
+	default:
+		return gotext.GetN("%d update available", "%d updates available", 1, 1)
 	}
 }
 

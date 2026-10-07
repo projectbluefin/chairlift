@@ -3,6 +3,7 @@ package updatepresent
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -294,6 +295,43 @@ func TestSourceMapsSourceState(t *testing.T) {
 			title, subtitle := Source(tt.state)
 			if title != tt.title || subtitle != tt.sub {
 				t.Fatalf("Source() = %q, %q; want %q, %q", title, subtitle, tt.title, tt.sub)
+			}
+		})
+	}
+}
+
+// A source whose one pending item is the source itself (the operating
+// system's deployment) shows the versions on its own row and gets no child
+// row repeating its name; multi-item and differently named sources keep
+// their item rows. VM finding: "Operating system — 1 update available"
+// followed by an "Operating System" child row with "20261006 → 20261007".
+func TestSourceFoldsSoleSelfNamedItem(t *testing.T) {
+	osItem := updateflow.Item{Name: "Operating system", CurrentVersion: "20261006", AvailableVersion: "20261007", Scope: "bootc"}
+	apps := []updateflow.Item{{Name: "Firefox"}, {Name: "GIMP"}}
+	tests := []struct {
+		name     string
+		id       updateflow.SourceID
+		items    []updateflow.Item
+		sub      string
+		itemRows []updateflow.Item
+	}{
+		{"os version transition", updateflow.OperatingSystem, []updateflow.Item{osItem}, "Update available: 20261006 → 20261007", nil},
+		{"os legacy capitalization", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating System", CurrentVersion: "1", AvailableVersion: "2"}}, "Update available: 1 → 2", nil},
+		{"os available version only", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system", AvailableVersion: "20261007"}}, "Update available: 20261007", nil},
+		{"os without versions", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system"}}, "1 update available", nil},
+		{"single differently named app", updateflow.Applications, []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}},
+		{"multiple apps", updateflow.Applications, apps, "2 updates available", apps},
+		{"multiple developer tools", updateflow.DeveloperTools, apps, "2 updates available", apps},
+		{"two items naming the source", updateflow.OperatingSystem, []updateflow.Item{osItem, osItem}, "2 updates available", []updateflow.Item{osItem, osItem}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			state := updateflow.SourceState{ID: tt.id, Configured: true, Available: true, Enabled: true, Items: tt.items}
+			if _, sub := Source(state); sub != tt.sub {
+				t.Fatalf("Source() subtitle = %q, want %q", sub, tt.sub)
+			}
+			if got := ItemRows(state); !slices.Equal(got, tt.itemRows) {
+				t.Fatalf("ItemRows() = %#v, want %#v", got, tt.itemRows)
 			}
 		})
 	}

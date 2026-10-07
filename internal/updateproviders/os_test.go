@@ -121,7 +121,7 @@ func TestOperatingSystemCheckMapsCurrentVersionAndRestartState(t *testing.T) {
 	}
 	want := updateflow.CheckResult{
 		Items: []updateflow.Item{{
-			Name:             "Operating System",
+			Name:             "Operating system",
 			CurrentVersion:   "20260901",
 			AvailableVersion: "20260907",
 			Scope:            "bootc",
@@ -155,7 +155,7 @@ func TestOperatingSystemApplyForwardsProgressAndRefreshesStatus(t *testing.T) {
 	})
 
 	result, err := provider.Apply(context.Background(), []updateflow.Item{{
-		Name:  "Operating System",
+		Name:  "Operating system",
 		Scope: "bootc",
 	}}, func(update updateflow.Progress) {
 		progress = append(progress, update)
@@ -196,7 +196,7 @@ func TestOperatingSystemApplyBootcDryRunReportsPreview(t *testing.T) {
 	})
 
 	result, err := provider.Apply(context.Background(), []updateflow.Item{{
-		Name:  "Operating System",
+		Name:  "Operating system",
 		Scope: bootcScope,
 	}}, nil)
 	if err != nil {
@@ -231,7 +231,7 @@ func TestOperatingSystemDryRunRemainsPendingAndSkipsMaintenance(t *testing.T) {
 		Available:  true,
 		Enabled:    true,
 		Items: []updateflow.Item{{
-			Name:  "Operating System",
+			Name:  "Operating system",
 			Scope: bootcScope,
 		}},
 	}}}
@@ -273,7 +273,7 @@ func TestOperatingSystemApplyPropagatesStageErrorWithoutRefreshingStatus(t *test
 	})
 
 	_, err := provider.Apply(context.Background(), []updateflow.Item{{
-		Name:  "Operating System",
+		Name:  "Operating system",
 		Scope: bootcScope,
 	}}, nil)
 	if !errors.Is(err, wantErr) {
@@ -306,7 +306,7 @@ func TestOperatingSystemApplyRejectsUnknownScope(t *testing.T) {
 	})
 
 	if _, err := provider.Apply(context.Background(), []updateflow.Item{{
-		Name:  "Operating System",
+		Name:  "Operating system",
 		Scope: "rpm-ostree",
 	}}, nil); err == nil || !strings.Contains(err.Error(), "unknown operating system update scope") {
 		t.Fatalf("Apply() error = %v, want unknown scope", err)

@@ -726,7 +726,11 @@ surface in three layers that must stay separate:
   source whose policy has `Configured` false reads "Disabled by
   administrator"; one that is configured but not `Available` — the provider's
   own `Available` probe says no, or `Policy.Supported` is false because the capability
-  floor cannot back it — reads "Not available on this system".
+  floor cannot back it — reads "Not available on this system". `ItemRows`
+  decides which pending items get a child row: a source whose only pending
+  item names the source itself (the Operating system's one deployment) shows
+  "Update available: <booted> → <new>" on its own row and gets no child row
+  repeating its name; multi-item sources keep one row per item.
 
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from

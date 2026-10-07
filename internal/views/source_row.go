@@ -62,7 +62,7 @@ func newSourceRow(state updateflow.SourceState, group *adw.PreferencesGroup, she
 		r.restartShown = state.RestartRequired
 		r.buttons = append(r.buttons, button)
 	}
-	for _, item := range state.Items {
+	for _, item := range updatepresent.ItemRows(state) {
 		detail := adw.NewActionRow()
 		detail.SetTitle(updatepresent.ItemTitle(item))
 		detail.SetSubtitle(updatepresent.ItemSubtitle(item))
