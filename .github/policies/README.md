@@ -1,15 +1,9 @@
 # Repository policies
 
 This directory holds ChairLift's machine-readable QA governance policy.
-The catalog-bound issue lifecycle is configured separately by
-[`issue-policy.json`](../issue-policy.json) and [`prow.yaml`](../prow.yaml),
-consumed by the managed first-party
-[`issue-lifecycle.yml`](../workflows/issue-lifecycle.yml) caller. The secret-free,
-read-only [`issue-policy-preview.yml`](../workflows/issue-policy-preview.yml)
-previews catalog changes and full-history migration without applying them.
-The [local lifecycle procedure](../../docs/skills/issue-lifecycle/SKILL.md)
-defines maintainer acceptance, independent gates, native assignment and delivery
-verification; descriptive labels and Prow commands do not authorize implementation.
+Issues and pull requests are driven by Prow
+([`prow.yml`](../workflows/prow.yml)); see
+[how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 
 [`auto-qa-tuning.json`](auto-qa-tuning.json) defines allowed responses to changes
 in [pull request acceptance](../../docs/metrics.md). It keeps required,

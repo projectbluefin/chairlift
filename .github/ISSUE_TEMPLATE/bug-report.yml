@@ -1,21 +1,22 @@
 name: "Bug report"
 description: "Report broken or incorrect ChairLift behavior."
 title: "bug: "
-labels: ["needs-triage", "kind/bug"]
+labels: ["needs-human", "kind/bug"]
 body:
   - type: markdown
     attributes:
       value: |
         ## What happens next
 
-        A maintainer assesses the report before accepting implementation. You do
-        not need label permissions or slash commands: answer questions in normal
-        replies. Choosing machine analysis does not approve implementation.
+        A maintainer reads every report and may ask you for more details. Once a
+        maintainer accepts it, a contributor or agent can pick it up.
+
+        You do not need labels or commands. Just reply normally in the comments.
+        See [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 
         ChairLift is distributed through Homebrew, with stable `vYY.MM.N` releases.
-        A merged fix is not proof that your installation has it. The report stays
-        open through delivery and a request to test the named version. Fixes to
-        image-installed helpers also need the affected OS image to deliver them.
+        A merged fix reaches you in the next release. Fixes to image-installed
+        helpers also need the affected OS image to deliver them.
 
         Keep Common reports in [Common](https://github.com/projectbluefin/common/issues).
         For a ChairLift problem that depends on Common or an image, link the
@@ -25,7 +26,7 @@ body:
     id: automation_preference
     attributes:
       label: "Automation preference"
-      description: "Choose how this report may be analyzed; a maintainer separately accepts implementation."
+      description: "Choose \"Human interaction only\" if you do not want agents working on this report: maintainers keep the needs-human label on it, so agents never pick it up."
       options:
         - "Human interaction only"
         - "Machine analysis is welcome"

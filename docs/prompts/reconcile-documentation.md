@@ -26,10 +26,9 @@ not in instructions claiming the old implementation still ships.
 Search for old terms, source-path mentions, and contradictory claims rather than
 only adding a new paragraph. Follow the existing local skill/frontmatter contract;
 do not infer a generated catalog or workflow state from Common parity. Check
-the current default-branch baseline: ChairLift consumes projectbluefin/actions
-managed v1 through its local issue-lifecycle caller and policy catalog. Read
-docs/skills/issue-lifecycle/SKILL.md, not Common's Common-only runtime commands,
-for local intake, migration, independent Hive gates and delivery evidence.
+the current default-branch baseline: ChairLift's issues and pull requests are
+driven by Prow (.github/workflows/prow.yml, OWNERS). Link Common's workflow page
+(docs/skills/label-workflow.md) rather than restating it.
 After integration, run the applicable documentation gates and make ci once.
 Report changed and reviewed-unchanged files, source evidence, unresolved active
 scope, README corrections, and immutable ADR discrepancies.

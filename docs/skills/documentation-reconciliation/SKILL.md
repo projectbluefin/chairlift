@@ -1,8 +1,8 @@
 ---
 name: documentation-reconciliation
 description: Use when reconciling current documentation, retiring plans, checking links, or citing an ADR.
-version: 2.1.0
-last_updated: 2026-10-04
+version: 2.2.0
+last_updated: 2026-10-07
 tags:
   - documentation
   - consistency
@@ -48,11 +48,9 @@ the source-backed claim checklist; load subsystem design docs only as needed.
    removing a doc. Current instructions point at live source or canonical
    docs, not retired plans or compatibility aliases. Common is a linked sidecar;
    verify the current default-branch baseline and local source wiring before
-   documenting factory or lifecycle adoption. A stale checkout without a caller
-   is not proof of exclusion: ChairLift's adopted caller lives in
-   `.github/workflows/issue-lifecycle.yml`, backed by `.github/issue-policy.json`
-   and the [local lifecycle package](../issue-lifecycle/SKILL.md). Read the shared
-   Actions runtime it consumes, not Common's repository-specific pilot script.
+   documenting factory adoption. ChairLift's issues and pull requests are
+   driven by Prow from `.github/workflows/prow.yml` and `OWNERS`; link Common's
+   workflow page rather than restating it.
    Do not infer a generated catalog, frontmatter migration, universal Hive
    scheduling guarantee or direct-push exception from sidecar conventions.
 

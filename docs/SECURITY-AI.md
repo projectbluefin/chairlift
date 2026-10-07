@@ -39,16 +39,14 @@ authoritative.
   execution.
 - Pin every third-party workflow action to a reviewed full 40-character commit
   SHA with a readable version comment. Local actions are exempt; first-party
-  `projectbluefin/actions` production callers use managed `@v1`. Candidate refs
-  are permitted only through the entirely read-only, secret-free shared
-  issue-policy preview interface, never the production lifecycle writer.
+  `projectbluefin/actions` production callers use managed `@v1`.
 - AI-authored automation must not approve, merge, release, or deploy its own
-  changes.
+  changes. On pull requests, `/lgtm` and `/approve` are Prow merge actions.
 - Issue classification and analysis consent are not implementation approval.
-  Follow the [catalog-bound local lifecycle](skills/issue-lifecycle/SKILL.md):
-  verify current human acceptance, scope, assignment and all independent gates.
-  `ai-fix-requested` is intent only, not a label-driven Copilot dispatch. Prow
-  may classify or manage a hold, not accept work, approve a PR or merge it.
+  Agents take only issues a maintainer accepted with `/triage accepted` and
+  never remove `needs-human`; see
+  [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
+  `ai-fix-requested` is intent only, not a label-driven Copilot dispatch.
 
 ### Code and review
 

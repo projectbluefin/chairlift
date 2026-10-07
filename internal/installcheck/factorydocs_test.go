@@ -42,8 +42,9 @@ var expectedLegacySkillAliases = map[string]string{
 // 2026-09-18 triage session added five: exemption-justification,
 // fixture-path-fidelity, multi-arch-digest-pinning, phony-target-shadowing,
 // and self-referential-assertions. Issue #81 added bounded-stream-rendering.
-// Issue #204 added fail-open-tables-need-a-totality-gate.
-const factoryCanonicalSkillPackageCount = 34
+// Issue #204 added fail-open-tables-need-a-totality-gate. The Prow cutover
+// removed issue-lifecycle.
+const factoryCanonicalSkillPackageCount = 33
 
 type factorySkillFrontMatter struct {
 	name         string
@@ -465,7 +466,6 @@ func TestFactoryDocumentationContract(t *testing.T) {
 
 		requiredCommonLinks := []string{
 			"https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md",
-			"https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md",
 			"https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md",
 			"https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md",
 			"https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md",

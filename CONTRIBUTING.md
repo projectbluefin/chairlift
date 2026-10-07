@@ -11,10 +11,10 @@ Thank you for helping improve ChairLift.
   guidance.
 - Follow the [AI security policy](docs/SECURITY-AI.md) for AI-assisted work,
   including its data, tool, automation, and human-review boundaries.
-- For filing reports, maintainer acceptance, assignment, classification commands,
-  release delivery and reporter verification, follow the local
-  [issue lifecycle](docs/skills/issue-lifecycle/SKILL.md). Reporters reply
-  normally; no label permissions or slash commands are required.
+- Issues and pull requests are driven by Prow. A maintainer reads every
+  report; once accepted, it can be picked up. Reporters reply normally; no
+  label permissions or slash commands are required. See
+  [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 - For factory-assigned work, use the [factory entry point](docs/factory/README.md)
   and Common's linked onboarding and human-gate contracts. Check live scope,
   acceptance and assignment state; repository security rules and merge gates
@@ -118,36 +118,33 @@ canonical description of every signal.
 
 ## Pull requests
 
-- Target `main` from the branch on your fork. Link unresolved product reports
-  with `Refs #NNN`; use `Closes #NNN` only for code-only work completed at merge
-  or reports already delivered and verified. Implementation merge alone does
-  not close a report awaiting a usable Homebrew release or image-installed fix.
+- Target `main` from the branch on your fork. Link the issue with
+  `Closes #NNN` when the pull request resolves it, or `Refs #NNN` when it is
+  only related.
 - Complete every section of the pull request template: explain what changed
   and why, list exact validation commands and results, and describe regression
   coverage and documentation changes.
 - Keep the commit history and changed-files list focused on the issue.
 - Ensure every required GitHub check passes, and inspect a failed job's logs
   rather than relying on the aggregate status.
-- Merging happens through a merge queue. The queue re-runs the `Tests`
+- Merging happens through a merge queue. Prow enqueues the pull request once a
+  reviewer has given `/lgtm` and an approver from [`OWNERS`](OWNERS) has given
+  `/approve`, and nothing has put it on `/hold`. The queue re-runs the `Tests`
   workflow against your change combined with the current `main` and waits for
   the aggregating **Tests Passed** check, so a branch that only passed against
   a stale base is caught there rather than on `main`.
 - Review proposed changes against the
   [pull request review rubric](docs/review-rubric.md).
 
-## Delivery and reporter verification
+## Delivery
 
 ChairLift is distributed only through Homebrew and publishes stable `vYY.MM.N`
 releases from reviewed, CI-green `main`. The app release does not prove that
-image-installed helpers or PolicyKit changes reached the affected host.
-Follow the [local release checklist](docs/skills/factory-onboarding/SKILL.md#stable-release-cutover)
-and [delivery evidence procedure](docs/skills/issue-lifecycle/SKILL.md#delivery-evidence-and-reporter-verification):
-a maintainer verifies the actual fix merge, selects `awaiting-release`, records
-the package/version, merged revision, publishing evidence and exact reproduction
-instructions, then selects `needs-verification`. The reporter tests the named
-installation and replies **Confirmed fixed** or **Still broken** with the tested
-version. Keep Common reports in Common and link dependencies rather than
-transferring reports or assuming application publication updates an OS image.
+image-installed helpers or PolicyKit changes reached the affected host; those
+ship with the OS image. Follow the
+[local release checklist](docs/skills/factory-onboarding/SKILL.md#stable-release-cutover).
+Keep Common reports in Common and link dependencies rather than transferring
+reports or assuming application publication updates an OS image.
 
 By contributing, you agree that your contributions are licensed under the
 project's [GPL-3.0-or-later license](LICENSE).

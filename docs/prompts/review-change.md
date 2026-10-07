@@ -20,9 +20,8 @@ Check specifically for:
 - current-state docs contradicting source, config, go.mod, or install files;
 - retired plan links presented as current authority, or accepted ADR history
   mistaken for the live implementation.
-- issue lifecycle claims confusing trusted acceptance with Hive readiness,
-  analysis consent, PR approval or delivery; verify the local issue-policy
-  catalog and shared Actions caller, preserving independent human/App gates.
+- issue claims confusing `triage/accepted` with Hive readiness, analysis
+  consent, PR approval or delivery, or bypassing `needs-human` and `hold`.
 
 For each finding, give the file and line, explain the concrete failure mode, and suggest the smallest safe correction. Distinguish blocking defects from optional improvements. If there are no findings, say so and identify any testing gap that still limits confidence.
 ```

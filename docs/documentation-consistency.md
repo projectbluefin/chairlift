@@ -37,8 +37,8 @@ installation layout changes:
   Unscheduled ideas stay in the issue tracker, not a "Later" backlog here.
 - Follow [Common's skill authoring patterns](https://github.com/projectbluefin/common/blob/main/docs/skills/write-a-skill.md):
   task-specific routing, short procedures, canonical links, and executable
-  verification of project facts. ChairLift's adopted catalog-bound lifecycle
-  remains authoritative; link its shared runtime rather than duplicating it.
+  verification of project facts. Link Common's Prow workflow page rather than
+  duplicating it.
 - Check every inbound local link when moving or removing a document. Verify
   links resolve, source citations exist, and the index names retained docs.
 - Run `make ci`, then search current-state documentation for the obsolete term,

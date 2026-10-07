@@ -136,9 +136,6 @@ behavior belongs in the design docs and specs above.
 - [skills/index.md](skills/index.md) — canonical catalog of agent skill packages
 - [factory/README.md](factory/README.md) — local Project Bluefin factory
   navigation and Common sidecar links
-- [skills/issue-lifecycle/SKILL.md](skills/issue-lifecycle/SKILL.md) — deployed
-  ChairLift intake, classification, trusted acceptance, Prow controls, delivery
-  evidence and reporter verification through the shared Actions runtime
 - [skills/](skills/) — canonical agent knowledge base; edit the matching
   `SKILL.md` package, never a compatibility surface
 - [agents/skills/](agents/skills/) — legacy compatibility aliases only; do not
@@ -181,6 +178,6 @@ behavior belongs in the design docs and specs above.
   claims in these docs; when docs and tests disagree, update both in the
   same commit.
 - Load only task-matching [skills](skills/index.md). Link Common's canonical
-  factory policy and ChairLift's adopted lifecycle instead of copying them.
+  factory policy and Prow workflow page instead of copying them.
 - After reconciliation, validate local links and source citations and run the
   relevant repository gates. Keep root `README.md` human-owned.

@@ -1,23 +1,23 @@
 name: "Feature request"
 description: "Describe a ChairLift capability or improvement with a clear outcome."
 title: "feat: "
-labels: ["needs-triage", "kind/feature"]
+labels: ["needs-human", "kind/feature"]
 body:
   - type: markdown
     attributes:
       value: |
         ## What happens next
 
-        A maintainer clarifies scope and decides whether to accept implementation.
-        Acceptance does not assign a contributor. You do not need label
-        permissions or slash commands; reply normally when information is needed.
-        Choosing machine analysis is a preference, not implementation approval.
+        A maintainer reads every request and may ask you to clarify the scope. A
+        suggestion is not a commitment. Once a maintainer accepts it, a contributor
+        or agent can pick it up.
+
+        You do not need labels or commands. Just reply normally in the comments.
+        See [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 
         ChairLift is Homebrew-only and publishes stable `vYY.MM.N` releases.
-        A merged change does not guarantee availability on your installation;
-        maintainers record delivery and request verification before closing an
-        unresolved product report. Image-installed helpers have a separate
-        delivery boundary from the Homebrew app.
+        Image-installed helpers are delivered by the OS image, separately from
+        the Homebrew app.
 
         Keep [Common reports](https://github.com/projectbluefin/common/issues)
         in Common. Link related work instead of transferring it or assuming
@@ -26,7 +26,7 @@ body:
     id: automation_preference
     attributes:
       label: "Automation preference"
-      description: "Choose how this request may be analyzed; a maintainer separately accepts implementation."
+      description: "Choose \"Human interaction only\" if you do not want agents working on this request: maintainers keep the needs-human label on it, so agents never pick it up."
       options:
         - "Human interaction only"
         - "Machine analysis is welcome"

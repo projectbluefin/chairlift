@@ -6,17 +6,16 @@
 
 ## Related issue
 
-<!-- Use Refs for product reports awaiting delivery and reporter verification. Use Closes only for code-only work whose acceptance criteria are met at merge, or an already delivered and verified report. See docs/skills/issue-lifecycle/SKILL.md. -->
+<!-- Use Closes #N when this pull request resolves the issue, Refs #N when it is only related. See how issues and PRs work here: https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md -->
 
-Refs #
+Closes #
 
-## Delivery and verification
+## Delivery
 
-<!-- For product fixes, identify the actual fix, affected Homebrew app version and any separately image-installed helpers. A release or merged reference is not proof that the reporter can consume the fix. For code-only work, explain why merge completes acceptance. -->
+<!-- For product fixes, name the affected Homebrew app and any image-installed helpers. Image-installed helpers reach users through the OS image, not the Homebrew release. For code-only work, write "not applicable". -->
 
 - Affected app/package or image-installed component:
-- Release/delivery owner and remaining steps:
-- Reporter verification steps (or why not applicable):
+- Release/delivery remaining steps:
 
 ## Change classification
 

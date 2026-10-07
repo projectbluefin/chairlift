@@ -10,10 +10,10 @@ Before editing:
    the matching package from docs/skills/, and relevant current-state docs.
 2. Inspect the existing implementation and tests; do not infer behavior from historical plans.
 3. State the intended change and identify affected repository invariants.
-4. For issue-backed work, load docs/skills/issue-lifecycle/SKILL.md and verify
-   trusted scope acceptance, assignment, automation preference and independent
-   gates. A Hive-ready item, machine-analysis consent or PR approval is not
-   implementation acceptance.
+4. For issue-backed work, verify the issue has `triage/accepted`, no
+   `needs-human`, `blocked` or `hold`, and is assigned to you. A Hive-ready
+   item, machine-analysis consent or PR approval is not implementation
+   acceptance. See https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md.
 
 While implementing:
 - Keep the GTK main thread free of external tool calls and marshal UI updates through sgtk.RunOnMainThread.

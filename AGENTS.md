@@ -678,10 +678,9 @@ An agent must not break these:
 - **CI action authority.** Third-party `.github/workflows/` actions use full
   40-character commit SHAs with reviewed version comments. Local `./` actions
   are exempt. Shared `projectbluefin/actions` production interfaces use managed
-  `@v1`; candidate branches are allowed only for the secret-free, entirely
-  read-only issue-policy preview interface. Native review, actual main CI and
-  released-source guards still precede writes. The installcheck scan enforces
-  these boundaries across every workflow.
+  `@v1`. Native review, actual main CI and released-source guards still
+  precede writes. The installcheck scan enforces these boundaries across every
+  workflow.
 - **The merge queue gates on one context, and that context waits for every
   other job.** `main` merges through a merge queue, which validates a
   candidate on a `gh-readonly-queue/main/pr-<n>-<sha>` ref — a `merge_group`
@@ -1239,9 +1238,10 @@ plans.
 Documentation cleanup must inspect every inbound link before removing an
 artifact. Preserve accepted ADR decisions; repair a retired-plan reference
 with a revision-pinned history link, not a rewritten decision. Verify local
-links and cited source paths after reconciliation. ChairLift is onboarded through
-its local catalog and the shared Project Bluefin Actions lifecycle. Link those
-contracts; do not copy their runtime or bypass native review/merge controls.
+links and cited source paths after reconciliation. ChairLift's issues and pull
+requests are driven by Prow ([`.github/workflows/prow.yml`](.github/workflows/prow.yml),
+approvers in [`OWNERS`](OWNERS)). Link Common's workflow page; do not copy it or
+bypass native review/merge controls.
 
 **.knowledge/ directory** is the repository's cross-session knowledge index.
 Read `.knowledge/README.md` before working so prior corrections, handoffs,
@@ -1264,9 +1264,8 @@ Before planning, implementing, or reviewing a change, read:
 2. [`docs/SKILL.md`](docs/SKILL.md), then the matching package in
    [`docs/skills/`](docs/skills/) selected by
    [`docs/skills/index.md`](docs/skills/index.md).
-3. Common's linked factory-onboarding and agentic-model documentation when work
-   crosses repositories, uses Hive, affects labels, or needs a human decision
-   gate.
+3. Common's linked agentic-model documentation when work crosses
+   repositories, uses Hive, affects labels, or needs a human decision gate.
 
 The former `docs/agents/skills/*.md` paths are compatibility aliases only; the
 canonical agent knowledge base is `docs/skills/`.
@@ -1278,19 +1277,17 @@ the linked sidecar authority for cross-repository factory process; do not copy
 its policy into this file. For local navigation, start at
 [`docs/factory/README.md`](docs/factory/README.md).
 
-For ChairLift intake, classification, maintainer acceptance, assignment, Prow
-commands, label migration, release delivery or reporter verification, read
-[`docs/skills/issue-lifecycle/SKILL.md`](docs/skills/issue-lifecycle/SKILL.md)
-and the canonical [`.github/issue-policy.json`](.github/issue-policy.json).
-Product reports stay open through actual delivery and reporter verification;
-link unresolved reports with `Refs`, not automatic merge-closing keywords.
+Issues and pull requests are driven by Prow: `/kind`, `/triage accepted`,
+`/lgtm`, `/approve` and the other commands, with approvers from
+[`OWNERS`](OWNERS) and labels from the org config in `projectbluefin/.project`.
+Read [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md)
+before changing labels or state. `OWNERS` is generated; do not edit it here.
 
 | Topic | Common source |
 | --- | --- |
-| Factory onboarding | [`docs/skills/factory-onboarding.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md) |
 | Agentic operating model | [`docs/factory/agentic-model.md`](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md) |
 | Human decision gates | [`docs/skills/human-gates.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/human-gates.md) |
-| Issue lifecycle and labels | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
+| Issues, PRs, labels and Prow commands | [`docs/skills/label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
 | Skill improvement | [`docs/skills/skill-improvement.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/skill-improvement.md) |
 | Commit attribution | [`docs/contributing/style-guide.md`](https://github.com/projectbluefin/common/blob/main/docs/contributing/style-guide.md) and Common's `AGENTS.md` PR rules |
 | Merge queue mechanics (local) | [`docs/skills/factory-onboarding/SKILL.md`](docs/skills/factory-onboarding/SKILL.md) |

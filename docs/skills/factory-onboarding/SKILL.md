@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
-description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; load issue-lifecycle for intake, label decisions, assignment and delivery verification.
-version: 1.4.0
-last_updated: 2026-10-04
+description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; follow Common's Prow workflow page for intake, labels and commands.
+version: 1.5.0
+last_updated: 2026-10-07
 tags:
   - factory
   - onboarding
@@ -13,8 +13,7 @@ metadata:
 # Factory onboarding
 
 Follow Common's
-[`Copyable Agent Onboarding`](https://github.com/projectbluefin/common/blob/main/docs/skills/factory-onboarding.md#copyable-agent-onboarding)
-and [agentic model](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md),
+[agentic model](https://github.com/projectbluefin/common/blob/main/docs/factory/agentic-model.md),
 with ChairLift's [`AGENTS.md`](../../../AGENTS.md), [`task router`](../../SKILL.md)
 and [`canonical catalog`](../index.md) as local authority. Verify the repository,
 issue/PR, branch target, scope and corresponding Hive assignment before acting.
@@ -25,11 +24,11 @@ Common is a sidecar, not a replacement local contract. Keep transient task
 records in non-committed session state; preserve durable lessons through
 [`skill-improvement`](../skill-improvement/SKILL.md), not a tracked session log.
 
-For issue intake, label/catalog decisions, acceptance and assignment, Prow
-commands, migration or reporter verification, load
-[`issue-lifecycle`](../issue-lifecycle/SKILL.md). It links shared policy and
-owns the local Homebrew-versus-image-helper delivery boundary. Verify live
-issue state and the local workflow/policy wiring before changing labels.
+For issue intake, labels, acceptance (`/triage accepted`), assignment and the
+other Prow commands, follow Common's
+[how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
+Prow runs from [`prow.yml`](../../../.github/workflows/prow.yml) with approvers
+from [`OWNERS`](../../../OWNERS). Verify live issue state before changing labels.
 Common's documentation-only direct-push exception does not bypass ChairLift's
 pull-request and merge-queue contract.
 
@@ -40,7 +39,9 @@ Human approval and independent security gates come from Common's linked
 and
 [`label-workflow.md`](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
 ChairLift's actual merge requirements are its native ruleset: one required
-approving review, **Tests Passed**, and the squash/ALLGREEN merge queue. Read
+approving review, **Tests Passed**, and the squash/ALLGREEN merge queue. On top
+of that, Prow enqueues a pull request once it has `lgtm` and `approved` and no
+`hold`, so `/lgtm` and `/approve` are merge actions, not comments. Read
 the live ruleset before publishing; an administrative bypass capability is
 not permission to use it. Issue acceptance is separate from PR approval.
 

@@ -16,66 +16,19 @@ func isImmutableActionReference(ref string) bool {
 	return strings.HasPrefix(ref, "./") || commitActionPattern.MatchString(ref)
 }
 
-func isAllowedWorkflowActionReference(ref string, readOnlyPreview bool) bool {
+func isAllowedWorkflowActionReference(ref string) bool {
 	if isImmutableActionReference(ref) {
 		return true
 	}
-	if strings.HasPrefix(ref, "projectbluefin/actions/") && strings.HasSuffix(ref, "@v1") {
-		return true
-	}
-	return readOnlyPreview && strings.HasPrefix(ref, "projectbluefin/actions/.github/workflows/reusable-issue-policy-preview.yml@")
+	return strings.HasPrefix(ref, "projectbluefin/actions/") && strings.HasSuffix(ref, "@v1")
 }
 
-func workflowIsReadOnly(data []byte) bool {
-	var config struct {
-		Permissions *map[string]string `yaml:"permissions"`
-		Jobs        map[string]struct {
-			Permissions map[string]string `yaml:"permissions"`
-			Secrets     yaml.Node         `yaml:"secrets"`
-		} `yaml:"jobs"`
+func TestFirstPartyActionsRequireManagedV1(t *testing.T) {
+	if !isAllowedWorkflowActionReference("projectbluefin/actions/.github/workflows/example.yml@v1") {
+		t.Error("managed v1 first-party reference must be allowed")
 	}
-	if yaml.Unmarshal(data, &config) != nil || config.Permissions == nil || strings.Contains(string(data), "secrets.") {
-		return false
-	}
-	for _, value := range *config.Permissions {
-		if value != "read" && value != "none" {
-			return false
-		}
-	}
-	for _, job := range config.Jobs {
-		if job.Secrets.Kind != 0 {
-			return false
-		}
-		for _, value := range job.Permissions {
-			if value != "read" && value != "none" {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func TestFirstPartyPreviewRequiresReadOnlySecretFreeCaller(t *testing.T) {
-	preview := "projectbluefin/actions/.github/workflows/reusable-issue-policy-preview.yml@candidate"
-	for _, tc := range []struct {
-		name string
-		data string
-		want bool
-	}{
-		{"readonly", "permissions: {}\njobs:\n  preview:\n    permissions: {contents: read, issues: read}\n", true},
-		{"write", "permissions: {}\njobs:\n  preview:\n    permissions: {issues: write}\n", false},
-		{"inherited secrets", "permissions: {}\njobs:\n  preview:\n    secrets: inherit\n", false},
-		{"secret expression", "permissions: {}\njobs:\n  preview:\n    with: {token: '${{ secrets.TOKEN }}'}\n", false},
-		{"implicit permissions", "jobs: {}\n", false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isAllowedWorkflowActionReference(preview, workflowIsReadOnly([]byte(tc.data))); got != tc.want {
-				t.Errorf("preview allowed = %v, want %v", got, tc.want)
-			}
-		})
-	}
-	if isAllowedWorkflowActionReference("projectbluefin/actions/.github/workflows/reusable-issue-lifecycle.yml@candidate", true) {
-		t.Error("production candidate reference must not be allowed")
+	if isAllowedWorkflowActionReference("projectbluefin/actions/.github/workflows/example.yml@candidate") {
+		t.Error("candidate first-party reference must not be allowed")
 	}
 }
 
@@ -131,7 +84,6 @@ func TestWorkflowActionsUseImmutableCommitSHAs(t *testing.T) {
 			t.Errorf("parse %s: %v", path, err)
 			continue
 		}
-		readOnlyPreview := workflowIsReadOnly(data)
 
 		var inspectUses func(*yaml.Node)
 		inspectUses = func(node *yaml.Node) {
@@ -141,7 +93,7 @@ func TestWorkflowActionsUseImmutableCommitSHAs(t *testing.T) {
 					if key.Kind == yaml.ScalarNode && key.Tag == "!!str" && key.Value == "uses" {
 						if value.Kind != yaml.ScalarNode || value.Tag != "!!str" {
 							t.Errorf("%s:%d: uses value must be a string", entry.Name(), value.Line)
-						} else if !isAllowedWorkflowActionReference(value.Value, readOnlyPreview) {
+						} else if !isAllowedWorkflowActionReference(value.Value) {
 							t.Errorf("%s:%d: action %q violates immutable-third-party or managed-first-party authority", entry.Name(), value.Line, value.Value)
 						}
 					}

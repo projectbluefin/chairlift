@@ -9,16 +9,13 @@ lesson; current symbols and behavior must still be verified against source.
 
 - [factory-onboarding](factory-onboarding/SKILL.md) — start a verified
   Project Bluefin factory assignment, use the merge queue, or cut a release.
-- [issue-lifecycle](issue-lifecycle/SKILL.md) — file and triage reports, accept or
-  assign work, use maintainer Prow commands, migrate labels, and verify delivery
-  to the Homebrew app and any image-installed helpers.
 - [skill-improvement](skill-improvement/SKILL.md) — preserve durable lessons,
   corrections, and catalog integrity when a change is complete.
 
-Load onboarding for factory entry, issue-lifecycle for ChairLift intake and
-delivery, and skill-improvement when preserving a lesson. Common's linked
-documents remain authoritative for cross-repository policy; the local catalog
-and shared Actions caller own ChairLift's adopted lifecycle.
+Load onboarding for factory entry and skill-improvement when preserving a
+lesson. For issue intake, labels and Prow commands, follow Common's workflow
+page linked from `docs/SKILL.md`. Common's linked documents remain
+authoritative for cross-repository policy.
 
 ## Planning and scope
 
