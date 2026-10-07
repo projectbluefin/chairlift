@@ -171,7 +171,8 @@ a terminal.
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch
 position is on and Sync Folder's is off; once GNOME answers, the switches show
 its actual saved choices. Sync Folder is labelled experimental. A missing
-extension or GNOME session leaves its control unavailable and explains why.
+extension or GNOME session leaves its switch off and unavailable and explains
+why.
 Changing a switch enables or disables that extension for your account; it does
 not install software or start Tailscale or Sync Folder services. Preview mode
 leaves GNOME preferences unchanged.

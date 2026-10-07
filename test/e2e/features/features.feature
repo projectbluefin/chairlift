@@ -291,3 +291,5 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the switch in the "Tailscale Integration" row refuses input
     And the "Sync Folder Integration" row says "This GNOME extension is not installed."
     And the switch in the "Sync Folder Integration" row refuses input
+    And the switch in the "Tailscale Integration" row is off
+    And the switch in the "Sync Folder Integration" row is off
