@@ -786,7 +786,12 @@ An agent must not break these:
   second Goose starts; llmman would refuse a launch while that lock is held.
   GNOME's focus-stealing prevention may answer with a "Goose is ready"
   notification rather than raising the window (observed in the lab on a
-  minimized window); nothing passes an activation token. Copy never
+  minimized window); nothing passes an activation token. A fresh launch
+  holds the row busy until Goose holds that lock, exits, or 15 seconds pass,
+  and the toast says whether it started or handed off
+  (`agentmode.LaunchResult`, `pageview.GooseLaunchToast`), never that a
+  window opened: a Goose that cannot draw (#544) still holds the profile.
+  Both launches send Goose's output to ChairLift's stderr. Copy never
   claims a session's questions stay on this computer: knowledge searches go
   online. No pkexec route is involved, every install is user-scope Homebrew,
   and dry-run writes and installs nothing. Keep `brew tap` in Homebrew's

@@ -54,6 +54,22 @@ func GooseSetupToast(state agentmode.State, model string) string {
 	return "Goose is installed — " + state.Subtitle(model)
 }
 
+// GooseLaunchToast reports a live launch that returned without error. It
+// names what was observed, not that a window opened: on a host where Goose
+// cannot draw (#544) its process still runs and holds the profile, and every
+// later Launch is handed to that process, which must not look like nothing
+// happened.
+func GooseLaunchToast(result agentmode.LaunchResult) string {
+	switch result {
+	case agentmode.LaunchHandedOff:
+		return "Goose Desktop is already running; asked it to show its window"
+	case agentmode.LaunchStarting:
+		return "Goose Desktop is still starting"
+	default:
+		return "Goose Desktop started"
+	}
+}
+
 // TroubleshootGroupTitle titles the group holding the Goose row and the
 // Ask Bluefin menu switch. Ask Bluefin is one path into this feature, not
 // its name.

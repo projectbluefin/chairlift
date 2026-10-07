@@ -193,7 +193,9 @@ func (uh *UserHome) setUpGoose() {
 
 // launchGoose re-reads readiness, then launches through agentmode.Launch,
 // which writes ChairLift's Goose profile before a fresh session and hands a
-// launch to the session already open. Both run off the main thread.
+// launch to the session already open. Both run off the main thread, and the
+// row stays busy until a fresh session holds its profile (agentmode.Launch's
+// bounded startup wait), so a second click cannot race the first.
 func (uh *UserHome) launchGoose() {
 	if uh.gooseLaunchBtn == nil || !uh.gooseGate.TryStart() {
 		return
@@ -208,8 +210,9 @@ func (uh *UserHome) launchGoose() {
 		defer cancel()
 		state, facts, _ := agentmode.ObserveLive(ctx)
 		var launchErr error
+		var result agentmode.LaunchResult
 		if state.Ready() {
-			launchErr = agentmode.Launch(ctx, facts, func(asyncErr error) {
+			result, launchErr = agentmode.Launch(ctx, facts, func(asyncErr error) {
 				sgtk.RunOnMainThread(func() {
 					log.Printf("views: goose desktop exited with error: %v", asyncErr)
 					uh.toastAdder.ShowErrorToast("Goose Desktop encountered an error.")
@@ -227,6 +230,10 @@ func (uh *UserHome) launchGoose() {
 				uh.toastAdder.ShowErrorToast("Failed to launch Goose Desktop.")
 			case dryRun:
 				uh.toastAdder.ShowToast("[DRY-RUN] Would launch Goose Desktop")
+			default:
+				message := pageview.GooseLaunchToast(result)
+				log.Printf("views: goose desktop launch: %s", message)
+				uh.toastAdder.ShowToast(message)
 			}
 		})
 	}()
