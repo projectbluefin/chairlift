@@ -332,7 +332,7 @@ func dockerSubtitle(state devtools.DockerState, err error) string {
 	case state.Active:
 		return "Docker is running. Log out and back in to use it."
 	case !state.Available:
-		return "Install and enable Docker"
+		return "Docker isn't available on this system, so containers can't run here."
 	default:
 		return "Asks for your administrator password. Anyone using Docker can control this whole computer."
 	}
