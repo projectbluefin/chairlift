@@ -3,6 +3,6 @@
 help_page:
   help_resources_group:
     enabled: true
-    website: https://example.test/site
+    website: https://example.test/docs/
     issues: https://example.test/issues?labels=help&state=open
-    chat: https://example.test/docs/
+    chat: https://example.test/ask/

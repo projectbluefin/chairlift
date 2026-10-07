@@ -162,8 +162,8 @@ func TestFeatureRowsAndDescriptions(t *testing.T) {
 func TestHelpResourcesPreserveConfiguredOrder(t *testing.T) {
 	got := HelpResources("https://example.test", "", "https://chat.example.test")
 	want := []HelpResource{
-		{Title: "Visit project website", URL: "https://example.test"},
-		{Title: "Browse documentation", URL: "https://chat.example.test"},
+		{Title: "Browse documentation", URL: "https://example.test"},
+		{Title: "Ask for help", URL: "https://chat.example.test"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("HelpResources() = %#v, want %#v", got, want)

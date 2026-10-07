@@ -254,9 +254,9 @@ Help also shows a **Feature availability** group — not configurable, and absen
 
 | Field | Description |
 |-------|-------------|
-| `website` | Project website URL (default: `https://projectbluefin.io`) |
-| `issues` | Issue tracker URL (default: `https://github.com/projectbluefin/dakota/issues`) |
-| `chat` | Documentation URL (default: `https://docs.projectbluefin.io/`). The key is named `chat` for backward compatibility; the link is titled "Documentation" |
+| `website` | Documentation URL, titled "Browse documentation" (default: `https://docs.projectbluefin.io/`) |
+| `issues` | Issue tracker URL, titled "Report a problem" (default: `https://github.com/projectbluefin/dakota/issues`) |
+| `chat` | Assistant or community help URL, titled "Ask for help" (default: `https://ask.projectbluefin.io/`) |
 
 ## Example
 

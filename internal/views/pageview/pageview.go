@@ -129,13 +129,19 @@ func FeaturesEmptyState(bluefinGroups, printers, optionalFeatures bool) (Row, bo
 }
 
 // HelpResources returns configured Help links in their display order with clear action titles.
+//
+// Each title names what its key holds in the distribution's shipped
+// configuration (projectbluefin/common's help_resources_group): website is
+// the documentation site and chat is the Ask Bluefin assistant. Titling chat
+// as documentation put "Browse documentation" on the assistant and "Visit
+// project website" on the documentation. "Ask for help" rather than "Ask
+// Bluefin" because the Ask Bluefin menu entry opens Troubleshooting on the
+// Agents page, a different destination.
 func HelpResources(website, issues, chat string) []HelpResource {
 	candidates := []HelpResource{
-		{Title: "Visit project website", URL: website},
+		{Title: "Browse documentation", URL: website},
 		{Title: "Report a problem", URL: issues},
-		// The third slot's config key is "chat" for backward compatibility,
-		// but it points at documentation or community discussions.
-		{Title: "Browse documentation", URL: chat},
+		{Title: "Ask for help", URL: chat},
 	}
 	resources := make([]HelpResource, 0, len(candidates))
 	for _, resource := range candidates {

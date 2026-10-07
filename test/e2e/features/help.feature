@@ -18,20 +18,20 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                                     |
-      | Visit project website | https://example.test/site               |
-      | Report a problem      | https://example.test/issues?labels=help |
-      | Browse documentation  | https://example.test/docs/#start        |
+      | title                | url                                     |
+      | Browse documentation | https://example.test/docs/#start        |
+      | Report a problem     | https://example.test/issues?labels=help |
+      | Ask for help         | https://example.test/ask/               |
 
   @config.help-links-markup
   Scenario: A support URL containing "&" is shown exactly as configured
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                                                |
-      | Visit project website | https://example.test/site                          |
-      | Report a problem      | https://example.test/issues?labels=help&state=open |
-      | Browse documentation  | https://example.test/docs/                         |
+      | title                | url                                                |
+      | Browse documentation | https://example.test/docs/                         |
+      | Report a problem     | https://example.test/issues?labels=help&state=open |
+      | Ask for help         | https://example.test/ask/                          |
 
   @config.help-links-markup @stub.help-xdg-open
   Scenario: A support URL containing "&" still opens verbatim
@@ -45,9 +45,9 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     Then the Help resources are, in order
-      | title                 | url                        |
-      | Visit project website | https://example.test/site  |
-      | Browse documentation  | https://example.test/docs/ |
+      | title                | url                        |
+      | Browse documentation | https://example.test/docs/ |
+      | Ask for help         | https://example.test/ask/  |
 
   @config.help-links @stub.help-xdg-open
   Scenario Outline: Opening a support link hands its exact URL to xdg-open
@@ -61,10 +61,10 @@ Feature: Help destination
     And the action journal is empty
 
     Examples:
-      | title                 | url                                     |
-      | Visit project website | https://example.test/site               |
-      | Report a problem      | https://example.test/issues?labels=help |
-      | Browse documentation  | https://example.test/docs/#start        |
+      | title                | url                                     |
+      | Browse documentation | https://example.test/docs/#start        |
+      | Report a problem     | https://example.test/issues?labels=help |
+      | Ask for help         | https://example.test/ask/               |
 
   @stub.help-xdg-open-fails
   Scenario: A link with no URL handler reports the failure and keeps the page
@@ -79,10 +79,10 @@ Feature: Help destination
   Scenario: A new failure is visible without dismissing the previous error
     Given ChairLift is running
     When I press "F1"
-    And I open the "Visit project website" Help link
-    Then a toast says "Failed to open URL: https://example.test/site"
-    When I open the "Browse documentation" Help link
+    And I open the "Browse documentation" Help link
     Then a toast says "Failed to open URL: https://example.test/docs/#start"
+    When I open the "Ask for help" Help link
+    Then a toast says "Failed to open URL: https://example.test/ask/"
     And the Help page is still responsive
 
   @config.help-no-resources

@@ -5,6 +5,6 @@
 help_page:
   help_resources_group:
     enabled: true
-    website: https://example.test/site
+    website: https://example.test/docs/#start
     issues: https://example.test/issues?labels=help
-    chat: https://example.test/docs/#start
+    chat: https://example.test/ask/

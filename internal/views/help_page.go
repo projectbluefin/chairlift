@@ -1,14 +1,17 @@
 package views
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"os/user"
 	"strings"
+	"time"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/gpu"
@@ -115,6 +118,7 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 				diag.OSVersion = info.EffectiveTag()
 				diag.ImageRef = info.CleanRef()
 			}
+			diag.SystemVersion, diag.Digest = bootedBuild()
 			if data, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
 				diag.Kernel = strings.TrimSpace(string(data))
 			}
@@ -157,6 +161,29 @@ func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	row.AddSuffix(&copyBtn.Widget)
 	group.Add(&row.Widget)
 	page.Add(group)
+}
+
+// diagnosticsStatusTimeout bounds the status read behind Copy, which holds
+// the button insensitive until it returns.
+const diagnosticsStatusTimeout = 10 * time.Second
+
+// bootedBuild returns the booted deployment's version and full image digest
+// through the same unprivileged bootc.GetStatus read the Updates page's
+// Details row uses, or empty strings on a host with no readable deployment.
+// It never prompts: no pkexec route is involved. Call it off the main thread.
+func bootedBuild() (version, digest string) {
+	if !bootc.IsBootcBootedCached() {
+		return "", ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), diagnosticsStatusTimeout)
+	defer cancel()
+	status, err := bootc.GetStatus(ctx)
+	if err != nil {
+		log.Printf("views: reading the booted build for diagnostics failed: %v", err)
+		return "", ""
+	}
+	booted := status.Status.Booted
+	return booted.Version(), booted.Digest()
 }
 
 // openURL opens a URL in the default browser using xdg-open

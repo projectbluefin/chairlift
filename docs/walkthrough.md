@@ -313,13 +313,15 @@ ask you to confirm before applying the switch at the next restart.
 
 **Troubleshooting**, the AI troubleshooting assistant, is on the Agents page.
 
-Three links, each shown only when it is configured: **Visit project
-website**, **Report a problem** (the `issues` URL, where bug reports go), and
-**Browse documentation**.
+Three links, each shown only when it is configured: **Browse documentation**
+(the `website` URL), **Report a problem** (the `issues` URL, where bug reports
+go), and **Ask for help** (the `chat` URL, Ask Bluefin on Bluefin).
 
 A **Diagnostics** group offers a **System diagnostics** row that places
-scrubbed system information — OS, image, kernel, desktop, and GPU — onto the
-clipboard to include when asking for help.
+scrubbed system information — OS, image, system version, full build digest,
+kernel, desktop, and GPU — onto the clipboard to include when asking for help.
+The version and digest come from the same unprivileged status read as the
+Updates page's Details row, and are omitted where no deployment is readable.
 
 When the configuration turns on something this computer cannot run — Flatpak
 or Homebrew is absent, or the machine is not a native A/B install — **Feature
