@@ -635,3 +635,36 @@ func PrinterApp(dryRun bool, enable bool, rowTitle string) FeatureToggleDecision
 	}
 	return FeatureToggleDecision{Confirm: true, Toast: rowTitle + " is off. The driver and its printer settings were kept."}
 }
+
+// AskBluefinMenuDecision is the outcome of flipping the Agents page's "Show
+// Ask Bluefin in menu" switch.
+type AskBluefinMenuDecision struct {
+	// Active is the position the switch must show: the observed visibility
+	// when it was read back, otherwise the last known one (!requested).
+	Active bool
+	// Toast is empty when the requested change was observed applied.
+	Toast string
+	// Error selects an error toast rather than an ordinary one.
+	Error bool
+}
+
+// AskBluefinMenu decides what the Ask Bluefin menu switch shows after
+// devmenu.SetAskBluefinVisible (err) and the read-back
+// devmenu.AskBluefinState (observed, readErr). A preview says nothing
+// changed, and a write that did not take effect is reported rather than
+// silently snapping the switch back.
+func AskBluefinMenu(dryRun, requested, observed bool, err, readErr error) AskBluefinMenuDecision {
+	switch {
+	case readErr != nil && err != nil:
+		return AskBluefinMenuDecision{Active: !requested, Toast: "Could not update the Ask Bluefin menu entry.", Error: true}
+	case readErr != nil:
+		return AskBluefinMenuDecision{Active: !requested, Toast: "Could not verify the Ask Bluefin menu entry.", Error: true}
+	case err != nil:
+		return AskBluefinMenuDecision{Active: observed, Toast: "Could not update the Ask Bluefin menu entry.", Error: true}
+	case dryRun:
+		return AskBluefinMenuDecision{Active: observed, Toast: "Preview only — the menu entry was not changed."}
+	case observed != requested:
+		return AskBluefinMenuDecision{Active: observed, Toast: "The Ask Bluefin menu entry did not change.", Error: true}
+	}
+	return AskBluefinMenuDecision{Active: observed}
+}

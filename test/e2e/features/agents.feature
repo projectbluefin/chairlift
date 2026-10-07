@@ -297,6 +297,7 @@ Feature: Agents page
     When I toggle the switch in the "Show Ask Bluefin in menu" row
     Then the application log contains "[DRY-RUN] would set Custom Command Menu command11 visible=false"
     And the switch in the "Show Ask Bluefin in menu" row is on
+    And I see "Preview only — the menu entry was not changed."
     And dconf was never asked to "write"
     And dconf was never asked to "reset"
 

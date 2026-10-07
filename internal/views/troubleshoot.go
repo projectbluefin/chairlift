@@ -15,6 +15,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/troubleshoot"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
@@ -244,15 +245,25 @@ func (uh *UserHome) onAskBluefinMenuToggled(enabled bool, toggle *guardedSwitch)
 		defer cancel()
 		err := devmenu.SetAskBluefinVisible(ctx, enabled)
 		_, visible, readErr := devmenu.AskBluefinState(ctx)
+		decision := actionmsg.AskBluefinMenu(dryrun.Enabled(), enabled, visible, err, readErr)
 		sgtk.RunOnMainThread(func() {
 			uh.askBluefinGate.Reset()
 			toggle.widget.SetSensitive(true)
-			if readErr == nil {
-				toggle.set(visible)
-			}
+			// set() on every path: the switch handler held its state,
+			// so skipping it would leave the switch half-flipped.
+			toggle.set(decision.Active)
 			if err != nil {
 				log.Printf("views: setting ask bluefin menu visibility failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not update the Ask Bluefin menu entry.")
+			}
+			if readErr != nil {
+				log.Printf("views: reading ask bluefin menu visibility failed: %v", readErr)
+			}
+			switch {
+			case decision.Toast == "":
+			case decision.Error:
+				uh.toastAdder.ShowErrorToast(decision.Toast)
+			default:
+				uh.toastAdder.ShowToast(decision.Toast)
 			}
 		})
 	}()
