@@ -58,23 +58,20 @@ func TestDeveloperModeLiveToastsAskForARelogin(t *testing.T) {
 	}
 }
 
-// Issue #495: an enable whose helper skipped groups must warn and name each
-// group not granted, not read as a complete grant.
-func TestDeveloperModeWarnsAboutSkippedGroups(t *testing.T) {
+// Issue #495: an enable whose helper skipped groups still confirms and names
+// each group not granted, so it does not read as a complete grant.
+func TestDeveloperModeNamesSkippedGroups(t *testing.T) {
 	decision := DeveloperMode(false, true, []string{"docker", "incus-admin"})
-	if !decision.Confirm || !decision.Warn {
-		t.Errorf("DeveloperMode(partial enable) = %+v, want a confirmed warning", decision)
+	if !decision.Confirm {
+		t.Errorf("DeveloperMode(partial enable) = %+v, want it confirmed", decision)
 	}
 	for _, group := range []string{"docker", "incus-admin"} {
 		if !strings.Contains(decision.Toast, group) {
 			t.Errorf("DeveloperMode(partial enable).Toast = %q, want it to name %s", decision.Toast, group)
 		}
 	}
-	if full := DeveloperMode(false, true, nil); full.Warn {
-		t.Errorf("DeveloperMode(full enable) = %+v, want no warning", full)
-	}
-	if disable := DeveloperMode(false, false, []string{"docker"}); disable.Warn {
-		t.Errorf("DeveloperMode(disable, skipped) = %+v, want no warning", disable)
+	if disable := DeveloperMode(false, false, []string{"docker"}); strings.Contains(disable.Toast, "docker") {
+		t.Errorf("DeveloperMode(disable, skipped).Toast = %q, want no skipped-group note", disable.Toast)
 	}
 }
 

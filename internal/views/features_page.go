@@ -566,11 +566,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 			if decision.Confirm {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
-			if decision.Warn {
-				uh.toastAdder.ShowErrorToast(decision.Toast)
-			} else {
-				uh.toastAdder.ShowToast(decision.Toast)
-			}
+			uh.toastAdder.ShowToast(decision.Toast)
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
