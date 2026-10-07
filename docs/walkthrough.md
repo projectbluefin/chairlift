@@ -131,7 +131,8 @@ downloaded. The row shows an activity spinner throughout setup and shutdown, the
 restores the switch if the operation fails.
 
 **Active Model** and **Recommended Presets** remain visible, becoming usable
-only when the local server is ready; then **Models and Chat** opens llmman's
+only when the local server is ready. **Choose…** lists the model families with
+the recommended one first and highlighted; **Models and Chat**'s **Open llmman** opens llmman's
 own web interface for pulling, removing, and trying models. The connection
 address is directly selectable, not hidden in Details.
 
@@ -147,7 +148,7 @@ configuration is never read or changed, and one session runs at a time. The
 desktop shortcut and `chairlift --ask-bluefin` launch Goose Desktop directly
 when ready, or open Control Center to the Agents page naming the missing
 requirement. **Show Ask Bluefin in menu** toggles the distribution's shortcut
-in GNOME's top panel menu. Apps and terminals opened
+in GNOME's top panel menu, and reads on only when the menu actually lists it. Apps and terminals opened
 after Agent Mode is on receive `OLLAMA_HOST`; already-open ones need restarting.
 Everything here runs in your own account, without an administrator password.
 
@@ -156,7 +157,8 @@ contribute tasks to Project Bluefin. Before launch, preflight verifies that
 `xdg-terminal-exec`, `ujust`, the `contribute` recipe, and `podman` are
 available, and that a Hive registration file is present. When a requirement is
 missing, the row explains what is needed and keeps the action button
-unavailable until ready. In dry-run mode, it previews the launch without opening
+unavailable until ready; a missing registration offers a **Registration Guide**
+button that opens the setup instructions. In dry-run mode, it previews the launch without opening
 a terminal.
 
 ---

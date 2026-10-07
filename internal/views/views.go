@@ -313,6 +313,7 @@ type UserHome struct {
 	// Contribute to Bluefin (agents_page)
 	contributeRow     *adw.ActionRow
 	contributeButton  *gtk.Button
+	contributeGuide   *gtk.Button
 	contributeSpinner *gtk.Spinner
 	contributeGate    actionstate.Gate
 

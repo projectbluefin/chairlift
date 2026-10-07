@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -53,6 +54,7 @@ func TestPreflightOutcomes(t *testing.T) {
 		wantStatus   Status
 		wantReady    bool
 		wantSub      string
+		wantHelp     string
 	}{
 		{
 			name:         "ready when all preflight requirements are met",
@@ -137,7 +139,8 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRegistration,
 			wantReady:  false,
-			wantSub:    "Register this machine first — see https://github.com/projectbluefin/contribute#configuration",
+			wantSub:    "Register this machine with Hive first.",
+			wantHelp:   RegistrationURL,
 		},
 		{
 			name: "registration path is a directory",
@@ -148,7 +151,8 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRegistration,
 			wantReady:  false,
-			wantSub:    "Register this machine first — see https://github.com/projectbluefin/contribute#configuration",
+			wantSub:    "Register this machine with Hive first.",
+			wantHelp:   RegistrationURL,
 		},
 	}
 
@@ -165,6 +169,14 @@ func TestPreflightOutcomes(t *testing.T) {
 			}
 			if got.Subtitle != tt.wantSub {
 				t.Errorf("Preflight subtitle = %q, want %q", got.Subtitle, tt.wantSub)
+			}
+			// A URL is offered as a link control, never as unclickable
+			// subtitle text.
+			if got.HelpURL != tt.wantHelp {
+				t.Errorf("Preflight help URL = %q, want %q", got.HelpURL, tt.wantHelp)
+			}
+			if strings.Contains(got.Subtitle, "://") {
+				t.Errorf("Preflight subtitle %q spells out a URL", got.Subtitle)
 			}
 		})
 	}

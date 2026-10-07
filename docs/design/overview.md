@@ -971,9 +971,10 @@ Preflight is read-only, uses injectable probe seams, and executes off the GTK th
 4. `podman` on `$PATH`.
 5. Hive registration file present at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`.
 
-When any check fails, the row displays an actionable subtitle (including a link
-to registration setup when the registration file is missing) and leaves the
-action button insensitive. Ready actions invoke `launcher.Start`, reporting
+When any check fails, the row displays an actionable subtitle and leaves the
+action button insensitive. A missing registration file also shows a
+**Registration Guide** button (`Result.HelpURL`) that opens the registration
+setup page; the URL is not spelled out as unclickable subtitle text. Ready actions invoke `launcher.Start`, reporting
 launch failures asynchronously through the UI toast surface. Previews under
 `--dry-run` log the launch command without opening a terminal or spawning a worker.
 
@@ -1493,7 +1494,7 @@ Once set up, Ask Bluefin just opens Goose. With no session running, `agentmode.L
 - When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
 - When any prerequisite is missing, or the launch fails to start, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
 
-The Troubleshooting group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state.
+The Troubleshooting group also offers a **Show Ask Bluefin in menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state. The extension renders only slots listed in its `command-order` key, so the switch reads on only when the tuple is visible and its slot is listed; showing the entry also appends a missing slot to `command-order` (resetting instead when the result equals the distro default). Dakota's distro layer moves Ask Bluefin to `command12` while inheriting Bluefin's order of 1..11, which otherwise left a visible tuple the menu never rendered.
 
 ## Explicit setup flow
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -834,5 +835,159 @@ func TestAskBluefinIdentityAcceptsTheDistroWrapperEntry(t *testing.T) {
 	got := mock.user[key]
 	if !strings.Contains(got, distro) || !strings.Contains(got, "false") {
 		t.Errorf("user override = %q, want the distro command kept and visible=false", got)
+	}
+}
+
+// dakotaOrder is the command-order Dakota inherits from Bluefin's distro
+// layer while its own layer moves Ask Bluefin to command12.
+const dakotaOrder = "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]"
+
+const dakotaAskBluefin = "('Ask Bluefin', 'xdg-open https://ask.projectbluefin.io', '', true)"
+
+func withMockDconf(t *testing.T) *mockDconf {
+	t.Helper()
+	origLookPath, origRunCommand := lookPath, runCommand
+	t.Cleanup(func() {
+		lookPath, runCommand = origLookPath, origRunCommand
+		dryrun.Set(false)
+	})
+	lookPath = func(file string) (string, error) { return "/usr/bin/" + file, nil }
+	mock := newMockDconf()
+	runCommand = mock.runCommand
+	return mock
+}
+
+func TestParseCommandOrder(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want []int
+	}{
+		{"[1, 2, 11]", []int{1, 2, 11}},
+		{"[3,1]", []int{3, 1}},
+		{"@ai []", []int{}},
+		{"[]", []int{}},
+	}
+	for _, tc := range cases {
+		got, err := ParseCommandOrder(tc.raw)
+		if err != nil || !slices.Equal(got, tc.want) {
+			t.Errorf("ParseCommandOrder(%q) = (%v, %v), want %v", tc.raw, got, err, tc.want)
+		}
+	}
+	all, err := ParseCommandOrder("")
+	if err != nil || len(all) != MaxCommands || all[0] != 1 || all[MaxCommands-1] != MaxCommands {
+		t.Errorf("ParseCommandOrder(\"\") = (%v, %v), want the schema default 1..%d", all, err, MaxCommands)
+	}
+	for _, bad := range []string{"1, 2", "[1, x]", "('a', 'b')"} {
+		if _, err := ParseCommandOrder(bad); err == nil {
+			t.Errorf("ParseCommandOrder(%q) succeeded, want error", bad)
+		}
+	}
+	if got := FormatCommandOrder([]int{1, 12}); got != "[1, 12]" {
+		t.Errorf("FormatCommandOrder = %q", got)
+	}
+	if got := FormatCommandOrder(nil); got != "@ai []" {
+		t.Errorf("FormatCommandOrder(nil) = %q, want a typed empty array", got)
+	}
+}
+
+// The extension renders only slots listed in command-order. On Dakota the
+// Ask Bluefin slot is visible=true but unlisted, so the menu never shows it
+// and the switch must not claim it does.
+func TestAskBluefinStateRequiresTheSlotInCommandOrder(t *testing.T) {
+	mock := withMockDconf(t)
+	mock.defaults[DconfPath+"command12"] = dakotaAskBluefin
+	mock.defaults[DconfPath+CommandOrderKey] = dakotaOrder
+
+	avail, vis, err := AskBluefinState(context.Background())
+	if err != nil || !avail || vis {
+		t.Fatalf("AskBluefinState() = (%v, %v, %v), want (true, false, nil)", avail, vis, err)
+	}
+
+	mock.user[DconfPath+CommandOrderKey] = "[1, 2, 12]"
+	avail, vis, err = AskBluefinState(context.Background())
+	if err != nil || !avail || !vis {
+		t.Fatalf("listed slot: AskBluefinState() = (%v, %v, %v), want (true, true, nil)", avail, vis, err)
+	}
+
+	mock.user[DconfPath+CommandOrderKey] = "not an array"
+	if _, _, err := AskBluefinState(context.Background()); err == nil {
+		t.Fatal("AskBluefinState() accepted a malformed command-order")
+	}
+}
+
+func TestShowAskBluefinListsAnUnlistedSlot(t *testing.T) {
+	mock := withMockDconf(t)
+	entryKey := DconfPath + "command12"
+	orderKey := DconfPath + CommandOrderKey
+	mock.defaults[entryKey] = dakotaAskBluefin
+	mock.defaults[orderKey] = dakotaOrder
+
+	if err := SetAskBluefinVisible(context.Background(), true); err != nil {
+		t.Fatalf("SetAskBluefinVisible(true) error: %v", err)
+	}
+	if want := "[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]"; mock.writes[orderKey] != want {
+		t.Errorf("command-order write = %q, want %q", mock.writes[orderKey], want)
+	}
+	if _, ok := mock.writes[entryKey]; ok {
+		t.Errorf("an already-visible tuple was rewritten: %q", mock.writes[entryKey])
+	}
+	if _, vis, _ := AskBluefinState(context.Background()); !vis {
+		t.Error("Ask Bluefin is not reported visible after showing it")
+	}
+
+	// Hiding touches only the tuple's flag; the order keeps the slot.
+	mock.writes = map[string]string{}
+	if err := SetAskBluefinVisible(context.Background(), false); err != nil {
+		t.Fatalf("SetAskBluefinVisible(false) error: %v", err)
+	}
+	if _, ok := mock.writes[orderKey]; ok {
+		t.Errorf("hiding rewrote command-order: %q", mock.writes[orderKey])
+	}
+	if want := "('Ask Bluefin', 'xdg-open https://ask.projectbluefin.io', '', false)"; mock.writes[entryKey] != want {
+		t.Errorf("tuple write = %q, want %q", mock.writes[entryKey], want)
+	}
+	if _, vis, _ := AskBluefinState(context.Background()); vis {
+		t.Error("Ask Bluefin is still reported visible after hiding it")
+	}
+
+	// Showing again resets the tuple to its distro default and leaves the
+	// order, which already lists the slot, alone.
+	mock.writes = map[string]string{}
+	if err := SetAskBluefinVisible(context.Background(), true); err != nil {
+		t.Fatalf("SetAskBluefinVisible(true) again error: %v", err)
+	}
+	if !mock.resets[entryKey] || len(mock.writes) != 0 {
+		t.Errorf("re-show: resets=%v writes=%v, want only a tuple reset", mock.resets, mock.writes)
+	}
+}
+
+// A user layer that dropped the slot from an order the distro already lists
+// it in is reset, not pinned with a copy of the distro value.
+func TestShowAskBluefinResetsAnOrderThatMatchesTheDistroDefault(t *testing.T) {
+	mock := withMockDconf(t)
+	orderKey := DconfPath + CommandOrderKey
+	mock.defaults[DconfPath+"command12"] = dakotaAskBluefin
+	mock.defaults[orderKey] = "[1, 12]"
+	mock.user[orderKey] = "[1]"
+
+	if err := SetAskBluefinVisible(context.Background(), true); err != nil {
+		t.Fatalf("SetAskBluefinVisible(true) error: %v", err)
+	}
+	if !mock.resets[orderKey] || len(mock.writes) != 0 {
+		t.Errorf("resets=%v writes=%v, want a command-order reset", mock.resets, mock.writes)
+	}
+}
+
+func TestShowAskBluefinUnderDryRunDoesNotWriteTheOrder(t *testing.T) {
+	mock := withMockDconf(t)
+	dryrun.Set(true)
+	mock.defaults[DconfPath+"command12"] = dakotaAskBluefin
+	mock.defaults[DconfPath+CommandOrderKey] = dakotaOrder
+
+	if err := SetAskBluefinVisible(context.Background(), true); err != nil {
+		t.Fatalf("SetAskBluefinVisible(true) error: %v", err)
+	}
+	if len(mock.writes) != 0 || len(mock.resets) != 0 {
+		t.Errorf("dry-run mutated: writes=%v resets=%v", mock.writes, mock.resets)
 	}
 }

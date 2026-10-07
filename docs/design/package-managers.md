@@ -752,14 +752,17 @@ application requests share that dispatcher.
 tuple's visibility — recognizing the web link, `chairlift --ask-bluefin`,
 and the distro's `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper
 --ask-bluefin` — using the user-layer override/reset rule; it never rewrites
-the command and does not run a privileged action.
+the command and does not run a privileged action. Because the extension
+renders only slots listed in `command-order`, the entry counts as shown only
+when its slot is listed there too, and showing it appends a missing slot.
 
 The same Agents page's **Contribute to Bluefin** action uses
 [`internal/contribute`](../../internal/contribute/contribute.go) to check
 `xdg-terminal-exec`, `ujust`, the `contribute` recipe, Podman and an existing
 Hive registration file. Readiness launches `xdg-terminal-exec ujust contribute`
 through the async launcher; a missing prerequisite leaves an explained,
-insensitive action. Registration is not created or validated with Hive here,
+insensitive action, and missing registration adds a **Registration Guide**
+button that opens the contributor configuration documentation. Registration is not created or validated with Hive here,
 and dry-run launches nothing.
 
 ## Printer applications (`internal/printerapp`)

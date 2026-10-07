@@ -107,3 +107,33 @@ func AgentModeManageSubtitle() string {
 
 // AgentModeManageLabel is the button that opens it.
 func AgentModeManageLabel() string { return "Open llmman" }
+
+// AgentModePresetResponse is one model family offered by the preset chooser.
+type AgentModePresetResponse struct {
+	ID        string
+	Label     string
+	Suggested bool
+}
+
+// AgentModePresetResponses lists the chooser's family responses in the order
+// the view adds them to its AdwAlertDialog, after Cancel. Six responses never
+// fit side by side, and AdwAlertDialog then stacks them in reverse order, so
+// the families are added last-first: the recommended default family is added
+// last, which puts it at the top of the stack (and rightmost when the
+// responses do fit in a row), and it is the one suggested response.
+func AgentModePresetResponses() []AgentModePresetResponse {
+	families := aistack.Families()
+	responses := make([]AgentModePresetResponse, 0, len(families))
+	for i := len(families) - 1; i >= 0; i-- {
+		fam := families[i]
+		if fam == aistack.DefaultFamily {
+			continue
+		}
+		responses = append(responses, AgentModePresetResponse{ID: string(fam), Label: fam.DisplayName()})
+	}
+	return append(responses, AgentModePresetResponse{
+		ID:        string(aistack.DefaultFamily),
+		Label:     aistack.DefaultFamily.DisplayName(),
+		Suggested: true,
+	})
+}

@@ -27,6 +27,19 @@ func (uh *UserHome) buildContributeGroup(page *adw.PreferencesPage) {
 	uh.contributeSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.contributeSpinner.Widget)
 
+	// The registration guide is a real control, built once and shown only
+	// when preflight names a page that resolves the unmet requirement; a URL
+	// spelled out in the subtitle is not clickable.
+	guide := gtk.NewButtonWithLabel(contribute.RegistrationGuideLabel)
+	guide.SetValign(gtk.AlignCenterValue)
+	guide.SetTooltipText(contribute.RegistrationURL)
+	guide.SetVisible(false)
+	guideClicked := func(_ gtk.Button) {
+		uh.openURL(contribute.RegistrationURL)
+	}
+	guide.ConnectClicked(&guideClicked)
+	row.AddSuffix(&guide.Widget)
+
 	button := gtk.NewButtonWithLabel("Contribute")
 	button.SetValign(gtk.AlignCenterValue)
 	button.SetSensitive(false)
@@ -42,6 +55,7 @@ func (uh *UserHome) buildContributeGroup(page *adw.PreferencesPage) {
 
 	uh.contributeRow = row
 	uh.contributeButton = button
+	uh.contributeGuide = guide
 
 	uh.refreshContributePreflight()
 }
@@ -62,6 +76,9 @@ func (uh *UserHome) refreshContributePreflight() {
 			}
 			uh.contributeRow.SetSubtitle(result.Subtitle)
 			uh.contributeButton.SetSensitive(result.Ready)
+			if uh.contributeGuide != nil {
+				uh.contributeGuide.SetVisible(result.HelpURL != "")
+			}
 		})
 	}()
 }
