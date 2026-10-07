@@ -125,6 +125,24 @@ func TestUninstall(t *testing.T) {
 	}
 }
 
+// Homebrew refuses to uninstall a package other installed packages need;
+// the toast names them instead of a bare, unactionable failure (W2-APPS-3).
+func TestUninstallFailureNamesDependents(t *testing.T) {
+	for _, tt := range []struct {
+		dependents []string
+		want       string
+	}{
+		{nil, "Could not uninstall node"},
+		{[]string{"yarn"}, "Could not uninstall node because yarn needs it"},
+		{[]string{"yarn", "pnpm"}, "Could not uninstall node because yarn and pnpm need it"},
+		{[]string{"glib", "pipx", "yarn"}, "Could not uninstall node because glib, pipx and yarn need it"},
+	} {
+		if got := UninstallFailure("node", tt.dependents); got != tt.want {
+			t.Errorf("UninstallFailure(node, %q) = %q, want %q", tt.dependents, got, tt.want)
+		}
+	}
+}
+
 func TestPin(t *testing.T) {
 	tests := []struct {
 		name      string

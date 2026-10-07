@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	"fmt"
 	"log"
 
@@ -416,10 +417,15 @@ func (uh *UserHome) runHomebrewUninstall(
 	err := homebrew.Uninstall(name, kind == homebrew.Cask)
 	dryRun := dryrun.Enabled()
 	decision := actionstate.PackageUninstall(err == nil, dryRun)
+	var dependents []string
+	var depErr *homebrew.DependentsError
+	if errors.As(err, &depErr) {
+		dependents = depErr.Dependents
+	}
 	uh.finishHomebrewPackageMutation(
 		decision,
 		err,
-		fmt.Sprintf("Could not uninstall %s", name),
+		actionmsg.UninstallFailure(name, dependents),
 		actionmsg.Uninstall(dryRun, name),
 		"Uninstall",
 		"Uninstalled",
