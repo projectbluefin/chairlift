@@ -78,6 +78,9 @@ type UserHome struct {
 	// Apps collections share one install gate per collection.
 	bundleInstalls map[string]*bundleInstall
 	bundleButtons  buttonRoute
+	// bundleStatusRefresh lets only the newest installed-state check of the
+	// collections publish; see refreshBundleStatuses.
+	bundleStatusRefresh actionstate.RefreshGate
 
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.

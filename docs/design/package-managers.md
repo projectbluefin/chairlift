@@ -232,7 +232,9 @@ showing raw paths in the UI.
 `BundleCheck` reports Installed on first-pass success. Only an ordinary exit 1
 permits `check --no-upgrade`: success then means Update Available, exit 1 means
 Not Installed. Malformed manifests, cancellation, timeouts and other failures
-remain Indeterminate with an error; dry-run still performs these reads.
+remain Indeterminate with an error; dry-run still performs these reads. Read-only
+`bundle check`/`bundle list` run with `HOMEBREW_NO_AUTO_UPDATE=1`, because brew
+otherwise runs `brew update --auto-update` before every `bundle` subcommand.
 
 `applications_page.brew_bundles_group` is independent of `brew_group`.
 Built-in `bundles_paths` contains `/usr/share/ublue-os/homebrew`,
@@ -240,9 +242,19 @@ Built-in `bundles_paths` contains `/usr/share/ublue-os/homebrew`,
 [`config.yml`](../../config.yml) replaces that list with the first directory
 only. Group visibility is floored on Homebrew before discovery.
 A per-path `bundleview.InstallGate` prevents overlapping collection installs.
-Live success permanently completes that row and refreshes installed packages;
-failure or preview restores Install, and preview requests no inventory refresh.
+Live success completes that row and refreshes installed packages; failure or
+preview restores Install, and preview requests no inventory refresh.
 Inline install progress pulses rather than inventing a percentage.
+Each row's installed state is observed, not remembered:
+`refreshBundleStatuses` (`internal/views/bundle_install.go`) runs
+`BundleCheck` for every collection off the GTK thread once the rows are
+built, again after every live collection install (success or failure), and
+after a live Homebrew uninstall. `bundleview.ObservedInstalled` maps Installed
+and Update Available to installed, Not Installed to not installed, and
+Indeterminate to no change; `InstallGate.Observe` then closes an idle row as
+Installed or reopens an Installed one, and never touches a running install.
+An `actionstate.RefreshGate` generation lets only the newest refresh publish,
+so a check begun before an install cannot overwrite its outcome.
 
 ### Tap trust
 

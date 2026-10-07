@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
@@ -85,6 +86,51 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 	})
 }
 
+// refreshBundleStatuses observes, off the GTK thread, whether each connected
+// collection is already installed, so a row reads "Installed" because the
+// system holds the collection, not only because this session installed it.
+// It must be called on the GTK main thread. Only the newest refresh may
+// publish: each result is dropped once a later refresh has begun, and a
+// worker stops checking as soon as it is superseded. A collection whose
+// check cannot decide keeps the row it had.
+func (uh *UserHome) refreshBundleStatuses() {
+	if uh == nil || len(uh.bundleInstalls) == 0 {
+		return
+	}
+	paths := make([]string, 0, len(uh.bundleInstalls))
+	for path := range uh.bundleInstalls {
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	generation := uh.bundleStatusRefresh.Begin()
+
+	go func() {
+		for _, path := range paths {
+			if !uh.bundleStatusRefresh.IsCurrent(generation) {
+				return
+			}
+			status, err := homebrew.BundleCheck(path)
+			if err != nil {
+				log.Printf("Could not check whether app collection %q is installed: %v", path, err)
+			}
+			installed, known := bundleview.ObservedInstalled(status)
+			if !known {
+				continue
+			}
+			sgtk.RunOnMainThread(func() {
+				if !uh.bundleStatusRefresh.IsCurrent(generation) {
+					return
+				}
+				shared := uh.bundleInstalls[path]
+				if shared == nil || !shared.gate.Observe(installed) {
+					return
+				}
+				shared.show(shared.gate.InstallPhase())
+			})
+		}
+	}()
+}
+
 // runBundleInstall installs one collection behind its shared gate and
 // reports the outcome the way the Apps page always has: a trust refusal
 // names the tap, a partial failure says so, a dry run restores the
@@ -105,6 +151,9 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 			sgtk.RunOnMainThread(func() {
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)
+				// Part of it, or of a collection sharing its items, may
+				// have been installed before it stopped.
+				uh.refreshBundleStatuses()
 				var trustErr *homebrew.UntrustedTapError
 				if errors.As(err, &trustErr) {
 					uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage(collection.Title, trustErr.Tap))
@@ -125,9 +174,12 @@ func (uh *UserHome) runBundleInstall(bundle homebrew.Bundle, shared *bundleInsta
 				shared.show(bundleview.InstallLabelCompleted, false)
 				// A live install can add packages the current inventory
 				// snapshot predates, so refresh the installed list to
-				// match. Under dry-run decision.Complete is false —
-				// nothing was changed — so the inventory stays put.
+				// match, and re-observe every collection: they can share
+				// items, and a check begun before this install must not
+				// publish over it. Under dry-run decision.Complete is
+				// false — nothing was changed — so both stay put.
 				go uh.loadHomebrewPackages()
+				uh.refreshBundleStatuses()
 			} else {
 				shared.gate.Reset()
 				shared.show(bundleview.InstallLabelReady, true)

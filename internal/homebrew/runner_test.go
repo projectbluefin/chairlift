@@ -107,6 +107,35 @@ func TestRunBrewCommandAtKeepsTapInfoOffTheGitHubAPI(t *testing.T) {
 	}
 }
 
+// TestRunBrewCommandAtKeepsBundleReadsFromAutoUpdating pins that the Apps
+// page's per-collection `brew bundle check` never triggers brew's
+// auto-update (which brew runs before every `bundle` subcommand), while
+// install and every other command keep brew's own behaviour.
+func TestRunBrewCommandAtKeepsBundleReadsFromAutoUpdating(t *testing.T) {
+	t.Setenv("HOMEBREW_NO_AUTO_UPDATE", "")
+	script := fakeBrew(t, `printf '%s' "$HOMEBREW_NO_AUTO_UPDATE"`)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"bundle", "check", "--file=/x.Brewfile"}, "1"},
+		{[]string{"bundle", "check", "--no-upgrade", "--file=/x.Brewfile"}, "1"},
+		{[]string{"bundle", "list"}, "1"},
+		{[]string{"bundle", "install", "--file=/x.Brewfile"}, ""},
+		{[]string{"info", "--installed", "--json=v2"}, ""},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		out, err := runBrewCommandAt(ctx, script, tc.args...)
+		cancel()
+		if err != nil {
+			t.Fatalf("runBrewCommandAt(%v): %v", tc.args, err)
+		}
+		if out != tc.want {
+			t.Errorf("runBrewCommandAt(%v) saw HOMEBREW_NO_AUTO_UPDATE=%q, want %q", tc.args, out, tc.want)
+		}
+	}
+}
+
 func TestRunBrewCommandAt(t *testing.T) {
 	t.Run("success captures stdout", func(t *testing.T) {
 		script := fakeBrew(t, `echo "hello from brew"`)

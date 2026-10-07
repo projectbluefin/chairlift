@@ -4,6 +4,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 const wantGroupDescription = "Install a set of apps and tools together in one step. " +
@@ -286,6 +288,58 @@ func TestGateInstallPhaseFollowsTheLifecycle(t *testing.T) {
 		label, sensitive := gate.InstallPhase()
 		if label != step.wantLabel || sensitive != step.wantSensitive {
 			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
+		}
+	}
+}
+
+// TestGateObserveReflectsTheSystem covers W3-09: a collection installed
+// before this session must read "Installed" on load, an observation must
+// never overwrite a running install, and a collection observed missing
+// again (one of its items was uninstalled) must offer Install again.
+func TestGateObserveReflectsTheSystem(t *testing.T) {
+	var gate InstallGate
+	steps := []struct {
+		name          string
+		transition    func() bool
+		wantChanged   bool
+		wantLabel     string
+		wantSensitive bool
+	}{
+		{"not installed on load leaves Install", func() bool { return gate.Observe(false) }, false, InstallLabelReady, true},
+		{"installed on load reads Installed", func() bool { return gate.Observe(true) }, true, InstallLabelCompleted, false},
+		{"installed again changes nothing", func() bool { return gate.Observe(true) }, false, InstallLabelCompleted, false},
+		{"a completed gate cannot start", func() bool { return gate.TryStart() }, false, InstallLabelCompleted, false},
+		{"observed missing reopens Install", func() bool { return gate.Observe(false) }, true, InstallLabelReady, true},
+		{"an install starts", func() bool { return gate.TryStart() }, true, InstallLabelRunning, false},
+		{"installed never overwrites a run", func() bool { return gate.Observe(true) }, false, InstallLabelRunning, false},
+		{"missing never overwrites a run", func() bool { return gate.Observe(false) }, false, InstallLabelRunning, false},
+	}
+	for _, step := range steps {
+		if changed := step.transition(); changed != step.wantChanged {
+			t.Fatalf("%s: changed = %v, want %v", step.name, changed, step.wantChanged)
+		}
+		label, sensitive := gate.InstallPhase()
+		if label != step.wantLabel || sensitive != step.wantSensitive {
+			t.Fatalf("%s: InstallPhase = (%q, %v), want (%q, %v)", step.name, label, sensitive, step.wantLabel, step.wantSensitive)
+		}
+	}
+}
+
+func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
+	for _, tc := range []struct {
+		status        homebrew.BundleStatus
+		wantInstalled bool
+		wantKnown     bool
+	}{
+		{homebrew.BundleInstalled, true, true},
+		{homebrew.BundleUpdateAvailable, true, true},
+		{homebrew.BundleNotInstalled, false, true},
+		{homebrew.BundleIndeterminate, false, false},
+		{"", false, false},
+	} {
+		installed, known := ObservedInstalled(tc.status)
+		if installed != tc.wantInstalled || known != tc.wantKnown {
+			t.Errorf("ObservedInstalled(%q) = (%v, %v), want (%v, %v)", tc.status, installed, known, tc.wantInstalled, tc.wantKnown)
 		}
 	}
 }

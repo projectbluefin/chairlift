@@ -111,7 +111,17 @@ Feature: Apps destination
     And the "Install" button in the "Coding fonts" row is sensitive
     And I do not see "Installing collection"
     And I do not see "Installing collection…"
-    And Homebrew was never asked to "bundle"
+    And Homebrew was asked to "bundle check"
+    And Homebrew was never asked to "bundle install"
+
+  @config.apps-bundles @stub.apps-brew-team-tools-installed @stub.apps-collections
+  Scenario: A collection already on the system reads Installed when the page loads
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then the "Installed" button in the "Team tools" row is insensitive
+    And the "Install" button in the "Coding fonts" row is sensitive
+    And Homebrew was asked to "bundle check"
+    And Homebrew was never asked to "bundle install"
 
   @config.apps-bundles @stub.apps-brew
   Scenario: A system with no app collections says none are offered
