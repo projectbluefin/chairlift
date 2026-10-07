@@ -888,7 +888,8 @@ func (w *Window) finishFirstRun(completed bool) {
 			_, _, err = firstrun.RecordSkip(ctx, store)
 		}
 		if err != nil {
-			sgtk.RunOnMainThread(func() { w.ShowErrorToast(err.Error()) })
+			log.Printf("window: recording setup disposition failed: %v", err)
+			sgtk.RunOnMainThread(func() { w.ShowErrorToast("Couldn't save your setup progress. Setup may open again next time.") })
 		}
 	}()
 }

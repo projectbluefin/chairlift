@@ -61,3 +61,14 @@ func IsAuthDismissed(err error) bool {
 func MessageIsAuthDismissed(message string) bool {
 	return strings.Contains(message, dismissedMarker)
 }
+
+// UserMessage returns the text a privileged view hands the window's error
+// toast for err: plain, a sentence written for the person, for a genuine
+// failure; or a message the toast recognises as a dismissed password prompt.
+// The raw error belongs in the log, which the caller writes.
+func UserMessage(err error, plain string) string {
+	if IsAuthDismissed(err) {
+		return dismissedMarker
+	}
+	return plain
+}

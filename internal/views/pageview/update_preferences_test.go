@@ -18,7 +18,7 @@ func TestUpdateSourcePreferenceRowsExplainWhyASwitchIsLocked(t *testing.T) {
 		{"before the first check", nil, false, "Checking availability…", false},
 		{"a source the shell has not reported", []updateflow.SourceState{{ID: updateflow.OperatingSystem, Configured: true, Available: true}}, true, "Checking availability…", false},
 		{"disabled by the administrator", []updateflow.SourceState{{ID: id, Configured: false, Available: true}}, true, "Disabled by your administrator", false},
-		{"not backed by this host", []updateflow.SourceState{{ID: id, Configured: true, Available: false}}, true, "Not available on this system", false},
+		{"not backed by this host", []updateflow.SourceState{{ID: id, Configured: true, Available: false}}, true, "Not available on this computer", false},
 		{"operable", []updateflow.SourceState{{ID: id, Configured: true, Available: true}}, true, "", true},
 	}
 	for _, tc := range cases {

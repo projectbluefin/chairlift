@@ -94,10 +94,12 @@ func TestPinCandidateOrderMatchesPublishedSpellings(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(args, want) || !reflect.DeepEqual(calls, tc.calls) {
 				t.Fatalf("args=%v err=%v calls=%v; want %v, %v", args, err, calls, want, tc.calls)
 			}
+			// The Published versions row the Pin button sits on must carry the
+			// same day the helper derives its target from.
 			builds := registrytags.Builds(published, time.Time{})
 			rows := pageview.PublishedVersions(builds, pageview.CatalogStream(tc.booted), "", "")
-			if len(rows) != 1 || rows[0].Subtitle != "Published as "+tc.published {
-				t.Fatalf("catalog rows = %+v, want selected tag %q", rows, tc.published)
+			if len(rows) != 1 || rows[0].Day != tc.day {
+				t.Fatalf("catalog rows = %+v, want one row for day %q", rows, tc.day)
 			}
 		})
 	}

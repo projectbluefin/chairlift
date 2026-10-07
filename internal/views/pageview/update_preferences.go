@@ -30,7 +30,7 @@ func UpdateSourcePreferenceSubtitle(states []updateflow.SourceState, ready bool,
 		return "Disabled by your administrator"
 	}
 	if !state.Available {
-		return "Not available on this system"
+		return "Not available on this computer"
 	}
 	return ""
 }

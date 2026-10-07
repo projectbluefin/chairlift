@@ -163,7 +163,7 @@ func (c *Cleanup) runStep(ctx context.Context, id StepID, progress func(updatefl
 		}
 		report(progress, updateflow.Progress{
 			Source:  updateflow.DeveloperTools,
-			Message: "Removing old downloads",
+			Message: "Removing old downloads…",
 		})
 		output, err := c.deps.HomebrewCleanup()
 		if err != nil {
@@ -180,7 +180,7 @@ func (c *Cleanup) runStep(ctx context.Context, id StepID, progress func(updatefl
 		}
 		report(progress, updateflow.Progress{
 			Source:  updateflow.Applications,
-			Message: "Removing unused supporting software",
+			Message: "Removing unused app parts…",
 		})
 		if err := c.deps.FlatpakCleanup(); err != nil {
 			return StepResult{ID: id, Outcome: classify(err), Detail: err.Error(), Err: err}

@@ -118,7 +118,7 @@ exit 0
 
 @stub("maintenance_bootc_pinned")
 def maintenance_bootc_pinned(context):
-    """A bootc host booted on a dated tag (e.g. latest.20260920), offering Return to stream."""
+    """A bootc host booted on a dated tag (e.g. latest.20260920), offering Go back to regular updates."""
     status = json.loads(json.dumps(BOOTC_STATUS_WITH_ROLLBACK))
     status["status"]["booted"]["image"]["image"]["image"] = "ghcr.io/projectbluefin/dakota:latest.20260920"
     status["status"]["booted"]["image"]["version"] = "44.20260920"

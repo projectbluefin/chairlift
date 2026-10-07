@@ -21,11 +21,11 @@ func TestGooseRowOffersOnlyWhatTheRowCanDo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.state.String(), func(t *testing.T) {
-			view := GooseRow(tt.state, "unsloth/Qwen3-8B-GGUF:Q4_K_M")
+			view := GooseRow(tt.state)
 			if view.Action != tt.wantAction || view.Action.Label() != tt.wantLabel {
 				t.Errorf("GooseRow(%v) = %v %q, want %v %q", tt.state, view.Action, view.Action.Label(), tt.wantAction, tt.wantLabel)
 			}
-			if view.Subtitle != tt.state.Subtitle("unsloth/Qwen3-8B-GGUF:Q4_K_M") {
+			if view.Subtitle != tt.state.Subtitle() {
 				t.Errorf("GooseRow(%v).Subtitle = %q", tt.state, view.Subtitle)
 			}
 		})
@@ -33,10 +33,10 @@ func TestGooseRowOffersOnlyWhatTheRowCanDo(t *testing.T) {
 }
 
 func TestGooseSetupToastSaysWhatStillBlocksALaunch(t *testing.T) {
-	if got := GooseSetupToast(agentmode.StateReady, "m"); got != "Goose is ready" {
+	if got := GooseSetupToast(agentmode.StateReady); !strings.Contains(got, "ready") {
 		t.Errorf("ready toast = %q", got)
 	}
-	got := GooseSetupToast(agentmode.StateDaemonUnavailable, "")
+	got := GooseSetupToast(agentmode.StateDaemonUnavailable)
 	if !strings.Contains(got, "installed") || !strings.Contains(got, "Agent Mode") {
 		t.Errorf("blocked toast = %q, want it to name Agent Mode", got)
 	}

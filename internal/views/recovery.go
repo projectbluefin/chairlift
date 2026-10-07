@@ -1,11 +1,11 @@
 package views
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -129,7 +129,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
-	group.SetDescription("Return to the previous system version if an update went badly")
+	group.SetDescription("Go back if an update caused problems.")
 	group.Add(&uh.bootcRollbackRow.Widget)
 	group.SetVisible(false)
 	page.Add(group)
@@ -149,31 +149,29 @@ func (uh *UserHome) buildRecoveryVersionsGroup(page *adw.PreferencesPage) {
 	}
 }
 
-// buildReturnToStreamRow builds the Return to stream row on the Powerwash
-// page when booted on a dated tag.
+// buildReturnToStreamRow builds the "Go back to regular updates" row on the
+// Powerwash page when booted on a dated tag.
 func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 	status := ublue.StatusCached()
-	build, pinned := registrytags.ParseBuild(status.Tag)
-	if !status.Available || !pinned {
+	if _, pinned := registrytags.ParseBuild(status.Tag); !status.Available || !pinned {
 		return
 	}
 
-	stream := build.Stream
 	supported := status.Supports(ubluehelper.CommandUnpin)
-	presentation := pageview.UnpinRow(stream, supported)
+	presentation := pageview.UnpinRow(supported)
 
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 
-	btn := gtk.NewButtonWithLabel("Return to Stream")
+	btn := gtk.NewButtonWithLabel(returnToStreamButtonLabel)
 	btn.SetValign(gtk.AlignCenterValue)
 	btn.SetSensitive(supported)
 	if !supported {
 		btn.SetTooltipText(pageview.UnpinUnsupportedExplanation())
 	} else {
 		clickedCb := func(gtk.Button) {
-			uh.confirmReturnToStream(stream, btn)
+			uh.confirmReturnToStream(btn)
 		}
 		btn.ConnectClicked(&clickedCb)
 	}
@@ -184,17 +182,21 @@ func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 	uh.unpinBtn = btn
 }
 
+// returnToStreamButtonLabel is the unpin row's button and its dialog's
+// confirming response.
+const returnToStreamButtonLabel = "Resume Updates"
+
 // confirmReturnToStream presents an AdwAlertDialog confirmation before
 // returning to the regular release stream.
-func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
+func (uh *UserHome) confirmReturnToStream(button *gtk.Button) {
 	if !uh.unpinGate.TryStart() {
 		return
 	}
 
-	title, body := pageview.UnpinConfirmation(stream)
+	title, body := pageview.UnpinConfirmation()
 	dialog := adw.NewAlertDialog(title, body)
 	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Return to Stream")
+	dialog.AddResponse("confirm", returnToStreamButtonLabel)
 	dialog.SetResponseAppearance("confirm", adw.ResponseSuggestedValue)
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
@@ -211,7 +213,7 @@ func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
 // pkexec chairlift-helper unpin.
 func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 	button.SetSensitive(false)
-	button.SetLabel("Returning…")
+	button.SetLabel("Switching…")
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -222,11 +224,11 @@ func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 		sgtk.RunOnMainThread(func() {
 			uh.unpinGate.Reset()
 			button.SetSensitive(true)
-			button.SetLabel("Return to Stream")
+			button.SetLabel(returnToStreamButtonLabel)
 
 			if err != nil {
 				log.Printf("views: return to stream failed: %v", err)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Return to stream failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't go back to regular updates. Try again."))
 				return
 			}
 
@@ -307,9 +309,10 @@ func (uh *UserHome) onBootcRollbackClicked() {
 
 		sgtk.RunOnMainThread(func() {
 			if err != nil {
+				log.Printf("views: rollback failed: %v", err)
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Rollback failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't go back to the previous version. Try again."))
 				return
 			}
 
@@ -344,7 +347,7 @@ func (uh *UserHome) onBootcRollbackRestartClicked() {
 		sgtk.RunOnMainThread(func() {
 			button.SetSensitive(true)
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't restart. Try again."))
 			}
 		})
 	}()

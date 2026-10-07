@@ -46,13 +46,12 @@ func (uh *UserHome) buildApplicationsPage() {
 	// Homebrew group
 	if uh.groupEnabled("applications_page", "brew_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Packages from Homebrew")
-		group.SetDescription("Apps and tools installed with Homebrew, a third-party source.")
+		group.SetTitle("Backup")
 
 		// Package-list export row
 		dumpRow := adw.NewActionRow()
-		dumpRow.SetTitle("Export package list")
-		dumpRow.SetSubtitle("Saves a list of everything you installed here so you can put it back later. Replaces the list you exported last time.")
+		dumpRow.SetTitle("Export app list")
+		dumpRow.SetSubtitle("Save a list of your apps and tools to reinstall them later.")
 		dumpSpinner := newActivitySpinner()
 		dumpRow.AddSuffix(&dumpSpinner.Widget)
 
@@ -74,7 +73,7 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		// Applications — Homebrew casks
 		uh.installedCasks = adw.NewPreferencesGroup()
-		uh.installedCasks.SetTitle("Homebrew applications")
+		uh.installedCasks.SetTitle("Installed apps")
 		uh.installedCasks.SetDescription("Counting…")
 		page.Add(uh.installedCasks)
 		page.Add(uh.installedFormulae)
@@ -159,7 +158,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedFormulae.SetDescription("Could not read the list")
+				uh.installedFormulae.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			// Dependencies are managed by Homebrew, not individual choices here.
@@ -187,10 +186,10 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetSubtitle(presentation.Subtitle)
 
 					pinLabel := "Pin"
-					pinTooltip := "Keep this version and skip it during updates"
+					pinTooltip := "Keep this version during updates"
 					if pkg.Pinned {
 						pinLabel = "Unpin"
-						pinTooltip = "Let this be updated again"
+						pinTooltip = "Allow updates again"
 					}
 					pinBtn := gtk.NewButtonWithLabel(pinLabel)
 					pinBtn.SetValign(gtk.AlignCenterValue)
@@ -199,7 +198,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this tool from your system")
+					uninstallBtn.SetTooltipText("Remove this tool")
 
 					gate := &actionstate.Gate{}
 					controls := []*gtk.Button{pinBtn, uninstallBtn}
@@ -234,7 +233,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedCasks.SetDescription("Could not read the list")
+				uh.installedCasks.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			sgtk.RunOnMainThread(func() {
@@ -265,7 +264,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this app from your system")
+					uninstallBtn.SetTooltipText("Remove this app")
 
 					gate := &actionstate.Gate{}
 					controls := []*gtk.Button{uninstallBtn}
@@ -293,10 +292,10 @@ func (uh *UserHome) confirmHomebrewPin(
 	gate *actionstate.Gate,
 ) {
 	action := "Unpin"
-	description := "It will be updated again with everything else."
+	description := "It will get updates again."
 	if pin {
 		action = "Pin"
-		description = "It stays at the version you have now and is skipped during updates, until you unpin it."
+		description = "It stays at this version until you unpin it."
 	}
 
 	dialog := adw.NewAlertDialog(fmt.Sprintf("%s %s?", action, name), description)
@@ -334,11 +333,11 @@ func (uh *UserHome) runHomebrewPin(
 
 	idleLabel := "Unpin"
 	completeLabel := "Unpinned"
-	errorMessage := fmt.Sprintf("Could not unpin %s", name)
+	errorMessage := fmt.Sprintf("Couldn't unpin %s. Try again.", name)
 	if pin {
 		idleLabel = "Pin"
 		completeLabel = "Pinned"
-		errorMessage = fmt.Sprintf("Could not pin %s", name)
+		errorMessage = fmt.Sprintf("Couldn't pin %s. Try again.", name)
 	}
 	uh.finishHomebrewPackageMutation(
 		decision,
@@ -362,7 +361,7 @@ func (uh *UserHome) confirmHomebrewUninstall(
 ) {
 	dialog := adw.NewAlertDialog(
 		fmt.Sprintf("Uninstall %s?", name),
-		fmt.Sprintf("Removes %s and the files Homebrew installed with it. Anything you created yourself is left alone.", name),
+		fmt.Sprintf("This removes %s from this computer. Your own files are kept.", name),
 	)
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("uninstall", "Uninstall")
@@ -393,7 +392,7 @@ func (uh *UserHome) runHomebrewUninstall(
 	uh.finishHomebrewPackageMutation(
 		decision,
 		err,
-		fmt.Sprintf("Could not uninstall %s", name),
+		fmt.Sprintf("Couldn't uninstall %s. Try again.", name),
 		actionmsg.Uninstall(dryRun, name),
 		"Uninstall",
 		"Uninstalled",

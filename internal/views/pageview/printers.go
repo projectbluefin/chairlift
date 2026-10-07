@@ -11,11 +11,12 @@ func PrintersGroupTitle() string {
 	return "Printers"
 }
 
-// PrintersGroupDescription says what turning a family on does and where it
-// runs: in the user's own account, as a container, with nothing added to
-// the system — the posture that keeps it off the pkexec path.
+// PrintersGroupDescription says what turning a family on does for a person:
+// extra drivers for printers that do not work on their own, shared on the
+// local network. That sharing is the one consequence worth knowing before
+// flipping the switch, so it is named.
 func PrintersGroupDescription() string {
-	return "Driver services for printers that need more than built-in driverless printing. Each runs as a container in your account, adds nothing to the system, and shares its printers with this computer and your network."
+	return "Extra drivers for printers that don't work on their own. Printers are shared on your network."
 }
 
 // familyRowTitles overrides the derived "<family> printers" title where the
@@ -33,33 +34,33 @@ func PrinterFamilyRow(f printerapp.Family) string {
 }
 
 // PrinterAppSubtitle is the switch row's subtitle for a resolved state. The
-// blocked text is the ADR-0016 condition as a person meets it: it names what
-// cannot be secured, what is needed, and that the switch unlocks once the
-// image accepts it — an actionable, non-enabled state, never a switch that
+// blocked text is the ADR-0016 condition as a person meets it: the printer's
+// settings page cannot be password-protected yet, so the switch stays locked
+// until it can — an actionable, non-enabled state, never a switch that
 // silently does nothing. port is where the ready application serves both
 // IPP and its web page.
 func PrinterAppSubtitle(s printerapp.State, port int) string {
 	switch s {
 	case printerapp.StateUnavailable:
-		return "Not available on this computer — Podman is not installed."
+		return "Not available on this computer."
 	case printerapp.StateBlocked:
-		return "Can't be turned on yet. This printer application's administration page cannot be secured until its image accepts an administrator credential; the switch unlocks once it does."
+		return "Can't be turned on until its settings page can be password-protected."
 	case printerapp.StateStarting:
-		return "Starting… The driver image is downloaded the first time, which can take a few minutes."
+		return "Starting… The first start can take a few minutes."
 	case printerapp.StateReady:
 		return fmt.Sprintf("Running. Add and manage its printers at http://localhost:%d/", port)
 	case printerapp.StateFailedDeviceAccess:
-		return "Printer device access failed. Ensure your user account has permission to access USB printer devices (e.g. 'lp' group membership or udev rules)."
+		return "Couldn't reach the printer. Your account may not be allowed to use USB printers."
 	case printerapp.StateFailedImage:
-		return "Container image unavailable. Podman could not find or download the driver image; check your network connection and container registry access."
+		return "Couldn't download the printer driver. Check your internet connection."
 	case printerapp.StateFailedPlugin:
-		return "HP proprietary plugin verification failed. The downloaded driver component failed cryptographic signature verification and was not installed."
+		return "HP's driver add-on failed a security check, so it wasn't installed."
 	case printerapp.StateFailedCrash:
-		return "The printer application crashed unexpectedly. Check journalctl --user for logs, or turn it off and on again to restart."
+		return "The printer driver stopped unexpectedly. Turn it off and on again."
 	case printerapp.StateFailed:
-		return "Turned on, but the printer application is not running. Turn it off and on again to restart it."
+		return "The printer driver isn't running. Turn it off and on again."
 	default:
-		return fmt.Sprintf("Turning this on starts the driver service in your account and shares its printers on port %d.", port)
+		return "Turn on to use these printers and share them on your network."
 	}
 }
 
@@ -74,10 +75,11 @@ func PrinterAppWorkingSubtitle(enabling bool) string {
 // PrinterAppFailureToast is the toast for a switch that could not do what
 // was asked, naming the row so three families' toasts are distinguishable.
 // The error itself is logged: it names commands and unit files. A failed
-// disable keeps the unit, because the service could not be proven stopped.
+// disable keeps the unit, because the service could not be proven stopped,
+// so that toast says the driver is still running.
 func PrinterAppFailureToast(enabling bool, rowTitle string) string {
 	if enabling {
-		return rowTitle + " could not be turned on."
+		return "Couldn't turn on " + rowTitle + ". Try again."
 	}
-	return rowTitle + " is still running. It could not be stopped, so nothing was removed."
+	return rowTitle + " is still running. Couldn't turn it off. Try again."
 }

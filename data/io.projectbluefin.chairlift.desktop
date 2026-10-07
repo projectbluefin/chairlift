@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Control Center
 GenericName=System Management
-Comment=Update, configure, and maintain your Bluefin system
+Comment=Keep this computer up to date and set it up your way
 Exec=chairlift-wrapper
 Icon=io.projectbluefin.chairlift
 Terminal=false

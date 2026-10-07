@@ -17,12 +17,12 @@ import (
 func (uh *UserHome) buildShellExtensionsGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Desktop integrations")
-	group.SetDescription("Choose which integrations appear in GNOME Quick Settings.")
+	group.SetDescription("Choose what appears in Quick Settings.")
 	page.Add(group)
 	for _, extension := range shellextensions.Catalog() {
 		row := adw.NewActionRow()
 		row.SetTitle(extension.Title)
-		row.SetSubtitle("Checking GNOME extension…")
+		row.SetSubtitle("Checking…")
 		var toggle *guardedSwitch
 		toggle = newGuardedSwitch(extension.DefaultEnabled, func(enabled bool) {
 			toggle.widget.SetSensitive(false)
@@ -33,8 +33,9 @@ func (uh *UserHome) buildShellExtensionsGroup(page *adw.PreferencesPage) {
 				states, readErr := shellextensions.Load(ctx)
 				sgtk.RunOnMainThread(func() {
 					if readErr != nil {
+						log.Printf("views: reading desktop integrations failed: %v", readErr)
 						toggle.set(!enabled)
-						row.SetSubtitle("Could not check the GNOME extension. Reopen the application to try again.")
+						row.SetSubtitle("Couldn't check this setting. Reopen the app to try again.")
 					} else {
 						state := states[extension.UUID]
 						toggle.set(state.Enabled)
@@ -44,9 +45,10 @@ func (uh *UserHome) buildShellExtensionsGroup(page *adw.PreferencesPage) {
 						}
 					}
 					if err != nil {
-						uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change %s: %v", extension.Title, err))
+						log.Printf("views: changing %s failed: %v", extension.UUID, err)
+						uh.toastAdder.ShowErrorToast("Couldn't change " + extension.Title + ". Try again.")
 					} else if readErr != nil {
-						uh.toastAdder.ShowErrorToast("Could not verify the GNOME extension state.")
+						uh.toastAdder.ShowErrorToast("Couldn't check whether the change worked.")
 					} else if dryrun.Enabled() {
 						uh.toastAdder.ShowToast("Preview only — the GNOME extension was not changed.")
 					}
@@ -64,12 +66,12 @@ func (uh *UserHome) buildShellExtensionsGroup(page *adw.PreferencesPage) {
 			sgtk.RunOnMainThread(func() {
 				if err != nil {
 					log.Printf("views: desktop integrations unavailable: %v", err)
-					row.SetSubtitle("Requires GNOME Shell and the gnome-extensions tool.")
+					row.SetSubtitle("Only available on the GNOME desktop.")
 					return
 				}
 				state := states[extension.UUID]
 				if !state.Installed {
-					row.SetSubtitle("This GNOME extension is not installed.")
+					row.SetSubtitle("Not installed on this computer.")
 					return
 				}
 				toggle.set(state.Enabled)

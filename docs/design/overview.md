@@ -169,7 +169,7 @@ second mutation. Render untrusted command/provider text with markup disabled.
 
 ### Deferred visibility (async startup)
 
-A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Could not read the list", "Could not check for tool updates") while keeping the last known rows and counts.
+A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Couldn't load this list.", "Could not check for tool updates") while keeping the last known rows and counts.
 
 Runtime query gates remain asynchronous: optional distribution features hide when no definitions exist; tap trust hides when there is nothing to trust; automatic updates stays hidden until its installed timer is observed. Query failures are not invented empty inventories. Discoverability is surface-specific: desktop integrations and unsupported Developer options deliberately remain visible with insensitive controls and explanations, and printer administration locks render visible off switches. Static navigation never reindexes after these workers finish.
 
@@ -1046,9 +1046,9 @@ neither reads nor writes those names today; once an image ships them,
 `Environment=` lines that carry the values — that is the whole follow-up
 that makes a switch live. Until then every family resolves to `StateBlocked`:
 the row is shown with its switch off **and insensitive** and
-`pageview.PrinterAppSubtitle` says the administration page cannot be secured
-until the image accepts an administrator credential and that the switch
-unlocks once it does. That is the actionable, non-enabled state the ADR asks
+`pageview.PrinterAppSubtitle` says it can't be turned on until its settings
+(administration) page can be password-protected — that is, until the image
+accepts an administrator credential. That is the actionable, non-enabled state the ADR asks
 for — never a false enabled indicator and never a switch that silently does
 nothing — and it encodes no unshipped environment variable. The toggle
 handler (`onPrinterAppToggled`) is admitted by a per-family

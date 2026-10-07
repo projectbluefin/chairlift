@@ -2,11 +2,11 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -45,7 +45,7 @@ func (uh *UserHome) buildPublishedVersionsRow(group *adw.PreferencesGroup) {
 	}
 
 	row := adw.NewExpanderRow()
-	presentation := pageview.PublishedVersionsRow(stream)
+	presentation := pageview.PublishedVersionsRow()
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 	// Nothing to expand until the registry has been read.
@@ -76,11 +76,11 @@ func (uh *UserHome) onPublishedVersionsClicked() {
 
 	row := uh.publishedVersionsRow
 	button := uh.publishedVersionsButton
-	repo, stream := uh.publishedVersionsRepo, uh.publishedVersionsStream
+	repo := uh.publishedVersionsRepo
 
 	button.SetSensitive(false)
 	button.SetLabel("Checking…")
-	row.SetSubtitle("Asking the image registry…")
+	row.SetSubtitle("Looking for versions…")
 
 	since := time.Now().UTC().AddDate(0, 0, -pageview.PublishedVersionsDays)
 	go func() {
@@ -97,13 +97,13 @@ func (uh *UserHome) onPublishedVersionsClicked() {
 			if err != nil {
 				log.Printf("published versions: %s: %v", repo, err)
 				uh.renderPublishedVersions(nil)
-				row.SetSubtitle(pageview.PublishedVersionsRow(stream).Subtitle)
-				uh.toastAdder.ShowErrorToast("Could not read the published versions from the image registry")
+				row.SetSubtitle(pageview.PublishedVersionsRow().Subtitle)
+				uh.toastAdder.ShowErrorToast("Couldn't check for versions. Check your internet connection.")
 				return
 			}
 
-			versions := pageview.PublishedVersions(builds, stream, uh.runningVersion, uh.previousVersion)
-			row.SetSubtitle(pageview.PublishedVersionsSummary(len(versions), stream))
+			versions := pageview.PublishedVersions(builds, uh.publishedVersionsStream, uh.runningVersion, uh.previousVersion)
+			row.SetSubtitle(pageview.PublishedVersionsSummary(len(versions)))
 			uh.renderPublishedVersions(versions)
 		})
 	}()
@@ -133,7 +133,10 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 		row.SetTitle(version.Title)
 		subtitle := version.Subtitle
 		if !supported {
-			subtitle += " · " + pageview.PinUnsupportedExplanation()
+			if subtitle != "" {
+				subtitle += " · "
+			}
+			subtitle += pageview.PinUnsupportedExplanation()
 		}
 		row.SetSubtitle(subtitle)
 
@@ -207,7 +210,7 @@ func (uh *UserHome) runPin(day string, button *gtk.Button) {
 
 			if err != nil {
 				log.Printf("views: pin failed for day %s: %v", day, err)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Pin failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't pin this version. Try again."))
 				return
 			}
 

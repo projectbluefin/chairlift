@@ -2,12 +2,12 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -125,7 +125,8 @@ func (uh *UserHome) onAutomaticUpdatesToggled(enabled bool, toggle *guardedSwitc
 
 			if err != nil {
 				toggle.set(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Automatic updates: %v", err))
+				log.Printf("changing automatic updates failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change automatic updates. Try again."))
 				return
 			}
 

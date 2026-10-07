@@ -52,7 +52,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then I see "Developer Mode"
     And I see "WSL Mode"
-    And I see "WSL Backend"
+    And I see "Virtual machine engine"
     And I see "Enable Docker"
     When I expand the "IDEs and terminal editors" list under "Developer"
     Then the developer editor choices match the documented catalog
@@ -67,7 +67,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: Disabling a running WSL machine previews stop without deleting data
     Given ChairLift is running
     When I open the "Features" page
-    Then I see "WSL Backend"
+    Then I see "Virtual machine engine"
     And the switch in the "WSL Mode" row is on
     When I toggle the switch in the "WSL Mode" row
     Then the application log contains "would stop nsl machines and VM without deleting data"
@@ -83,7 +83,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
-    And the "Enable Docker" row says "This base image has no Docker daemon. Installing CLI tools alone cannot run containers."
+    And the "Enable Docker" row says "This computer doesn't come with Docker."
     And the action journal is empty
 
   @stub.features-gaming-none
@@ -174,7 +174,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: Gaming fails closed when installed components cannot be listed
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Gaming Mode" row says "Could not check which gaming apps are installed."
+    Then the "Gaming Mode" row says "Couldn't check which gaming apps are installed."
     And the "Install Selected" button is insensitive
     And the "Remove Selected" button is insensitive
     And the application log contains "views: gaming status unavailable"
@@ -210,7 +210,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Features page shows a "Gaming" group
     And the Features page shows no "Developer" group
     And I do not see "WSL Mode"
-    And I do not see "WSL Backend"
+    And I do not see "Virtual machine engine"
     And I do not see "Enable Docker"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
@@ -302,7 +302,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
   Scenario: Missing desktop extensions are explained without permitting changes
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Tailscale Integration" row says "This GNOME extension is not installed."
+    Then the "Tailscale Integration" row says "Not installed on this computer."
     And the switch in the "Tailscale Integration" row refuses input
-    And the "Sync Folder Integration" row says "This GNOME extension is not installed."
+    And the "Sync Folder Integration" row says "Not installed on this computer."
     And the switch in the "Sync Folder Integration" row refuses input

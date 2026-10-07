@@ -104,8 +104,8 @@ Feature: Updates
   Scenario: A failed source-trust check is not hidden as if every source were trusted
     Given ChairLift is running
     Then I see "Unverified sources"
-    And the "Could not check software sources" row says "Broken pipe"
-    And the "Retry" button in the "Could not check software sources" row is sensitive
+    And the "Couldn't check for paused updates" row says "Check your internet connection and try again."
+    And the "Retry" button in the "Couldn't check for paused updates" row is sensitive
     And the application log contains "untrusted tap check failed"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -217,7 +217,7 @@ Feature: Updates
   @stub.updates-bootc-booted @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: The system version is read from the booted deployment
     Given ChairLift is running
-    Then the "System version" row says "You are running version 42.20260920.0, released 20 September 2026"
+    Then the "System version" row says "Version 42.20260920.0, released 20 September 2026."
 
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Updating one app from its row in a dry run previews that app only and restores the row
@@ -243,10 +243,10 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-sources-fail
   Scenario: A failed source discovery remains visible and can be retried
     Given ChairLift is running
-    Then the "Could not check software sources" row says "source list unavailable"
+    Then the "Couldn't check for paused updates" row says "Check your internet connection and try again."
     When software source discovery is reachable again
-    And I click the "Retry" button in the "Could not check software sources" row
-    Then I do not see "Could not check software sources"
+    And I click the "Retry" button in the "Couldn't check for paused updates" row
+    Then I do not see "Couldn't check for paused updates"
 
   @stub.updates-flatpak-current @stub.updates-brew-untrusted
   Scenario: Trust remains reachable without opening an update disclosure

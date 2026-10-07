@@ -496,11 +496,12 @@ func (uh *UserHome) showLiveryCustomPath(surface livery.Surface, path string) {
 	}
 }
 
-// reportLiveryFailure logs and toasts, on the main thread.
+// reportLiveryFailure logs the raw error and shows a plain toast, on the
+// main thread.
 func (uh *UserHome) reportLiveryFailure(what string, err error) {
 	log.Printf("livery: %s: %v", what, err)
 	sgtk.RunOnMainThread(func() {
-		uh.toastAdder.ShowErrorToast("Livery: " + what + " failed — " + err.Error())
+		uh.toastAdder.ShowErrorToast(pageview.LiveryFailure(what))
 	})
 }
 

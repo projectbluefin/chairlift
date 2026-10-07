@@ -14,6 +14,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/maintenanceexec"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
@@ -237,7 +238,7 @@ func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spi
 			button.SetLabel("Export")
 			if err != nil {
 				log.Printf("Package list export failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not export your package list")
+				uh.toastAdder.ShowErrorToast("Couldn't save your app list. Try again.")
 				return
 			}
 			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled()))
@@ -287,7 +288,12 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 			button.SetLabel(cleanupview.ScriptsButtonLabel)
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s failed: %v", title, err))
+				log.Printf("Maintenance task %q failed: %v", title, err)
+				message := fmt.Sprintf("Couldn't finish %s. Try again.", title)
+				if sudo {
+					message = pkexec.UserMessage(err, message)
+				}
+				uh.toastAdder.ShowErrorToast(message)
 				return
 			}
 

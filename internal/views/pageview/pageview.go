@@ -42,12 +42,12 @@ func HomebrewPackage(name, version string, pinned bool) Row {
 // package list: what matters is how much is stuck, not its taxonomy.
 func UntrustedTap(name string, formulae, casks []string) Row {
 	count := len(formulae) + len(casks)
-	row := Row{Title: name, Subtitle: "Updates are paused for software from this source"}
+	row := Row{Title: name, Subtitle: "Updates are paused for software from this source."}
 	switch {
 	case count == 1:
-		row.Subtitle = "Updates are paused for 1 program you installed from this source"
+		row.Subtitle = "Updates are paused for 1 program from this source."
 	case count > 1:
-		row.Subtitle = fmt.Sprintf("Updates are paused for %d programs you installed from this source", count)
+		row.Subtitle = fmt.Sprintf("Updates are paused for %d programs from this source.", count)
 	}
 	return row
 }
@@ -57,12 +57,12 @@ func UntrustedTap(name string, formulae, casks []string) Row {
 // waiting state says when it takes effect rather than that it is "staged".
 func BootcUpdateSubtitle(staged bool, version string) string {
 	if !staged {
-		return "Check whether a newer version of the operating system is available"
+		return "Check for a newer version of the operating system."
 	}
 	if version == "" {
-		return "A new version is ready and installs when you restart"
+		return "A new version installs when you restart."
 	}
-	return fmt.Sprintf("Version %s is ready and installs when you restart", version)
+	return fmt.Sprintf("Version %s installs when you restart.", version)
 }
 
 // BootcStageResultSubtitle returns the subtitle after a staging action
@@ -73,7 +73,7 @@ func BootcStageResultSubtitle(staged bool, version string) string {
 	if staged {
 		return BootcUpdateSubtitle(true, version)
 	}
-	return "Your system is up to date"
+	return "Everything is up to date."
 }
 
 // StagingLogSubtitle returns the "Details" expander subtitle for a staging
@@ -87,13 +87,13 @@ func BootcStageResultSubtitle(staged bool, version string) string {
 func StagingLogSubtitle(shown, total int) string {
 	switch {
 	case total <= 0:
-		return "View output"
+		return "Shows what happens while updating."
 	case shown < total:
-		return fmt.Sprintf("Showing the last %d of %d lines", shown, total)
+		return fmt.Sprintf("Showing the last %d of %d lines.", shown, total)
 	case total == 1:
-		return "View output (1 line)"
+		return "1 line."
 	default:
-		return fmt.Sprintf("View output (%d lines)", total)
+		return fmt.Sprintf("%d lines.", total)
 	}
 }
 
@@ -124,7 +124,7 @@ func FeaturesEmptyState(bluefinGroups, printers, optionalFeatures bool) (Row, bo
 	}
 	return Row{
 		Title:    "Nothing to set up here",
-		Subtitle: "This system does not offer developer tools, gaming apps, printers, or optional features that can be set up from this page.",
+		Subtitle: "This computer has no extra features to set up.",
 	}, true
 }
 
@@ -165,16 +165,16 @@ func SystemVersionRow(version, released string, staged bool, stagedVersion strin
 	date := formatReleaseDate(released)
 	switch {
 	case version != "" && date != "":
-		row.Subtitle = fmt.Sprintf("You are running version %s, released %s", version, date)
+		row.Subtitle = fmt.Sprintf("Version %s, released %s.", version, date)
 	case version != "":
-		row.Subtitle = fmt.Sprintf("You are running version %s", version)
+		row.Subtitle = fmt.Sprintf("Version %s.", version)
 	case date != "":
-		row.Subtitle = fmt.Sprintf("You are running the version released %s", date)
+		row.Subtitle = fmt.Sprintf("Released %s.", date)
 	default:
-		row.Subtitle = "This system's version could not be read"
+		row.Subtitle = "Couldn't read this computer's version."
 	}
 	if staged {
-		row.Subtitle = row.Subtitle + ". " + BootcUpdateSubtitle(true, stagedVersion)
+		row.Subtitle = row.Subtitle + " " + BootcUpdateSubtitle(true, stagedVersion)
 	}
 	return row
 }
@@ -229,11 +229,11 @@ func ChannelRow(onTesting, switchable bool) Row {
 	row := Row{Title: "Get updates early"}
 	switch {
 	case !switchable:
-		row.Subtitle = "This system does not offer early updates"
+		row.Subtitle = "Not offered for this computer."
 	case onTesting:
-		row.Subtitle = "You get new versions before they are fully tested. Turning this off replaces the operating system with the tested version and needs a restart."
+		row.Subtitle = "You get new features sooner, but they're less tested. Changing this needs a restart."
 	default:
-		row.Subtitle = "Get new versions before they are fully tested. They can be unreliable. Replaces the operating system and needs a restart."
+		row.Subtitle = "Get new features sooner. They're less tested and can break. Needs a restart."
 	}
 	return row
 }
@@ -243,9 +243,9 @@ func ChannelRow(onTesting, switchable bool) Row {
 // only downloaded, so the restart is the part the user still has to do.
 func ChannelSwitchResultSubtitle(toTesting bool) string {
 	if toTesting {
-		return "You will get updates early — restart to apply"
+		return "Restart to start getting early updates."
 	}
-	return "You will get tested updates only — restart to apply"
+	return "Restart to go back to tested updates."
 }
 
 // DeveloperRow returns the developer-tools switch row text. It names the
@@ -256,10 +256,10 @@ func ChannelSwitchResultSubtitle(toTesting bool) string {
 func DeveloperRow(active bool) Row {
 	row := Row{Title: "Developer Mode"}
 	if active {
-		row.Subtitle = "Build projects with containers and virtual machines on your Bluefin workstation. Choose optional tools below."
+		row.Subtitle = "Containers and virtual machines are set up for your account."
 		return row
 	}
-	row.Subtitle = "Set up this Bluefin workstation for project development, containers and virtual machines. Needs your administrator password; choose optional tools below."
+	row.Subtitle = "Set up containers and virtual machines. Asks for your administrator password."
 	return row
 }
 
@@ -268,9 +268,9 @@ func DeveloperRow(active bool) Row {
 // so rather than implying an immediate effect.
 func DeveloperResultSubtitle(enabled bool) string {
 	if enabled {
-		return "Turned on — log out and back in for it to take effect."
+		return "Log out and back in to finish turning this on."
 	}
-	return "Turned off — log out and back in for it to take effect."
+	return "Log out and back in to finish turning this off."
 }
 
 // GamingCheckingSubtitle is the gaming row's subtitle while ChairLift is still
@@ -280,7 +280,7 @@ const GamingCheckingSubtitle = "Checking what is installed…"
 
 // GamingUnavailableSubtitle is shown when that check fails. The underlying
 // error names commands and application ids, so it is logged rather than shown.
-const GamingUnavailableSubtitle = "Could not check which gaming apps are installed."
+const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
 
 // GamingRow returns the gaming switch row text. ready reports whether the
 // apps gaming needs are all present (internal/gaming.State.Enabled), and
@@ -289,11 +289,9 @@ func GamingRow(ready bool, installed, total int) Row {
 	row := Row{Title: "Gaming Mode"}
 	switch {
 	case ready && installed >= total:
-		row.Subtitle = fmt.Sprintf("All %d gaming components are installed. Select apps to manage below.", total)
-	case ready:
-		row.Subtitle = fmt.Sprintf("%d of %d gaming components installed. Select apps to manage below.", installed, total)
+		row.Subtitle = fmt.Sprintf("All %d gaming apps are installed.", total)
 	case installed > 0:
-		row.Subtitle = fmt.Sprintf("%d of %d gaming components installed. Choose which apps to add or remove.", installed, total)
+		row.Subtitle = fmt.Sprintf("%d of %d gaming apps installed.", installed, total)
 	default:
 		row.Subtitle = "Choose the gaming apps to install. Downloads can be large."
 	}
@@ -332,9 +330,9 @@ func GamingComponentStatus(user, system bool) string {
 func GamingResultSubtitle(enabled bool, changed, failed int) string {
 	if failed > 0 {
 		if enabled {
-			return fmt.Sprintf("Installed %s, but %d could not be installed.", gamingApps(changed), failed)
+			return fmt.Sprintf("Installed %s, but %d couldn't be installed.", gamingApps(changed), failed)
 		}
-		return fmt.Sprintf("Removed %s, but %d could not be removed.", gamingApps(changed), failed)
+		return fmt.Sprintf("Removed %s, but %d couldn't be removed.", gamingApps(changed), failed)
 	}
 	if changed == 0 {
 		return "Nothing needed changing."
@@ -369,13 +367,15 @@ func BootcRollbackRow(version, timestamp string) Row {
 	date := formatReleaseDate(timestamp)
 	switch {
 	case version == "" && date == "":
-		row.Subtitle = "Return to the previous version the next time you restart"
+		// A destination exists; only its date is unreadable. Saying
+		// nothing is kept would be the one wrong answer here.
+		row.Subtitle = "Return to the previous version the next time you restart."
 	case version == "":
-		row.Subtitle = fmt.Sprintf("Return to the version from %s the next time you restart", date)
+		row.Subtitle = fmt.Sprintf("Return to the version from %s the next time you restart.", date)
 	case date == "":
-		row.Subtitle = fmt.Sprintf("Return to version %s the next time you restart", version)
+		row.Subtitle = fmt.Sprintf("Return to version %s the next time you restart.", version)
 	default:
-		row.Subtitle = fmt.Sprintf("Return to version %s, released %s, the next time you restart", version, date)
+		row.Subtitle = fmt.Sprintf("Return to version %s from %s the next time you restart.", version, date)
 	}
 	return row
 }
@@ -384,7 +384,7 @@ func BootcRollbackRow(version, timestamp string) Row {
 // requested. It only changes which version starts next, so it never claims
 // the running system changed.
 func BootcRollbackResultSubtitle() string {
-	return "The previous version starts the next time you restart"
+	return "The previous version starts the next time you restart."
 }
 
 // AutomaticUpdatesRow returns the automatic-background-updates switch row
@@ -394,10 +394,10 @@ func BootcRollbackResultSubtitle() string {
 func AutomaticUpdatesRow(enabled bool) Row {
 	row := Row{Title: "Automatic updates"}
 	if enabled {
-		row.Subtitle = "This system installs updates in the background and applies them at restart"
+		row.Subtitle = "Updates download in the background and install when you restart."
 		return row
 	}
-	row.Subtitle = "Update this system only when you ask"
+	row.Subtitle = "Updates install only when you ask."
 	return row
 }
 
@@ -406,9 +406,9 @@ func AutomaticUpdatesRow(enabled bool) Row {
 // so neither outcome implies an immediate change.
 func AutomaticUpdatesResultSubtitle(enabled bool) string {
 	if enabled {
-		return "Automatic updates are on — the next check runs on the system's schedule"
+		return "Automatic updates are on."
 	}
-	return "Automatic updates are off — use Update all when you want to update"
+	return "Automatic updates are off. Update from this page when you're ready."
 }
 
 // GraphicsDriverRow returns the graphics-driver row text. current is the
@@ -430,17 +430,17 @@ func GraphicsDriverRow(current, hardware, recommended string) Row {
 	}
 	switch {
 	case recommended != "" && hardware != "":
-		row.Subtitle = fmt.Sprintf("Switch to the %s driver for your %s graphics. Replaces the operating system and needs a restart.", recommended, hardware)
+		row.Subtitle = fmt.Sprintf("Switch to the %s driver for your %s graphics. Needs a restart.", recommended, hardware)
 	case recommended != "":
-		row.Subtitle = fmt.Sprintf("Switch to the %s driver. Replaces the operating system and needs a restart.", recommended)
+		row.Subtitle = fmt.Sprintf("Switch to the %s driver. Needs a restart.", recommended)
 	case current != "" && hardware != "":
-		row.Subtitle = fmt.Sprintf("Using the %s driver for your %s graphics", current, hardware)
+		row.Subtitle = fmt.Sprintf("Using the %s driver for your %s graphics.", current, hardware)
 	case current != "":
-		row.Subtitle = fmt.Sprintf("Using the %s driver", current)
+		row.Subtitle = fmt.Sprintf("Using the %s driver.", current)
 	case hardware != "":
-		row.Subtitle = fmt.Sprintf("Your graphics hardware: %s", hardware)
+		row.Subtitle = fmt.Sprintf("Your graphics: %s.", hardware)
 	default:
-		row.Subtitle = "No graphics hardware was detected"
+		row.Subtitle = "No graphics hardware found."
 	}
 	return row
 }
@@ -449,7 +449,7 @@ func GraphicsDriverRow(current, hardware, recommended string) Row {
 // requested. Like a channel switch it only downloads the new version, so it
 // never claims the running system changed.
 func GraphicsDriverResultSubtitle(driver string) string {
-	return fmt.Sprintf("Switched to the %s driver — restart to apply", driver)
+	return fmt.Sprintf("Restart to use the %s driver.", driver)
 }
 
 // Recovery rows. These two are not maintenance — they are what a person
@@ -458,14 +458,19 @@ func GraphicsDriverResultSubtitle(driver string) string {
 // implied it would be talking someone out of the action that would have
 // helped them, or into one that does more than they wanted.
 //
-// The confirmation dialogs below are the authority on irreversibility and
-// stay as they are; these rows are the resting text of the page.
+// The confirmation dialogs below are the authority on irreversibility; these
+// rows are the resting text of the page.
+//
+// Flatpak and Distrobox stay named here on purpose: Powerwash removes
+// exactly those and leaves everything on the Apps page (and other
+// containers), so "your apps" alone would claim a wider scope than the
+// action has (#525).
 
 // PowerwashRow returns the Powerwash row text.
 func PowerwashRow() Row {
 	return Row{
 		Title:    "Remove Flatpak apps and containers",
-		Subtitle: "Removes every Flatpak app and Distrobox container in your account. Homebrew packages, your files, settings, and the system itself stay as they are.",
+		Subtitle: "Removes every Flatpak app and Distrobox container in your account. Your files and everything on the Apps page stay.",
 	}
 }
 
@@ -477,13 +482,13 @@ func PowerwashRow() Row {
 func PowerwashResultSubtitle(succeeded, failed int) string {
 	switch {
 	case failed > 0 && succeeded > 0:
-		return "Some apps could not be removed — see the system logs for details"
+		return "Some apps or containers couldn't be removed. Try again."
 	case failed > 0:
-		return "Nothing could be removed — see the system logs for details"
+		return "Couldn't remove anything. Try again."
 	case succeeded > 0:
-		return "Removed your Flatpak apps and containers"
+		return "Removed your Flatpak apps and containers."
 	default:
-		return "There was nothing installed to remove"
+		return "There was nothing to remove."
 	}
 }
 
@@ -492,36 +497,37 @@ func PowerwashResultSubtitle(succeeded, failed int) string {
 // application and container cannot be undone from within ChairLift.
 func PowerwashConfirmation() (title, body string) {
 	return "Remove Flatpak Apps and Containers?",
-		"This removes every Flatpak application and every Distrobox container " +
-			"for your account. It does not touch the system image or your files. " +
-			"This cannot be undone."
+		"Every Flatpak app and Distrobox container in your account will be removed. " +
+			"Your files and everything on the Apps page stay. " +
+			"This can't be undone."
 }
 
 // FactoryResetRow returns the Factory Reset row text.
 func FactoryResetRow() Row {
 	return Row{
-		Title:    "Reset the system",
-		Subtitle: "Reinstalls the system from scratch and discards changes made to it. Your files and apps stay where they are. Takes effect after a restart.",
+		Title:    "Reset this computer",
+		Subtitle: "Reinstall the operating system the next time you restart. Your files and apps stay.",
 	}
 }
 
 // FactoryResetConfirmation returns the title and body of the confirmation
-// dialog Factory Reset must show before it runs. The body names
-// --experimental explicitly — bootc's own reset path is not stabilized
-// upstream, and a confirmation that omitted that fact would be hiding the
-// one piece of information most likely to change a user's mind.
+// dialog Factory Reset must show before it runs. The body says plainly that
+// the reset method is still experimental — bootc's reset path is not
+// stabilized upstream (it runs with --experimental), and a confirmation that
+// omitted that fact would be hiding the one piece of information most likely
+// to change a user's mind.
 func FactoryResetConfirmation() (title, body string) {
-	return "Factory Reset This System?",
-		"This discards every local change and reinstalls the current system " +
-			"image from scratch, using bootc's --experimental reset path. " +
-			"Your applications and home directory are not touched, but this " +
-			"cannot be undone. The reset applies at the next restart."
+	return "Factory Reset This Computer?",
+		"The operating system will be reinstalled and any changes made to it " +
+			"will be lost. Your files and apps stay. This uses a reset method " +
+			"that is still experimental, and it can't be undone. " +
+			"The reset happens the next time you restart."
 }
 
 // FactoryResetResultSubtitle returns the subtitle after a factory reset is
 // applied. Like a channel switch it only stages the change.
 func FactoryResetResultSubtitle() string {
-	return "Factory reset applied — restart to complete it"
+	return "Restart to finish resetting this computer."
 }
 
 // KVMAccessNeedsNewLogin is shown after virtualization access was granted to

@@ -123,7 +123,7 @@ func DeveloperFeedFeedback(setup DeveloperFeedSetup, outcome DeveloperFeedOutcom
 			sentences = append(sentences, "Pulp is ready.")
 		} else {
 			failed = true
-			sentences = append(sentences, "Pulp could not be installed.")
+			sentences = append(sentences, "Couldn't install Pulp.")
 		}
 	}
 
@@ -131,12 +131,12 @@ func DeveloperFeedFeedback(setup DeveloperFeedSetup, outcome DeveloperFeedOutcom
 		switch {
 		case !outcome.FeedsStaged:
 			failed = true
-			sentences = append(sentences, "The developer feed list could not be staged.")
+			sentences = append(sentences, "Couldn't save the developer news feeds.")
 		case outcome.StagedPath != "":
 			sentences = append(sentences, fmt.Sprintf(
-				"Developer feeds staged at %s — open Pulp to import them when you are ready.", outcome.StagedPath))
+				"Developer news feeds saved to %s. Open Pulp to import them.", outcome.StagedPath))
 		default:
-			sentences = append(sentences, "Developer feeds staged in your home folder — open Pulp to import them when you are ready.")
+			sentences = append(sentences, "Developer news feeds saved to your home folder. Open Pulp to import them.")
 		}
 	}
 
@@ -145,7 +145,7 @@ func DeveloperFeedFeedback(setup DeveloperFeedSetup, outcome DeveloperFeedOutcom
 		// a failed optional install from reading as a failed permission
 		// change, which is the misreport the two outcomes are kept apart to
 		// prevent.
-		sentences = append(sentences, "Developer access is on; only the optional setup failed.")
+		sentences = append(sentences, "Developer Mode itself is on.")
 	}
 
 	return DeveloperFeedResult{Failed: failed, Message: strings.Join(sentences, " ")}

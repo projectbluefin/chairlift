@@ -33,8 +33,8 @@ type GooseRowView struct {
 // GooseRow decides the Goose row for a readiness state. Set Up is offered
 // only for missing packages, because installing them is the one thing the
 // row can do itself; Agent Mode and its model are the controls above it.
-func GooseRow(state agentmode.State, model string) GooseRowView {
-	view := GooseRowView{Subtitle: state.Subtitle(model)}
+func GooseRow(state agentmode.State) GooseRowView {
+	view := GooseRowView{Subtitle: state.Subtitle()}
 	switch {
 	case state.Ready():
 		view.Action = GooseLaunch
@@ -47,11 +47,11 @@ func GooseRow(state agentmode.State, model string) GooseRowView {
 // GooseSetupToast reports a finished, live setup. Every step can succeed and
 // still leave Goose blocked on Agent Mode, which the toast has to say rather
 // than reporting a bare success.
-func GooseSetupToast(state agentmode.State, model string) string {
+func GooseSetupToast(state agentmode.State) string {
 	if state.Ready() {
-		return "Goose is ready"
+		return "Goose is ready."
 	}
-	return "Goose is installed — " + state.Subtitle(model)
+	return "Goose is installed. " + state.Subtitle()
 }
 
 // TroubleshootGroupTitle titles the group holding the Goose row and the
@@ -63,5 +63,5 @@ func TroubleshootGroupTitle() string { return "Troubleshooting" }
 // Agent Mode model and the Project Bluefin knowledge base, which is searched
 // online.
 func TroubleshootGroupDescription() string {
-	return "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
+	return "Goose looks into problems on this computer. Knowledge searches go online."
 }

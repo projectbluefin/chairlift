@@ -76,7 +76,7 @@ func (uh *UserHome) refreshChangelogAvailability(status *bootc.Status) {
 	uh.changelogStaged = staged
 
 	available := booted != "" && staged != ""
-	if changed && uh.changelogButton.GetLabel() != "Comparing..." {
+	if changed && uh.changelogButton.GetLabel() != "Comparing…" {
 		uh.changelogButton.SetSensitive(available)
 		uh.changelogRow.SetSubtitle(pageview.ChangelogRow(available).Subtitle)
 	}
@@ -94,7 +94,7 @@ func (uh *UserHome) onChangelogClicked() {
 
 	button.SetSensitive(false)
 	button.SetLabel("Comparing…")
-	row.SetSubtitle("Downloading both versions' program lists…")
+	row.SetSubtitle("Downloading details of both versions…")
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), changelogTimeout)
@@ -117,7 +117,7 @@ func (uh *UserHome) onChangelogClicked() {
 			if err != nil {
 				log.Printf("changelog: %v", err)
 				row.SetSubtitle(pageview.ChangelogRow(true).Subtitle)
-				uh.toastAdder.ShowErrorToast("Could not compare the two versions")
+				uh.toastAdder.ShowErrorToast("Couldn't compare the two versions. Check your internet connection.")
 				return
 			}
 

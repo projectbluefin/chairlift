@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
@@ -21,9 +22,17 @@ func TestLoadErrorDiagnosticMessages(t *testing.T) {
 	}
 
 	// The toast is user-facing, so it names the product; the log line above
-	// keeps the code name. That asymmetry is the point of the assertion.
-	wantToast := "Configuration error: config read error: /etc/chairlift/config.yml: reading configuration file: permission denied. All feature groups are disabled. Fix the configuration file and restart " + branding.AppName + "."
-	if got := loadErr.ToastMessage(); got != wantToast {
-		t.Fatalf("ToastMessage() = %q, want %q", got, wantToast)
+	// keeps the code name and the detail. The toast must carry neither the
+	// path nor the parser's error text.
+	toast := loadErr.ToastMessage()
+	for _, want := range []string{branding.AppName, "restart"} {
+		if !strings.Contains(toast, want) {
+			t.Errorf("ToastMessage() = %q, want it to contain %q", toast, want)
+		}
+	}
+	for _, leak := range []string{"/etc/chairlift", "permission denied", "ChairLift"} {
+		if strings.Contains(toast, leak) {
+			t.Errorf("ToastMessage() = %q leaks %q", toast, leak)
+		}
 	}
 }

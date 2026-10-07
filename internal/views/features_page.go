@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"log"
 	"slices"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
@@ -118,7 +118,7 @@ func (uh *UserHome) buildFeaturesPage() {
 		// Build the features group (hidden once updex reports none)
 		uh.featuresGroup = adw.NewPreferencesGroup()
 		uh.featuresGroup.SetTitle("Optional features")
-		uh.featuresGroup.SetDescription("Checking what this system offers…")
+		uh.featuresGroup.SetDescription("Checking what this computer offers…")
 
 		// Add Update button as header suffix (disabled until features are listed)
 		updateBtn := gtk.NewButtonWithLabel("Update")
@@ -158,7 +158,7 @@ func (uh *UserHome) loadFeatures(updateBtn *gtk.Button, onListed func(optionalFe
 
 		if err != nil {
 			log.Printf("views: listing optional features failed: %v", err)
-			uh.featuresGroup.SetDescription("Could not check which features are available.")
+			uh.featuresGroup.SetDescription("Couldn't check which features are available.")
 			return
 		}
 
@@ -266,7 +266,8 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 			if err != nil {
 				// Revert switch to previous state
 				toggle.set(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change %s: %v", name, err))
+				log.Printf("views: changing feature %s failed: %v", name, err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change this feature. Try again."))
 				return
 			}
 
@@ -307,7 +308,8 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 			button.SetLabel("Update")
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not update the features: %v", err))
+				log.Printf("views: updating features failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't update features. Try again."))
 				return
 			}
 
@@ -387,7 +389,7 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	uh.developerCanToggle = status.Supports(ubluehelper.CommandDXEnable, ubluehelper.CommandDXDisable)
 	if !uh.developerCanToggle {
 		toggle.widget.SetSensitive(false)
-		row.SetSubtitle("Needs the installed Developer Mode actions in the system helper. Optional tools can still be selected below.")
+		row.SetSubtitle("Developer Mode isn't available on this computer. You can still install tools below.")
 	}
 
 	row.AddSuffix(&toggle.widget.Widget)
@@ -411,7 +413,7 @@ type gamingComponentRow struct {
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Choose the apps to install. They are installed system-wide for every account on this computer, which may ask for an administrator password.")
+	group.SetDescription("Apps for playing games on this computer.")
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
@@ -430,7 +432,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	for _, component := range gaming.Components() {
 		item := &gamingComponentRow{component: component, row: adw.NewActionRow(), choice: gtk.NewCheckButton()}
 		item.row.SetTitle(component.Name)
-		item.row.SetSubtitle(component.Description + " — checking installation…")
+		item.row.SetSubtitle(component.Description + " — Checking…")
 		item.choice.SetValign(gtk.AlignCenterValue)
 		item.choice.SetSensitive(false)
 		SetAccessibleLabel(item.choice, "Select "+component.Name)
@@ -448,7 +450,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 				log.Printf("views: gaming status unavailable: %v", err)
 				row.SetSubtitle(pageview.GamingUnavailableSubtitle)
 				for _, item := range uh.gamingComponents {
-					item.row.SetSubtitle(item.component.Description + " — installed state unavailable")
+					item.row.SetSubtitle(item.component.Description + " — Couldn't check")
 				}
 				return
 			}
@@ -552,11 +554,12 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 
 			if err != nil {
 				toggle.set(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change developer tools: %v", err))
+				log.Printf("views: changing Developer Mode failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change Developer Mode. Try again."))
 				return
 			}
 			if menuErr != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Custom Command Menu update failed: %v", menuErr))
+				uh.toastAdder.ShowErrorToast("Couldn't update the developer entries in the top bar menu.")
 			}
 
 			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled, skipped)
@@ -706,13 +709,13 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 			} else {
 				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
 				if len(kept) > 0 {
-					result += fmt.Sprintf(" %d app(s) that came with the system left in place.", len(kept))
+					result += " Apps installed for everyone were kept."
 				}
 				if len(failures) > 0 {
-					result += " Details are in the application log."
+					result += " Try again."
 				}
 				if refreshErr != nil {
-					result += " Installed state could not be refreshed; previous observations are kept."
+					result += " Couldn't refresh the list of installed apps."
 				}
 				row.SetSubtitle(result)
 			}

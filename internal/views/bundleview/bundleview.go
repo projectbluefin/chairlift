@@ -33,12 +33,9 @@ type Presentation struct {
 	PlaceholderSubtitle string
 }
 
-// GroupDescription states what the group does and the two consequences that
-// matter once, at the group, rather than repeating them on every row: the
-// software comes from a third party, and a whole collection is a large
-// download.
-const GroupDescription = "Install a set of apps and tools together in one step. " +
-	"Collections come from Homebrew, a third-party source, and can be a large download."
+// GroupDescription states what the group does and the one consequence that
+// matters before pressing Install: a whole collection can be a large download.
+const GroupDescription = "Install a group of apps and tools in one step. Some are large downloads."
 
 // Present derives the collection group's complete loaded state. warning is
 // empty when every existing configured location was read successfully; it is
@@ -50,12 +47,12 @@ func Present(count int, warning string) Presentation {
 	switch {
 	case count == 0 && warning == "":
 		result.PlaceholderTitle = "No collections available"
-		result.PlaceholderSubtitle = "This system does not offer any app collections."
+		result.PlaceholderSubtitle = "This computer has no app collections."
 	case count == 0:
-		result.PlaceholderTitle = "Collections could not be loaded"
-		result.PlaceholderSubtitle = "Something went wrong while looking for app collections."
+		result.PlaceholderTitle = "Couldn't load collections"
+		result.PlaceholderSubtitle = "Try again later."
 	case warning != "":
-		result.Description += " Some collections could not be read."
+		result.Description += " Some collections couldn't be loaded."
 	}
 	return result
 }
@@ -76,7 +73,7 @@ type catalogEntry struct {
 // comments are headings or provenance notes, so both the name and the
 // description a person reads are written here.
 var catalog = map[string]catalogEntry{
-	"ai-tools":            {"AI tools", "Assistants and model runners you can use from the terminal."},
+	"ai-tools":            {"AI tools", "AI assistants and model runners for the terminal."},
 	"artwork":             {"Wallpapers", "Wallpapers and artwork for your desktop."},
 	"cli":                 {"Command line tools", "A modern set of everyday terminal utilities."},
 	"cncf":                {"Cloud native tools", "Tools for building and running cloud native software."},
@@ -96,7 +93,7 @@ var catalog = map[string]catalogEntry{
 	"wallpaper-slideshow": {"Wallpaper slideshow", "Change your desktop background on a schedule."},
 }
 
-const fallbackSummary = "A set of apps and tools put together for this system."
+const fallbackSummary = "A set of apps and tools put together for this computer."
 
 // jargonMarkers are the substrings that disqualify a collection's leading
 // comment from being shown to a person. Each one is either a packaging term,

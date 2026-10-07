@@ -103,7 +103,7 @@ Feature: Livery
     Then the Livery chooser titled "Choose a Project" is shown
     When I search the Livery chooser for "zzqxnothing"
     Then the Livery chooser offers only "No matching project"
-    And the Livery chooser says "Nothing in cncf/artwork matches"
+    And the Livery chooser says "No project matches"
     When I pick "No matching project" in the Livery chooser
     Then the Livery chooser is still open
     And the Livery dry run would not set dock-foundation
@@ -130,7 +130,7 @@ Feature: Livery
     Then the Livery chooser is closed
     And the "Brand" row in the Livery "App Launcher Icon" section says "Choose a brand mark"
     And the Livery dry run would set app-grid-slug to "gitlab"
-    And a Livery error toast says "Livery: fetching that brand mark failed"
+    And a Livery error toast says "Couldn't download that icon"
     And the Livery dry run would install no icon
     And no icon was written under the home directory
 
@@ -145,7 +145,7 @@ Feature: Livery
     Then the Livery chooser is closed
     And the "Project" row in the Livery "Files Icon" section says "Certified Kubernetes"
     And the Livery dry run would set dock-foundation to "prometheus"
-    And a Livery error toast says "Livery: fetching that project's icon failed"
+    And a Livery error toast says "Couldn't download that icon"
     And the Livery dry run would install no icon
     And no icon was written under the home directory
 
@@ -169,7 +169,7 @@ Feature: Livery
     Then the Livery chooser titled "Choose a Profile Picture" is shown
     And the Livery "Apply" button is insensitive
     When I pick "Bluefin" in the Livery chooser
-    Then the Livery chooser says "Could not download Bluefin. Your picture was not changed"
+    Then the Livery chooser says "Couldn't download Bluefin. Your picture was not changed"
     And the Livery "Apply" button is insensitive
     And no profile picture was staged under the home directory
     And the action journal is empty

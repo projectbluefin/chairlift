@@ -555,7 +555,7 @@ reference. Missing installed pin support keeps that action insensitive with
 an explanation; the currently booted day reads Pinned. Shared `buttonRoute`
 and `dialogRoute` callbacks survive repeated list refreshes.
 
-[`recovery.go`](../../internal/views/recovery.go) offers **Return to stream**
+[`recovery.go`](../../internal/views/recovery.go) offers **Go back to regular updates**
 only when the descriptor's running tag parses as a dated build. Its confirmed
 action calls `ublue.Unpin(ctx)` and requires installed unpin support. Both
 controls reset their action gates after completion, refresh rollback status

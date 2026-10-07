@@ -182,7 +182,7 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 					return
 				}
 				log.Printf("app: launch goose desktop failed: %v", launchErr)
-				decision.Reason = "Failed to launch Goose Desktop."
+				decision.Reason = "Couldn't open Goose. Try again."
 			}
 			sgtk.RunOnMainThread(func() {
 				defer a.Release()

@@ -75,7 +75,7 @@ func (uh *UserHome) buildHelpPage() {
 		group.SetTitle("Feature availability")
 		expander := adw.NewExpanderRow()
 		expander.SetTitle("Why is something missing?")
-		expander.SetSubtitle("Features this computer cannot run right now")
+		expander.SetSubtitle("Features this computer can't use right now.")
 		for _, r := range rows {
 			row := adw.NewActionRow()
 			row.SetTitle(r.Title)
@@ -90,7 +90,7 @@ func (uh *UserHome) buildHelpPage() {
 func (uh *UserHome) buildDiagnosticsGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Diagnostics")
-	group.SetDescription("System information to include when asking for help")
+	group.SetDescription("Share these details when you ask for help.")
 
 	row := adw.NewActionRow()
 	diagRow := pageview.SystemDiagnosticsRow()
@@ -172,11 +172,11 @@ func (uh *UserHome) openURL(url string) {
 		// URL is malformed; surface that async failure instead of silently
 		// dropping it. Must run on the GTK main thread.
 		sgtk.RunOnMainThread(func() {
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))
 		})
 	}); err != nil {
 		log.Printf("Failed to open URL %s: %v", url, err)
-		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))
+		uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))
 		return
 	}
 }

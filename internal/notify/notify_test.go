@@ -41,7 +41,7 @@ func TestUpdateAllCompleteCoversEveryOutcome(t *testing.T) {
 			failed:          1,
 			restartRequired: true,
 			wantTitleHas:    "problems",
-			wantBodyHas:     "Restart to apply",
+			wantBodyHas:     "Restart",
 			wantUrgency:     UrgencyHigh,
 		},
 		{

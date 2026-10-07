@@ -18,10 +18,10 @@ func sampleResult() sbom.Result {
 }
 
 func TestChangelogRowSaysWhenThereIsNothingToCompare(t *testing.T) {
-	if got := ChangelogRow(false).Subtitle; !strings.Contains(got, "once an update is ready to install") {
+	if got := ChangelogRow(false).Subtitle; !strings.Contains(got, "once an update is downloaded") {
 		t.Errorf("subtitle = %q", got)
 	}
-	if got := ChangelogRow(true).Subtitle; strings.Contains(got, "once an update is ready to install") {
+	if got := ChangelogRow(true).Subtitle; strings.Contains(got, "once an update is downloaded") {
 		t.Errorf("ready subtitle still says there is nothing to compare: %q", got)
 	}
 }

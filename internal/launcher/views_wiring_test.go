@@ -27,7 +27,7 @@ func TestViewsReportAsyncLauncherFailuresOnMainThread(t *testing.T) {
 				`cmd := exec.Command("xdg-open", url)`,
 				`if err := launcher.Start(cmd, func(err error) {`,
 				`sgtk.RunOnMainThread(func() {`,
-				`uh.toastAdder.ShowErrorToast(fmt.Sprintf("Failed to open URL: %s", url))`,
+				`uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't open %s.", url))`,
 			},
 		},
 	} {

@@ -16,8 +16,8 @@ func TestAvatarAppliedClaimsOnlyWhatTheRouteDid(t *testing.T) {
 		want       string
 		notContain string
 	}{
-		{avatar.RouteBusctl, "is now your profile picture", "sign in"},
-		{avatar.RouteFaceFile, "after you next sign in", "is now"},
+		{avatar.RouteBusctl, "is now your profile picture", "log out"},
+		{avatar.RouteFaceFile, "after you log out and back in", "is now"},
 		{avatar.RouteDryRun, "not applied", "is now"},
 		{"", "not applied", "is now"},
 	}

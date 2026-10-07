@@ -23,11 +23,11 @@ Feature: Agents page
     Given ChairLift is running
     When I open the "Agents" page
     Then the switch in the "Agent Mode" row is off
-    And the "Agent Mode" row says "Turn on to install the model server"
+    And the "Agent Mode" row says "Turn on to download and set up Agent Mode."
     And the "Active Model" row says "Turn on Agent Mode to choose a model."
     And the model chooser is insensitive
     And I do not see "Models and Chat"
-    And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
     And the "Local connection" row says "http://127.0.0.1:17434/v1"
 
@@ -40,8 +40,8 @@ Feature: Agents page
     And the llmman node endpoint was probed
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
     And the model chooser is sensitive
-    And the "Models and Chat" row says "Pull, remove, and try models in llmman's own web interface"
-    And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    And the "Models and Chat" row says "Download, remove, and chat with models."
+    And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.help-xdg-open
@@ -49,7 +49,7 @@ Feature: Agents page
     Given ChairLift is running
     When I open the "Agents" page
     # The row is the button's label (AdwActionRow activatable widget), so the
-    # "Open llmman" button announces itself as "Models and Chat".
+    # "Open" button announces itself as "Models and Chat".
     And I click the "Models and Chat" button in the "Models and Chat" row
     Then xdg-open was asked to open "http://127.0.0.1:17434/"
     And the action journal is empty
@@ -67,9 +67,9 @@ Feature: Agents page
     Given ChairLift is running
     When I open the "Agents" page
     Then the Agent Mode switch settles on and sensitive
-    And the "Agent Mode" row says "The model server is not answering."
-    And the "Active Model" row says "Available when the model server is ready."
-    And the "Recommended Presets" row says "Available when the model server is ready."
+    And the "Agent Mode" row says "Agent Mode isn't responding."
+    And the "Active Model" row says "Available when Agent Mode is ready."
+    And the "Recommended Presets" row says "Available when Agent Mode is ready."
     And the model chooser is insensitive
     And I do not see "Models and Chat"
 
@@ -79,7 +79,7 @@ Feature: Agents page
     And I toggle the switch in the "Agent Mode" row
     Then the application log shows Agent Mode would write its unit and fragment
     And the Agent Mode switch settles off and sensitive
-    And the "Agent Mode" row says "Turn on to install the model server"
+    And the "Agent Mode" row says "Turn on to download and set up Agent Mode."
     And I see "[DRY-RUN] Preview: Agent Mode would be turned on — no changes made"
     And the Agent Mode unit does not exist
     And the Agent Mode environment fragment does not exist
@@ -91,11 +91,11 @@ Feature: Agents page
   Scenario: Turning Agent Mode back on in a dry run keeps it off and keeps llmman idle
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Agent Mode" row says "Off. Downloaded software and models were kept."
+    Then the "Agent Mode" row says "Off. Your downloaded models were kept."
     When I toggle the switch in the "Agent Mode" row
     Then the application log shows Agent Mode would write its unit and fragment
     And the Agent Mode switch settles off and sensitive
-    And the "Agent Mode" row says "Off. Downloaded software and models were kept."
+    And the "Agent Mode" row says "Off. Your downloaded models were kept."
     And the Agent Mode unit does not exist
     And llmman was never asked to "serve"
     And the systemctl tool was never asked to mutate
@@ -167,7 +167,7 @@ Feature: Agents page
       | Local AI                 |
       | Troubleshooting |
       | Contribute               |
-    And I see "Goose answers with your Agent Mode model and reads this computer's logs, services, and network with read-only tools. Knowledge searches go online to the Project Bluefin knowledge base."
+    And I see "Goose looks into problems on this computer. Knowledge searches go online."
 
   @config.agents-no-troubleshooting
   Scenario: Troubleshooting disabled by configuration leaves Agent Mode
@@ -189,7 +189,7 @@ Feature: Agents page
   Scenario: Set Up on a fresh host previews every step and changes nothing
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    Then the "Goose" row says "Set up Goose to start troubleshooting."
     When I click the "Set Up" button in the "Goose" row
     Then I see "[DRY-RUN] Preview: Goose would be set up — no changes made"
     And the Goose setup previewed exactly
@@ -200,7 +200,7 @@ Feature: Agents page
       | brew install --cask ublue-os/tap/goose-linux |
     And brew was never asked to "tap"
     And brew was never asked to "install"
-    And the "Goose" row says "Goose Desktop or linux-mcp-server is not installed."
+    And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
     And no Goose session was previewed
     And the Goose profile was not written
@@ -234,14 +234,14 @@ Feature: Agents page
   Scenario: Installed Goose with Agent Mode off points at Agent Mode
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Goose" row says "Turn on Agent Mode to launch Goose."
+    Then the "Goose" row says "Turn on Agent Mode to use Goose."
     And the "Launch" button in the "Goose" row is insensitive
 
   @stub.agents.goose @stub.agents.llmman @stub.agents.unit @stub.agents.node
   Scenario: Agent Mode running without a model asks for one
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Goose" row says "Choose a model to launch Goose."
+    Then the "Goose" row says "Choose a model above to use Goose."
     And the "Launch" button in the "Goose" row is insensitive
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose
@@ -250,7 +250,7 @@ Feature: Agents page
     When I open the "Agents" page
     Then the Agent Mode switch settles on and sensitive
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
-    And the "Goose" row says "Ready to launch with unsloth/Qwen3-8B-GGUF:Q4_K_M."
+    And the "Goose" row says "Ready to launch."
     And the "Launch" button in the "Goose" row is sensitive
     When I click the "Launch" button in the "Goose" row
     Then I see "[DRY-RUN] Would launch Goose Desktop"
@@ -274,7 +274,7 @@ Feature: Agents page
   Scenario: Contribute to Bluefin is ready when all preflight checks pass
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Contribute to Bluefin" row says "Run the Hive contributor appliance in a terminal."
+    Then the "Contribute to Bluefin" row says "Opens a terminal to help build Bluefin."
     And the "Contribute" button in the "Contribute to Bluefin" row is sensitive
     When I click the "Contribute" button in the "Contribute to Bluefin" row
     Then the application log contains "[DRY-RUN] would launch xdg-terminal-exec ujust contribute"
@@ -284,7 +284,7 @@ Feature: Agents page
   Scenario: Contribute to Bluefin explains missing Hive registration
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Contribute to Bluefin" row says "Register this machine first — see https://github.com/projectbluefin/contribute#configuration"
+    Then the "Contribute to Bluefin" row says "Sign up as a contributor first."
     And the "Contribute" button in the "Contribute to Bluefin" row is insensitive
 
   @stub.agents.devmenu
@@ -304,7 +304,7 @@ Feature: Agents page
     When I open the "Apps" page
     And I run a second invocation with "--dry-run --ask-bluefin"
     Then the "Agents" page is shown
-    And I see "Agent Mode is not running."
+    And I see "Turn on Agent Mode to use Goose."
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose
   Scenario: A second invocation with ask-bluefin launches Goose when Agent Mode is ready
@@ -320,7 +320,7 @@ Feature: Agents page
     When I open the "Apps" page
     And I run a second invocation with "--dry-run --ask-bluefin"
     Then the "Agents" page is shown
-    And I see "Goose Desktop or linux-mcp-server is not installed."
+    And I see "Goose isn't set up yet."
     And no Goose session was previewed
 
   @stub.agents.devmenu.wrapper

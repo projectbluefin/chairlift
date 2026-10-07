@@ -257,7 +257,7 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		file, function string
 		required       []string
 	}{
-		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
+		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "if statusErr != nil {", "log.Printf(\"reading status after staging failed", "uh.updateShell.StartCheck()"}},
 		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)"}},
 		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
 		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},

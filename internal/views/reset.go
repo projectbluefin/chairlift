@@ -2,13 +2,13 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/distrobox"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/powerwash"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -57,7 +57,7 @@ const (
 func (uh *UserHome) buildResetGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Powerwash")
-	group.SetDescription("For when something has gone wrong. Each one asks you to confirm, and cannot be undone.")
+	group.SetDescription("For when something has gone wrong. These can't be undone.")
 
 	powerwashRow := adw.NewActionRow()
 	presentation := pageview.PowerwashRow()
@@ -194,7 +194,8 @@ func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 			button.SetLabel(factoryResetButtonLabel)
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Factory reset failed: %v", err))
+				log.Printf("views: factory reset failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't reset this computer. Try again."))
 				return
 			}
 

@@ -131,8 +131,8 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 			uh.showAgentModeState(state)
 			if migrationErr != nil {
 				log.Printf("views: local-only model service migration failed: %v", migrationErr)
-				uh.agentModeRow.SetSubtitle("Local-only setup could not be updated. Turn Agent Mode off and on to retry.")
-				uh.toastAdder.ShowErrorToast("Agent Mode could not update its local-only service.")
+				uh.agentModeRow.SetSubtitle("Agent Mode needs an update. Turn it off and on again.")
+				uh.toastAdder.ShowErrorToast("Couldn't update Agent Mode. Turn it off and on again.")
 			}
 		})
 	}()
@@ -156,7 +156,7 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 		return
 	}
 	uh.agentPresetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
-	uh.agentModelRow.SetSubtitle("Checking the selected model…")
+	uh.agentModelRow.SetSubtitle("Checking…")
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
 		defer cancel()
@@ -167,7 +167,7 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 			}
 			if err != nil {
 				log.Printf("views: read active model failed: %v", err)
-				uh.agentModelRow.SetSubtitle("Could not read the selected model. Choose a preset to set one.")
+				uh.agentModelRow.SetSubtitle("Couldn't check the model. Choose one below.")
 				return
 			}
 			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
@@ -179,7 +179,7 @@ func (uh *UserHome) presentModelPresetChooser() {
 	if uh.agentModeState != aistack.StateReady || !uh.agentPresetGate.TryStart() {
 		return
 	}
-	dialog := adw.NewAlertDialog("Choose a Model", "Choose a model family. A model that fits this computer's memory will be downloaded.")
+	dialog := adw.NewAlertDialog("Choose a Model", "Pick a model family. A size that fits this computer will be downloaded.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.SetCloseResponse("cancel")
 	for _, fam := range aistack.Families() {
@@ -248,13 +248,13 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) 
 	status, err := aistack.FetchNodeStatus(ctx)
 	if err != nil {
 		log.Printf("views: fetch node status failed: %v", err)
-		finish("", "Could not reach the model server to check memory.", true)
+		finish("", "Couldn't reach Agent Mode. Try again.", true)
 		return
 	}
 	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
 	if err != nil {
 		log.Printf("views: resolve candidate failed: %v", err)
-		finish("", fmt.Sprintf("Could not find a model that fits for %s.", fam.DisplayName()), true)
+		finish("", fmt.Sprintf("Couldn't find a %s model that fits this computer.", fam.DisplayName()), true)
 		return
 	}
 	modelRef := candidate.ModelRef()
@@ -265,12 +265,12 @@ func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) 
 	}
 	if err := aistack.PullModel(ctx, modelRef); err != nil {
 		log.Printf("views: pull model failed: %v", err)
-		finish("", fmt.Sprintf("Could not download %s. The previous model was kept.", modelRef), true)
+		finish("", "Couldn't download the model. Check your internet connection.", true)
 		return
 	}
 	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
 		log.Printf("views: configure alias failed: %v", err)
-		finish("", "Could not select the downloaded model.", true)
+		finish("", "Couldn't switch to the new model. Try again.", true)
 		return
 	}
 	finish(modelRef, fmt.Sprintf("Selected %s.", fam.DisplayName()), false)
@@ -287,8 +287,8 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	uh.agentPresetRow.SetSensitive(false)
 	uh.agentModelRow.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
-	uh.agentModelRow.SetSubtitle("Waiting for the model server…")
-	uh.agentPresetRow.SetSubtitle("Waiting for the model server…")
+	uh.agentModelRow.SetSubtitle("Waiting for Agent Mode…")
+	uh.agentPresetRow.SetSubtitle("Waiting for Agent Mode…")
 	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
 	go func() {
@@ -325,7 +325,7 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 				return
 			}
 			if enabled && !dryRun && state != aistack.StateReady {
-				uh.toastAdder.ShowErrorToast("The model server did not become ready. Turn Agent Mode off and on to retry.")
+				uh.toastAdder.ShowErrorToast("Agent Mode didn't start. Turn it off and on again.")
 				return
 			}
 			uh.toastAdder.ShowToast(actionmsg.AgentMode(dryRun, enabled).Toast)

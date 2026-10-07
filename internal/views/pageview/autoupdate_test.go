@@ -43,7 +43,7 @@ func TestAutomaticUpdatesResultDoesNotImplyAnImmediateUpdate(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(off, "Update all") {
+	if !strings.Contains(off, "Update") {
 		t.Errorf("AutomaticUpdatesResultSubtitle(false) = %q, want it to point at the manual action", off)
 	}
 }

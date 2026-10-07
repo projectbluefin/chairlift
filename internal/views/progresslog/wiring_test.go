@@ -134,25 +134,20 @@ func TestErrorSubtitlesAreNotPangoMarkup(t *testing.T) {
 	}
 	text := string(source)
 
-	// loadUntrustedTaps feeds err.Error() into an AdwActionRow subtitle when
-	// listing untrusted taps fails. The error string comes from the homebrew
-	// invocation, so a '<' or '&' would garble the row with a GTK warning
-	// unless the row disables Pango parsing before its subtitle is set.
-	if !strings.Contains(text, "row.SetSubtitle(err.Error())") {
-		t.Error("updates_page.go no longer sets err.Error() as a row subtitle: the markup assertion below no longer covers the untrusted-tap error text (issue #437)")
+	// Raw errors stay in the log: a failure subtitle is plain text a person
+	// can act on, never a command's error string (which could also carry
+	// '<' or '&' into Pango markup, issue #437).
+	for _, retired := range []string{
+		"row.SetSubtitle(err.Error())",
+		`fmt.Sprintf("Could not verify staged update: %v", statusErr)`,
+	} {
+		if strings.Contains(text, retired) {
+			t.Errorf("updates_page.go shows a raw error to the user again: %q", retired)
+		}
 	}
-	if !strings.Contains(text, "row.SetUseMarkup(false)") {
-		t.Error("updates_page.go renders the untrusted-tap error as a row subtitle without SetUseMarkup(false): it is parsed as Pango markup (issue #437)")
-	}
-
-	// onBootcStageClicked feeds a wrapped statusErr into the bootc stage
-	// expander subtitle when reading status after a stage fails. The error
-	// string is whatever bootc.GetStatus returned, so the expander must
-	// render it literally rather than parse it as Pango markup.
-	if !strings.Contains(text, `message := fmt.Sprintf("Could not verify staged update: %v", statusErr)`) {
-		t.Error("updates_page.go no longer wraps statusErr into the stage expander subtitle: the markup assertion below no longer covers that error text (issue #437)")
-	}
+	// The stage expander's subtitle still carries the version string
+	// bootc reports, so it must render literally.
 	if !strings.Contains(text, "uh.bootcStageExpander.SetUseMarkup(false)") {
-		t.Error("updates_page.go renders the wrapped statusErr as the stage expander subtitle without SetUseMarkup(false): it is parsed as Pango markup (issue #437)")
+		t.Error("updates_page.go renders the stage expander subtitle without SetUseMarkup(false): it is parsed as Pango markup (issue #437)")
 	}
 }

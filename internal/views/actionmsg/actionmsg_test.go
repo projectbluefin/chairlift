@@ -15,9 +15,9 @@ func TestBundleDump(t *testing.T) {
 		wantExact    string
 	}{
 		{
-			name:      "live run confirms the export in plain words",
-			dryRun:    false,
-			wantExact: "Package list exported to your home folder",
+			name:         "live run confirms the export in plain words",
+			dryRun:       false,
+			wantContains: []string{"home folder"},
 		},
 		{
 			name:         "dry-run previews without claiming a save happened",
@@ -287,7 +287,7 @@ func TestSelfUpdate(t *testing.T) {
 // staging providers. Dry-run cannot claim that a status re-read is work done
 // by this click, while live staging retains its fixed completion messages.
 func TestSystemStage(t *testing.T) {
-	const stagedMsg = "System update staged. Restart to apply."
+	const stagedMsg = "Update downloaded. Restart to install it."
 	const upToDateMsg = "System is up to date"
 
 	tests := []struct {
@@ -370,7 +370,7 @@ func TestTapTrust(t *testing.T) {
 			dryRun:       false,
 			tapName:      "some/tap",
 			wantMutateUI: true,
-			wantToast:    "Trusted some/tap. Its packages can update again.",
+			wantToast:    "Trusted some/tap. Its software can update again.",
 		},
 		{
 			name:             "dry-run previews without mutating the UI",
@@ -476,20 +476,20 @@ func TestFeatureToggle(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name:        "live enable confirms the switch",
-			dryRun:      false,
-			enable:      true,
-			featName:    "docker",
-			wantConfirm: true,
-			wantToast:   "docker enabled. Update to download, reboot to apply.",
+			name:         "live enable confirms the switch",
+			dryRun:       false,
+			enable:       true,
+			featName:     "docker",
+			wantConfirm:  true,
+			wantContains: []string{"docker", "turned on", "restart"},
 		},
 		{
-			name:        "live disable confirms the switch",
-			dryRun:      false,
-			enable:      false,
-			featName:    "docker",
-			wantConfirm: true,
-			wantToast:   "docker disabled. Update to apply, reboot to complete.",
+			name:         "live disable confirms the switch",
+			dryRun:       false,
+			enable:       false,
+			featName:     "docker",
+			wantConfirm:  true,
+			wantContains: []string{"docker", "turned off", "restart"},
 		},
 		{
 			name:         "dry-run enable previews without confirming the switch",
@@ -544,9 +544,9 @@ func TestFeatureUpdate(t *testing.T) {
 		wantContains []string
 	}{
 		{
-			name:      "live run reports fixed completion message",
-			dryRun:    false,
-			wantExact: "Features updated. Changes apply after reboot.",
+			name:         "live run says a restart applies it",
+			dryRun:       false,
+			wantContains: []string{"updated", "Restart"},
 		},
 		{
 			name:         "dry-run previews without claiming completion",

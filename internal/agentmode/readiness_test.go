@@ -62,7 +62,7 @@ func TestReadinessTable(t *testing.T) {
 func TestReadinessSubtitlesAndPrerequisites(t *testing.T) {
 	for _, state := range []State{StateReady, StateDaemonUnavailable, StateModelUnavailable, StatePackagesMissing, StateUnsupported} {
 		t.Run(state.String(), func(t *testing.T) {
-			if state.Subtitle("qwen:test") == "" {
+			if state.Subtitle() == "" {
 				t.Errorf("Subtitle() for %v is empty", state)
 			}
 			prereq := state.MissingPrerequisite()
@@ -260,7 +260,7 @@ func TestLaunchFailed(t *testing.T) {
 		facts := readyFacts()
 		facts.ActiveModel = ""
 		err := Launch(context.Background(), facts, nil)
-		if err == nil || !strings.Contains(err.Error(), "No model is selected") {
+		if err == nil || !strings.Contains(err.Error(), "Choose a model") {
 			t.Errorf("Launch() = %v, want the missing prerequisite", err)
 		}
 		if len(h.cmds) != 0 {

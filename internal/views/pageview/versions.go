@@ -24,28 +24,25 @@ func CatalogStream(tag string) string {
 	return tag
 }
 
-// PublishedVersionsRow returns the Recovery row that lists the stream's
-// published versions, before anything has been read. The read is a network
-// request to the image registry, so the subtitle says so. The stream is
-// quoted as a name: Dakota's stream is "latest", and "the latest versions"
-// read as a claim about recency rather than the stream being listed.
-func PublishedVersionsRow(stream string) Row {
+// PublishedVersionsRow returns the Recovery row that lists the versions this
+// computer could go back to, before anything has been read. The row names no
+// stream or registry: the list is always the stream the computer follows.
+func PublishedVersionsRow() Row {
 	return Row{
-		Title: "Published versions",
-		Subtitle: fmt.Sprintf("See the versions of the “%s” stream the image registry still offers from the last %d days. This asks the registry each time.",
-			stream, PublishedVersionsDays),
+		Title:    "Published versions",
+		Subtitle: fmt.Sprintf("See which versions came out in the last %d days.", PublishedVersionsDays),
 	}
 }
 
 // PublishedVersionsSummary returns the row subtitle after a completed read.
-func PublishedVersionsSummary(count int, stream string) string {
+func PublishedVersionsSummary(count int) string {
 	switch count {
 	case 0:
-		return fmt.Sprintf("The registry lists no versions of the “%s” stream from the last %d days", stream, PublishedVersionsDays)
+		return fmt.Sprintf("No versions were released in the last %d days.", PublishedVersionsDays)
 	case 1:
-		return fmt.Sprintf("1 version of the “%s” stream from the last %d days", stream, PublishedVersionsDays)
+		return fmt.Sprintf("1 version released in the last %d days.", PublishedVersionsDays)
 	default:
-		return fmt.Sprintf("%d versions of the “%s” stream from the last %d days", count, stream, PublishedVersionsDays)
+		return fmt.Sprintf("%d versions released in the last %d days.", count, PublishedVersionsDays)
 	}
 }
 
@@ -64,7 +61,8 @@ type PublishedVersion struct {
 // running and previous are the bootc image versions of the booted and
 // rollback deployments ("44.20260908"); either may be empty. A day matching
 // one of them is marked, so the list says where the machine is and where
-// Roll Back would take it.
+// Roll Back would take it. Other days have no subtitle: the tag a build was
+// published under is registry detail nobody choosing a day needs.
 func PublishedVersions(builds []registrytags.Build, stream, running, previous string) []PublishedVersion {
 	runningDay, hasRunning := versionDay(running)
 	previousDay, hasPrevious := versionDay(previous)
@@ -77,13 +75,12 @@ func PublishedVersions(builds []registrytags.Build, stream, running, previous st
 		}
 		lastDay = build.Date
 
-		subtitle := "Published as " + build.Tag
-		runningNow := hasRunning && build.Date.Equal(runningDay)
+		subtitle := ""
 		switch {
-		case runningNow:
-			subtitle = "Running now · " + subtitle
+		case hasRunning && build.Date.Equal(runningDay):
+			subtitle = "Running now"
 		case hasPrevious && build.Date.Equal(previousDay):
-			subtitle = "Your previous version · " + subtitle
+			subtitle = "Your previous version"
 		}
 		rows = append(rows, PublishedVersion{
 			Row: Row{
@@ -101,27 +98,28 @@ func PublishedVersions(builds []registrytags.Build, stream, running, previous st
 // PinConfirmation returns the title and body of the confirmation dialog shown
 // before pinning to a published dated build.
 func PinConfirmation(date string) (title, body string) {
-	title = fmt.Sprintf("Pin to %s?", date)
-	body = fmt.Sprintf("This stages a switch to the build from %s. Automatic updates will stay at this version until you return to the stream. The change applies the next time you restart.", date)
+	title = fmt.Sprintf("Pin the %s Version?", date)
+	body = "Updates stop at this version until you go back to regular updates. " +
+		"It takes effect the next time you restart."
 	return title, body
 }
 
 // UnpinConfirmation returns the title and body of the confirmation dialog
 // shown before returning to the regular release stream.
-func UnpinConfirmation(stream string) (title, body string) {
-	title = "Return to Stream?"
-	body = fmt.Sprintf("This stages a switch back to regular updates on the “%s” stream. The change applies the next time you restart.", stream)
-	return title, body
+func UnpinConfirmation() (title, body string) {
+	return "Go Back to Regular Updates?",
+		"This computer moves to the newest version the next time you restart."
 }
 
-// UnpinRow returns the title and subtitle for the Return to stream row.
-func UnpinRow(stream string, supported bool) Row {
-	subtitle := fmt.Sprintf("Switch back to the newest updates on the “%s” stream", stream)
+// UnpinRow returns the title and subtitle for the row that returns a pinned
+// computer to its regular release stream.
+func UnpinRow(supported bool) Row {
+	subtitle := "Get the newest version again."
 	if !supported {
-		subtitle = "Returning to the stream is not supported on this system"
+		subtitle = UnpinUnsupportedExplanation()
 	}
 	return Row{
-		Title:    "Return to stream",
+		Title:    "Go back to regular updates",
 		Subtitle: subtitle,
 	}
 }
@@ -129,13 +127,13 @@ func UnpinRow(stream string, supported bool) Row {
 // PinUnsupportedExplanation returns the explanation when pinning is not
 // supported by the system image.
 func PinUnsupportedExplanation() string {
-	return "Pinning is not supported on this system"
+	return "Pinning isn't available on this computer."
 }
 
 // UnpinUnsupportedExplanation returns the explanation when returning to the
 // stream is not supported by the system image.
 func UnpinUnsupportedExplanation() string {
-	return "Returning to the stream is not supported on this system"
+	return "Going back to regular updates isn't available on this computer."
 }
 
 // versionDay reads the build day out of a bootc image version. Bluefin's

@@ -19,13 +19,13 @@ type DiagnosticsData struct {
 func SystemDiagnosticsRow() Row {
 	return Row{
 		Title:    "System diagnostics",
-		Subtitle: "Copy scrubbed system facts to share in support requests",
+		Subtitle: "Copy details about this computer for a help request.",
 	}
 }
 
 // DiagnosticsClipboardToast returns the toast message shown after copying diagnostics.
 func DiagnosticsClipboardToast() string {
-	return "System diagnostics copied to clipboard"
+	return "Copied to the clipboard."
 }
 
 // FormatScrubbedDiagnostics formats system facts into a clean text block for support,

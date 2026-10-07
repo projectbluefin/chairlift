@@ -12,19 +12,19 @@ import (
 func ChangelogRow(staged bool) Row {
 	row := Row{Title: "What's changing"}
 	if !staged {
-		row.Subtitle = "Available once an update is ready to install"
+		row.Subtitle = "Available once an update is downloaded."
 		return row
 	}
 	// The fetch is tens of megabytes per side, so it is never automatic —
 	// the subtitle has to say that pressing the button costs a download.
-	row.Subtitle = "See which programs change, by comparing your version with the new one. This is a large download."
+	row.Subtitle = "See which programs change in the new version. This is a large download."
 	return row
 }
 
 // ChangelogSummary returns the subtitle describing a completed comparison.
 func ChangelogSummary(result sbom.Result) string {
 	if result.Empty() {
-		return "No programs change between the two versions"
+		return "No programs change in the new version."
 	}
 
 	parts := make([]string, 0, 5)

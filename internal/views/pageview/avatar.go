@@ -37,24 +37,24 @@ func AvatarEntryRow(entry avatar.Avatar) Row {
 // AvatarPreviewFailed is the chooser's banner when the artwork could not be
 // downloaded or decoded. Nothing was applied, so it says so.
 func AvatarPreviewFailed(entry avatar.Avatar) string {
-	return "Could not download " + entry.CommonName + ". Your picture was not changed; check your connection and pick again."
+	return "Couldn't download " + entry.CommonName + ". Your picture was not changed."
 }
 
 // AvatarApplyFailed is the chooser's banner when the downloaded artwork
 // could not be set on the account.
 func AvatarApplyFailed(entry avatar.Avatar) string {
-	return "Could not set " + entry.CommonName + " as your picture. Your picture was not changed; press Apply to try again."
+	return "Couldn't set " + entry.CommonName + " as your picture. Your picture was not changed."
 }
 
 // AvatarApplied is the toast after a dispatch returned without error. Only
 // the bus route changes the running session; the face-file fallback is read
-// at the next sign-in, and a dry run changed nothing at all.
+// after the person logs out and back in, and a dry run changed nothing.
 func AvatarApplied(route avatar.Route, entry avatar.Avatar) string {
 	switch route {
 	case avatar.RouteBusctl:
 		return entry.CommonName + " is now your profile picture"
 	case avatar.RouteFaceFile:
-		return entry.CommonName + " will be your profile picture after you next sign in"
+		return entry.CommonName + " will be your profile picture after you log out and back in"
 	default:
 		return "Dry run: " + entry.CommonName + " was previewed but not applied"
 	}

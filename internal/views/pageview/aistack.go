@@ -18,34 +18,34 @@ func AgentModeRowTitle() string {
 func AgentModeSubtitle(s aistack.State) string {
 	switch s {
 	case aistack.StateUnavailable:
-		return "Not available on this computer — Homebrew is not installed."
+		return "This computer is missing a part Agent Mode needs."
 	case aistack.StateProvisioning:
-		return "Checking the model server…"
+		return "Checking…"
 	case aistack.StateReady:
-		return "Ready. Restart already-open apps and terminals to connect."
+		return "Ready. Restart open apps to use it."
 	case aistack.StateDegraded:
-		return "The model server is not answering. Turn Agent Mode off and on to retry."
+		return "Agent Mode isn't responding. Turn it off and on again."
 	case aistack.StateDisabled:
-		return "Off. Downloaded software and models were kept."
+		return "Off. Your downloaded models were kept."
 	default:
-		return "Turn on to install the model server and download its engine."
+		return "Turn on to download and set up Agent Mode."
 	}
 }
 
 func AgentModeWorkingSubtitle(enabling bool) string {
 	if enabling {
-		return "Setting up… This can take several minutes the first time."
+		return "Setting up… The first time can take several minutes."
 	}
-	return "Stopping…"
+	return "Turning off…"
 }
 
 // A failure may occur before or after the files changed. The view re-observes
 // the actual state instead of claiming every failed disable is still running.
 func AgentModeFailureToast(enabling bool) string {
 	if enabling {
-		return "Agent Mode could not be turned on. Check its current status above."
+		return "Couldn't turn on Agent Mode. Try again."
 	}
-	return "Could not finish turning off Agent Mode. Check its current status above."
+	return "Couldn't turn off Agent Mode. Try again."
 }
 
 func AgentModeActiveModelTitle() string {
@@ -54,17 +54,17 @@ func AgentModeActiveModelTitle() string {
 
 func AgentModeActiveModelSubtitle(modelRef string) string {
 	if modelRef == "" {
-		return "No model selected — choose a preset."
+		return "No model selected. Choose one below."
 	}
 	return modelRef
 }
 
 func AgentModeModelUnavailable(s aistack.State) string {
 	if s == aistack.StateProvisioning {
-		return "Waiting for the model server…"
+		return "Waiting for Agent Mode…"
 	}
 	if s == aistack.StateDegraded {
-		return "Available when the model server is ready."
+		return "Available when Agent Mode is ready."
 	}
 	return "Turn on Agent Mode to choose a model."
 }
@@ -94,7 +94,7 @@ func AskBluefinMenuRowTitle() string {
 }
 
 func AskBluefinMenuRowSubtitle() string {
-	return "Show the Ask Bluefin shortcut in the top panel menu."
+	return "Show Ask Bluefin in the top bar menu."
 }
 
 // AgentModeManageTitle titles the row that opens llmman's web UI.
@@ -102,8 +102,8 @@ func AgentModeManageTitle() string { return "Models and Chat" }
 
 // AgentModeManageSubtitle says what the web UI is for.
 func AgentModeManageSubtitle() string {
-	return "Pull, remove, and try models in llmman's own web interface"
+	return "Download, remove, and chat with models."
 }
 
 // AgentModeManageLabel is the button that opens it.
-func AgentModeManageLabel() string { return "Open llmman" }
+func AgentModeManageLabel() string { return "Open" }

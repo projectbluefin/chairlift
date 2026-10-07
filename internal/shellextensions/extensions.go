@@ -25,8 +25,8 @@ type Extension struct {
 // Catalog returns only the extension IDs shipped by Dakota and Bluefin Bling.
 func Catalog() []Extension {
 	return []Extension{
-		{"tailscale-gnome-qs@tailscale-qs.github.io", "Tailscale Integration", "Show Tailscale controls in GNOME Quick Settings.", true},
-		{"syncthing-toggle@projectbluefin.io", "Sync Folder Integration", "Show Sync Folder controls in GNOME Quick Settings. This feature is not ready yet.", false},
+		{"tailscale-gnome-qs@tailscale-qs.github.io", "Tailscale Integration", "Show Tailscale in Quick Settings.", true},
+		{"syncthing-toggle@projectbluefin.io", "Sync Folder Integration", "Show Sync Folder in Quick Settings. Not ready yet.", false},
 	}
 }
 

@@ -56,7 +56,7 @@ Feature: Help destination
     And I open the "<title>" Help link
     Then xdg-open was asked to open "<url>"
     And the application log contains "Opening URL: <url>"
-    And I do not see "Failed to open URL"
+    And I do not see "Couldn't open"
     And the Help page is still responsive
     And the action journal is empty
 
@@ -72,7 +72,7 @@ Feature: Help destination
     When I press "F1"
     And I open the "Report a problem" Help link
     Then xdg-open was asked to open "https://github.com/projectbluefin/dakota/issues"
-    And I see "Failed to open URL: https://github.com/projectbluefin/dakota/issues"
+    And I see "Couldn't open https://github.com/projectbluefin/dakota/issues."
     And the Help page is still responsive
 
   @config.help-links @stub.help-xdg-open-fails
@@ -80,9 +80,9 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     And I open the "Visit project website" Help link
-    Then a toast says "Failed to open URL: https://example.test/site"
+    Then a toast says "Couldn't open https://example.test/site."
     When I open the "Browse documentation" Help link
-    Then a toast says "Failed to open URL: https://example.test/docs/#start"
+    Then a toast says "Couldn't open https://example.test/docs/#start."
     And the Help page is still responsive
 
   @config.help-no-resources
@@ -100,6 +100,6 @@ Feature: Help destination
     Given ChairLift is running
     When I press "F1"
     And I click the "Copy" button in the "System diagnostics" row
-    Then I see "System diagnostics copied to clipboard"
+    Then I see "Copied to the clipboard."
     And the "Copy" button in the "System diagnostics" row is sensitive
     And the action journal is empty

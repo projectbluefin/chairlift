@@ -10,8 +10,8 @@ func TestSystemDiagnosticsRow(t *testing.T) {
 	if row.Title != "System diagnostics" {
 		t.Errorf("SystemDiagnosticsRow().Title = %q, want %q", row.Title, "System diagnostics")
 	}
-	if !strings.Contains(row.Subtitle, "support requests") {
-		t.Errorf("SystemDiagnosticsRow().Subtitle = %q, want mention of support requests", row.Subtitle)
+	if !strings.Contains(row.Subtitle, "help request") {
+		t.Errorf("SystemDiagnosticsRow().Subtitle = %q, want mention of asking for help", row.Subtitle)
 	}
 }
 

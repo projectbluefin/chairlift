@@ -54,22 +54,22 @@ func UpdateAllComplete(succeeded, failed, skipped int, restartRequired bool) Not
 
 	switch {
 	case total == 0:
-		return Notification{Title: "Nothing to update", Body: "No update sources are available on this system."}
+		return Notification{Title: "Nothing to update", Body: "There is nothing on this computer to update."}
 	case failed == total:
 		return Notification{
 			Title:   "Update failed",
-			Body:    branding.AppName + " could not update this system. Open the app for details.",
+			Body:    branding.AppName + " couldn't update this computer. Open it to see what went wrong.",
 			Urgency: UrgencyHigh,
 		}
 	case failed > 0:
 		body := fmt.Sprintf("%d part(s) updated, %d failed.", succeeded, failed)
 		if restartRequired {
-			body += " Restart to apply the system image."
+			body += " Restart to finish updating."
 		}
 		return Notification{Title: "Update finished with problems", Body: body, Urgency: UrgencyHigh}
 	case restartRequired:
-		return Notification{Title: "Update complete", Body: "Restart to apply the new system image."}
+		return Notification{Title: "Update complete", Body: "Restart to finish updating."}
 	default:
-		return Notification{Title: "Update complete", Body: "This system is already up to date."}
+		return Notification{Title: "Update complete", Body: "This computer is already up to date."}
 	}
 }

@@ -70,7 +70,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
   @config.config-invalid-yaml
   Scenario: A YAML parse error names its cause once
     Given ChairLift is running
-    Then the configuration error toast states "did not find expected ','" once
+    Then the configuration error log states "did not find expected ','" once
 
   @config.config-no-agents-maintenance
   Scenario: Disabling every group of a page removes its row and compacts Alt+number
@@ -130,7 +130,7 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Given ChairLift is running
     When I select "Help" in the sidebar
     And I expand the "Why is something missing?" row with the keyboard
-    Then the "Packages from Homebrew" row says "Needs Homebrew"
+    Then the "Installed apps and tools" row says "Needs Homebrew"
     And the feature availability list omits "Agent Mode"
     And the feature availability list omits "Troubleshooting"
     And the feature availability list omits "Powerwash"
@@ -141,8 +141,8 @@ Feature: Fail-closed configuration and configuration-driven visibility
     Then the application log does not contain "CONFIGURATION ERROR"
     When I select "Help" in the sidebar
     And I expand the "Why is something missing?" row with the keyboard
-    Then the "Developer mode" row says "Needs /usr/share/ublue-os/image-info.json"
-    And the feature availability list <verdict> "Release channel"
+    Then the "Developer mode" row says "Needs Bluefin"
+    And the feature availability list <verdict> "Early updates"
 
     @config.everything
     Examples: no legacy input

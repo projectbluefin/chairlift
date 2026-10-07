@@ -248,7 +248,7 @@ GUI /usr/bin/waypipe
 MISSING /usr/libexec/virtiofsd
 OK /usr/bin/systemctl
 `,
-			wantAction: "Needs host prerequisites: systemd-vmspawn, /usr/libexec/virtiofsd (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 		{
@@ -256,7 +256,7 @@ OK /usr/bin/systemctl
 			output: `OK /usr/bin/systemd-vmspawn
 MISSING UEFI firmware (vmspawn found no x86_64 firmware without Secure Boot; install ovmf)
 `,
-			wantAction: "Needs host prerequisite: UEFI firmware (ovmf) (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 		{
@@ -264,7 +264,7 @@ MISSING UEFI firmware (vmspawn found no x86_64 firmware without Secure Boot; ins
 			output: `OK /usr/bin/systemd-vmspawn
 MISSING you are not a member of the kvm group
 `,
-			wantAction: "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.",
+			wantAction: NeedsKVMAccess,
 			wantKVM:    true,
 		},
 		{
@@ -273,7 +273,7 @@ MISSING you are not a member of the kvm group
 OK kvm group membership
 KVM/vsock group access: permission denied
 `,
-			wantAction: "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.",
+			wantAction: NeedsKVMAccess,
 			wantKVM:    true,
 		},
 		{
@@ -281,7 +281,7 @@ KVM/vsock group access: permission denied
 			output: `OK /usr/bin/systemd-vmspawn
 User namespaces: operation not permitted
 `,
-			wantAction: "Needs host prerequisite: user namespaces (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 	}
@@ -294,6 +294,13 @@ User namespaces: operation not permitted
 			}
 			if gotKVM != tt.wantKVM {
 				t.Errorf("ParseNSLDoctor() isKVM = %v, want %v", gotKVM, tt.wantKVM)
+			}
+			// The row shows this text: it must not name programs, devices,
+			// or commands a person cannot act on.
+			for _, jargon := range []string{"nsl", "/", "systemd", "kvm", "ovmf"} {
+				if strings.Contains(gotAction, jargon) {
+					t.Errorf("ParseNSLDoctor() actionable = %q names %q", gotAction, jargon)
+				}
 			}
 		})
 	}

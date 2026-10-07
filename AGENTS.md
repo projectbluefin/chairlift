@@ -851,7 +851,7 @@ An agent must not break these:
   last list when a read fails rather than leaving it standing as current,
   and offers a confirmed Pin action for each build that stages a switch to
   that dated tag (`chairlift-helper pin <YYYYMMDD>`). When booted on a dated
-  tag, Powerwash offers **Return to stream** (`chairlift-helper unpin`).
+  tag, Powerwash offers **Go back to regular updates** (`chairlift-helper unpin`).
   `internal/bootc.CheckUpdate` also calls `Client.Tag` directly on composefs
   hosts (below); it only compares digests.
 - **Reading OS state never needs a password.** bootc 1.16 refuses
@@ -917,7 +917,7 @@ An agent must not break these:
   prerequisite, with identical behavior for
   cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
-  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (linking `https://github.com/projectbluefin/contribute#configuration` for missing registration) and leaves the button insensitive. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
+  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, a plain subtitle says what is missing without naming commands or paths and leaves the button insensitive; for missing registration a **Learn How** button opens `contribute.RegistrationURL` (`https://github.com/projectbluefin/contribute#configuration`). Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
 - **Printer applications are rootless quadlets, locked until their
   administration is authenticated, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family

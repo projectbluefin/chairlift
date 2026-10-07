@@ -90,7 +90,7 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 | Group | Key | Description |
 |-------|-----|-------------|
 | App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
-| Homebrew packages | `brew_group` | Homebrew applications (installed casks), then Command line tools (explicitly requested formulae), then Packages from Homebrew containing the Brewfile exporter; uninstall and formula pin/unpin actions |
+| Homebrew packages | `brew_group` | Installed apps (installed casks), then Command line tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
 
 Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
 do not appear in the inventory. Apps has no Flatpak inventory, external catalog
@@ -154,7 +154,7 @@ the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and
 `docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
 
-The **WSL Backend** chooser changes the current window's backend without rewriting
+The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
 YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
 with no nsl machine resolves the nsl default to Lima.
 
@@ -216,7 +216,7 @@ pair and unit file, and dry-run restores both switches without writes.
 |-------|-----|-------------|
 | Storage | `maintenance_freespace_group` | The single "Free up space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other |
 | Maintenance tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free up space" (disabled by default) |
-| Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back and Published versions (Pin, Return to stream) are gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
+| Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back and Published versions (Pin, Go back to regular updates) are gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
 
 `maintenance_cleanup_group` supports:
 

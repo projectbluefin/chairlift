@@ -43,6 +43,17 @@ type Tool struct {
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
 
+// Plain prerequisite sentences shown on the WSL Mode row. ParseNSLDoctor and
+// the view share them so the same missing piece always reads the same way.
+const (
+	// NeedsVirtualization means the processor's virtualization is off.
+	NeedsVirtualization = "Turn on virtualization in your computer's firmware settings."
+	// NeedsKVMAccess means this account cannot use virtualization yet.
+	NeedsKVMAccess = "Turning this on asks for your administrator password. Then log out and back in."
+	// NeedsPrerequisite means nsl doctor reported something else missing.
+	NeedsPrerequisite = "This computer is missing a part WSL Mode needs."
+)
+
 // Tools follows Common's ide.Brewfile and devmode terminal-editor choices.
 // The current Toolbox cask contains only the x86_64 Linux archive.
 func Tools() []Tool {
@@ -175,11 +186,12 @@ func NSLDoctor(ctx context.Context) (string, error) {
 	return command(ctx, false, "nsl", "doctor")
 }
 
-// ParseNSLDoctor parses the output of "nsl doctor". It returns an actionable
-// human-readable message if prerequisites are missing, and reports whether
-// the failure was due to KVM device access or group membership.
+// ParseNSLDoctor parses the output of "nsl doctor". It returns a plain
+// sentence if prerequisites are missing, and reports whether the failure was
+// due to KVM device access or group membership. The missing items themselves
+// name programs and devices, so callers log the raw output instead.
 func ParseNSLDoctor(output string) (actionable string, isKVM bool) {
-	var missing []string
+	missing := false
 	hasKVM := false
 	for _, rawLine := range strings.Split(output, "\n") {
 		line := strings.TrimSpace(rawLine)
@@ -188,30 +200,22 @@ func ParseNSLDoctor(output string) (actionable string, isKVM bool) {
 		}
 		if strings.HasPrefix(line, "MISSING") {
 			item := strings.TrimSpace(strings.TrimPrefix(line, "MISSING"))
-			lower := strings.ToLower(item)
-			if strings.Contains(lower, "kvm") || strings.Contains(item, "/dev/kvm") {
+			if strings.Contains(strings.ToLower(item), "kvm") {
 				hasKVM = true
-			} else if strings.HasPrefix(item, "UEFI firmware") {
-				missing = append(missing, "UEFI firmware (ovmf)")
 			} else {
-				missing = append(missing, item)
+				missing = true
 			}
 		} else if strings.HasPrefix(line, "KVM/vsock group access:") || strings.HasPrefix(line, "SESSION /dev/kvm:") {
 			hasKVM = true
-		} else if strings.HasPrefix(line, "User namespaces:") {
-			missing = append(missing, "user namespaces")
-		} else if strings.HasPrefix(line, "User systemd:") {
-			missing = append(missing, "user systemd")
+		} else if strings.HasPrefix(line, "User namespaces:") || strings.HasPrefix(line, "User systemd:") {
+			missing = true
 		}
 	}
-	if len(missing) > 0 {
-		if len(missing) == 1 {
-			return fmt.Sprintf("Needs host prerequisite: %s (run 'nsl doctor').", missing[0]), hasKVM
-		}
-		return fmt.Sprintf("Needs host prerequisites: %s (run 'nsl doctor').", strings.Join(missing, ", ")), hasKVM
+	if missing {
+		return NeedsPrerequisite, hasKVM
 	}
 	if hasKVM {
-		return "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.", true
+		return NeedsKVMAccess, true
 	}
 	return "", false
 }
@@ -383,14 +387,14 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 			return errors.New("hardware virtualization is unavailable: /dev/kvm is missing; enable it in firmware")
 		}
 		if !accessible {
-			stage("Requesting hardware virtualization access…")
+			stage("Asking for virtual machine access…")
 			if err := ublue.EnableKVMAccess(ctx); err != nil {
 				return err
 			}
 			return ErrNewLogin
 		}
 		if !NSLInstalled() {
-			stage("Installing nsl through Homebrew…")
+			stage("Installing…")
 			if err := homebrew.Tap("frostyard/tap"); err != nil {
 				return err
 			}
@@ -401,14 +405,10 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 				return err
 			}
 		}
-		stage("Checking host prerequisites…")
-		output, err := command(ctx, false, "nsl", "doctor")
-		if err != nil {
-			actionable, _ := ParseNSLDoctor(output)
-			if actionable != "" {
-				return errors.New(actionable)
-			}
-			return fmt.Errorf("nsl doctor: %w", err)
+		stage("Checking this computer…")
+		// command's error already carries the doctor output for the log.
+		if _, err := command(ctx, false, "nsl", "doctor"); err != nil {
+			return err
 		}
 	}
 	state, err := NSLStatus(ctx)
@@ -419,25 +419,25 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		if !state.Exists && !state.Running {
 			return nil
 		}
-		stage("Stopping nsl machines…")
+		stage("Stopping…")
 		_, err := command(ctx, true, "nsl", "shutdown")
 		return err
 	}
 	if !state.Exists {
-		stage("Creating default machine…")
+		stage("Creating your virtual machine…")
 		if _, err := command(ctx, true, "nsl", "create", "debian", "--distro", "debian:13"); err != nil {
 			return err
 		}
 	}
 	if !state.Running {
-		stage("Starting nsl machine…")
+		stage("Starting…")
 		if _, err := command(ctx, true, "nsl", "start", "debian"); err != nil {
 			if _, runErr := command(ctx, true, "nsl", "run", "true"); runErr != nil {
 				return err
 			}
 		}
 	}
-	stage("Checking nsl shell…")
+	stage("Checking that it works…")
 	_, err = command(ctx, false, "nsl", "run", "true")
 	return err
 }
@@ -465,13 +465,13 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 			return errors.New("hardware virtualization is unavailable: /dev/kvm is missing; enable it in firmware")
 		}
 		if !accessible {
-			stage("Requesting hardware virtualization access…")
+			stage("Asking for virtual machine access…")
 			if err := ublue.EnableKVMAccess(ctx); err != nil {
 				return err
 			}
 			return ErrNewLogin
 		}
-		stage("Installing Lima and its virtual-machine dependencies…")
+		stage("Installing…")
 		if err := homebrew.Install("lima", false); err != nil {
 			return err
 		}
@@ -487,7 +487,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 		if !state.Exists {
 			return nil
 		}
-		stage("Stopping Ubuntu; keeping its disk and your files…")
+		stage("Stopping Ubuntu…")
 		_, autoErr := command(ctx, true, "limactl", "autostart", "disable", "ubuntu")
 		var stopErr error
 		if state.Running {
@@ -495,7 +495,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 		}
 		return errors.Join(autoErr, stopErr)
 	}
-	stage("Starting Ubuntu LTS; the first image download is about 600 MB…")
+	stage("Starting Ubuntu…")
 	if !state.Exists {
 		_, err = command(ctx, true, "limactl", "start", "--name", "ubuntu", "--mount-writable", "--tty=false", "template:ubuntu-lts")
 	} else if !state.Running {
@@ -507,7 +507,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 	if _, err := command(ctx, true, "limactl", "autostart", "enable", "ubuntu"); err != nil {
 		return err
 	}
-	stage("Checking the Ubuntu shell…")
+	stage("Checking that Ubuntu works…")
 	_, err = command(ctx, false, "limactl", "shell", "ubuntu", "true")
 	return err
 }
@@ -611,17 +611,21 @@ func SetDocker(ctx context.Context, enabled bool, progress func(string)) error {
 		if !state.Available {
 			return errors.New("the base image does not provide Docker's daemon; installing its CLI cannot enable containers")
 		}
+		if progress != nil {
+			progress("Installing Docker tools…")
+		}
 		for _, pkg := range []string{"docker", "docker-compose", "lazydocker", "dive"} {
-			if progress != nil {
-				progress("Installing " + pkg + "…")
-			}
 			if err := homebrew.Install(pkg, false); err != nil {
 				return err
 			}
 		}
 	}
 	if progress != nil {
-		progress("Changing the Docker daemon…")
+		if enabled {
+			progress("Starting Docker…")
+		} else {
+			progress("Stopping Docker…")
+		}
 	}
 	return ublue.SetDocker(ctx, enabled)
 }

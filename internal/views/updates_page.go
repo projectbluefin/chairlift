@@ -9,6 +9,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/stageexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -52,7 +53,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		group := adw.NewPreferencesGroup()
 		group.SetTitle("System update details")
-		group.SetDescription("Download a system update on its own, or compare the version waiting for your next restart.")
+		group.SetDescription("Download a system update on its own, or see what it changes.")
 		group.SetVisible(false)
 
 		uh.bootcStageExpander = adw.NewExpanderRow()
@@ -87,7 +88,7 @@ func (uh *UserHome) buildUpdatesPage() {
 	if uh.groupEnabled("updates_page", "brew_trust_group") {
 		uh.brewTrustGroup = adw.NewPreferencesGroup()
 		uh.brewTrustGroup.SetTitle("Unverified sources")
-		uh.brewTrustGroup.SetDescription("Some software came from a source you have not said you trust, so it stays at the version you have. Trusting a source lets its software update again.")
+		uh.brewTrustGroup.SetDescription("Updates are paused for software from sources you haven't trusted yet.")
 		uh.brewTrustGroup.SetVisible(false)
 		page.Add(uh.brewTrustGroup)
 
@@ -122,13 +123,10 @@ func (uh *UserHome) loadUntrustedTaps() {
 		uh.trustButtons.clear()
 		if err != nil {
 			row := adw.NewActionRow()
-			// err.Error() is the message returned by the untrusted-tap
-			// check; AdwActionRow parses a subtitle as Pango markup by
-			// default, so a '<' or '&' in that text would garble or drop
-			// the row with a GTK warning (issue #437).
+			// The raw error is logged above; the row says what to do.
 			row.SetUseMarkup(false)
-			row.SetTitle("Could not check software sources")
-			row.SetSubtitle(err.Error())
+			row.SetTitle("Couldn't check for paused updates")
+			row.SetSubtitle("Check your internet connection and try again.")
 			button := gtk.NewButtonWithLabel("Retry")
 			button.SetValign(gtk.AlignCenterValue)
 			uh.trustButtons.connect(button, func(btn gtk.Button) {
@@ -164,7 +162,7 @@ func (uh *UserHome) loadUntrustedTaps() {
 func (uh *UserHome) confirmTrustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 	dialog := adw.NewAlertDialog(
 		fmt.Sprintf("Trust software from %s?", tap.Name),
-		"Software from this source can run its own code on your computer while it installs and updates. Only trust sources you recognize.",
+		"Software from this source can change anything on this computer. Only trust sources you recognize.",
 	)
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("trust", "Trust")
@@ -192,7 +190,7 @@ func (uh *UserHome) trustTap(tap homebrew.UntrustedTap, button *gtk.Button) {
 		if err != nil {
 			button.SetSensitive(true)
 			button.SetLabel("Trust…")
-			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not trust %s", tap.Name))
+			uh.toastAdder.ShowErrorToast(fmt.Sprintf("Couldn't trust %s. Try again.", tap.Name))
 			return
 		}
 
@@ -241,7 +239,7 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 		group.SetVisible(true)
 		if err != nil {
 			log.Printf("reading system status failed: %v", err)
-			uh.bootcStageExpander.SetSubtitle("The system's update status could not be read")
+			uh.bootcStageExpander.SetSubtitle("Couldn't check for system updates.")
 			return
 		}
 		version := ""
@@ -418,8 +416,8 @@ func (uh *UserHome) onBootcStageClicked() {
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
-				expander.SetSubtitle("The update could not be downloaded. Open Details to see what happened.")
-				uh.toastAdder.ShowErrorToast("The system update could not be downloaded")
+				expander.SetSubtitle("Couldn't download the update. Open Details to see why.")
+				uh.toastAdder.ShowErrorToast("Couldn't download the system update. Try again later.")
 				return
 			}
 
@@ -427,7 +425,8 @@ func (uh *UserHome) onBootcStageClicked() {
 				uh.refreshChangelogAvailability(status)
 			}
 			if statusErr != nil {
-				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
+				log.Printf("reading status after staging failed: %v", statusErr)
+				message := "Couldn't confirm the update is ready. Try again."
 				expander.SetSubtitle(message)
 				if dryrun.Enabled() {
 					uh.toastAdder.ShowToast(actionmsg.SystemStage(true, false))
@@ -467,7 +466,7 @@ func (uh *UserHome) buildSystemVersionGroup(page *adw.PreferencesPage) {
 
 	details := adw.NewExpanderRow()
 	details.SetTitle("Details")
-	details.SetSubtitle("Identifiers to quote when asking for help")
+	details.SetSubtitle("Share these when asking for help.")
 	group.Add(&details.Widget)
 
 	page.Add(group)
@@ -561,7 +560,7 @@ func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage) {
 
 	row := adw.NewActionRow()
 	row.SetTitle("Unavailable right now")
-	row.SetSubtitle("Early updates and graphics driver choices can't be changed until this system's update settings are repaired.")
+	row.SetSubtitle("These options are off because of a problem with this computer's update settings.")
 	group.Add(&row.Widget)
 
 	page.Add(group)
@@ -576,7 +575,7 @@ func (uh *UserHome) buildChannelErrorGroup(page *adw.PreferencesPage) {
 func (uh *UserHome) buildChannelGroup(page *adw.PreferencesPage, status ublue.Status) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Advanced")
-	group.SetDescription("These replace the operating system itself. Both need your administrator password, a large download, and a restart.")
+	group.SetDescription("These change the whole operating system. Each needs your administrator password, a large download, and a restart.")
 
 	onTesting := status.Channel == imageinfo.ChannelTesting
 	// Nothing to switch to, or an image that does not provide the helper
@@ -675,7 +674,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 
 			if err != nil {
 				log.Printf("switching the graphics driver failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not switch the graphics driver")
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't switch the graphics driver. Try again."))
 				return
 			}
 
@@ -712,7 +711,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			if err != nil {
 				toggle.set(!toTesting)
 				log.Printf("switching the release channel failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not change when this system gets updates")
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change early updates. Try again."))
 				return
 			}
 

@@ -86,27 +86,27 @@ var components = []Component{
 		ID:          "com.valvesoftware.Steam",
 		Kind:        flatpak.KindApplication,
 		Name:        "Steam",
-		Description: "Valve's game client, with Proton for Windows titles",
+		Description: "Valve's game store and launcher, which also runs Windows games",
 		Core:        true,
 	},
 	{
 		ID:          "net.davidotek.pupgui2",
 		Kind:        flatpak.KindApplication,
 		Name:        "ProtonUp-Qt",
-		Description: "Installs and manages Proton-GE and Wine-GE compatibility tools",
+		Description: "Adds newer versions of the tools that run Windows games",
 		Core:        true,
 	},
 	{
 		ID:          "com.github.Matoking.protontricks",
 		Kind:        flatpak.KindApplication,
 		Name:        "Protontricks",
-		Description: "Per-game Winetricks workarounds for Proton prefixes",
+		Description: "Applies fixes for Windows games that need extra help",
 	},
 	{
 		ID:          "io.github.benjamimgois.goverlay",
 		Kind:        flatpak.KindApplication,
 		Name:        "GOverlay",
-		Description: "Configures the MangoHud performance overlay",
+		Description: "Sets up the in-game performance display",
 	},
 	{
 		// The one runtime component: MangoHud is a Vulkan layer extending
@@ -116,14 +116,14 @@ var components = []Component{
 		ID:          "org.freedesktop.Platform.VulkanLayer.MangoHud",
 		Kind:        flatpak.KindRuntime,
 		Name:        "MangoHud",
-		Description: "In-game FPS, frametime, and hardware overlay",
+		Description: "Shows frame rate and hardware use while you play",
 		BranchOf:    "com.valvesoftware.Steam",
 	},
 	{
 		ID:          "com.github.tchx84.Flatseal",
 		Kind:        flatpak.KindApplication,
 		Name:        "Flatseal",
-		Description: "Grants games access to controllers and external drives",
+		Description: "Lets games use controllers and external drives",
 	},
 }
 

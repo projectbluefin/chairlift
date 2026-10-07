@@ -46,7 +46,7 @@ func TestUpdateRowsCoverEveryPresentation(t *testing.T) {
 			casks:    []string{"vendor/apps/gui"},
 			want: Row{
 				Title:    "vendor/tap",
-				Subtitle: "Updates are paused for 3 programs you installed from this source",
+				Subtitle: "Updates are paused for 3 programs from this source.",
 			},
 		},
 		{
@@ -54,12 +54,12 @@ func TestUpdateRowsCoverEveryPresentation(t *testing.T) {
 			formulae: []string{"plain"},
 			want: Row{
 				Title:    "vendor/tap",
-				Subtitle: "Updates are paused for 1 program you installed from this source",
+				Subtitle: "Updates are paused for 1 program from this source.",
 			},
 		},
 		{
 			name: "no programs",
-			want: Row{Title: "vendor/tap", Subtitle: "Updates are paused for software from this source"},
+			want: Row{Title: "vendor/tap", Subtitle: "Updates are paused for software from this source."},
 		},
 	}
 	for _, tt := range tapTests {
@@ -82,18 +82,18 @@ func TestBootcUpdateSubtitlesCoverEveryState(t *testing.T) {
 	}{
 		{
 			name: "not staged",
-			want: "Check whether a newer version of the operating system is available",
+			want: "Check for a newer version of the operating system.",
 		},
 		{
 			name:   "staged without version",
 			staged: true,
-			want:   "A new version is ready and installs when you restart",
+			want:   "A new version installs when you restart.",
 		},
 		{
 			name:    "staged with version",
 			staged:  true,
 			version: "42.1",
-			want:    "Version 42.1 is ready and installs when you restart",
+			want:    "Version 42.1 installs when you restart.",
 		},
 	}
 	for _, tt := range tests {
@@ -113,16 +113,16 @@ func TestBootcUpdateSubtitlesCoverEveryState(t *testing.T) {
 		{
 			name:   "staged with version",
 			staged: true, version: "42.1",
-			want: "Version 42.1 is ready and installs when you restart",
+			want: "Version 42.1 installs when you restart.",
 		},
 		{
 			name:   "staged without version",
 			staged: true,
-			want:   "A new version is ready and installs when you restart",
+			want:   "A new version installs when you restart.",
 		},
 		{
 			name: "nothing staged",
-			want: "Your system is up to date",
+			want: "Everything is up to date.",
 		},
 	}
 	for _, tt := range resultTests {
@@ -224,39 +224,39 @@ func TestSystemVersionRowStaysReadable(t *testing.T) {
 		{
 			name:    "version and date",
 			version: "42.20260810", released: released,
-			want: "You are running version 42.20260810, released " + date,
+			want: "Version 42.20260810, released " + date + ".",
 		},
 		{
 			name:    "version only",
 			version: "42.20260810",
-			want:    "You are running version 42.20260810",
+			want:    "Version 42.20260810.",
 		},
 		{
 			name:     "unparseable date is dropped",
 			version:  "42.20260810",
 			released: "not-a-time",
-			want:     "You are running version 42.20260810",
+			want:     "Version 42.20260810.",
 		},
 		{
 			name:     "date only",
 			released: released,
-			want:     "You are running the version released " + date,
+			want:     "Released " + date + ".",
 		},
 		{
 			name: "nothing readable",
-			want: "This system's version could not be read",
+			want: "Couldn't read this computer's version.",
 		},
 		{
 			name:    "an update is waiting",
 			version: "42.20260810", staged: true, stagedVersion: "42.20260901",
-			want: "You are running version 42.20260810. Version 42.20260901 is ready and installs when you restart",
+			want: "Version 42.20260810. Version 42.20260901 installs when you restart.",
 		},
 		// A composefs host can say an update is staged without being able
 		// to read its version unprivileged; the row must still say so.
 		{
 			name:    "an update of unknown version is waiting",
 			version: "20260921", staged: true,
-			want: "You are running version 20260921. A new version is ready and installs when you restart",
+			want: "Version 20260921. A new version installs when you restart.",
 		},
 	}
 	for _, tt := range tests {
@@ -331,27 +331,27 @@ func TestStagingLogSubtitleNamesTheCapWhenOneApplied(t *testing.T) {
 	}{
 		{
 			name: "before any output",
-			want: "View output",
+			want: "Shows what happens while updating.",
 		},
 		{
 			name:  "single line",
 			shown: 1, total: 1,
-			want: "View output (1 line)",
+			want: "1 line.",
 		},
 		{
 			name:  "every line retained",
 			shown: 37, total: 37,
-			want: "View output (37 lines)",
+			want: "37 lines.",
 		},
 		{
 			name:  "window over a verbose run",
 			shown: 200, total: 4321,
-			want: "Showing the last 200 of 4321 lines",
+			want: "Showing the last 200 of 4321 lines.",
 		},
 		{
 			name:  "first dropped line",
 			shown: 200, total: 201,
-			want: "Showing the last 200 of 201 lines",
+			want: "Showing the last 200 of 201 lines.",
 		},
 	}
 	for _, tt := range tests {

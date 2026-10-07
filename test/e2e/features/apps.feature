@@ -1,7 +1,7 @@
 @apps
 Feature: Apps destination
   The Apps page offers Homebrew collections first, installed packages next,
-  and a Brewfile exporter last. Package mutations require confirmation.
+  and the app list exporter last. Package mutations require confirmation.
   ChairLift runs with --dry-run: commands are previewed, controls restored,
   and known inventory preserved. Stubs record every actual invocation.
   Each scenario names its configuration: behave lists a Feature's tags after
@@ -13,15 +13,15 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the Apps groups are ordered exactly
       | title                 |
-      | App collections       |
-      | Homebrew applications |
-      | Command line tools    |
-      | Packages from Homebrew |
+      | App collections    |
+      | Installed apps     |
+      | Command line tools |
+      | Backup             |
     And I do not see "Firefox"
     And I do not see "Text Editor"
     And Flatpak was never asked to "list"
     Then the "Command line tools" apps group says "2 installed"
-    And the "Homebrew applications" apps group says "1 installed"
+    And the "Installed apps" apps group says "1 installed"
     Then the "Command line tools" apps group shows exactly
       | title   |
       | jq      |
@@ -31,7 +31,7 @@ Feature: Apps destination
     And the "Pin" button in the "jq" row is sensitive
     And the "Unpin" button in the "ripgrep" row is sensitive
     And I do not see "libunistring"
-    Then the "Homebrew applications" apps group shows exactly
+    Then the "Installed apps" apps group shows exactly
       | title              |
       | visual-studio-code |
 
@@ -64,7 +64,7 @@ Feature: Apps destination
     Examples:
       | list               | name               | count       | command                                  |
       | Command line tools | jq                 | 2 installed | brew uninstall jq                        |
-      | Homebrew applications| visual-studio-code | 1 installed | brew uninstall --cask visual-studio-code |
+      | Installed apps     | visual-studio-code | 1 installed | brew uninstall --cask visual-studio-code |
 
   @config.apps-bundles @stub.apps-brew
   Scenario Outline: <action> on <name> is confirmed, previewed, and restores both row controls
@@ -88,10 +88,10 @@ Feature: Apps destination
   Scenario: An unreadable Homebrew inventory leaves collections and export usable
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Command line tools" apps group says "Could not read the list"
-    And the "Homebrew applications" apps group says "Could not read the list"
+    Then the "Command line tools" apps group says "Couldn't load this list."
+    And the "Installed apps" apps group says "Couldn't load this list."
     And the "Install" button in the "Team tools" row is sensitive
-    And the "Export" button in the "Export package list" row is sensitive
+    And the "Export" button in the "Export app list" row is sensitive
 
   @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
   Scenario: A host without Homebrew omits Apps even with Flatpak available
@@ -118,15 +118,15 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then I see "No collections available"
-    And I see "This system does not offer any app collections."
+    And I see "This computer has no app collections."
 
   @config.apps-collections-only @stub.apps-brew @stub.apps-collections
   Scenario: App collections install without the Homebrew package groups
     Given ChairLift is running
     When I open the "Apps" page
-    Then the Apps page does not show the "Packages from Homebrew" group
+    Then the Apps page does not show the "Backup" group
     And the Apps page does not show the "Command line tools" group
-    And the Apps page does not show the "Homebrew applications" group
+    And the Apps page does not show the "Installed apps" group
     When I click the "Install" button in the "Team tools" row
     Then the application log contains "/bundles/team-tools.Brewfile"
     And the "Install" button in the "Team tools" row is sensitive
@@ -135,13 +135,13 @@ Feature: Apps destination
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew
-  Scenario: Exporting the package list is previewed and writes nothing
+  Scenario: Exporting the app list is previewed and writes nothing
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Export" button in the "Export package list" row
+    And I click the "Export" button in the "Export app list" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle dump --file="
     And the application log contains "/home/Brewfile --force"
-    And the "Export" button in the "Export package list" row is sensitive
+    And the "Export" button in the "Export app list" row is sensitive
     And the home directory has no "Brewfile"
     And Homebrew was never asked to "bundle"
 
@@ -152,5 +152,5 @@ Feature: Apps destination
     Then the "Pin" button in the "jq" row is sensitive
     And the "Install" button in the "Team tools" row is sensitive
     And the "Uninstall" button in the "visual-studio-code" row is sensitive
-    And the "Export" button in the "Export package list" row is sensitive
+    And the "Export" button in the "Export app list" row is sensitive
     And every visible action control has an accessible name and an action

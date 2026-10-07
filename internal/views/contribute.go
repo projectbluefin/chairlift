@@ -22,10 +22,19 @@ func (uh *UserHome) buildContributeGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle("Contribute to Bluefin")
 	row.SetUseMarkup(false)
-	row.SetSubtitle("Checking requirements…")
+	row.SetSubtitle("Checking…")
 
 	uh.contributeSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.contributeSpinner.Widget)
+
+	// Shown only while the contributor sign-up is missing.
+	help := gtk.NewButtonWithLabel("Learn How")
+	help.SetValign(gtk.AlignCenterValue)
+	help.SetVisible(false)
+	helpCb := func(_ gtk.Button) { uh.openURL(contribute.RegistrationURL) }
+	help.ConnectClicked(&helpCb)
+	row.AddSuffix(&help.Widget)
+	uh.contributeHelp = help
 
 	button := gtk.NewButtonWithLabel("Contribute")
 	button.SetValign(gtk.AlignCenterValue)
@@ -62,6 +71,9 @@ func (uh *UserHome) refreshContributePreflight() {
 			}
 			uh.contributeRow.SetSubtitle(result.Subtitle)
 			uh.contributeButton.SetSensitive(result.Ready)
+			if uh.contributeHelp != nil {
+				uh.contributeHelp.SetVisible(result.Status == contribute.StatusMissingRegistration)
+			}
 		})
 	}()
 }
@@ -93,7 +105,7 @@ func (uh *UserHome) onContributeClicked() {
 			}
 			if exitErr != nil {
 				log.Printf("views: contribute session exited with error: %v", exitErr)
-				uh.toastAdder.ShowErrorToast("Contribute session exited with an error.")
+				uh.toastAdder.ShowErrorToast("Contribute closed unexpectedly.")
 			}
 		})
 	})
@@ -103,6 +115,6 @@ func (uh *UserHome) onContributeClicked() {
 			uh.contributeButton.SetSensitive(true)
 		}
 		log.Printf("views: launch contribute failed: %v", err)
-		uh.toastAdder.ShowErrorToast("Could not launch Contribute to Bluefin.")
+		uh.toastAdder.ShowErrorToast("Couldn't open Contribute. Try again.")
 	}
 }
