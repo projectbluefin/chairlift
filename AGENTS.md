@@ -549,7 +549,9 @@ An agent must not break these:
   step is added. The window hides its sidebar during the flow and builds
   Back/Next/Finish/Dismiss controls once. Every step navigates through
   `Window.navigateToPage` and uses the page's existing widgets, gates, and
-  operations; there is no dialog copy or `SetupHost` bridge.
+  operations; there is no dialog copy or `SetupHost` bridge. Each step then
+  calls `UserHome.ScrollPageToTop`, because a page keeps its scroll position
+  and a step entered mid-page hid its own heading.
   Next and Back perform no configuration mutation. Repeated explicit
   requests preserve the current step; an empty eligible inventory opens no
   flow. Finish records completed plus version, intentional dismissal records

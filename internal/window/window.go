@@ -857,7 +857,9 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 }
 
 func (w *Window) showFirstRunStep() {
-	w.navigateToPage(w.firstRunSteps[w.firstRunIndex])
+	step := w.firstRunSteps[w.firstRunIndex]
+	w.navigateToPage(step)
+	w.views.ScrollPageToTop(step)
 	w.firstRunBack.SetSensitive(w.firstRunIndex > 0)
 	if w.firstRunIndex+1 == len(w.firstRunSteps) {
 		w.firstRunNext.SetLabel("Finish")

@@ -62,6 +62,9 @@ type UserHome struct {
 	liveryPrefsPage       *adw.PreferencesPage
 	helpPrefsPage         *adw.PreferencesPage
 	recoveryPrefsPage     *adw.PreferencesPage
+	// The preferences page inside each createPage ToolbarView; it owns the
+	// scrolling, so it is what ScrollPageToTop resets.
+	pageContents map[*adw.ToolbarView]*adw.PreferencesPage
 
 	// References for dynamic updates
 	installedFormulae  *adw.PreferencesGroup
@@ -423,6 +426,15 @@ func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 	}
 }
 
+// ScrollPageToTop returns a page built by createPage to its top. A page keeps
+// its scroll position across navigation, so a step of the setup flow could
+// otherwise open mid-page with its heading out of view.
+func (uh *UserHome) ScrollPageToTop(name string) {
+	if page := uh.pageContents[uh.GetPage(name)]; page != nil {
+		page.ScrollToTop()
+	}
+}
+
 // createPage creates a page with toolbar view and scrolled content
 func (uh *UserHome) createPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 	toolbarView := adw.NewToolbarView()
@@ -440,6 +452,10 @@ func (uh *UserHome) createPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 	scrolled.SetChild(&prefsPage.Widget)
 
 	toolbarView.SetContent(&scrolled.Widget)
+	if uh.pageContents == nil {
+		uh.pageContents = map[*adw.ToolbarView]*adw.PreferencesPage{}
+	}
+	uh.pageContents[toolbarView] = prefsPage
 
 	return toolbarView, prefsPage
 }
