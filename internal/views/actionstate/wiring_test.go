@@ -317,3 +317,53 @@ func TestHomebrewRowGatesSurviveListRebuilds(t *testing.T) {
 		t.Errorf("settleHomebrewRows is called %d times, want every gate release (cancel pin, cancel uninstall, finish)", got)
 	}
 }
+
+// Goose Set Up, enabling Agent Mode, and a collection install that stopped
+// partway all install Homebrew packages, but none re-read the Apps
+// inventory, so the new packages stayed unlisted and their collections kept
+// offering Install until restart (W2-APPS-2). Every Homebrew install outside
+// the Apps row actions reaches homebrewInventoryChanged.
+func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	viewsDir := filepath.Join(filepath.Dir(filename), "..")
+	body := func(file, signature string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(viewsDir, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		start := strings.Index(text, signature)
+		if start < 0 {
+			t.Fatalf("%s: %q not found", file, signature)
+		}
+		fn, _, _ := strings.Cut(text[start:], "\nfunc ")
+		return fn
+	}
+	const refresh = "uh.homebrewInventoryChanged()"
+	for _, c := range []struct {
+		file, signature string
+		calls           int
+	}{
+		{"troubleshoot.go", "func (uh *UserHome) setUpGoose()", 1},
+		{"agents_page.go", "func (uh *UserHome) onAgentModeToggled(", 1},
+		// The failure branch (partial install) and the live success.
+		{"bundle_install.go", "func (uh *UserHome) runBundleInstall(", 2},
+		{"developer_tools.go", "func (uh *UserHome) onDeveloperOption(", 1},
+	} {
+		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
+			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)
+		}
+	}
+	goose := body("troubleshoot.go", "func (uh *UserHome) setUpGoose()")
+	if strings.Index(goose, refresh) > strings.Index(goose, "if err != nil {") {
+		t.Error("Goose setup refreshes the inventory only after success; a partial setup also installed packages")
+	}
+	agent := body("agents_page.go", "func (uh *UserHome) onAgentModeToggled(")
+	if strings.Index(agent, refresh) > strings.Index(agent, "if err != nil {\n\t\t\t\tlog.Printf(\"views: agent mode toggle") {
+		t.Error("Agent Mode refreshes the inventory only after success; a failed enable may already have installed llmman")
+	}
+}

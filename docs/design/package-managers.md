@@ -190,6 +190,10 @@ action is running (including an open confirmation dialog), a rebuild of that
 list is deferred rather than replacing the controls that show the action, and
 `settleHomebrewRows` runs the owed reload once every gate is released.
 Export restores its gate and spinner after every outcome.
+Homebrew installs started elsewhere — Goose Set Up, enabling Agent Mode,
+Features' developer tools, and collection installs, including one that
+stopped partway — call `homebrewInventoryChanged` on the main thread, which
+reloads the installed lists and re-observes every collection's status.
 
 ### Process and diagnostic contract
 

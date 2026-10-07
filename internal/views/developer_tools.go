@@ -489,7 +489,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s: %v", item.row.GetTitle(), err))
 			}
 			if !dryrun.Enabled() && err == nil {
-				go uh.loadHomebrewPackages()
+				uh.homebrewInventoryChanged()
 			}
 			uh.setDeveloperSensitive(true)
 		})
