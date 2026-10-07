@@ -76,7 +76,7 @@ func (uh *UserHome) refreshChangelogAvailability(status *bootc.Status) {
 	uh.changelogStaged = staged
 
 	available := booted != "" && staged != ""
-	if changed && uh.changelogButton.GetLabel() != "Comparing..." {
+	if changed && uh.changelogButton.GetLabel() != pageview.ChangelogComparingLabel {
 		uh.changelogButton.SetSensitive(available)
 		uh.changelogRow.SetSubtitle(pageview.ChangelogRow(available).Subtitle)
 	}
@@ -93,7 +93,7 @@ func (uh *UserHome) onChangelogClicked() {
 	booted, staged := uh.changelogBooted, uh.changelogStaged
 
 	button.SetSensitive(false)
-	button.SetLabel("Comparing…")
+	button.SetLabel(pageview.ChangelogComparingLabel)
 	row.SetSubtitle("Downloading both versions' program lists…")
 
 	go func() {
