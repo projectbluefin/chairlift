@@ -48,10 +48,8 @@ func ResetAvailabilityFor(configured, effective bool) ResetAvailability {
 // return to, because the Roll Back group is built hidden and revealed
 // asynchronously.
 type RecoveryOffer struct {
-	Rollback          bool
-	ReturnToStream    bool
-	PublishedVersions bool
-	Reset             bool
+	Rollback bool
+	Reset    bool
 }
 
 // RecoveryEntrySubtitle is the subtitle on the Maintenance page's Powerwash
@@ -62,12 +60,6 @@ func RecoveryEntrySubtitle(offer RecoveryOffer) string {
 	var jobs []string
 	if offer.Rollback {
 		jobs = append(jobs, "roll back to the previous system version")
-	}
-	if offer.ReturnToStream {
-		jobs = append(jobs, "return to your release stream")
-	}
-	if offer.PublishedVersions {
-		jobs = append(jobs, "browse published system versions")
 	}
 	if offer.Reset {
 		jobs = append(jobs, "reset this machine")
@@ -90,7 +82,7 @@ func RecoveryEntrySubtitle(offer RecoveryOffer) string {
 // RecoveryPageDescription is the Powerwash detail page's heading
 // description. When the reset rows are present their own group explains
 // them, so the page says nothing; when they are absent it says why, so a
-// page holding only version rows does not leave the user hunting for the
+// page holding only Roll Back does not leave the user hunting for the
 // reset the destination's name suggests.
 func RecoveryPageDescription(reset ResetAvailability) string {
 	switch reset {
@@ -102,7 +94,3 @@ func RecoveryPageDescription(reset ResetAvailability) string {
 		return ""
 	}
 }
-
-// RecoveryVersionsGroupTitle heads the Powerwash detail's Return to stream
-// and Published versions rows, so they never sit untitled on the page.
-const RecoveryVersionsGroupTitle = "System Versions"

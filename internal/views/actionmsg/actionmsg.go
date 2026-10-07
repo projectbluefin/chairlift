@@ -550,38 +550,6 @@ func Rollback(dryRun bool) FeatureToggleDecision {
 	}
 }
 
-// PinBuild decides whether the pin action should confirm, and what toast to
-// show. Confirm is exactly !dryRun, for the same reason as Rollback: under
-// dry-run ublue.runHelper short-circuits before pkexec, so no build was
-// staged and confirming would misreport what will boot next.
-func PinBuild(dryRun bool, day string) FeatureToggleDecision {
-	if dryRun {
-		return FeatureToggleDecision{
-			Confirm: false,
-			Toast:   fmt.Sprintf("[DRY-RUN] Preview: would pin to build %s — no changes made", day),
-		}
-	}
-	return FeatureToggleDecision{
-		Confirm: true,
-		Toast:   "Build pinned. Restart to apply.",
-	}
-}
-
-// ReturnToStream decides whether the unpin action should confirm, and what
-// toast to show. Confirm is exactly !dryRun, for the same reason as PinBuild.
-func ReturnToStream(dryRun bool) FeatureToggleDecision {
-	if dryRun {
-		return FeatureToggleDecision{
-			Confirm: false,
-			Toast:   "[DRY-RUN] Preview: would return to the stream — no changes made",
-		}
-	}
-	return FeatureToggleDecision{
-		Confirm: true,
-		Toast:   "Returned to the stream. Restart to apply.",
-	}
-}
-
 // FactoryReset decides whether the factory-reset row should adopt its
 // applied subtitle, and what toast to show. Confirm is exactly !dryRun, the
 // same reasoning as Rollback: under dry-run nothing was staged.

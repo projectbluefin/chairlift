@@ -102,11 +102,11 @@ this inventory, independently of the original YAML namespace names.
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
 Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
-Maintenance, with rollback, published-version reads with pin and return-to-stream
-actions, and opt-in reset controls. The Maintenance entry's subtitle is
+Maintenance, with rollback and opt-in reset controls; the published-versions
+calendar (pin and return to stream) is withdrawn per #522, because its dated
+tags exist only for the deprecated `latest` stream. The Maintenance entry's subtitle is
 `pageview.RecoveryEntrySubtitle` over what the detail actually built (Roll Back
-once the asynchronous status check reveals it, Return to stream, Published
-versions, and the reset rows), so it never promises a reset the shipped
+once the asynchronous status check reveals it, and the reset rows), so it never promises a reset the shipped
 `reset_group: enabled: false` leaves out; without reset rows the detail's page
 description (`pageview.RecoveryPageDescription`) says whether configuration or
 the host is why. There is no current System primary page;
@@ -1305,8 +1305,8 @@ neither a row nor an accelerator: `Shortcuts` and `Bindings` skip it
 structurally, so a detail can never be advertised or registered by accident.
 Powerwash is the live detail. It is a content-stack child of Maintenance, whose
 row stays selected while it is shown, and it draws on two configuration
-namespaces at once — `bootc_updates_group` on `updates_page` for its rollback,
-pin, and return-to-stream controls and `reset_group` on `maintenance_page` for its
+namespaces at once — `bootc_updates_group` on `updates_page` for its rollback
+control and `reset_group` on `maintenance_page` for its
 Powerwash and Factory Reset controls — which
 is why a route's refs are `{Page, Group}` pairs rather than one page field per
 route. `navigation.VisibleRoutes` returns the visible primaries followed by the

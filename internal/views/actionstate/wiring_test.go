@@ -62,10 +62,7 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 	for file, gates := range map[string][]string{
 		"updates_page.go": {"driverGate"},
 		"reset.go":        {"powerwashGate", "factoryResetGate"},
-		// Pin and Return to stream share one gate; see
-		// TestRecoverySwitchesExcludeOneAnother.
-		"recovery.go":    {"recoverySwitchGate"},
-		"agents_page.go": {"agentPresetGate"},
+		"agents_page.go":  {"agentPresetGate"},
 		// Free up space is offered again after every run (#488).
 		"maintenance_page.go": {"freeUpSpaceGate"},
 		// Set Up and Launch share one gate, and both are offered again.
@@ -109,66 +106,6 @@ func TestRollbackGateCompletesOnlyAfterLiveSuccess(t *testing.T) {
 	for _, required := range []string{"uh.bootcRollbackGate.TryStart()", "if decision.Confirm {", "uh.bootcRollbackGate.Complete()", "button.SetSensitive(false)", "uh.bootcRollbackGate.Reset()", "button.SetSensitive(true)"} {
 		if !strings.Contains(body, required) {
 			t.Errorf("rollback must remain one-shot on live success but retry after failure or preview: missing %q", required)
-		}
-	}
-}
-
-// Pin, Return to stream, and Roll Back each run a bootc transaction that
-// decides the next boot. Two in flight race on the sysroot lock and both
-// report success, so they exclude one another: pin and unpin share one gate,
-// Roll Back refuses while it runs and vice versa, and every start and end
-// re-derives the other controls (a Check Again during a pin must not
-// rebuild a sensitive Pin button beside the pin in flight).
-func TestRecoverySwitchesExcludeOneAnother(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
-	functions := map[string]string{}
-	for _, file := range []string{"recovery.go", "versions.go"} {
-		data, err := os.ReadFile(filepath.Join(viewsDir, file))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, chunk := range strings.Split(string(data), "\nfunc ")[1:] {
-			name, _, _ := strings.Cut(chunk, "(")
-			if strings.HasPrefix(chunk, "(uh *UserHome) ") {
-				name, _, _ = strings.Cut(strings.TrimPrefix(chunk, "(uh *UserHome) "), "(")
-			}
-			functions[name] = chunk
-		}
-	}
-
-	requirements := map[string][]string{
-		"tryStartRecoverySwitch":  {"uh.bootcRollbackGate.Running() || !uh.recoverySwitchGate.TryStart()", "uh.syncRecoverySwitches()"},
-		"onBootcRollbackClicked":  {"uh.recoverySwitchGate.Running() || !uh.bootcRollbackGate.TryStart()"},
-		"confirmPin":              {"uh.tryStartRecoverySwitch()"},
-		"confirmReturnToStream":   {"uh.tryStartRecoverySwitch()"},
-		"renderPublishedVersions": {"uh.applyPinButtons()"},
-		"applyPinButtons":         {"uh.recoveryBusy()", "uh.pinningDay", "pageview.PinButton("},
-		"syncRecoverySwitches":    {"uh.applyPinButtons()", "uh.unpinOffered && !busy", "uh.bootcRollbackGate.Idle() && !uh.recoverySwitchGate.Running()"},
-		"recoveryBusy":            {"uh.recoverySwitchGate.Running() || uh.bootcRollbackGate.Running()"},
-	}
-	for name, fragments := range requirements {
-		body, ok := functions[name]
-		if !ok {
-			t.Errorf("%s not found in recovery.go or versions.go", name)
-			continue
-		}
-		for _, fragment := range fragments {
-			if !strings.Contains(body, fragment) {
-				t.Errorf("%s does not contain %q", name, fragment)
-			}
-		}
-	}
-
-	// Every release of either gate restores the other controls.
-	for name, body := range functions {
-		for _, release := range []string{"uh.recoverySwitchGate.Reset()", "uh.bootcRollbackGate.Reset()", "uh.bootcRollbackGate.Complete()"} {
-			if strings.Count(body, release) > strings.Count(body, "uh.syncRecoverySwitches()") {
-				t.Errorf("%s calls %s without re-deriving the recovery controls", name, release)
-			}
 		}
 	}
 }

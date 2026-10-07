@@ -362,6 +362,9 @@ An agent must not break these:
   404; any other error refuses. Unpin requires a dated booted tag and verifies
   the recovered stream. Both enforce container signature policy. Dry runs
   derive without registry access; both commands require a valid channel table.
+  The GUI no longer calls `pin` or `unpin` (#522 withdrew the Powerwash
+  calendar); the commands and their PolicyKit actions stay for a later
+  surface.
   Channel switch, driver switch, pin, and unpin all run through the helper's
   `switchImage`, which falls back to the fixed `bootc rollback` when a
   composefs `bootc switch` refuses a target that is the rollback deployment
@@ -828,37 +831,30 @@ An agent must not break these:
   parse renders a blank changelog with nothing in the chain reporting a
   failure, which is a bug finupdate shipped. The diff runs only when the user
   presses Compare, because each side is tens of megabytes.
-- **The dated-build catalog reads the registry, and reads it read-only.**
-  `internal/registrytags` is the leaf package behind the rollback calendar
-  (ADR-0013): `Client.Tags` lists a repository through the registry's
-  `Link: rel="next"` pagination, `ParseBuild` reads the day out of the tag
-  name, and `Client.Tag` resolves one tag to its digest and its
-  `org.opencontainers.image.created` timestamp. Every request goes through the
-  `Client.HTTP` transport, the same seam `internal/sbom` uses, so no gate in
-  `make ci` makes an outbound request — its tests drive a loopback `httptest`
-  registry that models GHCR's pagination, its 404 `MANIFEST_UNKNOWN`, and the
-  fact that the response's `Content-Type` header, not the body's `mediaType`
-  field, is the media-type authority (GHCR omits `mediaType` on some dated-tag
-  manifests — verified 2026-09-22). Two rules keep it safe to grow: no
-  registry-supplied string may become a privileged switch target. Pin and
-  unpin call only `Client.Tag` to verify targets already derived from the
-  descriptor, channel table, and validated day (ADR-0017), discarding the
-  response data. The catalog is never baked, cached to disk, or served stale,
-  because a catalog that is not the registry's is the failure this design
-  exists to avoid. A failed read is returned to the caller, never cached and
-  never replaced by a previous answer. `Catalog` caches in process only,
-  bounded by `MaxEntries` and expiring at `TTL`, and its callers run off the
-  GTK main thread, so it must stay safe for concurrent readers. `Catalog`'s
-  one caller is the Powerwash page's **Published versions** row
-  (`internal/views/versions.go`), which reads the registry when the user presses
-  Check, lists one row per day of the running stream
-  (`pageview.PublishedVersions` drops other streams' aliases), removes the
-  last list when a read fails rather than leaving it standing as current,
-  and offers a confirmed Pin action for each build that stages a switch to
-  that dated tag (`chairlift-helper pin <YYYYMMDD>`). When booted on a dated
-  tag, Powerwash offers **Return to stream** (`chairlift-helper unpin`).
-  `internal/bootc.CheckUpdate` also calls `Client.Tag` directly on composefs
-  hosts (below); it only compares digests.
+- **The registry tag reader is read-only, and the GUI offers no calendar.**
+  `internal/registrytags` (ADR-0013) lists a repository through the
+  registry's `Link: rel="next"` pagination (`Client.Tags`), reads the day out
+  of a tag name (`ParseBuild`), and resolves one tag to its digest and its
+  `org.opencontainers.image.created` timestamp (`Client.Tag`). Every request
+  goes through the `Client.HTTP` transport, the same seam `internal/sbom`
+  uses, so no gate in `make ci` makes an outbound request — its tests drive a
+  loopback `httptest` registry that models GHCR's pagination, its 404
+  `MANIFEST_UNKNOWN`, and the fact that the response's `Content-Type` header,
+  not the body's `mediaType` field, is the media-type authority (GHCR omits
+  `mediaType` on some dated-tag manifests — verified 2026-09-22). No
+  registry-supplied string may become a privileged switch target: the
+  helper's pin and unpin call only `Client.Tag` to verify targets already
+  derived from the descriptor, channel table, and validated day (ADR-0017),
+  discarding the response data. A failed read is returned to the caller,
+  never cached and never replaced by a previous answer. The Powerwash
+  page's published-versions calendar (Published versions with per-day Pin,
+  and Return to stream) is withdrawn (#522): the dated tags it listed exist
+  only for the deprecated `latest` stream, so Powerwash offers Roll Back
+  only, and the in-process `Catalog` cache and the `ublue.Pin`/`ublue.Unpin`
+  client wrappers went with it. The helper's `pin`/`unpin` commands and their
+  PolicyKit actions remain. The GUI's one remaining registry reader is
+  `internal/bootc.CheckUpdate`, which calls `Client.Tag` on composefs hosts
+  (below) and only compares digests.
 - **Reading OS state never needs a password.** bootc 1.16 refuses
   `bootc status` and `bootc upgrade --check` without root, which left the
   operating-system source "not available" on every Dakota host (#381).

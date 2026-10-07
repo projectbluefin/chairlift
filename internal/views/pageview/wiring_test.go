@@ -250,27 +250,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"pageview.BootcRollbackRow(",
 				"pageview.BootcRollbackResultSubtitle(",
-				"pageview.UnpinRow(",
-				"pageview.UnpinOffer(",
-				"pageview.UnpinConfirmation(",
 			},
-			// Support alone is not enough: the helper also refuses a
-			// broken channel table or an unknown stream after the
-			// password prompt.
-			retired: []string{"status.Supports(ubluehelper.CommandUnpin)"},
-		},
-		{
-			file: "versions.go",
-			required: []string{
-				"pageview.PublishedVersionsRow(",
-				"pageview.PublishedVersionsSummary(",
-				"pageview.PublishedVersions(",
-				"pageview.PinConfirmation(",
-				"pageview.PinOffer(",
-				"imageinfo.KnownStream(",
-				"ChannelTableError",
-			},
-			retired: []string{"Supports(ubluehelper.CommandPin)"},
+			// The published-versions calendar (pin / return to stream)
+			// is withdrawn (#522): Powerwash offers Roll Back only.
+			retired: []string{"buildRecoveryVersionsGroup(", "buildReturnToStreamRow(", "ublue.Pin(", "ublue.Unpin("},
 		},
 		{
 			// Collection buttons are named after the collection (W2-APPS-5).
@@ -491,7 +474,7 @@ func TestRollBackHeadingHidesWithItsRow(t *testing.T) {
 			t.Errorf("buildRecoveryRollbackGroup no longer builds a hidden, owned Roll Back group: missing %q", required)
 		}
 	}
-	for _, banned := range []string{"buildReturnToStreamRow(", "buildPublishedVersionsRow("} {
+	for _, banned := range []string{"buildReturnToStreamRow(", "buildPublishedVersionsRow(", "buildRecoveryVersionsGroup("} {
 		if strings.Contains(build, banned) {
 			t.Errorf("buildRecoveryRollbackGroup puts %s under the Roll Back heading", banned)
 		}
@@ -508,8 +491,7 @@ func TestRollBackHeadingHidesWithItsRow(t *testing.T) {
 
 // W3-11: the Maintenance entry's subtitle is derived from what the Powerwash
 // detail built, not a fixed promise of a reset. It is written once the detail
-// is built and again whenever the rollback check reveals or hides Roll Back,
-// and the detail's version rows sit under a titled group.
+// is built and again whenever the rollback check reveals or hides Roll Back.
 func TestRecoveryEntrySubtitleFollowsTheDetail(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -543,7 +525,7 @@ func TestRecoveryEntrySubtitleFollowsTheDetail(t *testing.T) {
 		}
 	}
 	refresh := bodies["refreshRecoveryEntry"]
-	for _, required := range []string{"uh.bootcRollbackOffered", "uh.unpinRow != nil", "uh.publishedVersionsRow != nil", `"reset_group"`} {
+	for _, required := range []string{"uh.bootcRollbackOffered", `"reset_group"`} {
 		if !strings.Contains(refresh, required) {
 			t.Errorf("refreshRecoveryEntry ignores %s", required)
 		}
@@ -551,7 +533,7 @@ func TestRecoveryEntrySubtitleFollowsTheDetail(t *testing.T) {
 	if !strings.Contains(bodies["buildRecoveryPage"], "page.SetDescription(pageview.RecoveryPageDescription(") {
 		t.Error("buildRecoveryPage does not explain a missing reset")
 	}
-	if !strings.Contains(bodies["buildRecoveryVersionsGroup"], "group.SetTitle(pageview.RecoveryVersionsGroupTitle)") {
-		t.Error("buildRecoveryVersionsGroup leaves the version rows untitled")
+	if strings.Contains(bodies["buildRecoveryPage"], "buildRecoveryVersionsGroup(") {
+		t.Error("buildRecoveryPage builds the published-versions calendar withdrawn by #522")
 	}
 }

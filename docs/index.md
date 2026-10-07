@@ -29,7 +29,7 @@ guaranteed on every host.
 | **Agents** | Agent Mode: run a language model on this computer (llmman); Troubleshooting: set up Goose Desktop with read-only Linux tools and launch it on that model; and contribute to Bluefin. |
 | **Features** | Distribution features, Developer Mode, WSL Mode (nsl or Lima), Docker, individually chosen IDEs/editors, selective Gaming, and safely locked printer applications. |
 | **Livery** | Choose your profile picture and the marks shown on the app launcher button, the top-bar menu, and Files. |
-| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and Powerwash: Roll Back and pin/return to stream (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
+| **Maintenance** | Free up space, run administrator-configured maintenance scripts, and Powerwash: Roll Back (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
 | **Help** | Links to the project website, issue tracker, and community documentation, plus system diagnostics. |
 
 A functional page is omitted when all of its groups are disabled. Help is

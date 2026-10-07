@@ -565,7 +565,7 @@ record intent separately, without these helper outcome/derived-argv records.
 Ordinary Homebrew, Flatpak and user-service commands do not flow through the
 fixed-helper journal choke point.
 
-### Dated-build registry catalog and pinning
+### Dated-build registry reads and the helper's pin commands
 
 [`internal/registrytags`](../../internal/registrytags/registrytags.go) is
 read-only: `Client.Tags` follows validated same-host `Link: rel="next"`
@@ -575,45 +575,20 @@ response Content-Type determines manifest shape. A 404 returns
 `ErrUnknownTag`; an absent creation annotation is not a transport failure.
 `ParseBuild` recognizes real days ending a stream with `.` or `-`;
 `Builds(tags, since)` keeps aliases and sorts newest day first, then tag.
+Every request uses the injectable `Client.HTTP`; tests use loopback
+registries. In the GUI, only composefs `bootc.CheckUpdate` reads the registry
+(see above).
 
-[`Catalog`](../../internal/registrytags/catalog.go) caches listings and tag
-resolutions in process with a fifteen-minute default TTL and a 256-entry
-bound **per cache map**. It is safe for concurrent readers, never persists to
-disk, never caches a failed read and never serves an expired answer as a
-failure fallback. Every request uses the injectable `Client.HTTP`; tests use
-loopback registries.
+**The published-versions calendar is withdrawn (#522).** Powerwash used to
+list the running stream's dated builds (Published versions, with a confirmed
+per-day **Pin**) and offer **Return to stream** when booted on a dated tag.
+The dated tags exist only for the deprecated `latest` stream, so Powerwash now
+offers Roll Back and the reset group only. The view code, its in-process
+`Catalog` cache, the `ublue.Pin`/`ublue.Unpin` wrappers and the shared
+pin/unpin switch gate were removed; Roll Back keeps its own one-shot gate.
 
-Powerwash's [`versions.go`](../../internal/views/versions.go) reads the catalog
-only when Check is pressed. `pageview.PublishedVersions` selects the running
-stream and one row per day. A failed read removes the previous list rather
-than leaving it displayed as current. Each row offers a confirmed **Pin**
-action that calls `ublue.Pin(ctx, day)` with a day word, never the listed image
-reference. `pageview.PinOffer` keeps that action insensitive, with its
-explanation, wherever the helper would refuse only after authentication:
-missing installed pin support, a broken channel table
-(`ublue.Status.ChannelTableError`), or a running stream outside the image's
-channel table (`imageinfo.KnownStream`). The currently booted day reads
-Pinned. Shared `buttonRoute` and `dialogRoute` callbacks survive repeated
-list refreshes.
-
-[`recovery.go`](../../internal/views/recovery.go) offers **Return to stream**
-only when the descriptor's running tag parses as a dated build. Its confirmed
-action calls `ublue.Unpin(ctx)` and is gated by `pageview.UnpinOffer` on the
-same three conditions. Pin and Return to stream share one
-`recoverySwitchGate`, held from the confirmation dialog to completion, and
-Roll Back refuses to start while it runs and vice versa: each is a bootc
-transaction deciding the next boot, and two in flight would race on the
-sysroot lock while both reported success. `syncRecoverySwitches` re-derives
-every recovery control when either gate starts or ends, and
-`pageview.PinButton` derives each Pin button in place, so a Check Again
-during a pin shows the pin in flight rather than fresh buttons. Both
-controls reset the shared gate after completion, refresh rollback status
-and request a shared update check only after live success. Preview restores
-the controls and does not claim a deployment was staged. The catalog remains
-read-only; these separate actions use the validated helper boundary below.
-
-`ublue.Pin(ctx, day)` validates `YYYYMMDD` before dispatch; the helper validates
-it again. `pin <YYYYMMDD> [--dry-run]` accepts a real day no later than today
+The privileged half stays, with no GUI caller. The helper validates the day
+itself: `pin <YYYYMMDD> [--dry-run]` accepts a real day no later than today
 UTC; `unpin [--dry-run]` accepts no target. In
 [`ubluehelper.PinArgs`](../../internal/ubluehelper/pin.go), the booted tag
 supplies the stream, which must pass `imageinfo.KnownStream`. Live pin tries

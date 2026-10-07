@@ -6,7 +6,6 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -98,11 +97,10 @@ func (uh *UserHome) buildRecoveryPage() {
 
 	// Roll Back: gated by the OS provider group, built hidden, revealed
 	// asynchronously once a previous deployment is confirmed to exist.
-	// Return to stream and Published versions sit in their own group so
-	// the Roll Back heading never stands over rows that are not a rollback.
+	// The published-versions calendar (pin / return to stream) is withdrawn
+	// (#522): its dated tags exist only for the deprecated `latest` stream.
 	if uh.groupEnabled("updates_page", "bootc_updates_group") {
 		uh.buildRecoveryRollbackGroup(page)
-		uh.buildRecoveryVersionsGroup(page)
 		go uh.loadBootcRollbackStatus()
 	}
 	uh.refreshRecoveryEntry()
@@ -115,10 +113,8 @@ func (uh *UserHome) refreshRecoveryEntry() {
 		return
 	}
 	uh.recoveryEntryRow.SetSubtitle(pageview.RecoveryEntrySubtitle(pageview.RecoveryOffer{
-		Rollback:          uh.bootcRollbackOffered,
-		ReturnToStream:    uh.unpinRow != nil,
-		PublishedVersions: uh.publishedVersionsRow != nil,
-		Reset:             uh.groupEnabled("maintenance_page", "reset_group"),
+		Rollback: uh.bootcRollbackOffered,
+		Reset:    uh.groupEnabled("maintenance_page", "reset_group"),
 	}))
 }
 
@@ -158,148 +154,6 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	uh.bootcRollbackGroup = group
 }
 
-// buildRecoveryVersionsGroup builds the Return to stream row (offered when
-// booted on a dated tag) and the Published versions row (a bootc image
-// concept: it reads the registry the booted image comes from) in their own
-// group. The group is added only when at least one of them was built.
-func (uh *UserHome) buildRecoveryVersionsGroup(page *adw.PreferencesPage) {
-	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.RecoveryVersionsGroupTitle)
-	uh.buildReturnToStreamRow(group)
-	uh.buildPublishedVersionsRow(group)
-	if uh.unpinRow != nil || uh.publishedVersionsRow != nil {
-		page.Add(group)
-	}
-}
-
-// buildReturnToStreamRow builds the Return to stream row on the Powerwash
-// page when booted on a dated tag.
-func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
-	status := ublue.StatusCached()
-	build, pinned := registrytags.ParseBuild(status.Tag)
-	if !status.Available || !pinned {
-		return
-	}
-
-	stream := build.Stream
-	offered, explanation := pageview.UnpinOffer(stream, pinSupport(status, ubluehelper.CommandUnpin, stream))
-	presentation := pageview.UnpinRow(stream, explanation)
-
-	row := adw.NewActionRow()
-	row.SetTitle(presentation.Title)
-	row.SetSubtitle(presentation.Subtitle)
-
-	btn := gtk.NewButtonWithLabel("Return to Stream")
-	btn.SetValign(gtk.AlignCenterValue)
-	btn.SetSensitive(offered)
-	if !offered {
-		btn.SetTooltipText(explanation)
-	} else {
-		clickedCb := func(gtk.Button) {
-			uh.confirmReturnToStream(stream, btn)
-		}
-		btn.ConnectClicked(&clickedCb)
-	}
-
-	row.AddSuffix(&btn.Widget)
-	group.Add(&row.Widget)
-	uh.unpinRow = row
-	uh.unpinBtn = btn
-	uh.unpinOffered = offered
-}
-
-// confirmReturnToStream presents an AdwAlertDialog confirmation before
-// returning to the regular release stream.
-func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
-	if !uh.tryStartRecoverySwitch() {
-		return
-	}
-
-	title, body := pageview.UnpinConfirmation(stream)
-	dialog := adw.NewAlertDialog(title, body)
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("confirm", "Return to Stream")
-	dialog.SetResponseAppearance("confirm", adw.ResponseSuggestedValue)
-
-	uh.recoveryDialogs.connect(dialog, func(response string) {
-		if response != "confirm" {
-			uh.recoverySwitchGate.Reset()
-			uh.syncRecoverySwitches()
-			return
-		}
-		uh.runReturnToStream(button)
-	})
-	dialog.Present(&uh.recoveryPrefsPage.Widget)
-}
-
-// runReturnToStream unpins the machine and returns to the stream via
-// pkexec chairlift-helper unpin.
-func (uh *UserHome) runReturnToStream(button *gtk.Button) {
-	button.SetLabel("Returning…")
-
-	go func() {
-		ctx, cancel := ublue.ImageSwitchContext()
-		defer cancel()
-
-		err := ublue.Unpin(ctx)
-
-		sgtk.RunOnMainThread(func() {
-			uh.recoverySwitchGate.Reset()
-			button.SetLabel("Return to Stream")
-			uh.syncRecoverySwitches()
-
-			if err != nil {
-				log.Printf("views: return to stream failed: %v", err)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Return to stream failed: %v", err))
-				return
-			}
-
-			decision := actionmsg.ReturnToStream(dryrun.Enabled())
-			if decision.Confirm {
-				go uh.loadBootcRollbackStatus()
-				if uh.updateShell != nil {
-					uh.updateShell.StartCheck()
-				}
-			}
-			uh.toastAdder.ShowToast(decision.Toast)
-		})
-	}()
-}
-
-// recoveryBusy reports whether a Powerwash bootc transaction — a pin, a
-// return to the stream, or Roll Back — holds the page.
-func (uh *UserHome) recoveryBusy() bool {
-	return uh.recoverySwitchGate.Running() || uh.bootcRollbackGate.Running()
-}
-
-// tryStartRecoverySwitch admits a pin or a return to the stream only while
-// Roll Back is not running, and turns the other recovery controls off for
-// as long as it holds the gate. Main thread only.
-func (uh *UserHome) tryStartRecoverySwitch() bool {
-	if uh.bootcRollbackGate.Running() || !uh.recoverySwitchGate.TryStart() {
-		return false
-	}
-	uh.syncRecoverySwitches()
-	return true
-}
-
-// syncRecoverySwitches derives the sensitivity of every Powerwash bootc
-// control from the two gates, so one transaction in flight leaves the others
-// insensitive and its end restores exactly what each still offers: Pin and
-// Return to stream within their offer, Roll Back unless its live success
-// completed its gate. Each builder may have been skipped, so every widget is
-// nil-guarded. Main thread only.
-func (uh *UserHome) syncRecoverySwitches() {
-	busy := uh.recoveryBusy()
-	uh.applyPinButtons()
-	if uh.unpinBtn != nil {
-		uh.unpinBtn.SetSensitive(uh.unpinOffered && !busy)
-	}
-	if uh.bootcRollbackBtn != nil {
-		uh.bootcRollbackBtn.SetSensitive(uh.bootcRollbackGate.Idle() && !uh.recoverySwitchGate.Running())
-	}
-}
-
 // loadBootcRollbackStatus reveals the Roll Back group when bootc records a
 // rollback deployment. A host with no previous image — a fresh install, or
 // one whose rollback slot has been pruned — leaves the whole group hidden
@@ -313,12 +167,6 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 	helperSupported := ublue.StatusCached().Supports(ubluehelper.CommandRollback)
 
 	sgtk.RunOnMainThread(func() {
-		if err == nil && status != nil {
-			// Kept for the Published versions list, which marks the
-			// running and previous days.
-			uh.runningVersion = status.Status.Booted.Version()
-			uh.previousVersion = status.Status.Rollback.Version()
-		}
 		if uh.bootcRollbackRow == nil || uh.bootcRollbackGroup == nil {
 			return
 		}
@@ -349,17 +197,15 @@ func (uh *UserHome) recoveryProvidersAvailable() bool {
 
 // onBootcRollbackClicked queues a rollback to the previous deployment. It
 // does not restart: rolling back and restarting are separate decisions, so
-// a live success swaps in a Restart now button rather than rebooting. It
-// refuses to start while a pin or a return to the stream runs.
+// a live success swaps in a Restart now button rather than rebooting.
 func (uh *UserHome) onBootcRollbackClicked() {
-	if uh.recoverySwitchGate.Running() || !uh.bootcRollbackGate.TryStart() {
+	if !uh.bootcRollbackGate.TryStart() {
 		return
 	}
 
 	button := uh.bootcRollbackBtn
 	row := uh.bootcRollbackRow
 	button.SetSensitive(false)
-	uh.syncRecoverySwitches()
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -372,7 +218,6 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Rollback failed: %v", err))
-				uh.syncRecoverySwitches()
 				return
 			}
 
@@ -389,7 +234,6 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 			}
-			uh.syncRecoverySwitches()
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()

@@ -54,7 +54,7 @@ Feature: Maintenance and its Powerwash detail
   Scenario: Powerwash is a detail of Maintenance and Back returns there
     Given ChairLift is running
     When I open the "Maintenance" page
-    Then the "Powerwash" row says "Roll back to the previous system version, browse published system versions, or reset this machine."
+    Then the "Powerwash" row says "Roll back to the previous system version or reset this machine."
     When I open the Powerwash detail
     Then the Powerwash detail is shown
     And I see "Go back to the previous version"
@@ -191,89 +191,10 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    Then I see "Published versions"
+    Then I do not see "Published versions"
     And I see "Reset the system"
     And I do not see "Go back to the previous version"
     And the "Roll Back" button is not shown
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_registry_unreachable
-  Scenario: An unreachable registry lists no published versions and the check can be retried
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Powerwash detail
-    And I click the "Check" button in the "Published versions" row
-    Then I see "Could not read the published versions from the image registry"
-    And the application log contains "published versions: "
-    And the "Published versions" row says "See the versions of the “latest” stream the image registry still offers from the last 90 days. A check within 15 minutes of the last one reuses its answer."
-    And the "Check Again" button in the "Published versions" row is sensitive
-    And I do not see "stream from the last 90 days"
-    And the action journal is empty
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_published_versions
-  Scenario: Cancelling pin to a published version leaves the build unpinned and controls available
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Powerwash detail
-    And I click the "Check" button in the "Published versions" row
-    Then the "Check Again" button is shown
-    When I click the "Pin" button in the "13 September 2026" row
-    Then a dialog titled "Pin to 13 September 2026?" is shown
-    And the dialog says "This stages a switch to the build from 13 September 2026. Automatic updates will stay at this version until you return to the stream. The change applies the next time you restart."
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the "Pin" button in the "13 September 2026" row is sensitive
-    And the action journal is empty
-
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_published_versions
-  Scenario: Confirming pin to a published version journals the pin command and keeps controls usable
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Powerwash detail
-    And I click the "Check" button in the "Published versions" row
-    Then the "Check Again" button is shown
-    When I click the "Pin" button in the "13 September 2026" row
-    Then a dialog titled "Pin to 13 September 2026?" is shown
-    When I choose "Pin" in the dialog
-    Then I see "[DRY-RUN] Preview: would pin to build 20260913 — no changes made"
-    And no dialog is shown
-    And the action journal records "pin" as dry-run
-    And the journalled command is "pkexec /usr/bin/chairlift-helper pin 20260913 --dry-run"
-    And the "Pin" button in the "13 September 2026" row is sensitive
-
-  @stub.maintenance_bootc_pinned @stub.maintenance_package_tools
-  Scenario: A host booted on a dated tag offers returning to the stream and journals unpin
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Powerwash detail
-    Then I see "Return to stream"
-    And the "Return to stream" row says "Switch back to the newest updates on the “latest” stream"
-    When I click the "Return to Stream" button in the "Return to stream" row
-    Then a dialog titled "Return to Stream?" is shown
-    And the dialog says "This stages a switch back to regular updates on the “latest” stream. The change applies the next time you restart."
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-    And the "Return to Stream" button in the "Return to stream" row is sensitive
-    When I click the "Return to Stream" button in the "Return to stream" row
-    And I choose "Return to Stream" in the dialog
-    Then I see "[DRY-RUN] Preview: would return to the stream — no changes made"
-    And no dialog is shown
-    And the action journal records "unpin" as dry-run
-    And the journalled command is "pkexec /usr/bin/chairlift-helper unpin --dry-run"
-    And the journalled action carries no argument
-    And the "Return to Stream" button in the "Return to stream" row is sensitive
-
-  @stub.maintenance_package_tools @stub.maintenance_published_versions
-  @stub.maintenance_unlisted_image
-  Scenario: An image outside the channel table is offered neither pin nor return to stream
-    Given ChairLift is running
-    When I open the "Maintenance" page
-    And I open the Powerwash detail
-    Then the "Return to stream" row says "Returning to the stream is not available for the “latest” stream of this image"
-    And the "Return to Stream" button in the "Return to stream" row is insensitive
-    When I click the "Check" button in the "Published versions" row
-    Then the "13 September 2026" row says "Pinning is not available for the “latest” stream of this image"
-    And the "Pin" button in the "13 September 2026" row is insensitive
-    And the action journal is empty
 
   # ------------------------------------------------ configuration & capability
 
@@ -283,12 +204,12 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     Then I see "Free up space"
     And I do not see "Maintenance tasks"
-    And the "Powerwash" row says "Roll back to the previous system version or browse published system versions."
+    And the "Powerwash" row says "Roll back to the previous system version."
     And I do not see "reset this machine"
     When I open the Powerwash detail
     Then I see "Go back to the previous version"
     And I see "Powerwash and Factory Reset are turned off in this computer's configuration."
-    And I see "System Versions"
+    And I do not see "Published versions"
     And I do not see "Reset the system"
     And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"

@@ -73,7 +73,9 @@ func TestHelperImageSwitchesGoThroughSwitchImage(t *testing.T) {
 // on DefaultContext gives up after 15 minutes and reports a timeout (and
 // restores its control) while the helper is still pulling.
 func TestViewsRunImageSwitchesUnderTheImageSwitchContext(t *testing.T) {
-	switchers := map[string]bool{"SwitchChannel": true, "SwitchDriver": true, "Pin": true, "Unpin": true}
+	// Pin and Unpin have no GUI caller since the published-versions calendar
+	// was withdrawn (#522); the helper arms stay and are held above.
+	switchers := map[string]bool{"SwitchChannel": true, "SwitchDriver": true}
 	dir := filepath.Join(RepoRoot(), "internal", "views")
 	matches, err := filepath.Glob(filepath.Join(dir, "*.go"))
 	if err != nil {

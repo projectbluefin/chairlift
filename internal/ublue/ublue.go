@@ -329,23 +329,6 @@ func Rollback(ctx context.Context) error {
 	return err
 }
 
-// Pin stages a dated build of the booted stream. Only the day crosses pkexec;
-// the helper derives and verifies the target. Callers must confirm first.
-func Pin(ctx context.Context, day string) error {
-	if err := ubluehelper.ValidateDay(day, time.Now()); err != nil {
-		return &Error{Message: err.Error()}
-	}
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandPin, day)
-	return err
-}
-
-// Unpin stages the stream recovered from the booted dated tag. Callers must
-// confirm first; no target crosses the privilege boundary.
-func Unpin(ctx context.Context) error {
-	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandUnpin)
-	return err
-}
-
 // FactoryReset replaces the running deployment with a fresh install of the
 // same image, discarding every local change. It is irreversible: callers
 // must confirm with the user before reaching this — see

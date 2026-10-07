@@ -89,12 +89,6 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			wantArgs: []string{ubluehelper.CommandRestart},
 		},
 		{
-			name:     "Pin",
-			call:     func(ctx context.Context) error { return Pin(ctx, "20240229") },
-			wantArgs: []string{ubluehelper.CommandPin, "20240229"},
-		},
-		{name: "Unpin", call: Unpin, wantArgs: []string{ubluehelper.CommandUnpin}},
-		{
 			name:     "Rollback",
 			call:     Rollback,
 			wantArgs: []string{ubluehelper.CommandRollback},
@@ -377,20 +371,5 @@ func TestStatusCachedDetectsOnceAndRepeats(t *testing.T) {
 	}
 	if calls > 1 {
 		t.Errorf("StatusCached ran detection %d times, want at most 1", calls)
-	}
-}
-
-func TestPinRejectionNeverReachesTheHelper(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "journal.jsonl")
-	t.Setenv(journal.PathEnv, path)
-	journal.Reset()
-	t.Cleanup(journal.Reset)
-	for _, day := range []string{"ghcr.io/evil/image:stable", "20260230", "99991231", "stable-20240229"} {
-		if err := Pin(context.Background(), day); err == nil {
-			t.Errorf("accepted %q", day)
-		}
-	}
-	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("invalid input reached journal: %v", err)
 	}
 }

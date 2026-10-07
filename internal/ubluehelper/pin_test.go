@@ -10,7 +10,6 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
-	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
 func TestPinInvocationGrammar(t *testing.T) {
@@ -93,11 +92,6 @@ func TestPinCandidateOrderMatchesPublishedSpellings(t *testing.T) {
 			want := []string{"switch", "--enforce-container-sigpolicy", tc.ref + ":" + tc.published}
 			if err != nil || !reflect.DeepEqual(args, want) || !reflect.DeepEqual(calls, tc.calls) {
 				t.Fatalf("args=%v err=%v calls=%v; want %v, %v", args, err, calls, want, tc.calls)
-			}
-			builds := registrytags.Builds(published, time.Time{})
-			rows := pageview.PublishedVersions(builds, pageview.CatalogStream(tc.booted), "", "")
-			if len(rows) != 1 || rows[0].Subtitle != "Published as "+tc.published {
-				t.Fatalf("catalog rows = %+v, want selected tag %q", rows, tc.published)
 			}
 		})
 	}

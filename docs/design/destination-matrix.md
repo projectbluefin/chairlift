@@ -26,7 +26,7 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
-| `recovery` | `recovery.go`, `reset.go`, `versions.go` | Previous-deployment rollback, live published-version reads, confirmed pin/return-to-stream and opt-in reset actions |
+| `recovery` | `recovery.go`, `reset.go` | Previous-deployment rollback and opt-in reset actions (the published-versions calendar is withdrawn, #522) |
 
 ## Configuration references and owners
 
@@ -39,7 +39,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | Configuration page | Group | Current mount / owner |
 | --- | --- | --- |
 | `updates_page` | `automatic_updates_group` | Updates; `onAutomaticUpdatesToggled`, observed through `internal/autoupdate`, writes via `ublue.SetAutomaticUpdates` |
-| `updates_page` | `bootc_updates_group` | Updates staging/Compare and Powerwash rollback/catalog/pin/unpin; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked`, `onPublishedVersionsClicked`, `confirmPin` / `runPin`, `confirmReturnToStream` / `runReturnToStream` |
+| `updates_page` | `bootc_updates_group` | Updates staging/Compare and Powerwash Roll Back; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked` |
 | `updates_page` | `flatpak_updates_group` | Updates applications source; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_updates_group` | Updates developer-tools source; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_trust_group` | Updates; `confirmTrustTap` / `trustTap`, unprivileged `homebrew.TrustPackages` |
@@ -102,10 +102,8 @@ Provider-specific safety remains with each live owner:
 
 - Staging uses the fixed bootc stage path and bounded streamed logs. Compare
   starts only on a click, with pinned image references and stale-result guards.
-  Published versions are read-only registry observations. Pin and Return to stream
-  require confirmation, installed helper support, a healthy channel table and a
-  running stream the table lists; only a validated day or
-  fixed unpin word crosses pkexec, never a registry-supplied image reference.
+  Powerwash offers no published-versions calendar, pin or return to stream
+  (#522); the helper's `pin`/`unpin` commands have no GUI caller.
   Roll Back uses the existing previous deployment and completes its gate after
   live success, without restarting.
 - Homebrew uninstall/pin actions confirm intent and retain typed target

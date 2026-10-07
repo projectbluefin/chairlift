@@ -9,7 +9,7 @@
 Issue #137 asks for a rollback surface that lets a user choose *which* build to
 return to, and says it "should cover pinning too". ADR-0013 landed the read
 half: `internal/registrytags` lists the registry's dated builds at runtime, and
-Recovery's **Published versions** row (`internal/views/versions.go`) displays
+Recovery's **Published versions** row ([historical `versions.go`](https://github.com/projectbluefin/chairlift/blob/290c83283e1bf31026c3b74fcb2838a6ea5142fe/internal/views/versions.go)) displays
 them, read-only. It also recorded what is deliberately still missing —
 "pinning is not in this package, and is not unblocked by it" — because
 `chairlift-ublue-helper` accepts no image reference (ADR-0001). A pin must

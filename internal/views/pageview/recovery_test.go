@@ -6,8 +6,8 @@ import (
 )
 
 // W3-11: the Maintenance entry promised "reset this machine" on the shipped
-// configuration (reset_group off), where the detail held only Published
-// versions. The subtitle now names exactly what the detail offers.
+// configuration (reset_group off). The subtitle now names exactly what the
+// detail offers: Roll Back and reset, nothing else since #522.
 func TestRecoveryEntrySubtitleNamesOnlyWhatTheDetailOffers(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -15,14 +15,9 @@ func TestRecoveryEntrySubtitleNamesOnlyWhatTheDetailOffers(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "shipped default with no previous deployment",
-			offer: RecoveryOffer{PublishedVersions: true},
-			want:  "Browse published system versions.",
-		},
-		{
-			name:  "rollback and published versions",
-			offer: RecoveryOffer{Rollback: true, PublishedVersions: true},
-			want:  "Roll back to the previous system version or browse published system versions.",
+			name:  "rollback only",
+			offer: RecoveryOffer{Rollback: true},
+			want:  "Roll back to the previous system version.",
 		},
 		{
 			name:  "reset only",
@@ -31,8 +26,8 @@ func TestRecoveryEntrySubtitleNamesOnlyWhatTheDetailOffers(t *testing.T) {
 		},
 		{
 			name:  "everything",
-			offer: RecoveryOffer{Rollback: true, ReturnToStream: true, PublishedVersions: true, Reset: true},
-			want:  "Roll back to the previous system version, return to your release stream, browse published system versions, or reset this machine.",
+			offer: RecoveryOffer{Rollback: true, Reset: true},
+			want:  "Roll back to the previous system version or reset this machine.",
 		},
 		{
 			name:  "nothing built yet",
@@ -50,14 +45,13 @@ func TestRecoveryEntrySubtitleNamesOnlyWhatTheDetailOffers(t *testing.T) {
 }
 
 // Every combination: "reset" appears exactly when reset is offered, and
-// "roll back" exactly when a rollback is.
+// "roll back" exactly when a rollback is. The withdrawn calendar (#522) is
+// never advertised.
 func TestRecoveryEntrySubtitleNeverPromisesAnAbsentControl(t *testing.T) {
-	for mask := range 16 {
+	for mask := range 4 {
 		offer := RecoveryOffer{
-			Rollback:          mask&1 != 0,
-			ReturnToStream:    mask&2 != 0,
-			PublishedVersions: mask&4 != 0,
-			Reset:             mask&8 != 0,
+			Rollback: mask&1 != 0,
+			Reset:    mask&2 != 0,
 		}
 		sub := RecoveryEntrySubtitle(offer)
 		if offer.Reset != strings.Contains(sub, "eset this machine") {
@@ -66,11 +60,8 @@ func TestRecoveryEntrySubtitleNeverPromisesAnAbsentControl(t *testing.T) {
 		if offer.Rollback != strings.Contains(sub, "oll back to the previous") {
 			t.Errorf("%+v: subtitle %q disagrees with Rollback", offer, sub)
 		}
-		if offer.ReturnToStream != strings.Contains(sub, "release stream") {
-			t.Errorf("%+v: subtitle %q disagrees with ReturnToStream", offer, sub)
-		}
-		if offer.PublishedVersions != strings.Contains(sub, "published system versions") {
-			t.Errorf("%+v: subtitle %q disagrees with PublishedVersions", offer, sub)
+		if strings.Contains(sub, "published") || strings.Contains(sub, "release stream") {
+			t.Errorf("%+v: subtitle %q advertises the withdrawn calendar", offer, sub)
 		}
 		if !strings.HasSuffix(sub, ".") || strings.ToUpper(sub[:1]) != sub[:1] {
 			t.Errorf("%+v: subtitle %q is not a capitalised sentence", offer, sub)

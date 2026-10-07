@@ -658,52 +658,6 @@ func readJournal(t *testing.T, path string) []journal.Entry {
 	return entries
 }
 
-func TestPinAndUnpinWrappersExecutePkexec(t *testing.T) {
-	captured := filepath.Join(t.TempDir(), "captured-args")
-	fake := writeFakePkexec(t, captured)
-	oldPkexec := pkexecCommand
-	pkexecCommand = fake
-	t.Cleanup(func() { pkexecCommand = oldPkexec })
-
-	t.Run("Pin executes fake pkexec with validated day", func(t *testing.T) {
-		if err := Pin(context.Background(), "20240229"); err != nil {
-			t.Fatalf("Pin error = %v, want nil", err)
-		}
-		got := readCapturedArgs(t, captured)
-		want := []string{HelperPath, "pin", "20240229"}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Pin argv = %v, want %v", got, want)
-		}
-		for _, arg := range got[1:] {
-			if strings.Contains(arg, "/") {
-				t.Errorf("Pin passed an argument carrying a slash: %q", arg)
-			}
-		}
-	})
-
-	t.Run("Pin rejects invalid day before executing pkexec", func(t *testing.T) {
-		if err := Pin(context.Background(), "not-a-day"); err == nil {
-			t.Fatal("Pin(\"not-a-day\") error = nil, want validation error")
-		}
-	})
-
-	t.Run("Unpin executes fake pkexec", func(t *testing.T) {
-		if err := Unpin(context.Background()); err != nil {
-			t.Fatalf("Unpin error = %v, want nil", err)
-		}
-		got := readCapturedArgs(t, captured)
-		want := []string{HelperPath, "unpin"}
-		if !reflect.DeepEqual(got, want) {
-			t.Errorf("Unpin argv = %v, want %v", got, want)
-		}
-		for _, arg := range got[1:] {
-			if strings.Contains(arg, "/") {
-				t.Errorf("Unpin passed an argument carrying a slash: %q", arg)
-			}
-		}
-	})
-}
-
 // Issue #495: the helper exits 0 after skipping a developer group the image
 // does not define, so the skipped groups must reach the caller rather than
 // the enable reading as a complete grant.
