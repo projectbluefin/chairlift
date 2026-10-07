@@ -155,6 +155,9 @@ func runDriverSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 
 // runPin supplies only the system descriptor and single-tag registry resolver;
 // the gated helper package owns all target derivation and refusal decisions.
+// The switch goes through switchImage like every other image switch: unpin's
+// target is the stream the host left when it pinned, which is exactly the
+// rollback deployment a composefs `bootc switch` refuses to switch to.
 func runPin(ctx context.Context, invocation ubluehelper.Invocation) {
 	info, err := imageinfo.Detect()
 	if err != nil {
@@ -169,10 +172,7 @@ func runPin(ctx context.Context, invocation ubluehelper.Invocation) {
 		fmt.Printf("[DRY-RUN] would execute: bootc %v\n", args)
 		return
 	}
-	if err := run(ctx, "bootc", args...); err != nil {
-		fatal(fmt.Sprintf("bootc switch failed: %v", err))
-	}
-	fmt.Printf("switched to %s — restart to apply\n", args[len(args)-1])
+	switchImage(ctx, args, "bootc switch failed")
 }
 
 // runDevGroups adds or removes the invoking user across every developer
