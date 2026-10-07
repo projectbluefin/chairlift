@@ -35,7 +35,10 @@ components and Operating system; **Apps and tools** groups Applications and
 Developer tools. Each row shows its own state, so you can see which source
 is holding you up without opening anything. A source your administrator
 turned off says **Disabled by administrator**; one this computer has no
-software for says **Not available on this system** instead.
+software for says **Not available on this system** instead. **Preferences**
+(Ctrl+,) has a switch per source: a source you turn off there says
+**Disabled in preferences** as soon as you change it, and a source you cannot
+turn on shows its switch off, greyed out, with the same words as its row here.
 
 Normally the page also reports **System is up to date**, or how many updates
 are waiting. When only a restart remains, that status panel disappears

@@ -169,6 +169,58 @@ def step_switch_sensitive(context, row):
     assert atspi.poll(check), f"the switch in {row!r} stayed insensitive"
 
 
+# ---------------------------------------------------------------- preferences
+
+
+# The Preferences dialog (internal/window/preferences.go) presents inside the
+# main window, over the Updates page, which has rows with the same titles. Its
+# "Update sources" group is the only one with that name, so it is the scope.
+def _update_sources(context):
+    if context.app is None:
+        raise AssertionError("ChairLift is not running in this scenario (@no-app?)")
+    return atspi.find(
+        context.app,
+        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == "Update sources",
+        "the Preferences dialog's Update sources group",
+    )
+
+
+def _preference_switch(context, row):
+    target = atspi.row_containing(_update_sources(context), row, timeout=1)
+    return atspi.find(
+        target,
+        lambda n: atspi.role(n) in ("switch", "toggle button", "check box"),
+        f"a switch in the Preferences {row!r} row",
+        timeout=1,
+    )
+
+
+@then('the Preferences "{row}" row says "{text}"')
+def step_preference_row_says(context, row, text):
+    def check():
+        return text_present(atspi.row_containing(_update_sources(context), row, timeout=1), text)
+
+    assert atspi.poll(check), f"Preferences row {row!r} never said {text!r}"
+
+
+@then('the Preferences "{row}" switch is {state:w} and {verdict:w} input')
+def step_preference_switch(context, row, state, verdict):
+    if state not in ("on", "off") or verdict not in ("accepts", "refuses"):
+        raise NotImplementedError(f"unknown switch state {state!r} or verdict {verdict!r}")
+    want_on, want_sensitive = state == "on", verdict == "accepts"
+
+    def check():
+        switch = _preference_switch(context, row)
+        return bool(atspi.checked(switch)) == want_on and atspi.sensitive(switch) == want_sensitive
+
+    assert atspi.poll(check), f"the Preferences {row!r} switch never read {state} and {verdict} input"
+
+
+@step('I toggle the Preferences "{row}" switch')
+def step_toggle_preference(context, row):
+    atspi.activate(_preference_switch(context, row))
+
+
 @then("the action journal holds exactly {count:d} entry")
 @then("the action journal holds exactly {count:d} entries")
 def step_journal_count(context, count):

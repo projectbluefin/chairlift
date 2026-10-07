@@ -60,6 +60,7 @@ type Window struct {
 	configError       *config.LoadError
 	views             *views.UserHome
 	updateShell       *views.UpdateShell
+	updateSettings    *settings.Store // The one updates-preference store: the shell reads it, Preferences binds to it
 	firstRunSteps     []string
 	firstRunIndex     int
 	firstRunActive    bool
@@ -176,6 +177,7 @@ func (w *Window) buildUI() {
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
 	store := settings.New()
+	w.updateSettings = store
 	// Each source's policy keeps the administrator's configuration and the
 	// capability floor apart, so the shell can tell "disabled by
 	// administrator" from "not available on this system". Their conjunction
@@ -200,6 +202,9 @@ func (w *Window) buildUI() {
 		w,
 	)
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
+	// Connected once, here: a source toggled in Preferences (or by
+	// gsettings) re-checks the shell instead of waiting for Refresh.
+	store.OnSourceChanged(w.updateShell.PreferencesChanged)
 	w.views.AttachUpdateShell(w.updateShell)
 	// Create the navigation split view
 	w.splitView = adw.NewNavigationSplitView()

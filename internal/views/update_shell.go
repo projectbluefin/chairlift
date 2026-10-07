@@ -237,6 +237,20 @@ func (s *UpdateShell) StartCheck() {
 	}()
 }
 
+// PreferencesChanged runs on the GTK main thread when an update-source
+// preference changes, and starts a check when the snapshot on screen no
+// longer matches the preferences. The coordinator stays the only owner of
+// source enablement: the shell never flips a row itself. A mutation in
+// flight refuses the check; finishMutation calls this again once it ends.
+func (s *UpdateShell) PreferencesChanged() {
+	if s == nil || s.closed.Load() {
+		return
+	}
+	if updatepresent.RecheckForPreferences(s.snapshot, s.currentPreferences()) {
+		s.StartCheck()
+	}
+}
+
 // StartUpdate starts the current snapshot's serial mutation away from the GTK
 // thread.
 func (s *UpdateShell) StartUpdate() {
@@ -314,6 +328,9 @@ func (s *UpdateShell) finishMutation() {
 			row.setRestartButtonSensitive(false)
 		}
 	}
+	// A preference changed while the run held admission left the rows
+	// describing the run's preferences, not the current ones.
+	s.PreferencesChanged()
 }
 
 func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflow.Item, row *adw.ActionRow) {
