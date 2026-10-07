@@ -650,7 +650,8 @@ An agent must not break these:
   machine is `ubuntu`, or the `debian` machine an older ChairLift created
   (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
   creates `ubuntu` only when neither exists (never a second machine), and turns
-  off with `nsl shutdown`, which keeps data. The backend
+  off with `nsl stop <machine>` on that machine only, which keeps data
+  (`nsl shutdown` would stop the user's own machines too). The backend
   choice is not stored: `wsl_backend` sets the default, and the first read
   follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
