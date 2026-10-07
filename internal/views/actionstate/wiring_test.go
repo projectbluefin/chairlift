@@ -278,3 +278,42 @@ func TestLiveryTogglesQueueBehindSelections(t *testing.T) {
 		t.Error("a failed or previewed toggle leaves its section's rows insensitive")
 	}
 }
+
+// An installed-list rebuild during a running uninstall or pin replaced the
+// row with an idle gate and detached the busy controls, so a second click
+// overlapped the first brew command (W2-APPS-1). Rows take their gates from
+// the list's RowGates, a rebuild defers while one runs, and every release
+// path settles the owed reload.
+func TestHomebrewRowGatesSurviveListRebuilds(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "applications_page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	start := strings.Index(text, "func (uh *UserHome) loadHomebrewPackages()")
+	if start < 0 {
+		t.Fatal("loadHomebrewPackages not found")
+	}
+	load, _, _ := strings.Cut(text[start:], "\nfunc ")
+	if strings.Contains(load, "&actionstate.Gate{}") {
+		t.Error("loadHomebrewPackages builds untracked row gates a rebuild would silently replace")
+	}
+	for _, list := range []string{"formulaGates", "caskGates"} {
+		for _, call := range []string{"if uh." + list + ".Defer() {", "uh." + list + ".Rebuild()", "gate := uh." + list + ".New()"} {
+			if !strings.Contains(load, call) {
+				t.Errorf("loadHomebrewPackages is missing %q", call)
+			}
+		}
+		if !strings.Contains(text, "uh."+list+".Settled()") {
+			t.Errorf("a deferred %s rebuild is never settled", list)
+		}
+	}
+	// Two dialog cancellations and the shared finish each release a gate.
+	if got := strings.Count(text, "uh.settleHomebrewRows("); got < 3 {
+		t.Errorf("settleHomebrewRows is called %d times, want every gate release (cancel pin, cancel uninstall, finish)", got)
+	}
+}

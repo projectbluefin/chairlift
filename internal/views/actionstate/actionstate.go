@@ -145,6 +145,63 @@ func (g *Gate) Running() bool {
 	return g.state.Load() == gateRunning
 }
 
+// RowGates holds the gates of the rows one list rebuild created, so the next
+// rebuild can tell whether replacing those rows would discard a running
+// action's controls. A rebuild that would is deferred and recorded as owed,
+// and runs once that action settles; until then the old rows keep showing the
+// action's progress and keep refusing a second start. It is not safe for
+// concurrent use: every method runs on the one thread that rebuilds the rows.
+// The gates it hands out are.
+type RowGates struct {
+	gates   []*Gate
+	pending bool
+}
+
+// Defer reports whether a rebuild must wait because a tracked row action is
+// running, recording the rebuild as owed when it must.
+func (r *RowGates) Defer() bool {
+	if r.running() {
+		r.pending = true
+		return true
+	}
+	return false
+}
+
+// Rebuild forgets the replaced rows' gates and any owed rebuild. Call it
+// immediately before replacing the rows, after Defer reported false.
+func (r *RowGates) Rebuild() {
+	clear(r.gates)
+	r.gates = r.gates[:0]
+	r.pending = false
+}
+
+// New returns an idle gate for a row the current rebuild adds and tracks it.
+func (r *RowGates) New() *Gate {
+	gate := &Gate{}
+	r.gates = append(r.gates, gate)
+	return gate
+}
+
+// Settled reports whether a deferred rebuild is owed and may now run because
+// no tracked action is running. Reporting true clears the debt, so one
+// settlement starts one rebuild.
+func (r *RowGates) Settled() bool {
+	if !r.pending || r.running() {
+		return false
+	}
+	r.pending = false
+	return true
+}
+
+func (r *RowGates) running() bool {
+	for _, gate := range r.gates {
+		if gate.Running() {
+			return true
+		}
+	}
+	return false
+}
+
 // Decision describes the UI work following one command attempt.
 type Decision struct {
 	Refresh         bool

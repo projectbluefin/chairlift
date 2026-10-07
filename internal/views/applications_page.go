@@ -177,6 +177,13 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
+				// A running row action owns its row's controls; replacing
+				// them now would hide its progress and admit a second
+				// start. settleHomebrewRows reloads once it finishes.
+				if uh.formulaGates.Defer() {
+					return
+				}
+				uh.formulaGates.Rebuild()
 				uh.formulaeRows.Clear(func(row *adw.ActionRow) {
 					uh.installedFormulae.Remove(&row.Widget)
 				})
@@ -204,7 +211,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this tool from your system")
 
-					gate := &actionstate.Gate{}
+					gate := uh.formulaGates.New()
 					controls := []*gtk.Button{pinBtn, uninstallBtn}
 					uh.formulaButtons.connect(pinBtn, func(gtk.Button) {
 						if !gate.TryStart() {
@@ -244,6 +251,10 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
+				if uh.caskGates.Defer() {
+					return
+				}
+				uh.caskGates.Rebuild()
 				uh.caskRows.Clear(func(row *adw.ActionRow) {
 					uh.installedCasks.Remove(&row.Widget)
 				})
@@ -270,7 +281,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this app from your system")
 
-					gate := &actionstate.Gate{}
+					gate := uh.caskGates.New()
 					controls := []*gtk.Button{uninstallBtn}
 					uh.caskButtons.connect(uninstallBtn, func(gtk.Button) {
 						if !gate.TryStart() {
@@ -310,6 +321,7 @@ func (uh *UserHome) confirmHomebrewPin(
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "confirm" {
 			gate.Reset()
+			uh.settleHomebrewRows(false)
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
@@ -374,6 +386,7 @@ func (uh *UserHome) confirmHomebrewUninstall(
 	uh.confirmations.connect(dialog, func(response string) {
 		if response != "uninstall" {
 			gate.Reset()
+			uh.settleHomebrewRows(false)
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
@@ -423,6 +436,7 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 	gate *actionstate.Gate,
 ) {
 	sgtk.RunOnMainThread(func() {
+		refresh := false
 		if decision.RestoreControl {
 			gate.Reset()
 			primary.SetLabel(idleLabel)
@@ -433,18 +447,29 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 			// failing recipe; that belongs in the log, not in a toast.
 			log.Printf("Homebrew package action failed: %v", err)
 			uh.toastAdder.ShowErrorToast(errorMessage)
-			return
+		} else {
+			if decision.CompleteControl {
+				gate.Complete()
+				primary.SetLabel(completeLabel)
+				setHomebrewControlsSensitive(controls, false)
+			}
+			uh.toastAdder.ShowToast(toast)
+			refresh = decision.Refresh
 		}
-		if decision.CompleteControl {
-			gate.Complete()
-			primary.SetLabel(completeLabel)
-			setHomebrewControlsSensitive(controls, false)
-		}
-		uh.toastAdder.ShowToast(toast)
-		if decision.Refresh {
-			go uh.loadHomebrewPackages()
-		}
+		uh.settleHomebrewRows(refresh)
 	})
+}
+
+// settleHomebrewRows runs on the GTK main thread once a row action has
+// released its gate. It starts one inventory load when the action asked for
+// one or when a list rebuild was deferred while the action ran, so the
+// deferral never leaves the lists stale.
+func (uh *UserHome) settleHomebrewRows(refresh bool) {
+	formulaeOwed := uh.formulaGates.Settled()
+	casksOwed := uh.caskGates.Settled()
+	if refresh || formulaeOwed || casksOwed {
+		go uh.loadHomebrewPackages()
+	}
 }
 
 func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
