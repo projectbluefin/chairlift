@@ -532,7 +532,7 @@ func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
 		return nil, errors.New("no Agent Mode model is selected")
 	}
 	cmd := exec.Command(state.LLMManPath, "launch", "goose-desktop", "--model", model)
-	cmd.Env = sessionEnv(profile)
+	sessionIO(cmd, profile)
 	return cmd, nil
 }
 
@@ -548,8 +548,21 @@ func ReopenCommand(state State, profile Profile) (*exec.Cmd, error) {
 		return nil, errors.New("goose desktop is not installed")
 	}
 	cmd := exec.Command(state.DesktopPath)
-	cmd.Env = sessionEnv(profile)
+	sessionIO(cmd, profile)
 	return cmd, nil
+}
+
+// sessionIO gives a launch the session environment and ChairLift's own
+// stderr for both output streams. When Goose fails to start — a GPU or
+// display error on a VM without 3D acceleration (#544) — those lines are the
+// only diagnosis, and they belong in the same journal stream as ChairLift's
+// "goose desktop exited" line rather than in /dev/null. An *os.File is
+// inherited directly, so no copy goroutine ties the child's lifetime to
+// ChairLift's, and the child keeps writing after a cold --ask-bluefin exits.
+func sessionIO(cmd *exec.Cmd, profile Profile) {
+	cmd.Env = sessionEnv(profile)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
 }
 
 // sessionEnv is the caller's environment plus the two profile roots, with

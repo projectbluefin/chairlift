@@ -744,6 +744,9 @@ button into Set Up; the Launch button rechecks readiness on each click.
 [`agentmode.Launch`](../../internal/agentmode/launch.go) writes the profile,
 then runs `llmman launch goose-desktop --model bluefin-active` with
 `GOOSE_PATH_ROOT` and `XDG_CONFIG_HOME` inside it, through `launcher.Run`.
+Both Goose launches write their stdout and stderr to ChairLift's own stderr,
+so a Goose that fails to start (#544) leaves its reason in the same journal
+stream as ChairLift's log rather than in `/dev/null`.
 Launch lifetime is detached from the short preflight context; asynchronous
 failures return through the GTK thread. When Goose is already running in the
 profile, Launch starts `goose-desktop` there directly instead; Goose's

@@ -3,6 +3,7 @@ package troubleshoot
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -415,6 +416,27 @@ func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 	}
 	if _, err := Command(ready, ProfileAt("/data"), ""); err == nil {
 		t.Error("Command succeeded with no model")
+	}
+}
+
+// Goose's own output is the only place a failed start says why (#544: Mesa
+// and Electron errors on a VM without 3D acceleration). Both launches must
+// hand it to ChairLift's stderr, which the session journals, not /dev/null.
+func TestLaunchCommandsKeepGooseOutput(t *testing.T) {
+	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
+	profile := ProfileAt("/data")
+	fresh, err := Command(state, profile, "bluefin-active")
+	if err != nil {
+		t.Fatalf("Command: %v", err)
+	}
+	reopen, err := ReopenCommand(state, profile)
+	if err != nil {
+		t.Fatalf("ReopenCommand: %v", err)
+	}
+	for name, cmd := range map[string]*exec.Cmd{"Command": fresh, "ReopenCommand": reopen} {
+		if cmd.Stdout != os.Stderr || cmd.Stderr != os.Stderr {
+			t.Errorf("%s output = (%v, %v), want both os.Stderr", name, cmd.Stdout, cmd.Stderr)
+		}
 	}
 }
 
