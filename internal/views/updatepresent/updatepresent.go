@@ -217,6 +217,17 @@ func RecheckForPreferences(snapshot updateflow.Snapshot, preferences userprefs.V
 	return snapshot.Phase == updateflow.PhaseChecking || snapshot.StaleFor(preferences)
 }
 
+// RecheckAfterCheck reports whether a check that has just returned left the
+// shell describing preferences other than the current ones, so the shell
+// must check again. A preference changed while that check was in flight is
+// otherwise only noticed by a manual Refresh. A snapshot still in
+// PhaseChecking belongs to a newer check, which already started from the
+// current preferences, so it never asks for another: asking would supersede
+// that check and loop for as long as checks overlap.
+func RecheckAfterCheck(snapshot updateflow.Snapshot, preferences userprefs.Values) bool {
+	return snapshot.Phase != updateflow.PhaseChecking && snapshot.StaleFor(preferences)
+}
+
 // PrimaryActionEnabled reports whether the page-level primary action button
 // (check, update all, or retry failed) should be sensitive. Restarting is not
 // a primary action: it lives on the Operating system row (#439). The action

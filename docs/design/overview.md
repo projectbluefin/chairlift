@@ -774,7 +774,12 @@ snapshot on screen no longer matches (`Snapshot.StaleFor`) or a check started
 from older preferences is still in flight. The shell never flips a row
 itself: enablement stays the coordinator's, and a source the user just turned
 on has to be checked anyway. A mutation in flight refuses the check, so
-`finishMutation` asks again once the run ends.
+`finishMutation` asks again once the run ends. Every check also ends with
+`UpdateShell.checkFinished`, which starts another when
+`updatepresent.RecheckAfterCheck` finds the finished snapshot stale for the
+current preferences, so a change made while a check ran is never left until
+a manual Refresh; a snapshot still in `PhaseChecking` belongs to a newer
+check and is left alone.
 
 Everything else the Updates page owns is built by `buildUpdatesPage` into
 `UserHome.updatesPrefsPage`; `Window.buildContentArea` mounts it below the

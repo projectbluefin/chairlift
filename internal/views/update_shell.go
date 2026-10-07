@@ -234,7 +234,21 @@ func (s *UpdateShell) StartCheck() {
 	go func() {
 		defer cancel()
 		s.coordinator.Check(ctx, preferences, policy, s.publish)
+		// Queued after the check's last publish, so it sees that snapshot.
+		sgtk.RunOnMainThread(s.checkFinished)
 	}()
+}
+
+// checkFinished runs on the GTK main thread once a check returns. The check
+// captured the preferences it started from; one changed while it ran left
+// the rows describing the old ones (W3-15).
+func (s *UpdateShell) checkFinished() {
+	if s == nil || s.closed.Load() {
+		return
+	}
+	if updatepresent.RecheckAfterCheck(s.snapshot, s.currentPreferences()) {
+		s.StartCheck()
+	}
 }
 
 // PreferencesChanged runs on the GTK main thread when an update-source
