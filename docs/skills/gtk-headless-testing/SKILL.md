@@ -230,6 +230,12 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   fake first on `PATH`.
 - **A skipping gate proves nothing.** Before the E2E job installed the stack,
   the suite skipped in CI and a real failure on `main` went unnoticed.
+- **Assert a control's own name, not `label_text`.** `label_text` falls back
+  to descendant text, so a button that publishes an empty accessible name
+  still passes. On GTK 4.24 a button built with `gtk_button_new_with_label`
+  and then given another child (`SetChild`) reports an empty name even with
+  an explicit `LABEL` property; build such buttons with `gtk.NewButton()`
+  (#508, every Apps collection Install button).
 
 **Learned from:** #366/#375 (turning the probe on in CI) and #357's Wave 0,
 which replaced the one-probe-per-feature TSV harness — every community PR
