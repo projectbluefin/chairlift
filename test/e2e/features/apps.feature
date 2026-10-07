@@ -148,7 +148,8 @@ Feature: Apps destination
   Scenario: Exporting the package list is previewed and writes nothing
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Export" button in the "Export package list" row
+    Then the "Export package list" row says "Replaces any Brewfile already there."
+    When I click the "Export" button in the "Export package list" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle dump --file="
     And the application log contains "/home/Brewfile --force"
     And the "Export" button in the "Export package list" row is sensitive

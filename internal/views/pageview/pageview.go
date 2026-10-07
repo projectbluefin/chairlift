@@ -36,6 +36,12 @@ func HomebrewPackage(name, version string, pinned bool) Row {
 	return Row{Title: name, Subtitle: subtitle}
 }
 
+// PackageListExportSubtitle describes the Apps page's package-list export.
+// The export writes Brewfile in the home folder with --force, so it replaces
+// any Brewfile there — one the person wrote by hand as much as an earlier
+// export — and the subtitle names the file so that person can tell.
+const PackageListExportSubtitle = "Saves everything you installed here to a file named Brewfile in your home folder, so you can put it back later. Replaces any Brewfile already there."
+
 // UntrustedTap returns the row text for a software source whose updates
 // Homebrew has paused. The source is named, because a person cannot decide
 // to trust something they cannot identify, and the count stands in for the

@@ -110,7 +110,8 @@ first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
 external catalog launcher, or package search here.
 
 Finally, **Packages from Homebrew** contains **Export package list**, which
-saves a Brewfile so you can restore your Homebrew packages on another machine.
+saves a Brewfile in your home folder, replacing any Brewfile already there, so
+you can restore your Homebrew packages on another machine.
 Export shows **Exporting…** and an activity spinner until it finishes, then
 becomes available again, including after a failed export.
 
