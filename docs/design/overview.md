@@ -757,14 +757,19 @@ is reached only when a source reports that a restart is required — the OS
 provider reads it from `bootc status`'s staged deployment, because staging an
 already-current system succeeds without staging anything (on composefs
 `bootc.StageUpdate` answers from the registry and skips the script, whose
-`bootc upgrade` fails on a current system) — and the
-status panel clears its title, description, banner, and primary button.
-`Presentation.ShowStatus` then hides the empty `AdwStatusPage` entirely:
-clearing text alone retains its internal padding. The shell uses 12px
-content spacing and a 12px top margin, with phase announcements sent from
-the visible toast overlay so hiding the panel does not silence a staged
-deployment. The wordmark leads straight into "System updates". The Operating
-system row carries the message instead: its subtitle reads "Deployment
+`bootc upgrade` fails on a current system) — and the header offers no
+primary button; its one status line reads "Restart to finish updating".
+The header is a plain box built once in `UpdateShell.build`: the wordmark,
+then the primary action (or, while checking or installing, the pulsing
+progress bar in its place), then one status line from
+`updatepresent.Presentation.Status`, with a second `Detail` line only for
+the two failure phases. `Presentation.ShowStatus` hides the header box
+whenever a presentation leaves it empty, so it adds no spacing. The shell
+uses 12px content spacing and a 12px top margin, and announces each phase's
+status line from the visible toast overlay. The status line carries the
+accessible description "Update status", which tells it apart from a source
+row with the same words. The Operating
+system row carries the action: its subtitle reads "Deployment
 staged" and a "Restart now" suffix calls `UpdateShell.StartRestart`, which
 sends `ublue.Restart` through the `chairlift-helper` `restart` subcommand.
 Its argv is the fixed `systemctl reboot` (`ubluehelper.RestartArgs`) with no

@@ -339,39 +339,6 @@ func TestOperatingSystemRowOwnsRestartButton(t *testing.T) {
 	}
 }
 
-// The page-level status panel clears when a deployment is staged (#439);
-// the row carries the message instead of the status page. updatepresent's
-// restart case must leave the panel's title, description, and banner empty
-// so the wordmark leads into the source groups, keeping only the
-// announcement a screen reader needs.
-func TestPhaseRestartRequiredClearsStatusPanel(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	source, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "updatepresent", "updatepresent.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(source)
-	if !strings.Contains(text, "case updateflow.PhaseRestartRequired:") {
-		t.Fatal("PhaseRestartRequired case missing from updatepresent")
-	}
-	// The restart case must not advertise a title, description, or banner
-	// above the wordmark; if any of these strings return the OS row carries
-	// the message and the panel stays blank.
-	for _, banned := range []string{
-		`Title: gotext.Get("Restart required")`,
-		`Description: gotext.Get("Restart to finish installing updates.")`,
-		`Banner:      gotext.Get("Restart required")`,
-		`ActionStyle = "destructive-action"`,
-	} {
-		if strings.Contains(text, banned) {
-			t.Errorf("PhaseRestartRequired still renders %q in the status panel", banned)
-		}
-	}
-}
-
 // The Roll Back heading belongs to the rollback row alone (#490). It used to
 // share a group with Return to stream and Published versions, so a host with
 // no previous deployment hid the row and left the heading standing over

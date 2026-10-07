@@ -332,13 +332,15 @@ Assert that opening the page and toggling in dry-run never execute `enable` or
 provider. A successful CLI exit alone is not proof of changed GNOME state, so
 production handlers must reload and compare before confirming the switch.
 
-## Empty status panels and announcements
+## Empty status headers and announcements
 
-For compact layouts, hide an empty `AdwStatusPage`; clearing its strings
-leaves internal padding in the allocation. Keep visibility decisions in the
-pure presenter and retain panels with an action or active progress. Emit
-phase announcements from a widget that stays mapped, such as the shell's
-toast overlay, rather than the panel being hidden.
+Keep status-header visibility decisions in the pure presenter, hide a header
+box that has nothing to show rather than only clearing its strings, and retain
+it with an action or active progress. (An `AdwStatusPage` is worse still:
+clearing its strings leaves its internal padding allocated.) Emit phase
+announcements from a widget that stays mapped, such as the shell's toast
+overlay. When a status line can repeat a row's words ("Up to date"), give it
+an accessible description and find it by that in the suite, not by text.
 
 A staged-deployment fixture needs both a fake `bootc status` with a non-null
 staged entry and the fixed stage-helper marker. The Dakota AT-SPI container

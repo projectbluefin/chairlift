@@ -53,7 +53,9 @@ type UpdateShell struct {
 	closeBlocked        bool
 	toolbarView         *adw.ToolbarView
 	toastOverlay        *adw.ToastOverlay
-	statusPage          *adw.StatusPage
+	header              *gtk.Box
+	statusLine          *gtk.Label
+	statusDetail        *gtk.Label
 	refresh             *gtk.Button
 	primary             *gtk.Button
 	progress            *gtk.ProgressBar
@@ -194,13 +196,11 @@ func unclampPreferencesPage(widget *gtk.Widget) {
 // growWithContent stops a widget that scrolls internally from doing so, so
 // it reports its content's full height instead of a scroller's small minimum.
 //
-// AdwStatusPage and AdwPreferencesPage are each built around a GtkScrolledWindow
-// as their only child. Nested in this shell's own scroller, both were
-// allocated that scroller-sized minimum once the preferences page was mounted
-// below the sources: the status page's title and description were clipped
-// away while its icon was cut in half, and the page scrolled inside the page.
-// The outer scroller alone scrolls the destination. Any other child shape is
-// left untouched.
+// AdwPreferencesPage is built around a GtkScrolledWindow as its only child.
+// Nested in this shell's own scroller, it was allocated that scroller-sized
+// minimum once mounted below the sources, and the page scrolled inside the
+// page. The outer scroller alone scrolls the destination. Any other child
+// shape is left untouched.
 func growWithContent(widget *gtk.Widget) {
 	child := widget.GetFirstChild()
 	if child == nil || child.GetCssName() != "scrolledwindow" {
@@ -535,9 +535,10 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 	}
 
 	presentation := updatepresent.Snapshot(snapshot)
-	s.statusPage.SetTitle(presentation.Title)
-	s.statusPage.SetDescription(presentation.Description)
-	s.statusPage.SetVisible(presentation.ShowStatus(snapshot.Phase))
+	s.statusLine.SetLabel(presentation.Status)
+	s.statusDetail.SetLabel(presentation.Detail)
+	s.statusDetail.SetVisible(presentation.Detail != "")
+	s.header.SetVisible(presentation.ShowStatus(snapshot.Phase))
 	s.renderPrimaryAction(presentation)
 	s.renderProgress(snapshot)
 	if s.refresh != nil {
@@ -548,15 +549,14 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 		s.banner.SetRevealed(true)
 	} else {
 		s.closeBlocked = false
-		s.banner.SetTitle(presentation.Banner)
-		s.banner.SetRevealed(presentation.Banner != "")
+		s.banner.SetRevealed(false)
 	}
 	s.renderSources(snapshot.Sources)
 	if s.toasts != nil {
 		s.toasts.SetUpdateBadge(snapshot.TotalUpdates)
 	}
 	if !s.havePhase || s.lastPhase != snapshot.Phase {
-		s.toastOverlay.Announce(presentation.Announce(), gtk.AccessibleAnnouncementPriorityMediumValue)
+		s.toastOverlay.Announce(presentation.Status, gtk.AccessibleAnnouncementPriorityMediumValue)
 		s.lastPhase = snapshot.Phase
 		s.havePhase = true
 	}
@@ -634,14 +634,16 @@ func (s *UpdateShell) build() {
 		s.themeHandler = s.styleManager.ConnectNotify(&changed)
 	}
 
-	s.statusPage = adw.NewStatusPage()
-	s.statusPage.SetVexpand(false)
-	s.statusPage.AddCssClass("compact")
-	controls := gtk.NewBox(gtk.OrientationVerticalValue, 12)
-	controls.SetHalign(gtk.AlignCenterValue)
+	// The header reads wordmark → primary action → one line of status, so
+	// the action sits directly under the wordmark and the supporting text
+	// under the action. While checking or updating there is no action and
+	// the progress bar takes its place.
+	s.header = gtk.NewBox(gtk.OrientationVerticalValue, 6)
+	s.header.SetHalign(gtk.AlignCenterValue)
 
 	s.primary = gtk.NewButtonWithLabel("")
 	s.primary.AddCssClass("pill")
+	s.primary.SetHalign(gtk.AlignCenterValue)
 	s.primary.SetVisible(false)
 	primaryClicked := func(_ gtk.Button) {
 		// The primary never starts a restart: the Operating system row owns
@@ -654,16 +656,30 @@ func (s *UpdateShell) build() {
 		}
 	}
 	s.primary.ConnectClicked(&primaryClicked)
-	controls.Append(&s.primary.Widget)
+	s.header.Append(&s.primary.Widget)
 
 	s.progress = gtk.NewProgressBar()
 	s.progress.SetShowText(false)
 	s.progress.SetVisible(false)
-	s.progress.SetHexpand(true)
-	controls.Append(&s.progress.Widget)
-	s.statusPage.SetChild(&controls.Widget)
-	growWithContent(&s.statusPage.Widget)
-	content.Append(&s.statusPage.Widget)
+	s.progress.SetSizeRequest(240, -1)
+	s.header.Append(&s.progress.Widget)
+
+	s.statusLine = gtk.NewLabel("")
+	s.statusLine.SetWrap(true)
+	s.statusLine.SetJustify(gtk.JustifyCenterValue)
+	// A stable description lets assistive technology, and the AT-SPI
+	// suite, tell the status line apart from a source row saying the same.
+	s.statusLine.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, "Update status", -1)
+	s.header.Append(&s.statusLine.Widget)
+
+	s.statusDetail = gtk.NewLabel("")
+	s.statusDetail.SetWrap(true)
+	s.statusDetail.SetJustify(gtk.JustifyCenterValue)
+	s.statusDetail.AddCssClass("caption")
+	s.statusDetail.AddCssClass("dim-label")
+	s.statusDetail.SetVisible(false)
+	s.header.Append(&s.statusDetail.Widget)
+	content.Append(&s.header.Widget)
 
 	s.banner = adw.NewBanner("")
 	s.banner.SetRevealed(false)

@@ -1,8 +1,9 @@
 """Steps for the Updates destination (updates.feature).
 
 The destination is the status-first update shell (internal/views/
-update_shell.go): a status page whose title, description, and one primary
-action come from internal/views/updatepresent, and one row per update source.
+update_shell.go): a header of wordmark, primary action, and one status line
+(plus a detail line for failures), whose text comes from
+internal/views/updatepresent, and one row per update source.
 The fake tools behind these steps live in fixtures/stubs_updates.py.
 """
 
@@ -25,33 +26,54 @@ def text_present(root, wanted, exact=False):
     return any((value == wanted) if exact else (wanted in value) for value in atspi.all_text_under(root))
 
 
-# Every title updatepresent.Snapshot can give the status page. Exactly one is
-# on screen at a time, so asserting one also asserts no stale phase remains.
-# A staged deployment no longer titles the status panel (#439) — the
-# Operating system row carries the message — so "Restart required" is not
-# a phase title here; "Deployment staged" lives on that row.
-PHASE_TITLES = (
-    "Checking for updates",
-    "Updates available",
-    "System is up to date",
-    "Unable to check for updates",
-    "Installing updates",
-    "Some updates could not be installed",
-)
+# The status line carries this accessible description (update_shell.go), which
+# is how it is told apart from a source row saying the same words, such as
+# "Up to date" or "Checking for updates…".
+STATUS_DESCRIPTION = "Update status"
 
 # Every label updatepresent gives the primary action.
 PRIMARY_LABELS = ("Check again", "Update all", "Try again", "Retry failed")
 
 
-def _shown_phase_titles(context):
-    return [title for title in PHASE_TITLES if text_present(content(context), title, exact=True)]
+def _status_nodes(context):
+    return atspi.find_all(content(context), lambda n: atspi.description(n) == STATUS_DESCRIPTION)
 
 
-@step('the Updates status reads "{title}"')
-def step_status_reads(context, title):
-    assert title in PHASE_TITLES, f"{title!r} is not a status title updatepresent can show"
-    ok = atspi.poll(lambda: _shown_phase_titles(context) == [title])
-    assert ok, f"status titles on screen are {_shown_phase_titles(context)}, want only {title!r}"
+def _status_line(context):
+    """The one status line on screen, or None when there is not exactly one."""
+    nodes = _status_nodes(context)
+    if len(nodes) != 1:
+        return None
+    return atspi.name(nodes[0]) or atspi.text(nodes[0])
+
+
+@step('the Updates status reads "{line}"')
+def step_status_reads(context, line):
+    ok = atspi.poll(lambda: _status_line(context) == line)
+    assert ok, f"the Updates status reads {_status_line(context)!r}, want {line!r}"
+
+
+@step('the Updates status starts with "{prefix}"')
+def step_status_starts_with(context, prefix):
+    ok = atspi.poll(lambda: (_status_line(context) or "").startswith(prefix))
+    assert ok, f"the Updates status reads {_status_line(context)!r}, want it to start with {prefix!r}"
+
+
+@then("the Updates status sits directly under the primary action")
+def step_status_under_primary(context):
+    def ordered():
+        nodes = list(atspi.search_nodes(content(context)))
+        primary = [i for i, n in enumerate(nodes) if any(atspi.is_button(n, label) for label in PRIMARY_LABELS)]
+        status = [i for i, n in enumerate(nodes) if atspi.description(n) == STATUS_DESCRIPTION]
+        if len(primary) != 1 or len(status) != 1 or status[0] < primary[0]:
+            return False
+        # Only the primary's own label may stand between them: no title,
+        # description, or other text sits between the action and its status.
+        action = atspi.label_text(nodes[primary[0]])
+        between = nodes[primary[0] + 1 : status[0]]
+        return not any(atspi.role(n) == "label" and atspi.name(n) not in ("", action) for n in between)
+
+    assert atspi.poll(ordered), "the status line does not directly follow the primary action"
 
 
 @then("the Updates page offers no primary action")

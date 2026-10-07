@@ -1,7 +1,8 @@
 @updates @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman
 Feature: Updates
-  The Updates destination has one status and primary action, with visible
-  updates grouped by system consequences and apps/tools. Flatpak and Homebrew
+  The Updates destination leads with the wordmark, one primary action, and one
+  status line under it, with visible updates grouped by system consequences
+  and apps/tools. Flatpak and Homebrew
   are faked (fixtures/stubs_updates.py) so every source reports a known state.
   Most scenarios omit bootc-stage to keep the Operating system source unavailable.
   Staged-deployment scenarios enable it explicitly; the isolated container supplies
@@ -10,8 +11,8 @@ Feature: Updates
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: A pending Flatpak update is summarised per source
     Given ChairLift is running
-    Then the Updates status reads "Updates available"
-    And I see "1 update is available."
+    Then the Updates status reads "1 update available"
+    And the Updates status sits directly under the primary action
     And the Updates page offers only the "Update all" action
     And the "Update all" button is sensitive
     And the "Applications" row says "1 update available"
@@ -25,8 +26,8 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: With nothing pending the shell offers a fresh check
     Given ChairLift is running
-    Then the Updates status reads "System is up to date"
-    And I see "No updates are available. Last checked at"
+    Then the Updates status starts with "Up to date · checked at"
+    And the Updates status sits directly under the primary action
     And the Updates page offers only the "Check again" action
     And the "Applications" row says "Up to date"
     And the "Developer tools" row says "Up to date"
@@ -35,17 +36,17 @@ Feature: Updates
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman,bootc-stage
   @stub.updates-bootc-staged @stub.updates-flatpak-current @stub.updates-brew-current
-  Scenario: A staged deployment keeps restart in its row without an empty status panel
+  Scenario: A staged deployment keeps restart in its row and says so in one status line
     Given ChairLift is running
     Then the "Operating system" row says "Deployment staged"
     And the "Restart now" button in the "Operating system" row is sensitive
     And the Updates page offers no primary action
+    And the Updates status reads "Restart to finish updating"
     And I do not see "Restart required"
-    And I do not see "Restart to finish installing updates."
     And the Updates progress bar is hidden
     When Flatpak now offers an update for Firefox
     And I click the "Refresh" button
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available · restart needed"
     And the Updates page offers only the "Update all" action
     And the "Operating system" row says "Deployment staged"
     And the "Restart now" button in the "Operating system" row is sensitive
@@ -53,12 +54,12 @@ Feature: Updates
   @stub.updates-flatpak-slow-check @stub.updates-brew-current
   Scenario: The shell reports the check while it runs, then its result
     Given ChairLift is running
-    Then the Updates status reads "Checking for updates"
+    Then the Updates status reads "Checking for updates…"
     And the Updates progress bar is shown
     And the "Applications" row says "Checking for updates…"
     And the Updates page offers no primary action
     When the Flatpak update check is allowed to finish
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
     And the Updates progress bar is hidden
     And the "Update all" button is sensitive
@@ -66,13 +67,13 @@ Feature: Updates
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
   Scenario: A failed check is reported and can be retried
     Given ChairLift is running
-    Then the Updates status reads "Unable to check for updates"
+    Then the Updates status reads "Couldn't check for updates"
     And I see "Unable to load summary from remote flathub"
     And the "Applications" row says "Check failed:"
     And the Updates page offers only the "Try again" action
     When the Flatpak remote is reachable again
     And I click the "Try again" button
-    Then the Updates status reads "System is up to date"
+    Then the Updates status starts with "Up to date · checked at"
     And the "Applications" row says "Up to date"
     And the Updates page offers only the "Check again" action
 
@@ -97,11 +98,11 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario Outline: <control> discovers an update that appeared after the first check
     Given ChairLift is running
-    Then the Updates status reads "System is up to date"
+    Then the Updates status starts with "Up to date"
     And the Updates sidebar row shows no badge
     When Flatpak now offers an update for Firefox
     And I click the "<control>" button
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
     And the "Firefox" row says "Available: 131.0"
     And the Updates sidebar badge shows "1"
@@ -114,12 +115,12 @@ Feature: Updates
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Update all previews only the sources with updates and keeps them pending
     Given ChairLift is running
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available"
     When I click the "Update all" button
     Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user"
     And the "Update all" button is sensitive
     And the "Refresh" button is sensitive
-    And the Updates status reads "Updates available"
+    And the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
     And the application log does not contain "flatpak update -y --system"
     And the application log does not contain "Would execute: brew update"
@@ -130,7 +131,7 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-one-outdated
   Scenario: Update all previews a Homebrew refresh and upgrade without running brew
     Given ChairLift is running
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available"
     And the "Developer tools" row says "1 update available"
     And the "jq" row says "Installed: 1.7.1"
     When I click the "Update all" button
@@ -146,7 +147,7 @@ Feature: Updates
   @config.updates-no-flatpak @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: An administrator-disabled source is never checked
     Given ChairLift is running
-    Then the Updates status reads "System is up to date"
+    Then the Updates status starts with "Up to date"
     And the "Applications" row says "Disabled by administrator"
     And the "Developer tools" row says "Up to date"
     And the Updates sidebar row shows no badge

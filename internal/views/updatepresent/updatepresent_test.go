@@ -4,6 +4,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,18 +22,14 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			state: updateflow.Snapshot{
 				Phase: updateflow.PhaseIdle,
 			},
-			want: Presentation{Title: "Checking for updates",
-				Description: "Preparing to check for updates…"},
+			want: Presentation{Status: "Checking for updates…"},
 		},
 		{
 			name: "checking",
 			state: updateflow.Snapshot{
-				Phase:    updateflow.PhaseChecking,
-				Current:  updateflow.Applications,
-				Progress: "Loading application updates…",
+				Phase: updateflow.PhaseChecking,
 			},
-			want: Presentation{Title: "Checking for updates",
-				Description: "Applications: Loading application updates…"},
+			want: Presentation{Status: "Checking for updates…"},
 		},
 		{
 			name: "up to date",
@@ -40,8 +37,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionCheck,
 			},
-			want: Presentation{Title: "System is up to date",
-				Description: "No updates are available.",
+			want: Presentation{Status: "Up to date",
 				ActionLabel: "Check again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -52,8 +48,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Phase:  updateflow.PhaseReady,
 				Action: updateflow.ActionNone,
 			},
-			want: Presentation{Title: "System is up to date",
-				Description: "No update sources are available."},
+			want: Presentation{Status: "Nothing to update on this computer"},
 		},
 		{
 			name: "updates available",
@@ -74,8 +69,22 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				TotalUpdates: 2,
 			},
-			want: Presentation{Title: "Updates available",
-				Description: "2 updates are available.",
+			want: Presentation{Status: "2 updates available",
+				ActionLabel: "Update all",
+				ShowAction:  true,
+				ActionStyle: "suggested-action"},
+		},
+		{
+			name: "updates available with a staged deployment",
+			state: updateflow.Snapshot{
+				Phase:  updateflow.PhaseReady,
+				Action: updateflow.ActionUpdateAll,
+				Sources: []updateflow.SourceState{
+					{ID: updateflow.OperatingSystem, RestartRequired: true},
+				},
+				TotalUpdates: 1,
+			},
+			want: Presentation{Status: "1 update available · restart needed",
 				ActionLabel: "Update all",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -92,22 +101,28 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			want: Presentation{Title: "Unable to check for updates",
-				Description: "Developer tools: network unavailable",
+			want: Presentation{Status: "Couldn't check for updates",
+				Detail:      "Developer tools: network unavailable",
 				ActionLabel: "Try again",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Unable to check for updates"},
+				ActionStyle: "suggested-action"},
 		},
 		{
-			name: "updating",
+			name: "updating with provider progress",
 			state: updateflow.Snapshot{
 				Phase:    updateflow.PhaseUpdating,
 				Current:  updateflow.DeveloperTools,
 				Progress: "Installing packages…",
 			},
-			want: Presentation{Title: "Installing updates",
-				Description: "Developer tools: Installing packages…"},
+			want: Presentation{Status: "Developer tools: Installing packages…"},
+		},
+		{
+			name: "updating without provider progress",
+			state: updateflow.Snapshot{
+				Phase:   updateflow.PhaseUpdating,
+				Current: updateflow.Applications,
+			},
+			want: Presentation{Status: "Applications: installing updates…"},
 		},
 		{
 			name: "partial failure",
@@ -127,12 +142,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					{ID: updateflow.OperatingSystem, ApplyErr: errors.New("staging failed")},
 				},
 			},
-			want: Presentation{Title: "Some updates could not be installed",
-				Description: "1 source completed; 2 sources failed.",
+			want: Presentation{Status: "Some updates didn't install",
+				Detail:      "Not updated: Developer tools, Operating system",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Some updates could not be installed"},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "maintenance failure",
@@ -144,12 +158,11 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				MaintenanceErr: errors.New("cleanup failed"),
 			},
-			want: Presentation{Title: "Some updates could not be installed",
-				Description: "Updates completed, but maintenance failed: cleanup failed",
+			want: Presentation{Status: "Updates installed, but cleanup failed",
+				Detail:      "cleanup failed",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
-				ActionStyle: "suggested-action",
-				Banner:      "Maintenance failed"},
+				ActionStyle: "suggested-action"},
 		},
 		{
 			name: "restart required",
@@ -162,12 +175,10 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					},
 				},
 			},
-			// The restart state lives on the Operating system row, not on
-			// the page-level status panel; the panel clears so the wordmark
-			// leads straight into the "System updates" group. Only the
-			// announcement survives, so a screen reader still reports the
-			// pending reboot.
-			want: Presentation{Announcement: "Deployment staged"},
+			// The restart action stays on the Operating system row (#439):
+			// the header offers no primary action, only the line saying
+			// what is left to do.
+			want: Presentation{Status: "Restart to finish updating"},
 		},
 	}
 
@@ -348,8 +359,8 @@ func TestSnapshotUsesSingularUpdateText(t *testing.T) {
 		Action:       updateflow.ActionUpdateAll,
 		TotalUpdates: 1,
 	})
-	if got.Description != "1 update is available." {
-		t.Fatalf("Snapshot() description = %q, want %q", got.Description, "1 update is available.")
+	if got.Status != "1 update available" {
+		t.Fatalf("Snapshot() status = %q, want %q", got.Status, "1 update available")
 	}
 }
 
@@ -359,8 +370,8 @@ func TestSnapshotShowsLastCheckedTimeWhenCurrent(t *testing.T) {
 		Action:      updateflow.ActionCheck,
 		LastChecked: time.Date(2026, 9, 7, 14, 5, 0, 0, time.UTC),
 	})
-	if got.Description != "No updates are available. Last checked at 14:05." {
-		t.Fatalf("Snapshot() description = %q, want %q", got.Description, "No updates are available. Last checked at 14:05.")
+	if !strings.HasPrefix(got.Status, "Up to date") || !strings.Contains(got.Status, "14:05") {
+		t.Fatalf("Snapshot() status = %q, want it to say up to date and name 14:05", got.Status)
 	}
 }
 
@@ -498,46 +509,78 @@ func TestSourceItemTitleUsesIdentityOnlyWhenNameIsMissing(t *testing.T) {
 	}
 }
 
-// A phase change announces to screen readers, so no phase may map to empty
-// announcement text. PhaseRestartRequired clears the status panel's title,
-// which would otherwise announce "" and leave a pending reboot silent.
-func TestEveryPhaseAnnouncesSomething(t *testing.T) {
-	for _, phase := range []updateflow.Phase{
-		updateflow.PhaseIdle,
-		updateflow.PhaseChecking,
-		updateflow.PhaseReady,
-		updateflow.PhaseCheckFailed,
-		updateflow.PhaseUpdating,
-		updateflow.PhasePartialFailure,
-		updateflow.PhaseRestartRequired,
-	} {
-		if got := Snapshot(updateflow.Snapshot{Phase: phase}).Announce(); got == "" {
-			t.Errorf("Snapshot(%v).Announce() is empty; a phase change would announce nothing", phase)
+var everyPhase = []updateflow.Phase{
+	updateflow.PhaseIdle,
+	updateflow.PhaseChecking,
+	updateflow.PhaseReady,
+	updateflow.PhaseCheckFailed,
+	updateflow.PhaseUpdating,
+	updateflow.PhasePartialFailure,
+	updateflow.PhaseRestartRequired,
+}
+
+// The header is wordmark → action → one line. Every phase announces its
+// status line to screen readers on a change, so no phase may leave it
+// empty, and it must stay one line: a newline would turn the compact
+// header back into a title and a description.
+func TestEveryPhaseHasOneStatusLine(t *testing.T) {
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{Phase: phase})
+		if got.Status == "" {
+			t.Errorf("Snapshot(%v).Status is empty; the phase change would announce nothing", phase)
+		}
+		if strings.Contains(got.Status, "\n") {
+			t.Errorf("Snapshot(%v).Status = %q spans more than one line", phase, got.Status)
 		}
 	}
 }
 
-func TestAnnouncePrefersTitleWhenThePanelHasOne(t *testing.T) {
-	if got := (Presentation{Title: "Updates available"}).Announce(); got != "Updates available" {
-		t.Fatalf("Announce() = %q, want the title", got)
-	}
-	if got := (Presentation{Title: "Updates available", Announcement: "Deployment staged"}).Announce(); got != "Deployment staged" {
-		t.Fatalf("Announce() = %q, want the explicit announcement", got)
+// Only failures may add a second line; the normal states are one line.
+func TestOnlyFailuresAddADetailLine(t *testing.T) {
+	failure := errors.New("boom")
+	sources := []updateflow.SourceState{{ID: updateflow.Applications, CheckErr: failure, ApplyErr: failure}}
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{
+			Phase:         phase,
+			Sources:       sources,
+			FailedSources: []updateflow.SourceID{updateflow.Applications},
+		})
+		isFailure := phase == updateflow.PhaseCheckFailed || phase == updateflow.PhasePartialFailure
+		if isFailure && got.Detail == "" {
+			t.Errorf("Snapshot(%v) names no failure in its detail line", phase)
+		}
+		if !isFailure && got.Detail != "" {
+			t.Errorf("Snapshot(%v).Detail = %q, want a single status line", phase, got.Detail)
+		}
 	}
 }
 
-func TestStatusPanelKeepsVisibleContent(t *testing.T) {
+// The restart lives on the Operating system row (#439); the header must not
+// grow a restart, destructive, or any other primary action for it.
+func TestRestartRequiredLeavesTheActionOnTheRow(t *testing.T) {
+	got := Snapshot(updateflow.Snapshot{
+		Phase:   updateflow.PhaseRestartRequired,
+		Action:  updateflow.ActionNone,
+		Sources: []updateflow.SourceState{{ID: updateflow.OperatingSystem, RestartRequired: true}},
+	})
+	if got.ShowAction || got.ActionLabel != "" || got.ActionStyle != "" {
+		t.Fatalf("restart phase offers a primary action: %#v", got)
+	}
+	if !strings.Contains(strings.ToLower(got.Status), "restart") {
+		t.Fatalf("restart phase status = %q, want it to say a restart is needed", got.Status)
+	}
+}
+
+func TestStatusHeaderKeepsVisibleContent(t *testing.T) {
 	tests := []struct {
 		name         string
 		presentation Presentation
 		phase        updateflow.Phase
 		want         bool
 	}{
-		{name: "empty panel", phase: updateflow.PhaseReady},
-		{name: "announcement only", presentation: Presentation{Announcement: "Deployment staged"}, phase: updateflow.PhaseRestartRequired},
-		{name: "banner outside panel", presentation: Presentation{Banner: "Check failed"}, phase: updateflow.PhaseCheckFailed},
-		{name: "title", presentation: Presentation{Title: "Updates available"}, phase: updateflow.PhaseReady, want: true},
-		{name: "description", presentation: Presentation{Description: "Permission denied"}, phase: updateflow.PhaseCheckFailed, want: true},
+		{name: "empty header", phase: updateflow.PhaseReady},
+		{name: "status", presentation: Presentation{Status: "Up to date"}, phase: updateflow.PhaseReady, want: true},
+		{name: "detail", presentation: Presentation{Detail: "Permission denied"}, phase: updateflow.PhaseCheckFailed, want: true},
 		{name: "action", presentation: Presentation{ShowAction: true}, phase: updateflow.PhaseReady, want: true},
 		{name: "checking progress", phase: updateflow.PhaseChecking, want: true},
 		{name: "installing progress", phase: updateflow.PhaseUpdating, want: true},
@@ -551,24 +594,10 @@ func TestStatusPanelKeepsVisibleContent(t *testing.T) {
 	}
 }
 
-func TestStatusPanelReturnsAfterStagedDeployment(t *testing.T) {
-	for _, phase := range []updateflow.Phase{
-		updateflow.PhaseIdle,
-		updateflow.PhaseChecking,
-		updateflow.PhaseReady,
-		updateflow.PhaseCheckFailed,
-		updateflow.PhaseUpdating,
-		updateflow.PhasePartialFailure,
-	} {
-		staged := Snapshot(updateflow.Snapshot{Phase: updateflow.PhaseRestartRequired})
-		if staged.ShowStatus(updateflow.PhaseRestartRequired) {
-			t.Fatal("staged deployment leaves an empty status panel visible")
-		}
-		if staged.Announce() != "Deployment staged" {
-			t.Fatal("collapsing the staged panel drops the restart announcement")
-		}
+func TestEveryPhaseShowsTheHeader(t *testing.T) {
+	for _, phase := range everyPhase {
 		if !Snapshot(updateflow.Snapshot{Phase: phase}).ShowStatus(phase) {
-			t.Fatalf("phase %v stays hidden after leaving the staged state", phase)
+			t.Errorf("phase %v hides the status header", phase)
 		}
 	}
 }

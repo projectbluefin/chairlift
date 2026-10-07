@@ -110,7 +110,8 @@ a shared check. Do not add a second count or update-state owner in `UserHome`.
 [`updatepresent`](../../internal/views/updatepresent/updatepresent.go). It
 pulses one reusable GLib timer while checking/updating, independent of provider
 output, and removes the timer at idle/disposal. Its visible toast overlay
-announces phases. `Presentation.ShowStatus` hides the empty status panel.
+announces each phase's one status line, which sits under the primary action.
+`Presentation.ShowStatus` hides an empty header.
 `SetSecondaryContent` mounts the existing Updates preferences beneath the
 source rows; automatic updates, system version, unverified sources and
 Advanced channel/driver controls are not a second unreachable page.

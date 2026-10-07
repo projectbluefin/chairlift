@@ -282,8 +282,11 @@ An agent must not break these:
   executed scope are no longer listed post-apply, so newly appeared updates
   published between check and apply do not mark the run unchanged.
   `internal/views/updatepresent` is the equally pure presentation layer: it
-  maps one immutable snapshot to a title, description, banner, and action
-  label, so the shell's copy is testable on a headless host.
+  maps one immutable snapshot to one status line (plus a detail line only
+  for the two failure phases) and an action label, so the shell's copy is
+  testable on a headless host. The header reads wordmark → primary action
+  (or the progress bar in its place) → status line; do not reintroduce a
+  title and description between the wordmark and the action.
   `internal/views/update_shell.go` is widget wiring only — it holds no update
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
@@ -315,10 +318,11 @@ An agent must not break these:
   relies on when it installs the helpers. The run's only privileged surface of its own is
   `restart`, offered only from the Operating system row once the snapshot
   reaches `PhaseRestartRequired` (whose page-level action is
-  `updateflow.ActionNone`). The empty status panel is hidden through
-  `updatepresent.Presentation.ShowStatus`, not merely cleared, so its padding
-  does not separate the wordmark from "System updates". Phase announcements
-  come from the shell's visible toast overlay, never the hidden status page.
+  `updateflow.ActionNone`), where the header's one status line reads
+  "Restart to finish updating". A header with nothing to show is hidden
+  through `updatepresent.Presentation.ShowStatus`, not merely cleared, so it
+  adds no spacing. Phase announcements (each phase's status line) come from
+  the shell's visible toast overlay.
   The Operating system row carries a "Deployment staged" subtitle and a
   "Restart now" suffix that calls `UpdateShell.StartRestart` and in turn
   `ublue.Restart`. That

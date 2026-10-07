@@ -30,26 +30,25 @@ this computer are skipped. The ordinary page controls perform every action;
 
 ![Updates](screenshots/1-updates.png)
 
-The Bluefin wordmark leads the page. **System updates** groups System
-components and Operating system; **Apps and tools** groups Applications and
-Developer tools. Each row shows its own state, so you can see which source
-is holding you up without opening anything. A source your administrator
-turned off says **Disabled by administrator**; one this computer has no
-software for says **Not available on this system** instead.
-
-Normally the page also reports **System is up to date**, or how many updates
-are waiting. When only a restart remains, that status panel disappears
-entirely, including its padding: the wordmark is followed directly by
-**System updates**, as shown above.
+The Bluefin wordmark leads the page, with the one action button directly
+under it and a single line of status under the button: **Up to date ·
+checked at** a time, how many updates are available, or **Restart to finish
+updating**. If something went wrong, a second line says what. **System
+updates** groups System components and Operating system; **Apps and tools**
+groups Applications and Developer tools. Each row shows its own state, so you
+can see which source is holding you up without opening anything. A source
+your administrator turned off says **Disabled by administrator**; one this
+computer has no software for says **Not available on this system** instead.
 
 One button covers all of them. It reads **Check again** when nothing is
 pending, **Update all** when something is, and **Retry failed** if a source
 didn't finish. A staged system version adds its own **Restart now** to the
-right of the **Operating system** row; the source that fails does not stop
-the others. A run long enough that you wandered off finishes with a desktop
-notification.
-While checking or installing, an animated activity bar stays moving even
-when the underlying tool has no new output. It does not claim a percentage.
+right of the **Operating system** row, so the header offers no button then;
+the source that fails does not stop the others. A run long enough that you
+wandered off finishes with a desktop notification.
+While checking or installing, an animated activity bar takes the button's
+place and stays moving even when the underlying tool has no new output. It
+does not claim a percentage.
 
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
