@@ -436,6 +436,10 @@ dispatcher. Enable, disable and update all accept a final `--dry-run`, which
 sets the library options' DryRun field. The GUI's preview normally suppresses
 pkexec entirely; helper-level preview is defense in depth and the installed
 accepted-command test surface. Successful helper results are JSON on stdout.
+A failed `update` writes one stderr line from
+`updexhelper.UpdateFailureDetail`: updex's generic error followed by every
+failed `feature/component: reason`, because updex records those only in its
+results and the helper's client has no warning reporter.
 
 [`featurestatus`](../../internal/views/featurestatus/featurestatus.go) owns
 the Features-page aggregation: **any** component update makes its feature

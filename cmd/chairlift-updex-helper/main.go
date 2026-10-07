@@ -36,7 +36,10 @@ func main() {
 		outputJSON(result, err)
 	case updexhelper.CommandUpdate:
 		results, err := client.UpdateFeatures(ctx, updexhelper.UpdateOptions(invocation.DryRun))
-		outputJSON(results, err)
+		if err != nil {
+			fatal(updexhelper.UpdateFailureDetail(results, err))
+		}
+		outputJSON(results, nil)
 	}
 }
 
