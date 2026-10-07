@@ -1,6 +1,9 @@
 package pageview
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -51,5 +54,47 @@ func TestAvatarCurrentRowPrecedence(t *testing.T) {
 	existing, none := AvatarCurrentRow(true, nil), AvatarCurrentRow(false, nil)
 	if existing == none {
 		t.Errorf("an existing picture and no picture must read differently, both %+v", existing)
+	}
+}
+
+// TestAvatarApplyNeedsArtworkAndNoApplyInFlight holds the chooser's Apply
+// rule. An apply that completes after the user picked another entry whose
+// download has not landed once re-enabled Apply unconditionally, offering a
+// button that silently did nothing.
+func TestAvatarApplyNeedsArtworkAndNoApplyInFlight(t *testing.T) {
+	tests := []struct {
+		applying, hasArtwork, want bool
+	}{
+		{false, true, true},
+		{false, false, false},
+		{true, true, false},
+		{true, false, false},
+	}
+	for _, tc := range tests {
+		if got := AvatarApplyEnabled(tc.applying, tc.hasArtwork); got != tc.want {
+			t.Errorf("AvatarApplyEnabled(applying=%v, hasArtwork=%v) = %v, want %v", tc.applying, tc.hasArtwork, got, tc.want)
+		}
+	}
+}
+
+// TestAvatarChooserDecidesApplyThroughOneRule holds every Apply sensitivity
+// change in profile_picture.go to AvatarApplyEnabled, so the completion that
+// once set it unconditionally cannot return.
+func TestAvatarChooserDecidesApplyThroughOneRule(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate avatar_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "profile_picture.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := strings.Count(string(data), "p.apply.SetSensitive(")
+	ruled := strings.Count(string(data), "p.apply.SetSensitive(pageview.AvatarApplyEnabled(")
+	if calls == 0 || calls != ruled {
+		t.Errorf("%d of %d Apply sensitivity changes bypass AvatarApplyEnabled", calls-ruled, calls)
+	}
+	if !strings.Contains(string(data), "pageview.AvatarApplyEnabled(false, p.png != nil)") {
+		t.Error("the apply completion no longer requires artwork before re-offering Apply")
 	}
 }

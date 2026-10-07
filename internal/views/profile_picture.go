@@ -228,7 +228,7 @@ func (uh *UserHome) previewAvatar(p *avatarPicker, index int) {
 	// bare nil interface would panic inside the binding.
 	p.preview.SetCustomImage((*gdk.PaintableBase)(nil))
 	p.banner.SetRevealed(false)
-	p.apply.SetSensitive(false)
+	p.apply.SetSensitive(pageview.AvatarApplyEnabled(p.applying.Running(), false))
 
 	generation := p.fetches.Begin()
 	go func() {
@@ -247,7 +247,7 @@ func (uh *UserHome) previewAvatar(p *avatarPicker, index int) {
 			}
 			p.png, p.texture = png, texture
 			p.preview.SetCustomImage(texture)
-			p.apply.SetSensitive(true)
+			p.apply.SetSensitive(pageview.AvatarApplyEnabled(p.applying.Running(), true))
 		})
 	}()
 }
@@ -277,13 +277,13 @@ func (uh *UserHome) applyAvatar(p *avatarPicker) {
 		return
 	}
 	entry, png, texture := *p.selected, p.png, p.texture
-	p.apply.SetSensitive(false)
+	p.apply.SetSensitive(pageview.AvatarApplyEnabled(p.applying.Running(), true))
 
 	go func() {
 		route, err := dispatchAvatar(entry, png)
 		sgtk.RunOnMainThread(func() {
 			p.applying.Reset()
-			p.apply.SetSensitive(true)
+			p.apply.SetSensitive(pageview.AvatarApplyEnabled(false, p.png != nil))
 			if err != nil {
 				log.Printf("avatar: applying %s: %v", entry.ID, err)
 				p.banner.SetTitle(pageview.AvatarApplyFailed(entry))
