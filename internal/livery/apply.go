@@ -881,7 +881,8 @@ func Clear(ctx context.Context, s Surface) error {
 // The panel's file name varies per selection, so overridePathsForSurface
 // cannot name them; removePanelIcons matches PanelIconPrefix instead. The
 // panel exists in one table only, and its theme is fixed, so the sweep is
-// desktop-independent for the same reason Clear is.
+// desktop-independent for the same reason Clear is. Turning the panel off
+// goes through RevertPanel, which restores the extension's settings first.
 func clearPanel(ctx context.Context) error {
 	spec, ok := surfaceFor(Panel, deskenv.GNOME)
 	if !ok {
@@ -919,6 +920,26 @@ func ClearPanelSettings(ctx context.Context, savedIcon, savedMode string) error 
 		return err
 	}
 	return ForgetPanelOverrides(ctx)
+}
+
+// RevertPanel turns the panel mark off: it restores the extension's settings
+// and only then removes ChairLift's mark files.
+//
+// The order is the point. Deleting the files first and then failing to
+// restore the settings — a timed-out or refused gsettings call — leaves the
+// extension naming a chairlift-livery-* icon that no longer exists, and the
+// top-bar menu renders blank while the section reads off. Restoring first
+// means a failure there keeps the mark drawn, and a failed sweep afterwards
+// leaves only an unreferenced file.
+//
+// restored reports whether ClearPanelSettings landed, which includes
+// forgetting the stored capture; a caller mirroring that capture in memory
+// must follow it even when the sweep then fails.
+func RevertPanel(ctx context.Context, savedIcon, savedMode string) (restored bool, err error) {
+	if err := ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {
+		return false, err
+	}
+	return true, clearPanel(ctx)
 }
 
 // ForgetPanelOverrides drops the recorded capture once it has been restored.
