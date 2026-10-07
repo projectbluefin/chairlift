@@ -65,13 +65,13 @@ Feature: Updates
     And the "Update all" button is sensitive
 
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
-  Scenario: A failed check is reported and can be retried
+  Scenario: A check that cannot reach the network is reported and can be retried
     Given ChairLift is running
     Then the Updates status reads "Couldn't check for updates"
     And I see "Not checked: Applications. Check your internet connection."
     And the "Applications" row says "Couldn't check for updates. Check your internet connection."
-    And I do not see "Unable to load summary from remote flathub"
-    And the application log contains "Unable to load summary from remote flathub"
+    And I do not see "Could not resolve hostname"
+    And the application log contains "Could not resolve hostname"
     And the Updates page offers only the "Try again" action
     When the Flatpak remote is reachable again
     And I click the "Try again" button
@@ -88,6 +88,17 @@ Feature: Updates
     And the "Applications" row says "1 update available"
     And the "Firefox" row says "Available: 131.0"
     And I do not see "Unable to load summary"
+
+  @stub.updates-flatpak-check-fails-locally @stub.updates-brew-current
+  Scenario: A check that fails for another reason does not blame the connection
+    Given ChairLift is running
+    Then the Updates status reads "Couldn't check for updates"
+    And I see "Not checked: Applications. Details are in the log."
+    And the "Applications" row says "Couldn't check for updates. Details are in the log."
+    And I do not see "Check your internet connection."
+    And I do not see "no summary signatures found"
+    And the application log contains "no summary signatures found"
+    And the Updates page offers only the "Try again" action
 
   @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
   Scenario: A failed source-trust check is not hidden as if every source were trusted

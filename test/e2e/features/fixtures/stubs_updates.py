@@ -164,9 +164,27 @@ def flatpak_slow_check(context):
 
 @stub("updates-flatpak-check-fails")
 def flatpak_check_fails(context):
-    """Flatpak whose update queries both fail, as with an unreachable remote."""
+    """Flatpak whose update queries both fail because the remote's host cannot be resolved."""
     for scope in ("user", "system"):
-        write_state(context, f"flatpak-remote-ls-{scope}.fail", "error: Unable to load summary from remote flathub\n")
+        write_state(
+            context,
+            f"flatpak-remote-ls-{scope}.fail",
+            "error: Unable to load summary from remote flathub: While fetching "
+            "https://dl.flathub.org/repo/summary.idx: [6] Could not resolve hostname\n",
+        )
+    _install_flatpak(context)
+
+
+@stub("updates-flatpak-check-fails-locally")
+def flatpak_check_fails_locally(context):
+    """Flatpak whose update queries both fail for a reason that is not the network."""
+    for scope in ("user", "system"):
+        write_state(
+            context,
+            f"flatpak-remote-ls-{scope}.fail",
+            "error: Unable to load summary from remote flathub: "
+            "GPG verification enabled, but no summary signatures found\n",
+        )
     _install_flatpak(context)
 
 

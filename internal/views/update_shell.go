@@ -326,7 +326,7 @@ func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflo
 		if errors.As(err, &trustErr) {
 			return trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable)
 		}
-		return fmt.Sprintf("Couldn't update %s. Try again later.", updatepresent.ItemTitle(item))
+		return fmt.Sprintf("Couldn't update %s. %s", updatepresent.ItemTitle(item), updatepresent.FailureHint(err))
 	}
 	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
 		return updateproviders.UpdateItem(ctx, source, item)
@@ -340,7 +340,9 @@ func (s *UpdateShell) startToolRefresh() {
 	}
 	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, updateproviders.RefreshDeveloperTools,
 		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"),
-		func(error) string { return "Couldn't check for new tool versions. Try again later." })
+		func(err error) string {
+			return "Couldn't check for new tool versions. " + updatepresent.FailureHint(err)
+		})
 }
 
 // startIndividualUpdate runs one row's update. A live change reports source

@@ -724,15 +724,22 @@ surface in three layers that must stay separate:
 - `internal/views/updatepresent` maps one snapshot to the shell's status
   line, failure detail line, and action label, and each source's row
   subtitle. Failures are said in plain words; the raw error is logged by the
-  coordinator where it is recorded, never shown. A source whose policy has
-  `Configured` false reads "Disabled by administrator"; one that is configured
-  but not `Available` — the provider's own `Available` probe says no, or
-  `Policy.Supported` is false because the capability floor cannot back it —
-  reads "Not available on this system". `ItemRows` decides which pending items
-  get a child row: the Operating system source's one pending item is its
-  deployment, so that source shows "Update available: <booted> → <new>" on its
-  own row and gets no child row repeating its name. The fold is keyed on the
-  source ID, never an item's name; every other source keeps one row per item,
+  coordinator where it is recorded, never shown. The sentence after a failure
+  comes from `updatepresent.FailureHint` and names a cause only when the
+  error shows one: "Check your internet connection." for a Go network error
+  or a tool message naming a failed connection (an unresolved host, a refused
+  or timed-out connection), "It took too long." for an exhausted deadline,
+  and otherwise "Details are in the log." — a local Flatpak, Homebrew, or
+  bootc failure is not told to check a connection it never used. The shell's
+  single-row update and tool-refresh failures use the same hint. A source
+  whose policy has `Configured` false reads "Disabled by administrator"; one
+  that is configured but not `Available` — the provider's own `Available`
+  probe says no, or `Policy.Supported` is false because the capability floor
+  cannot back it — reads "Not available on this system". `ItemRows` decides
+  which pending items get a child row: the Operating system source's one pending
+  item is its deployment, so that source shows "Update available: <booted> → <new>"
+  on its own row and gets no child row repeating its name. The fold is keyed on
+  the source ID, never an item's name; every other source keeps one row per item,
   because Applications and Developer tools carry each item's only Update button
   on that row.
 

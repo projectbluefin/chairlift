@@ -1,7 +1,10 @@
 package updatepresent
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
 	"reflect"
 	"slices"
 	"strings"
@@ -97,7 +100,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Sources: []updateflow.SourceState{
 					{
 						ID:       updateflow.DeveloperTools,
-						CheckErr: errors.New("network unavailable"),
+						CheckErr: errors.New("curl: (6) Could not resolve host: formulae.brew.sh"),
 					},
 				},
 			},
@@ -159,7 +162,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				MaintenanceErr: errors.New("cleanup failed"),
 			},
 			want: Presentation{Status: "Updates installed, but couldn't clean up",
-				Detail:      "Old files are still on this computer. Try again later.",
+				Detail:      "Old files are still on this computer. Details are in the log.",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -276,16 +279,28 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Deployment staged",
 		},
 		{
-			name: "check error",
+			name: "check error from the network",
 			state: updateflow.SourceState{
 				ID:         updateflow.DeveloperTools,
 				Configured: true,
 				Available:  true,
 				Enabled:    true,
-				CheckErr:   errors.New("offline"),
+				CheckErr:   &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("network is unreachable")},
 			},
 			title: "Developer tools",
 			sub:   "Couldn't check for updates. Check your internet connection.",
+		},
+		{
+			name: "check error that is not the network",
+			state: updateflow.SourceState{
+				ID:         updateflow.DeveloperTools,
+				Configured: true,
+				Available:  true,
+				Enabled:    true,
+				CheckErr:   errors.New("permission denied @ rb_sysopen - /home/linuxbrew/.linuxbrew/var"),
+			},
+			title: "Developer tools",
+			sub:   "Couldn't check for updates. Details are in the log.",
 		},
 		{
 			name: "apply error",
@@ -297,7 +312,19 @@ func TestSourceMapsSourceState(t *testing.T) {
 				ApplyErr:   errors.New("staging failed"),
 			},
 			title: "Operating system",
-			sub:   "Couldn't update. Try again later.",
+			sub:   "Couldn't update. Details are in the log.",
+		},
+		{
+			name: "apply error that timed out",
+			state: updateflow.SourceState{
+				ID:         updateflow.Applications,
+				Configured: true,
+				Available:  true,
+				Enabled:    true,
+				ApplyErr:   fmt.Errorf("flatpak update timed out: %w", context.DeadlineExceeded),
+			},
+			title: "Applications",
+			sub:   "Couldn't update. It took too long. Try again later.",
 		},
 	}
 
@@ -583,6 +610,83 @@ func TestRawErrorTextNeverReachesTheScreen(t *testing.T) {
 		if _, subtitle := Source(state); strings.Contains(subtitle, raw) || subtitle == "" {
 			t.Errorf("Source() subtitle = %q, want plain words without the raw error", subtitle)
 		}
+	}
+}
+
+// A failure is told to check the internet connection only when its error
+// shows the network was the cause; a local tool failure is not given a
+// remedy it may not need (it is pointed at the log, where the raw error is).
+func TestFailureHintNamesTheNetworkOnlyWhenTheErrorDoes(t *testing.T) {
+	const (
+		network = "Check your internet connection."
+		timeout = "It took too long. Try again later."
+		logged  = "Details are in the log."
+	)
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"Go dial error", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connect: network is unreachable")}, network},
+		{"wrapped Go DNS error", fmt.Errorf("resolving 43: %w", &net.DNSError{Err: "no such host", Name: "ghcr.io"}), network},
+		{"Flatpak cannot resolve the remote", errors.New("Flatpak command failed: error: Unable to load summary from remote flathub: While fetching https://dl.flathub.org/repo/summary.idx: [6] Could not resolve hostname"), network},
+		{"Homebrew's curl cannot connect", errors.New("curl: (7) Failed to connect to ghcr.io port 443 after 3 ms: Couldn't connect to server"), network},
+		{"bootc cannot reach the registry", errors.New("error: Fetching: error sending request for url (https://ghcr.io/v2/): dns error: failed to lookup address information"), network},
+		{"glibc resolver", errors.New("Temporary failure in name resolution"), network},
+		{"Flatpak remote without a cause", errors.New("Flatpak command failed: error: Unable to load summary from remote flathub"), logged},
+		{"Homebrew local permission error", errors.New("permission denied @ rb_sysopen - /home/linuxbrew/.linuxbrew/var"), logged},
+		{"updex incomplete check", errors.New("updex feature check incomplete: feature store unreadable"), logged},
+		{"deadline", fmt.Errorf("flatpak remote-ls timed out: %w", context.DeadlineExceeded), timeout},
+		{"cancellation", fmt.Errorf("flatpak remote-ls: %w", context.Canceled), logged},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := FailureHint(tt.err); got != tt.want {
+				t.Fatalf("FailureHint(%q) = %q, want %q", tt.err, got, tt.want)
+			}
+		})
+	}
+}
+
+// The check-failure detail line carries one hint for every failed source; it
+// names the network only when every failure was the network.
+func TestCheckFailedDetailNamesTheNetworkOnlyWhenEveryFailureWasIt(t *testing.T) {
+	offline := errors.New("curl: (6) Could not resolve host: formulae.brew.sh")
+	local := errors.New("permission denied")
+	tests := []struct {
+		name    string
+		sources []updateflow.SourceState
+		want    string
+	}{
+		{
+			name: "every source offline",
+			sources: []updateflow.SourceState{
+				{ID: updateflow.Applications, CheckErr: offline},
+				{ID: updateflow.DeveloperTools, CheckErr: offline},
+			},
+			want: "Not checked: Applications, Developer tools. Check your internet connection.",
+		},
+		{
+			name:    "one local failure",
+			sources: []updateflow.SourceState{{ID: updateflow.DeveloperTools, CheckErr: local}},
+			want:    "Not checked: Developer tools. Details are in the log.",
+		},
+		{
+			name: "offline and local mixed",
+			sources: []updateflow.SourceState{
+				{ID: updateflow.Applications, CheckErr: offline},
+				{ID: updateflow.DeveloperTools, CheckErr: local},
+			},
+			want: "Not checked: Applications, Developer tools. Details are in the log.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Snapshot(updateflow.Snapshot{Phase: updateflow.PhaseCheckFailed, Sources: tt.sources})
+			if got.Detail != tt.want {
+				t.Fatalf("Detail = %q, want %q", got.Detail, tt.want)
+			}
+		})
 	}
 }
 

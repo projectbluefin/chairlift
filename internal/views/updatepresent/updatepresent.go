@@ -3,6 +3,9 @@
 package updatepresent
 
 import (
+	"context"
+	"errors"
+	"net"
 	"strings"
 
 	"github.com/leonelquinteros/gotext"
@@ -78,9 +81,9 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
-		return title, gotext.Get("Couldn't update. Try again later.")
+		return title, gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
 	case state.CheckErr != nil:
-		return title, gotext.Get("Couldn't check for updates. Check your internet connection.")
+		return title, gotext.Get("Couldn't check for updates. %s", FailureHint(state.CheckErr))
 	case state.RestartRequired:
 		return title, gotext.Get("Deployment staged")
 	case len(state.Items) > 0:
@@ -257,21 +260,99 @@ func updatingStatus(state updateflow.Snapshot) string {
 
 func checkErrorDetail(state updateflow.Snapshot) string {
 	var failed []string
+	hint := ""
 	for _, source := range state.Sources {
-		if source.CheckErr != nil {
-			failed = append(failed, sourceTitle(source.ID))
+		if source.CheckErr == nil {
+			continue
+		}
+		failed = append(failed, sourceTitle(source.ID))
+		// One hint covers the line only when every failure earns it;
+		// otherwise the rows carry their own and the line points at the log.
+		sourceHint := FailureHint(source.CheckErr)
+		if hint == "" {
+			hint = sourceHint
+		} else if hint != sourceHint {
+			hint = logHint()
 		}
 	}
 	if len(failed) == 0 {
 		return ""
 	}
-	return gotext.Get("Not checked: %s. Check your internet connection.", strings.Join(failed, ", "))
+	return gotext.Get("Not checked: %s. %s", strings.Join(failed, ", "), hint)
+}
+
+// FailureHint is the sentence that follows a failure's plain description. It
+// names a cause only when the error shows one: a request that could not
+// reach the network, or one that ran out of time. Any other failure — a
+// local Flatpak, Homebrew, or bootc error — is pointed at the log, where the
+// raw error is kept, rather than told a remedy it may not need.
+func FailureHint(err error) string {
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return gotext.Get("It took too long. Try again later.")
+	case NetworkFailure(err):
+		return gotext.Get("Check your internet connection.")
+	default:
+		return logHint()
+	}
+}
+
+func logHint() string {
+	return gotext.Get("Details are in the log.")
+}
+
+// networkPhrases are what the tools behind the update sources print when a
+// request never reached its server: libcurl through Flatpak/OSTree and
+// Homebrew, glibc's resolver, Go's net package, and bootc's HTTP client.
+// Each is specific to a failed connection; a tool's generic "unable to load"
+// or "failed" is deliberately absent, because it says nothing about why.
+var networkPhrases = []string{
+	"could not resolve",
+	"temporary failure in name resolution",
+	"name or service not known",
+	"no such host",
+	"failed to lookup address",
+	"dns error",
+	"network is unreachable",
+	"network is down",
+	"no route to host",
+	"connection refused",
+	"connection timed out",
+	"connection reset",
+	"failed to connect",
+	"could not connect",
+	"couldn't connect",
+	"timeout was reached",
+	"i/o timeout",
+	"tls handshake timeout",
+	"error sending request",
+}
+
+// NetworkFailure reports whether err shows that a request could not reach
+// the network: a Go network error in its chain, or a tool's own message
+// naming a failed connection. A cancellation or an exhausted deadline is not
+// one (FailureHint names the deadline itself).
+func NetworkFailure(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	for _, phrase := range networkPhrases {
+		if strings.Contains(message, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func partialFailurePresentation(state updateflow.Snapshot) Presentation {
 	if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
 		return Presentation{Status: gotext.Get("Updates installed, but couldn't clean up"),
-			Detail: gotext.Get("Old files are still on this computer. Try again later.")}
+			Detail: gotext.Get("Old files are still on this computer. %s", FailureHint(state.MaintenanceErr))}
 	}
 	presentation := Presentation{Status: gotext.Get("Couldn't install some updates")}
 	if len(state.FailedSources) > 0 {
