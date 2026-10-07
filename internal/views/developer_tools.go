@@ -308,10 +308,13 @@ func (uh *UserHome) applyDeveloperTool(item *developerOptionRow, packages []home
 
 // showDeveloperTool renders a tool row's subtitle and button. The visible
 // label is the same word on every row, so the accessible name carries the
-// tool's name.
+// tool's name. GtkButton names itself from its label child through a
+// LABELLED_BY relation, which outranks the LABEL property, so the relation
+// is dropped after every label change or every row would announce "Install".
 func (uh *UserHome) showDeveloperTool(item *developerOptionRow, view pageview.DeveloperToolView) {
 	item.row.SetSubtitle(view.Subtitle)
 	item.button.SetLabel(view.ButtonLabel)
+	item.button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
 	SetAccessibleLabel(item.button, view.AccessibleLabel)
 }
 
