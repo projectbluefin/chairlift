@@ -65,7 +65,7 @@ func (uh *UserHome) buildUpdatesPage() {
 		uh.bootcStageExpander.SetTitle("Download system update")
 		uh.bootcStageExpander.SetSubtitle("Checking…")
 
-		uh.bootcStageBtn = gtk.NewButtonWithLabel("Check for updates")
+		uh.bootcStageBtn = gtk.NewButtonWithLabel(pageview.BootcStageButtonLabel)
 		uh.bootcStageBtn.SetValign(gtk.AlignCenterValue)
 		stageClickedCb := func(btn gtk.Button) {
 			uh.onBootcStageClicked()
@@ -333,10 +333,15 @@ func (s *stageProgressSink) flush() {
 
 	s.activityRow.SetSubtitle(batch.Lines[len(batch.Lines)-1].Text)
 	s.logExpander.SetSubtitle(pageview.StagingLogSubtitle(s.rows.Len(), batch.Total))
+	// The expander is built hidden and revealed by its first line, so a run
+	// whose helper printed nothing never offers an expander that opens to
+	// nothing (on Dakota, bootc logged a stage to the journal, not the pipe).
+	s.logExpander.SetVisible(true)
 }
 
 // onBootcStageClicked runs the stage script with streamed log output.
-// The script checks, downloads, and stages in one idempotent operation.
+// The script checks, downloads, and stages in one idempotent operation, which
+// is why the action is labelled Download rather than as a check.
 func (uh *UserHome) onBootcStageClicked() {
 	if uh.updateShell == nil || !uh.updateShell.beginMutation() {
 		return
@@ -347,7 +352,7 @@ func (uh *UserHome) onBootcStageClicked() {
 	button.SetSensitive(false)
 	button.SetLabel("Working…")
 	expander.SetExpanded(true)
-	expander.SetSubtitle("Checking for updates…")
+	expander.SetSubtitle(pageview.BootcStageRunningSubtitle)
 
 	// Remove rows from any previous run before adding new ones, otherwise
 	// repeated clicks stack duplicate Progress/Details rows.
@@ -377,6 +382,8 @@ func (uh *UserHome) onBootcStageClicked() {
 	logExpander := adw.NewExpanderRow()
 	logExpander.SetTitle("Details")
 	logExpander.SetSubtitle(pageview.StagingLogSubtitle(0, 0))
+	// Hidden until the helper prints a line; flush reveals it.
+	logExpander.SetVisible(false)
 	expander.AddRow(&logExpander.Widget)
 	uh.bootcLogExpander = logExpander
 
@@ -394,16 +401,18 @@ func (uh *UserHome) onBootcStageClicked() {
 			stageErr = bootc.StageUpdate(ctx, progressCh)
 		}()
 
-		// The sink's return value is the stage helper's own last line.
-		// It is deliberately discarded: it is terminal output that can
-		// name paths a person has no use for, which is why
+		// The sink's return value is the stage helper's own last line. Only
+		// whether there was one is used: the text is terminal output that
+		// can name paths a person has no use for, which is why
 		// pageview.BootcStageResultSubtitle takes no such argument.
-		newStageProgressSink(activityRow, logExpander).consume(progressCh)
+		hadOutput := newStageProgressSink(activityRow, logExpander).consume(progressCh) != ""
 
 		wg.Wait()
 
 		// Re-read status so the subtitle and badge reflect reality
 		// (staged vs already-current) rather than guessing from output.
+		// The System version readout is re-rendered from the same read.
+		versionGeneration := uh.systemVersionRefresh.Begin()
 		statusCtx, statusCancel := bootc.DefaultContext()
 		status, statusErr := bootc.GetStatus(statusCtx)
 		statusCancel()
@@ -414,17 +423,18 @@ func (uh *UserHome) onBootcStageClicked() {
 			uh.updateShell.finishMutation()
 			spinner.Stop()
 			button.SetSensitive(true)
-			button.SetLabel("Check for updates")
+			button.SetLabel(pageview.BootcStageButtonLabel)
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
-				expander.SetSubtitle("The update could not be downloaded. Open Details to see what happened.")
+				expander.SetSubtitle(pageview.BootcStageFailureSubtitle(hadOutput))
 				uh.toastAdder.ShowErrorToast("The system update could not be downloaded")
 				return
 			}
 
 			if statusErr == nil {
 				uh.refreshChangelogAvailability(status)
+				uh.renderSystemVersion(versionGeneration, status)
 			}
 			if statusErr != nil {
 				message := fmt.Sprintf("Could not verify staged update: %v", statusErr)
@@ -472,14 +482,18 @@ func (uh *UserHome) buildSystemVersionGroup(page *adw.PreferencesPage) {
 
 	page.Add(group)
 
-	go uh.loadSystemVersion(group, versionRow, details)
+	uh.systemVersionGroup = group
+	uh.systemVersionRow = versionRow
+	uh.systemVersionDetails = details
+
+	go uh.loadSystemVersion(uh.systemVersionRefresh.Begin())
 }
 
-// loadSystemVersion fills the System version group. Runs in a goroutine and
-// shows the group only on a host whose version can actually be read; the
-// widgets are parameters rather than fields because nothing refreshes them
-// after this single pass.
-func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *adw.ActionRow, details *adw.ExpanderRow) {
+// loadSystemVersion reads the booted and staged deployments for the System
+// version group's first render. Runs in a goroutine; the group stays hidden
+// on a host whose version cannot be read. Later renders come from the
+// status a staging or update run already re-read (renderSystemVersion).
+func (uh *UserHome) loadSystemVersion(generation uint64) {
 	if !bootc.IsBootcBootedCached() {
 		return // group stays hidden on hosts with no system image
 	}
@@ -493,6 +507,27 @@ func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *a
 		return // an unreadable version is not worth a row that says so
 	}
 
+	sgtk.RunOnMainThread(func() {
+		uh.renderSystemVersion(generation, status)
+	})
+}
+
+// renderSystemVersion fills the System version group from one observed
+// bootc status. It runs on the GTK main thread, after the startup read and
+// again after every staging or update run that re-read the status, so a
+// version staged in this session is named without a restart. generation
+// comes from systemVersionRefresh.Begin, claimed before the status was read:
+// a slower, older read must not overwrite a newer one. The group belongs to
+// bootc_status_group, which may be disabled while the paths that call this
+// are not, so every widget is nil-guarded.
+func (uh *UserHome) renderSystemVersion(generation uint64, status *bootc.Status) {
+	if uh.systemVersionRow == nil || uh.systemVersionDetails == nil || uh.systemVersionGroup == nil || status == nil {
+		return
+	}
+	if !uh.systemVersionRefresh.IsCurrent(generation) {
+		return
+	}
+
 	booted := status.Status.Booted
 	staged := status.Status.Staged
 	presentation := pageview.SystemVersionRow(booted.Version(), booted.Timestamp(), staged != nil, staged.Version())
@@ -503,20 +538,29 @@ func (uh *UserHome) loadSystemVersion(group *adw.PreferencesGroup, versionRow *a
 		booted.Digest(),
 	)
 
-	sgtk.RunOnMainThread(func() {
-		versionRow.SetTitle(presentation.Title)
-		versionRow.SetSubtitle(presentation.Subtitle)
+	uh.systemVersionRow.SetTitle(presentation.Title)
+	uh.systemVersionRow.SetSubtitle(presentation.Subtitle)
 
-		for _, detail := range detailRows {
-			row := adw.NewActionRow()
-			row.SetTitle(detail.Title)
-			row.SetSubtitle(detail.Subtitle)
-			details.AddRow(&row.Widget)
-		}
-		details.SetVisible(len(detailRows) > 0)
-
-		group.SetVisible(true)
+	details := uh.systemVersionDetails
+	uh.systemVersionRows.Clear(func(row *adw.ActionRow) {
+		details.Remove(&row.Widget)
 	})
+	for _, detail := range detailRows {
+		row := adw.NewActionRow()
+		// The image reference and digest are registry output; render them
+		// literally rather than as Pango markup (issue #437).
+		row.SetUseMarkup(false)
+		row.SetTitle(detail.Title)
+		row.SetSubtitle(detail.Subtitle)
+		// These are the identifiers a person is told to quote, so they
+		// must be selectable and copyable.
+		row.SetSubtitleSelectable(true)
+		details.AddRow(&row.Widget)
+		uh.systemVersionRows.Add(row)
+	}
+	details.SetVisible(len(detailRows) > 0)
+
+	uh.systemVersionGroup.SetVisible(true)
 }
 
 // buildImageIdentityGroup builds the two controls that decide which

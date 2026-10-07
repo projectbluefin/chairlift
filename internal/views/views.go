@@ -179,6 +179,15 @@ type UserHome struct {
 	bootcStageBtn      *gtk.Button
 	bootcActivityRow   *adw.ActionRow
 	bootcLogExpander   *adw.ExpanderRow
+	// System version readout (updates_page bootc_status_group), re-rendered
+	// from every observed bootc status rather than only the startup read.
+	// systemVersionRefresh orders those reads so an older one cannot land
+	// over a newer one.
+	systemVersionGroup   *adw.PreferencesGroup
+	systemVersionRow     *adw.ActionRow
+	systemVersionDetails *adw.ExpanderRow
+	systemVersionRows    rowset.Tracker[*adw.ActionRow]
+	systemVersionRefresh actionstate.RefreshGate
 	// The Roll Back group holds only the rollback row and is hidden with
 	// it, so a host with no previous deployment shows no orphaned heading.
 	bootcRollbackGroup *adw.PreferencesGroup
@@ -377,8 +386,9 @@ func (uh *UserHome) groupEnabled(page, group string) bool {
 	return capability.Compose(uh.config.IsGroupEnabled, uh.capabilities)(page, group)
 }
 
-// OnUpdateFinished refreshes the installed app inventories and Compare pair
-// after verified live updates. The shell remains the only badge owner.
+// OnUpdateFinished refreshes the installed app inventories, the Compare pair,
+// and the System version readout after verified live updates. The shell
+// remains the only badge owner.
 func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 	if final.Preview {
 		return
@@ -389,6 +399,7 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 			go uh.loadHomebrewPackages()
 		case updateflow.OperatingSystem:
 			go func() {
+				versionGeneration := uh.systemVersionRefresh.Begin()
 				ctx, cancel := bootc.DefaultContext()
 				defer cancel()
 				status, err := bootc.GetStatus(ctx)
@@ -398,6 +409,7 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 				}
 				sgtk.RunOnMainThread(func() {
 					uh.refreshChangelogAvailability(status)
+					uh.renderSystemVersion(versionGeneration, status)
 				})
 			}()
 		}

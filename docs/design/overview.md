@@ -752,6 +752,21 @@ capability and asynchronous runtime gates determine which groups are shown.
 The automatic-updates switch uses `guardedSwitch`: programmatic rollback after
 failure or preview must not request the opposite mutation.
 
+The dedicated download's button is labelled **Download**
+(`pageview.BootcStageButtonLabel`), and its idle subtitle says it downloads
+the newest version, asks for an administrator password, and installs at the
+next restart: the stage helper checks, pulls, and stages in one operation,
+so a "Check for updates" label promised less than it did. Its Details
+expander is built hidden and revealed by the first streamed line, because a
+stage can print nothing — on Dakota bootc logged its progress to the journal
+rather than to the pipe — and a failure then does not point at Details
+(`pageview.BootcStageFailureSubtitle`). System version renders through
+`renderSystemVersion` from every observed bootc status: the startup read, the
+dedicated download's re-read, and `OnUpdateFinished`'s re-read, ordered by a
+`RefreshGate` so an older read cannot replace a newer one. Its Details rows
+carry the whole build digest and selectable subtitles, because they exist to
+be quoted in a support request.
+
 Restart is the run's only privileged surface of its own. `PhaseRestartRequired`
 is reached only when a source reports that a restart is required — the OS
 provider reads it from `bootc status`'s staged deployment, because staging an
@@ -773,8 +788,8 @@ delay and no target; scheduled restarts would each need their own action.
 After a live run or a live single-row update (which reports its one source
 as completed), `UserHome.OnUpdateFinished` refreshes the installed Homebrew
 inventory when its source completed and, when the OS source completed,
-re-reads status to refresh Compare references. The coordinator remains the
-badge owner. A preview refreshes nothing.
+re-reads status to refresh Compare references and the System version
+readout. The coordinator remains the badge owner. A preview refreshes nothing.
 `UpdateShell.notifyUpdateComplete` sends the single desktop notification
 (see below) and skips previews.
 

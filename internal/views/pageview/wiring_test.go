@@ -67,14 +67,25 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.ChannelRow(",
 				"pageview.GraphicsDriverRow(",
 				// The system-version readout came with them. Digest
-				// formatting now lives entirely inside
-				// SystemVersionDetails, which calls ShortDigest itself —
-				// stricter than the deleted system_page.go entry, which
-				// only required the view to call ShortDigest. The banned
-				// hand-slice below is carried across from that entry.
+				// formatting lives entirely inside SystemVersionDetails,
+				// which now gives the whole digest (W3-07); the banned
+				// hand-slice below is carried across from the deleted
+				// system_page.go entry.
 				"pageview.SystemVersionRow(",
 				"pageview.SystemVersionDetails(",
 				"pageview.StagingLogSubtitle(",
+				// W3-01: the action stages an update, so its label and
+				// running and failure copy come from pageview, where the
+				// test holds them to describing a download.
+				"pageview.BootcStageButtonLabel",
+				"pageview.BootcStageRunningSubtitle",
+				"pageview.BootcStageFailureSubtitle(hadOutput)",
+				// W3-07: the support identifiers are selectable.
+				"row.SetSubtitleSelectable(true)",
+				// W3-08: the Details expander is hidden until a line
+				// arrives, so an empty one is never offered.
+				"logExpander.SetVisible(false)",
+				"s.logExpander.SetVisible(true)",
 			},
 			retired: []string{
 				"strings.LastIndex(",
@@ -83,6 +94,10 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"digest[:19]",
 				"row.SetSubtitle(pkg.Version)",
 				`"Roll Back"`,
+				`"Check for updates"`,
+				`"Checking for updates…"`,
+				`"The update could not be downloaded. Open Details to see what happened."`,
+				"ShortDigest(",
 			},
 		},
 		{
@@ -257,8 +272,11 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		file, function string
 		required       []string
 	}{
-		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
-		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)"}},
+		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
+		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)"}},
+		// W3-06: the System version readout re-renders from each observed
+		// status, ordered so an older read cannot replace a newer one.
+		{"updates_page.go", "renderSystemVersion", []string{"uh.systemVersionRefresh.IsCurrent(generation)", "uh.systemVersionRows.Clear(", "uh.systemVersionRow == nil"}},
 		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
 		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},
 	} {
@@ -306,6 +324,16 @@ func TestChangelogRefreshDiscardsOldImagePair(t *testing.T) {
 	compare := strings.SplitN(parts[1], "func (uh *UserHome) onChangelogClicked(", 2)
 	if len(compare) != 2 || !strings.Contains(compare[1], "booted != uh.changelogBooted || staged != uh.changelogStaged") {
 		t.Error("in-flight comparison can render a diff for an image no longer staged")
+	}
+	// The in-flight guard compares the button's label with the label the
+	// comparison set; one constant keeps the two spellings from drifting
+	// (a three-dot "Comparing..." never matched the "Comparing…" it set).
+	text := string(data)
+	if got := strings.Count(text, "pageview.ChangelogComparingLabel"); got < 2 {
+		t.Errorf("changelog.go uses pageview.ChangelogComparingLabel %d times, want both the label and its guard", got)
+	}
+	if strings.Contains(text, `"Comparing`) {
+		t.Error("changelog.go spells the Comparing label inline instead of using pageview.ChangelogComparingLabel")
 	}
 }
 

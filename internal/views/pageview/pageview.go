@@ -52,12 +52,27 @@ func UntrustedTap(name string, formulae, casks []string) Row {
 	return row
 }
 
+// BootcStageButtonLabel is the label of the system-update row's action. The
+// action runs the image's stage helper, which downloads the newest version
+// and stages it for the next restart, so the button says "Download": a
+// button labelled as a check that pulled an image and queued a deployment
+// behind an administrator prompt was the shakedown's W3-01.
+const BootcStageButtonLabel = "Download"
+
+// BootcStageRunningSubtitle is the system-update expander subtitle while the
+// stage helper runs. It names both halves, because the helper checks first
+// and downloads only when a newer version exists.
+const BootcStageRunningSubtitle = "Looking for a newer version and downloading it…"
+
 // BootcUpdateSubtitle returns the system-update expander subtitle. A
 // downloaded update changes nothing until the machine restarts, so the
 // waiting state says when it takes effect rather than that it is "staged".
+// The idle state describes what the Download action does — a download, an
+// administrator password, and nothing until a restart — because those are
+// the consequences a person cannot discover from a button label.
 func BootcUpdateSubtitle(staged bool, version string) string {
 	if !staged {
-		return "Check whether a newer version of the operating system is available"
+		return "Downloads the newest version of the operating system. Asks for an administrator password; the new version installs when you restart"
 	}
 	if version == "" {
 		return "A new version is ready and installs when you restart"
@@ -76,6 +91,17 @@ func BootcStageResultSubtitle(staged bool, version string) string {
 	return "Your system is up to date"
 }
 
+// BootcStageFailureSubtitle returns the subtitle after a staging action
+// failed. It points at Details only when the helper printed something: the
+// view hides Details until a line arrives, and a stage can print nothing —
+// on Dakota, bootc logged its progress to the journal, not to the pipe.
+func BootcStageFailureSubtitle(hadOutput bool) string {
+	if hadOutput {
+		return "The update could not be downloaded. Open Details to see what happened."
+	}
+	return "The update could not be downloaded"
+}
+
 // StagingLogSubtitle returns the "Details" expander subtitle for a staging
 // run whose output is rendered through a bounded rolling window: shown is how
 // many lines the expander currently holds and total is how many the stage
@@ -84,10 +110,12 @@ func BootcStageResultSubtitle(staged bool, version string) string {
 // It names the cap whenever one applied, because a truncated log that reads
 // like a complete one is worse than no log at all: someone diagnosing a failed
 // stage would otherwise keep looking for a line the view had silently dropped.
+// The view hides the expander until the first line arrives, so total <= 0
+// never names an empty log as something to view.
 func StagingLogSubtitle(shown, total int) string {
 	switch {
 	case total <= 0:
-		return "View output"
+		return "No output"
 	case shown < total:
 		return fmt.Sprintf("Showing the last %d of %d lines", shown, total)
 	case total == 1:
@@ -96,6 +124,11 @@ func StagingLogSubtitle(shown, total int) string {
 		return fmt.Sprintf("View output (%d lines)", total)
 	}
 }
+
+// ChangelogComparingLabel is the Compare button's label while a comparison
+// runs. The view both sets it and tests for it, so it has one spelling; a
+// three-dot copy of the ellipsis made the in-flight guard never match.
+const ChangelogComparingLabel = "Comparing…"
 
 // Feature returns the initial row text for an updex feature.
 func Feature(name, description string) Row {
@@ -180,7 +213,8 @@ func SystemVersionRow(version, released string, staged bool, stagedVersion strin
 		row.Subtitle = "This system's version could not be read"
 	}
 	if staged {
-		row.Subtitle = row.Subtitle + ". " + BootcUpdateSubtitle(true, stagedVersion)
+		// Two sentences, so both end in a period.
+		row.Subtitle = row.Subtitle + ". " + BootcUpdateSubtitle(true, stagedVersion) + "."
 	}
 	return row
 }
@@ -188,13 +222,14 @@ func SystemVersionRow(version, released string, staged bool, stagedVersion strin
 // SystemVersionDetails returns the rows behind the System version "Details"
 // expander: the identifiers a support request asks for, and the only place
 // they appear. A row is omitted when its value is unknown, so the expander
-// never shows an empty field.
+// never shows an empty field. The digest is given whole: a shortened one
+// cannot identify a build, and these rows exist to be quoted.
 func SystemVersionDetails(version, released, source, digest string) []Row {
 	candidates := []Row{
 		{Title: "Version", Subtitle: version},
 		{Title: "Released", Subtitle: formatReleaseDate(released)},
 		{Title: "Source", Subtitle: source},
-		{Title: "Build ID", Subtitle: ShortDigest(digest)},
+		{Title: "Build ID", Subtitle: digest},
 	}
 	rows := make([]Row, 0, len(candidates))
 	for _, row := range candidates {
@@ -213,14 +248,6 @@ func formatReleaseDate(timestamp string) string {
 		return ""
 	}
 	return parsed.Local().Format("2 January 2006")
-}
-
-// ShortDigest returns a compact bootc digest for display.
-func ShortDigest(digest string) string {
-	if len(digest) > 19 {
-		return digest[:19] + "..."
-	}
-	return digest
 }
 
 // ChannelRow returns the early-updates switch row text. onTesting is the

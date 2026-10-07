@@ -335,7 +335,10 @@ are capped, and `rowset.Tracker.TrimTo` caps the rendered window at
 `progresslog.DefaultLimit` (200). `StagingLogSubtitle(shown, total)` discloses
 omitted lines. Both callback and widget caps are required; do not copy a
 per-event GTK callback example into a stream consumer. Command-output rows
-keep markup disabled.
+keep markup disabled. The Details expander is built hidden and revealed by
+the first flushed line: a stage helper may print nothing to the pipe (on
+Dakota, `bootc upgrade` logged its progress to the journal), and an
+expander that opens to nothing reads as lost output.
 
 ## bootc (`internal/bootc/`)
 
