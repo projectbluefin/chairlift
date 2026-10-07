@@ -103,7 +103,8 @@ Provider-specific safety remains with each live owner:
 - Staging uses the fixed bootc stage path and bounded streamed logs. Compare
   starts only on a click, with pinned image references and stale-result guards.
   Published versions are read-only registry observations. Pin and Return to stream
-  require confirmation and installed helper support; only a validated day or
+  require confirmation, installed helper support, a healthy channel table and a
+  running stream the table lists; only a validated day or
   fixed unpin word crosses pkexec, never a registry-supplied image reference.
   Roll Back uses the existing previous deployment and completes its gate after
   live success, without restarting.

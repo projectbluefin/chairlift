@@ -182,8 +182,8 @@ func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 	}
 
 	stream := build.Stream
-	supported := status.Supports(ubluehelper.CommandUnpin)
-	presentation := pageview.UnpinRow(stream, supported)
+	offered, explanation := pageview.UnpinOffer(stream, pinSupport(status, ubluehelper.CommandUnpin, stream))
+	presentation := pageview.UnpinRow(stream, explanation)
 
 	row := adw.NewActionRow()
 	row.SetTitle(presentation.Title)
@@ -191,9 +191,9 @@ func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 
 	btn := gtk.NewButtonWithLabel("Return to Stream")
 	btn.SetValign(gtk.AlignCenterValue)
-	btn.SetSensitive(supported)
-	if !supported {
-		btn.SetTooltipText(pageview.UnpinUnsupportedExplanation())
+	btn.SetSensitive(offered)
+	if !offered {
+		btn.SetTooltipText(explanation)
 	} else {
 		clickedCb := func(gtk.Button) {
 			uh.confirmReturnToStream(stream, btn)

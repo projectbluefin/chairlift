@@ -244,6 +244,19 @@ Feature: Maintenance and its Powerwash detail
     And the journalled action carries no argument
     And the "Return to Stream" button in the "Return to stream" row is sensitive
 
+  @stub.maintenance_bootc_pinned @stub.maintenance_package_tools @stub.maintenance_published_versions
+  @stub.maintenance_unlisted_image
+  Scenario: An image outside the channel table is offered neither pin nor return to stream
+    Given ChairLift is running
+    When I open the "Maintenance" page
+    And I open the Powerwash detail
+    Then the "Return to stream" row says "Returning to the stream is not available for the “latest” stream of this image"
+    And the "Return to Stream" button in the "Return to stream" row is insensitive
+    When I click the "Check" button in the "Published versions" row
+    Then the "13 September 2026" row says "Pinning is not available for the “latest” stream of this image"
+    And the "Pin" button in the "13 September 2026" row is insensitive
+    And the action journal is empty
+
   # ------------------------------------------------ configuration & capability
 
   @config.maintenance-shipped @stub.maintenance_bootc_rollback @stub.maintenance_package_tools

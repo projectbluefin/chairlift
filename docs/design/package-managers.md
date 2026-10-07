@@ -563,13 +563,18 @@ only when Check is pressed. `pageview.PublishedVersions` selects the running
 stream and one row per day. A failed read removes the previous list rather
 than leaving it displayed as current. Each row offers a confirmed **Pin**
 action that calls `ublue.Pin(ctx, day)` with a day word, never the listed image
-reference. Missing installed pin support keeps that action insensitive with
-an explanation; the currently booted day reads Pinned. Shared `buttonRoute`
-and `dialogRoute` callbacks survive repeated list refreshes.
+reference. `pageview.PinOffer` keeps that action insensitive, with its
+explanation, wherever the helper would refuse only after authentication:
+missing installed pin support, a broken channel table
+(`ublue.Status.ChannelTableError`), or a running stream outside the image's
+channel table (`imageinfo.KnownStream`). The currently booted day reads
+Pinned. Shared `buttonRoute` and `dialogRoute` callbacks survive repeated
+list refreshes.
 
 [`recovery.go`](../../internal/views/recovery.go) offers **Return to stream**
 only when the descriptor's running tag parses as a dated build. Its confirmed
-action calls `ublue.Unpin(ctx)` and requires installed unpin support. Both
+action calls `ublue.Unpin(ctx)` and is gated by `pageview.UnpinOffer` on the
+same three conditions. Both
 controls reset their action gates after completion, refresh rollback status
 and request a shared update check only after live success. Preview restores
 the controls and does not claim a deployment was staged. The catalog remains
