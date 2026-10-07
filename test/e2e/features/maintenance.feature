@@ -54,10 +54,12 @@ Feature: Maintenance and its Powerwash detail
   Scenario: Powerwash is a detail of Maintenance and Back returns there
     Given ChairLift is running
     When I open the "Maintenance" page
-    And I open the Powerwash detail
+    Then the "Powerwash" row says "Roll back to the previous system version, browse published system versions, or reset this machine."
+    When I open the Powerwash detail
     Then the Powerwash detail is shown
     And I see "Go back to the previous version"
     And I see "Reset the system"
+    And I do not see "Powerwash and Factory Reset are turned off"
     When I go back from the Powerwash detail
     Then the "Maintenance" page is shown
     And I see "Free up space"
@@ -250,8 +252,12 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     Then I see "Free up space"
     And I do not see "Maintenance tasks"
+    And the "Powerwash" row says "Roll back to the previous system version or browse published system versions."
+    And I do not see "reset this machine"
     When I open the Powerwash detail
     Then I see "Go back to the previous version"
+    And I see "Powerwash and Factory Reset are turned off in this computer's configuration."
+    And I see "System Versions"
     And I do not see "Reset the system"
     And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"

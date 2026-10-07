@@ -103,7 +103,13 @@ this inventory, independently of the original YAML namespace names.
 
 Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
 Maintenance, with rollback, published-version reads with pin and return-to-stream
-actions, and opt-in reset controls. There is no current System primary page;
+actions, and opt-in reset controls. The Maintenance entry's subtitle is
+`pageview.RecoveryEntrySubtitle` over what the detail actually built (Roll Back
+once the asynchronous status check reveals it, Return to stream, Published
+versions, and the reset rows), so it never promises a reset the shipped
+`reset_group: enabled: false` leaves out; without reset rows the detail's page
+description (`pageview.RecoveryPageDescription`) says whether configuration or
+the host is why. There is no current System primary page;
 machine-wide desktop settings belong to the desktop's own settings application.
 
 ### Architecture route map

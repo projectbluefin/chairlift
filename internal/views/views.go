@@ -258,6 +258,11 @@ type UserHome struct {
 	publishedVersionsGate   actionstate.Gate
 	runningVersion          string
 	previousVersion         string
+	// recoveryEntryRow is the Maintenance page's Powerwash entry (nil when
+	// the entry is not built); bootcRollbackOffered records whether the
+	// detail's Roll Back group is currently shown, for its subtitle.
+	recoveryEntryRow     *adw.ActionRow
+	bootcRollbackOffered bool
 
 	// Agent Mode (agents_page agents_group)
 	agentModeRow       *adw.ActionRow

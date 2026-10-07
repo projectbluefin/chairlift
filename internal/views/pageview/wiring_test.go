@@ -379,12 +379,60 @@ func TestRollBackHeadingHidesWithItsRow(t *testing.T) {
 	}
 
 	load := bodies["loadBootcRollbackStatus"]
-	for _, required := range []string{"uh.bootcRollbackGroup.SetVisible(false)", "uh.bootcRollbackGroup.SetVisible(true)"} {
-		if !strings.Contains(load, required) {
-			t.Errorf("loadBootcRollbackStatus must show and hide the whole Roll Back group: missing %q", required)
-		}
+	if !strings.Contains(load, "uh.bootcRollbackGroup.SetVisible(offered)") {
+		t.Error("loadBootcRollbackStatus must show and hide the whole Roll Back group from one offered decision")
 	}
 	if strings.Contains(load, "uh.bootcRollbackRow.SetVisible(") {
 		t.Error("loadBootcRollbackStatus hides only the row, leaving the Roll Back heading orphaned")
+	}
+}
+
+// W3-11: the Maintenance entry's subtitle is derived from what the Powerwash
+// detail built, not a fixed promise of a reset. It is written once the detail
+// is built and again whenever the rollback check reveals or hides Roll Back,
+// and the detail's version rows sit under a titled group.
+func TestRecoveryEntrySubtitleFollowsTheDetail(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	bodies := map[string]string{}
+	for _, name := range []string{"recovery.go", "maintenance_page.go"} {
+		path := filepath.Join(filepath.Dir(filename), "..", name)
+		source, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		set := token.NewFileSet()
+		parsed, err := parser.ParseFile(set, path, source, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, declaration := range parsed.Decls {
+			if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Body != nil {
+				bodies[fn.Name.Name] = string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+			}
+		}
+	}
+
+	if strings.Contains(bodies["buildMaintenancePage"], "RecoveryEntrySubtitle(") {
+		t.Error("buildMaintenancePage writes the Powerwash entry subtitle before the detail is built")
+	}
+	for _, fn := range []string{"buildRecoveryPage", "loadBootcRollbackStatus"} {
+		if !strings.Contains(bodies[fn], "uh.refreshRecoveryEntry()") {
+			t.Errorf("%s does not refresh the Powerwash entry subtitle", fn)
+		}
+	}
+	refresh := bodies["refreshRecoveryEntry"]
+	for _, required := range []string{"uh.bootcRollbackOffered", "uh.unpinRow != nil", "uh.publishedVersionsRow != nil", `"reset_group"`} {
+		if !strings.Contains(refresh, required) {
+			t.Errorf("refreshRecoveryEntry ignores %s", required)
+		}
+	}
+	if !strings.Contains(bodies["buildRecoveryPage"], "page.SetDescription(pageview.RecoveryPageDescription(") {
+		t.Error("buildRecoveryPage does not explain a missing reset")
+	}
+	if !strings.Contains(bodies["buildRecoveryVersionsGroup"], "group.SetTitle(pageview.RecoveryVersionsGroupTitle)") {
+		t.Error("buildRecoveryVersionsGroup leaves the version rows untitled")
 	}
 }
