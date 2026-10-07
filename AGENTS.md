@@ -358,8 +358,13 @@ An agent must not break these:
   404; any other error refuses. Unpin requires a dated booted tag and verifies
   the recovered stream. Both enforce container signature policy. Dry runs
   derive without registry access; both commands require a valid channel table.
-  `internal/ubluehelper`'s tests assert
-  this per command, and the e2e boundary test asserts the installed binary
+  Channel switch, driver switch, pin, and unpin all run through the helper's
+  `switchImage`, which falls back to the fixed `bootc rollback` when a
+  composefs `bootc switch` refuses a target that is the rollback deployment
+  (unpin's usual case); `internal/installcheck`'s
+  `TestHelperImageSwitchesGoThroughSwitchImage` holds that wiring.
+  `internal/ubluehelper`'s tests assert the argv validation
+  per command, and the e2e boundary test asserts the installed binary
   rejects each shape. `cmd/chairlift-helper`'s dispatch carries a
   `default` arm that exits non-zero: a command the parser accepts and the
   switch does not handle would otherwise exit 0 having done nothing, which
