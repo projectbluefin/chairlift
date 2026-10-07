@@ -144,3 +144,31 @@ func TestPinAndUnpinAreOfferedOnlyWhenTheHelperCanDeriveATarget(t *testing.T) {
 		})
 	}
 }
+
+// A list re-rendered during a pin (Check Again while `bootc switch` pulls for
+// minutes) must show the pin in flight, and no Pin may start while another
+// recovery switch holds the page.
+func TestPinButtonFollowsTheRecoverySwitchInFlight(t *testing.T) {
+	tests := []struct {
+		name          string
+		offered       bool
+		alreadyPinned bool
+		day, pinning  string
+		busy          bool
+		want          PinButtonState
+	}{
+		{name: "idle", offered: true, day: "20260913", want: PinButtonState{Label: "Pin", Sensitive: true}},
+		{name: "not offered", day: "20260913", want: PinButtonState{Label: "Pin"}},
+		{name: "booted build", offered: true, alreadyPinned: true, day: "20260920", want: PinButtonState{Label: "Pinned"}},
+		{name: "this pin in flight", offered: true, day: "20260913", pinning: "20260913", busy: true, want: PinButtonState{Label: "Pinning…"}},
+		{name: "another pin in flight", offered: true, day: "20260906", pinning: "20260913", busy: true, want: PinButtonState{Label: "Pin"}},
+		{name: "return to stream or roll back running", offered: true, day: "20260913", busy: true, want: PinButtonState{Label: "Pin"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := PinButton(tt.offered, tt.alreadyPinned, tt.day, tt.pinning, tt.busy); got != tt.want {
+				t.Errorf("PinButton() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}

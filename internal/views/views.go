@@ -268,11 +268,22 @@ type UserHome struct {
 	publishedVersionsButton *gtk.Button
 	publishedVersionRows    []*adw.ActionRow
 	publishedVersionButtons buttonRoute
-	recoveryDialogs         dialogRoute
-	pinGate                 actionstate.Gate
-	unpinGate               actionstate.Gate
+	// publishedVersionPins are the listed Pin buttons, re-derived in place
+	// (applyPinButtons) when a recovery switch starts or finishes;
+	// publishedVersionsOffered is PinOffer's answer for the list.
+	publishedVersionPins     []publishedVersionPin
+	publishedVersionsOffered bool
+	recoveryDialogs          dialogRoute
+	// recoverySwitchGate admits one `bootc switch` from Powerwash at a
+	// time: a pin or a return to the stream. Roll Back keeps its own
+	// one-shot gate, and each refuses to start while the other runs,
+	// because concurrent transactions race for the next boot and both
+	// would report success. pinningDay is the day of the pin in flight.
+	recoverySwitchGate      actionstate.Gate
+	pinningDay              string
 	unpinRow                *adw.ActionRow
 	unpinBtn                *gtk.Button
+	unpinOffered            bool
 	publishedVersionsRepo   string
 	publishedVersionsStream string
 	publishedVersionsGate   actionstate.Gate

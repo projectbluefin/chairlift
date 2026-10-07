@@ -205,12 +205,13 @@ func (uh *UserHome) buildReturnToStreamRow(group *adw.PreferencesGroup) {
 	group.Add(&row.Widget)
 	uh.unpinRow = row
 	uh.unpinBtn = btn
+	uh.unpinOffered = offered
 }
 
 // confirmReturnToStream presents an AdwAlertDialog confirmation before
 // returning to the regular release stream.
 func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
-	if !uh.unpinGate.TryStart() {
+	if !uh.tryStartRecoverySwitch() {
 		return
 	}
 
@@ -222,7 +223,8 @@ func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {
-			uh.unpinGate.Reset()
+			uh.recoverySwitchGate.Reset()
+			uh.syncRecoverySwitches()
 			return
 		}
 		uh.runReturnToStream(button)
@@ -233,7 +235,6 @@ func (uh *UserHome) confirmReturnToStream(stream string, button *gtk.Button) {
 // runReturnToStream unpins the machine and returns to the stream via
 // pkexec chairlift-helper unpin.
 func (uh *UserHome) runReturnToStream(button *gtk.Button) {
-	button.SetSensitive(false)
 	button.SetLabel("Returning…")
 
 	go func() {
@@ -243,9 +244,9 @@ func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 		err := ublue.Unpin(ctx)
 
 		sgtk.RunOnMainThread(func() {
-			uh.unpinGate.Reset()
-			button.SetSensitive(true)
+			uh.recoverySwitchGate.Reset()
 			button.SetLabel("Return to Stream")
+			uh.syncRecoverySwitches()
 
 			if err != nil {
 				log.Printf("views: return to stream failed: %v", err)
@@ -263,6 +264,40 @@ func (uh *UserHome) runReturnToStream(button *gtk.Button) {
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()
+}
+
+// recoveryBusy reports whether a Powerwash bootc transaction — a pin, a
+// return to the stream, or Roll Back — holds the page.
+func (uh *UserHome) recoveryBusy() bool {
+	return uh.recoverySwitchGate.Running() || uh.bootcRollbackGate.Running()
+}
+
+// tryStartRecoverySwitch admits a pin or a return to the stream only while
+// Roll Back is not running, and turns the other recovery controls off for
+// as long as it holds the gate. Main thread only.
+func (uh *UserHome) tryStartRecoverySwitch() bool {
+	if uh.bootcRollbackGate.Running() || !uh.recoverySwitchGate.TryStart() {
+		return false
+	}
+	uh.syncRecoverySwitches()
+	return true
+}
+
+// syncRecoverySwitches derives the sensitivity of every Powerwash bootc
+// control from the two gates, so one transaction in flight leaves the others
+// insensitive and its end restores exactly what each still offers: Pin and
+// Return to stream within their offer, Roll Back unless its live success
+// completed its gate. Each builder may have been skipped, so every widget is
+// nil-guarded. Main thread only.
+func (uh *UserHome) syncRecoverySwitches() {
+	busy := uh.recoveryBusy()
+	uh.applyPinButtons()
+	if uh.unpinBtn != nil {
+		uh.unpinBtn.SetSensitive(uh.unpinOffered && !busy)
+	}
+	if uh.bootcRollbackBtn != nil {
+		uh.bootcRollbackBtn.SetSensitive(uh.bootcRollbackGate.Idle() && !uh.recoverySwitchGate.Running())
+	}
 }
 
 // loadBootcRollbackStatus reveals the Roll Back group when bootc records a
@@ -314,15 +349,17 @@ func (uh *UserHome) recoveryProvidersAvailable() bool {
 
 // onBootcRollbackClicked queues a rollback to the previous deployment. It
 // does not restart: rolling back and restarting are separate decisions, so
-// a live success swaps in a Restart now button rather than rebooting.
+// a live success swaps in a Restart now button rather than rebooting. It
+// refuses to start while a pin or a return to the stream runs.
 func (uh *UserHome) onBootcRollbackClicked() {
-	if !uh.bootcRollbackGate.TryStart() {
+	if uh.recoverySwitchGate.Running() || !uh.bootcRollbackGate.TryStart() {
 		return
 	}
 
 	button := uh.bootcRollbackBtn
 	row := uh.bootcRollbackRow
 	button.SetSensitive(false)
+	uh.syncRecoverySwitches()
 
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
@@ -335,6 +372,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Rollback failed: %v", err))
+				uh.syncRecoverySwitches()
 				return
 			}
 
@@ -351,6 +389,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 			}
+			uh.syncRecoverySwitches()
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()

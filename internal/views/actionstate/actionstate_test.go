@@ -118,6 +118,26 @@ func TestGateRunningOnlyWhileHeld(t *testing.T) {
 	}
 }
 
+func TestGateIdleOnlyWhenItCanStart(t *testing.T) {
+	var gate Gate
+	if !gate.Idle() {
+		t.Fatal("zero-value gate is not idle")
+	}
+	gate.TryStart()
+	if gate.Idle() {
+		t.Fatal("started gate reports idle")
+	}
+	gate.Reset()
+	if !gate.Idle() {
+		t.Fatal("reset gate is not idle")
+	}
+	gate.TryStart()
+	gate.Complete()
+	if gate.Idle() {
+		t.Fatal("completed gate reports idle, but it can never start again")
+	}
+}
+
 func TestRefreshGateAllowsOnlyTheNewestGeneration(t *testing.T) {
 	var gate RefreshGate
 	if gate.IsCurrent(0) {
