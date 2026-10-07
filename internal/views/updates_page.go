@@ -421,6 +421,10 @@ func (uh *UserHome) onBootcStageClicked() {
 		statusCancel()
 
 		staged := statusErr == nil && status.Status.Staged != nil
+		version := ""
+		if staged {
+			version = status.Status.Staged.Version()
+		}
 
 		sgtk.RunOnMainThread(func() {
 			uh.updateShell.finishMutation()
@@ -430,8 +434,16 @@ func (uh *UserHome) onBootcStageClicked() {
 
 			if stageErr != nil {
 				log.Printf("staging the system update failed: %v", stageErr)
+				toast, isError := pageview.PrivilegedFailureToast(stageErr, "The system update could not be downloaded")
+				if !isError {
+					// Authentication was dismissed: nothing ran, so the row
+					// reads as it did before the click.
+					expander.SetSubtitle(pageview.BootcUpdateSubtitle(staged, version))
+					uh.toastAdder.ShowToast(toast)
+					return
+				}
 				expander.SetSubtitle(pageview.BootcStageFailureSubtitle(hadOutput))
-				uh.toastAdder.ShowErrorToast("The system update could not be downloaded")
+				uh.toastAdder.ShowErrorToast(toast)
 				return
 			}
 
@@ -450,10 +462,6 @@ func (uh *UserHome) onBootcStageClicked() {
 				return
 			}
 
-			version := ""
-			if staged {
-				version = status.Status.Staged.Version()
-			}
 			expander.SetSubtitle(pageview.BootcStageResultSubtitle(staged, version))
 			uh.toastAdder.ShowToast(actionmsg.SystemStage(dryrun.Enabled(), staged))
 			if !dryrun.Enabled() {
@@ -732,7 +740,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 
 			if err != nil {
 				log.Printf("switching the graphics driver failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not switch the graphics driver")
+				uh.showPrivilegedFailure(err, "Could not switch the graphics driver")
 				return
 			}
 
@@ -777,7 +785,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			if err != nil {
 				toggle.set(!toTesting)
 				log.Printf("switching the release channel failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not change when this system gets updates")
+				uh.showPrivilegedFailure(err, "Could not change when this system gets updates")
 				return
 			}
 
@@ -790,6 +798,18 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()
+}
+
+// showPrivilegedFailure reports a failed privileged switch: a persistent
+// error toast, or the brief cancellation toast when the user dismissed the
+// authentication prompt and nothing ran.
+func (uh *UserHome) showPrivilegedFailure(err error, failure string) {
+	toast, isError := pageview.PrivilegedFailureToast(err, failure)
+	if isError {
+		uh.toastAdder.ShowErrorToast(toast)
+		return
+	}
+	uh.toastAdder.ShowToast(toast)
 }
 
 // refreshAfterOSSwitch re-reads what a live channel or driver switch staged,

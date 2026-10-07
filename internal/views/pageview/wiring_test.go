@@ -327,6 +327,12 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		{"updates_page.go", "onBootcStageClicked", []string{"if !uh.updateShell.beginMutation() {", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
 		{"updates_page.go", "onDriverSwitchClicked", []string{"if !uh.updateShell.beginMutation() {", "uh.driverGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
 		{"updates_page.go", "onChannelToggled", []string{"if !uh.updateShell.beginMutation() {", "toggle.set(!toTesting)", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		// W4: a dismissed password prompt is a brief cancellation, not a
+		// persistent error, on every Updates-page privileged action.
+		{"updates_page.go", "onBootcStageClicked", []string{"pageview.PrivilegedFailureToast(stageErr,"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"uh.showPrivilegedFailure(err,"}},
+		{"updates_page.go", "onChannelToggled", []string{"uh.showPrivilegedFailure(err,"}},
+		{"updates_page.go", "showPrivilegedFailure", []string{"pageview.PrivilegedFailureToast(err, failure)"}},
 	} {
 		body := functionBody(check.file, check.function)
 		for _, assertion := range check.required {
