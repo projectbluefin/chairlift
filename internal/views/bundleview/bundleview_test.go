@@ -343,3 +343,17 @@ func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 		}
 	}
 }
+
+// Every collection row shows the same Install label, so the accessible name
+// carries the collection's title in each phase (W2-APPS-5).
+func TestCollectionButtonNameCarriesTheTitle(t *testing.T) {
+	for label, want := range map[string]string{
+		InstallLabelReady:     "Install Team tools",
+		InstallLabelRunning:   "Installing Team tools",
+		InstallLabelCompleted: "Installed Team tools",
+	} {
+		if got := InstallButtonName(label, "Team tools"); got != want {
+			t.Errorf("InstallButtonName(%q) = %q, want %q", label, got, want)
+		}
+	}
+}
