@@ -39,37 +39,45 @@ type Notification struct {
 }
 
 // UpdateAllComplete returns the notification for a finished Update All run.
-// succeeded/failed/skipped are the phase counts from updateall.Summary, and
-// restartRequired is Summary.RestartRequired.
+// succeeded and failed count the run's sources whose updates were verified
+// as applied and that failed; sources the run never targeted — disabled,
+// unconfigured, or not available on this host — are not counted, because a
+// skipped source neither softens a total failure nor makes a clean run
+// partial. maintenanceFailed reports a failed post-update cleanup and
+// restartRequired a pending restart.
 //
-// The four distinct outcomes: every phase failed (high urgency — nothing
-// happened and the user should know), a mix of success and failure (high
-// urgency, since a silent partial failure is the case most likely to leave a
-// machine out of date without anyone noticing), a clean run that staged a
-// restart, and a clean run that found nothing to do — the last case still
-// gets a notification, since a user who stepped away wants to know the
-// system is current before deciding to restart.
-func UpdateAllComplete(succeeded, failed, skipped int, restartRequired bool) Notification {
-	total := succeeded + failed + skipped
-
+// The outcomes: every source failed (high urgency — nothing happened and the
+// user should know), a mix of success and failure (high urgency, since a
+// silent partial failure is the case most likely to leave a machine out of
+// date without anyone noticing), updates installed but cleanup failed, a
+// clean run that staged a restart, and a clean run. The run starts only with
+// updates pending, so a clean run installed them; it never says the system
+// was "already" current.
+func UpdateAllComplete(succeeded, failed int, restartRequired, maintenanceFailed bool) Notification {
+	restartSuffix := ""
+	if restartRequired {
+		restartSuffix = " Restart to apply the system image."
+	}
 	switch {
-	case total == 0:
-		return Notification{Title: "Nothing to update", Body: "No update sources are available on this system."}
-	case failed == total:
+	case failed > 0 && succeeded == 0:
 		return Notification{
 			Title:   "Update failed",
 			Body:    branding.AppName + " could not update this system. Open the app for details.",
 			Urgency: UrgencyHigh,
 		}
 	case failed > 0:
-		body := fmt.Sprintf("%d part(s) updated, %d failed.", succeeded, failed)
-		if restartRequired {
-			body += " Restart to apply the system image."
-		}
+		body := fmt.Sprintf("%d part(s) updated, %d failed.", succeeded, failed) + restartSuffix
 		return Notification{Title: "Update finished with problems", Body: body, Urgency: UrgencyHigh}
+	case succeeded == 0 && !maintenanceFailed:
+		return Notification{Title: "Nothing to update", Body: "No updates were installed."}
+	case maintenanceFailed:
+		return Notification{
+			Title: "Update finished with problems",
+			Body:  "Updates were installed, but cleaning up afterwards failed. Open the app for details." + restartSuffix,
+		}
 	case restartRequired:
 		return Notification{Title: "Update complete", Body: "Restart to apply the new system image."}
 	default:
-		return Notification{Title: "Update complete", Body: "This system is already up to date."}
+		return Notification{Title: "Update complete", Body: "All updates were installed."}
 	}
 }

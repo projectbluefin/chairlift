@@ -530,17 +530,11 @@ func (s *UpdateShell) notifyUpdateComplete(final updateflow.Snapshot) {
 		return
 	}
 
-	skipped := 0
-	for _, source := range final.Sources {
-		if !source.Enabled || !source.Configured || !source.Available {
-			skipped++
-		}
-	}
 	notification := notify.UpdateAllComplete(
 		len(final.CompletedSources),
 		len(final.FailedSources),
-		skipped,
 		final.RestartRequired(),
+		final.MaintenanceErr != nil,
 	)
 
 	sgtk.RunOnMainThread(func() {
