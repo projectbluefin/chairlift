@@ -162,6 +162,22 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
+// Dakota ships these collections in /usr/share/ublue-os/homebrew (observed on
+// dakota:testing, 2026-10-07). An unnamed one falls back to its title-cased
+// file name and a generic summary, which is how "Nsl" reached the Apps page.
+func TestDakotaCollectionsAreAllNamed(t *testing.T) {
+	for _, id := range []string{
+		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
+		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
+		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
+		"wallpaper-slideshow",
+	} {
+		if _, ok := catalog[id]; !ok {
+			t.Errorf("collection %q has no catalog entry", id)
+		}
+	}
+}
+
 // TestNoCollectionRowLeaksToolingIdentity holds the rule the group exists to
 // satisfy: a person reading a row never sees a file name, a location, or a
 // packaging term. Homebrew itself is exempt — the group description names it

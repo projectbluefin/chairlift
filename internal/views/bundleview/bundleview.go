@@ -88,9 +88,12 @@ var catalog = map[string]catalogEntry{
 	"full-desktop":        {"Full desktop", "A complete set of desktop apps for everyday use."},
 	"ide":                 {"Code editors", "Popular code editors and development environments."},
 	"k8s-tools":           {"Kubernetes tools", "Command line tools for working with Kubernetes clusters."},
+	"nsl":                 {"Linux machines", "Run persistent Linux virtual machines from your account."},
 	"swift":               {"Swift development", "Everything needed to build Swift projects."},
 	"system-dx-flatpaks":  {"Developer apps", "Desktop apps for development work."},
 	"system-flatpaks":     {"Everyday apps", "The desktop apps recommended for everyday use."},
+	"video-wallpaper":     {"Video wallpaper", "Use a video as your desktop background."},
+	"wallpaper-slideshow": {"Wallpaper slideshow", "Change your desktop background on a schedule."},
 }
 
 const fallbackSummary = "A set of apps and tools put together for this system."
