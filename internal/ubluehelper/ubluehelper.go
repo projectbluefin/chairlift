@@ -279,14 +279,16 @@ func RollbackArgs() []string {
 // `--experimental` is required by bootc itself — this reset path is not
 // stabilized upstream — and ChairLift does not hide that from the argv or
 // from the confirmation dialog that must be shown before this ever runs
-// (pageview.FactoryResetConfirmation). `--apply` makes the reset take effect
-// immediately rather than only staging it, because a "staged" factory reset
-// that silently applies at the next unrelated restart is a worse surprise
-// than the operation itself. Like Restart and Rollback this takes no
-// caller-supplied value: a factory reset has exactly one target, the image
-// already booted.
+// (pageview.FactoryResetConfirmation). `--apply` is deliberately absent:
+// bootc documents it as "Restart or reboot into the new target image.
+// Currently, this option always reboots", so carrying it rebooted the
+// machine the moment the user authenticated, discarding unsaved work, while
+// every user-facing string promises the reset applies at the next restart.
+// Without it bootc prepares the fresh deployment and the user restarts when
+// ready. Like Restart and Rollback this takes no caller-supplied value: a
+// factory reset has exactly one target, the image already booted.
 func FactoryResetArgs() []string {
-	return []string{"install", "reset", "--experimental", "--apply"}
+	return []string{"install", "reset", "--experimental"}
 }
 
 // AutoUpdateArgs returns the ordered systemctl argv lists that turn automatic

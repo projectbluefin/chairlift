@@ -498,7 +498,8 @@ loaded from root-owned system paths. It resolves the account from `PKEXEC_UID`.
 No image reference, username, unit name, reset/rollback target or scheduling
 value arrives in argv. Channel/driver switches enforce container signature
 policy. Rollback has one existing-deployment target; Factory Reset spells the
-fixed `bootc install reset --experimental --apply` argv in the helper.
+fixed `bootc install reset --experimental` argv in the helper (no `--apply`,
+which reboots immediately; the reset applies at the next restart).
 Reset and restart confirmations stay in the calling UI, with destructive
 wording supplied by `pageview`.
 

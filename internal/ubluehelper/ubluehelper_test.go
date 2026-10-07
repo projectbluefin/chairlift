@@ -340,14 +340,14 @@ func TestRestartArgsTakeNoCallerControlledValues(t *testing.T) {
 	}
 }
 
-// FactoryResetArgs is the one helper argv that legitimately carries flags —
-// --experimental and --apply are fixed, not caller-supplied, so they are not
-// the caller-controlled-value risk the other Args functions guard against.
+// FactoryResetArgs is the one helper argv that legitimately carries a flag —
+// --experimental is fixed, not caller-supplied, so it is not the
+// caller-controlled-value risk the other Args functions guard against.
 // What must still never appear is a registry reference or an image path,
 // since a factory reset takes exactly one target: the image already booted.
 func TestFactoryResetArgsAreFixedAndCarryNoTarget(t *testing.T) {
 	args := FactoryResetArgs()
-	want := []string{"install", "reset", "--experimental", "--apply"}
+	want := []string{"install", "reset", "--experimental"}
 	if !reflect.DeepEqual(args, want) {
 		t.Fatalf("FactoryResetArgs() = %v, want %v", args, want)
 	}
@@ -366,6 +366,18 @@ func TestFactoryResetArgsAreFixedAndCarryNoTarget(t *testing.T) {
 	}
 	if !found {
 		t.Error("FactoryResetArgs() does not carry --experimental")
+	}
+}
+
+// bootc's `install reset --apply` "always reboots" (bootc install reset
+// --help). Every Factory Reset string promises the reset applies at the next
+// restart, so the argv must never reboot the machine the moment the user
+// authenticates.
+func TestFactoryResetArgsNeverRebootImmediately(t *testing.T) {
+	for _, arg := range FactoryResetArgs() {
+		if arg == "--apply" || strings.HasPrefix(arg, "--apply=") {
+			t.Fatalf("FactoryResetArgs() carries %q, which reboots immediately", arg)
+		}
 	}
 }
 
