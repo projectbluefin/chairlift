@@ -7,9 +7,74 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
+
+// brokenRemoteStub is a flatpak stand-in for issue #471: the user
+// installation has flathub and a leftover test-center remote whose host no
+// longer resolves, the system installation has no remotes, and origins is the
+// user `list --columns=origin` answer. flathub reports a Firefox update until
+// `update` runs.
+func brokenRemoteStub(origins string) string {
+	return `state="${0%/*}/updated"
+case "$1" in
+remotes) [ "$2" = --user ] && printf 'flathub\ntest-center\tno-gpg-verify\n' ;;
+list) printf '` + origins + `' ;;
+update) : > "$state" ;;
+remote-ls)
+	case "$6" in
+	flathub) [ -e "$state" ] || printf 'Firefox\torg.mozilla.firefox\t131.0\n' ;;
+	*) echo "error: Unable to load summary from remote $6: Could not resolve hostname" >&2; exit 1 ;;
+	esac ;;
+*) exit 1 ;;
+esac
+exit 0
+`
+}
+
+// Issue #471: a leftover remote nothing installed comes from must not fail
+// the Applications check or the post-apply reconciliation, and the healthy
+// remote's update must still be offered and verified.
+func TestFlatpakIgnoresABrokenUnusedRemoteEndToEnd(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+	writeStub(t, "flatpak", brokenRemoteStub(`flathub\n`))
+	provider := NewFlatpak()
+
+	got, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v, want the unused broken remote ignored", err)
+	}
+	want := []updateflow.Item{{ID: "org.mozilla.firefox", Name: "Firefox", AvailableVersion: "131.0", Scope: "user"}}
+	if !reflect.DeepEqual(got.Items, want) {
+		t.Fatalf("Check() items = %#v, want %#v", got.Items, want)
+	}
+
+	result, err := provider.Apply(context.Background(), got.Items, nil)
+	if err != nil {
+		t.Fatalf("Apply() error = %v, want reconciliation to ignore the unused broken remote", err)
+	}
+	if !result.Changed || result.Preview {
+		t.Fatalf("Apply() = %#v, want a verified change", result)
+	}
+}
+
+// A broken remote an installed ref still comes from fails the check with an
+// error naming that remote, which the coordinator shows while keeping the
+// source's last known inventory.
+func TestFlatpakReportsABrokenRemoteInUse(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+	writeStub(t, "flatpak", brokenRemoteStub(`flathub\ntest-center\n`))
+
+	_, err := NewFlatpak().Check(context.Background())
+	var remoteErr *flatpak.RemoteError
+	if !errors.As(err, &remoteErr) || remoteErr.Remote != "test-center" || remoteErr.Installation != "user" {
+		t.Fatalf("Check() error = %v, want test-center reported in the user installation", err)
+	}
+}
 
 func TestFlatpakUnavailable(t *testing.T) {
 	provider := newFlatpak(FlatpakDeps{

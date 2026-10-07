@@ -76,6 +76,16 @@ Feature: Updates
     And the "Applications" row says "Up to date"
     And the Updates page offers only the "Check again" action
 
+  # Issue #471: a remote left behind by an uninstalled application cannot be
+  # reached, but nothing installed comes from it, so it must not fail the check.
+  @stub.updates-flatpak-leftover-remote @stub.updates-brew-current
+  Scenario: An unreachable remote nothing installed uses does not fail the check
+    Given ChairLift is running
+    Then the Updates status reads "Updates available"
+    And the "Applications" row says "1 update available"
+    And the "Firefox" row says "Available: 131.0"
+    And I do not see "Unable to load summary"
+
   @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
   Scenario: A failed source-trust check is not hidden as if every source were trusted
     Given ChairLift is running

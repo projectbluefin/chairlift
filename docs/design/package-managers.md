@@ -278,7 +278,7 @@ is stamped from the query, not inferred from optional parsed columns.
 | --- | --- |
 | `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version` |
 | `ListUserRuntimes()` / `ListSystemRuntimes()` | Same query with `--runtime` |
-| `ListUpdates(ctx, user)` | `remote-ls --updates --app --columns=name,application,version` in the selected scope |
+| `ListUpdates(ctx, user)` | `remotes --columns=name,options`, then `remote-ls --updates --app --columns=name,application,version <remote>` per enabled remote, in the selected scope |
 | `Install(appID, user)` / `InstallFromRemote(appID, remote, user)` | `install -y` in explicit scope, optionally naming a remote |
 | `Uninstall(appID, user)` | `uninstall -y` in explicit scope |
 | `Update(ctx, appID, user)` | `update -y` in explicit scope; empty ID updates that scope |
@@ -289,10 +289,26 @@ The update inventory deliberately lists applications only. A runtime extension
 such as Gaming's MangoHud requires the separate runtime inventory; it must
 not be classified absent from an application-only query.
 
+`ListUpdates` queries each enabled remote separately because a remote-less
+`remote-ls --updates` fails the whole installation when any one remote is
+unreachable: a remote left behind by an uninstalled application (issue #471)
+hid every other remote's updates and failed the Updates check, although
+`flatpak update` itself still succeeded. A remote whose query fails is checked
+against `list --columns=origin`: when no installed application or runtime in
+that scope comes from it, it is logged and ignored; otherwise it is reported
+as a `*flatpak.RemoteError` naming that remote and installation. A cancelled
+caller context or a missing executable still aborts the whole query. The
+healthy remotes' updates are returned alongside that error, but the
+Applications source's check still fails: the coordinator keeps the last known
+inventory on any check error rather than adopting a partial one. The
+post-apply reconciliation and the single-item verification read through the
+same function, so an ignored remote cannot fail them either.
+
 Install, uninstall, remove and update are mutations: 30-minute timeout,
 preview-skipped dispatch, successful output discarded and bounded diagnostic
 tails. Other commands get 30 seconds and full parser output. `ListUpdates`
-and `Update` accept caller cancellation and apply their read/mutation budgets;
+and `Update` accept caller cancellation and apply their read/mutation budgets
+(`ListUpdates` per query, so one slow remote cannot starve the others);
 other exported operations own their contexts. Availability runs `--version`
 under five seconds, with a cached variant for providers.
 
