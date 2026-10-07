@@ -28,8 +28,8 @@ Feature: Apps destination
       | ripgrep |
     And the "jq" row says "1.7.1"
     And the "ripgrep" row says "14.1.1 • Pinned"
-    And the "Pin" button in the "jq" row is sensitive
-    And the "Unpin" button in the "ripgrep" row is sensitive
+    And the "Pin jq" button in the "jq" row is sensitive
+    And the "Unpin ripgrep" button in the "ripgrep" row is sensitive
     And I do not see "libunistring"
     Then the "Homebrew applications" apps group shows exactly
       | title              |
@@ -39,12 +39,12 @@ Feature: Apps destination
   Scenario: Cancelling an uninstall changes nothing and leaves the row usable
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Uninstall" button in the "jq" row
+    And I click the "Uninstall jq" button in the "jq" row
     Then a dialog titled "Uninstall jq?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
-    And the "Uninstall" button in the "jq" row is sensitive
-    And the "Pin" button in the "jq" row is sensitive
+    And the "Uninstall jq" button in the "jq" row is sensitive
+    And the "Pin jq" button in the "jq" row is sensitive
     And the application log previews no "brew uninstall"
     And Homebrew was never asked to "uninstall"
 
@@ -52,12 +52,12 @@ Feature: Apps destination
   Scenario Outline: A confirmed uninstall of <name> is previewed and the known inventory is kept
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Uninstall" button in the "<name>" row
+    And I click the "Uninstall <name>" button in the "<name>" row
     Then a dialog titled "Uninstall <name>?" is shown
     When I choose "Uninstall" in the dialog
     Then the application log previews "<command>" exactly once
     And a toast on the Apps page says "[DRY-RUN] Preview: <name> would be uninstalled — no changes made"
-    And the "Uninstall" button in the "<name>" row is sensitive
+    And the "Uninstall <name>" button in the "<name>" row is sensitive
     And the "<list>" apps group says "<count>"
     And Homebrew was never asked to "uninstall"
 
@@ -70,12 +70,12 @@ Feature: Apps destination
   Scenario Outline: <action> on <name> is confirmed, previewed, and restores both row controls
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "<action>" button in the "<name>" row
+    And I click the "<action> <name>" button in the "<name>" row
     Then a dialog titled "<action> <name>?" is shown
     When I choose "<action>" in the dialog
     Then the application log previews "<command>" exactly once
-    And the "<action>" button in the "<name>" row is sensitive
-    And the "Uninstall" button in the "<name>" row is sensitive
+    And the "<action> <name>" button in the "<name>" row is sensitive
+    And the "Uninstall <name>" button in the "<name>" row is sensitive
     And the "<name>" row says "<subtitle>"
     And Homebrew was never asked to "<verb>"
 
@@ -90,7 +90,7 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Command line tools" apps group says "Could not read the list"
     And the "Homebrew applications" apps group says "Could not read the list"
-    And the "Install" button in the "Team tools" row is sensitive
+    And the "Install Team tools" button in the "Team tools" row is sensitive
     And the "Export" button in the "Export package list" row is sensitive
 
   @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
@@ -104,11 +104,11 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Coding fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    When I click the "Install" button in the "Coding fonts" row
+    When I click the "Install Coding fonts" button in the "Coding fonts" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And the application log contains "/bundles/fonts-dev.Brewfile"
     And a toast on the Apps page says "[DRY-RUN] Preview: Coding fonts would be installed — no changes made"
-    And the "Install" button in the "Coding fonts" row is sensitive
+    And the "Install Coding fonts" button in the "Coding fonts" row is sensitive
     And I do not see "Installing collection"
     And I do not see "Installing collection…"
     And Homebrew was asked to "bundle check"
@@ -118,8 +118,8 @@ Feature: Apps destination
   Scenario: A collection already on the system reads Installed when the page loads
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Installed" button in the "Team tools" row is insensitive
-    And the "Install" button in the "Coding fonts" row is sensitive
+    Then the "Installed Team tools" button in the "Team tools" row is insensitive
+    And the "Install Coding fonts" button in the "Coding fonts" row is sensitive
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
 
@@ -137,9 +137,9 @@ Feature: Apps destination
     Then the Apps page does not show the "Packages from Homebrew" group
     And the Apps page does not show the "Command line tools" group
     And the Apps page does not show the "Homebrew applications" group
-    When I click the "Install" button in the "Team tools" row
+    When I click the "Install Team tools" button in the "Team tools" row
     Then the application log contains "/bundles/team-tools.Brewfile"
-    And the "Install" button in the "Team tools" row is sensitive
+    And the "Install Team tools" button in the "Team tools" row is sensitive
     And I do not see "Installing collection"
     And I do not see "Installing collection…"
     And the application log does not contain "panic"
@@ -160,8 +160,8 @@ Feature: Apps destination
   Scenario: Every control on the Apps page, including every list row's, is named and operable
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Pin" button in the "jq" row is sensitive
-    And the "Install" button in the "Team tools" row is sensitive
-    And the "Uninstall" button in the "visual-studio-code" row is sensitive
+    Then the "Pin jq" button in the "jq" row is sensitive
+    And the "Install Team tools" button in the "Team tools" row is sensitive
+    And the "Uninstall visual-studio-code" button in the "visual-studio-code" row is sensitive
     And the "Export" button in the "Export package list" row is sensitive
     And every visible action control has an accessible name and an action

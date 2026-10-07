@@ -48,6 +48,8 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
 				"pageview.PackageListExportSubtitle",
+				"pageview.HomebrewPackageButtonName(",
+				"button.ResetRelation(gtk.AccessibleRelationLabelledByValue)",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
@@ -58,6 +60,11 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				// The export overwrites any Brewfile, not only an earlier
 				// export (W2-APPS-4).
 				"exported last time",
+				// A bare label names every row's button alike (W2-APPS-5);
+				// row buttons go through setPackageButtonLabel.
+				`gtk.NewButtonWithLabel("Uninstall")`,
+				"gtk.NewButtonWithLabel(pinLabel)",
+				"primary.SetLabel(",
 			},
 		},
 		{
@@ -255,6 +262,12 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.PublishedVersions(",
 				"pageview.PinConfirmation(",
 			},
+		},
+		{
+			// Collection buttons are named after the collection (W2-APPS-5).
+			file:     "bundle_install.go",
+			required: []string{"bundleview.InstallButtonName(label, b.title)"},
+			retired:  []string{"SetAccessibleLabel(control.button, label)"},
 		},
 	}
 

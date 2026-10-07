@@ -289,6 +289,14 @@ const (
 	InstallLabelCompleted = "Installed"
 )
 
+// InstallButtonName is the accessible name of a collection's button: its
+// label, without a progress ellipsis, followed by the collection's title, so
+// a screen reader announces "Install Team tools" rather than an "Install"
+// every row shares.
+func InstallButtonName(label, title string) string {
+	return strings.TrimSuffix(label, "…") + " " + title
+}
+
 // InstallPhase is the label and sensitivity every button bound to a
 // collection shows for the gate's current state. A button connected while a
 // run is in progress, or after one completed, joins at this phase rather

@@ -3,6 +3,7 @@ package pageview
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/gpu"
@@ -34,6 +35,15 @@ func HomebrewPackage(name, version string, pinned bool) Row {
 		subtitle += " • Pinned"
 	}
 	return Row{Title: name, Subtitle: subtitle}
+}
+
+// HomebrewPackageButtonName is the accessible name of an installed-package
+// row's button: its label, without a progress ellipsis, followed by the
+// package, so "Uninstall" becomes "Uninstall jq" and "Uninstalling…" becomes
+// "Uninstalling jq". Every row shows the same words; without the package a
+// screen reader announces "Uninstall" again and again.
+func HomebrewPackageButtonName(label, name string) string {
+	return strings.TrimSuffix(label, "…") + " " + name
 }
 
 // PackageListExportSubtitle describes the Apps page's package-list export.

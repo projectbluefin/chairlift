@@ -413,3 +413,21 @@ func TestPackageListExportSubtitleNamesWhatItReplaces(t *testing.T) {
 		t.Errorf("PackageListExportSubtitle = %q still claims only an earlier export is replaced", PackageListExportSubtitle)
 	}
 }
+
+// Every installed-package row shows the same Pin, Unpin, and Uninstall
+// labels, so the accessible name carries the package in each phase
+// (W2-APPS-5).
+func TestHomebrewPackageButtonNameCarriesThePackage(t *testing.T) {
+	for label, want := range map[string]string{
+		"Uninstall":     "Uninstall jq",
+		"Uninstalling…": "Uninstalling jq",
+		"Uninstalled":   "Uninstalled jq",
+		"Pin":           "Pin jq",
+		"Pinning…":      "Pinning jq",
+		"Unpin":         "Unpin jq",
+	} {
+		if got := HomebrewPackageButtonName(label, "jq"); got != want {
+			t.Errorf("HomebrewPackageButtonName(%q, jq) = %q, want %q", label, got, want)
+		}
+	}
+}

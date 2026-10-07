@@ -213,11 +213,13 @@ func (uh *UserHome) loadHomebrewPackages() {
 						pinLabel = "Unpin"
 						pinTooltip = "Let this be updated again"
 					}
-					pinBtn := gtk.NewButtonWithLabel(pinLabel)
+					pinBtn := gtk.NewButton()
+					setPackageButtonLabel(pinBtn, pinLabel, pkg.Name)
 					pinBtn.SetValign(gtk.AlignCenterValue)
 					pinBtn.SetTooltipText(pinTooltip)
 
-					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
+					uninstallBtn := gtk.NewButton()
+					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this tool from your system")
@@ -287,7 +289,8 @@ func (uh *UserHome) loadHomebrewPackages() {
 						continue
 					}
 
-					uninstallBtn := gtk.NewButtonWithLabel("Uninstall")
+					uninstallBtn := gtk.NewButton()
+					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
 					uninstallBtn.SetTooltipText("Remove this app from your system")
@@ -336,7 +339,7 @@ func (uh *UserHome) confirmHomebrewPin(
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
-		primary.SetLabel(action + "ning…")
+		setPackageButtonLabel(primary, action+"ning…", name)
 		go uh.runHomebrewPin(name, pin, primary, controls, gate)
 	})
 	dialog.Present(&uh.applicationsPrefsPage.Widget)
@@ -367,6 +370,7 @@ func (uh *UserHome) runHomebrewPin(
 		errorMessage = fmt.Sprintf("Could not pin %s", name)
 	}
 	uh.finishHomebrewPackageMutation(
+		name,
 		decision,
 		err,
 		errorMessage,
@@ -401,7 +405,7 @@ func (uh *UserHome) confirmHomebrewUninstall(
 			return
 		}
 		setHomebrewControlsSensitive(controls, false)
-		primary.SetLabel("Uninstalling…")
+		setPackageButtonLabel(primary, "Uninstalling…", name)
 		go uh.runHomebrewUninstall(name, kind, primary, controls, gate)
 	})
 	dialog.Present(&uh.applicationsPrefsPage.Widget)
@@ -423,6 +427,7 @@ func (uh *UserHome) runHomebrewUninstall(
 		dependents = depErr.Dependents
 	}
 	uh.finishHomebrewPackageMutation(
+		name,
 		decision,
 		err,
 		actionmsg.UninstallFailure(name, dependents),
@@ -441,6 +446,7 @@ func (uh *UserHome) runHomebrewUninstall(
 }
 
 func (uh *UserHome) finishHomebrewPackageMutation(
+	name string,
 	decision actionstate.Decision,
 	err error,
 	errorMessage string,
@@ -455,7 +461,7 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 		refresh := false
 		if decision.RestoreControl {
 			gate.Reset()
-			primary.SetLabel(idleLabel)
+			setPackageButtonLabel(primary, idleLabel, name)
 			setHomebrewControlsSensitive(controls, true)
 		}
 		if err != nil {
@@ -466,7 +472,7 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 		} else {
 			if decision.CompleteControl {
 				gate.Complete()
-				primary.SetLabel(completeLabel)
+				setPackageButtonLabel(primary, completeLabel, name)
 				setHomebrewControlsSensitive(controls, false)
 			}
 			uh.toastAdder.ShowToast(toast)
@@ -474,6 +480,18 @@ func (uh *UserHome) finishHomebrewPackageMutation(
 		}
 		uh.settleHomebrewRows(refresh)
 	})
+}
+
+// setPackageButtonLabel sets a package row button's visible label and names
+// it after the package for assistive technology: every row shows the same
+// words, so the label alone announced "Uninstall" for every package.
+// GtkButton names itself from its label child through a LABELLED_BY
+// relation, which outranks the LABEL property, so the relation is dropped
+// after every label change.
+func setPackageButtonLabel(button *gtk.Button, label, name string) {
+	button.SetLabel(label)
+	button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	SetAccessibleLabel(button, pageview.HomebrewPackageButtonName(label, name))
 }
 
 // settleHomebrewRows runs on the GTK main thread once a row action has

@@ -18,10 +18,12 @@ import (
 )
 
 // bundleInstall is the state one collection's install shares across every
-// surface that offers it: the gate that admits one run at a time and the
-// buttons that must all show the same phase.
+// surface that offers it: the gate that admits one run at a time, the
+// buttons that must all show the same phase, and the collection's display
+// title that names those buttons for assistive technology.
 type bundleInstall struct {
 	gate     bundleview.InstallGate
+	title    string
 	buttons  []bundleInstallButton
 	progress *installProgress
 }
@@ -38,7 +40,7 @@ type bundleInstallButton struct {
 func (b *bundleInstall) show(label string, sensitive bool) {
 	for _, control := range b.buttons {
 		control.label.SetLabel(label)
-		SetAccessibleLabel(control.button, label)
+		SetAccessibleLabel(control.button, bundleview.InstallButtonName(label, b.title))
 		control.button.SetSensitive(sensitive)
 		busy := label == bundleview.InstallLabelRunning
 		control.spinner.SetVisible(busy)
@@ -64,7 +66,10 @@ func (uh *UserHome) ConnectBundleInstall(bundle homebrew.Bundle, button *gtk.But
 	}
 	shared := uh.bundleInstalls[bundle.Path]
 	if shared == nil {
-		shared = &bundleInstall{progress: &uh.appInstallProgress}
+		shared = &bundleInstall{
+			title:    bundleview.Describe(bundle.Name, bundle.Description, bundle.ItemCount).Title,
+			progress: &uh.appInstallProgress,
+		}
 		uh.bundleInstalls[bundle.Path] = shared
 	}
 	content := gtk.NewBox(gtk.OrientationHorizontalValue, 6)
