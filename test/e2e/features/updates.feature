@@ -131,6 +131,7 @@ Feature: Updates
     Then the Updates status reads "1 update available"
     When I click the "Update all" button
     Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user"
+    And I see "[DRY-RUN] Preview: updates would be installed — no changes made"
     And the "Update all" button is sensitive
     And the "Refresh" button is sensitive
     And the Updates status reads "1 update available"
@@ -150,6 +151,7 @@ Feature: Updates
     When I click the "Update all" button
     Then the application log contains "[DRY-RUN] Would execute: brew update"
     And the application log contains "[DRY-RUN] Would execute: brew upgrade"
+    And I see "[DRY-RUN] Preview: updates would be installed — no changes made"
     And the "Update all" button is sensitive
     And the "Developer tools" row says "1 update available"
     And the application log does not contain "Would execute: flatpak update"

@@ -68,7 +68,9 @@ exists but the host is not bootc-booted.
 
 The coordinator owns `Snapshot.TotalUpdates`, source inventories and restart
 state. Generations reject stale publications. A failed check preserves the
-previous items and restart observation; a preview leaves inventory unchanged.
+previous items and restart observation; a preview leaves inventory unchanged,
+and the shell answers a preview Update all with `actionmsg.UpdateAllPreview`
+instead of the completion notification.
 An apply with `Changed=false` and no preview preserves pending items and sets
 a retryable apply failure, not completion. Retry applies only failed sources;
 maintenance can be retried separately. `PhaseRestartRequired` has

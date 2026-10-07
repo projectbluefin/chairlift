@@ -289,6 +289,16 @@ func (s *UpdateShell) StartUpdate() {
 			s.publish(snapshot)
 		})
 		s.notifyUpdateComplete(final)
+		if final.Preview {
+			// A preview installs nothing and the panel returns to "Updates
+			// available"; say it was a preview, as every other dry-run action
+			// on the page does.
+			sgtk.RunOnMainThread(func() {
+				if s.toasts != nil && updatepresent.ShouldPublish(s.closed.Load()) {
+					s.toasts.ShowToast(actionmsg.UpdateAllPreview)
+				}
+			})
+		}
 		if s.onUpdateFinished != nil {
 			sgtk.RunOnMainThread(func() {
 				if s.onUpdateFinished != nil {

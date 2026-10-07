@@ -151,6 +151,13 @@ func SystemStage(dryRun bool, staged bool) string {
 	return "System is up to date"
 }
 
+// UpdateAllPreview is the toast for an Update all run that only previewed
+// its sources (dry-run). The panel returns to "Updates available" because
+// nothing was installed, which without this toast reads like a failed or
+// silently ignored run; a live run reports through its completion
+// notification and the panel instead.
+const UpdateAllPreview = "[DRY-RUN] Preview: updates would be installed — no changes made"
+
 // TapTrustDecision is the result of deciding whether trusting a Homebrew tap
 // should mutate the Untrusted Homebrew Taps UI (remove the tap's row, hide
 // the group when empty, refresh outdated packages), and what toast to show

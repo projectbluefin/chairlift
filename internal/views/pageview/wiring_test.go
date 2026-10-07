@@ -313,7 +313,8 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		// status, ordered so an older read cannot replace a newer one.
 		{"updates_page.go", "renderSystemVersion", []string{"uh.systemVersionRefresh.IsCurrent(generation)", "uh.systemVersionRows.Clear(", "uh.systemVersionRow == nil"}},
 		{"update_shell.go", "Render", []string{"s.toasts.SetUpdateBadge(snapshot.TotalUpdates)"}},
-		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)"}},
+		// W4: a dry-run Update all says it was a preview.
+		{"update_shell.go", "StartUpdate", []string{"s.onUpdateFinished(final)", "if final.Preview {", "s.toasts.ShowToast(actionmsg.UpdateAllPreview)"}},
 		// W3-15: a preference changed while a check ran is re-checked once
 		// that check returns, and after a mutation that refused the check.
 		{"update_shell.go", "StartCheck", []string{"sgtk.RunOnMainThread(s.checkFinished)"}},
