@@ -102,7 +102,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 			},
 			want: Presentation{Status: "Couldn't check for updates",
-				Detail:      "Developer tools: network unavailable",
+				Detail:      "Not checked: Developer tools. Check your internet connection.",
 				ActionLabel: "Try again",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -142,7 +142,7 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 					{ID: updateflow.OperatingSystem, ApplyErr: errors.New("staging failed")},
 				},
 			},
-			want: Presentation{Status: "Some updates didn't install",
+			want: Presentation{Status: "Couldn't install some updates",
 				Detail:      "Not updated: Developer tools, Operating system",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
@@ -158,8 +158,8 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				},
 				MaintenanceErr: errors.New("cleanup failed"),
 			},
-			want: Presentation{Status: "Updates installed, but cleanup failed",
-				Detail:      "cleanup failed",
+			want: Presentation{Status: "Updates installed, but couldn't clean up",
+				Detail:      "Old files are still on this computer. Try again later.",
 				ActionLabel: "Retry failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -226,7 +226,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				Available:  false,
 			},
 			title: "System components",
-			sub:   "Not available on this system",
+			sub:   "Not available on this computer",
 		},
 		{
 			name: "preferences disabled",
@@ -285,7 +285,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				CheckErr:   errors.New("offline"),
 			},
 			title: "Developer tools",
-			sub:   "Check failed: offline",
+			sub:   "Couldn't check for updates. Check your internet connection.",
 		},
 		{
 			name: "apply error",
@@ -297,7 +297,7 @@ func TestSourceMapsSourceState(t *testing.T) {
 				ApplyErr:   errors.New("staging failed"),
 			},
 			title: "Operating system",
-			sub:   "Update failed: staging failed",
+			sub:   "Couldn't update. Try again later.",
 		},
 	}
 
@@ -551,6 +551,37 @@ func TestOnlyFailuresAddADetailLine(t *testing.T) {
 		}
 		if !isFailure && got.Detail != "" {
 			t.Errorf("Snapshot(%v).Detail = %q, want a single status line", phase, got.Detail)
+		}
+	}
+}
+
+// A failure is told in plain words: the raw error text a tool produced never
+// reaches the header or a source row (it is logged by the coordinator).
+func TestRawErrorTextNeverReachesTheScreen(t *testing.T) {
+	const raw = "error: Unable to load summary from remote flathub: exit status 1"
+	failure := errors.New(raw)
+	for _, phase := range everyPhase {
+		got := Snapshot(updateflow.Snapshot{
+			Phase:          phase,
+			Sources:        []updateflow.SourceState{{ID: updateflow.Applications, CheckErr: failure, ApplyErr: failure}},
+			FailedSources:  []updateflow.SourceID{updateflow.Applications},
+			MaintenanceErr: failure,
+		})
+		if strings.Contains(got.Status, raw) || strings.Contains(got.Detail, raw) {
+			t.Errorf("Snapshot(%v) shows the raw error: %#v", phase, got)
+		}
+	}
+	// Maintenance failing alone takes its own branch.
+	got := Snapshot(updateflow.Snapshot{Phase: updateflow.PhasePartialFailure, MaintenanceErr: failure})
+	if strings.Contains(got.Status, raw) || strings.Contains(got.Detail, raw) {
+		t.Errorf("cleanup failure shows the raw error: %#v", got)
+	}
+	for _, state := range []updateflow.SourceState{
+		{ID: updateflow.Applications, Configured: true, Available: true, Enabled: true, CheckErr: failure},
+		{ID: updateflow.Applications, Configured: true, Available: true, Enabled: true, ApplyErr: failure},
+	} {
+		if _, subtitle := Source(state); strings.Contains(subtitle, raw) || subtitle == "" {
+			t.Errorf("Source() subtitle = %q, want plain words without the raw error", subtitle)
 		}
 	}
 }

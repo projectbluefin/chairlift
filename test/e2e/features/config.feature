@@ -122,8 +122,8 @@ Feature: Fail-closed configuration and configuration-driven visibility
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: An update source the host cannot back is not blamed on the administrator
     Given ChairLift is running
-    Then the "Applications" row says "Not available on this system"
-    And the "Developer tools" row says "Not available on this system"
+    Then the "Applications" row says "Not available on this computer"
+    And the "Developer tools" row says "Not available on this computer"
 
   @config.config-no-agents-maintenance @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: Help explains missing tools, never groups the administrator disabled

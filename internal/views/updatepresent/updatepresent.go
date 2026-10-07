@@ -60,7 +60,9 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 	}
 }
 
-// Source maps one source state to its row title and subtitle.
+// Source maps one source state to its row title and subtitle. A failure is
+// said in plain words; the raw error is logged where it is produced
+// (updateflow.Coordinator), never shown.
 func Source(state updateflow.SourceState) (title, subtitle string) {
 	title = sourceTitle(state.ID)
 
@@ -68,7 +70,7 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case !state.Configured:
 		return title, gotext.Get("Disabled by administrator")
 	case !state.Available:
-		return title, gotext.Get("Not available on this system")
+		return title, gotext.Get("Not available on this computer")
 	case !state.Enabled:
 		return title, gotext.Get("Disabled in preferences")
 	case state.Checking:
@@ -76,9 +78,9 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
-		return title, gotext.Get("Update failed: %s", state.ApplyErr.Error())
+		return title, gotext.Get("Couldn't update. Try again later.")
 	case state.CheckErr != nil:
-		return title, gotext.Get("Check failed: %s", state.CheckErr.Error())
+		return title, gotext.Get("Couldn't check for updates. Check your internet connection.")
 	case state.RestartRequired:
 		return title, gotext.Get("Deployment staged")
 	case len(state.Items) > 0:
@@ -254,20 +256,24 @@ func updatingStatus(state updateflow.Snapshot) string {
 }
 
 func checkErrorDetail(state updateflow.Snapshot) string {
+	var failed []string
 	for _, source := range state.Sources {
 		if source.CheckErr != nil {
-			return gotext.Get("%s: %s", sourceTitle(source.ID), source.CheckErr.Error())
+			failed = append(failed, sourceTitle(source.ID))
 		}
 	}
-	return ""
+	if len(failed) == 0 {
+		return ""
+	}
+	return gotext.Get("Not checked: %s. Check your internet connection.", strings.Join(failed, ", "))
 }
 
 func partialFailurePresentation(state updateflow.Snapshot) Presentation {
 	if state.MaintenanceErr != nil && len(state.FailedSources) == 0 {
-		return Presentation{Status: gotext.Get("Updates installed, but cleanup failed"),
-			Detail: state.MaintenanceErr.Error()}
+		return Presentation{Status: gotext.Get("Updates installed, but couldn't clean up"),
+			Detail: gotext.Get("Old files are still on this computer. Try again later.")}
 	}
-	presentation := Presentation{Status: gotext.Get("Some updates didn't install")}
+	presentation := Presentation{Status: gotext.Get("Couldn't install some updates")}
 	if len(state.FailedSources) > 0 {
 		failed := make([]string, 0, len(state.FailedSources))
 		for _, id := range state.FailedSources {

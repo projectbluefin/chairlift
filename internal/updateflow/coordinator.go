@@ -3,6 +3,7 @@ package updateflow
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,6 +94,9 @@ func (c *Coordinator) Check(
 				source.Items = nil
 				source.CheckErr = nil
 			case err != nil:
+				// The UI shows plain words for a failure; the raw error is
+				// kept here, in the log, where it was produced.
+				log.Printf("updates: checking %s: %v", source.ID, err)
 				source.CheckErr = err
 			default:
 				source.Items = append([]Item(nil), result.Items...)
@@ -238,6 +242,7 @@ func (c *Coordinator) UpdateAll(
 			source := &state.Sources[sourceIndexValue]
 			source.Updating = false
 			if err != nil {
+				log.Printf("updates: updating %s: %v", id, err)
 				source.ApplyErr = err
 				source.Completed = false
 				removeSourceID(&state.CompletedSources, id)
@@ -256,6 +261,7 @@ func (c *Coordinator) UpdateAll(
 					// that cannot prove its mutation landed.
 					source.Completed = false
 					source.ApplyErr = errors.New("no update was applied; updates are still available")
+					log.Printf("updates: updating %s: %v", id, source.ApplyErr)
 					hadFailure = true
 					removeSourceID(&state.CompletedSources, id)
 				default:
@@ -308,6 +314,9 @@ func (c *Coordinator) UpdateAll(
 			c.commit(generation, progressState, publish)
 		}
 		err := c.maintenance.Run(ctx, maintenanceProgress)
+		if err != nil {
+			log.Printf("updates: cleanup after updating: %v", err)
+		}
 		stateMu.Lock()
 		state.MaintenanceErr = err
 		state.Current = ""

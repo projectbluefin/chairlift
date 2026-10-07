@@ -298,7 +298,7 @@ An agent must not break these:
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
   their conjunction is `effectiveEnabled`, but a source the host cannot back
-  must read "Not available on this system", never "Disabled by
+  must read "Not available on this computer", never "Disabled by
   administrator". Do not collapse them back into one boolean map. The rest
   of the Updates page — automatic updates, system version, dedicated staging
   and Compare, unverified sources, and Advanced channel/driver controls — is

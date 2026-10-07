@@ -38,7 +38,7 @@ updates** groups System components and Operating system; **Apps and tools**
 groups Applications and Developer tools. Each row shows its own state, so you
 can see which source is holding you up without opening anything. A source
 your administrator turned off says **Disabled by administrator**; one this
-computer has no software for says **Not available on this system** instead.
+computer has no software for says **Not available on this computer** instead.
 
 One button covers all of them. It reads **Check again** when nothing is
 pending, **Update all** when something is, and **Retry failed** if a source

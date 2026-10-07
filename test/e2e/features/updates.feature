@@ -19,8 +19,8 @@ Feature: Updates
     And the "Firefox" row says "Available: 131.0"
     And the update for "Firefox" is listed once with an accessible action
     And the "Developer tools" row says "Up to date"
-    And the "System components" row says "Not available on this system"
-    And the "Operating system" row says "Not available on this system"
+    And the "System components" row says "Not available on this computer"
+    And the "Operating system" row says "Not available on this computer"
     And the Updates sidebar badge shows "1"
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -68,8 +68,10 @@ Feature: Updates
   Scenario: A failed check is reported and can be retried
     Given ChairLift is running
     Then the Updates status reads "Couldn't check for updates"
-    And I see "Unable to load summary from remote flathub"
-    And the "Applications" row says "Check failed:"
+    And I see "Not checked: Applications. Check your internet connection."
+    And the "Applications" row says "Couldn't check for updates. Check your internet connection."
+    And I do not see "Unable to load summary from remote flathub"
+    And the application log contains "Unable to load summary from remote flathub"
     And the Updates page offers only the "Try again" action
     When the Flatpak remote is reachable again
     And I click the "Try again" button

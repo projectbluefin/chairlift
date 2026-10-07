@@ -468,7 +468,7 @@ keeps the two facts apart: `buildUI`'s `sourcePolicy` hands
 `Configured` is `Config.IsGroupEnabled` and whose `Supported` is
 `Set.Supports`. A source is checked only when both hold and its provider is
 available, exactly as the composed predicate would allow, but a source the host
-cannot back is reported unavailable ("Not available on this system") rather
+cannot back is reported unavailable ("Not available on this computer") rather
 than "Disabled by administrator", which `updatepresent` reserves for
 `Configured` false. The views' own "not installed" placeholder branches that
 the floor made unreachable were removed in #206.
@@ -721,18 +721,20 @@ surface in three layers that must stay separate:
   and `internal/bootc`; the coordinator executes nothing itself. Flatpak
   reconciliation verifies that all applied refs for each executed scope have
   cleared, ignoring newly appeared updates.
-- `internal/views/updatepresent` maps one snapshot to the shell's title,
-  description, banner, and action label, and each source's row subtitle. A
-  source whose policy has `Configured` false reads "Disabled by
-  administrator"; one that is configured but not `Available` — the provider's
-  own `Available` probe says no, or `Policy.Supported` is false because the capability
-  floor cannot back it — reads "Not available on this system". `ItemRows`
-  decides which pending items get a child row: the Operating system source's
-  one pending item is its deployment, so that source shows
-  "Update available: <booted> → <new>" on its own row and gets no child row
-  repeating its name. The fold is keyed on the source ID, never an item's
-  name; every other source keeps one row per item, because Applications and
-  Developer tools carry each item's only Update button on that row.
+- `internal/views/updatepresent` maps one snapshot to the shell's status
+  line, failure detail line, and action label, and each source's row
+  subtitle. Failures are said in plain words; the raw error is logged by the
+  coordinator where it is recorded, never shown. A source whose policy has
+  `Configured` false reads "Disabled by administrator"; one that is configured
+  but not `Available` — the provider's own `Available` probe says no, or
+  `Policy.Supported` is false because the capability floor cannot back it —
+  reads "Not available on this system". `ItemRows` decides which pending items
+  get a child row: the Operating system source's one pending item is its
+  deployment, so that source shows "Update available: <booted> → <new>" on its
+  own row and gets no child row repeating its name. The fold is keyed on the
+  source ID, never an item's name; every other source keeps one row per item,
+  because Applications and Developer tools carry each item's only Update button
+  on that row.
 
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from

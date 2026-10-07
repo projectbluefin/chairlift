@@ -321,14 +321,16 @@ func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflo
 	if source == updateflow.DeveloperTools {
 		message = actionmsg.Upgrade(dryrun.Enabled(), item.Name)
 	}
-	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
-		result, err := updateproviders.UpdateItem(ctx, source, item)
+	failed := func(err error) string {
 		var trustErr *homebrew.UntrustedTapError
 		if errors.As(err, &trustErr) {
-			return result, fmt.Errorf("%s", trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable))
+			return trustmsg.UpgradeMessage(item.Name, s.trustGroupAvailable)
 		}
-		return result, err
-	}, message)
+		return fmt.Sprintf("Couldn't update %s. Try again later.", updatepresent.ItemTitle(item))
+	}
+	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
+		return updateproviders.UpdateItem(ctx, source, item)
+	}, message, failed)
 }
 
 func (s *UpdateShell) startToolRefresh() {
@@ -337,13 +339,15 @@ func (s *UpdateShell) startToolRefresh() {
 		return
 	}
 	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, updateproviders.RefreshDeveloperTools,
-		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"))
+		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"),
+		func(error) string { return "Couldn't check for new tool versions. Try again later." })
 }
 
 // startIndividualUpdate runs one row's update. A live change reports source
 // as completed through the same finished hook an Update All run uses, so the
-// Apps inventory refreshes after a single Homebrew upgrade too.
-func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string) {
+// Apps inventory refreshes after a single Homebrew upgrade too. A failure is
+// logged with its raw error and shown as failed(err), which is plain words.
+func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string, failed func(error) string) {
 	if !s.beginMutation() {
 		return
 	}
@@ -363,9 +367,11 @@ func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw
 				return
 			}
 			if err != nil {
-				row.SetSubtitle(fmt.Sprintf("Update failed: %v", err))
+				log.Printf("updates: updating one item in %s: %v", source, err)
+				message := failed(err)
+				row.SetSubtitle(message)
 				if s.toasts != nil {
-					s.toasts.ShowErrorToast(fmt.Sprintf("Update failed: %v", err))
+					s.toasts.ShowErrorToast(message)
 				}
 				return
 			}
