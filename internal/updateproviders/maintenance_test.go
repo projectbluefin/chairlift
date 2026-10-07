@@ -207,3 +207,26 @@ func TestCleanupStepsAreSkippedWhenCleanupIsDisabled(t *testing.T) {
 		t.Fatalf("provider calls = %d, want 0 when cleanup is disabled", calls)
 	}
 }
+
+func TestCleanupConfiguredMatchesTheRunner(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  *config.Config
+		want bool
+	}{
+		{"no configuration", nil, false},
+		{"group absent", &config.Config{}, false},
+		{"group disabled", maintenanceConfig(false, true), false},
+		{"group enabled", maintenanceConfig(true, false), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CleanupConfigured(tc.cfg); got != tc.want {
+				t.Errorf("CleanupConfigured = %v, want %v", got, tc.want)
+			}
+			if got := newMaintenance(tc.cfg, MaintenanceDeps{}).Enabled(); got != tc.want {
+				t.Errorf("Enabled = %v, want %v; the preference and the runner disagree", got, tc.want)
+			}
+		})
+	}
+}
