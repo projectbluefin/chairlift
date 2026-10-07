@@ -586,19 +586,38 @@ func TestFeatureUpdate(t *testing.T) {
 	}
 }
 
-func TestLiveryToggleGatesMirrorsAndPreviewFeedback(t *testing.T) {
+// TestLiveryDecisionsGateTheMirrorAndAnnounceEveryPreview covers every Livery
+// decision. Selections and rotation once had no preview toast at all, so under
+// dry-run a pick closed its chooser and a rotate switch sprang back with
+// nothing on screen saying why (ADR-0009).
+func TestLiveryDecisionsGateTheMirrorAndAnnounceEveryPreview(t *testing.T) {
+	const name = "the Files icon"
 	for _, preview := range []bool{false, true} {
-		for _, enabled := range []bool{false, true} {
-			decision := LiveryToggle(preview, enabled, "the panel icon")
+		decisions := map[string]LiveryDecision{
+			"toggle on":    LiveryToggle(preview, true, name),
+			"toggle off":   LiveryToggle(preview, false, name),
+			"selection":    LiverySelection(preview, name),
+			"rotation on":  LiveryRotation(preview, true, name),
+			"rotation off": LiveryRotation(preview, false, name),
+		}
+		for action, decision := range decisions {
 			if decision.MutateUI == preview {
-				t.Fatalf("preview=%t allowed wrong mirror decision", preview)
+				t.Errorf("%s preview=%t: MutateUI=%t", action, preview, decision.MutateUI)
 			}
-			if preview && decision.Toast == "" {
-				t.Fatal("restored preview lacks feedback")
+			if !preview {
+				if decision.Toast != "" {
+					t.Errorf("%s: live run emits preview feedback %q", action, decision.Toast)
+				}
+				continue
 			}
-			if !preview && decision.Toast != "" {
-				t.Fatal("live switch emits redundant preview feedback")
+			if !strings.HasPrefix(decision.Toast, "[DRY-RUN] Preview: ") ||
+				!strings.HasSuffix(decision.Toast, " — no changes made") ||
+				!strings.Contains(decision.Toast, name) {
+				t.Errorf("%s: preview toast %q breaks the dry-run convention or omits the section", action, decision.Toast)
 			}
 		}
+	}
+	if on, off := LiveryRotation(true, true, name).Toast, LiveryRotation(true, false, name).Toast; on == off {
+		t.Errorf("rotation preview does not say which way it would go: %q", on)
 	}
 }

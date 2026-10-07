@@ -191,3 +191,40 @@ func TestLiveryRotateSensitivityReadsConfirmedSectionState(t *testing.T) {
 		t.Error("finishLiveryToggle no longer records the committed state before recomputing the section's rotate switch")
 	}
 }
+
+// Every Livery handler that mirrors a change on success reads dry-run once,
+// into an actionmsg decision that drives both the mirror and the preview
+// toast (ADR-0009). Selections and rotation once read a bare preview flag
+// and showed nothing under dry-run.
+func TestLiveryPreviewsComeFromOneDecision(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	decisions := 0
+	for call, want := range map[string]int{
+		"actionmsg.LiveryToggle(dryrun.Enabled(), ":    2,
+		"actionmsg.LiverySelection(dryrun.Enabled(), ": 4,
+		"actionmsg.LiveryRotation(dryrun.Enabled(), ":  1,
+	} {
+		if got := strings.Count(text, call); got != want {
+			t.Errorf("%d handlers build %s…), want %d", got, call, want)
+		}
+		decisions += want
+	}
+	if got := strings.Count(text, "dryrun.Enabled()"); got != decisions {
+		t.Errorf("livery_actions.go reads dryrun.Enabled() %d times, want only the %d decision constructions", got, decisions)
+	}
+	if got := strings.Count(text, "liverystate.Selection("); got != 1 {
+		t.Errorf("selection outcomes resolved in %d places, want only publishLiverySelection", got)
+	}
+	if !strings.Contains(text, "if saved && decision.Toast != \"\" {") ||
+		!strings.Contains(text, "if err == nil && decision.Toast != \"\" {") {
+		t.Error("a selection or rotation completion no longer shows its preview toast")
+	}
+}
