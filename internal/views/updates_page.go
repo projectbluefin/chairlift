@@ -343,7 +343,10 @@ func (s *stageProgressSink) flush() {
 // The script checks, downloads, and stages in one idempotent operation, which
 // is why the action is labelled Download rather than as a check.
 func (uh *UserHome) onBootcStageClicked() {
-	if uh.updateShell == nil || !uh.updateShell.beginMutation() {
+	// beginMutation refuses while a check, an update run, or a restart owns
+	// the system; say so instead of ignoring the click.
+	if !uh.updateShell.beginMutation() {
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
 	button := uh.bootcStageBtn
@@ -697,9 +700,16 @@ func (uh *UserHome) buildDriverRow(status ublue.Status) {
 
 // onDriverSwitchClicked asks for the recommended graphics driver. Only the
 // driver word crosses the privileged boundary; the helper derives the
-// operating system to install from its own read-only table.
+// operating system to install from its own read-only table. The switch
+// replaces the operating system, so it is admitted through the update shell
+// like a stage: it must not race an update run's own staging.
 func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.Button, row *adw.ActionRow) {
 	if !uh.driverGate.TryStart() {
+		return
+	}
+	if !uh.updateShell.beginMutation() {
+		uh.driverGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
 
@@ -713,6 +723,9 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 		err := ublue.SwitchDriver(ctx, driver)
 
 		sgtk.RunOnMainThread(func() {
+			// Ends the admission before refreshAfterOSSwitch, whose check
+			// the shell refuses while a mutation is in flight.
+			uh.updateShell.finishMutation()
 			uh.driverGate.Reset()
 			button.SetSensitive(true)
 			button.SetLabel("Switch")
@@ -735,11 +748,18 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 }
 
 // onChannelToggled asks for the other release channel. Only the channel word
-// crosses the privileged boundary.
+// crosses the privileged boundary. Like a driver switch it replaces the
+// operating system, so the update shell admits it.
 func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row *adw.ActionRow) {
 	channel := imageinfo.ChannelStable
 	if toTesting {
 		channel = imageinfo.ChannelTesting
+	}
+
+	if !uh.updateShell.beginMutation() {
+		toggle.set(!toTesting)
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
 	}
 
 	toggle.widget.SetSensitive(false)
@@ -751,6 +771,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 		err := ublue.SwitchChannel(ctx, channel)
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			toggle.widget.SetSensitive(true)
 
 			if err != nil {

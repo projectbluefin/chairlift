@@ -102,6 +102,14 @@ func BootcStageFailureSubtitle(hadOutput bool) string {
 	return "The update could not be downloaded"
 }
 
+// UpdateBusyToast answers a Download, early-updates, or graphics-driver
+// request the update shell refused because a check, an update run, or a
+// restart already owns the system. Each of them replaces or stages the
+// operating system, so running one beside an update run's own staging would
+// race two privileged deployments; a refused click must still say why
+// nothing happened.
+const UpdateBusyToast = "Wait for the current update check or installation to finish"
+
 // StagingLogSubtitle returns the "Details" expander subtitle for a staging
 // run whose output is rendered through a bounded rolling window: shown is how
 // many lines the expander currently holds and total is how many the stage

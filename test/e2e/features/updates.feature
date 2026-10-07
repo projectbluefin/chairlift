@@ -224,7 +224,8 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Asking for early updates in a dry run journals the channel word only and stays on stable
     Given ChairLift is running
-    Then the switch in the "Get updates early" row is off
+    Then the Updates status reads "System is up to date"
+    And the switch in the "Get updates early" row is off
     When I toggle the switch in the "Get updates early" row
     Then the action journal records "channel-switch" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper channel-switch testing --dry-run"
@@ -233,10 +234,23 @@ Feature: Updates
     And the switch in the "Get updates early" row is off
     And the action journal holds exactly 1 entry
 
+  # W4: switching channel replaces the operating system, so the update shell
+  # admits it like a stage; a click it refuses says why rather than racing
+  # a check or an update run's own staging.
+  @stub.updates-flatpak-slow-check @stub.updates-brew-current
+  Scenario: Asking for early updates while a check runs is refused with an explanation
+    Given ChairLift is running
+    Then the Updates status reads "Checking for updates"
+    When I toggle the switch in the "Get updates early" row
+    Then I see "Wait for the current update check or installation to finish"
+    And the switch in the "Get updates early" row is off
+    And the action journal is empty
+
   @stub.updates-image-dakota-stable @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: Switching to the recommended graphics driver in a dry run journals the driver word and restores the button
     Given ChairLift is running
-    Then the "Graphics driver" row says "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics"
+    Then the Updates status reads "System is up to date"
+    And the "Graphics driver" row says "Switch to the NVIDIA (proprietary) driver for your NVIDIA + Intel graphics"
     When I click the "Switch" button in the "Graphics driver" row
     Then the action journal records "driver-switch" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper driver-switch nvidia --dry-run"
