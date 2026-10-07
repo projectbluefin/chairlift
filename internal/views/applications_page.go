@@ -53,7 +53,7 @@ func (uh *UserHome) buildApplicationsPage() {
 		// Package-list export row
 		dumpRow := adw.NewActionRow()
 		dumpRow.SetTitle("Export package list")
-		dumpRow.SetSubtitle("Saves a list of everything you installed here so you can put it back later. Replaces the list you exported last time.")
+		dumpRow.SetSubtitle(pageview.PackageListExportSubtitle)
 		dumpSpinner := newActivitySpinner()
 		dumpRow.AddSuffix(&dumpSpinner.Widget)
 

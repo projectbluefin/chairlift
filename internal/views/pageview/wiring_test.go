@@ -47,6 +47,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"bundleview.Describe(",
 				"pageview.HomebrewPackage(",
+				"pageview.PackageListExportSubtitle",
 			},
 			retired: []string{
 				`fmt.Sprintf("%s — %s", bundle.Description, bundle.Path)`,
@@ -54,6 +55,9 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"~/Brewfile",
 				`fmt.Sprintf("Error: %v", err)`,
 				"homebrew.BundleInstall(",
+				// The export overwrites any Brewfile, not only an earlier
+				// export (W2-APPS-4).
+				"exported last time",
 			},
 		},
 		{

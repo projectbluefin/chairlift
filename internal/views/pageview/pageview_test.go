@@ -399,3 +399,17 @@ func TestFeaturesEmptyStateOnlyWhenNothingIsOffered(t *testing.T) {
 		}
 	}
 }
+
+// The export replaces any Brewfile in the home folder, a hand-written one as
+// much as an earlier export, so the row names the file and says so rather
+// than claiming only a previous export is replaced (W2-APPS-4).
+func TestPackageListExportSubtitleNamesWhatItReplaces(t *testing.T) {
+	for _, want := range []string{"Brewfile in your home folder", "Replaces any Brewfile already there."} {
+		if !strings.Contains(PackageListExportSubtitle, want) {
+			t.Errorf("PackageListExportSubtitle = %q, want it to contain %q", PackageListExportSubtitle, want)
+		}
+	}
+	if strings.Contains(PackageListExportSubtitle, "exported last time") {
+		t.Errorf("PackageListExportSubtitle = %q still claims only an earlier export is replaced", PackageListExportSubtitle)
+	}
+}
