@@ -83,7 +83,7 @@ Feature: Agents page
     And I see "[DRY-RUN] Preview: Agent Mode would be turned on — no changes made"
     And the Agent Mode unit does not exist
     And the Agent Mode environment fragment does not exist
-    And brew was never asked to "bundle"
+    And brew was never asked to "bundle install"
     And the systemctl tool was never asked to mutate
     And the action journal is empty
 

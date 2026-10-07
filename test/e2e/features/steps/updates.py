@@ -185,12 +185,16 @@ def _update_sources(context):
     )
 
 
+# Each source is an AdwSwitchRow, which publishes itself with the "switch"
+# role (not a list row) and nests a second "switch" for its GtkSwitch. The
+# outer one is the row: it carries the subtitle and the row's sensitivity,
+# which is what the user can or cannot press. Pre-order search finds it
+# before the inner switch.
 def _preference_switch(context, row):
-    target = atspi.row_containing(_update_sources(context), row, timeout=1)
     return atspi.find(
-        target,
-        lambda n: atspi.role(n) in ("switch", "toggle button", "check box"),
-        f"a switch in the Preferences {row!r} row",
+        _update_sources(context),
+        lambda n: atspi.role(n) in ("switch", "toggle button", "check box") and atspi.name(n) == row,
+        f"the Preferences {row!r} switch row",
         timeout=1,
     )
 
@@ -198,7 +202,7 @@ def _preference_switch(context, row):
 @then('the Preferences "{row}" row says "{text}"')
 def step_preference_row_says(context, row, text):
     def check():
-        return text_present(atspi.row_containing(_update_sources(context), row, timeout=1), text)
+        return text_present(_preference_switch(context, row), text)
 
     assert atspi.poll(check), f"Preferences row {row!r} never said {text!r}"
 
@@ -218,7 +222,13 @@ def step_preference_switch(context, row, state, verdict):
 
 @step('I toggle the Preferences "{row}" switch')
 def step_toggle_preference(context, row):
-    atspi.activate(_preference_switch(context, row))
+    # The row publishes no action; its nested GtkSwitch does.
+    atspi.activate(atspi.find(
+        _preference_switch(context, row),
+        lambda n: atspi.role(n) in ("switch", "toggle button", "check box") and bool(atspi.actions(n)),
+        f"the actionable switch in the Preferences {row!r} row",
+        timeout=1,
+    ))
 
 
 @then("the action journal holds exactly {count:d} entry")

@@ -486,6 +486,12 @@ func (uh *UserHome) presentLiveryPicker(mode liveryPickerMode) {
 	}
 	uh.refreshLiveryPickerRows("")
 	uh.liveryPickerDialog.Present(&uh.liveryPrefsPage.Widget)
+	// Opened from the keyboard (Return on the Mark row) the dialog would
+	// otherwise hold no focus at all, so neither typing nor Escape reached
+	// it. Focus the search field, whose stop-search closes an empty chooser.
+	if uh.liveryPickerSearch != nil {
+		uh.liveryPickerDialog.SetFocus(&uh.liveryPickerSearch.Widget)
+	}
 }
 
 // liveryPickerMode selects which catalog the shared chooser searches.
