@@ -198,11 +198,11 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
   image descriptor or disable Gaming, rather than treating a legitimate
   Gaming read as evidence the Apps page still manages Flatpaks.
-- **Stub tags apply in no guaranteed order.** behave hands a scenario's
-  effective tags over as a set, so `@stub.a @stub.b` can run `b` before `a`.
-  A stub that refines another (replaces its fake or descriptor) calls the base
-  stub itself and the scenario lists only the refining tag; see
-  `maintenance_powerwash_inventory` and `maintenance_unlisted_image`.
+- **Never read tags from `scenario.effective_tags`.** It is a set, so
+  `@stub.a @stub.b` ran `b` before `a` and a refining stub was overwritten by
+  its base. `environment.py`'s `before_scenario` builds the list from
+  `feature.tags`, the rule's tags and `scenario.tags` in written order, so
+  stubs apply left to right and a later stub may replace an earlier one's fake.
 - **A switch cannot be moved back inside its own `state-set` emission.**
   `guardedSwitch.set` called synchronously from the user-change handler is
   overridden when the emission finishes, so a refused toggle stays on. Revert

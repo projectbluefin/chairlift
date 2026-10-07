@@ -1316,9 +1316,10 @@ back rather than entering it.
 
 The accelerators are:
 
-- `Ctrl+Q` → quit, by closing the window so its `close-request` handlers run:
-  a running update refuses the close (showing the Updates page and its
-  "Updates are still in progress…" banner) and active setup is dismissed
+- `Ctrl+Q` → quit, unless an update is running: `Window.RefuseCloseWhileUpdating`
+  (shared with the close-request handler, since `g_application_quit` emits no
+  `close-request`) shows the Updates page and its "Updates are still in
+  progress…" banner instead
 - `Ctrl+?` → show shortcuts dialog
 - `Alt+1` through `Alt+N` → navigate to the first through Nth visible page in
   canonical order, with omitted pages leaving no gaps

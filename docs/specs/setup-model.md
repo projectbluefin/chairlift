@@ -35,8 +35,7 @@ Moving Back or Next changes only navigation. It never installs software,
 changes configuration, or writes setup disposition. Advancing onto Livery must
 show it; only its Finish button completes setup. Escape, Dismiss setup, and an
 intentional window close dismiss setup without closing the application.
-`Ctrl+Q` quits by closing the window, so during setup it dismisses setup the
-same way; a second `Ctrl+Q` quits.
+`Ctrl+Q` quits in one press, setup included; only a running update refuses it.
 
 ## Disposition and dry run
 

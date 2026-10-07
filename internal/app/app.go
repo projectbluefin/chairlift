@@ -303,17 +303,14 @@ func (a *Application) onActivate() {
 // setupKeyboardShortcuts installs resolves to nothing and Ctrl+Q is
 // advertised in the shortcuts dialog while doing nothing.
 //
-// Quitting closes the window rather than calling g_application_quit
-// directly: g_application_quit never emits close-request, so a bare Quit
-// skipped the window's close-request handlers — the update-in-progress guard
-// and the setup dismissal — and Ctrl+Q killed a running update mid-flight.
-// Closing the last window still ends the application once those handlers
-// allow it.
+// g_application_quit never emits close-request, so a bare Quit skipped the
+// update-in-progress guard and Ctrl+Q killed a running update mid-flight.
+// The action asks the window's shared guard first; when no update runs it
+// quits in one press, setup included.
 func (a *Application) registerQuitAction() {
 	quitAction := gio.NewSimpleAction("quit", nil)
 	quitActivateCb := func(action gio.SimpleAction, param uintptr) {
-		if a.window != nil {
-			a.window.Close()
+		if a.window != nil && a.window.RefuseCloseWhileUpdating() {
 			return
 		}
 		a.Quit()

@@ -479,18 +479,11 @@ func (w *Window) setupActions() {
 	aboutAction.ConnectActivate(&aboutActivateCb)
 	w.AddAction(aboutAction)
 
-	// A close rejected while an update runs must say so where the user can
-	// see it: the banner lives inside the Updates shell, so a refusal from any
-	// other page used to look like a dead close button. The setup flow's own
-	// close-request handler is connected earlier (buildUI) and stops emission
-	// while setup is active, so this navigation is never refused by setup.
+	// The setup flow's own close-request handler is connected earlier
+	// (buildUI) and stops emission while setup is active, so this
+	// navigation is never refused by setup.
 	closeRequestCb := func(_ gtk.Window) bool {
-		if w.updateShell == nil || !w.updateShell.Busy() {
-			return false
-		}
-		w.navigateToPage("updates")
-		w.updateShell.RevealBusyBanner()
-		return true
+		return w.RefuseCloseWhileUpdating()
 	}
 	w.ConnectCloseRequest(&closeRequestCb)
 
@@ -897,4 +890,18 @@ func (w *Window) finishFirstRun(completed bool) {
 			sgtk.RunOnMainThread(func() { w.ShowErrorToast(err.Error()) })
 		}
 	}()
+}
+
+// RefuseCloseWhileUpdating reports whether an update run must keep the window
+// open, and if so shows why: the busy banner lives inside the Updates shell,
+// so a refusal from any other page used to look like a dead close button.
+// The close-request handler and app.quit share it, because
+// g_application_quit never emits close-request.
+func (w *Window) RefuseCloseWhileUpdating() bool {
+	if w.updateShell == nil || !w.updateShell.Busy() {
+		return false
+	}
+	w.navigateToPage("updates")
+	w.updateShell.RevealBusyBanner()
+	return true
 }

@@ -136,9 +136,17 @@ def parse_tags(tags):
 
 
 def before_scenario(context, scenario):
-    # Feature-level tags first so a scenario's own @config/@env wins.
-    feature_tags = list(scenario.feature.tags)
-    tags = feature_tags + [t for t in scenario.effective_tags if t not in feature_tags]
+    # behave's effective_tags is a set, so stubs that refine one another were
+    # applied in no fixed order. Build the list from the ordered tag lists
+    # instead: feature, rule, then the scenario's own (which includes an
+    # outline's Examples tags), so a scenario's own @config/@env/@stub wins.
+    tags = []
+    rule = getattr(scenario, "rule", None)
+    for source in (scenario.feature.tags, getattr(rule, "tags", None) or [], scenario.tags):
+        for tag in source:
+            if tag not in tags:
+                tags.append(tag)
+    tags += sorted(t for t in scenario.effective_tags if t not in tags)
     known = [t for t in tags if t.startswith("known_issue.")]
     if known and not os.environ.get("CHAIRLIFT_ATSPI_KNOWN_ISSUES"):
         issues = ", ".join("#" + t.split(".", 1)[1] for t in known)

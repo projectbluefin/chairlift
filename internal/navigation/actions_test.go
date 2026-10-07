@@ -155,20 +155,21 @@ func TestQuitAndCloseHonourTheUpdateGuard(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 
 	quit := funcBody(t, filepath.Join(repoRoot, actionScopes["app."]), "registerQuitAction")
-	closeAt := strings.Index(quit, "a.window.Close()")
+	guardAt := strings.Index(quit, "a.window.RefuseCloseWhileUpdating()")
 	quitAt := strings.Index(quit, "a.Quit()")
-	if closeAt < 0 {
-		t.Error("app.quit does not close the window, so close-request handlers never run")
-	}
-	if quitAt >= 0 && (closeAt < 0 || quitAt < closeAt) {
-		t.Error("app.quit calls a.Quit() before routing through the window's close-request handlers")
+	if guardAt < 0 || quitAt < 0 || quitAt < guardAt {
+		t.Error("app.quit must consult the window's update guard before a.Quit()")
 	}
 
 	actions := funcBody(t, filepath.Join(repoRoot, actionScopes["win."]), "setupActions")
-	navigate := strings.Index(actions, `w.navigateToPage("updates")`)
-	banner := strings.Index(actions, "w.updateShell.RevealBusyBanner()")
+	if !strings.Contains(actions, "return w.RefuseCloseWhileUpdating()") {
+		t.Error("the close-request handler no longer uses the shared update guard")
+	}
+	guard := funcBody(t, filepath.Join(repoRoot, actionScopes["win."]), "RefuseCloseWhileUpdating")
+	navigate := strings.Index(guard, `w.navigateToPage("updates")`)
+	banner := strings.Index(guard, "w.updateShell.RevealBusyBanner()")
 	if banner < 0 {
-		t.Fatal("the close-request guard no longer reveals the busy banner")
+		t.Fatal("the update guard no longer reveals the busy banner")
 	}
 	if navigate < 0 || navigate > banner {
 		t.Error("a refused close reveals the busy banner without first showing the Updates page")
