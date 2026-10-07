@@ -59,7 +59,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		if choice.kind == "wsl" {
 			combo := adw.NewComboRow()
 			combo.SetTitle("Virtual machine engine")
-			combo.SetSubtitle("The built-in engine runs Debian. Lima runs Ubuntu.")
+			combo.SetSubtitle("Both engines run Ubuntu.")
 			combo.SetModel(gtk.NewStringList([]string{"Built-in (recommended)", "Lima"}))
 			uh.wslSuppress = true
 			if uh.wslBackend == devtools.BackendLima {
@@ -327,7 +327,7 @@ func dockerSubtitle(state devtools.DockerState, err error) string {
 	case state.Active:
 		return "Docker is running. Log out and back in to use it."
 	case !state.Available:
-		return "This computer doesn't come with Docker."
+		return "Install and enable Docker"
 	default:
 		return "Asks for your administrator password. Anyone using Docker can control this whole computer."
 	}

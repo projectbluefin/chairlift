@@ -184,8 +184,8 @@ one JetBrains Toolbox entry. WSL needs hardware virtualization and access to
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
-Use **Virtual machine engine** to choose the built-in engine (Debian) or Lima
-(Ubuntu). An existing Lima Ubuntu machine is kept as the choice when no
+Use **Virtual machine engine** to choose the built-in engine or Lima;
+both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
 built-in machine exists, rather than creating a second one.
 **Gaming** lets you select individual applications and tools, and installs
 them system-wide for every account on the computer, which may ask for an

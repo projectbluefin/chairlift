@@ -83,7 +83,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     When I open the "Features" page
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
-    And the "Enable Docker" row says "This computer doesn't come with Docker."
+    And the "Enable Docker" row says "Install and enable Docker"
     And the action journal is empty
 
   @stub.features-gaming-none

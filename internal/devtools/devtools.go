@@ -425,13 +425,13 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 	}
 	if !state.Exists {
 		stage("Creating your virtual machine…")
-		if _, err := command(ctx, true, "nsl", "create", "debian", "--distro", "debian:13"); err != nil {
+		if _, err := command(ctx, true, "nsl", "create", "ubuntu", "--distro", "ubuntu:26.04"); err != nil {
 			return err
 		}
 	}
 	if !state.Running {
 		stage("Starting…")
-		if _, err := command(ctx, true, "nsl", "start", "debian"); err != nil {
+		if _, err := command(ctx, true, "nsl", "start", "ubuntu"); err != nil {
 			if _, runErr := command(ctx, true, "nsl", "run", "true"); runErr != nil {
 				return err
 			}

@@ -627,7 +627,7 @@ the chooser selection or silently migrate data. nsl requires Linux amd64;
 Lima supports Linux amd64 and arm64. Both require actual invoking-session
 `/dev/kvm` access; the fixed `kvm-enable` grant requires a new login before
 setup continues. nsl installs the `frostyard/tap/nsl` cask, runs `nsl doctor`,
-creates a Debian 13 machine when absent, starts it and proves shell readiness
+creates an Ubuntu 26.04 machine (`ubuntu`) when absent, starts it and proves shell readiness
 with `nsl run true`. Disable uses `nsl shutdown` and keeps data. Lima installs
 `lima`, adds its SSH include, creates/starts Ubuntu LTS with a writable home,
 enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
