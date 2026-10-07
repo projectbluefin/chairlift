@@ -328,3 +328,65 @@ func TestSerializerReservationOutlivesLaterClaims(t *testing.T) {
 		t.Errorf("ran %v, want %v", order, want)
 	}
 }
+
+// A list rebuild while a row's uninstall or pin is running discarded the
+// only controls showing it and gave the replacement row an idle gate, so a
+// second click started an overlapping brew command (W2-APPS-1).
+func TestRowGatesDeferRebuildWhileARowActionRuns(t *testing.T) {
+	var rows RowGates
+	if rows.Defer() {
+		t.Fatal("an empty list deferred its first rebuild")
+	}
+	rows.Rebuild()
+	jq := rows.New()
+	ripgrep := rows.New()
+	if rows.Defer() {
+		t.Fatal("idle rows deferred a rebuild")
+	}
+
+	if !ripgrep.TryStart() {
+		t.Fatal("idle row gate refused a start")
+	}
+	if !rows.Defer() {
+		t.Fatal("a rebuild would replace a row whose action is running")
+	}
+	if rows.Settled() {
+		t.Fatal("deferred rebuild ran while the row action is still running")
+	}
+	if !jq.TryStart() || !rows.Defer() {
+		t.Fatal("a second running row must keep the rebuild deferred")
+	}
+	jq.Complete()
+	if rows.Settled() {
+		t.Fatal("deferred rebuild ran while another row action is still running")
+	}
+	ripgrep.Reset()
+	if !rows.Settled() {
+		t.Fatal("the owed rebuild did not run once every row action settled")
+	}
+	if rows.Settled() {
+		t.Fatal("one deferred rebuild settled twice")
+	}
+}
+
+func TestRowGatesRebuildForgetsReplacedRowsAndDebt(t *testing.T) {
+	var rows RowGates
+	old := rows.New()
+	old.TryStart()
+	if !rows.Defer() {
+		t.Fatal("running row did not defer the rebuild")
+	}
+	old.Reset()
+	rows.Rebuild()
+	if rows.Settled() {
+		t.Fatal("a rebuild that ran still reports a deferred one owed")
+	}
+	replacement := rows.New()
+	if replacement == old {
+		t.Fatal("rebuild reused a replaced row's gate")
+	}
+	old.TryStart()
+	if rows.Defer() {
+		t.Fatal("a replaced row's gate still blocks rebuilds")
+	}
+}

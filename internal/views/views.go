@@ -350,6 +350,11 @@ type UserHome struct {
 	closeRecoveryDetail func()
 
 	brewPackagesRefresh actionstate.RefreshGate
+	// formulaGates and caskGates hold each installed list's row gates, so a
+	// rebuild waits for a running uninstall or pin instead of replacing
+	// the only controls that show it.
+	formulaGates actionstate.RowGates
+	caskGates    actionstate.RowGates
 }
 
 // New creates a new UserHome views manager.

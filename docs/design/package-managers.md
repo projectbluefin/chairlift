@@ -185,6 +185,10 @@ on failure or dry-run, and refresh the installed inventory only after live
 success. The installed loader clears and repopulates separate
 `formulaeRows`/`caskRows` trackers under its refresh generation; a stale
 generation's result is dropped and a failed read preserves the last known rows.
+Row gates come from each list's `actionstate.RowGates`: while any row's
+action is running (including an open confirmation dialog), a rebuild of that
+list is deferred rather than replacing the controls that show the action, and
+`settleHomebrewRows` runs the owed reload once every gate is released.
 Export restores its gate and spinner after every outcome.
 
 ### Process and diagnostic contract

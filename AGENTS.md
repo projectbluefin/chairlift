@@ -617,6 +617,9 @@ An agent must not break these:
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
+  Row gates come from the list's `actionstate.RowGates`, so a rebuild waits
+  while any row action (or its confirmation) is running instead of replacing
+  its busy controls with idle ones, and reloads once the last one settles.
   ChairLift's own cask (`pageview.IsSelfCask`) stays listed without an
   Uninstall button, so the page cannot delete the running application.
   Package-list export likewise holds an `actionstate.Gate`, shows a spinner
