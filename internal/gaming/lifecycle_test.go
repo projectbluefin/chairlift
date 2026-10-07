@@ -276,7 +276,7 @@ func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 		userRuntimes: []string{mangohud},
 	}))
 
-	removed, failures := Disable(allComponentIDs())
+	removed, _, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
@@ -371,9 +371,12 @@ func TestDisableRemovesEachComponentFromTheScopesItIsIn(t *testing.T) {
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, failures := Disable(allComponentIDs())
+	removed, kept, failures := Disable(allComponentIDs())
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if len(kept) != 0 {
+		t.Errorf("Disable() kept = %v, want none — the image declares nothing here", kept)
 	}
 	if !reflect.DeepEqual(removed, []string{steam, protonUp, flatseal}) {
 		t.Errorf("Disable() removed = %v, want every installed component", removed)
@@ -401,7 +404,7 @@ func TestDisableReportsAComponentWithACopyLeftAsFailed(t *testing.T) {
 	}, nil)
 	log := fakeFlatpak(t, "if [ \"$3\" = --system ]; then echo 'error: not allowed' >&2; exit 1; fi\nexit 0\n")
 
-	removed, failures := Disable([]string{steam})
+	removed, _, failures := Disable([]string{steam})
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none — the system copy is still installed", removed)
 	}
@@ -417,7 +420,7 @@ func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 	stubInstalled(t, []string{steam, protonUp}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")
 
-	removed, failures := Disable(allComponentIDs())
+	removed, _, failures := Disable(allComponentIDs())
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none", removed)
 	}
@@ -467,7 +470,7 @@ func TestGamingSelectionRejectsUnknownBeforeAnyMutation(t *testing.T) {
 func TestGamingRemovalLeavesUnselectedComponents(t *testing.T) {
 	stubInstalled(t, []string{steam, protonUp}, nil)
 	log := fakeFlatpak(t, "exit 0")
-	removed, failures := Disable([]string{protonUp})
+	removed, _, failures := Disable([]string{protonUp})
 	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{protonUp}) {
 		t.Fatalf("removal = %v %v", removed, failures)
 	}

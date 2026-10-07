@@ -269,8 +269,8 @@ func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 	if installed, failures := Enable(allComponentIDs()); installed != nil || len(failures) != 1 {
 		t.Errorf("Enable() = (%v, %v), want (nil, one error)", installed, failures)
 	}
-	if removed, failures := Disable(allComponentIDs()); removed != nil || len(failures) != 1 {
-		t.Errorf("Disable() = (%v, %v), want (nil, one error)", removed, failures)
+	if removed, kept, failures := Disable(allComponentIDs()); removed != nil || kept != nil || len(failures) != 1 {
+		t.Errorf("Disable() = (%v, %v, %v), want (nil, nil, one error)", removed, kept, failures)
 	}
 }
 

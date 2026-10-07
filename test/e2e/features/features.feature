@@ -1,8 +1,8 @@
 @features
 Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, and Printers
   Optional tools are explicit choices. Gaming installs system-wide and removes
-  a selected app from every scope it is in; the fixed helper grants only the
-  access each developer option needs.
+  a selected app from every scope it is in, except a system copy the image
+  ships; the fixed helper grants only the access each developer option needs.
   Dry runs restore every control and preserve observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
@@ -128,6 +128,21 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And each gaming component says "Installed system-wide"
     And the "Remove Selected" button is sensitive
     And the fake flatpak was never asked to "uninstall"
+
+  # Dakota's /usr/share/ublue-os/homebrew/system-flatpaks.Brewfile ships
+  # Flatseal system-wide, so undoing gaming mode must leave that copy alone.
+  @stub.features-gaming-installed
+  Scenario: A selected gaming app that came with the system is left in place
+    Given ChairLift is running
+    When I open the "Features" page
+    And I select the "Flatseal" gaming component
+    And I click the "Remove Selected" button
+    And I choose "Remove" in the dialog
+    Then the Gaming inventory is read again after the change
+    And the application log contains "views: gaming component com.github.tchx84.Flatseal came with the system"
+    And the application log does not contain "flatpak uninstall"
+    And each gaming component says "Installed system-wide"
+    And the "Remove Selected" button is sensitive
 
   @stub.features-gaming-user
   Scenario: Per-user gaming apps an earlier release installed are removed from your account

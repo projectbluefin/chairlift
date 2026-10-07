@@ -497,7 +497,7 @@ func (uh *UserHome) confirmGamingRemoval() {
 		return
 	}
 	uh.setGamingSensitive(false)
-	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, including ones that came with the system, and copies installed only for your account. Game data is kept.")
+	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Apps that came with the system are left in place. Game data is kept.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("remove", "Remove")
 	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
@@ -683,15 +683,18 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 	setActivitySpinner(uh.gamingSpinner, true)
 	go func() {
-		var changed []string
+		var changed, kept []string
 		var failures []error
 		if enabled {
 			changed, failures = gaming.Enable(selected)
 		} else {
-			changed, failures = gaming.Disable(selected)
+			changed, kept, failures = gaming.Disable(selected)
 		}
 		for _, failure := range failures {
 			log.Printf("views: gaming component failed: %v", failure)
+		}
+		for _, id := range kept {
+			log.Printf("views: gaming component %s came with the system; its system-wide copy was left in place", id)
 		}
 		state, refreshErr := gaming.Status()
 		if refreshErr != nil {
@@ -701,11 +704,14 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 			defer uh.gamingGate.Reset()
 			setActivitySpinner(uh.gamingSpinner, false)
 			uh.setGamingSensitive(true)
-			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures))
+			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(kept))
 			if dryrun.Enabled() {
 				row.SetSubtitle(before)
 			} else {
 				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
+				if len(kept) > 0 {
+					result += fmt.Sprintf(" %d app(s) that came with the system left in place.", len(kept))
+				}
 				if len(failures) > 0 {
 					result += " Details are in the application log."
 				}

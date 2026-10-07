@@ -622,7 +622,10 @@ scopes, so a per-user copy from an earlier release counts as installed and is
 not duplicated. Disable removes each selected ref from exactly the scopes it
 is observed in (`Uninstall(id, true)` for a user copy, `Uninstall(id, false)`
 for a system copy); unselected refs are never touched, and a ref with a copy
-left is a failure. Invalid selections fail before mutation, duplicates run
+left is a failure. A system copy the image declares it ships (Flatpak
+`preinstall.d` or Bluefin's `system-flatpaks.Brewfile`, read by
+`imageShipped`) is left in place and returned as kept rather than removed.
+Invalid selections fail before mutation, duplicates run
 once, and per-item failures preserve partial outcomes. The Features view
 serializes action/refresh with `gamingGate`; failed refreshes preserve last
 known state. Neither gaming nor per-user Homebrew trust adds a ChairLift

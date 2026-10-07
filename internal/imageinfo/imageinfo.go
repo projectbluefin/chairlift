@@ -388,7 +388,7 @@ const gamingSuffix = "-gaming"
 //
 // The gaming images (dakota-gaming, dakota-nvidia-gaming) carry Steam and the
 // rest of the stack as system packages. ChairLift's gaming mode installs the
-// same applications as user Flatpaks, so offering it here would install a
+// same applications as Flatpaks, so offering it here would install a
 // second, shadowing copy of software the image already provides.
 //
 // Two signals are accepted because only the first is authoritative and it is

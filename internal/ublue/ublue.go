@@ -87,7 +87,7 @@ type Status struct {
 	ChannelTableError string
 	// Gaming reports that the running image already ships the gaming stack
 	// as system packages. The views must not offer gaming mode when it is
-	// set: that toggle installs the same applications as user Flatpaks, so
+	// set: that toggle installs the same applications as Flatpaks, so
 	// on these images it would only shadow what the image already provides.
 	Gaming bool
 	// Commands is the set of helper commands this host can run: the helper

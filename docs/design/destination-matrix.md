@@ -118,7 +118,8 @@ Provider-specific safety remains with each live owner:
   but insensitive.
 - Gaming validates selected refs, distinguishes applications/runtimes and
   user/system scope, installs system-wide, removes a selected app from each
-  scope it is in after confirmation, and reports partial failures.
+  scope it is in after confirmation — leaving a system copy the image ships
+  in place — and reports partial failures.
 - Agent Mode is local and unprivileged: user service, loopback endpoint, no
   peer/offload controls. Readiness is observed HTTP health after the owned unit's
   restart/invocation-stamp boundary, not file presence or optimistic switch state.

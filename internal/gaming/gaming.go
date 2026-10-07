@@ -317,16 +317,28 @@ func Enable(selected []string) (installed []string, failures []error) {
 // ChairLift release installed per-user) is removed with `--user` and needs no
 // authorization, a system-scope copy with `--system` under Flatpak's own
 // PolicyKit. Unselected components, and scopes a selected component is not
-// installed in, are never touched. A component counts as removed only when
+// installed in, are never touched.
+//
+// A system copy of a component the OS image declares it ships (imageShipped)
+// is left in place: it predates gaming mode, and removing it would take a
+// distro default away from every account. Such a component is reported in
+// kept — after its user copy, if any, is removed — rather than as removed,
+// because it is still installed. A component counts as removed only when
 // every one of its copies was; otherwise it is one failure naming each scope
 // that could not be removed.
-func Disable(selected []string) (removed []string, failures []error) {
+func Disable(selected []string) (removed, kept []string, failures []error) {
 	if err := validSelection(selected); err != nil {
-		return nil, []error{err}
+		return nil, nil, []error{err}
 	}
 	state, err := Status()
 	if err != nil {
-		return nil, []error{err}
+		return nil, nil, []error{err}
+	}
+	var shipped map[string]bool
+	if slices.ContainsFunc(selected, func(id string) bool { return slices.Contains(state.SystemInstalled, id) }) {
+		if shipped, err = imageShipped(); err != nil {
+			return nil, nil, []error{fmt.Errorf("reading the Flatpaks the system image ships: %w", err)}
+		}
 	}
 
 	for _, id := range state.Installed {
@@ -339,16 +351,22 @@ func Disable(selected []string) (removed []string, failures []error) {
 				errs = append(errs, fmt.Errorf("user scope: %w", err))
 			}
 		}
+		keep := false
 		if slices.Contains(state.SystemInstalled, id) {
-			if err := flatpak.Uninstall(id, false); err != nil {
+			if shipped[id] {
+				keep = true
+			} else if err := flatpak.Uninstall(id, false); err != nil {
 				errs = append(errs, fmt.Errorf("system scope: %w", err))
 			}
 		}
-		if len(errs) != 0 {
+		switch {
+		case len(errs) != 0:
 			failures = append(failures, fmt.Errorf("%s: %w", id, errors.Join(errs...)))
-			continue
+		case keep:
+			kept = append(kept, id)
+		default:
+			removed = append(removed, id)
 		}
-		removed = append(removed, id)
 	}
-	return removed, failures
+	return removed, kept, failures
 }
