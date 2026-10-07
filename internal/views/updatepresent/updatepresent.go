@@ -290,6 +290,8 @@ func updatingStatus(state updateflow.Snapshot) string {
 		return state.Progress
 	case state.Current != "":
 		return gotext.Get("%s: installing updates…", sourceTitle(state.Current))
+	case state.Maintaining:
+		return gotext.Get("Cleaning up after updates…")
 	default:
 		return gotext.Get("Installing updates…")
 	}

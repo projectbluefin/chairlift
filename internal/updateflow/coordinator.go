@@ -300,6 +300,7 @@ func (c *Coordinator) UpdateAll(
 		stateMu.Lock()
 		state.MaintenanceErr = nil
 		state.MaintenanceRan = true
+		state.Maintaining = true
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
@@ -319,6 +320,7 @@ func (c *Coordinator) UpdateAll(
 		}
 		stateMu.Lock()
 		state.MaintenanceErr = err
+		state.Maintaining = false
 		state.Current = ""
 		state.Progress = ""
 		state.Generation = generation
