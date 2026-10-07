@@ -135,6 +135,25 @@ def maintenance_bootc_pinned(context):
         }, handle)
 
 
+@stub("maintenance_unlisted_image")
+def maintenance_unlisted_image(context):
+    """An image the channel table does not list (bluefin-dx on "latest").
+
+    The privileged helper derives no pin or unpin target for a stream outside
+    the table and refuses after authentication, so Powerwash must not offer
+    either. Booted on a dated build so Return to stream is built as well.
+    """
+    image_info_path = os.path.join(context.scenario_dir, "image-info.json")
+    with open(image_info_path, "w", encoding="utf-8") as handle:
+        json.dump({
+            "image-name": "bluefin-dx",
+            "image-tag": "latest.20260920",
+            "image-ref": "ostree-image-signed:docker://ghcr.io/ublue-os/bluefin-dx",
+            "image-vendor": "ublue-os",
+            "image-flavor": "dx",
+        }, handle)
+
+
 @stub("maintenance_published_versions")
 def maintenance_published_versions(context):
     """A local registry proxy that answers tags/list with dated builds."""

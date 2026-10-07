@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -124,16 +125,17 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 	uh.publishedVersionRows = nil
 	uh.publishedVersionButtons.clear()
 
-	supported := ublue.StatusCached().Supports(ubluehelper.CommandPin)
 	status := ublue.StatusCached()
+	offered, explanation := pageview.PinOffer(uh.publishedVersionsStream,
+		pinSupport(status, ubluehelper.CommandPin, uh.publishedVersionsStream))
 	bootedBuild, isBootedPinned := registrytags.ParseBuild(status.Tag)
 
 	for _, version := range versions {
 		row := adw.NewActionRow()
 		row.SetTitle(version.Title)
 		subtitle := version.Subtitle
-		if !supported {
-			subtitle += " · " + pageview.PinUnsupportedExplanation()
+		if !offered {
+			subtitle += " · " + explanation
 		}
 		row.SetSubtitle(subtitle)
 
@@ -142,9 +144,9 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 
 		isAlreadyPinned := isBootedPinned && bootedBuild.Date.Format("20060102") == version.Day
 		switch {
-		case !supported:
+		case !offered:
 			btn.SetSensitive(false)
-			btn.SetTooltipText(pageview.PinUnsupportedExplanation())
+			btn.SetTooltipText(explanation)
 		case isAlreadyPinned:
 			btn.SetLabel("Pinned")
 			btn.SetSensitive(false)
@@ -164,6 +166,17 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 
 	parent.SetEnableExpansion(len(versions) > 0)
 	parent.SetExpanded(len(versions) > 0)
+}
+
+// pinSupport collects, from the cached host status, what PinOffer and
+// UnpinOffer need: the helper command, the channel table's health, and
+// whether the running stream is one the helper can derive a target for.
+func pinSupport(status ublue.Status, command, stream string) pageview.PinSupport {
+	return pageview.PinSupport{
+		Helper:      status.Supports(command),
+		TableBroken: status.ChannelTableError != "",
+		KnownStream: imageinfo.KnownStream(status.Ref, stream),
+	}
 }
 
 // confirmPin presents an AdwAlertDialog confirmation before staging a switch to

@@ -83,26 +83,64 @@ func TestUnpinConfirmationStatesStreamAndRestart(t *testing.T) {
 	}
 }
 
-func TestUnpinRowReflectsSupport(t *testing.T) {
-	supported := UnpinRow("latest", true)
-	if supported.Title != "Return to stream" {
-		t.Errorf("UnpinRow(supported).Title = %q, want %q", supported.Title, "Return to stream")
+func TestUnpinRowReflectsTheOffer(t *testing.T) {
+	offered := UnpinRow("latest", "")
+	if offered.Title != "Return to stream" {
+		t.Errorf("UnpinRow(offered).Title = %q, want %q", offered.Title, "Return to stream")
 	}
-	if !strings.Contains(supported.Subtitle, "latest") {
-		t.Errorf("UnpinRow(supported).Subtitle = %q, want it to name the stream", supported.Subtitle)
+	if !strings.Contains(offered.Subtitle, "latest") {
+		t.Errorf("UnpinRow(offered).Subtitle = %q, want it to name the stream", offered.Subtitle)
 	}
 
-	unsupported := UnpinRow("latest", false)
-	if !strings.Contains(unsupported.Subtitle, "not supported") {
-		t.Errorf("UnpinRow(unsupported).Subtitle = %q, want it to explain lack of support", unsupported.Subtitle)
+	_, explanation := UnpinOffer("latest", PinSupport{})
+	if got := UnpinRow("latest", explanation).Subtitle; got != explanation {
+		t.Errorf("UnpinRow(refused).Subtitle = %q, want the refusal %q", got, explanation)
 	}
 }
 
-func TestPinAndUnpinUnsupportedExplanations(t *testing.T) {
-	if got := PinUnsupportedExplanation(); !strings.Contains(got, "not supported") {
-		t.Errorf("PinUnsupportedExplanation() = %q, want explanation", got)
+// Every refusal the helper makes before deriving a pin or unpin target —
+// no helper command, a broken channel table, a stream outside the image's
+// channel table — must be decided here, before the password prompt, rather
+// than reached as an error after authentication.
+func TestPinAndUnpinAreOfferedOnlyWhenTheHelperCanDeriveATarget(t *testing.T) {
+	ready := PinSupport{Helper: true, KnownStream: true}
+	tests := []struct {
+		name    string
+		support PinSupport
+		offered bool
+		pin     string
+		unpin   string
+	}{
+		{name: "ready", support: ready, offered: true},
+		{
+			name:    "no helper command",
+			support: PinSupport{KnownStream: true},
+			pin:     "Pinning is not supported on this system",
+			unpin:   "Returning to the stream is not supported on this system",
+		},
+		{
+			name:    "broken channel table",
+			support: PinSupport{Helper: true, TableBroken: true, KnownStream: true},
+			pin:     "Pinning is unavailable until this system's update settings are repaired",
+			unpin:   "Returning to the stream is unavailable until this system's update settings are repaired",
+		},
+		{
+			name:    "stream outside the channel table",
+			support: PinSupport{Helper: true},
+			pin:     "Pinning is not available for the “stable” stream of this image",
+			unpin:   "Returning to the stream is not available for the “stable” stream of this image",
+		},
 	}
-	if got := UnpinUnsupportedExplanation(); !strings.Contains(got, "not supported") {
-		t.Errorf("UnpinUnsupportedExplanation() = %q, want explanation", got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			offered, explanation := PinOffer("stable", tt.support)
+			if offered != tt.offered || explanation != tt.pin {
+				t.Errorf("PinOffer() = %v, %q; want %v, %q", offered, explanation, tt.offered, tt.pin)
+			}
+			offered, explanation = UnpinOffer("stable", tt.support)
+			if offered != tt.offered || explanation != tt.unpin {
+				t.Errorf("UnpinOffer() = %v, %q; want %v, %q", offered, explanation, tt.offered, tt.unpin)
+			}
+		})
 	}
 }

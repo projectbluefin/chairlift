@@ -115,10 +115,12 @@ func UnpinConfirmation(stream string) (title, body string) {
 }
 
 // UnpinRow returns the title and subtitle for the Return to stream row.
-func UnpinRow(stream string, supported bool) Row {
+// explanation is UnpinOffer's: non-empty when the row's button cannot do
+// anything, in which case it replaces the description.
+func UnpinRow(stream, explanation string) Row {
 	subtitle := fmt.Sprintf("Switch back to the newest updates on the “%s” stream", stream)
-	if !supported {
-		subtitle = "Returning to the stream is not supported on this system"
+	if explanation != "" {
+		subtitle = explanation
 	}
 	return Row{
 		Title:    "Return to stream",
@@ -126,16 +128,45 @@ func UnpinRow(stream string, supported bool) Row {
 	}
 }
 
-// PinUnsupportedExplanation returns the explanation when pinning is not
-// supported by the system image.
-func PinUnsupportedExplanation() string {
-	return "Pinning is not supported on this system"
+// PinSupport is what the GUI knows, before anyone authenticates, about
+// whether the privileged helper can carry out a pin or a return to the
+// stream on this host.
+type PinSupport struct {
+	// Helper reports that the installed helper and its PolicyKit action
+	// provide the command.
+	Helper bool
+	// TableBroken reports that the authoritative channel table exists but
+	// could not be applied; the helper refuses every pin and unpin then.
+	TableBroken bool
+	// KnownStream reports that the running stream belongs to this image's
+	// channel table (imageinfo.KnownStream); the helper derives no target
+	// for any other stream.
+	KnownStream bool
 }
 
-// UnpinUnsupportedExplanation returns the explanation when returning to the
-// stream is not supported by the system image.
-func UnpinUnsupportedExplanation() string {
-	return "Returning to the stream is not supported on this system"
+// PinOffer reports whether a Published versions row's Pin button is offered,
+// and otherwise why not. Every refusal here is one the helper would make only
+// after the administrator password, so the button must not invite it.
+func PinOffer(stream string, support PinSupport) (offered bool, explanation string) {
+	return switchOffer("Pinning", stream, support)
+}
+
+// UnpinOffer is PinOffer for the Return to stream button.
+func UnpinOffer(stream string, support PinSupport) (offered bool, explanation string) {
+	return switchOffer("Returning to the stream", stream, support)
+}
+
+func switchOffer(action, stream string, support PinSupport) (bool, string) {
+	switch {
+	case !support.Helper:
+		return false, action + " is not supported on this system"
+	case support.TableBroken:
+		return false, action + " is unavailable until this system's update settings are repaired"
+	case !support.KnownStream:
+		return false, fmt.Sprintf("%s is not available for the “%s” stream of this image", action, stream)
+	default:
+		return true, ""
+	}
 }
 
 // versionDay reads the build day out of a bootc image version. Bluefin's

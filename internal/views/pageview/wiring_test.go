@@ -251,8 +251,13 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.BootcRollbackRow(",
 				"pageview.BootcRollbackResultSubtitle(",
 				"pageview.UnpinRow(",
+				"pageview.UnpinOffer(",
 				"pageview.UnpinConfirmation(",
 			},
+			// Support alone is not enough: the helper also refuses a
+			// broken channel table or an unknown stream after the
+			// password prompt.
+			retired: []string{"status.Supports(ubluehelper.CommandUnpin)"},
 		},
 		{
 			file: "versions.go",
@@ -261,7 +266,11 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.PublishedVersionsSummary(",
 				"pageview.PublishedVersions(",
 				"pageview.PinConfirmation(",
+				"pageview.PinOffer(",
+				"imageinfo.KnownStream(",
+				"ChannelTableError",
 			},
+			retired: []string{"Supports(ubluehelper.CommandPin)"},
 		},
 		{
 			// Collection buttons are named after the collection (W2-APPS-5).
