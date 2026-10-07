@@ -170,7 +170,7 @@ a terminal.
 **Desktop integrations** offers **Tailscale Integration** and **Sync Folder
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch
 position is on and Sync Folder's is off; once GNOME answers, the switches show
-its actual saved choices. Sync Folder is marked as not ready yet. A missing
+its actual saved choices. Sync Folder is labelled experimental. A missing
 extension or GNOME session leaves its control unavailable and explains why.
 Changing a switch enables or disables that extension for your account; it does
 not install software or start Tailscale or Sync Folder services. Preview mode
@@ -186,7 +186,10 @@ reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
 default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64),
 **Enable Docker**, and individually selected IDEs and terminal editors, including
-one JetBrains Toolbox entry. WSL needs hardware virtualization and access to
+one JetBrains Toolbox entry. Each editor row says what the tool is, and its
+Install button names the tool for screen readers. Installed state is read again
+whenever the page is shown, so a tool removed on Apps or in a terminal is
+offered again. WSL needs hardware virtualization and access to
 `/dev/kvm`; permission grants require a new login. Docker needs the base
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected

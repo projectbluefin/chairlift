@@ -94,6 +94,13 @@ func (g *Gate) Complete() {
 	g.state.CompareAndSwap(gateRunning, gateComplete)
 }
 
+// Running reports whether an action currently holds the gate. A passive
+// refresh uses it to stand aside while that action owns the state it would
+// publish.
+func (g *Gate) Running() bool {
+	return g.state.Load() == gateRunning
+}
+
 // Decision describes the UI work following one command attempt.
 type Decision struct {
 	Refresh         bool

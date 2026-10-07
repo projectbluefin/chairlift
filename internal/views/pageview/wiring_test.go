@@ -138,6 +138,26 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "developer_tools.go",
+			required: []string{
+				"pageview.DeveloperTool(",
+				"pageview.DeveloperToolChecking(",
+				"pageview.DeveloperToolInstalling(",
+				"pageview.DeveloperToolUnverified(",
+				"SetAccessibleLabel(item.button, view.AccessibleLabel)",
+				// W3-10: a tool removed on Apps or in a terminal read
+				// "Installed" until restart. The re-read is connected once
+				// at build and generation-guarded against gated actions.
+				"ConnectMap(&uh.developerToolsMapped)",
+				"uh.developerToolRefresh.IsCurrent(generation)",
+			},
+			retired: []string{
+				`"Optional Homebrew tool; installed only when you choose it."`,
+				`"Installed through Homebrew."`,
+				`"Checking installed state…"`,
+			},
+		},
+		{
 			file: "printers_page.go",
 			required: []string{
 				"pageview.PrintersGroupTitle(",

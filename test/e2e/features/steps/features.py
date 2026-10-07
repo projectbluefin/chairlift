@@ -15,7 +15,7 @@ from behave import step, then
 
 import chairlift_atspi as atspi
 from apps import expander_header, expander_rows, focus_by_tab
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, account_is_developer
+from stubs_features import CALLS_LOG, GAMING_COMPONENTS, MICRO_MARKER, account_is_developer
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -243,6 +243,12 @@ def step_developer_editors(context):
     assert titles == expected, f"developer editor rows {titles} != {expected}"
 
 
+@step('Homebrew stops listing "{formula}"')
+def step_brew_stops_listing(context, formula):
+    # Only the features-developer-micro stub models a listing that changes.
+    if formula != "micro":
+        raise NotImplementedError(f"no stub models removing {formula!r}")
+    os.remove(os.path.join(context.scenario_dir, MICRO_MARKER))
 
 
 @then("the Gaming inventory is read again after the change")

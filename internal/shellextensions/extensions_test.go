@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -21,6 +22,16 @@ func TestCatalogDefaults(t *testing.T) {
 	got := Catalog()
 	if len(got) != 2 || got[0].UUID != "tailscale-gnome-qs@tailscale-qs.github.io" || !got[0].DefaultEnabled || got[1].UUID != "syncthing-toggle@projectbluefin.io" || got[1].DefaultEnabled {
 		t.Fatalf("unexpected integrations: %+v", got)
+	}
+}
+
+// Every catalog entry can be enabled, so a description calling the feature
+// unusable contradicts the switch beside it (W3-14).
+func TestCatalogNeverCallsASwitchableExtensionUnready(t *testing.T) {
+	for _, extension := range Catalog() {
+		if strings.Contains(strings.ToLower(extension.Description), "not ready") {
+			t.Errorf("%s is switchable but described as not ready: %q", extension.Title, extension.Description)
+		}
 	}
 }
 

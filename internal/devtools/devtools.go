@@ -34,10 +34,13 @@ const (
 )
 
 type Tool struct {
-	Name      string
-	Package   string
-	Cask      bool
-	AMD64Only bool
+	Name string
+	// Description is the one-line summary the tool's row shows, so the
+	// choices are distinguishable without already knowing each tool.
+	Description string
+	Package     string
+	Cask        bool
+	AMD64Only   bool
 }
 
 // ErrNewLogin means access was granted but this session cannot use it yet.
@@ -47,16 +50,16 @@ var ErrNewLogin = errors.New("hardware virtualization access granted; log out an
 // The current Toolbox cask contains only the x86_64 Linux archive.
 func Tools() []Tool {
 	return []Tool{
-		{Name: "Dev Container CLI", Package: "devcontainer"},
-		{Name: "VSCode Stable", Package: "ublue-os/tap/visual-studio-code-linux", Cask: true},
-		{Name: "VSCode Insiders", Package: "ublue-os/tap/visual-studio-code-linux@insiders", Cask: true},
-		{Name: "VSCodium", Package: "ublue-os/tap/vscodium-linux", Cask: true},
-		{Name: "Antigravity", Package: "ublue-os/tap/antigravity-linux", Cask: true},
-		{Name: "JetBrains Toolbox", Package: "ublue-os/tap/jetbrains-toolbox-linux", Cask: true, AMD64Only: true},
-		{Name: "Neovim", Package: "neovim"},
-		{Name: "Helix", Package: "helix"},
-		{Name: "Vim", Package: "vim"},
-		{Name: "Micro", Package: "micro"},
+		{Name: "Dev Container CLI", Description: "Builds and runs development containers from a devcontainer.json.", Package: "devcontainer"},
+		{Name: "VSCode Stable", Description: "Microsoft's Visual Studio Code editor, monthly stable releases.", Package: "ublue-os/tap/visual-studio-code-linux", Cask: true},
+		{Name: "VSCode Insiders", Description: "Daily Visual Studio Code builds with features before they reach stable.", Package: "ublue-os/tap/visual-studio-code-linux@insiders", Cask: true},
+		{Name: "VSCodium", Description: "Visual Studio Code built from its open-source code, without Microsoft branding or telemetry.", Package: "ublue-os/tap/vscodium-linux", Cask: true},
+		{Name: "Antigravity", Description: "Google's agent-first code editor.", Package: "ublue-os/tap/antigravity-linux", Cask: true},
+		{Name: "JetBrains Toolbox", Description: "Installs and updates JetBrains IDEs such as IntelliJ IDEA and PyCharm.", Package: "ublue-os/tap/jetbrains-toolbox-linux", Cask: true, AMD64Only: true},
+		{Name: "Neovim", Description: "Extensible, Vim-based terminal text editor.", Package: "neovim"},
+		{Name: "Helix", Description: "Modal terminal editor with built-in language support.", Package: "helix"},
+		{Name: "Vim", Description: "The classic modal terminal text editor.", Package: "vim"},
+		{Name: "Micro", Description: "Terminal text editor with familiar keyboard shortcuts and mouse support.", Package: "micro"},
 	}
 }
 
