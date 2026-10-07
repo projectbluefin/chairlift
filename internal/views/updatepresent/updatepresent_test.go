@@ -300,12 +300,14 @@ func TestSourceMapsSourceState(t *testing.T) {
 	}
 }
 
-// A source whose one pending item is the source itself (the operating
-// system's deployment) shows the versions on its own row and gets no child
-// row repeating its name; multi-item and differently named sources keep
-// their item rows. VM finding: "Operating system — 1 update available"
-// followed by an "Operating System" child row with "20261006 → 20261007".
-func TestSourceFoldsSoleSelfNamedItem(t *testing.T) {
+// The Operating system source's one pending item is the deployment itself:
+// its versions go on the source row and no child row repeats the source's
+// name. VM finding: "Operating system — 1 update available" followed by an
+// "Operating System" child row with "20261006 → 20261007". The fold is keyed
+// on the source ID, never the item's name: a lone app or formula that happens
+// to share its source's title keeps its row, which carries its only Update
+// button (Hive review on #539).
+func TestSourceFoldsSoleOperatingSystemItem(t *testing.T) {
 	osItem := updateflow.Item{Name: "Operating system", CurrentVersion: "20261006", AvailableVersion: "20261007", Scope: "bootc"}
 	apps := []updateflow.Item{{Name: "Firefox"}, {Name: "GIMP"}}
 	tests := []struct {
@@ -320,9 +322,12 @@ func TestSourceFoldsSoleSelfNamedItem(t *testing.T) {
 		{"os available version only", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system", AvailableVersion: "20261007"}}, "Update available: 20261007", nil},
 		{"os without versions", updateflow.OperatingSystem, []updateflow.Item{{Name: "Operating system"}}, "1 update available", nil},
 		{"single differently named app", updateflow.Applications, []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Firefox", CurrentVersion: "1", AvailableVersion: "2"}}},
+		{"single app named like its source", updateflow.Applications, []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}, "1 update available", []updateflow.Item{{Name: "Applications", CurrentVersion: "1", AvailableVersion: "2"}}},
+		{"single tool named like its source", updateflow.DeveloperTools, []updateflow.Item{{Name: "Developer tools"}}, "1 update available", []updateflow.Item{{Name: "Developer tools"}}},
+		{"single component named like its source", updateflow.SystemComponents, []updateflow.Item{{Name: "System components"}}, "1 update available", []updateflow.Item{{Name: "System components"}}},
 		{"multiple apps", updateflow.Applications, apps, "2 updates available", apps},
 		{"multiple developer tools", updateflow.DeveloperTools, apps, "2 updates available", apps},
-		{"two items naming the source", updateflow.OperatingSystem, []updateflow.Item{osItem, osItem}, "2 updates available", []updateflow.Item{osItem, osItem}},
+		{"two operating system items", updateflow.OperatingSystem, []updateflow.Item{osItem, osItem}, "2 updates available", []updateflow.Item{osItem, osItem}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

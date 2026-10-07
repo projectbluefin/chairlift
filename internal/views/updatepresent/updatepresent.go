@@ -3,8 +3,6 @@
 package updatepresent
 
 import (
-	"strings"
-
 	"github.com/leonelquinteros/gotext"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
@@ -103,7 +101,7 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.RestartRequired:
 		return title, gotext.Get("Deployment staged")
 	case len(state.Items) > 0:
-		if item, ok := soleSelfItem(state); ok {
+		if item, ok := soleOSItem(state); ok {
 			return title, soleItemSubtitle(item)
 		}
 		return title, gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
@@ -115,25 +113,27 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 }
 
 // ItemRows returns the pending items that get their own row beneath a
-// source row. A source whose only pending item names the source itself — the
-// operating system's one deployment — carries that item's versions on its own
-// row (see Source), so no child row repeats the source's name for one fact.
+// source row. The Operating system source's one pending item is the
+// deployment itself, so its versions go on the source row (see Source) and
+// no child row repeats the source's name for one fact. Every other source
+// keeps one row per item: Applications and Developer tools carry each item's
+// own Update button on that row, so folding one away would remove its only
+// control.
 func ItemRows(state updateflow.SourceState) []updateflow.Item {
-	if _, ok := soleSelfItem(state); ok {
+	if _, ok := soleOSItem(state); ok {
 		return nil
 	}
 	return state.Items
 }
 
-// soleSelfItem reports the source's only pending item when that item is the
-// source itself. The match is on the locale-independent source ID
-// ("operating-system" ↔ "Operating system"), not on translated copy.
-func soleSelfItem(state updateflow.SourceState) (updateflow.Item, bool) {
-	if len(state.Items) != 1 {
+// soleOSItem reports the Operating system source's only pending item. The
+// decision is keyed on the source ID, never on the item's name: a Flatpak or
+// formula that happens to be called "Applications" is still its own item.
+func soleOSItem(state updateflow.SourceState) (updateflow.Item, bool) {
+	if state.ID != updateflow.OperatingSystem || len(state.Items) != 1 {
 		return updateflow.Item{}, false
 	}
-	item := state.Items[0]
-	return item, strings.EqualFold(strings.ReplaceAll(string(state.ID), "-", " "), item.Name)
+	return state.Items[0], true
 }
 
 // soleItemSubtitle is the source row's subtitle when its one pending item is

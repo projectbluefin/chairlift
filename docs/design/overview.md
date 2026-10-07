@@ -727,10 +727,12 @@ surface in three layers that must stay separate:
   administrator"; one that is configured but not `Available` — the provider's
   own `Available` probe says no, or `Policy.Supported` is false because the capability
   floor cannot back it — reads "Not available on this system". `ItemRows`
-  decides which pending items get a child row: a source whose only pending
-  item names the source itself (the Operating system's one deployment) shows
+  decides which pending items get a child row: the Operating system source's
+  one pending item is its deployment, so that source shows
   "Update available: <booted> → <new>" on its own row and gets no child row
-  repeating its name; multi-item sources keep one row per item.
+  repeating its name. The fold is keyed on the source ID, never an item's
+  name; every other source keeps one row per item, because Applications and
+  Developer tools carry each item's only Update button on that row.
 
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
