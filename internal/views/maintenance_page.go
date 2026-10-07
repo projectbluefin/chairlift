@@ -55,13 +55,16 @@ func (uh *UserHome) buildMaintenancePage() {
 		uh.buildConfiguredTasksGroup(page)
 	}
 
-	// Powerwash detail entry. The detail view houses rollback and reset.
+	// Powerwash detail entry. The detail view houses rollback and reset. Its
+	// subtitle names only what the detail built, so it is written by
+	// refreshRecoveryEntry once buildRecoveryPage has run, and again when the
+	// asynchronous rollback check settles.
 	if uh.recoveryProvidersAvailable() {
 		recoveryGroup := adw.NewPreferencesGroup()
 		recoveryGroup.SetTitle("Powerwash")
 		recoveryRow := adw.NewActionRow()
 		recoveryRow.SetTitle("Powerwash")
-		recoveryRow.SetSubtitle(pageview.RecoveryEntrySubtitle())
+		uh.recoveryEntryRow = recoveryRow
 		recoveryRow.SetActivatable(true)
 		icon := gtk.NewImageFromIconName("pan-end-symbolic")
 		recoveryRow.AddSuffix(&icon.Widget)

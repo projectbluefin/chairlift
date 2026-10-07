@@ -88,6 +88,13 @@ func (uh *UserHome) buildRecoveryPage() {
 	}
 
 	page.SetTitle("Powerwash")
+	// The reset rows (built by buildMaintenancePage when reset_group is on)
+	// carry their own description; without them the page says why, so the
+	// destination's name does not send the user hunting for a reset.
+	page.SetDescription(pageview.RecoveryPageDescription(pageview.ResetAvailabilityFor(
+		uh.config.IsGroupEnabled("maintenance_page", "reset_group"),
+		uh.groupEnabled("maintenance_page", "reset_group"),
+	)))
 
 	// Roll Back: gated by the OS provider group, built hidden, revealed
 	// asynchronously once a previous deployment is confirmed to exist.
@@ -98,6 +105,21 @@ func (uh *UserHome) buildRecoveryPage() {
 		uh.buildRecoveryVersionsGroup(page)
 		go uh.loadBootcRollbackStatus()
 	}
+	uh.refreshRecoveryEntry()
+}
+
+// refreshRecoveryEntry rewrites the Maintenance page's Powerwash entry
+// subtitle from what the detail currently holds. Main thread only.
+func (uh *UserHome) refreshRecoveryEntry() {
+	if uh.recoveryEntryRow == nil {
+		return
+	}
+	uh.recoveryEntryRow.SetSubtitle(pageview.RecoveryEntrySubtitle(pageview.RecoveryOffer{
+		Rollback:          uh.bootcRollbackOffered,
+		ReturnToStream:    uh.unpinRow != nil,
+		PublishedVersions: uh.publishedVersionsRow != nil,
+		Reset:             uh.groupEnabled("maintenance_page", "reset_group"),
+	}))
 }
 
 // buildRecoveryRollbackGroup builds the bootc Roll Back group on the Powerwash
@@ -142,6 +164,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 // group. The group is added only when at least one of them was built.
 func (uh *UserHome) buildRecoveryVersionsGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
+	group.SetTitle(pageview.RecoveryVersionsGroupTitle)
 	uh.buildReturnToStreamRow(group)
 	uh.buildPublishedVersionsRow(group)
 	if uh.unpinRow != nil || uh.publishedVersionsRow != nil {
@@ -264,15 +287,17 @@ func (uh *UserHome) loadBootcRollbackStatus() {
 		if uh.bootcRollbackRow == nil || uh.bootcRollbackGroup == nil {
 			return
 		}
-		if err != nil || status.Status.Rollback == nil || !helperSupported {
-			uh.bootcRollbackGroup.SetVisible(false)
+		offered := err == nil && status != nil && status.Status.Rollback != nil && helperSupported
+		uh.bootcRollbackGroup.SetVisible(offered)
+		uh.bootcRollbackOffered = offered
+		uh.refreshRecoveryEntry()
+		if !offered {
 			return
 		}
 
 		deployment := status.Status.Rollback
 		presentation := pageview.BootcRollbackRow(deployment.Version(), deployment.Timestamp())
 		uh.bootcRollbackRow.SetSubtitle(presentation.Subtitle)
-		uh.bootcRollbackGroup.SetVisible(true)
 		log.Printf("views: bootc rollback available version=%q", deployment.Version())
 	})
 }

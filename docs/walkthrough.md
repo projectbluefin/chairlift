@@ -296,7 +296,9 @@ holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll B
 returns to the previous system version if an update went badly, **Powerwash**
 removes your Flatpak apps and Distrobox containers (Homebrew packages stay), and **Factory Reset**
 reinstalls the system from scratch.
-Those stay hidden normally until turned on or until a rollback exists.
+Those stay hidden normally until turned on or until a rollback exists; the
+Powerwash entry's subtitle names only what the detail currently offers, and
+when the reset actions are off the detail says so at the top.
 Powerwash also has **Published versions**, which asks the image registry for
 the versions of your release stream from the last 90 days and lists one per
 day, marking the one you are running and the one Roll Back returns to. Each
