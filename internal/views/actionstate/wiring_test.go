@@ -138,24 +138,32 @@ func TestLiveryPanelToggleDoesNotMutateInMemoryStateUnderDryRun(t *testing.T) {
 		`if enabled && surface == livery.Panel && savedIcon == "" && savedMode == "" {`,
 		`if err := livery.SetString(ctx, livery.KeySavedPanelIcon, icon); err != nil {`,
 		`if err := livery.SetString(ctx, livery.KeySavedPanelMode, mode); err != nil {`,
-		`if err := livery.ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {`,
+		`restored, err := livery.RevertPanel(ctx, savedIcon, savedMode)`,
 	} {
 		if !strings.Contains(text, required) {
 			t.Errorf("panel capture/revert omits %q", required)
 		}
 	}
-	for name, values := range map[string][2]string{
-		"capture": {"icon", "mode"},
-		"reset":   {`""`, `""`},
-	} {
-		snippet := "\t\t\tif decision.MutateUI {\n" +
+	for name, snippet := range map[string]string{
+		"capture": "\t\t\tif decision.MutateUI {\n" +
 			"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = " + values[0] + "\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelMode = " + values[1] + "\n" +
-			"\t\t\t\t})\n\t\t\t}\n"
+			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = icon\n" +
+			"\t\t\t\t\tuh.liveryState.SavedPanelMode = mode\n" +
+			"\t\t\t\t})\n\t\t\t}\n",
+		// The reset also follows a restore that landed before a failed
+		// file sweep, so it is gated on restored as well.
+		"reset": "\t\t\tif restored && decision.MutateUI {\n" +
+			"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
+			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = \"\"\n" +
+			"\t\t\t\t\tuh.liveryState.SavedPanelMode = \"\"\n" +
+			"\t\t\t\t})\n\t\t\t}\n",
+	} {
 		if !strings.Contains(text, snippet) {
 			t.Errorf("panel %s mirror bypasses its dry-run mutation decision", name)
 		}
+	}
+	if strings.Contains(text, "livery.ClearPanelSettings(") {
+		t.Error("the panel toggle restores settings itself instead of through livery.RevertPanel, which owns the restore-then-remove order")
 	}
 }
 

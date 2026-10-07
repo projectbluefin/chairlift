@@ -548,6 +548,72 @@ func TestClearPanelSettingsForgetsTheCapture(t *testing.T) {
 	}
 }
 
+// TestRevertPanelKeepsTheMarkWhenTheRestoreFails holds the order of turning
+// the panel off. Removing the files first and then failing to restore the
+// extension's settings left it naming a deleted chairlift-livery-* icon, and
+// the top-bar menu rendered blank while the section read off.
+func TestRevertPanelKeepsTheMarkWhenTheRestoreFails(t *testing.T) {
+	useTempDataHome(t)
+	fake := newFakeCommands(t)
+
+	if err := Apply(context.Background(), Panel, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	path, err := IconPath(Panel, DefaultID)
+	if err != nil {
+		t.Fatalf("IconPath: %v", err)
+	}
+	fake.fail["gsettings reset "+extensionSchema] = errors.New("gsettings timed out")
+
+	restored, err := RevertPanel(context.Background(), "", "")
+	if err == nil {
+		t.Fatal("RevertPanel reported success although the restore failed")
+	}
+	if restored {
+		t.Error("RevertPanel reported the settings restored although gsettings failed")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("RevertPanel removed %s although the extension still names it: %v", path, err)
+	}
+}
+
+// TestRevertPanelRestoresSettingsBeforeRemovingTheMark is the success half:
+// the extension is pointed back at the user's icon before the sweep, and the
+// mark is gone afterwards.
+func TestRevertPanelRestoresSettingsBeforeRemovingTheMark(t *testing.T) {
+	useTempDataHome(t)
+	fake := newFakeCommands(t)
+
+	if err := Apply(context.Background(), Panel, Source{Kind: FromCatalog, Value: DefaultID}); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	path, err := IconPath(Panel, DefaultID)
+	if err != nil {
+		t.Fatalf("IconPath: %v", err)
+	}
+	fake.calls = nil
+
+	restored, err := RevertPanel(context.Background(), "", "")
+	if err != nil || !restored {
+		t.Fatalf("RevertPanel = %v, %v; want restored with no error", restored, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("RevertPanel left %s behind", path)
+	}
+	reset, refresh := -1, -1
+	for i, call := range fake.calls {
+		if reset < 0 && strings.HasPrefix(call, "gsettings reset "+extensionSchema+" "+extensionIconKey) {
+			reset = i
+		}
+		if refresh < 0 && strings.HasPrefix(call, "gtk-update-icon-cache") {
+			refresh = i
+		}
+	}
+	if reset < 0 || refresh < 0 || reset > refresh {
+		t.Errorf("settings must be restored before the mark is swept; calls: %v", fake.calls)
+	}
+}
+
 // TestMissingCustomFileNamesTheFile asserts an unreadable custom SVG is
 // reported rather than silently substituted, and that the message contains
 // the path so the user can fix it.

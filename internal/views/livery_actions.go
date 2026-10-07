@@ -217,33 +217,40 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 			return
 		}
 
-		if err := livery.Clear(ctx, surface); err != nil {
-			uh.reportLiveryFailure("removing the mark", err)
-			return
-		}
-		if surface != livery.Panel {
-			// The panel is the exception: its extension redraws on
-			// `changed::menuicon-setting` by itself.
-			if err := livery.RefreshShellIcons(); err != nil {
-				uh.reportLiveryFailure("refreshing the shell's icons", err)
-			}
-		}
 		if surface == livery.Panel {
-			if err := livery.ClearPanelSettings(ctx, savedIcon, savedMode); err != nil {
-				uh.reportLiveryFailure("restoring the previous panel icon", err)
-				return
-			}
+			// RevertPanel restores the extension's settings before it removes
+			// the mark files, so a failed restore never leaves the top bar
+			// naming an icon that was just deleted.
+			restored, err := livery.RevertPanel(ctx, savedIcon, savedMode)
 			// The capture is only taken when both saved values are empty, and
-			// ClearPanelSettings has just emptied the stored keys, so the
-			// in-memory copy has to follow or the next enable would keep
-			// reusing the first capture instead of reading what the user has
-			// now.
-			if decision.MutateUI {
+			// a restore that landed has just emptied the stored keys, so the
+			// in-memory copy has to follow — even when the file sweep then
+			// failed — or the next enable would keep reusing the first
+			// capture instead of reading what the user has now.
+			if restored && decision.MutateUI {
 				sgtk.RunOnMainThread(func() {
 					uh.liveryState.SavedPanelIcon = ""
 					uh.liveryState.SavedPanelMode = ""
 				})
 			}
+			if err != nil {
+				what := "restoring the previous panel icon"
+				if restored {
+					what = "removing the mark"
+				}
+				uh.reportLiveryFailure(what, err)
+			}
+			return
+		}
+
+		if err := livery.Clear(ctx, surface); err != nil {
+			uh.reportLiveryFailure("removing the mark", err)
+			return
+		}
+		// The panel returned above: its extension redraws on
+		// `changed::menuicon-setting` by itself.
+		if err := livery.RefreshShellIcons(); err != nil {
+			uh.reportLiveryFailure("refreshing the shell's icons", err)
 		}
 	}()
 }
