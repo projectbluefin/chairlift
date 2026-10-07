@@ -350,6 +350,18 @@ func TestSystemStage(t *testing.T) {
 	}
 }
 
+// A dry-run Update all returned the panel to "Updates available" with no
+// feedback, unlike every other dry-run action on the Updates page. Its toast
+// follows the page's preview convention and never claims an install.
+func TestUpdateAllPreviewSaysNothingWasInstalled(t *testing.T) {
+	if !strings.HasPrefix(UpdateAllPreview, "[DRY-RUN] Preview: ") || !strings.HasSuffix(UpdateAllPreview, "— no changes made") {
+		t.Fatalf("UpdateAllPreview = %q, want the [DRY-RUN] Preview: … — no changes made shape", UpdateAllPreview)
+	}
+	if !strings.Contains(UpdateAllPreview, "would be installed") {
+		t.Fatalf("UpdateAllPreview = %q, want it to say updates would be installed", UpdateAllPreview)
+	}
+}
+
 // TestTapTrust covers both dry-run states for Homebrew tap trust, asserting
 // both the UI-mutation gate (MutateUI) and the Toast text. MutateUI is the
 // criterion that directly proves the Untrusted Homebrew Taps UI does not
