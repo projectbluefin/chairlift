@@ -60,7 +60,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updateproviders/ Provider adapters for the unified update coordinator
         ├── internal/userprefs/ Pure user update preferences model
         ├── internal/settings/  GSettings adapter for user update preferences
-        ├── internal/commands/  Canonical command and keyboard shortcut inventory
+        ├── internal/commands/  Shared action names (shortcuts live in navigation)
         └── internal/version/   Build metadata (ldflags injection)
 ```
 
