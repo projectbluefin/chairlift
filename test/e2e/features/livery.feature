@@ -16,6 +16,8 @@ Feature: Livery
     And the "Brand" row in the Livery "App Launcher Icon" section says "GitLab"
     And the "Customize the Top Bar Icon" switch in the Livery "Top Bar Icon" section is on
     And the "Mark" row in the Livery "Top Bar Icon" section says "GNOME Foundation"
+    And the "GNOME Foundation" mark in the Livery "Top Bar Icon" gallery is selected
+    And the "Cloud Native Computing Foundation" mark in the Livery "Top Bar Icon" gallery is not selected
     And the "Rotate at Login" switch in the Livery "Top Bar Icon" section is on
     And the "Customize the Files Icon" switch in the Livery "Files Icon" section is on
     And the "Project" row in the Livery "Files Icon" section says "Prometheus"
@@ -94,6 +96,23 @@ Feature: Livery
     And the Livery dry run would install the "chairlift-livery-gnome-symbolic" icon in the "hicolor" theme
     And the Livery dry run would point the panel at "chairlift-livery-gnome-symbolic"
     And no icon was written under the home directory
+    And the "Cloud Native Computing Foundation" mark in the Livery "Top Bar Icon" gallery is selected
+    And the "GNOME Foundation" mark in the Livery "Top Bar Icon" gallery is not selected
+
+  @stub.livery-tools @stub.livery-panel-on
+  Scenario: Escape closes the chooser from its search field
+    Given ChairLift is running
+    When I open the "Livery" page
+    And I activate the "Mark" row in the Livery "Top Bar Icon" section
+    Then the Livery chooser titled "Choose a Mark" is shown
+    And the Livery chooser's search field has focus
+    When I search the Livery chooser for "gnome"
+    And I press "Escape"
+    Then the Livery chooser is still open
+    And the Livery chooser's search field is empty
+    And the Livery chooser offers "Cloud Native Computing Foundation"
+    When I press "Escape"
+    Then the Livery chooser is closed
 
   @stub.livery-tools @stub.livery-dock-on
   Scenario: A search that matches nothing offers nothing to pick

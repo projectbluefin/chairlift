@@ -120,6 +120,9 @@ type UserHome struct {
 	liveryPickerGeneration uint64
 	liveryFoundationGrid   *gtk.FlowBox
 	liveryFoundationImages map[string]*gtk.Image
+	// liveryFoundationChecks holds each gallery tile's selected-mark badge,
+	// index-aligned with livery.Foundations() and the grid's children.
+	liveryFoundationChecks []*gtk.Image
 	liveryDockSelectedRow  *adw.ActionRow
 	liveryDockRotate       *gtk.Switch
 	// liveryDockVisible is the result set currently drawn, so the list's one

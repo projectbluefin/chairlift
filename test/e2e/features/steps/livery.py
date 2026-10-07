@@ -342,6 +342,43 @@ def step_chooser_open(context):
     _dialog(context, timeout=2)
 
 
+def _chooser_search(context):
+    return atspi.find(
+        _dialog(context), lambda n: atspi.role(n) in atspi.TEXT_ROLES, "the chooser's search field"
+    )
+
+
+@then("the Livery chooser's search field has focus")
+def step_chooser_search_focused(context):
+    entry = _chooser_search(context)
+    assert atspi.poll(lambda: atspi.focused(entry)), "the chooser opened without focus in its search field"
+
+
+@then("the Livery chooser's search field is empty")
+def step_chooser_search_empty(context):
+    entry = _chooser_search(context)
+    assert atspi.poll(lambda: not atspi.text(entry)), f"the search field still reads {atspi.text(entry)!r}"
+
+
+# The foundation gallery is a GtkFlowBox; GTK publishes each tile as a grid
+# cell, which older bridges report as a table cell.
+GALLERY_TILE_ROLES = ("table cell", "grid cell")
+
+
+@then('the "{name}" mark in the Livery "{section}" gallery is {state}')
+def step_gallery_tile_state(context, name, section, state):
+    if state not in ("selected", "not selected"):
+        raise NotImplementedError(f"unknown gallery tile state {state!r}")
+    want = state == "selected"
+    tile = atspi.find(
+        _section(context, section),
+        lambda n: atspi.role(n) in GALLERY_TILE_ROLES and name in _texts(n),
+        f"the {name!r} mark in the {section!r} gallery",
+    )
+    ok = atspi.poll(lambda: atspi.selected(tile) == want)
+    assert ok, f"the {name!r} mark in the {section!r} gallery is not {state}"
+
+
 # ---------------------------------------------------------------- toasts
 
 

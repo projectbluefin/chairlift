@@ -304,6 +304,7 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 	panelChoice := pageview.LiveryChoices(state.PanelID)
 
 	uh.liveryState.PanelID = pageview.LiveryIDForIndex(panelChoice.Selected)
+	uh.syncLiveryFoundationGrid()
 
 	if uh.liveryAppGridSwitch != nil {
 		uh.liveryAppGridSwitch.SetSensitive(appGridAvailable)
@@ -356,6 +357,12 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 }
 
 // The finite embedded catalog needs no network and one activation handler.
+//
+// The grid keeps SelectionNone on purpose: GtkFlowBox's single-selection mode
+// moves the selection with the keyboard cursor, so arrowing across the tiles
+// would highlight marks that were never applied. The confirmed selection is
+// instead drawn by syncLiveryFoundationGrid as a badge plus the accessible
+// selected state.
 func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	grid := gtk.NewFlowBox()
 	grid.SetSelectionMode(gtk.SelectionNoneValue)
@@ -364,6 +371,7 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	grid.SetSensitive(false)
 	uh.liveryFoundationGrid = grid
 	uh.liveryFoundationImages = make(map[string]*gtk.Image)
+	uh.liveryFoundationChecks = nil
 	for _, foundation := range livery.Foundations() {
 		box := gtk.NewBox(gtk.OrientationVerticalValue, 6)
 		box.SetMarginTop(12)
@@ -374,8 +382,24 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 		label := gtk.NewLabel(foundation.Name)
 		label.SetWrap(true)
 		box.Append(&label.Widget)
-		grid.Insert(&box.Widget, -1)
+
+		// An overlay keeps the badge from resizing the tile, so marking a
+		// selection never reflows the gallery.
+		check := gtk.NewImageFromIconName("object-select-symbolic")
+		check.AddCssClass("accent")
+		check.SetHalign(gtk.AlignEndValue)
+		check.SetValign(gtk.AlignStartValue)
+		check.SetMarginTop(6)
+		check.SetMarginEnd(6)
+		check.SetVisible(false)
+		SetAccessibleLabel(check, pageview.LiveryFoundationSelectedLabel)
+		tile := gtk.NewOverlay()
+		tile.SetChild(&box.Widget)
+		tile.AddOverlay(&check.Widget)
+
+		grid.Insert(&tile.Widget, -1)
 		uh.liveryFoundationImages[foundation.ID] = image
+		uh.liveryFoundationChecks = append(uh.liveryFoundationChecks, check)
 	}
 	activated := func(_ gtk.FlowBox, ptr uintptr) {
 		child := gtk.FlowBoxChildNewFromInternalPtr(ptr)
@@ -391,6 +415,31 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	style.ConnectNotify(&changed)
 	uh.refreshLiveryFoundationPreviews()
 	group.Add(&grid.Widget)
+	uh.syncLiveryFoundationGrid()
+}
+
+// syncLiveryFoundationGrid marks the confirmed panel selection in the
+// gallery. It reads liveryState and changes presentation only — it emits no
+// child-activated and writes no setting — so it is safe inside the load-time
+// restore. A custom file selects no tile.
+func (uh *UserHome) syncLiveryFoundationGrid() {
+	if uh.liveryFoundationGrid == nil {
+		return
+	}
+	for i, tile := range pageview.LiveryFoundationTiles(uh.liveryState.PanelID) {
+		if i < len(uh.liveryFoundationChecks) {
+			uh.liveryFoundationChecks[i].SetVisible(tile.Selected)
+		}
+		child := uh.liveryFoundationGrid.GetChildAtIndex(int32(i))
+		if child == nil {
+			continue
+		}
+		selected := 0
+		if tile.Selected {
+			selected = 1
+		}
+		child.UpdateState(gtk.AccessibleStateSelectedValue, selected, -1)
+	}
 }
 
 func (uh *UserHome) refreshLiveryFoundationPreviews() {
@@ -527,6 +576,18 @@ func (uh *UserHome) buildLiveryProjectPicker() {
 		uh.refreshLiveryPickerRows(search.GetText())
 	}
 	search.ConnectSearchChanged(&searchChanged)
+
+	// GtkSearchEntry binds Escape to stop-search and consumes it, so the
+	// dialog's own Escape-to-close never fires while the field has focus —
+	// which it does from the moment the chooser opens.
+	stopSearch := func(_ gtk.SearchEntry) {
+		if pageview.LiveryChooserEscapeCloses(search.GetText()) {
+			dialog.Close()
+			return
+		}
+		search.SetText("")
+	}
+	search.ConnectStopSearch(&stopSearch)
 
 	rowActivated := func(_ gtk.ListBox, rowPtr uintptr) {
 		uh.onLiveryPickerRowActivated(rowPtr)

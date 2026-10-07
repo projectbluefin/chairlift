@@ -466,6 +466,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 				uh.liveryState.AppGridCustom, uh.liveryState.AppGridSlug = path, livery.CustomID
 			case livery.Panel:
 				uh.liveryState.PanelCustom, uh.liveryState.PanelID = path, livery.CustomID
+				uh.syncLiveryFoundationGrid()
 			default:
 				uh.liveryState.DockCustom, uh.liveryState.DockID = path, livery.CustomID
 			}
@@ -673,6 +674,7 @@ func (uh *UserHome) liverySelectionState(s livery.Surface) (string, string) {
 func (uh *UserHome) setLiverySelectionState(s livery.Surface, id string) {
 	if s == livery.Panel {
 		uh.liveryState.PanelID = id
+		uh.syncLiveryFoundationGrid()
 		return
 	}
 	uh.liveryState.DockID = id
