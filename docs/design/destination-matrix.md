@@ -148,9 +148,16 @@ Provider-specific safety remains with each live owner:
   self-reported derived argv where available; markers are an audit aid, not proof.
 
 Livery uses an embedded, theme-adaptive foundation `GtkFlowBox` with one
-activation signal. The shared catalog chooser fetches only its visible page of
+activation signal. It stays in `SelectionNone` mode, because single selection
+follows the keyboard cursor and would highlight marks never applied; the
+confirmed panel selection is drawn as a badge plus the accessible selected
+state (`pageview.LiveryFoundationTiles`) whenever `liveryState.PanelID` is
+confirmed, including the load-time restore, which writes nothing. The shared
+catalog chooser fetches only its visible page of
 at most twelve search matches plus Custom SVG; new searches cancel old fetches
-and generation checks discard stale artwork. Rotation scheduling serializes
+and generation checks discard stale artwork. Its search field consumes Escape
+as `stop-search`, so that handler clears a typed query and otherwise closes the
+chooser (`pageview.LiveryChooserEscapeCloses`). Rotation scheduling serializes
 systemd changes and retains confirmed preferences when a unit change fails.
 
 All external work runs off GTK; widget updates return through

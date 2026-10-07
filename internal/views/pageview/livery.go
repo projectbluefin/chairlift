@@ -106,6 +106,24 @@ func LiveryFoundationResults(query, selectedID string) []LiveryPickerResult {
 	return out
 }
 
+// LiveryFoundationTiles is the Top Bar Icon gallery's model: every foundation
+// in catalog order, so tile i is grid child i, with the confirmed selection
+// marked. A custom file or an unknown id marks no tile.
+func LiveryFoundationTiles(selectedID string) []LiveryPickerResult {
+	return LiveryFoundationResults("", selectedID)
+}
+
+// LiveryFoundationSelectedLabel names the badge on the selected gallery tile.
+const LiveryFoundationSelectedLabel = "Selected"
+
+// LiveryChooserEscapeCloses reports whether Escape in the chooser's search
+// field closes the dialog. GtkSearchEntry consumes Escape as stop-search, so
+// the chooser decides: a typed query is cleared first, and an empty field —
+// the state the chooser opens in — closes it.
+func LiveryChooserEscapeCloses(query string) bool {
+	return query == ""
+}
+
 // LiveryProjectResults returns the dock picker's rows for a query.
 func LiveryProjectResults(query, selectedID string) []LiveryPickerResult {
 	projects := livery.SearchCNCF(query, LiveryProjectResultLimit)
