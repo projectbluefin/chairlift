@@ -174,14 +174,19 @@ def step_switch_sensitive(context, row):
 
 # The Preferences dialog (internal/window/preferences.go) presents inside the
 # main window, over the Updates page, which has rows with the same titles. Its
-# "Update sources" group is the only one with that name, so it is the scope.
-def _update_sources(context):
+# "Update sources" group is the only one with that name, so it is the scope;
+# the post-update maintenance switch lives in its "Maintenance" group.
+_PREFERENCE_GROUPS = {"Run maintenance after updates": "Maintenance"}
+
+
+def _preference_group(context, row):
     if context.app is None:
         raise AssertionError("ChairLift is not running in this scenario (@no-app?)")
+    group = _PREFERENCE_GROUPS.get(row, "Update sources")
     return atspi.find(
         context.app,
-        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == "Update sources",
-        "the Preferences dialog's Update sources group",
+        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == group,
+        f"the Preferences dialog's {group} group",
     )
 
 
@@ -192,7 +197,7 @@ def _update_sources(context):
 # before the inner switch.
 def _preference_switch(context, row):
     return atspi.find(
-        _update_sources(context),
+        _preference_group(context, row),
         lambda n: atspi.role(n) in ("switch", "toggle button", "check box") and atspi.name(n) == row,
         f"the Preferences {row!r} switch row",
         timeout=1,

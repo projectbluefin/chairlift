@@ -724,7 +724,9 @@ surface in three layers that must stay separate:
   abort the run; `ActionRetryFailed` re-applies only sources that still carry
   an apply error. Post-update maintenance (`updateproviders.NewMaintenance`,
   gated by `maintenance_freespace_group`) runs only after a clean live run and
-  only when the user's `MaintenanceAfterUpdates` preference is set.
+  only when the user's `MaintenanceAfterUpdates` preference is set. When that
+  group is disabled, Preferences shows the preference off, insensitive, and
+  "Disabled by administrator" (`updateproviders.CleanupConfigured`).
 - `internal/updateproviders` holds the production `updateflow.Provider`
   values, which wrap `internal/flatpak`, `internal/homebrew`, `internal/updex`,
   and `internal/bootc`; the coordinator executes nothing itself. Flatpak

@@ -153,6 +153,16 @@ Feature: Updates
     And the Preferences "Applications" switch is off and refuses input
     And the Preferences "Developer tools" switch is on and accepts input
 
+  # "Run maintenance after updates" stayed bound and sensitive with routine
+  # cleanup disabled, offering an ON switch for a post-update phase that skips
+  # every step.
+  @config.config-one-group-off @stub.updates-brew-current
+  Scenario: Preferences locks post-update maintenance when cleanup is disabled
+    Given ChairLift is running
+    When I press "<Control>comma"
+    Then the Preferences "Run maintenance after updates" row says "Disabled by administrator"
+    And the Preferences "Run maintenance after updates" switch is off and refuses input
+
   # W3-15: turning a source off in Preferences left its row "Up to date"
   # until a manual Refresh.
   @stub.updates-flatpak-current @stub.updates-brew-current

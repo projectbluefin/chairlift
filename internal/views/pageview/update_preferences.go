@@ -54,6 +54,16 @@ func UpdateSourcePreferenceSensitive(states []updateflow.SourceState, ready bool
 	return ok && updatepresent.SourceLockReason(state) == ""
 }
 
+// MaintenancePreferenceLockReason explains why the "Run maintenance after
+// updates" switch cannot be turned on: the administrator disabled routine
+// cleanup (updateproviders.CleanupConfigured is false), so the post-update
+// phase would skip every step. It is empty when cleanup is configured. The
+// words are SourceLockReason's for an administrator-disabled source, so every
+// locked switch in Preferences reads the same.
+func MaintenancePreferenceLockReason(configured bool) string {
+	return updatepresent.SourceLockReason(updateflow.SourceState{Configured: configured, Available: true})
+}
+
 func updateSourceState(states []updateflow.SourceState, id updateflow.SourceID) (updateflow.SourceState, bool) {
 	for _, state := range states {
 		if state.ID == id {

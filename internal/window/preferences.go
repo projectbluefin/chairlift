@@ -3,6 +3,7 @@ package window
 import (
 	"github.com/projectbluefin/chairlift/internal/settings"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
@@ -59,7 +60,17 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	maintenanceGroup.SetTitle("Maintenance")
 	maintenanceRow := adw.NewSwitchRow()
 	maintenanceRow.SetTitle("Run maintenance after updates")
-	store.BindBoolean("maintenance-after-updates", &maintenanceRow.Object)
+	// The post-update phase skips every step when the administrator disabled
+	// routine cleanup, so its preference is locked off and left unbound, like
+	// a locked update source: an ON switch here would promise cleanup that
+	// never runs.
+	if reason := pageview.MaintenancePreferenceLockReason(updateproviders.CleanupConfigured(w.config)); reason != "" {
+		maintenanceRow.SetSubtitle(reason)
+		maintenanceRow.SetActive(false)
+		maintenanceRow.SetSensitive(false)
+	} else {
+		store.BindBoolean("maintenance-after-updates", &maintenanceRow.Object)
+	}
 	maintenanceGroup.Add(&maintenanceRow.Widget)
 	page.Add(maintenanceGroup)
 

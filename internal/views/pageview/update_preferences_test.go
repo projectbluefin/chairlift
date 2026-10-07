@@ -1,6 +1,10 @@
 package pageview
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/updateflow"
@@ -56,5 +60,38 @@ func TestUpdateSourcePreferenceSubtitleMatchesTheUpdatesRow(t *testing.T) {
 				t.Errorf("%s %+v: preferences say %q, Updates row says %q", preference.ID, state, got, row)
 			}
 		}
+	}
+}
+
+// The "Run maintenance after updates" switch was always bound and sensitive,
+// so with maintenance_freespace_group disabled it offered an ON switch for a
+// post-update phase that skips every step. It is locked with the same words
+// as an administrator-disabled source.
+func TestMaintenancePreferenceLockedWhenCleanupIsDisabled(t *testing.T) {
+	if got := MaintenancePreferenceLockReason(true); got != "" {
+		t.Errorf("configured cleanup is locked: %q", got)
+	}
+	want := UpdateSourcePreferenceSubtitle(
+		[]updateflow.SourceState{{ID: updateflow.Applications, Configured: false, Available: true}},
+		true, updateflow.Applications,
+	)
+	if got := MaintenancePreferenceLockReason(false); got == "" || got != want {
+		t.Errorf("disabled cleanup reason = %q, want %q", got, want)
+	}
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate update_preferences_test.go")
+	}
+	path := filepath.Join(filepath.Dir(filename), "..", "..", "window", "preferences.go")
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(source)
+	lock := strings.Index(text, "pageview.MaintenancePreferenceLockReason(updateproviders.CleanupConfigured(w.config))")
+	bind := strings.Index(text, `store.BindBoolean("maintenance-after-updates"`)
+	if lock < 0 || bind < 0 || bind < lock {
+		t.Error("buildPreferences binds the maintenance preference without first checking that cleanup is configured")
 	}
 }

@@ -108,10 +108,18 @@ func newMaintenance(cfg *config.Config, deps MaintenanceDeps) *Cleanup {
 
 // Enabled reports whether routine cleanup is available at all.
 func (c *Cleanup) Enabled() bool {
-	if c.cfg == nil {
+	return CleanupConfigured(c.cfg)
+}
+
+// CleanupConfigured reports whether the configuration enables routine
+// cleanup through CleanupGroup. It is the one predicate both the cleanup
+// runner and the "Run maintenance after updates" preference read, so the
+// preference cannot offer an ON switch for a phase the runner would skip.
+func CleanupConfigured(cfg *config.Config) bool {
+	if cfg == nil {
 		return false
 	}
-	settings, ok := c.cfg.MaintenancePage[CleanupGroup]
+	settings, ok := cfg.MaintenancePage[CleanupGroup]
 	return ok && settings.Enabled
 }
 
