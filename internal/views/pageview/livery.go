@@ -154,10 +154,11 @@ const LiveryBrandPickerTitle = "Choose a Brand"
 // LiveryBrandSearchPlaceholder is the brand search box's placeholder.
 const LiveryBrandSearchPlaceholder = "Search brands…"
 
-// LiverySelectedBrandRow describes the current app-grid selection.
-func LiverySelectedBrandRow(slug string) Row {
+// LiverySelectedBrandRow describes the current app-grid selection. A custom
+// selection names its file, exactly as the row read right after the pick.
+func LiverySelectedBrandRow(slug, customPath string) Row {
 	if slug == livery.CustomID {
-		return Row{Title: "Brand", Subtitle: "Your own file"}
+		return Row{Title: "Brand", Subtitle: LiveryCustomRow(customPath).Subtitle}
 	}
 	if icon, ok := livery.LookupSimpleIcon(slug); ok {
 		return Row{Title: "Brand", Subtitle: icon.Title}
@@ -165,10 +166,11 @@ func LiverySelectedBrandRow(slug string) Row {
 	return Row{Title: "Brand", Subtitle: "Choose a brand mark"}
 }
 
-// LiverySelectedProjectRow describes the current dock selection.
-func LiverySelectedProjectRow(selectedID string) Row {
+// LiverySelectedProjectRow describes the current dock selection. A custom
+// selection names its file, exactly as the row read right after the pick.
+func LiverySelectedProjectRow(selectedID, customPath string) Row {
 	if selectedID == livery.CustomID {
-		return Row{Title: "Project", Subtitle: "Your own file"}
+		return Row{Title: "Project", Subtitle: LiveryCustomRow(customPath).Subtitle}
 	}
 	if project, ok := livery.LookupCNCF(selectedID); ok {
 		return Row{Title: "Project", Subtitle: project.Name}
