@@ -127,8 +127,10 @@ func (uh *UserHome) runPowerwash(button *gtk.Button, row *adw.ActionRow) {
 
 		runner := powerwash.Runner{
 			FlatpakInstalled:   flatpak.IsInstalledCached,
+			FlatpaksPresent:    func(context.Context) (bool, error) { return flatpak.HasUserRefs() },
 			RemoveFlatpaks:     func(context.Context) error { return flatpak.RemoveAllUser() },
 			DistroboxInstalled: distrobox.IsInstalled,
+			DistroboxesPresent: distrobox.HasContainers,
 			RemoveDistroboxes:  distrobox.RemoveAll,
 		}
 		results := runner.Run(ctx)

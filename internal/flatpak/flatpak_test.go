@@ -580,3 +580,53 @@ func TestUpdateDryRunReturnsNilWithoutRunning(t *testing.T) {
 		t.Fatalf("Update dry-run error = %v, want nil (command must not run)", err)
 	}
 }
+
+// HasUserRefs answers for exactly what RemoveAllUser removes: user-scope
+// applications and runtimes. An empty user installation — Dakota installs
+// every application system-wide — must read as nothing to remove.
+func TestHasUserRefsReadsUserApplicationsAndRuntimes(t *testing.T) {
+	tests := []struct {
+		name, apps, runtimes string
+		want                 bool
+	}{
+		{name: "empty user installation"},
+		{name: "an application", apps: "Firefox\torg.mozilla.firefox\t128.0", want: true},
+		{name: "only a runtime", runtimes: "Freedesktop Platform\torg.freedesktop.Platform\t24.08", want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := "#!/bin/sh\n" +
+				"case \"$*\" in\n" +
+				"  \"list --user --app \"*) printf '%s\\n' \"$FAKE_APPS\" ;;\n" +
+				"  \"list --user --runtime \"*) printf '%s\\n' \"$FAKE_RUNTIMES\" ;;\n" +
+				"  *) exit 2 ;;\n" +
+				"esac\n"
+			if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(script), 0o755); err != nil {
+				t.Fatalf("write fake flatpak: %v", err)
+			}
+			t.Setenv("PATH", dir)
+			t.Setenv("FAKE_APPS", tt.apps)
+			t.Setenv("FAKE_RUNTIMES", tt.runtimes)
+
+			got, err := HasUserRefs()
+			if err != nil {
+				t.Fatalf("HasUserRefs() error = %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("HasUserRefs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHasUserRefsReportsAFailedListing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte("#!/bin/sh\necho broken >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	t.Setenv("PATH", dir)
+	if _, err := HasUserRefs(); err == nil {
+		t.Error("HasUserRefs() error = nil for a failed listing, want an error")
+	}
+}

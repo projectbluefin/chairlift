@@ -26,8 +26,10 @@ func TestStepsAreOrderedAndTitled(t *testing.T) {
 func okRunner() Runner {
 	return Runner{
 		FlatpakInstalled:   func() bool { return true },
+		FlatpaksPresent:    func(context.Context) (bool, error) { return true, nil },
 		RemoveFlatpaks:     func(context.Context) error { return nil },
 		DistroboxInstalled: func() bool { return true },
+		DistroboxesPresent: func(context.Context) (bool, error) { return true, nil },
 		RemoveDistroboxes:  func(context.Context) error { return nil },
 	}
 }
@@ -86,6 +88,59 @@ func TestRunTreatsAMissingSeamAsFailureNotSuccess(t *testing.T) {
 		if result.Outcome != OutcomeFailed {
 			t.Errorf("%s outcome = %q with no seam wired, want %q", result.Step.ID, result.Outcome, OutcomeFailed)
 		}
+	}
+
+	// An inventory seam alone, without the removal, is the same mistake.
+	noRemoval := okRunner()
+	noRemoval.RemoveFlatpaks = nil
+	if got := noRemoval.Run(context.Background())[0].Outcome; got != OutcomeFailed {
+		t.Errorf("flatpak outcome with no removal seam = %q, want %q", got, OutcomeFailed)
+	}
+}
+
+// Both removal commands exit 0 when the account holds nothing — observed in
+// ghcr.io/projectbluefin/dakota:testing, where every application is a
+// system-scope Flatpak — so a removal that had nothing to remove must be a
+// skip that reaches the "nothing was installed" copy, and must not run.
+func TestRunSkipsAnAccountWithNothingToRemove(t *testing.T) {
+	removed := false
+	runner := okRunner()
+	runner.FlatpaksPresent = func(context.Context) (bool, error) { return false, nil }
+	runner.DistroboxesPresent = func(context.Context) (bool, error) { return false, nil }
+	runner.RemoveFlatpaks = func(context.Context) error { removed = true; return nil }
+	runner.RemoveDistroboxes = func(context.Context) error { removed = true; return nil }
+
+	results := runner.Run(context.Background())
+	if removed {
+		t.Error("a removal ran for an account that holds nothing")
+	}
+	for _, result := range results {
+		if result.Outcome != OutcomeSkipped {
+			t.Errorf("%s outcome = %q, want %q", result.Step.ID, result.Outcome, OutcomeSkipped)
+		}
+	}
+	if got := Summarize(results).Headline; got != "Nothing was installed to remove" {
+		t.Errorf("Headline = %q, want %q", got, "Nothing was installed to remove")
+	}
+}
+
+// An inventory that cannot be read is a failure, not a skip: the run cannot
+// say whether anything was left behind.
+func TestRunFailsWhenTheInventoryCannotBeRead(t *testing.T) {
+	removed := false
+	runner := okRunner()
+	runner.DistroboxesPresent = func(context.Context) (bool, error) { return false, errors.New("podman is not running") }
+	runner.RemoveDistroboxes = func(context.Context) error { removed = true; return nil }
+
+	results := runner.Run(context.Background())
+	if removed {
+		t.Error("distrobox removal ran after its inventory failed")
+	}
+	if results[1].Outcome != OutcomeFailed || results[1].Detail != "podman is not running" {
+		t.Errorf("distrobox result = %+v, want a failure carrying the inventory error", results[1])
+	}
+	if results[0].Outcome != OutcomeSucceeded {
+		t.Errorf("flatpak outcome = %q, want %q", results[0].Outcome, OutcomeSucceeded)
 	}
 }
 

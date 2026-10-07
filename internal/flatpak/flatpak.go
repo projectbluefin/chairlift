@@ -563,3 +563,22 @@ func RemoveAllUser() error {
 	_, err := runFlatpakCommand("uninstall", "--user", "--all", "-y")
 	return err
 }
+
+// HasUserRefs reports whether the user installation holds any application or
+// runtime — exactly what RemoveAllUser would uninstall. It is read-only.
+// Powerwash consults it first because `flatpak uninstall --user --all -y`
+// exits 0 with nothing to remove, which on its own reads as a removal.
+func HasUserRefs() (bool, error) {
+	apps, err := ListUserApplications()
+	if err != nil {
+		return false, err
+	}
+	if len(apps) > 0 {
+		return true, nil
+	}
+	runtimes, err := ListUserRuntimes()
+	if err != nil {
+		return false, err
+	}
+	return len(runtimes) > 0, nil
+}

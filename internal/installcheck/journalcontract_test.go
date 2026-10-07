@@ -94,6 +94,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/devmenu/devmenu.go", Func: "execCommand"},                   // dconf
 	{File: "internal/devtools/devtools.go", Func: "command"},                     // limactl / systemctl read; privilege mutations dispatch through ublue.runHelper
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},                 // distrobox
+	{File: "internal/distrobox/distrobox.go", Func: "HasContainers"},             // distrobox list (query)
 	{File: "internal/firstrun/settings.go", Func: "execCommand"},                 // gsettings
 	{File: "internal/flatpak/flatpak.go", Func: "runFlatpakCommandAt"},           // flatpak
 	{File: "internal/flatpak/flatpak.go", Func: "IsInstalled"},                   // flatpak --version

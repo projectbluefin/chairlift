@@ -1067,10 +1067,15 @@ unverified and unwired.
 two steps (removing every
 user-scope Flatpak, removing every Distrobox container) through function
 seams, and `Summarize` aggregates the outcome. A step whose tool is not
-installed is `OutcomeSkipped`, not a failure — there is nothing for it to
-remove. Both steps are unprivileged; `internal/flatpak.RemoveAllUser` and the
-new `internal/distrobox` package (a minimal wrapper existing only to detect
-Distrobox and remove every container) are the real implementations.
+installed, or whose read-only inventory (`flatpak.HasUserRefs`,
+`distrobox.HasContainers`) finds nothing in the account, is `OutcomeSkipped`,
+not a failure — there is nothing for it to remove. The inventory is read
+first because both removal commands exit 0 with nothing to do, so their
+success alone would claim a removal that never happened; an unreadable
+inventory fails the step. Both steps are unprivileged;
+`internal/flatpak.RemoveAllUser` and the `internal/distrobox` package (a
+minimal wrapper existing only to detect, list, and remove every container)
+are the real implementations.
 
 Factory Reset is `bootc install reset --experimental`, dispatched
 through a new `factory-reset` action on the existing `chairlift-helper`

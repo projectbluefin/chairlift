@@ -272,7 +272,9 @@ func TestPowerwashConfirmsOnlyWhenSomethingWasRemoved(t *testing.T) {
 		wantConfirm bool
 		wantToast   string
 	}{
-		{name: "dry run", dryRun: true, wantToast: "[DRY-RUN]"},
+		{name: "dry run", dryRun: true, succeeded: 2, wantToast: "[DRY-RUN] Preview: would remove"},
+		{name: "dry run with nothing installed", dryRun: true, wantToast: "[DRY-RUN] Preview: nothing is installed to remove"},
+		{name: "dry run with an unreadable inventory", dryRun: true, succeeded: 1, failed: 1, wantToast: "[DRY-RUN] Preview: could not read"},
 		{name: "both succeeded", succeeded: 2, wantConfirm: true, wantToast: "complete"},
 		{name: "nothing installed", wantConfirm: true, wantToast: "Nothing was installed"},
 		{name: "one failed, one succeeded", succeeded: 1, failed: 1, wantConfirm: true, wantToast: "problems"},
