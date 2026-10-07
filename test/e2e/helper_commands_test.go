@@ -162,7 +162,7 @@ func acceptedHelperCommands() []acceptedCommand {
 			helper:     ublue,
 			command:    ubluehelper.CommandFactoryReset,
 			args:       []string{ubluehelper.CommandFactoryReset, "--dry-run"},
-			wantStdout: []string{"[DRY-RUN] would execute: bootc [install reset --experimental --apply]"},
+			wantStdout: []string{"[DRY-RUN] would execute: bootc [install reset --experimental]"},
 		},
 		{
 			name:    "automatic updates enable",

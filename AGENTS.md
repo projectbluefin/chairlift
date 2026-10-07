@@ -346,7 +346,8 @@ An agent must not break these:
   extreme case and the shape to copy: it is the most destructive privileged
   action ChairLift offers, so both the program (`bootc`) and its entire argv
   (`ubluehelper.FactoryResetArgs`, the fixed
-  `install reset --experimental --apply`) are spelled in the helper, and the
+  `install reset --experimental`, never `--apply`, which bootc documents as
+  always rebooting at once) are spelled in the helper, and the
   GUI sends nothing but the command word — a factory reset has exactly one
   target, the image already booted, so there is nothing for a caller to name.
   `rollback` is the same shape with an even shorter argv.

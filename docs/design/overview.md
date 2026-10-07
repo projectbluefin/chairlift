@@ -1072,10 +1072,12 @@ remove. Both steps are unprivileged; `internal/flatpak.RemoveAllUser` and the
 new `internal/distrobox` package (a minimal wrapper existing only to detect
 Distrobox and remove every container) are the real implementations.
 
-Factory Reset is `bootc install reset --experimental --apply`, dispatched
+Factory Reset is `bootc install reset --experimental`, dispatched
 through a new `factory-reset` action on the existing `chairlift-helper`
 — it takes no argument, since a factory reset has exactly one target, the
-image already booted.
+image already booted. It deliberately omits `--apply`, which bootc documents
+as always rebooting immediately; the reset takes effect at the next restart,
+as the confirmation says.
 
 Both are gated by `maintenance_page`'s `reset_group`, which ships
 `enabled: false` in `config.yml` (the same default as
