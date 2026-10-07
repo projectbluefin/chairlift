@@ -725,7 +725,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 	button.SetLabel("Switching…")
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.SwitchDriver(ctx, driver)
@@ -773,7 +773,7 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 	toggle.widget.SetSensitive(false)
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.SwitchChannel(ctx, channel)

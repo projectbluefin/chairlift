@@ -466,6 +466,13 @@ is the complete fourteen-command surface:
 The helper dispatcher rejects unhandled commands; parser acceptance alone is
 not evidence a command executes.
 
+`ubluehelper.Timeout` is the helper's per-command budget: 30 minutes for the
+image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin` (the same
+as OS staging's `bootc.DefaultTimeout`), 10 minutes for everything else. The
+GUI's `ublue.ImageSwitchContext` and `ublue.DefaultContext` add a five-minute
+`AuthenticationAllowance`, because the caller's clock also runs during the
+PolicyKit prompt and the helper must be the one to report its outcome.
+
 Only validated channel, driver or day words cross this boundary. The helper
 resolves concrete image references from its own descriptor and the
 [`internal/imageinfo`](../../internal/imageinfo/) channel/driver tables,

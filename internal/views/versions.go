@@ -195,7 +195,7 @@ func (uh *UserHome) runPin(day string, button *gtk.Button) {
 	button.SetLabel("Pinning…")
 
 	go func() {
-		ctx, cancel := ublue.DefaultContext()
+		ctx, cancel := ublue.ImageSwitchContext()
 		defer cancel()
 
 		err := ublue.Pin(ctx, day)

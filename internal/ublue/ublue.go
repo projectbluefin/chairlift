@@ -41,15 +41,24 @@ const (
 	// (the default).
 	HelperPath = "/usr/bin/chairlift-helper"
 
-	// DefaultTimeout bounds a helper invocation. Channel switching only
-	// stages a bootc transaction, but that transaction contacts a registry,
-	// so it gets the same generous ceiling the updex helper uses.
-	DefaultTimeout = 10 * time.Minute
+	// AuthenticationAllowance is how much longer the GUI waits than the
+	// helper's own budget (ubluehelper.Timeout). The GUI's clock also runs
+	// while the PolicyKit prompt is open, and the helper's starts only after
+	// authentication, so without the margin a slow password entry made the
+	// GUI give up and report a timeout while the helper was still working.
+	AuthenticationAllowance = 5 * time.Minute
 )
 
-// DefaultContext returns a context with the default timeout.
+// DefaultContext returns a context for a helper command that does not pull
+// an image.
 func DefaultContext() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), DefaultTimeout)
+	return context.WithTimeout(context.Background(), ubluehelper.DefaultTimeout+AuthenticationAllowance)
+}
+
+// ImageSwitchContext returns a context for a channel switch, driver switch,
+// pin, or unpin: each runs `bootc switch`, which pulls a full image.
+func ImageSwitchContext() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), ubluehelper.ImageSwitchTimeout+AuthenticationAllowance)
 }
 
 // Error represents a ublue helper error. It aliases
