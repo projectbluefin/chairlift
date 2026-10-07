@@ -1,10 +1,66 @@
 package updexhelper
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/frostyard/updex/updex"
 )
+
+// updex returns a generic error and records each component's failure only in
+// its result. The helper's failure line must name every failed component and
+// its reason, and must not list components that updated.
+func TestUpdateFailureDetailNamesEveryFailedComponent(t *testing.T) {
+	generic := errors.New("one or more components failed to update")
+	tests := []struct {
+		name    string
+		results []updex.UpdateFeaturesResult
+		want    string
+	}{
+		{
+			name: "failures across features",
+			results: []updex.UpdateFeaturesResult{
+				{Feature: "devtools", Results: []updex.UpdateResult{
+					{Component: "docker", Version: "27.1", Installed: true},
+					{Component: "incus", Error: "fetching manifest: 404 Not Found"},
+				}},
+				{Feature: "virt", Results: []updex.UpdateResult{
+					{Component: "qemu", Error: "verifying signature: bad key"},
+				}},
+			},
+			want: "one or more components failed to update: " +
+				"devtools/incus: fetching manifest: 404 Not Found; virt/qemu: verifying signature: bad key",
+		},
+		{
+			name: "no per-component detail",
+			results: []updex.UpdateFeaturesResult{
+				{Feature: "devtools", Results: []updex.UpdateResult{{Component: "docker", Installed: true}}},
+			},
+			want: "one or more components failed to update",
+		},
+		{
+			name: "no results at all",
+			want: "one or more components failed to update",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UpdateFailureDetail(tt.results, generic)
+			if got != tt.want {
+				t.Errorf("UpdateFailureDetail() = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(got, "docker") {
+				t.Errorf("UpdateFailureDetail() = %q lists a component that updated", got)
+			}
+			if strings.Contains(got, "\n") {
+				t.Errorf("UpdateFailureDetail() = %q spans lines; the GUI shows stderr as one message", got)
+			}
+		})
+	}
+}
 
 func TestParseInvocationAcceptsSupportedShapes(t *testing.T) {
 	tests := []struct {

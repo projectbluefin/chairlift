@@ -14,6 +14,7 @@ package updexhelper
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/frostyard/updex/updex"
 )
@@ -94,4 +95,28 @@ func DisableOptions(dryRun bool) updex.DisableFeatureOptions {
 // parsed --dry-run flag for this one subcommand.
 func UpdateOptions(dryRun bool) updex.UpdateFeaturesOptions {
 	return updex.UpdateFeaturesOptions{DryRun: dryRun}
+}
+
+// UpdateFailureDetail is the helper's stderr line for a failed update. updex
+// reports each component's failure only in its result (its own warnings go to
+// a no-op reporter in the helper) and returns the generic "one or more
+// components failed to update", so printing err alone left the update run
+// naming no component and no reason. The detail appends every failed
+// feature/component and its error, on one line because the GUI shows the
+// whole stderr as the source's failure message; components that succeeded
+// are omitted.
+func UpdateFailureDetail(results []updex.UpdateFeaturesResult, err error) string {
+	var failed []string
+	for _, feature := range results {
+		for _, component := range feature.Results {
+			if component.Error == "" {
+				continue
+			}
+			failed = append(failed, fmt.Sprintf("%s/%s: %s", feature.Feature, component.Component, component.Error))
+		}
+	}
+	if len(failed) == 0 {
+		return err.Error()
+	}
+	return err.Error() + ": " + strings.Join(failed, "; ")
 }
