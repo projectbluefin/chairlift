@@ -1119,7 +1119,9 @@ retried without restarting the application.
 `internal/autoupdate` classifies the state of `uupd.timer`, the unit
 Universal Blue images ship for unattended updates. It is read-only; the
 privileged writes are `auto-updates-enable` / `auto-updates-disable` on
-`chairlift-helper`.
+`chairlift-helper`. Disabling also masks and stops `uupd-resume.timer`, the
+image's second trigger of the same `uupd.service` (20 minutes after every
+resume), and enabling unmasks it, so "off" stops every unattended run.
 
 The package exists because ChairLift presents this as **one switch** where
 bluefinctl presents a strategy enum, a schedule picker, per-layer switches,

@@ -86,7 +86,7 @@ controls after construction. See the [configuration reference](reference.md).
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | Updex | System feature toggles |
 | llmman (installed by Agent Mode through Homebrew) | The Agents page's local model server |
-| `uupd.timer` systemd unit | The automatic-updates switch. ChairLift reads the unit's state and enables or masks it; it never executes the `uupd` binary |
+| `uupd.timer` systemd unit | The automatic-updates switch. ChairLift reads the unit's state and enables or masks it (masking and unmasking `uupd-resume.timer` alongside, when present); it never executes the `uupd` binary |
 
 ## Building
 

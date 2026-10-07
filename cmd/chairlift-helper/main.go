@@ -270,8 +270,8 @@ func runFactoryReset(ctx context.Context, invocation ubluehelper.Invocation) {
 	fmt.Println("factory reset applied — restart to complete it")
 }
 
-// runAutoUpdates turns the unattended-update timer on or off. Each step must
-// succeed: a partial application would leave the timer in a state that does
+// runAutoUpdates turns the unattended-update timers on or off. Each step must
+// succeed: a partial application would leave the timers in a state that does
 // not match what the user was shown.
 func runAutoUpdates(ctx context.Context, invocation ubluehelper.Invocation) {
 	steps, ok := ubluehelper.AutoUpdateArgs(invocation.Command)
