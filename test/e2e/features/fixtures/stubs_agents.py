@@ -187,11 +187,16 @@ WEB_LINK_COMMAND = "xdg-open https://ask.projectbluefin.io"
 WRAPPER_COMMAND = "/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin"
 
 
-def _devmenu(context, command):
-    """The Custom Command Menu extension with an Ask Bluefin entry running command."""
+def _devmenu(context, command, slot="command11", order=None):
+    """The Custom Command Menu extension with an Ask Bluefin entry running command.
+
+    order, when given, is the distro layer's command-order; None leaves the key
+    unset so the schema default (every slot) applies."""
     entry = _tuple("Ask Bluefin", command, "", True)
-    dump = "\n".join(["[/]", "command11=" + entry, ""])
-    defaults = {"command11": entry}
+    defaults = {slot: entry}
+    if order is not None:
+        defaults["command-order"] = order
+    dump = "\n".join(["[/]"] + [f"{key}={value}" for key, value in sorted(defaults.items())] + [""])
     dump_path = os.path.join(context.scenario_dir, "dconf-dump.txt")
     with open(dump_path, "w", encoding="utf-8") as handle:
         handle.write(dump)
@@ -232,6 +237,12 @@ def devmenu_wrapper(context):
     """The Ask Bluefin entry as the distro ships it, through chairlift-wrapper."""
     _devmenu(context, WRAPPER_COMMAND)
 
+
+@stub("agents.devmenu.unlisted")
+def devmenu_unlisted(context):
+    """Dakota's layout: Ask Bluefin moved to command12, visible, while the
+    inherited command-order lists only 1..11, so the menu omits it."""
+    _devmenu(context, WEB_LINK_COMMAND, slot="command12", order="[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]")
 
 
 

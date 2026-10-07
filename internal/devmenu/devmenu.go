@@ -22,6 +22,11 @@ const DconfPath = "/org/gnome/shell/extensions/custom-command-list/"
 // MaxCommands is the maximum number of command keys in the schema (command1..command99).
 const MaxCommands = 99
 
+// CommandOrderKey is the extension's `ai` key listing which command slots the
+// panel menu renders, in order. The extension skips every slot not listed
+// here, so a slot's own visible flag alone does not put it in the menu.
+const CommandOrderKey = "command-order"
+
 // TargetLabels are the Custom Command Menu labels managed by Developer Mode.
 var TargetLabels = []string{"Terminal", "Containers"}
 
@@ -98,23 +103,31 @@ func ResetTestRunners() {
 	runCommand = execCommand
 }
 
+// menu is the extension's resolved state from one `dconf dump`: each command
+// key's tuple and the raw command-order value ("" when no layer sets it).
+type menu struct {
+	entries map[string]string
+	order   string
+}
+
 // scan reads every command key under the extension's dconf path with a single
-// `dconf dump`, returning key name (command1..command99) to resolved tuple value.
+// `dconf dump`, returning key name (command1..command99) to resolved tuple value
+// along with the resolved command-order.
 // dconf resolves through the whole profile, so the dump carries distro defaults
 // (e.g. Bluefin's 04-bluefin-custom-command-menu) as well as user-layer overrides;
 // one subprocess therefore replaces a per-key read of all 99 keys.
-func scan(ctx context.Context) (map[string]string, error) {
+func scan(ctx context.Context) (menu, error) {
 	out, err := runCommand(ctx, "dconf", "dump", DconfPath)
 	if err != nil {
-		return nil, fmt.Errorf("devmenu: dumping %s: %w: %s", DconfPath, err, strings.TrimSpace(out))
+		return menu{}, fmt.Errorf("devmenu: dumping %s: %w: %s", DconfPath, err, strings.TrimSpace(out))
 	}
 	return parseDump(out), nil
 }
 
-// parseDump parses `dconf dump` keyfile output, keeping only command keys that
-// live directly under the dumped path.
-func parseDump(out string) map[string]string {
-	entries := make(map[string]string)
+// parseDump parses `dconf dump` keyfile output, keeping only command keys and
+// command-order that live directly under the dumped path.
+func parseDump(out string) menu {
+	m := menu{entries: make(map[string]string)}
 	inRoot := false
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -134,12 +147,17 @@ func parseDump(out string) map[string]string {
 		}
 		key = strings.TrimSpace(key)
 		value = strings.TrimSpace(value)
-		if value == "" || !isCommandKey(key) {
+		if value == "" {
 			continue
 		}
-		entries[key] = value
+		switch {
+		case key == CommandOrderKey:
+			m.order = value
+		case isCommandKey(key):
+			m.entries[key] = value
+		}
 	}
-	return entries
+	return m
 }
 
 // isCommandKey reports whether key names one of command1..command99.
@@ -156,11 +174,72 @@ func isCommandKey(key string) bool {
 }
 
 // load probes the extension and returns its command entries in one dconf dump.
-func load(ctx context.Context) (map[string]string, error) {
+func load(ctx context.Context) (menu, error) {
 	if _, err := lookPath("dconf"); err != nil {
-		return nil, nil
+		return menu{}, nil
 	}
 	return scan(ctx)
+}
+
+// schemaDefaultOrder is command-order's schema default, [1..99]: every slot.
+// It applies when neither the user nor a distro layer sets the key.
+func schemaDefaultOrder() []int {
+	order := make([]int, MaxCommands)
+	for i := range order {
+		order[i] = i + 1
+	}
+	return order
+}
+
+// ParseCommandOrder parses command-order's GVariant text (`[1, 2, 3]`, or
+// `@ai []` when empty). An empty raw value means no layer sets the key, so the
+// schema default — every slot — is in effect.
+func ParseCommandOrder(raw string) ([]int, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return schemaDefaultOrder(), nil
+	}
+	s = strings.TrimSpace(strings.TrimPrefix(s, "@ai"))
+	inner, ok := strings.CutPrefix(s, "[")
+	if !ok {
+		return nil, fmt.Errorf("devmenu: command-order %q is not an array", raw)
+	}
+	inner, ok = strings.CutSuffix(inner, "]")
+	if !ok {
+		return nil, fmt.Errorf("devmenu: command-order %q is not an array", raw)
+	}
+	order := []int{}
+	if strings.TrimSpace(inner) == "" {
+		return order, nil
+	}
+	for _, field := range strings.Split(inner, ",") {
+		field = strings.TrimSpace(field)
+		n, err := strconv.Atoi(field)
+		if err != nil {
+			return nil, fmt.Errorf("devmenu: command-order %q: %w", raw, err)
+		}
+		order = append(order, n)
+	}
+	return order, nil
+}
+
+// FormatCommandOrder formats an order as GVariant text for `dconf write`. An
+// empty order carries its type annotation, which dconf cannot otherwise infer.
+func FormatCommandOrder(order []int) string {
+	if len(order) == 0 {
+		return "@ai []"
+	}
+	parts := make([]string, len(order))
+	for i, n := range order {
+		parts[i] = strconv.Itoa(n)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// slotNumber returns n for a key command<n>.
+func slotNumber(key string) int {
+	n, _ := strconv.Atoi(strings.TrimPrefix(key, "command"))
+	return n
 }
 
 // available reports whether the Custom Command Menu extension is present and can be managed.
@@ -171,11 +250,11 @@ func load(ctx context.Context) (map[string]string, error) {
 // A missing dconf tool or absence of custom-command-list keys returns false, nil (supported no-op
 // for Plasma/non-GNOME or environments without the extension).
 func available(ctx context.Context) (bool, error) {
-	entries, err := load(ctx)
+	m, err := load(ctx)
 	if err != nil {
 		return false, err
 	}
-	return len(entries) > 0, nil
+	return len(m.entries) > 0, nil
 }
 
 // ParseEntry parses a GVariant (sssb) tuple representation into an Entry.
@@ -331,10 +410,11 @@ func escapeGVariant(s string) string {
 // in the Custom Command Menu extension according to developerMode.
 // Missing extension or non-GNOME environment is a supported no-op.
 func Apply(ctx context.Context, developerMode bool) error {
-	entries, err := load(ctx)
+	m, err := load(ctx)
 	if err != nil {
 		return err
 	}
+	entries := m.entries
 	if len(entries) == 0 {
 		return nil
 	}
@@ -412,20 +492,13 @@ func Apply(ctx context.Context, developerMode bool) error {
 	return nil
 }
 
-// AskBluefinState reports whether the owned Ask Bluefin entry is available in
-// the Custom Command Menu extension and its current visibility state.
-func AskBluefinState(ctx context.Context) (available bool, visible bool, err error) {
-	entries, err := load(ctx)
-	if err != nil {
-		return false, false, err
-	}
-	if len(entries) == 0 {
-		return false, false, nil
-	}
+// findAskBluefin returns the command key and entry of the owned Ask Bluefin
+// slot, or ok=false when the menu has none.
+func findAskBluefin(entries map[string]string) (key string, entry Entry, ok bool) {
 	for i := 1; i <= MaxCommands; i++ {
 		key := fmt.Sprintf("command%d", i)
-		cur, ok := entries[key]
-		if !ok {
+		cur, found := entries[key]
+		if !found {
 			continue
 		}
 		entry, err := ParseEntry(cur)
@@ -433,92 +506,107 @@ func AskBluefinState(ctx context.Context) (available bool, visible bool, err err
 			continue
 		}
 		if IsAskBluefin(entry) {
-			return true, entry.Visible, nil
+			return key, entry, true
 		}
 	}
-	return false, false, nil
+	return "", Entry{}, false
+}
+
+// AskBluefinState reports whether the owned Ask Bluefin entry is available in
+// the Custom Command Menu extension and whether the panel menu actually shows
+// it. The extension renders only slots listed in command-order, so a slot
+// whose own visible flag is true but which command-order omits is not visible
+// (Dakota's distro layer moved Ask Bluefin to command12 while inheriting an
+// order of [1..11]).
+func AskBluefinState(ctx context.Context) (available bool, visible bool, err error) {
+	m, err := load(ctx)
+	if err != nil {
+		return false, false, err
+	}
+	key, entry, ok := findAskBluefin(m.entries)
+	if !ok {
+		return false, false, nil
+	}
+	order, err := ParseCommandOrder(m.order)
+	if err != nil {
+		return true, false, err
+	}
+	return true, entry.Visible && slices.Contains(order, slotNumber(key)), nil
 }
 
 // SetAskBluefinVisible updates the visibility of the owned Ask Bluefin entry in
 // the Custom Command Menu extension.
 // It modifies only an entry whose title and command match ChairLift's owned identity.
-// When visible matches the distro default (read via `dconf read -d`), it resets the
-// key in the user layer so distro defaults are revealed rather than copied into user state.
+// Showing the entry also lists its slot in command-order when the order omits
+// it, appending the slot and preserving the rest of the order; hiding it
+// changes only the entry's visible flag. For both keys, a value that matches
+// the distro default (read via `dconf read -d`) resets the user layer so
+// distro defaults are revealed rather than copied into user state.
 func SetAskBluefinVisible(ctx context.Context, visible bool) error {
-	entries, err := load(ctx)
+	m, err := load(ctx)
 	if err != nil {
 		return err
 	}
-	if len(entries) == 0 {
+	key, entry, ok := findAskBluefin(m.entries)
+	if !ok {
 		return nil
 	}
 
-	for i := 1; i <= MaxCommands; i++ {
-		key := fmt.Sprintf("command%d", i)
-		cur, ok := entries[key]
-		if !ok {
-			continue
-		}
-		dconfKeyPath := DconfPath + key
-
-		entry, err := ParseEntry(cur)
-		if err != nil {
-			continue
-		}
-
-		if !IsAskBluefin(entry) {
-			continue
-		}
-
-		desired := Entry{
-			Label:   entry.Label,
-			Command: entry.Command,
-			Icon:    entry.Icon,
-			Visible: visible,
-		}
-		desiredFormatted := FormatEntry(desired)
-
-		defaultRaw, err := runCommand(ctx, "dconf", "read", "-d", dconfKeyPath)
+	desired := entry
+	desired.Visible = visible
+	if entry != desired {
+		defaultRaw, err := runCommand(ctx, "dconf", "read", "-d", DconfPath+key)
 		if err != nil {
 			return fmt.Errorf("devmenu: reading default %s: %w: %s", key, err, strings.TrimSpace(defaultRaw))
 		}
-		def := strings.TrimSpace(defaultRaw)
-
-		defMatches := false
-		if def != "" {
-			if defEntry, defErr := ParseEntry(def); defErr == nil {
-				if defEntry == desired {
-					defMatches = true
-				}
-			}
+		defEntry, defErr := ParseEntry(strings.TrimSpace(defaultRaw))
+		if err := settleKey(ctx, key, FormatEntry(desired), defErr == nil && defEntry == desired, fmt.Sprintf("visible=%t", visible)); err != nil {
+			return err
 		}
-
-		if entry == desired {
-			return nil
-		}
-
-		if defMatches {
-			if dryrun.Enabled() {
-				log.Printf("[DRY-RUN] would reset Custom Command Menu %s to default", key)
-			} else {
-				out, err := runCommand(ctx, "dconf", "reset", dconfKeyPath)
-				if err != nil {
-					return fmt.Errorf("devmenu: resetting %s: %w: %s", key, err, strings.TrimSpace(out))
-				}
-			}
-			return nil
-		}
-
-		if dryrun.Enabled() {
-			log.Printf("[DRY-RUN] would set Custom Command Menu %s visible=%t", key, visible)
-		} else {
-			out, err := runCommand(ctx, "dconf", "write", dconfKeyPath, desiredFormatted)
-			if err != nil {
-				return fmt.Errorf("devmenu: writing %s: %w: %s", key, err, strings.TrimSpace(out))
-			}
-		}
+	}
+	if !visible {
 		return nil
 	}
 
+	order, err := ParseCommandOrder(m.order)
+	if err != nil {
+		return err
+	}
+	slot := slotNumber(key)
+	if slices.Contains(order, slot) {
+		return nil
+	}
+	desiredOrder := append(slices.Clone(order), slot)
+	defaultRaw, err := runCommand(ctx, "dconf", "read", "-d", DconfPath+CommandOrderKey)
+	if err != nil {
+		return fmt.Errorf("devmenu: reading default %s: %w: %s", CommandOrderKey, err, strings.TrimSpace(defaultRaw))
+	}
+	defOrder, defErr := ParseCommandOrder(defaultRaw)
+	formatted := FormatCommandOrder(desiredOrder)
+	return settleKey(ctx, CommandOrderKey, formatted, defErr == nil && slices.Equal(defOrder, desiredOrder), "to "+formatted)
+}
+
+// settleKey moves one key to its desired value in the user layer: a reset when
+// the desired value is the distro default, otherwise a write. Dry-run logs
+// change and mutates nothing.
+func settleKey(ctx context.Context, key, desired string, matchesDefault bool, change string) error {
+	path := DconfPath + key
+	if matchesDefault {
+		if dryrun.Enabled() {
+			log.Printf("[DRY-RUN] would reset Custom Command Menu %s to default", key)
+			return nil
+		}
+		if out, err := runCommand(ctx, "dconf", "reset", path); err != nil {
+			return fmt.Errorf("devmenu: resetting %s: %w: %s", key, err, strings.TrimSpace(out))
+		}
+		return nil
+	}
+	if dryrun.Enabled() {
+		log.Printf("[DRY-RUN] would set Custom Command Menu %s %s", key, change)
+		return nil
+	}
+	if out, err := runCommand(ctx, "dconf", "write", path, desired); err != nil {
+		return fmt.Errorf("devmenu: writing %s: %w: %s", key, err, strings.TrimSpace(out))
+	}
 	return nil
 }

@@ -89,6 +89,11 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	manageBtn.ConnectClicked(&manageClicked)
 	manageRow.AddSuffix(&manageBtn.Widget)
 	manageRow.SetActivatableWidget(&manageBtn.Widget)
+	// AdwActionRow labels its activatable widget by the row title, so the
+	// "Open llmman" button would be announced as "Models and Chat" — a name
+	// that does not contain its visible label. Drop that relation so the
+	// button is announced by what it shows.
+	manageBtn.ResetRelation(gtk.AccessibleRelationLabelledByValue)
 	manageRow.SetVisible(false)
 	uh.agentManageRow = manageRow
 	group.Add(&manageRow.Widget)
@@ -182,8 +187,11 @@ func (uh *UserHome) presentModelPresetChooser() {
 	dialog := adw.NewAlertDialog("Choose a Model", "Choose a model family. A model that fits this computer's memory will be downloaded.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.SetCloseResponse("cancel")
-	for _, fam := range aistack.Families() {
-		dialog.AddResponse(string(fam), fam.DisplayName())
+	for _, response := range pageview.AgentModePresetResponses() {
+		dialog.AddResponse(response.ID, response.Label)
+		if response.Suggested {
+			dialog.SetResponseAppearance(response.ID, adw.ResponseSuggestedValue)
+		}
 	}
 	uh.agentPresetDialogs.connect(dialog, func(response string) {
 		fam := aistack.Family(response)

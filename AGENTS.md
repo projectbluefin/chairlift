@@ -252,7 +252,13 @@ An agent must not break these:
   Bluefin's distro layer ships (projectbluefin/common#1396) because an
   extension's command runs without Homebrew on `$PATH`. ChairLift changes only
   that entry's visibility and never rewrites its command; a slot whose command
-  the user changed is not claimed.
+  the user changed is not claimed. The extension renders only slots listed in
+  its `command-order` key, so Ask Bluefin reads as shown only when its tuple is
+  visible **and** its slot is listed (Dakota moves the entry to `command12`
+  while inheriting an order of 1..11). Showing it appends a missing slot to
+  `command-order`, preserving the rest of the order, under the same
+  reset-when-matching-the-distro-default rule; hiding it changes only the
+  tuple's visible flag.
 - **The release-channel table is keyed on the image, never on the tag alone.**
   `internal/imageinfo`'s `imageChannelMap` records, per registry path, which
   tags are stable streams, which are testing streams, and how each maps to
@@ -895,7 +901,7 @@ An agent must not break these:
   prerequisite, with identical behavior for
   cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
-  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (linking `https://github.com/projectbluefin/contribute#configuration` for missing registration) and leaves the button insensitive. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
+  `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`) checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Start`, reporting failures asynchronously. Previews under `--dry-run` log only and launch nothing.
 - **Printer applications are rootless quadlets, locked until their
   administration is authenticated, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
