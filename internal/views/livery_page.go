@@ -65,7 +65,7 @@ func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 	// up on the website.
 	brandRow := adw.NewActionRow()
 	brandRow.SetUseMarkup(false)
-	brand := pageview.LiverySelectedBrandRow("")
+	brand := pageview.LiverySelectedBrandRow("", "")
 	brandRow.SetTitle(brand.Title)
 	brandRow.SetSubtitle(brand.Subtitle)
 	brandRow.AddSuffix(&gtk.NewImageFromIconName("go-next-symbolic").Widget)
@@ -146,7 +146,7 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	// screen besides.
 	projectRow := adw.NewActionRow()
 	projectRow.SetUseMarkup(false)
-	selected := pageview.LiverySelectedProjectRow(livery.DefaultCNCFID)
+	selected := pageview.LiverySelectedProjectRow(livery.DefaultCNCFID, "")
 	projectRow.SetTitle(selected.Title)
 	projectRow.SetSubtitle(selected.Subtitle)
 	projectRow.AddSuffix(&gtk.NewImageFromIconName("go-next-symbolic").Widget)
@@ -312,7 +312,7 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 	}
 	if uh.liveryAppGridRow != nil {
 		uh.liveryAppGridRow.SetSensitive(appGridAvailable && state.AppGridEnabled)
-		uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(state.AppGridSlug).Subtitle)
+		uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(state.AppGridSlug, state.AppGridCustom).Subtitle)
 	}
 
 	// Without the Custom Command Menu extension there is no panel mark to
@@ -342,7 +342,7 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 		uh.liveryDockSwitch.SetActive(state.DockEnabled)
 	}
 	if uh.liveryDockSelectedRow != nil {
-		selected := pageview.LiverySelectedProjectRow(state.DockID)
+		selected := pageview.LiverySelectedProjectRow(state.DockID, state.DockCustom)
 		uh.liveryDockSelectedRow.SetTitle(selected.Title)
 		uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
 	}

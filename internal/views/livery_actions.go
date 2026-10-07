@@ -128,7 +128,7 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 		uh.publishLiverySelection(livery.AppGrid, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
 			uh.liveryState.AppGridSlug = slug
 			if uh.liveryAppGridRow != nil {
-				uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug).Subtitle)
+				uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug, uh.liveryState.AppGridCustom).Subtitle)
 			}
 		})
 	})
@@ -284,7 +284,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 		uh.publishLiverySelection(livery.Dock, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
 			uh.liveryState.DockID = id
 			if uh.liveryDockSelectedRow != nil {
-				selected := pageview.LiverySelectedProjectRow(id)
+				selected := pageview.LiverySelectedProjectRow(id, uh.liveryState.DockCustom)
 				uh.liveryDockSelectedRow.SetTitle(selected.Title)
 				uh.liveryDockSelectedRow.SetSubtitle(selected.Subtitle)
 			}

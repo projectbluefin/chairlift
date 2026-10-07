@@ -169,3 +169,25 @@ func TestNoResultsRowNamesTheCatalogItSearched(t *testing.T) {
 		}
 	}
 }
+
+// TestSelectedRowsNameTheCustomFileOnEverySurface holds that a custom
+// selection still names its file after a reload, as it does right after the
+// pick. The brand and project rows once answered "Your own file" on load
+// while the panel row kept the path.
+func TestSelectedRowsNameTheCustomFileOnEverySurface(t *testing.T) {
+	const path = "/home/u/mark.svg"
+	want := LiveryCustomRow(path).Subtitle
+	rows := map[string]Row{
+		"brand":      LiverySelectedBrandRow(livery.CustomID, path),
+		"project":    LiverySelectedProjectRow(livery.CustomID, path),
+		"foundation": LiverySelectedFoundationRow(livery.CustomID, path),
+	}
+	for name, row := range rows {
+		if row.Subtitle != want {
+			t.Errorf("%s row subtitle %q, want %q", name, row.Subtitle, want)
+		}
+	}
+	if got := LiverySelectedProjectRow(livery.DefaultCNCFID, path).Subtitle; got == want {
+		t.Errorf("a catalog project row shows the custom path %q", got)
+	}
+}
