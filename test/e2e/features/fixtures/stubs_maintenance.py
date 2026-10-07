@@ -116,6 +116,43 @@ exit 0
     fake_executable(context, "distrobox", _recorder(context) + "exit 0\n")
 
 
+@stub("maintenance_powerwash_inventory")
+def maintenance_powerwash_inventory(context):
+    """Flatpak and Distrobox that each hold something for Powerwash to remove.
+
+    List after @stub.maintenance_package_tools, whose empty fakes these
+    replace. Powerwash reads the user installation and the container list
+    before removing, so only a non-empty inventory previews a removal.
+    """
+    fake_executable(
+        context,
+        "flatpak",
+        _recorder(context)
+        + """
+case "$*" in
+  --version) echo "Flatpak 1.16.1" ;;
+  "list --user --app "*) printf 'Firefox\\torg.mozilla.firefox\\t128.0\\n' ;;
+esac
+exit 0
+""",
+    )
+    fake_executable(
+        context,
+        "distrobox",
+        _recorder(context)
+        + """
+case "$1" in
+  list)
+    echo "ID           | NAME                 | STATUS             | IMAGE"
+    echo "2f3a9c1b0d4e | fedora               | Up 2 hours         | registry.fedoraproject.org/fedora-toolbox:41"
+    ;;
+esac
+exit 0
+""",
+    )
+
+
+
 @stub("maintenance_bootc_pinned")
 def maintenance_bootc_pinned(context):
     """A bootc host booted on a dated tag (e.g. latest.20260920), offering Return to stream."""

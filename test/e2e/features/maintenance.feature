@@ -96,7 +96,7 @@ Feature: Maintenance and its Powerwash detail
     And the stubbed "distrobox" never ran "rm"
     And the action journal is empty
 
-  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
+  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools @stub.maintenance_powerwash_inventory
   Scenario: Confirming Powerwash previews both removals, claims nothing, and can run again
     Given ChairLift is running
     When I open the "Maintenance" page
@@ -115,6 +115,24 @@ Feature: Maintenance and its Powerwash detail
     And the action journal is empty
     When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
     Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
+
+  @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
+  Scenario: Powerwash on an account that holds nothing previews no removal
+    Given ChairLift is running
+    When I open the "Maintenance" page
+    And I open the Powerwash detail
+    And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
+    And I choose "Remove Apps and Containers" in the dialog
+    Then I see "[DRY-RUN] Preview: nothing is installed to remove — no changes made"
+    And no dialog is shown
+    And the application log contains "views: powerwash finished succeeded=0 failed=0 skipped=2"
+    And the application log does not contain "Would execute: flatpak uninstall"
+    And the application log does not contain "would execute: distrobox"
+    And the stubbed "flatpak" never ran "uninstall"
+    And the stubbed "distrobox" never ran "rm"
+    And I do not see "would remove your Flatpaks and Distrobox containers"
+    And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
+    And the action journal is empty
 
   # --------------------------------------------------------- Factory Reset
 

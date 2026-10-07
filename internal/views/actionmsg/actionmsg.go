@@ -601,15 +601,21 @@ func FactoryReset(dryRun bool) FeatureToggleDecision {
 // Powerwash decides whether the Powerwash row should show its outcome, and
 // what toast to display. Unlike Rollback and FactoryReset, Powerwash runs
 // two independent, unprivileged steps that can each succeed, fail, or be
-// skipped (a tool not installed), so Confirm is not simply !dryRun — a live
-// run in which nothing was actually removed must not claim success, the same
-// distinction internal/views/actionmsg.GamingMode already makes.
+// skipped (a tool not installed, or nothing in the account), so Confirm is
+// not simply !dryRun — a live run in which nothing was actually removed must
+// not claim success, the same distinction internal/views/actionmsg.GamingMode
+// already makes. A preview reads the same inventory, so it previews only a
+// removal that would happen.
 func Powerwash(dryRun bool, succeeded, failed int) FeatureToggleDecision {
 	if dryRun {
-		return FeatureToggleDecision{
-			Confirm: false,
-			Toast:   "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made",
+		toast := "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made"
+		switch {
+		case failed > 0:
+			toast = "[DRY-RUN] Preview: could not read everything Powerwash would remove — no changes made"
+		case succeeded == 0:
+			toast = "[DRY-RUN] Preview: nothing is installed to remove — no changes made"
 		}
+		return FeatureToggleDecision{Confirm: false, Toast: toast}
 	}
 	switch {
 	case succeeded == 0 && failed == 0:
