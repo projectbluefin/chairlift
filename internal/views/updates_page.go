@@ -765,7 +765,10 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 	}
 
 	if !uh.updateShell.beginMutation() {
-		toggle.set(!toTesting)
+		// This runs inside the switch's state-set emission, where moving
+		// the switch is overridden when the emission finishes; revert on
+		// the next main-loop turn instead.
+		sgtk.RunOnMainThread(func() { toggle.set(!toTesting) })
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}

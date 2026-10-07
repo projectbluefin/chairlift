@@ -120,10 +120,13 @@ exit 0
 def maintenance_powerwash_inventory(context):
     """Flatpak and Distrobox that each hold something for Powerwash to remove.
 
-    List after @stub.maintenance_package_tools, whose empty fakes these
-    replace. Powerwash reads the user installation and the container list
-    before removing, so only a non-empty inventory previews a removal.
+    Applies @stub.maintenance_package_tools first and replaces its empty
+    Flatpak and Distrobox fakes: behave hands tags over as an unordered set,
+    so a scenario cannot rely on listing one stub after another. Powerwash
+    reads the user installation and the container list before removing, so
+    only a non-empty inventory previews a removal.
     """
+    maintenance_package_tools(context)
     fake_executable(
         context,
         "flatpak",
@@ -179,7 +182,10 @@ def maintenance_unlisted_image(context):
     The privileged helper derives no pin or unpin target for a stream outside
     the table and refuses after authentication, so Powerwash must not offer
     either. Booted on a dated build so Return to stream is built as well.
+    Applies @stub.maintenance_bootc_pinned first and replaces its descriptor,
+    since behave applies tags in no guaranteed order.
     """
+    maintenance_bootc_pinned(context)
     image_info_path = os.path.join(context.scenario_dir, "image-info.json")
     with open(image_info_path, "w", encoding="utf-8") as handle:
         json.dump({
