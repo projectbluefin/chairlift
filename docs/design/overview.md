@@ -162,8 +162,10 @@ percentage is inferred. `Window.ShowToast` and `ShowErrorToast` preempt older
 toasts with Libadwaita's high priority, retaining those older errors in the
 queue rather than leaving every later result behind an infinite timeout. A
 message carrying pkexec's dismissal text (`pkexec.MessageIsAuthDismissed`) is
-not an error: `ShowErrorToast` shows a brief "Authentication cancelled" toast
-instead of pinning raw stderr.
+not an error: `ShowErrorToast` shows the brief `pkexec.CancelledMessage`
+("Authentication cancelled") instead of pinning raw stderr. Views whose failure
+toast is fixed text never carry that text, so they classify the error itself
+with `pageview.PrivilegedFailureToast` (exit 126 anywhere in the chain).
 
 Connect reusable GTK signals once, outside refresh paths. `buttonRoute` and
 `dialogRoute` in `internal/views/widgets.go` reuse stable callback variables

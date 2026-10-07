@@ -110,6 +110,20 @@ func BootcStageFailureSubtitle(hadOutput bool) string {
 // nothing happened.
 const UpdateBusyToast = "Wait for the current update check or installation to finish"
 
+// PrivilegedFailureToast returns the toast for a privileged action that
+// returned err, and whether that toast is an error. failure is the view's
+// own plain-language failure text; the views on the Updates page do not
+// quote the helper's output, so the window's message-based dismissal check
+// never sees pkexec's "Request dismissed". A dismissed authentication prompt
+// is not a failure — the helper never ran — so it yields the brief
+// pkexec.CancelledMessage instead of a persistent error.
+func PrivilegedFailureToast(err error, failure string) (toast string, isError bool) {
+	if pkexec.IsAuthDismissed(err) {
+		return pkexec.CancelledMessage, false
+	}
+	return failure, true
+}
+
 // StagingLogSubtitle returns the "Details" expander subtitle for a staging
 // run whose output is rendered through a bounded rolling window: shown is how
 // many lines the expander currently holds and total is how many the stage
