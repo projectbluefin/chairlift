@@ -287,6 +287,9 @@ func updatingDescription(state updateflow.Snapshot) string {
 	if state.Current != "" {
 		return gotext.Get("Installing %s…", sourceTitle(state.Current))
 	}
+	if state.Maintaining {
+		return gotext.Get("Cleaning up after updates…")
+	}
 	return gotext.Get("Installing updates…")
 }
 

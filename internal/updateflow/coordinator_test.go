@@ -674,6 +674,55 @@ func TestCoordinatorMaintenanceRunsOnceAfterCompleteLiveSuccess(t *testing.T) {
 	}
 }
 
+// Post-update maintenance runs after every source finished, so no source is
+// updating; the run is still in progress (cleanup may prompt for a
+// password), and the panel read "System is up to date" with no progress
+// while it ran. Every snapshot published during maintenance stays updating.
+func TestCoordinatorStaysUpdatingWhileMaintenanceRuns(t *testing.T) {
+	var published []Snapshot
+	publish := func(snapshot Snapshot) { published = append(published, snapshot) }
+	var duringRun []Snapshot
+	maintenance := &testMaintenance{
+		run: func(_ context.Context, progress func(Progress)) error {
+			duringRun = append(duringRun, published[len(published)-1])
+			progress(Progress{Source: DeveloperTools, Message: "Removing old downloads"})
+			duringRun = append(duringRun, published[len(published)-1])
+			return nil
+		},
+	}
+	provider := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(context.Context, []Item, func(Progress)) (ApplyResult, error) {
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	current := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+	}}
+
+	got := New([]Provider{provider}, maintenance).UpdateAll(
+		context.Background(), current,
+		userprefs.Values{Applications: true, MaintenanceAfterUpdates: true},
+		publish,
+	)
+	if len(duringRun) != 2 {
+		t.Fatalf("maintenance observed %d snapshots, want 2", len(duringRun))
+	}
+	for i, snapshot := range duringRun {
+		if snapshot.Phase != PhaseUpdating || snapshot.Action != ActionNone || !snapshot.Maintaining {
+			t.Errorf("snapshot %d during maintenance = phase %v action %v maintaining %v, want updating with no action",
+				i, snapshot.Phase, snapshot.Action, snapshot.Maintaining)
+		}
+	}
+	if progress := duringRun[1]; progress.Current != DeveloperTools || progress.Progress != "Removing old downloads" {
+		t.Errorf("maintenance progress = %q/%q, want the cleanup step", progress.Current, progress.Progress)
+	}
+	if got.Phase != PhaseReady || got.Maintaining {
+		t.Fatalf("final snapshot = phase %v maintaining %v, want ready once maintenance finished", got.Phase, got.Maintaining)
+	}
+}
+
 func TestCoordinatorRetriesMaintenanceWithoutReapplyingSuccessfulSources(t *testing.T) {
 	maintenanceErr := errors.New("cleanup failed")
 	var applyCalls atomic.Int32

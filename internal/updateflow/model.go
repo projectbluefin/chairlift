@@ -91,6 +91,10 @@ type Snapshot struct {
 	Preview          bool
 	MaintenanceRan   bool
 	MaintenanceErr   error
+	// Maintaining is true only while post-update maintenance runs. No source
+	// is updating then, yet the run is not finished: cleanup still executes
+	// and may prompt for a password, so the phase stays PhaseUpdating.
+	Maintaining bool
 }
 
 // Progress is one provider progress update.
@@ -183,7 +187,7 @@ func derive(s Snapshot) Snapshot {
 	case checking:
 		s.Phase = PhaseChecking
 		s.Action = ActionNone
-	case updating:
+	case updating || s.Maintaining:
 		s.Phase = PhaseUpdating
 		s.Action = ActionNone
 	case hasApplyFailure(s.Sources):

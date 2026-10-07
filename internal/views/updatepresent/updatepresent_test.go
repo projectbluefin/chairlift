@@ -109,6 +109,28 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				Description: "Developer tools: Installing packages…"},
 		},
 		{
+			// Post-update maintenance: no source is updating, but the run
+			// is still cleaning up, so the panel keeps reporting it.
+			name: "maintenance before its first step",
+			state: updateflow.Snapshot{
+				Phase:       updateflow.PhaseUpdating,
+				Maintaining: true,
+			},
+			want: Presentation{Title: "Installing updates",
+				Description: "Cleaning up after updates…"},
+		},
+		{
+			name: "maintenance step",
+			state: updateflow.Snapshot{
+				Phase:       updateflow.PhaseUpdating,
+				Maintaining: true,
+				Current:     updateflow.DeveloperTools,
+				Progress:    "Removing old downloads",
+			},
+			want: Presentation{Title: "Installing updates",
+				Description: "Developer tools: Removing old downloads"},
+		},
+		{
 			name: "partial failure",
 			state: updateflow.Snapshot{
 				Phase:  updateflow.PhasePartialFailure,
