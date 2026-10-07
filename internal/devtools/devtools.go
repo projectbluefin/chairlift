@@ -54,6 +54,29 @@ const (
 	NeedsPrerequisite = "This computer is missing a part WSL Mode needs."
 )
 
+// nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
+// built-in engine when none exists.
+const (
+	nslNewMachine = "ubuntu"
+	nslNewDistro  = "ubuntu:26.04"
+)
+
+// nslManagedMachines lists, in order of preference, the nsl machine names
+// ChairLift has created: ubuntu now, debian before the built-in engine moved
+// to Ubuntu. WSL Mode adopts the first one that exists, so a host that already
+// has the older debian machine keeps using it rather than gaining a second
+// machine. Machines with other names belong to the user and are not WSL Mode's.
+var nslManagedMachines = []string{nslNewMachine, "debian"}
+
+// EngineSubtitle describes what the engines run, given the nsl machine WSL
+// Mode manages (WSLState.Machine; empty when none exists or it was not read).
+func EngineSubtitle(nslMachine string) string {
+	if nslMachine == "debian" {
+		return "Your built-in engine runs Debian. Lima runs Ubuntu."
+	}
+	return "Both engines run Ubuntu."
+}
+
 // Tools follows Common's ide.Brewfile and devmode terminal-editor choices.
 // The current Toolbox cask contains only the x86_64 Linux archive.
 func Tools() []Tool {
@@ -176,6 +199,9 @@ type WSLState struct {
 	Exists  bool
 	Running bool
 	Ready   bool
+	// Machine is the nsl machine WSL Mode manages when it exists (see
+	// nslManagedMachines); empty for Lima or when none exists.
+	Machine string
 }
 
 // NSLDoctor runs "nsl doctor" to check host prerequisites.
@@ -220,43 +246,35 @@ func ParseNSLDoctor(output string) (actionable string, isKVM bool) {
 	return "", false
 }
 
-// ParseNSLList parses the output of "nsl list" into WSLState.
+// ParseNSLList parses the output of "nsl list" into the WSLState of the
+// machine WSL Mode manages: the first of nslManagedMachines that exists.
+// The shared VM's own state and other machines do not count.
 func ParseNSLList(output string) WSLState {
-	state := WSLState{}
-	lines := strings.Split(output, "\n")
+	running := map[string]bool{}
 	inMachines := false
-	for _, rawLine := range lines {
-		line := strings.TrimSpace(rawLine)
-		if line == "" || strings.HasPrefix(line, "No ") || strings.HasPrefix(line, "Pending ") {
+	for _, rawLine := range strings.Split(output, "\n") {
+		fields := strings.Fields(rawLine)
+		if len(fields) == 0 || fields[0] == "No" || fields[0] == "Pending" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		if fields[0] == "MACHINE" {
+		switch fields[0] {
+		case "MACHINE":
 			inMachines = true
 			continue
-		}
-		if fields[0] == "VM" {
+		case "VM":
 			inMachines = false
 			continue
 		}
 		if inMachines {
-			state.Exists = true
-			if len(fields) >= 2 && fields[1] == "running" {
-				state.Running = true
-			}
-		} else {
-			if len(fields) >= 2 && fields[1] == "running" {
-				state.Running = true
-				state.Exists = true
-			} else if len(fields) >= 2 && fields[1] == "stopped" {
-				state.Exists = true
-			}
+			running[fields[0]] = len(fields) >= 2 && fields[1] == "running"
 		}
 	}
-	return state
+	for _, name := range nslManagedMachines {
+		if isRunning, ok := running[name]; ok {
+			return WSLState{Exists: true, Running: isRunning, Machine: name}
+		}
+	}
+	return WSLState{}
 }
 
 // statusTimeout bounds one whole status probe — every command it runs and the
@@ -279,7 +297,7 @@ func NSLStatus(ctx context.Context) (WSLState, error) {
 	}
 	state := ParseNSLList(output)
 	if state.Running {
-		_, err := command(ctx, false, "nsl", "run", "true")
+		_, err := command(ctx, false, "nsl", "run", "-m", state.Machine, "true")
 		state.Ready = err == nil
 	}
 	return state, nil
@@ -372,7 +390,7 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 	}
 	if dryrun.Enabled() {
 		if enabled {
-			log.Print("[DRY-RUN] would install nsl, check host prerequisites, start nsl machine, and probe its shell")
+			log.Print("[DRY-RUN] would install nsl, check host prerequisites, start the existing ubuntu or debian machine (creating ubuntu only when neither exists), and probe its shell")
 		} else {
 			log.Print("[DRY-RUN] would stop nsl machines and VM without deleting data")
 		}
@@ -410,35 +428,43 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		if _, err := command(ctx, false, "nsl", "doctor"); err != nil {
 			return err
 		}
+		return startNSL(ctx, stage)
 	}
+	state, err := NSLStatus(ctx)
+	if err != nil || !state.Running {
+		return err
+	}
+	stage("Stopping…")
+	_, err = command(ctx, true, "nsl", "shutdown")
+	return err
+}
+
+// startNSL brings up the machine WSL Mode manages: the existing ubuntu or
+// debian machine, or a new ubuntu machine only when neither exists. Every
+// command names that machine, since nsl's default machine may be another one.
+func startNSL(ctx context.Context, stage func(string)) error {
 	state, err := NSLStatus(ctx)
 	if err != nil {
 		return err
 	}
-	if !enabled {
-		if !state.Exists && !state.Running {
-			return nil
-		}
-		stage("Stopping…")
-		_, err := command(ctx, true, "nsl", "shutdown")
-		return err
-	}
+	machine := state.Machine
 	if !state.Exists {
+		machine = nslNewMachine
 		stage("Creating your virtual machine…")
-		if _, err := command(ctx, true, "nsl", "create", "ubuntu", "--distro", "ubuntu:26.04"); err != nil {
+		if _, err := command(ctx, true, "nsl", "create", machine, "--distro", nslNewDistro); err != nil {
 			return err
 		}
 	}
 	if !state.Running {
 		stage("Starting…")
-		if _, err := command(ctx, true, "nsl", "start", "ubuntu"); err != nil {
-			if _, runErr := command(ctx, true, "nsl", "run", "true"); runErr != nil {
+		if _, err := command(ctx, true, "nsl", "start", machine); err != nil {
+			if _, runErr := command(ctx, true, "nsl", "run", "-m", machine, "true"); runErr != nil {
 				return err
 			}
 		}
 	}
 	stage("Checking that it works…")
-	_, err = command(ctx, false, "nsl", "run", "true")
+	_, err = command(ctx, false, "nsl", "run", "-m", machine, "true")
 	return err
 }
 

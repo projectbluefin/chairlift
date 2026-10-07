@@ -179,7 +179,9 @@ KVM permission changes require a new login; Docker needs an accessible daemon
 socket for this session. No user-configurable privileged argv is accepted.
 The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
 `wsl_backend` configures the initial choice. With the nsl default, an existing
-Lima Ubuntu machine and no nsl machine select Lima instead of creating another.
+Lima Ubuntu machine and no ChairLift nsl machine select Lima instead of creating
+another. nsl creates an Ubuntu machine, but keeps using the Debian machine an
+older ChairLift created rather than adding a second one.
 
 
 ### Livery Page (`livery_page`)

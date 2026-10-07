@@ -143,8 +143,8 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Gaming Mode | `gaming_group` | Selectively installs chosen Flatpak applications and runtime extensions system-wide (`flatpak install --system`) from the system Flathub remote Bluefin-family images configure, authorized by Flatpak's own PolicyKit rather than by ChairLift; reports user and system installed scopes and persistent partial failures. A copy an earlier release installed per-user counts as installed. Remove Selected removes each selected app from every scope it is installed in, after a confirmation that system-wide copies go for every account, except a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`), which is left in place; shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting new enables are locked and the row says what is needed. Existing units remain manageable for disabling. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 
-Developer options include WSL Mode (persistent Linux machines in systemd-vmspawn
-via nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
+Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
+nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
 Lima supports amd64 and arm64. Both require hardware virtualization and
 `/dev/kvm` access. The group also offers the base image's
 Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
@@ -156,7 +156,9 @@ privileged operations use only `kvm-enable`, `docker-enable`, and
 
 The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
 YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
-with no nsl machine resolves the nsl default to Lima.
+with no ChairLift nsl machine resolves the nsl default to Lima. nsl keeps using
+the `debian` machine an older ChairLift created instead of creating `ubuntu`
+beside it, and the chooser then says the built-in engine runs Debian.
 
 `dx_group` takes `wsl_backend`, the WSL Mode backend: `nsl` (default) or
 `lima`; any other value is a configuration error. It also supports optional steps that run off the GTK main

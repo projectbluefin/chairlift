@@ -53,6 +53,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then I see "Developer Mode"
     And I see "WSL Mode"
     And I see "Virtual machine engine"
+    And I see "Your built-in engine runs Debian. Lima runs Ubuntu."
     And I see "Enable Docker"
     When I expand the "IDEs and terminal editors" list under "Developer"
     Then the developer editor choices match the documented catalog

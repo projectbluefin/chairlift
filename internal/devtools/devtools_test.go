@@ -342,6 +342,75 @@ debian  running  debian:13  shared  *
 	})
 }
 
+// WSL Mode manages the ubuntu machine, or the debian machine an older
+// ChairLift created; the shared VM and machines with other names are not its.
+func TestParseNSLListPicksTheManagedMachine(t *testing.T) {
+	header := "VM  STATE  IMAGE  RESOURCES  DATA DISK\nshared  running  ubuntu:26.04  4 CPUs, 8 GiB  20 GiB\n\nMACHINE  STATE  IMAGE  TIER  DEFAULT\n"
+	for _, tc := range []struct {
+		name     string
+		machines string
+		want     WSLState
+	}{
+		{"ubuntu only", "ubuntu  running  ubuntu:26.04  shared  *\n", WSLState{Exists: true, Running: true, Machine: "ubuntu"}},
+		{"legacy debian only", "debian  stopped  debian:13  shared  *\n", WSLState{Exists: true, Machine: "debian"}},
+		{"ubuntu preferred over debian", "debian  running  debian:13  shared  *\nubuntu  stopped  ubuntu:26.04  shared\n", WSLState{Exists: true, Machine: "ubuntu"}},
+		{"user's own machine is not WSL Mode's", "fedora  running  fedora:42  shared  *\n", WSLState{}},
+		{"running VM without machines", "", WSLState{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseNSLList(header + tc.machines); got != tc.want {
+				t.Fatalf("ParseNSLList = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEngineSubtitleNamesALegacyDebianMachine(t *testing.T) {
+	if got := EngineSubtitle("debian"); !strings.Contains(got, "Debian") {
+		t.Fatalf("EngineSubtitle(debian) = %q, want it to say the built-in engine runs Debian", got)
+	}
+	for _, machine := range []string{"", "ubuntu"} {
+		if got := EngineSubtitle(machine); got != "Both engines run Ubuntu." {
+			t.Fatalf("EngineSubtitle(%q) = %q", machine, got)
+		}
+	}
+}
+
+// A host whose WSL Mode machine is the debian one an older ChairLift created
+// must start and probe that machine, never create ubuntu beside it or start a
+// machine that does not exist.
+func TestNSLStartUsesTheExistingLegacyMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian stopped' ;;\n*) exit 0 ;;\nesac\n")
+	if err := startNSL(context.Background(), func(string) {}); err != nil {
+		t.Fatalf("startNSL: %v", err)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	want := []string{"list", "start debian", "run -m debian true"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("nsl calls = %q, want %q", got, want)
+	}
+}
+
+func TestNSLStartCreatesUbuntuOnlyWithoutAManagedMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'fedora running' ;;\n*) exit 0 ;;\nesac\n")
+	if err := startNSL(context.Background(), func(string) {}); err != nil {
+		t.Fatalf("startNSL: %v", err)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	want := []string{"list", "create ubuntu --distro ubuntu:26.04", "start ubuntu", "run -m ubuntu true"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("nsl calls = %q, want %q", got, want)
+	}
+}
+
 func TestNSLReadinessRequiresShellProbe(t *testing.T) {
 	fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian running' ;;\nrun) exit 1 ;;\nesac\n")
 	state, err := WSLStatus(context.Background(), BackendNSL)

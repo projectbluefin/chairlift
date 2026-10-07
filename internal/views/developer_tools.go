@@ -59,7 +59,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		if choice.kind == "wsl" {
 			combo := adw.NewComboRow()
 			combo.SetTitle("Virtual machine engine")
-			combo.SetSubtitle("Both engines run Ubuntu.")
+			combo.SetSubtitle(devtools.EngineSubtitle(""))
 			combo.SetModel(gtk.NewStringList([]string{"Built-in (recommended)", "Lima"}))
 			uh.wslSuppress = true
 			if uh.wslBackend == devtools.BackendLima {
@@ -156,6 +156,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						uh.wslSuppress = false
 					}
 				}
+			}
+			if backend == devtools.BackendNSL && wslErr == nil && uh.wslCombo != nil {
+				// An older ChairLift created a Debian machine; say so
+				// rather than promise Ubuntu for the machine WSL Mode starts.
+				uh.wslCombo.SetSubtitle(devtools.EngineSubtitle(wsl.Machine))
 			}
 			brew := uh.capabilities[capability.Homebrew]
 			for _, item := range uh.developerOptions {

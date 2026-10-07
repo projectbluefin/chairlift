@@ -622,13 +622,18 @@ inventory; architecture support is checked per tool.
 
 `dx_group.wsl_backend` defaults to **nsl**, with **Lima** as an administrator
 option and an in-session backend chooser. The first observation retains an
-existing Lima Ubuntu machine when no nsl machine exists; it does not persist
-the chooser selection or silently migrate data. nsl requires Linux amd64;
+existing Lima Ubuntu machine when no ChairLift nsl machine exists; it does not
+persist the chooser selection or silently migrate data. nsl requires Linux amd64;
 Lima supports Linux amd64 and arm64. Both require actual invoking-session
 `/dev/kvm` access; the fixed `kvm-enable` grant requires a new login before
-setup continues. nsl installs the `frostyard/tap/nsl` cask, runs `nsl doctor`,
-creates an Ubuntu 26.04 machine (`ubuntu`) when absent, starts it and proves shell readiness
-with `nsl run true`. Disable uses `nsl shutdown` and keeps data. Lima installs
+setup continues. nsl installs the `frostyard/tap/nsl` cask and runs `nsl doctor`.
+WSL Mode's nsl machine is `ubuntu`, or the `debian` machine an older ChairLift
+created (`devtools.ParseNSLList` prefers `ubuntu`; other machine names are the
+user's and are ignored). It creates an Ubuntu 26.04 machine (`ubuntu`) only when
+neither exists — never a second machine beside `debian` — then starts the
+managed machine and proves shell readiness with `nsl run -m <machine> true`; the
+engine chooser says the built-in engine runs Debian while that machine is the
+legacy one. Disable uses `nsl shutdown` and keeps data. Lima installs
 `lima`, adds its SSH include, creates/starts Ubuntu LTS with a writable home,
 enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM

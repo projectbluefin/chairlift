@@ -186,7 +186,9 @@ tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
 Use **Virtual machine engine** to choose the built-in engine or Lima;
 both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
-built-in machine exists, rather than creating a second one.
+built-in machine exists, rather than creating a second one. Likewise, a Debian
+machine the built-in engine made in an earlier release keeps being used, and
+the chooser says so, instead of an Ubuntu machine being created beside it.
 **Gaming** lets you select individual applications and tools, and installs
 them system-wide for every account on the computer, which may ask for an
 administrator password. Each row says whether that app is installed

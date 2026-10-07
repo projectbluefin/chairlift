@@ -643,12 +643,16 @@ An agent must not break these:
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Developer options remain discoverable without privileged support.** WSL
-  Mode defaults to nsl (persistent Linux machines inside systemd-vmspawn and
+  Mode defaults to nsl (an Ubuntu machine inside systemd-vmspawn and
   QEMU/KVM) with Lima (Ubuntu LTS VM) as an alternative backend, both with an
   explicit `/dev/kvm` permission floor; the fixed `kvm-enable` action grants
-  access to the invoking account, effective after a new login. The backend
+  access to the invoking account, effective after a new login. nsl's managed
+  machine is `ubuntu`, or the `debian` machine an older ChairLift created
+  (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
+  creates `ubuntu` only when neither exists (never a second machine), and turns
+  off with `nsl shutdown`, which keeps data. The backend
   choice is not stored: `wsl_backend` sets the default, and the first read
-  follows an existing Lima machine when no nsl machine exists
+  follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
   the start prerequisites are unmet. Docker uses the
   fixed enable/disable actions for its system daemon and requires actual socket
