@@ -297,7 +297,8 @@ func NSLStatus(ctx context.Context) (WSLState, error) {
 	}
 	state := ParseNSLList(output)
 	if state.Running {
-		_, err := command(ctx, false, "nsl", "run", "-m", state.Machine, "true")
+		name, args := nslProbe(state.Machine)
+		_, err := command(ctx, false, name, args...)
 		state.Ready = err == nil
 	}
 	return state, nil
@@ -392,7 +393,7 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		if enabled {
 			log.Print("[DRY-RUN] would install nsl, check host prerequisites, start the existing ubuntu or debian machine (creating ubuntu only when neither exists), and probe its shell")
 		} else {
-			log.Print("[DRY-RUN] would stop nsl machines and VM without deleting data")
+			log.Print("[DRY-RUN] would stop the ubuntu or debian nsl machine WSL Mode manages, leaving other machines and all data alone")
 		}
 		return nil
 	}
@@ -435,7 +436,10 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		return err
 	}
 	stage("Stopping…")
-	_, err = command(ctx, true, "nsl", "shutdown")
+	// Stop only the managed machine: `nsl shutdown` stops every machine and
+	// every nsl VM, including the user's own (#546). The shared VM powers
+	// itself off once its last machine stops.
+	_, err = command(ctx, true, "nsl", "stop", state.Machine)
 	return err
 }
 
@@ -458,14 +462,23 @@ func startNSL(ctx context.Context, stage func(string)) error {
 	if !state.Running {
 		stage("Starting…")
 		if _, err := command(ctx, true, "nsl", "start", machine); err != nil {
-			if _, runErr := command(ctx, true, "nsl", "run", "-m", machine, "true"); runErr != nil {
+			name, args := nslProbe(machine)
+			if _, runErr := command(ctx, true, name, args...); runErr != nil {
 				return err
 			}
 		}
 	}
 	stage("Checking that it works…")
-	_, err = command(ctx, false, "nsl", "run", "-m", machine, "true")
+	name, args := nslProbe(machine)
+	_, err = command(ctx, false, name, args...)
 	return err
+}
+
+// nslProbe is the shell-readiness probe for machine. `--cd /` keeps it
+// independent of ChairLift's working directory: nsl run translates the host
+// directory into the guest and fails outright when it cannot (/tmp, /, …).
+func nslProbe(machine string) (string, []string) {
+	return "nsl", []string{"run", "-m", machine, "--cd", "/", "true"}
 }
 
 func setLima(ctx context.Context, enabled bool, progress func(string)) error {

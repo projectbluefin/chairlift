@@ -71,7 +71,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then I see "Virtual machine engine"
     And the switch in the "WSL Mode" row is on
     When I toggle the switch in the "WSL Mode" row
-    Then the application log contains "would stop nsl machines and VM without deleting data"
+    Then the application log contains "would stop the ubuntu or debian nsl machine WSL Mode manages"
     And the switch in the "WSL Mode" row is on
     And the switch in the "WSL Mode" row accepts input
     And the fake nsl was never asked to "shutdown"

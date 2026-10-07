@@ -633,7 +633,9 @@ user's and are ignored). It creates an Ubuntu 26.04 machine (`ubuntu`) only when
 neither exists — never a second machine beside `debian` — then starts the
 managed machine and proves shell readiness with `nsl run -m <machine> true`; the
 engine chooser says the built-in engine runs Debian while that machine is the
-legacy one. Disable uses `nsl shutdown` and keeps data. Lima installs
+legacy one. Disable runs `nsl stop <machine>` on that machine only and keeps
+data; `nsl shutdown` would stop every machine and nsl VM, the user's included
+(#546), and the shared VM powers off by itself after its last machine. Lima installs
 `lima`, adds its SSH include, creates/starts Ubuntu LTS with a writable home,
 enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM

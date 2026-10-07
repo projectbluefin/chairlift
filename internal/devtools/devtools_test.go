@@ -389,7 +389,7 @@ func TestNSLStartUsesTheExistingLegacyMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	want := []string{"list", "start debian", "run -m debian true"}
+	want := []string{"list", "start debian", "run -m debian --cd / true"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("nsl calls = %q, want %q", got, want)
 	}
@@ -405,7 +405,7 @@ func TestNSLStartCreatesUbuntuOnlyWithoutAManagedMachine(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	want := []string{"list", "create ubuntu --distro ubuntu:26.04", "start ubuntu", "run -m ubuntu true"}
+	want := []string{"list", "create ubuntu --distro ubuntu:26.04", "start ubuntu", "run -m ubuntu --cd / true"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("nsl calls = %q, want %q", got, want)
 	}
@@ -422,8 +422,8 @@ func TestNSLReadinessRequiresShellProbe(t *testing.T) {
 	}
 }
 
-func TestNSLDisableShutsDownMachinesWithoutDeletingData(t *testing.T) {
-	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian running' ;;\nshutdown) exit 0 ;;\nesac\n")
+func TestNSLDisableStopsOnlyTheManagedMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'VM STATE' 'shared running' 'MACHINE STATE' 'work running' 'debian running' ;;\n*) exit 0 ;;\nesac\n")
 	if err := SetWSL(context.Background(), BackendNSL, false, nil); err != nil {
 		t.Fatalf("SetWSL disable failed: %v", err)
 	}
@@ -431,11 +431,14 @@ func TestNSLDisableShutsDownMachinesWithoutDeletingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(calls), "shutdown") {
-		t.Fatalf("SetWSL disable must call shutdown, got: %s", calls)
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	if got[len(got)-1] != "stop debian" {
+		t.Fatalf("disable must stop only the managed machine, got calls %q", got)
 	}
-	if strings.Contains(string(calls), "remove") {
-		t.Fatalf("SetWSL disable must not remove machine: %s", calls)
+	for _, call := range got {
+		if call == "shutdown" || strings.Contains(call, "work") || strings.HasPrefix(call, "remove") {
+			t.Fatalf("disable touched more than the managed machine: %q", got)
+		}
 	}
 }
 
