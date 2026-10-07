@@ -49,7 +49,7 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 	preview := !decision.MutateUI
 	saved := false
 
-	go func() {
+	uh.runLiveryToggleWork(livery.AppGrid, func() {
 		defer func() {
 			uh.finishLiveryToggle(livery.AppGrid, liverystate.Toggle(liverystate.Result{Saved: saved}, preview), enabled, decision)
 		}()
@@ -88,7 +88,7 @@ func (uh *UserHome) onLiveryAppGridToggled(enabled bool) {
 		if err := livery.RefreshShellIcons(); err != nil {
 			uh.reportLiveryFailure("refreshing the shell's icons", err)
 		}
-	}()
+	})
 }
 
 // onLiveryBrandChosen applies a brand mark picked from the chooser.
@@ -164,7 +164,7 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 	preview := !decision.MutateUI
 	saved := false
 
-	go func() {
+	uh.runLiveryToggleWork(surface, func() {
 		defer func() {
 			uh.finishLiveryToggle(surface, liverystate.Toggle(liverystate.Result{Saved: saved}, preview), enabled, decision)
 		}()
@@ -252,7 +252,7 @@ func (uh *UserHome) onLiverySurfaceToggled(surface livery.Surface, enabled bool)
 		if err := livery.RefreshShellIcons(); err != nil {
 			uh.reportLiveryFailure("refreshing the shell's icons", err)
 		}
-	}()
+	})
 }
 
 // onLiveryProjectChosen applies a CNCF project's artwork to the Files icon.
@@ -378,13 +378,13 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 	// then overlay every candidate already in flight. Taking the snapshot from
 	// confirmed state alone would write the other section's older confirmed
 	// value back over a rotation that already landed.
-	generation := uh.liveryRotateWork.Claim()
+	ticket := uh.liveryRotateWork.Claim()
 	uh.liveryRotatePending.Set(surface, enabled)
 	state := uh.liveryRotatePending.Overlay(uh.liveryState)
 	decision := actionmsg.LiveryRotation(dryrun.Enabled(), enabled, pageview.LiverySectionName(surface))
 
 	go func() {
-		uh.liveryRotateWork.Run(generation, func() {
+		uh.liveryRotateWork.Run(ticket, func() {
 			sgtk.RunOnMainThread(func() {
 				setActivitySpinner(uh.liveryPanelRotateSpinner, true)
 				setActivitySpinner(uh.liveryDockRotateSpinner, true)
@@ -399,7 +399,7 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 
 			outcome := liverystate.Rotation(liverystate.Result{Saved: err == nil}, !decision.MutateUI)
 			sgtk.RunOnMainThread(func() {
-				if !uh.liveryRotateWork.IsCurrent(generation) {
+				if !uh.liveryRotateWork.IsCurrent(ticket.Generation()) {
 					// A newer flip owns the whole pair and will publish it,
 					// carrying this candidate in its snapshot. Leave this
 					// attempt's optimistic switch alone; reverting it here
@@ -571,12 +571,32 @@ func (uh *UserHome) liverySelectionWork(s livery.Surface) *actionstate.Serialize
 // only while it is still the newest; see publishLiverySelection.
 func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func(generation uint64)) {
 	serializer := uh.liverySelectionWork(s)
-	generation := serializer.Claim()
+	ticket := serializer.Claim()
 	go func() {
-		serializer.Run(generation, func() {
-			work(generation)
+		serializer.Run(ticket, func() {
+			work(ticket.Generation())
 		})
 	}()
+}
+
+// runLiveryToggleWork queues a section switch's work in the same line as that
+// section's selection work, and holds the section's selection rows
+// insensitive until finishLiveryToggle recomputes them.
+//
+// A toggle that ran beside a pick raced it: turning the Files Icon off right
+// after picking a project let Clear run before the pick's Apply, which then
+// installed the mark under a switch and a stored setting that both read off;
+// the panel's Apply likewise re-pointed the extension after ClearPanelSettings
+// had restored it. Queued behind the picks made before it, the toggle sees
+// their result. With the rows insensitive no pick can be made while it is
+// pending, so no pick captures a section state the toggle is about to change.
+// A reservation is never superseded, so a toggle still runs if the user picks
+// again before it reaches the front.
+func (uh *UserHome) runLiveryToggleWork(s livery.Surface, work func()) {
+	uh.setLiverySectionSensitive(s, false)
+	serializer := uh.liverySelectionWork(s)
+	ticket := serializer.Reserve()
+	go serializer.Run(ticket, work)
 }
 
 // publishLiverySelection runs commit on the main thread, but only while this
@@ -610,7 +630,8 @@ func (uh *UserHome) publishLiverySelection(s livery.Surface, generation uint64, 
 //
 // When the attempt committed, it records the new switch state and updates the
 // section's dependent rows. Otherwise it restores the switch the user flipped,
-// so a failed or previewed toggle never shows a state that did not land. The
+// so a failed or previewed toggle never shows a state that did not land, and
+// gives the dependent rows back the sensitivity runLiveryToggleWork took. The
 // programmatic restore re-enters the handler, which compares against the
 // unchanged confirmed state and does nothing.
 func (uh *UserHome) finishLiveryToggle(s livery.Surface, outcome liverystate.Outcome, enabled bool, decision actionmsg.LiveryDecision) {
@@ -620,15 +641,19 @@ func (uh *UserHome) finishLiveryToggle(s livery.Surface, outcome liverystate.Out
 		if outcome.Commit {
 			uh.setLiveryToggleState(s, enabled)
 			uh.setLiverySectionSensitive(s, enabled)
-		} else if toggle != nil {
-			// Revert while the gate still holds, so the re-entrant handler
-			// cannot start a second run even if the value comparison missed.
-			previous := uh.liverySuppress
-			uh.liverySuppress = true
+		} else {
 			confirmed, _ := uh.liveryToggleState(s)
-			toggle.SetActive(confirmed)
-			toggle.SetState(confirmed)
-			uh.liverySuppress = previous
+			if toggle != nil {
+				// Revert while the gate still holds, so the re-entrant
+				// handler cannot start a second run even if the value
+				// comparison missed.
+				previous := uh.liverySuppress
+				uh.liverySuppress = true
+				toggle.SetActive(confirmed)
+				toggle.SetState(confirmed)
+				uh.liverySuppress = previous
+			}
+			uh.setLiverySectionSensitive(s, confirmed)
 		}
 		gate.Reset()
 		if toggle != nil {

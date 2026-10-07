@@ -185,11 +185,11 @@ func TestSerializerRunsOneAttemptAtATime(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 8 {
-		generation := s.Claim()
+		ticket := s.Claim()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.Run(generation, func() {
+			s.Run(ticket, func() {
 				mu.Lock()
 				inFlight++
 				if inFlight > 1 {
@@ -233,12 +233,12 @@ func TestSerializerSkipsASupersededAttempt(t *testing.T) {
 	}
 }
 
-// TestSerializerRefusesAnUnclaimedGeneration keeps a zero value — the shape a
+// TestSerializerRefusesAnUnclaimedTicket keeps a zero value — the shape a
 // caller that forgot to Claim would pass — from running work out of order.
-func TestSerializerRefusesAnUnclaimedGeneration(t *testing.T) {
+func TestSerializerRefusesAnUnclaimedTicket(t *testing.T) {
 	var s Serializer
-	if s.Run(0, func() { t.Error("unclaimed work ran") }) {
-		t.Error("Run accepted generation 0")
+	if s.Run(Ticket{}, func() { t.Error("unclaimed work ran") }) {
+		t.Error("Run accepted a zero ticket")
 	}
 }
 
@@ -248,11 +248,83 @@ func TestSerializerIsCurrentFollowsLaterClaims(t *testing.T) {
 		t.Fatal("unclaimed completion is current")
 	}
 	first := s.Claim()
-	if !s.IsCurrent(first) {
+	if !s.IsCurrent(first.Generation()) {
 		t.Fatal("new completion is stale")
 	}
 	second := s.Claim()
-	if s.IsCurrent(first) || !s.IsCurrent(second) {
+	if s.IsCurrent(first.Generation()) || !s.IsCurrent(second.Generation()) {
 		t.Fatal("new request did not supersede first completion")
+	}
+	if s.Reserve(); !s.IsCurrent(second.Generation()) {
+		t.Fatal("a reservation superseded the newest claim")
+	}
+}
+
+// TestSerializerRunsInQueueOrder is what lets a Livery section switch be
+// ordered with the picks made before it. A pick in flight, a second pick, and
+// a toggle all waited on one mutex, and whichever woke first ran: a toggle
+// that turned the section off could run before the second pick, whose Apply
+// then installed a mark under a switch reading off.
+func TestSerializerRunsInQueueOrder(t *testing.T) {
+	for range 50 {
+		var s Serializer
+		release := make(chan struct{})
+		var mu sync.Mutex
+		var order []string
+		record := func(name string) func() {
+			return func() {
+				mu.Lock()
+				order = append(order, name)
+				mu.Unlock()
+			}
+		}
+
+		var wg sync.WaitGroup
+		start := func(ticket Ticket, fn func()) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s.Run(ticket, fn)
+			}()
+		}
+		first := s.Claim()
+		start(first, func() { <-release; record("first")() })
+		second := s.Reserve()
+		third := s.Reserve()
+		// Start the later tickets in reverse so the scheduler, not the
+		// queue, would decide the order if the queue did not.
+		start(third, record("third"))
+		start(second, record("second"))
+		close(release)
+		wg.Wait()
+
+		if want := []string{"first", "second", "third"}; !reflect.DeepEqual(order, want) {
+			t.Fatalf("ran %v, want %v", order, want)
+		}
+	}
+}
+
+// TestSerializerReservationOutlivesLaterClaims pins that a reservation is
+// never superseded: a section switch queued behind a pick must still run when
+// the user picks again before it reaches the front, and the newer pick waits
+// for it.
+func TestSerializerReservationOutlivesLaterClaims(t *testing.T) {
+	var s Serializer
+	stale := s.Claim()
+	reserved := s.Reserve()
+	newest := s.Claim()
+
+	var order []string
+	if s.Run(stale, func() { order = append(order, "stale") }) {
+		t.Error("a superseded claim ran")
+	}
+	if !s.Run(reserved, func() { order = append(order, "reserved") }) {
+		t.Error("a later claim superseded the reservation")
+	}
+	if !s.Run(newest, func() { order = append(order, "newest") }) {
+		t.Error("the newest claim did not run")
+	}
+	if want := []string{"reserved", "newest"}; !reflect.DeepEqual(order, want) {
+		t.Errorf("ran %v, want %v", order, want)
 	}
 }

@@ -228,3 +228,53 @@ func TestLiveryPreviewsComeFromOneDecision(t *testing.T) {
 		t.Error("a selection or rotation completion no longer shows its preview toast")
 	}
 }
+
+// A section switch's work queues in its section's selection line and holds
+// the section's rows insensitive while pending. Run beside a pick, turning a
+// section off let the pick's Apply land after Clear, leaving a mark installed
+// under a switch and a stored setting that both read off.
+func TestLiveryTogglesQueueBehindSelections(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for handler, call := range map[string]string{
+		"func (uh *UserHome) onLiveryAppGridToggled(": "uh.runLiveryToggleWork(livery.AppGrid, func() {",
+		"func (uh *UserHome) onLiverySurfaceToggled(": "uh.runLiveryToggleWork(surface, func() {",
+	} {
+		_, body, found := strings.Cut(text, handler)
+		if !found {
+			t.Fatalf("%s… is gone", handler)
+		}
+		body, _, _ = strings.Cut(body, "\n}\n")
+		if !strings.Contains(body, call) {
+			t.Errorf("%s… does not queue its work through %s", handler, call)
+		}
+		if strings.Contains(body, "go func()") {
+			t.Errorf("%s… starts an unordered goroutine", handler)
+		}
+	}
+	_, helper, found := strings.Cut(text, "func (uh *UserHome) runLiveryToggleWork(")
+	if !found {
+		t.Fatal("runLiveryToggleWork is gone")
+	}
+	helper, _, _ = strings.Cut(helper, "\n}\n")
+	for _, required := range []string{
+		"uh.setLiverySectionSensitive(s, false)",
+		"serializer := uh.liverySelectionWork(s)",
+		"ticket := serializer.Reserve()",
+		"go serializer.Run(ticket, work)",
+	} {
+		if !strings.Contains(helper, required) {
+			t.Errorf("runLiveryToggleWork omits %q", required)
+		}
+	}
+	if !strings.Contains(text, "\t\t\tuh.setLiverySectionSensitive(s, confirmed)\n") {
+		t.Error("a failed or previewed toggle leaves its section's rows insensitive")
+	}
+}

@@ -205,7 +205,10 @@ keeps the confirmed selection and switch; every previewed switch flip, pick,
 and rotation change says so in a `[DRY-RUN] Preview:` toast built by the same
 `actionmsg` decision that withholds the commit. When a selection saves but its
 artwork fails, the persisted selection is shown and a toast names the failed
-step. Queued results recheck their shared serializer before publishing.
+step. Queued results recheck their shared serializer before publishing. Each
+section's master switch queues first-in-first-out in the same serializer as
+that section's picks and holds the section's rows insensitive until it lands,
+so turning a section off never races a pick's Apply.
 Rotation candidates overlay the confirmed pair while work is in flight.
 Unlike an artwork selection, a rotation preference commits only after the
 user manager accepts its unit; failure preserves the previous preference

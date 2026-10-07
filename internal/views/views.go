@@ -157,7 +157,9 @@ type UserHome struct {
 	// it; these queue instead, and a pick that a newer one has already
 	// overtaken drops out. Without them two rapid picks can interleave and
 	// leave the persisted id naming one mark while the installed icon is
-	// another. See liverySelectionWork.
+	// another. The section's master switch reserves a place in the same
+	// line, so its Apply or Clear never races a pick. See
+	// liverySelectionWork and runLiveryToggleWork.
 	liveryAppGridWork actionstate.Serializer
 	liveryPanelWork   actionstate.Serializer
 	liveryDockWork    actionstate.Serializer
