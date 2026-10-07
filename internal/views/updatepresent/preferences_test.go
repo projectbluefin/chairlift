@@ -36,6 +36,35 @@ func TestRecheckForPreferences(t *testing.T) {
 	}
 }
 
+// A preference changed while a check ran must be picked up when the check
+// returns, but a newer check still in flight must not be superseded.
+func TestRecheckAfterCheck(t *testing.T) {
+	on := userprefs.Values{Applications: true}
+	off := userprefs.Values{}
+	apps := func(enabled bool) []updateflow.SourceState {
+		return []updateflow.SourceState{{ID: updateflow.Applications, Configured: true, Available: true, Enabled: enabled}}
+	}
+	tests := []struct {
+		name        string
+		snapshot    updateflow.Snapshot
+		preferences userprefs.Values
+		want        bool
+	}{
+		{"finished check matches", updateflow.Snapshot{Phase: updateflow.PhaseReady, Sources: apps(true)}, on, false},
+		{"turned off during check", updateflow.Snapshot{Phase: updateflow.PhaseReady, Sources: apps(true)}, off, true},
+		{"turned on during check", updateflow.Snapshot{Phase: updateflow.PhaseReady, Sources: apps(false)}, on, true},
+		{"newer check in flight", updateflow.Snapshot{Phase: updateflow.PhaseChecking, Sources: apps(true)}, off, false},
+		{"newer check before sources are known", updateflow.Snapshot{Phase: updateflow.PhaseChecking}, on, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RecheckAfterCheck(tc.snapshot, tc.preferences); got != tc.want {
+				t.Errorf("RecheckAfterCheck = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // The shared lock reason is the subtitle the Updates row shows, and an
 // operable source has none whatever its preference.
 func TestSourceLockReason(t *testing.T) {
