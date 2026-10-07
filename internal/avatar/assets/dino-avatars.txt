@@ -4,7 +4,6 @@ karl	Karl	Amargasaurus cazaui	public/characters/karl.webp
 dolly	Dolly	Dimetrodon limbatus	public/characters/dolly.webp
 dakotaraptor	Dakotaraptor	Dakotaraptor steini	public/characters/dakota.webp
 utahraptor	Utahraptor	Utahraptor ostrommaysi	public/characters/utah.webp
-torosaurus	Torosaurus	Torosaurus latus	public/characters/torosaurus.webp
 bob-torosaurus	Bob	Torosaurus latus	public/characters/bob-torosaurus.webp
 kentrosaurus	Katharina	Kentrosaurus aethiopicus	public/characters/header/katharina.webp
 alamosaurus	Alamo	Alamosaurus sanjuanensis	public/characters/alamosaurus.webp
