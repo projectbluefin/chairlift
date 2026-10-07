@@ -70,6 +70,15 @@ func TestDeveloperModeNamesSkippedGroups(t *testing.T) {
 			t.Errorf("DeveloperMode(partial enable).Toast = %q, want it to name %s", decision.Toast, group)
 		}
 	}
+	// ShowToast renders a single ellipsized line; keep the Dakota note no
+	// longer than the plain enable toast plus the two group names, so the
+	// names are not the part that gets cut off.
+	if len(decision.Toast) > 72 {
+		t.Errorf("DeveloperMode(partial enable).Toast = %q (%d chars), want at most 72 so it fits a plain toast", decision.Toast, len(decision.Toast))
+	}
+	if !strings.Contains(decision.Toast, "Log out") {
+		t.Errorf("DeveloperMode(partial enable).Toast = %q, want it to ask for a re-login", decision.Toast)
+	}
 	if disable := DeveloperMode(false, false, []string{"docker"}); strings.Contains(disable.Toast, "docker") {
 		t.Errorf("DeveloperMode(disable, skipped).Toast = %q, want no skipped-group note", disable.Toast)
 	}

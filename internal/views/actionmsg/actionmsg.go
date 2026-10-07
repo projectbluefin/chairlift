@@ -362,7 +362,9 @@ func ChannelSwitch(dryRun bool, toTesting bool) FeatureToggleDecision {
 // granted, so the user does not assume access to Docker or Incus they lack
 // (#495). The toast is an ordinary one, not a persistent error: on images
 // that ship neither group (Dakota) every enable skips them, and a persistent
-// "enabled" banner outlived a later disable.
+// "enabled" banner outlived a later disable. An ordinary toast's title is a
+// single ellipsized line, so the note stays short enough that the group
+// names are not cut off.
 func DeveloperMode(dryRun bool, enable bool, skipped []string) FeatureToggleDecision {
 	verb := "disabled"
 	if enable {
@@ -377,21 +379,13 @@ func DeveloperMode(dryRun bool, enable bool, skipped []string) FeatureToggleDeci
 	if enable && len(skipped) > 0 {
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast: fmt.Sprintf("Developer mode enabled, but your account was not added to %s; this system may not provide %s. Log out and back in to apply the rest.",
-				strings.Join(skipped, ", "), pluralIt(len(skipped))),
+			Toast:   fmt.Sprintf("Developer mode enabled (no %s). Log out and back in.", strings.Join(skipped, ", ")),
 		}
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
 		Toast:   fmt.Sprintf("Developer mode %s. Log out and back in to apply.", verb),
 	}
-}
-
-func pluralIt(n int) string {
-	if n == 1 {
-		return "it"
-	}
-	return "them"
 }
 
 // GamingMode decides whether the Gaming Mode switch should confirm its new
