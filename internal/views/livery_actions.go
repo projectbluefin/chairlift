@@ -104,7 +104,7 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 	}
 
 	enabled := uh.liveryState.AppGridEnabled
-	preview := dryrun.Enabled()
+	decision := actionmsg.LiverySelection(dryrun.Enabled(), pageview.LiverySectionName(livery.AppGrid))
 	uh.runLiverySelectionWork(livery.AppGrid, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
@@ -125,7 +125,7 @@ func (uh *UserHome) onLiveryBrandChosen(slug string) {
 			}
 		}
 
-		uh.publishLiverySelection(livery.AppGrid, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+		uh.publishLiverySelection(livery.AppGrid, generation, saved, decision, func() {
 			uh.liveryState.AppGridSlug = slug
 			if uh.liveryAppGridRow != nil {
 				uh.liveryAppGridRow.SetSubtitle(pageview.LiverySelectedBrandRow(slug, uh.liveryState.AppGridCustom).Subtitle)
@@ -265,7 +265,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 	}
 
 	enabled := uh.liveryState.DockEnabled
-	preview := dryrun.Enabled()
+	decision := actionmsg.LiverySelection(dryrun.Enabled(), pageview.LiverySectionName(livery.Dock))
 	uh.runLiverySelectionWork(livery.Dock, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
@@ -288,7 +288,7 @@ func (uh *UserHome) onLiveryProjectChosen(id string) {
 			}
 		}
 
-		uh.publishLiverySelection(livery.Dock, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+		uh.publishLiverySelection(livery.Dock, generation, saved, decision, func() {
 			uh.liveryState.DockID = id
 			if uh.liveryDockSelectedRow != nil {
 				selected := pageview.LiverySelectedProjectRow(id, uh.liveryState.DockCustom)
@@ -312,7 +312,7 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 
 	enabled, _ := uh.liveryToggleState(surface)
 	source := liverySelectionSource(surface, id)
-	preview := dryrun.Enabled()
+	decision := actionmsg.LiverySelection(dryrun.Enabled(), pageview.LiverySectionName(surface))
 	uh.runLiverySelectionWork(surface, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
 		defer cancel()
@@ -333,7 +333,7 @@ func (uh *UserHome) onLiverySelectionChangedByID(surface livery.Surface, id stri
 			}
 		}
 
-		uh.publishLiverySelection(surface, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+		uh.publishLiverySelection(surface, generation, saved, decision, func() {
 			uh.setLiverySelectionState(surface, id)
 			if surface == livery.Panel && uh.liveryPanelMarkRow != nil {
 				uh.liveryPanelMarkRow.SetSubtitle(
@@ -381,7 +381,7 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 	generation := uh.liveryRotateWork.Claim()
 	uh.liveryRotatePending.Set(surface, enabled)
 	state := uh.liveryRotatePending.Overlay(uh.liveryState)
-	preview := dryrun.Enabled()
+	decision := actionmsg.LiveryRotation(dryrun.Enabled(), enabled, pageview.LiverySectionName(surface))
 
 	go func() {
 		uh.liveryRotateWork.Run(generation, func() {
@@ -397,7 +397,7 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 				uh.reportLiveryFailure("scheduling rotation", err)
 			}
 
-			outcome := liverystate.Rotation(liverystate.Result{Saved: err == nil}, preview)
+			outcome := liverystate.Rotation(liverystate.Result{Saved: err == nil}, !decision.MutateUI)
 			sgtk.RunOnMainThread(func() {
 				if !uh.liveryRotateWork.IsCurrent(generation) {
 					// A newer flip owns the whole pair and will publish it,
@@ -414,6 +414,11 @@ func (uh *UserHome) onLiveryRotateToggled(surface livery.Surface, enabled bool) 
 					uh.liveryState.DockRotate = observed.DockRotate
 				}
 				uh.applyLiveryRotateSwitches()
+				// A preview whose writes all ran says so; the switch has
+				// just sprung back, and a failure already toasted its error.
+				if err == nil && decision.Toast != "" {
+					uh.toastAdder.ShowToast(decision.Toast)
+				}
 			})
 		})
 	}()
@@ -443,7 +448,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 		enabled = uh.liveryState.DockEnabled
 	}
 	source := livery.Source{Kind: livery.FromFile, Value: path}
-	preview := dryrun.Enabled()
+	decision := actionmsg.LiverySelection(dryrun.Enabled(), pageview.LiverySectionName(surface))
 
 	uh.runLiverySelectionWork(surface, func(generation uint64) {
 		ctx, cancel := livery.DefaultContext()
@@ -467,7 +472,7 @@ func (uh *UserHome) onLiveryCustomFileChosen(surface livery.Surface, path string
 			}
 		}
 
-		uh.publishLiverySelection(surface, generation, liverystate.Selection(liverystate.Result{Saved: saved}, preview), func() {
+		uh.publishLiverySelection(surface, generation, saved, decision, func() {
 			switch surface {
 			case livery.AppGrid:
 				uh.liveryState.AppGridCustom, uh.liveryState.AppGridSlug = path, livery.CustomID
@@ -575,20 +580,28 @@ func (uh *UserHome) runLiverySelectionWork(s livery.Surface, work func(generatio
 }
 
 // publishLiverySelection runs commit on the main thread, but only while this
-// attempt is still the section's newest.
+// attempt is still the section's newest, and announces a preview.
 //
 // Run already guarantees currency when the work starts; a newer pick can be
 // claimed while it is still running, and this callback is queued rather than
 // inline. The re-check is what stops a stale completion from replacing the
 // newer confirmed row and selection with an older result.
-func (uh *UserHome) publishLiverySelection(s livery.Surface, generation uint64, outcome liverystate.Outcome, commit func()) {
+//
+// The commit and the preview toast both derive from decision: under dry-run
+// nothing commits, so the row keeps its old value, and the toast is what says
+// the pick was understood. A save that failed already toasted its error.
+func (uh *UserHome) publishLiverySelection(s livery.Surface, generation uint64, saved bool, decision actionmsg.LiveryDecision, commit func()) {
 	serializer := uh.liverySelectionWork(s)
+	outcome := liverystate.Selection(liverystate.Result{Saved: saved}, !decision.MutateUI)
 	sgtk.RunOnMainThread(func() {
 		if !serializer.IsCurrent(generation) {
 			return
 		}
 		if outcome.Commit {
 			commit()
+		}
+		if saved && decision.Toast != "" {
+			uh.toastAdder.ShowToast(decision.Toast)
 		}
 	})
 }
@@ -600,7 +613,7 @@ func (uh *UserHome) publishLiverySelection(s livery.Surface, generation uint64, 
 // so a failed or previewed toggle never shows a state that did not land. The
 // programmatic restore re-enters the handler, which compares against the
 // unchanged confirmed state and does nothing.
-func (uh *UserHome) finishLiveryToggle(s livery.Surface, outcome liverystate.Outcome, enabled bool, decision actionmsg.LiveryToggleDecision) {
+func (uh *UserHome) finishLiveryToggle(s livery.Surface, outcome liverystate.Outcome, enabled bool, decision actionmsg.LiveryDecision) {
 	sgtk.RunOnMainThread(func() {
 		gate, toggle, spinner := uh.liveryToggleGate(s)
 		setActivitySpinner(spinner, false)

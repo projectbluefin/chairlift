@@ -201,7 +201,9 @@ itself.
 
 Livery publishes selections and master-switch state through the pure
 `internal/views/liverystate` transitions. A failed save or dry-run preview
-keeps the confirmed selection and switch; when a selection saves but its
+keeps the confirmed selection and switch; every previewed switch flip, pick,
+and rotation change says so in a `[DRY-RUN] Preview:` toast built by the same
+`actionmsg` decision that withholds the commit. When a selection saves but its
 artwork fails, the persisted selection is shown and a toast names the failed
 step. Queued results recheck their shared serializer before publishing.
 Rotation candidates overlay the confirmed pair while work is in flight.

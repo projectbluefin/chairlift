@@ -297,25 +297,26 @@ func FeatureToggle(dryRun bool, enable bool, name string) FeatureToggleDecision 
 	}
 }
 
-// LiveryToggleDecision is the result of deciding whether flipping one of the
-// Livery page's section master switches (onLiveryAppGridToggled and
-// onLiverySurfaceToggled in internal/views/livery_actions.go) may advance the
-// page's own view of that section, and what toast to show for the decision.
-type LiveryToggleDecision struct {
+// LiveryDecision is the result of deciding whether a finished Livery action —
+// a section master switch (LiveryToggle), a mark selection (LiverySelection),
+// or a rotate-at-login switch (LiveryRotation), all in
+// internal/views/livery_actions.go — may advance the page's own view of that
+// section, and what toast to show for the decision.
+type LiveryDecision struct {
 	// MutateUI is true when the new value was really persisted and the page
-	// may mirror it: advance the section's in-memory enabled flag, change
-	// its sub-rows' sensitivity, and leave the switch where the user put
-	// it. It is exactly !dryRun — under dry-run livery.SetBool returns
-	// before touching gsettings (internal/livery/settings.go), so the
-	// stored value never moved and the page must neither mirror nor display
-	// a change that did not happen. The caller must not independently
+	// may mirror it: advance the section's in-memory state, change its
+	// sub-rows, and leave the control where the user put it. It is exactly
+	// !dryRun — under dry-run livery.SetBool and livery.SetString return
+	// before touching gsettings (internal/livery/settings.go), so the stored
+	// value never moved and the page must neither mirror nor display a
+	// change that did not happen. The caller must not independently
 	// recompute that condition: the same decision value drives the mirror,
-	// the switch restore in releaseLiveryToggle, and the toast below.
+	// the control restore, and the toast below.
 	MutateUI bool
-	// Toast is the message to show once the section's work has finished. It
-	// is empty on a live run, where a successful section toggle is its own
+	// Toast is the message to show once the action's work has finished. It
+	// is empty on a live run, where the changed control is its own
 	// confirmation and the page has never shown a toast for one; only the
-	// preview needs words, because the switch visibly springs back.
+	// preview needs words, because the control visibly springs back.
 	Toast string
 }
 
@@ -324,18 +325,44 @@ type LiveryToggleDecision struct {
 // may not. MutateUI is exactly !dryRun. name is the section's display name
 // (pageview.LiverySectionName), never a livery.Surface value or a gsettings
 // key.
-func LiveryToggle(dryRun bool, enable bool, name string) LiveryToggleDecision {
+func LiveryToggle(dryRun bool, enable bool, name string) LiveryDecision {
 	if dryRun {
-		verb := "turned on"
-		if !enable {
-			verb = "turned off"
-		}
-		return LiveryToggleDecision{
-			MutateUI: false,
-			Toast:    fmt.Sprintf("[DRY-RUN] Preview: %s would be %s — no changes made", name, verb),
-		}
+		return LiveryDecision{Toast: liveryPreview(name + " would be " + liveryTurned(enable))}
 	}
-	return LiveryToggleDecision{MutateUI: true}
+	return LiveryDecision{MutateUI: true}
+}
+
+// LiverySelection decides whether a brand, project, foundation mark, or
+// custom-file pick may replace the section's confirmed selection. Under
+// dry-run the chooser closes and the row keeps its old value, so the preview
+// toast is what says the pick was understood. name is as for LiveryToggle.
+func LiverySelection(dryRun bool, name string) LiveryDecision {
+	if dryRun {
+		return LiveryDecision{Toast: liveryPreview(name + " would change")}
+	}
+	return LiveryDecision{MutateUI: true}
+}
+
+// LiveryRotation decides whether a rotate-at-login switch may advance the
+// confirmed rotation pair. Under dry-run the switch springs back after its
+// spinner, so the preview toast says what would have been scheduled. name is
+// as for LiveryToggle.
+func LiveryRotation(dryRun bool, enable bool, name string) LiveryDecision {
+	if dryRun {
+		return LiveryDecision{Toast: liveryPreview("rotating " + name + " at login would be " + liveryTurned(enable))}
+	}
+	return LiveryDecision{MutateUI: true}
+}
+
+func liveryTurned(enable bool) string {
+	if enable {
+		return "turned on"
+	}
+	return "turned off"
+}
+
+func liveryPreview(what string) string {
+	return fmt.Sprintf("[DRY-RUN] Preview: %s — no changes made", what)
 }
 
 // FeatureUpdate returns the toast text for the Features page's "Update"
