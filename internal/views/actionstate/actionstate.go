@@ -38,7 +38,8 @@ func (g *RefreshGate) IsCurrent(generation uint64) bool {
 }
 
 // Serializer runs one resource's asynchronous work strictly one attempt at a
-// time and lets a superseded attempt drop out.
+// time, in the order the attempts were queued, and lets a superseded attempt
+// drop out.
 //
 // A Gate is the wrong tool where every request carries a distinct value the
 // user picked: refusing the second click would silently discard the newer
@@ -47,25 +48,68 @@ func (g *RefreshGate) IsCurrent(generation uint64) bool {
 // been claimed — so the last value the user chose is the one that is both
 // persisted and applied, and no two attempts for the same resource overlap.
 //
+// The queue is first in, first out. A mutex alone does not promise that:
+// when several attempts wait for the one in flight, any of them may run next,
+// so an action queued after a pick could overtake it.
+//
 // Its zero value is ready for use.
 type Serializer struct {
-	mu         sync.Mutex
+	mu sync.Mutex
+	// tail is closed when the most recently queued attempt finishes; nil
+	// while nothing has been queued.
+	tail       chan struct{}
 	generation atomic.Uint64
 }
 
-// Claim records a new request and returns its generation. Call it on the
-// thread that read the user's choice, before starting the worker.
-func (s *Serializer) Claim() uint64 {
-	return s.generation.Add(1)
+// Ticket is one attempt's place in a Serializer's queue. Pass it to Run
+// exactly once: a ticket that is never run holds up every later attempt.
+type Ticket struct {
+	generation uint64
+	exclusive  bool
+	prev, done chan struct{}
 }
 
-// Run waits for any earlier work on this resource to finish, then runs fn
-// unless a newer generation has been claimed in the meantime. It reports
-// whether fn ran.
-func (s *Serializer) Run(generation uint64, fn func()) bool {
+// Generation is the claim a queued completion checks with IsCurrent. It is
+// zero for a Reserve ticket, which no completion publishes against.
+func (t Ticket) Generation() uint64 {
+	return t.generation
+}
+
+// Claim records a new request, superseding every earlier claim, and queues
+// it. Call it on the thread that read the user's choice, before starting the
+// worker.
+func (s *Serializer) Claim() Ticket {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if generation == 0 || generation != s.generation.Load() {
+	return s.enqueue(s.generation.Add(1), false)
+}
+
+// Reserve queues work that must be ordered with the claimed requests but
+// neither supersedes them nor can be superseded: it runs once every attempt
+// queued before it has finished, and every attempt queued after it waits.
+func (s *Serializer) Reserve() Ticket {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.enqueue(0, true)
+}
+
+func (s *Serializer) enqueue(generation uint64, exclusive bool) Ticket {
+	t := Ticket{generation: generation, exclusive: exclusive, prev: s.tail, done: make(chan struct{})}
+	s.tail = t.done
+	return t
+}
+
+// Run waits for every attempt queued before t to finish, then runs fn unless
+// t is a claim a newer one has superseded. It reports whether fn ran.
+func (s *Serializer) Run(t Ticket, fn func()) bool {
+	if t.done == nil {
+		return false
+	}
+	defer close(t.done)
+	if t.prev != nil {
+		<-t.prev
+	}
+	if !t.exclusive && (t.generation == 0 || t.generation != s.generation.Load()) {
 		return false
 	}
 	fn()
