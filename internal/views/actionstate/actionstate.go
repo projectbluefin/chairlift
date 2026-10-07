@@ -202,6 +202,13 @@ func (r *RowGates) running() bool {
 	return false
 }
 
+// Idle reports whether TryStart would succeed now: the action is neither
+// running nor permanently completed. A control derives its sensitivity from
+// it when another action may have changed what it can offer.
+func (g *Gate) Idle() bool {
+	return g.state.Load() == gateIdle
+}
+
 // Decision describes the UI work following one command attempt.
 type Decision struct {
 	Refresh         bool

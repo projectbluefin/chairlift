@@ -574,8 +574,15 @@ list refreshes.
 [`recovery.go`](../../internal/views/recovery.go) offers **Return to stream**
 only when the descriptor's running tag parses as a dated build. Its confirmed
 action calls `ublue.Unpin(ctx)` and is gated by `pageview.UnpinOffer` on the
-same three conditions. Both
-controls reset their action gates after completion, refresh rollback status
+same three conditions. Pin and Return to stream share one
+`recoverySwitchGate`, held from the confirmation dialog to completion, and
+Roll Back refuses to start while it runs and vice versa: each is a bootc
+transaction deciding the next boot, and two in flight would race on the
+sysroot lock while both reported success. `syncRecoverySwitches` re-derives
+every recovery control when either gate starts or ends, and
+`pageview.PinButton` derives each Pin button in place, so a Check Again
+during a pin shows the pin in flight rather than fresh buttons. Both
+controls reset the shared gate after completion, refresh rollback status
 and request a shared update check only after live success. Preview restores
 the controls and does not claim a deployment was staged. The catalog remains
 read-only; these separate actions use the validated helper boundary below.

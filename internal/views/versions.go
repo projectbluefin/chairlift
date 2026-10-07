@@ -123,11 +123,13 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 		parent.Remove(&row.Widget)
 	}
 	uh.publishedVersionRows = nil
+	uh.publishedVersionPins = nil
 	uh.publishedVersionButtons.clear()
 
 	status := ublue.StatusCached()
 	offered, explanation := pageview.PinOffer(uh.publishedVersionsStream,
 		pinSupport(status, ubluehelper.CommandPin, uh.publishedVersionsStream))
+	uh.publishedVersionsOffered = offered
 	bootedBuild, isBootedPinned := registrytags.ParseBuild(status.Tag)
 
 	for _, version := range versions {
@@ -141,31 +143,50 @@ func (uh *UserHome) renderPublishedVersions(versions []pageview.PublishedVersion
 
 		btn := gtk.NewButtonWithLabel("Pin")
 		btn.SetValign(gtk.AlignCenterValue)
-
-		isAlreadyPinned := isBootedPinned && bootedBuild.Date.Format("20060102") == version.Day
-		switch {
-		case !offered:
-			btn.SetSensitive(false)
+		if !offered {
 			btn.SetTooltipText(explanation)
-		case isAlreadyPinned:
-			btn.SetLabel("Pinned")
-			btn.SetSensitive(false)
-		default:
-			btn.SetSensitive(true)
-			vTitle := version.Title
-			vDay := version.Day
-			uh.publishedVersionButtons.connect(btn, func(gtk.Button) {
-				uh.confirmPin(vTitle, vDay, btn)
-			})
 		}
+		// Every button is routed; its sensitivity, derived below, is what
+		// admits a click.
+		vTitle := version.Title
+		vDay := version.Day
+		uh.publishedVersionButtons.connect(btn, func(gtk.Button) {
+			uh.confirmPin(vTitle, vDay)
+		})
+		uh.publishedVersionPins = append(uh.publishedVersionPins, publishedVersionPin{
+			button: btn,
+			day:    version.Day,
+			pinned: isBootedPinned && bootedBuild.Date.Format("20060102") == version.Day,
+		})
 
 		row.AddSuffix(&btn.Widget)
 		parent.AddRow(&row.Widget)
 		uh.publishedVersionRows = append(uh.publishedVersionRows, row)
 	}
+	uh.applyPinButtons()
 
 	parent.SetEnableExpansion(len(versions) > 0)
 	parent.SetExpanded(len(versions) > 0)
+}
+
+// publishedVersionPin is one rendered Pin button and what decides it.
+type publishedVersionPin struct {
+	button *gtk.Button
+	day    string
+	pinned bool
+}
+
+// applyPinButtons derives every listed Pin button's label and sensitivity
+// from the recovery switch state, in place, so a re-render (Check Again
+// during a minutes-long pin) or another switch starting or finishing never
+// leaves a fresh, clickable button beside a pin in flight. Main thread only.
+func (uh *UserHome) applyPinButtons() {
+	busy := uh.recoveryBusy()
+	for _, pin := range uh.publishedVersionPins {
+		state := pageview.PinButton(uh.publishedVersionsOffered, pin.pinned, pin.day, uh.pinningDay, busy)
+		pin.button.SetLabel(state.Label)
+		pin.button.SetSensitive(state.Sensitive)
+	}
 }
 
 // pinSupport collects, from the cached host status, what PinOffer and
@@ -180,9 +201,10 @@ func pinSupport(status ublue.Status, command, stream string) pageview.PinSupport
 }
 
 // confirmPin presents an AdwAlertDialog confirmation before staging a switch to
-// the selected dated build.
-func (uh *UserHome) confirmPin(date, day string, button *gtk.Button) {
-	if !uh.pinGate.TryStart() {
+// the selected dated build. The shared recovery switch gate is held from here,
+// so no other Powerwash switch can start behind the dialog.
+func (uh *UserHome) confirmPin(date, day string) {
+	if !uh.tryStartRecoverySwitch() {
 		return
 	}
 
@@ -194,18 +216,19 @@ func (uh *UserHome) confirmPin(date, day string, button *gtk.Button) {
 
 	uh.recoveryDialogs.connect(dialog, func(response string) {
 		if response != "confirm" {
-			uh.pinGate.Reset()
+			uh.recoverySwitchGate.Reset()
+			uh.syncRecoverySwitches()
 			return
 		}
-		uh.runPin(day, button)
+		uh.runPin(day)
 	})
 	dialog.Present(&uh.recoveryPrefsPage.Widget)
 }
 
 // runPin stages the dated build via pkexec chairlift-helper pin <day>.
-func (uh *UserHome) runPin(day string, button *gtk.Button) {
-	button.SetSensitive(false)
-	button.SetLabel("Pinning…")
+func (uh *UserHome) runPin(day string) {
+	uh.pinningDay = day
+	uh.syncRecoverySwitches()
 
 	go func() {
 		ctx, cancel := ublue.ImageSwitchContext()
@@ -214,9 +237,9 @@ func (uh *UserHome) runPin(day string, button *gtk.Button) {
 		err := ublue.Pin(ctx, day)
 
 		sgtk.RunOnMainThread(func() {
-			uh.pinGate.Reset()
-			button.SetSensitive(true)
-			button.SetLabel("Pin")
+			uh.pinningDay = ""
+			uh.recoverySwitchGate.Reset()
+			uh.syncRecoverySwitches()
 
 			if err != nil {
 				log.Printf("views: pin failed for day %s: %v", day, err)

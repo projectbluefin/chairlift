@@ -169,6 +169,29 @@ func switchOffer(action, stream string, support PinSupport) (bool, string) {
 	}
 }
 
+// PinButtonState is one Published versions row's Pin button.
+type PinButtonState struct {
+	Label     string
+	Sensitive bool
+}
+
+// PinButton derives a Pin button from everything that decides it, so a list
+// re-rendered while a pin is running (Check Again during a minutes-long
+// `bootc switch`) shows the pin in flight instead of a fresh, inert button.
+// pinning is the day of the pin in flight, "" when none; busy reports that
+// another recovery switch — a pin, Return to stream, or Roll Back — holds the
+// page, because two bootc transactions would race for the next boot.
+func PinButton(offered, alreadyPinned bool, day, pinning string, busy bool) PinButtonState {
+	switch {
+	case pinning != "" && day == pinning:
+		return PinButtonState{Label: "Pinning…"}
+	case alreadyPinned:
+		return PinButtonState{Label: "Pinned"}
+	default:
+		return PinButtonState{Label: "Pin", Sensitive: offered && !busy}
+	}
+}
+
 // versionDay reads the build day out of a bootc image version. Bluefin's
 // versions use the dated-tag grammar ("44.20260908"); anything else has no
 // day to match.
