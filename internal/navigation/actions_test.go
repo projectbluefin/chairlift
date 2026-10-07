@@ -1,6 +1,9 @@
 package navigation
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -115,4 +118,59 @@ func matchesPrefix(action string, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+// funcBody returns the source text of the named function's body in the file
+// at path, or fails the test when the function is missing.
+func funcBody(t *testing.T, path, name string) string {
+	t.Helper()
+	source, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	set := token.NewFileSet()
+	parsed, err := parser.ParseFile(set, path, source, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	for _, declaration := range parsed.Decls {
+		if fn, ok := declaration.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
+			return string(source[set.Position(fn.Body.Pos()).Offset:set.Position(fn.Body.End()).Offset])
+		}
+	}
+	t.Fatalf("%s declares no %s", path, name)
+	return ""
+}
+
+// TestQuitAndCloseHonourTheUpdateGuard holds two halves of one contract: a
+// running update keeps the window open and says why. Ctrl+Q's app.quit called
+// g_application_quit, which never emits close-request, so it skipped the
+// update-in-progress guard and killed the run; and a close refused from any
+// page but Updates revealed the banner on a page nobody could see.
+func TestQuitAndCloseHonourTheUpdateGuard(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate actions_test.go")
+	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
+
+	quit := funcBody(t, filepath.Join(repoRoot, actionScopes["app."]), "registerQuitAction")
+	closeAt := strings.Index(quit, "a.window.Close()")
+	quitAt := strings.Index(quit, "a.Quit()")
+	if closeAt < 0 {
+		t.Error("app.quit does not close the window, so close-request handlers never run")
+	}
+	if quitAt >= 0 && (closeAt < 0 || quitAt < closeAt) {
+		t.Error("app.quit calls a.Quit() before routing through the window's close-request handlers")
+	}
+
+	actions := funcBody(t, filepath.Join(repoRoot, actionScopes["win."]), "setupActions")
+	navigate := strings.Index(actions, `w.navigateToPage("updates")`)
+	banner := strings.Index(actions, "w.updateShell.RevealBusyBanner()")
+	if banner < 0 {
+		t.Fatal("the close-request guard no longer reveals the busy banner")
+	}
+	if navigate < 0 || navigate > banner {
+		t.Error("a refused close reveals the busy banner without first showing the Updates page")
+	}
 }
