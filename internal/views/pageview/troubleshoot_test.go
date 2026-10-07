@@ -42,6 +42,31 @@ func TestGooseSetupToastSaysWhatStillBlocksALaunch(t *testing.T) {
 	}
 }
 
+// A launch handed to a session that already holds the profile must say so:
+// on a host where Goose cannot draw (#544) that session has no window, and a
+// silent success on every later click hid it.
+func TestGooseLaunchToastNamesTheHandOff(t *testing.T) {
+	tests := map[agentmode.LaunchResult]string{
+		agentmode.LaunchStarted:   "started",
+		agentmode.LaunchStarting:  "starting",
+		agentmode.LaunchHandedOff: "already running",
+	}
+	seen := map[string]bool{}
+	for result, want := range tests {
+		got := GooseLaunchToast(result)
+		if !strings.Contains(got, want) {
+			t.Errorf("GooseLaunchToast(%v) = %q, want it to say %q", result, got, want)
+		}
+		if strings.Contains(strings.ToLower(got), "window opened") || strings.Contains(strings.ToLower(got), "is open") {
+			t.Errorf("GooseLaunchToast(%v) = %q claims a window it never observed", result, got)
+		}
+		seen[got] = true
+	}
+	if len(seen) != len(tests) {
+		t.Errorf("launch results share a toast: %v", seen)
+	}
+}
+
 // Knowledge searches go online, so the copy must say so and never promise
 // that questions stay on this computer.
 func TestTroubleshootCopyNeverClaimsAnswersStayLocal(t *testing.T) {

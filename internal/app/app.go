@@ -172,9 +172,11 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 			decision := agentmode.Dispatch(facts)
 			// Launch is plain exec and profile write, so it runs here; only
 			// GTK work goes to the main thread. Its context only gates the
-			// start, and the probe's context is already spent.
+			// start and Launch's own bounded startup wait, so a Goose that
+			// dies while starting opens Agents with the failure; the probe's
+			// context is already spent.
 			if decision.Action == agentmode.DispatchLaunch {
-				launchErr := agentmode.Launch(context.Background(), facts, func(asyncErr error) {
+				_, launchErr := agentmode.Launch(context.Background(), facts, func(asyncErr error) {
 					log.Printf("app: goose desktop exited with error: %v", asyncErr)
 				})
 				if launchErr == nil {

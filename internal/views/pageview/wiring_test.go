@@ -205,6 +205,9 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.TroubleshootGroupDescription()",
 				"pageview.GooseRow(",
 				"pageview.GooseSetupToast(",
+				// A live launch says what it observed, including a hand-off
+				// to a session that may have no window (#544).
+				"pageview.GooseLaunchToast(",
 				// Readiness and the launch both belong to agentmode, which
 				// writes ChairLift's own Goose profile before launching.
 				"agentmode.ObserveLive(",

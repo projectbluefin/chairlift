@@ -114,10 +114,13 @@ func newLaunchHost(t *testing.T) *launchHost {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	h := &launchHost{profile: troubleshoot.ProfileAt(t.TempDir())}
 	origProfile, origRun := profileFor, runCmd
+	origWait, origPoll := sessionStartWait, sessionPoll
 	t.Cleanup(func() {
 		profileFor, runCmd = origProfile, origRun
+		sessionStartWait, sessionPoll = origWait, origPoll
 		dryrun.Set(false)
 	})
+	sessionStartWait, sessionPoll = 200*time.Millisecond, 5*time.Millisecond
 	profileFor = func() (troubleshoot.Profile, error) { return h.profile, nil }
 	runCmd = func(cmd *exec.Cmd, onExit func(error)) error {
 		h.cmds = append(h.cmds, cmd)
@@ -136,7 +139,7 @@ func readyFacts() ReadinessFacts {
 // XDG_CONFIG_HOME inside that profile.
 func TestLaunchWritesTheProfileAndIsolatesTheSession(t *testing.T) {
 	h := newLaunchHost(t)
-	if err := Launch(context.Background(), readyFacts(), nil); err != nil {
+	if _, err := Launch(context.Background(), readyFacts(), nil); err != nil {
 		t.Fatalf("Launch() = %v", err)
 	}
 	if len(h.cmds) != 1 {
@@ -171,17 +174,23 @@ func TestLaunchWritesTheProfileAndIsolatesTheSession(t *testing.T) {
 // SingletonLock naming this host and a live process (the test itself).
 func holdLock(t *testing.T, profile troubleshoot.Profile) {
 	t.Helper()
+	if err := takeLock(profile); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// takeLock is holdLock for a goroutine standing in for a starting Goose,
+// which must not call t.Fatal.
+func takeLock(profile troubleshoot.Profile) error {
 	host, err := os.Hostname()
 	if err != nil {
-		t.Fatal(err)
+		return err
 	}
 	dir := filepath.Join(profile.DesktopConfigHome(), "Goose")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		t.Fatal(err)
+		return err
 	}
-	if err := os.Symlink(fmt.Sprintf("%s-%d", host, os.Getpid()), filepath.Join(dir, "SingletonLock")); err != nil {
-		t.Fatal(err)
-	}
+	return os.Symlink(fmt.Sprintf("%s-%d", host, os.Getpid()), filepath.Join(dir, "SingletonLock"))
 }
 
 // Ask Bluefin with Goose already open opens Goose the ordinary way: start
@@ -192,8 +201,14 @@ func TestLaunchWithASessionRunningReopensGoose(t *testing.T) {
 	h := newLaunchHost(t)
 	holdLock(t, h.profile)
 
-	if err := Launch(context.Background(), readyFacts(), nil); err != nil {
+	result, err := Launch(context.Background(), readyFacts(), nil)
+	if err != nil {
 		t.Fatalf("Launch() = %v", err)
+	}
+	// The session may be one that never drew a window (#544); the caller
+	// has to be able to say it handed off rather than started anything.
+	if result != LaunchHandedOff {
+		t.Errorf("Launch() result = %v, want LaunchHandedOff", result)
 	}
 	if len(h.cmds) != 1 {
 		t.Fatalf("started %d commands, want 1", len(h.cmds))
@@ -223,7 +238,7 @@ func TestLaunchIgnoresAStaleLock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Launch(context.Background(), readyFacts(), nil); err != nil {
+	if _, err := Launch(context.Background(), readyFacts(), nil); err != nil {
 		t.Fatalf("Launch() = %v", err)
 	}
 	if len(h.cmds) != 1 || h.cmds[0].Args[0] != installedTools().LLMManPath {
@@ -234,7 +249,7 @@ func TestLaunchIgnoresAStaleLock(t *testing.T) {
 func TestLaunchDryRunStartsNothing(t *testing.T) {
 	h := newLaunchHost(t)
 	dryrun.Set(true)
-	if err := Launch(context.Background(), readyFacts(), nil); err != nil {
+	if _, err := Launch(context.Background(), readyFacts(), nil); err != nil {
 		t.Fatalf("Launch() in dry-run = %v", err)
 	}
 	if len(h.cmds) != 0 {
@@ -250,7 +265,7 @@ func TestLaunchFailed(t *testing.T) {
 		newLaunchHost(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if err := Launch(ctx, readyFacts(), nil); !errors.Is(err, context.Canceled) {
+		if _, err := Launch(ctx, readyFacts(), nil); !errors.Is(err, context.Canceled) {
 			t.Errorf("Launch() = %v, want context.Canceled", err)
 		}
 	})
@@ -259,7 +274,7 @@ func TestLaunchFailed(t *testing.T) {
 		h := newLaunchHost(t)
 		facts := readyFacts()
 		facts.ActiveModel = ""
-		err := Launch(context.Background(), facts, nil)
+		_, err := Launch(context.Background(), facts, nil)
 		if err == nil || !strings.Contains(err.Error(), "No model is selected") {
 			t.Errorf("Launch() = %v, want the missing prerequisite", err)
 		}
@@ -272,7 +287,7 @@ func TestLaunchFailed(t *testing.T) {
 		newLaunchHost(t)
 		startFailure := errors.New("cannot spawn llmman")
 		runCmd = func(*exec.Cmd, func(error)) error { return startFailure }
-		if err := Launch(context.Background(), readyFacts(), nil); !errors.Is(err, startFailure) {
+		if _, err := Launch(context.Background(), readyFacts(), nil); !errors.Is(err, startFailure) {
 			t.Errorf("Launch() = %v, want %v", err, startFailure)
 		}
 	})
@@ -280,7 +295,7 @@ func TestLaunchFailed(t *testing.T) {
 	t.Run("profile error", func(t *testing.T) {
 		newLaunchHost(t)
 		profileFor = func() (troubleshoot.Profile, error) { return troubleshoot.Profile{}, errors.New("no home") }
-		if err := Launch(context.Background(), readyFacts(), nil); err == nil {
+		if _, err := Launch(context.Background(), readyFacts(), nil); err == nil {
 			t.Error("Launch() succeeded without a profile")
 		}
 	})
@@ -303,7 +318,7 @@ func TestLaunchChildSurvivesCallerContext(t *testing.T) {
 
 	callerCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := Launch(callerCtx, readyFacts(), nil); err != nil {
+	if _, err := Launch(callerCtx, readyFacts(), nil); err != nil {
 		t.Fatalf("Launch failed: %v", err)
 	}
 	cancel()
@@ -317,4 +332,103 @@ func TestLaunchChildSurvivesCallerContext(t *testing.T) {
 	if err := capturedCmd.Process.Signal(syscall.Signal(0)); err != nil {
 		t.Errorf("child process was killed upon caller context cancellation: %v", err)
 	}
+}
+
+// A fresh launch keeps the caller busy until Goose holds the profile's lock:
+// released at spawn, a second click before the lock existed started a second
+// llmman launch, which llmman refuses while the first Goose opens normally.
+func TestLaunchWaitsForTheSessionToHoldTheProfile(t *testing.T) {
+	h := newLaunchHost(t)
+	sessionStartWait = 5 * time.Second
+	runCmd = func(cmd *exec.Cmd, onExit func(error)) error {
+		h.cmds = append(h.cmds, cmd)
+		go func() {
+			time.Sleep(30 * time.Millisecond)
+			_ = takeLock(h.profile)
+		}()
+		return nil
+	}
+	result, err := Launch(context.Background(), readyFacts(), nil)
+	if err != nil {
+		t.Fatalf("Launch() = %v", err)
+	}
+	if result != LaunchStarted {
+		t.Errorf("Launch() result = %v, want LaunchStarted", result)
+	}
+	if !h.profile.Running() {
+		t.Error("Launch() returned before the session held the profile")
+	}
+}
+
+// A Goose that dies while starting is Launch's error, returned to the
+// caller, not a later asynchronous report the caller may no longer hear (a
+// cold --ask-bluefin has exited by then).
+func TestLaunchReturnsAStartupExit(t *testing.T) {
+	h := newLaunchHost(t)
+	sessionStartWait = 5 * time.Second
+	died := errors.New("exit status 1")
+	runCmd = func(cmd *exec.Cmd, onExit func(error)) error {
+		h.cmds = append(h.cmds, cmd)
+		go onExit(died)
+		return nil
+	}
+	reported := make(chan error, 1)
+	_, err := Launch(context.Background(), readyFacts(), func(err error) { reported <- err })
+	if !errors.Is(err, died) {
+		t.Fatalf("Launch() = %v, want %v", err, died)
+	}
+	select {
+	case err := <-reported:
+		t.Errorf("startup exit also reported asynchronously: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+// A clean exit before the lock does not end the wait (the launcher may hand
+// Goose off and return); with no lock the wait ends at its bound, as a
+// session still starting, and a failure after that reaches the reporter.
+func TestLaunchStartingSessionReportsLaterFailures(t *testing.T) {
+	h := newLaunchHost(t)
+	sessionStartWait = 50 * time.Millisecond
+	runCmd = func(cmd *exec.Cmd, onExit func(error)) error {
+		h.cmds = append(h.cmds, cmd)
+		h.onExit = onExit
+		return nil
+	}
+	reported := make(chan error, 1)
+	result, err := Launch(context.Background(), readyFacts(), func(err error) { reported <- err })
+	if err != nil {
+		t.Fatalf("Launch() = %v", err)
+	}
+	if result != LaunchStarting {
+		t.Errorf("Launch() result = %v, want LaunchStarting", result)
+	}
+	late := errors.New("exit status 2")
+	h.onExit(late)
+	select {
+	case err := <-reported:
+		if !errors.Is(err, late) {
+			t.Errorf("reported %v, want %v", err, late)
+		}
+	case <-time.After(time.Second):
+		t.Error("a failure after Launch returned was not reported")
+	}
+
+	t.Run("clean exit keeps waiting", func(t *testing.T) {
+		h := newLaunchHost(t)
+		sessionStartWait = 5 * time.Second
+		runCmd = func(cmd *exec.Cmd, onExit func(error)) error {
+			h.cmds = append(h.cmds, cmd)
+			go func() {
+				onExit(nil)
+				time.Sleep(30 * time.Millisecond)
+				_ = takeLock(h.profile)
+			}()
+			return nil
+		}
+		result, err := Launch(context.Background(), readyFacts(), nil)
+		if err != nil || result != LaunchStarted {
+			t.Errorf("Launch() = %v, %v, want LaunchStarted after the lock appeared", result, err)
+		}
+	})
 }

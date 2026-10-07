@@ -772,12 +772,20 @@ then runs `llmman launch goose-desktop --model bluefin-active` with
 Both Goose launches write their stdout and stderr to ChairLift's own stderr,
 so a Goose that fails to start (#544) leaves its reason in the same journal
 stream as ChairLift's log rather than in `/dev/null`.
-Launch lifetime is detached from the short preflight context; asynchronous
-failures return through the GTK thread. When Goose is already running in the
+Launch lifetime is detached from the short preflight context. A fresh launch
+keeps the Goose row busy until the session holds the profile's
+single-instance lock, the process exits, or 15 seconds pass, so a second
+click cannot start a second `llmman launch` that llmman would refuse; a
+non-zero exit during that wait is the launch's error, and later failures
+return through the GTK thread. When Goose is already running in the
 profile, Launch starts `goose-desktop` there directly instead; Goose's
 single-instance lock hands the request to the running session, so no second
 Goose starts. GNOME may show a "Goose is ready" notification rather than
-raise the window, since no activation token is passed.
+raise the window, since no activation token is passed. Launch reports which
+of these happened (`agentmode.LaunchResult`), and the row's toast
+(`pageview.GooseLaunchToast`) says "started", "still starting", or "already
+running" rather than claiming a window opened: a Goose that cannot draw still
+holds the profile, and every later click is handed to it.
 
 `chairlift --ask-bluefin` uses the same pure
 [`dispatcher`](../../internal/agentmode/dispatcher.go): launch when ready,
