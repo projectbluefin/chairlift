@@ -1303,7 +1303,9 @@ back rather than entering it.
 
 The accelerators are:
 
-- `Ctrl+Q` → quit
+- `Ctrl+Q` → quit, by closing the window so its `close-request` handlers run:
+  a running update refuses the close (showing the Updates page and its
+  "Updates are still in progress…" banner) and active setup is dismissed
 - `Ctrl+?` → show shortcuts dialog
 - `Alt+1` through `Alt+N` → navigate to the first through Nth visible page in
   canonical order, with omitted pages leaving no gaps
