@@ -675,11 +675,6 @@ func (w *Window) ShowToast(message string) {
 // and the message itself is length-bounded at the source.
 const errorToastWidthChars = 48
 
-// authCancelledToast replaces a dismissed PolicyKit prompt's error. The
-// helper never ran, so there is nothing to diagnose and no raw pkexec
-// stderr worth pinning to the window (#492).
-const authCancelledToast = "Authentication cancelled"
-
 // ShowErrorToast shows an error toast immediately, keeping older errors queued
 // until dismissed. It wraps the failing command's diagnosis instead of hiding
 // subsequent failures behind an indefinitely displayed earlier toast.
@@ -696,7 +691,7 @@ const authCancelledToast = "Authentication cancelled"
 func (w *Window) ShowErrorToast(message string) {
 	if pkexec.MessageIsAuthDismissed(message) {
 		log.Printf("window: authentication dismissed: %s", message)
-		w.ShowToast(authCancelledToast)
+		w.ShowToast(pkexec.CancelledMessage)
 		return
 	}
 	toast := adw.NewToast(message)

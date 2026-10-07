@@ -39,6 +39,12 @@ const DismissedExitCode = 126
 // surface such as the window's error toast can still recognise it.
 const dismissedMarker = "Request dismissed"
 
+// CancelledMessage is the brief, non-error toast that replaces a dismissed
+// PolicyKit prompt's error. The program never ran, so there is nothing to
+// diagnose and no raw pkexec stderr or exit status worth pinning to the
+// window (#492).
+const CancelledMessage = "Authentication cancelled"
+
 // IsAuthDismissed reports whether err is the user cancelling the PolicyKit
 // authentication prompt rather than a failure: pkexec's own exit status 126
 // anywhere in the chain, or its dismissal text in the message. Apply it only

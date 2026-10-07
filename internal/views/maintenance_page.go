@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"path"
@@ -290,7 +289,12 @@ func (uh *UserHome) runMaintenanceAction(title, script string, sudo bool, button
 			button.SetLabel(cleanupview.ScriptsButtonLabel)
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("%s failed: %v", title, err))
+				text, isError := actionmsg.MaintenanceScriptFailure(title, sudo, err)
+				if isError {
+					uh.toastAdder.ShowErrorToast(text)
+				} else {
+					uh.toastAdder.ShowToast(text)
+				}
 				return
 			}
 
