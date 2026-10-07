@@ -320,6 +320,13 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 					return "", &UntrustedTapError{Message: fmt.Sprintf("Brew command failed: %s", message), Tap: tap}
 				}
 			}
+			// Gated on argv like the bundle check above: only an uninstall
+			// prints Homebrew's dependents refusal, read from its stderr.
+			if len(args) > 0 && args[0] == "uninstall" {
+				if dependents, ok := uninstallDependents(stderrText); ok {
+					return "", &DependentsError{Message: fmt.Sprintf("Brew command failed: %s", message), Dependents: dependents}
+				}
+			}
 			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
 		}
 		// exec.ErrNotFound covers a bare name missing from $PATH;

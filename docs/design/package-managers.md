@@ -205,7 +205,10 @@ failures and discard successful output.
 
 Deadline and cancellation classify distinctly and unwrap to their context
 sentinels. Missing executables return `*NotFoundError`. Nonzero exits return
-`*Error` or `*UntrustedTapError`. For mutations, stdout and stderr tails are
+`*Error`, `*UntrustedTapError`, or, for `uninstall` argv only, a
+`*DependentsError` naming the installed packages Homebrew's stderr refusal
+says still need the package (closed name grammar; Apps names them in its
+error toast through `actionmsg.UninstallFailure`). For mutations, stdout and stderr tails are
 joined stdout-first, logged, and distilled by
 [`diagnostic.go`](../../internal/homebrew/diagnostic.go) to one bounded error
 line for UI feedback. Bundle installers replay their real failure on stdout,

@@ -88,6 +88,24 @@ func Uninstall(dryRun bool, name string) string {
 	return fmt.Sprintf("%s uninstalled", name)
 }
 
+// UninstallFailure returns the error toast for a failed Homebrew uninstall.
+// When Homebrew refused because installed packages still need it,
+// dependents names them: a bare "Could not uninstall" left a retry that
+// fails the same way as the only thing to try. Any other failure keeps its
+// detail in the log.
+func UninstallFailure(name string, dependents []string) string {
+	switch len(dependents) {
+	case 0:
+		return fmt.Sprintf("Could not uninstall %s", name)
+	case 1:
+		return fmt.Sprintf("Could not uninstall %s because %s needs it", name, dependents[0])
+	default:
+		last := len(dependents) - 1
+		return fmt.Sprintf("Could not uninstall %s because %s and %s need it",
+			name, strings.Join(dependents[:last], ", "), dependents[last])
+	}
+}
+
 // Pin returns toast text for a formula pin or unpin.
 func Pin(dryRun bool, name string, pin bool) string {
 	action := "unpinned"
