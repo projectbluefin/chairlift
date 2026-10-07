@@ -365,10 +365,12 @@ func TestParseUpdateRemotesSkipsOnlyDisabledRemotes(t *testing.T) {
 // fakeRemotesFlatpak installs a flatpak stand-in for the per-remote update
 // query of issue #471. It lists the user remotes flathub, test-center, and
 // fedora; flathub offers a Firefox update, fedora a GIMP update, and
-// test-center fails like a remote whose host no longer resolves. origins is
-// the `list --columns=origin` answer. Every invocation is appended to the
-// returned log.
-func fakeRemotesFlatpak(t *testing.T, origins string) string {
+// test-center fails like a remote whose host no longer resolves. appOrigins
+// and runtimeOrigins are the origin remotes of the installed applications
+// and runtimes, which `list --columns=origin` reports according to its
+// `--app`/`--runtime` filter, as flatpak does. Every invocation is appended
+// to the returned log.
+func fakeRemotesFlatpak(t *testing.T, appOrigins, runtimeOrigins string) string {
 	t.Helper()
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "log")
@@ -376,7 +378,12 @@ func fakeRemotesFlatpak(t *testing.T, origins string) string {
 printf '%s\n' "$*" >> "$CHAIRLIFT_FLATPAK_LOG"
 case "$1" in
 remotes) printf 'flathub\ntest-center\tno-gpg-verify\nfedora\n' ;;
-list) printf '` + origins + `' ;;
+list)
+	case "$*" in
+	*--app*) printf '` + appOrigins + `' ;;
+	*--runtime*) printf '` + runtimeOrigins + `' ;;
+	*) printf '` + appOrigins + runtimeOrigins + `' ;;
+	esac ;;
 remote-ls)
 	case "$6" in
 	flathub) printf 'Firefox\torg.mozilla.firefox\t131.0\n' ;;
@@ -405,7 +412,7 @@ var healthyRemoteUpdates = []UpdateInfo{
 // every healthy remote's updates are still listed.
 func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
 	dryrun.Set(false)
-	logPath := fakeRemotesFlatpak(t, `flathub\nflathub\nfedora\n`)
+	logPath := fakeRemotesFlatpak(t, `flathub\nflathub\nfedora\n`, `flathub\n`)
 
 	updates, err := ListUpdates(context.Background(), true)
 	if err != nil {
@@ -419,19 +426,36 @@ func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
 		"remote-ls --updates --app --columns=name,application,version --user flathub",
 		"remote-ls --updates --app --columns=name,application,version --user test-center",
 		"remote-ls --updates --app --columns=name,application,version --user fedora",
-		"list --user --columns=origin",
+		"list --user --app --columns=origin",
 	}
 	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ListUpdates ran %q, want %q", got, want)
 	}
 }
 
-// A broken remote an installed ref — application or runtime — still comes
-// from hides that ref's updates, so it stays an error naming that remote only,
+// The usual leftover of an application uninstalled without `--unused` is a
+// remote that still serves runtimes. The update inventory lists applications
+// only, so no update it could show comes from that remote: it is ignored like
+// an unused one rather than failing the check.
+func TestListUpdatesIgnoresABrokenRemoteServingOnlyRuntimes(t *testing.T) {
+	dryrun.Set(false)
+	fakeRemotesFlatpak(t, `flathub\nfedora\n`, `flathub\ntest-center\n`)
+
+	updates, err := ListUpdates(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListUpdates error = %v, want the runtime-only broken remote ignored", err)
+	}
+	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
+		t.Fatalf("ListUpdates = %#v, want %#v", updates, healthyRemoteUpdates)
+	}
+}
+
+// A broken remote an installed application still comes from hides that
+// application's updates, so it stays an error naming that remote only,
 // alongside the updates the healthy remotes reported.
 func TestListUpdatesReportsABrokenRemoteInUse(t *testing.T) {
 	dryrun.Set(false)
-	fakeRemotesFlatpak(t, `flathub\ntest-center\nfedora\n`)
+	fakeRemotesFlatpak(t, `flathub\ntest-center\nfedora\n`, `flathub\n`)
 
 	updates, err := ListUpdates(context.Background(), true)
 	var remoteErr *RemoteError

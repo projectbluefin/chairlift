@@ -294,9 +294,13 @@ not be classified absent from an application-only query.
 unreachable: a remote left behind by an uninstalled application (issue #471)
 hid every other remote's updates and failed the Updates check, although
 `flatpak update` itself still succeeded. A remote whose query fails is checked
-against `list --columns=origin`: when no installed application or runtime in
-that scope comes from it, it is logged and ignored; otherwise it is reported
-as a `*flatpak.RemoteError` naming that remote and installation. A cancelled
+against `list --app --columns=origin`: when no installed application in that
+scope comes from it, it is logged and ignored; otherwise it is reported as a
+`*flatpak.RemoteError` naming that remote and installation. The origin check
+matches the inventory's `--app` filter on purpose: a remote that still serves
+only runtimes — the usual leftover when an application is uninstalled without
+`--unused` — can hide no update this inventory would list, so it must not
+fail the check either. A cancelled
 caller context or a missing executable still aborts the whole query. The
 healthy remotes' updates are returned alongside that error, but the
 Applications source's check still fails: the coordinator keeps the last known

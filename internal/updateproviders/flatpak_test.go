@@ -14,14 +14,20 @@ import (
 
 // brokenRemoteStub is a flatpak stand-in for issue #471: the user
 // installation has flathub and a leftover test-center remote whose host no
-// longer resolves, the system installation has no remotes, and origins is the
-// user `list --columns=origin` answer. flathub reports a Firefox update until
-// `update` runs.
-func brokenRemoteStub(origins string) string {
+// longer resolves, the system installation has no remotes, and appOrigins is
+// the origin remotes of the installed applications. A runtime from
+// test-center is installed as well — the usual leftover of an application
+// uninstalled without `--unused` — so an origin listing without `--app` also
+// names test-center. flathub reports a Firefox update until `update` runs.
+func brokenRemoteStub(appOrigins string) string {
 	return `state="${0%/*}/updated"
 case "$1" in
 remotes) [ "$2" = --user ] && printf 'flathub\ntest-center\tno-gpg-verify\n' ;;
-list) printf '` + origins + `' ;;
+list)
+	case "$*" in
+	*--app*) printf '` + appOrigins + `' ;;
+	*) printf '` + appOrigins + `test-center\n' ;;
+	esac ;;
 update) : > "$state" ;;
 remote-ls)
 	case "$6" in
@@ -34,9 +40,10 @@ exit 0
 `
 }
 
-// Issue #471: a leftover remote nothing installed comes from must not fail
-// the Applications check or the post-apply reconciliation, and the healthy
-// remote's update must still be offered and verified.
+// Issue #471: a leftover remote no installed application comes from — even
+// one still serving a runtime — must not fail the Applications check or the
+// post-apply reconciliation, and the healthy remote's update must still be
+// offered and verified.
 func TestFlatpakIgnoresABrokenUnusedRemoteEndToEnd(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
@@ -61,9 +68,9 @@ func TestFlatpakIgnoresABrokenUnusedRemoteEndToEnd(t *testing.T) {
 	}
 }
 
-// A broken remote an installed ref still comes from fails the check with an
-// error naming that remote, which the coordinator shows while keeping the
-// source's last known inventory.
+// A broken remote an installed application still comes from fails the check
+// with an error naming that remote, which the coordinator shows while keeping
+// the source's last known inventory.
 func TestFlatpakReportsABrokenRemoteInUse(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })

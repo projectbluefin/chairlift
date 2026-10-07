@@ -483,10 +483,13 @@ func parseUpdateRemotes(output string) []string {
 	return remotes
 }
 
-// originListArgs lists the origin remote of every installed ref, applications
-// and runtimes alike, in the scope.
+// originListArgs lists the origin remote of every installed application in
+// the scope. "--app" matches the update query's own filter: runtimes never
+// appear in the update inventory, so a remote that serves only runtimes —
+// the usual leftover when an application is uninstalled without
+// `--unused` — cannot hide an update the inventory would list.
 func originListArgs(user bool) []string {
-	return []string{"list", installationFlag(user), "--columns=origin"}
+	return []string{"list", installationFlag(user), "--app", "--columns=origin"}
 }
 
 // parseOrigins returns the set of remotes named in `flatpak list
@@ -508,9 +511,9 @@ func updateListArgs(user bool, remote string) []string {
 	return []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", installationFlag(user), remote}
 }
 
-// RemoteError reports a remote whose update query failed while installed refs
-// in its installation still come from it, so updates for those refs are
-// unknown.
+// RemoteError reports a remote whose update query failed while installed
+// applications in its installation still come from it, so updates for those
+// applications are unknown.
 type RemoteError struct {
 	Remote       string
 	Installation string // "user" or "system"
@@ -539,7 +542,7 @@ func readCtx(ctx context.Context, args ...string) (string, error) {
 // remote-less `remote-ls --updates` fails outright when any one remote is
 // unreachable — a leftover remote from an uninstalled application then hid
 // every other remote's updates (issue #471). A remote whose query fails is
-// ignored, with a log line, when no installed application or runtime in the
+// ignored, with a log line, when no installed application in the
 // installation comes from it; otherwise it is reported as a *RemoteError.
 // When the returned error is non-nil the slice still holds the updates the
 // healthy remotes reported, for callers that can use a partial inventory.
@@ -594,7 +597,7 @@ func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
 	var errs []error
 	for _, remoteErr := range failed {
 		if !origins[remoteErr.Remote] {
-			log.Printf("flatpak: ignoring %s remote %q, which no installed ref uses: %v", installation, remoteErr.Remote, remoteErr.Err)
+			log.Printf("flatpak: ignoring %s remote %q, which no installed application uses: %v", installation, remoteErr.Remote, remoteErr.Err)
 			continue
 		}
 		errs = append(errs, remoteErr)
