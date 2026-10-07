@@ -34,6 +34,15 @@ func AvatarEntryRow(entry avatar.Avatar) Row {
 	return Row{Title: entry.CommonName, Subtitle: entry.Species}
 }
 
+// AvatarApplyEnabled decides whether the chooser's Apply button is offered.
+// It needs downloaded artwork for the entry being previewed, and no apply
+// already in flight: an apply that finishes after the user picked another
+// entry, whose download has not landed, must not leave Apply sensitive with
+// nothing for it to set.
+func AvatarApplyEnabled(applying, hasArtwork bool) bool {
+	return !applying && hasArtwork
+}
+
 // AvatarPreviewFailed is the chooser's banner when the artwork could not be
 // downloaded or decoded. Nothing was applied, so it says so.
 func AvatarPreviewFailed(entry avatar.Avatar) string {
