@@ -24,6 +24,10 @@ const (
 // GTK object properties.
 type Store struct {
 	settings *gio.Settings
+	// changed is the one GSettings::changed callback a Store connects; it
+	// lives in the struct so puregotk's callback table holds one slot for
+	// the Store's lifetime.
+	changed func(gio.Settings, string)
 }
 
 // SchemaAvailable reports whether the updates schema is registered in the system
@@ -77,4 +81,25 @@ func (s *Store) BindBoolean(key string, object *gobject.Object) {
 		return
 	}
 	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue)
+}
+
+// OnSourceChanged calls fn on the GTK main thread whenever one of the four
+// update-source keys changes, from this process (the Preferences dialog's
+// bound switches) or another (gsettings, dconf-editor). Call it once per
+// Store, at build time: each call claims a puregotk callback slot. It does
+// nothing when the schema is not installed, since nothing can then change.
+func (s *Store) OnSourceChanged(fn func()) {
+	if s == nil || s.settings == nil || fn == nil || s.changed != nil {
+		return
+	}
+	s.changed = func(_ gio.Settings, key string) {
+		switch key {
+		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey:
+			fn()
+		}
+	}
+	s.settings.ConnectChanged(&s.changed)
+	// GSettings emits ::changed only for keys read after a handler is
+	// connected (the dconf backend subscribes on read), so read them now.
+	s.Values()
 }

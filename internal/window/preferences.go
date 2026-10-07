@@ -21,7 +21,10 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 	dialog := adw.NewPreferencesDialog()
 	dialog.SetTitle("Preferences")
 
-	store := settings.New()
+	store := w.updateSettings
+	if store == nil {
+		store = settings.New()
+	}
 	page := adw.NewPreferencesPage()
 	page.SetTitle("Updates")
 
@@ -33,6 +36,16 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 		row := adw.NewSwitchRow()
 		row.SetTitle(preference.Title)
 		row.SetSubtitle(pageview.UpdateSourcePreferenceSubtitle(states, ready, preference.ID))
+		// A source the administrator disabled or the host cannot back is
+		// shown off and left unbound: binding it would display the stored
+		// preference, an ON switch beside "Disabled by administrator"
+		// (W3-05), for a source nothing will ever check.
+		if pageview.UpdateSourcePreferenceLocked(states, ready, preference.ID) {
+			row.SetActive(false)
+			row.SetSensitive(false)
+			sourcesGroup.Add(&row.Widget)
+			continue
+		}
 		// Bind first: the default GSettings binding sets sensitivity from
 		// the key's writability (dconf lockdown), which overwrote an
 		// earlier "unavailable" decision. Narrow what the bind left.

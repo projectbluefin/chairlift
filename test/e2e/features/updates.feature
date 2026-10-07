@@ -166,6 +166,31 @@ Feature: Updates
     And the Updates sidebar row shows no badge
     And the flatpak tool was never asked to "remote-ls"
 
+  # W3-05: Preferences showed this source's switch ON beside "Disabled by your
+  # administrator", in different words from the Updates page's row.
+  @config.updates-no-flatpak @stub.updates-flatpak-one-update @stub.updates-brew-current
+  Scenario: Preferences shows an administrator-disabled source switched off, in the Updates page's words
+    Given ChairLift is running
+    Then the "Applications" row says "Disabled by administrator"
+    When I press "<Control>comma"
+    Then the Preferences "Applications" row says "Disabled by administrator"
+    And the Preferences "Applications" switch is off and refuses input
+    And the Preferences "Developer tools" switch is on and accepts input
+
+  # W3-15: turning a source off in Preferences left its row "Up to date"
+  # until a manual Refresh.
+  @stub.updates-flatpak-current @stub.updates-brew-current
+  Scenario: Turning a source off in Preferences updates its row without a Refresh
+    Given ChairLift is running
+    Then the "Applications" row says "Up to date"
+    When I press "<Control>comma"
+    And I toggle the Preferences "Applications" switch
+    Then the Preferences "Applications" switch is off and accepts input
+    When I press "Escape"
+    Then no dialog is shown
+    And the "Applications" row says "Disabled in preferences"
+    And the "Developer tools" row says "Up to date"
+
   # Issue #349 regressions: the Updates preferences page (buildUpdatesPage)
   # mounts beneath the update shell's sources, so automatic updates, the
   # system version, the per-source groups, and the Advanced group are part

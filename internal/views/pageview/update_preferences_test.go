@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 )
 
 func TestUpdateSourcePreferenceRowsExplainWhyASwitchIsLocked(t *testing.T) {
@@ -14,12 +15,16 @@ func TestUpdateSourcePreferenceRowsExplainWhyASwitchIsLocked(t *testing.T) {
 		ready         bool
 		wantSubtitle  string
 		wantSensitive bool
+		wantLocked    bool
 	}{
-		{"before the first check", nil, false, "Checking availability…", false},
-		{"a source the shell has not reported", []updateflow.SourceState{{ID: updateflow.OperatingSystem, Configured: true, Available: true}}, true, "Checking availability…", false},
-		{"disabled by the administrator", []updateflow.SourceState{{ID: id, Configured: false, Available: true}}, true, "Disabled by your administrator", false},
-		{"not backed by this host", []updateflow.SourceState{{ID: id, Configured: true, Available: false}}, true, "Not available on this system", false},
-		{"operable", []updateflow.SourceState{{ID: id, Configured: true, Available: true}}, true, "", true},
+		{"before the first check", nil, false, "Checking availability…", false, false},
+		{"a source the shell has not reported", []updateflow.SourceState{{ID: updateflow.OperatingSystem, Configured: true, Available: true}}, true, "Checking availability…", false, false},
+		// W3-05: the switch showed ON beside this subtitle, and the words
+		// differed from the Updates page's row for the same source.
+		{"disabled by the administrator", []updateflow.SourceState{{ID: id, Configured: false, Available: true}}, true, "Disabled by administrator", false, true},
+		{"not backed by this host", []updateflow.SourceState{{ID: id, Configured: true, Available: false}}, true, "Not available on this computer", false, true},
+		{"operable", []updateflow.SourceState{{ID: id, Configured: true, Available: true}}, true, "", true, false},
+		{"operable but turned off", []updateflow.SourceState{{ID: id, Configured: true, Available: true, Enabled: false}}, true, "", true, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -29,6 +34,27 @@ func TestUpdateSourcePreferenceRowsExplainWhyASwitchIsLocked(t *testing.T) {
 			if got := UpdateSourcePreferenceSensitive(tc.states, tc.ready, id); got != tc.wantSensitive {
 				t.Errorf("sensitive = %v, want %v", got, tc.wantSensitive)
 			}
+			if got := UpdateSourcePreferenceLocked(tc.states, tc.ready, id); got != tc.wantLocked {
+				t.Errorf("locked = %v, want %v", got, tc.wantLocked)
+			}
 		})
+	}
+}
+
+// Preferences and the Updates page must describe a locked source in the same
+// words, for every source.
+func TestUpdateSourcePreferenceSubtitleMatchesTheUpdatesRow(t *testing.T) {
+	for _, preference := range UpdateSourcePreferences {
+		for _, state := range []updateflow.SourceState{
+			{ID: preference.ID, Configured: false, Available: true},
+			{ID: preference.ID, Configured: false, Available: false},
+			{ID: preference.ID, Configured: true, Available: false},
+		} {
+			_, row := updatepresent.Source(state)
+			got := UpdateSourcePreferenceSubtitle([]updateflow.SourceState{state}, true, preference.ID)
+			if got != row {
+				t.Errorf("%s %+v: preferences say %q, Updates row says %q", preference.ID, state, got, row)
+			}
+		}
 	}
 }

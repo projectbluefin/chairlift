@@ -741,13 +741,19 @@ surface in three layers that must stay separate:
   whose policy has `Configured` false reads "Disabled by administrator"; one
   that is configured but not `Available` — the provider's own `Available`
   probe says no, or `Policy.Supported` is false because the capability floor
-  cannot back it — reads "Not available on this computer". `ItemRows` decides
-  which pending items get a child row: the Operating system source's one pending
-  item is its deployment, so that source shows "Update available: <booted> → <new>"
-  on its own row and gets no child row repeating its name. The fold is keyed on
-  the source ID, never an item's name; every other source keeps one row per item,
-  because Applications and Developer tools carry each item's only Update button
-  on that row.
+  cannot back it — reads "Not available on this computer". Both strings
+  come from `updatepresent.SourceLockReason`, which the Preferences dialog's
+  update-source rows (`pageview.UpdateSourcePreferenceSubtitle`) use too, so
+  the two surfaces never word one source differently. Such a locked source's
+  Preferences switch is shown off and insensitive and is not bound to its
+  GSettings key (`pageview.UpdateSourcePreferenceLocked`): bound, it showed
+  the stored preference — on — beside "Disabled by administrator". `ItemRows`
+  decides which pending items get a child row: the Operating system source's
+  one pending item is its deployment, so that source shows
+  "Update available: <booted> → <new>" on its own row and gets no child row
+  repeating its name. The fold is keyed on the source ID, never an item's
+  name; every other source keeps one row per item, because Applications and
+  Developer tools carry each item's only Update button on that row.
 
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
@@ -755,6 +761,17 @@ The shell learns each source's policy from `Window.buildUI`'s
 "Host capability floor" above). The four sources are keyed to
 `bootc_updates_group`, `flatpak_updates_group`, and `brew_updates_group` on
 `updates_page`, and `features_group` on `features_page`.
+
+The shell reads the user's preferences through the window's one
+`settings.Store`, which the Preferences dialog's switches are bound to as
+well. `Store.OnSourceChanged`, connected once in `buildUI`, calls
+`UpdateShell.PreferencesChanged` whenever an update-source key changes, and
+the shell starts a check when `updatepresent.RecheckForPreferences` says the
+snapshot on screen no longer matches (`Snapshot.StaleFor`) or a check started
+from older preferences is still in flight. The shell never flips a row
+itself: enablement stays the coordinator's, and a source the user just turned
+on has to be checked anyway. A mutation in flight refuses the check, so
+`finishMutation` asks again once the run ends.
 
 Everything else the Updates page owns is built by `buildUpdatesPage` into
 `UserHome.updatesPrefsPage`; `Window.buildContentArea` mounts it below the
