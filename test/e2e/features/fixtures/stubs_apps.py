@@ -58,14 +58,21 @@ def _record(context, program):
     return f'printf \'%s\\n\' "$*" >> "{calls_log(context, program)}"\n'
 
 
-def _brew(context, fail=()):
+def _brew(context, fail=(), installed_collections=()):
     """A brew serving the fixed catalog above.
 
     fail names read operations that exit 1 when brew cannot read its API.
+    installed_collections names the Brewfiles `brew bundle check` reports
+    satisfied; every other collection reports unmet dependencies (exit 1),
+    as brew does for a collection nobody installed.
     """
     formulae = json.dumps({"formulae": FORMULAE, "casks": []})
     casks = json.dumps({"formulae": [], "casks": CASKS})
     info_fail = "echo 'Error: Failed to load the API' >&2; exit 1\n" if "info" in fail else ""
+    satisfied = ""
+    if installed_collections:
+        patterns = "|".join(f"*/{name}" for name in installed_collections)
+        satisfied = f'case "$*" in {patterns}) exit 0 ;; esac\n        '
     script = _record(context, "brew") + f"""
 case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
@@ -84,6 +91,12 @@ EOF
     exit 0 ;;
 outdated) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
 tap-info) echo '[]'; exit 0 ;;
+bundle)
+    if [ "$2" = check ]; then
+        {satisfied}echo "brew bundle can't satisfy your Brewfile's dependencies." >&2
+        exit 1
+    fi
+    exit 0 ;;
 esac
 exit 0
 """
@@ -98,6 +111,12 @@ def _rows(rows):
 def apps_brew(context):
     """Homebrew with two requested formulae (one pinned) and one cask."""
     _brew(context)
+
+
+@stub("apps-brew-team-tools-installed")
+def apps_brew_team_tools_installed(context):
+    """Homebrew on which the Team tools collection is already installed."""
+    _brew(context, installed_collections=("team-tools.Brewfile",))
 
 
 @stub("apps-brew-unreadable")

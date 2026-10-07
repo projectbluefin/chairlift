@@ -183,8 +183,21 @@ def step_toast(context, text):
 
 @then('Homebrew was never asked to "{command}"')
 def step_brew_never(context, command):
-    ran = [line for line in calls(context, "brew") if line.split(" ", 1)[0] == command]
+    # Leading words, so "bundle install" is told apart from the read-only
+    # "bundle check" each collection row runs on load.
+    words = command.split()
+    ran = [line for line in calls(context, "brew") if line.split()[: len(words)] == words]
     assert not ran, f"brew ran {command!r} for real: {ran}"
+
+
+@then('Homebrew was asked to "{command}"')
+def step_brew_asked(context, command):
+    words = command.split()
+
+    def ran():
+        return [line for line in calls(context, "brew") if line.split()[: len(words)] == words]
+
+    assert atspi.poll(ran), f"brew was never asked to {command!r}"
 
 
 @then('Flatpak was never asked to "{command}"')

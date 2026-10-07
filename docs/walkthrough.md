@@ -99,7 +99,9 @@ duplicate it.
 
 **App collections** lead the page and identify Homebrew as a third-party
 source. Installs show native activity and streamed command progress while they
-run, using the same controls in the explicit setup flow.
+run, using the same controls in the explicit setup flow. A collection whose
+apps and tools are all already on the system reads **Installed** when the page
+loads, not only after an install in the same session.
 
 **Homebrew applications** and **Command line tools** follow: installed casks
 first, then explicitly requested formulae (the packages Homebrew manages).

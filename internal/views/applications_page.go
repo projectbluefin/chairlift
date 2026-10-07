@@ -89,6 +89,8 @@ func (uh *UserHome) buildApplicationsPage() {
 // loadBrewBundles discovers configured collections off the GTK thread and
 // builds their rows on the main thread. ConnectBundleInstall owns the shared
 // callback and per-collection action gate; setup navigates these same widgets.
+// Once the rows exist, refreshBundleStatuses observes which collections the
+// system already holds.
 func (uh *UserHome) loadBrewBundles(paths []string) {
 	bundles, discoveryErr := homebrew.AvailableBundles(paths)
 	warning := ""
@@ -117,6 +119,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			uh.ConnectBundleInstall(bundle, installBtn, progress)
 			uh.brewBundlesGroup.Add(&row.Widget)
 		}
+		uh.refreshBundleStatuses()
 	})
 }
 
@@ -401,6 +404,11 @@ func (uh *UserHome) runHomebrewUninstall(
 		controls,
 		gate,
 	)
+	if err == nil && decision.Refresh {
+		// A collection holding the removed package is no longer fully
+		// installed; re-observe so its row offers Install again.
+		sgtk.RunOnMainThread(uh.refreshBundleStatuses)
+	}
 }
 
 func (uh *UserHome) finishHomebrewPackageMutation(

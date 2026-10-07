@@ -142,18 +142,25 @@ func isStateChanging(args []string) bool {
 		return false
 	}
 	cmd := args[0]
-	if sub := bundleSubcommand(args); sub != "" {
+	if bundleSubcommand(args) != "" {
 		// Reclassify brew bundle subcommands: check and list are read-only,
 		// while install, dump, and any unrecognized subcommand remain
 		// state-changing.
-		switch sub {
-		case "check", "list":
-			return false
-		default:
-			return true
-		}
+		return !isReadOnlyBundle(args)
 	}
 	return stateChangingCommands[cmd]
+}
+
+// isReadOnlyBundle reports whether args is a read-only `brew bundle`
+// subcommand (check or list). Install, dump, and any unrecognized
+// subcommand are not.
+func isReadOnlyBundle(args []string) bool {
+	switch bundleSubcommand(args) {
+	case "check", "list":
+		return true
+	default:
+		return false
+	}
 }
 
 // commandTimeout returns the timeout class for a brew invocation: the
@@ -216,6 +223,13 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 		// 2 of 6 ChairLift launches on Dakota). ChairLift reads only
 		// "trusted", which is local, so the API lookup is switched off.
 		cmd.Env = append(cmd.Env, "HOMEBREW_NO_GITHUB_API=1")
+	}
+	if isReadOnlyBundle(args) {
+		// brew runs `brew update --auto-update` before every `bundle`
+		// subcommand, including the read-only check the Apps page runs for
+		// each collection on load. A read must not fetch and rewrite tap
+		// state (or do so under --dry-run), so it skips the auto-update.
+		cmd.Env = append(cmd.Env, "HOMEBREW_NO_AUTO_UPDATE=1")
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
