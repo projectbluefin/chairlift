@@ -302,7 +302,16 @@ func FactoryResetArgs() []string {
 // disabling, so that a package upgrade re-running `systemctl preset` cannot
 // quietly re-enable something the user turned off.
 //
-// The unit name is fixed to autoupdate.TimerUnit rather than passed in: a
+// Every unattended trigger of uupd.service is covered, not just the timer the
+// switch reports: autoupdate.ResumeTimerUnit fires the same service after
+// every resume. Disabling masks it with --now, which also stops a timer
+// already armed by a resume; systemctl masks and stops a unit that is absent
+// without error, so images that do not ship it still succeed. Enabling only
+// unmasks it: its enablement links are never removed, so unmasking restores
+// exactly what the image (or the user) had, without trying to enable a unit
+// an image may not ship.
+//
+// The unit names are fixed in autoupdate rather than passed in: a
 // caller-supplied unit would let an authenticated user enable or mask any
 // systemd unit on the machine.
 func AutoUpdateArgs(command string) ([][]string, bool) {
@@ -311,11 +320,13 @@ func AutoUpdateArgs(command string) ([][]string, bool) {
 		return [][]string{
 			{"unmask", autoupdate.TimerUnit},
 			{"enable", "--now", autoupdate.TimerUnit},
+			{"unmask", autoupdate.ResumeTimerUnit},
 		}, true
 	case CommandAutoDisable:
 		return [][]string{
 			{"disable", "--now", autoupdate.TimerUnit},
 			{"mask", autoupdate.TimerUnit},
+			{"mask", "--now", autoupdate.ResumeTimerUnit},
 		}, true
 	default:
 		return nil, false

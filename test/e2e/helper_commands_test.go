@@ -169,11 +169,13 @@ func acceptedHelperCommands() []acceptedCommand {
 			helper:  ublue,
 			command: ubluehelper.CommandAutoEnable,
 			args:    []string{ubluehelper.CommandAutoEnable, "--dry-run"},
-			// Both steps must appear: unmasking without enabling leaves the
-			// timer in a state the user was never shown.
+			// Every step must appear: unmasking without enabling leaves the
+			// timer in a state the user was never shown, and the resume
+			// trigger must come back with it.
 			wantStdout: []string{
-				"[DRY-RUN] would execute: systemctl [unmask",
-				"[DRY-RUN] would execute: systemctl [enable --now",
+				"[DRY-RUN] would execute: systemctl [unmask uupd.timer]",
+				"[DRY-RUN] would execute: systemctl [enable --now uupd.timer]",
+				"[DRY-RUN] would execute: systemctl [unmask uupd-resume.timer]",
 			},
 		},
 		{
@@ -182,8 +184,9 @@ func acceptedHelperCommands() []acceptedCommand {
 			command: ubluehelper.CommandAutoDisable,
 			args:    []string{ubluehelper.CommandAutoDisable, "--dry-run"},
 			wantStdout: []string{
-				"[DRY-RUN] would execute: systemctl [disable --now",
-				"[DRY-RUN] would execute: systemctl [mask",
+				"[DRY-RUN] would execute: systemctl [disable --now uupd.timer]",
+				"[DRY-RUN] would execute: systemctl [mask uupd.timer]",
+				"[DRY-RUN] would execute: systemctl [mask --now uupd-resume.timer]",
 			},
 		},
 		{

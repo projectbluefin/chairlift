@@ -24,8 +24,15 @@ import (
 )
 
 // TimerUnit is the systemd unit Universal Blue images use for unattended
-// updates.
+// updates. It is the unit whose state the switch reports.
 const TimerUnit = "uupd.timer"
+
+// ResumeTimerUnit is the second trigger of the same uupd.service: Universal
+// Blue images enable it (WantedBy suspend, hibernate, and
+// suspend-then-hibernate) so an update runs 20 minutes after every resume.
+// Turning automatic updates off must silence it too, or the switch claims
+// "off" while background updates still run after each resume.
+const ResumeTimerUnit = "uupd-resume.timer"
 
 const probeTimeout = 5 * time.Second
 

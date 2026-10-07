@@ -2,6 +2,7 @@ package ubluehelper
 
 import (
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -404,6 +405,7 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	want := [][]string{
 		{"unmask", autoupdate.TimerUnit},
 		{"enable", "--now", autoupdate.TimerUnit},
+		{"unmask", autoupdate.ResumeTimerUnit},
 	}
 	if !reflect.DeepEqual(enable, want) {
 		t.Errorf("AutoUpdateArgs(enable) = %v, want %v", enable, want)
@@ -418,6 +420,7 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	wantDisable := [][]string{
 		{"disable", "--now", autoupdate.TimerUnit},
 		{"mask", autoupdate.TimerUnit},
+		{"mask", "--now", autoupdate.ResumeTimerUnit},
 	}
 	if !reflect.DeepEqual(disable, wantDisable) {
 		t.Errorf("AutoUpdateArgs(disable) = %v, want %v", disable, wantDisable)
@@ -430,29 +433,62 @@ func TestAutoUpdateArgsHandleBothRepresentationsOfOff(t *testing.T) {
 	}
 }
 
-// Every step must name only the unattended-update timer.
-func TestAutoUpdateArgsTouchOnlyTheUpdateTimer(t *testing.T) {
+// Every step must name exactly one of the fixed unattended-update triggers,
+// and nothing else.
+func TestAutoUpdateArgsTouchOnlyTheUpdateTimers(t *testing.T) {
+	fixed := map[string]bool{autoupdate.TimerUnit: true, autoupdate.ResumeTimerUnit: true}
 	for _, command := range []string{CommandAutoEnable, CommandAutoDisable} {
 		steps, ok := AutoUpdateArgs(command)
 		if !ok {
 			t.Fatalf("AutoUpdateArgs(%q) ok = false", command)
 		}
 		for _, args := range steps {
-			named := false
+			named := 0
 			for _, arg := range args {
-				if arg == autoupdate.TimerUnit {
-					named = true
+				if fixed[arg] {
+					named++
 					continue
 				}
 				if strings.Contains(arg, ".service") || strings.Contains(arg, ".timer") {
 					t.Errorf("AutoUpdateArgs(%q) touches unit %q", command, arg)
 				}
 			}
-			if !named {
-				t.Errorf("AutoUpdateArgs(%q) step %v does not name %s", command, args, autoupdate.TimerUnit)
+			if named != 1 {
+				t.Errorf("AutoUpdateArgs(%q) step %v names %d fixed timers, want 1", command, args, named)
 			}
 		}
 	}
+}
+
+// uupd-resume.timer runs uupd.service 20 minutes after every resume. Turning
+// automatic updates off must mask (and stop) it, and turning them back on
+// must unmask it, or "off" still updates after each suspend.
+func TestAutoUpdateArgsCoverTheResumeTrigger(t *testing.T) {
+	disable, _ := AutoUpdateArgs(CommandAutoDisable)
+	if !containsStep(disable, []string{"mask", "--now", autoupdate.ResumeTimerUnit}) {
+		t.Errorf("AutoUpdateArgs(disable) = %v, does not mask --now %s", disable, autoupdate.ResumeTimerUnit)
+	}
+	enable, _ := AutoUpdateArgs(CommandAutoEnable)
+	if !containsStep(enable, []string{"unmask", autoupdate.ResumeTimerUnit}) {
+		t.Errorf("AutoUpdateArgs(enable) = %v, does not unmask %s", enable, autoupdate.ResumeTimerUnit)
+	}
+	// Enabling must not `enable` the resume timer: an image may not ship it,
+	// and `systemctl enable` of an absent unit fails after the main timer is
+	// already on.
+	for _, step := range enable {
+		if step[0] == "enable" && slices.Contains(step, autoupdate.ResumeTimerUnit) {
+			t.Errorf("AutoUpdateArgs(enable) enables %s: %v", autoupdate.ResumeTimerUnit, step)
+		}
+	}
+}
+
+func containsStep(steps [][]string, want []string) bool {
+	for _, step := range steps {
+		if reflect.DeepEqual(step, want) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestDevGroupsMatchBluefinctl(t *testing.T) {

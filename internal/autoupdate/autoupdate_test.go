@@ -85,3 +85,15 @@ func TestTimerUnitIsTheUniversalBlueUnit(t *testing.T) {
 		t.Errorf("TimerUnit = %q, want uupd.timer", TimerUnit)
 	}
 }
+
+// Universal Blue's 01-uupd.preset enables both uupd.timer and
+// uupd-resume.timer, and both start uupd.service. The switch must govern
+// every unattended trigger, so the second name is pinned too.
+func TestResumeTimerUnitIsTheUniversalBlueResumeUnit(t *testing.T) {
+	if ResumeTimerUnit != "uupd-resume.timer" {
+		t.Errorf("ResumeTimerUnit = %q, want uupd-resume.timer", ResumeTimerUnit)
+	}
+	if ResumeTimerUnit == TimerUnit {
+		t.Error("ResumeTimerUnit must differ from TimerUnit")
+	}
+}
