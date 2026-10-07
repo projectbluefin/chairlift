@@ -609,8 +609,10 @@ An agent must not break these:
   snapshot.) Roll Back is
   different: `bootc rollback` toggles the selected deployment, so a successful
   live click completes its gate and leaves its button insensitive; only a
-  failure or preview resets it. `internal/views/actionstate`'s wiring tests
-  guard both lifetimes.
+  failure or preview resets it. A live success then swaps in a **Restart now**
+  button (when the helper supports `restart`), because a queued rollback is
+  not a staged deployment and the Updates page offers no restart for it
+  (#520). `internal/views/actionstate`'s wiring tests guard both lifetimes.
   Dedicated staging, a live unified run whose operating-system source
   completed, and a live channel or driver switch refresh the changelog's
   Compare references from observed status (a switch also re-checks, so the

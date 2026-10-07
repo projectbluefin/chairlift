@@ -178,7 +178,10 @@ type UserHome struct {
 	bootcRollbackGroup *adw.PreferencesGroup
 	bootcRollbackRow   *adw.ActionRow
 	bootcRollbackBtn   *gtk.Button
-	bootcRollbackGate  actionstate.Gate
+	// Shown in place of Roll Back once a live rollback is queued, because
+	// the rollback only takes effect at the next boot (#520).
+	bootcRestartBtn   *gtk.Button
+	bootcRollbackGate actionstate.Gate
 
 	// Free up space admits one cleanup run at a time.
 	freeUpSpaceGate actionstate.Gate

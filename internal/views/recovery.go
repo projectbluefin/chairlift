@@ -117,6 +117,15 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 	}
 	uh.bootcRollbackBtn.ConnectClicked(&rollbackClickedCb)
 	uh.bootcRollbackRow.AddSuffix(&uh.bootcRollbackBtn.Widget)
+	uh.bootcRestartBtn = gtk.NewButtonWithLabel("Restart now")
+	uh.bootcRestartBtn.SetValign(gtk.AlignCenterValue)
+	uh.bootcRestartBtn.AddCssClass("suggested-action")
+	uh.bootcRestartBtn.SetVisible(false)
+	restartClickedCb := func(gtk.Button) {
+		uh.onBootcRollbackRestartClicked()
+	}
+	uh.bootcRestartBtn.ConnectClicked(&restartClickedCb)
+	uh.bootcRollbackRow.AddSuffix(&uh.bootcRestartBtn.Widget)
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
@@ -278,8 +287,9 @@ func (uh *UserHome) recoveryProvidersAvailable() bool {
 		uh.groupEnabled("updates_page", "bootc_updates_group")
 }
 
-// onBootcRollbackClicked stages a rollback to the previous deployment. It
-// does not restart: rolling back and restarting are separate decisions.
+// onBootcRollbackClicked queues a rollback to the previous deployment. It
+// does not restart: rolling back and restarting are separate decisions, so
+// a live success swaps in a Restart now button rather than rebooting.
 func (uh *UserHome) onBootcRollbackClicked() {
 	if !uh.bootcRollbackGate.TryStart() {
 		return
@@ -308,11 +318,34 @@ func (uh *UserHome) onBootcRollbackClicked() {
 				uh.bootcRollbackGate.Complete()
 				button.SetSensitive(false)
 				row.SetSubtitle(pageview.BootcRollbackResultSubtitle())
+				if ublue.StatusCached().Supports(ubluehelper.CommandRestart) {
+					button.SetVisible(false)
+					uh.bootcRestartBtn.SetVisible(true)
+				}
 			} else {
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
+		})
+	}()
+}
+
+// onBootcRollbackRestartClicked restarts into the queued rollback through the
+// helper's fixed restart command, the same one Updates offers for a staged
+// deployment.
+func (uh *UserHome) onBootcRollbackRestartClicked() {
+	button := uh.bootcRestartBtn
+	button.SetSensitive(false)
+	go func() {
+		ctx, cancel := ublue.DefaultContext()
+		defer cancel()
+		err := ublue.Restart(ctx)
+		sgtk.RunOnMainThread(func() {
+			button.SetSensitive(true)
+			if err != nil {
+				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
+			}
 		})
 	}()
 }
