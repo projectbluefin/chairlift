@@ -98,6 +98,26 @@ func TestGateResetAndCompletion(t *testing.T) {
 	}
 }
 
+func TestGateRunningOnlyWhileHeld(t *testing.T) {
+	var gate Gate
+	if gate.Running() {
+		t.Fatal("zero-value gate reports running")
+	}
+	gate.TryStart()
+	if !gate.Running() {
+		t.Fatal("started gate does not report running")
+	}
+	gate.Reset()
+	if gate.Running() {
+		t.Fatal("reset gate still reports running")
+	}
+	gate.TryStart()
+	gate.Complete()
+	if gate.Running() {
+		t.Fatal("completed gate still reports running")
+	}
+}
+
 func TestRefreshGateAllowsOnlyTheNewestGeneration(t *testing.T) {
 	var gate RefreshGate
 	if gate.IsCurrent(0) {

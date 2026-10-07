@@ -695,6 +695,9 @@ re-reads after mutations to detect rejected changes. Failed verification leaves
 the switch insensitive; missing tools, sessions and extensions are explained.
 Default presentation is Tailscale on and Sync Folder off, but existing GNOME
 state always wins. OS-image extension defaults remain owned by the image.
+Sync Folder is off by default because it is early (#449), not locked: its
+copy says "Experimental" and its switch enables the extension like any other,
+so no description may call a switchable integration "not ready".
 
 ### Custom Command Menu developer visibility (`internal/devmenu`)
 

@@ -23,10 +23,13 @@ type Extension struct {
 }
 
 // Catalog returns only the extension IDs shipped by Dakota and Bluefin Bling.
+// Every entry is switchable, so no description may call its feature unusable.
+// Sync Folder is off by default because it is early (#449), not because the
+// switch should refuse it; its copy says experimental rather than "not ready".
 func Catalog() []Extension {
 	return []Extension{
 		{"tailscale-gnome-qs@tailscale-qs.github.io", "Tailscale Integration", "Show Tailscale controls in GNOME Quick Settings.", true},
-		{"syncthing-toggle@projectbluefin.io", "Sync Folder Integration", "Show Sync Folder controls in GNOME Quick Settings. This feature is not ready yet.", false},
+		{"syncthing-toggle@projectbluefin.io", "Sync Folder Integration", "Experimental: show Sync Folder controls in GNOME Quick Settings.", false},
 	}
 }
 
