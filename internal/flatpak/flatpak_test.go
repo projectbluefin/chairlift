@@ -648,6 +648,34 @@ func TestParseUpdateList(t *testing.T) {
 	}
 }
 
+// fakeFlatpakLog installs a flatpak stand-in that appends each invocation's
+// argument line to a log and answers `remotes` with remotes.
+func fakeFlatpakLog(t *testing.T, remotes string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "log")
+	source := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CHAIRLIFT_FLATPAK_LOG\"\n" +
+		"if [ \"$1\" = remotes ]; then printf '" + remotes + "'; fi\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("CHAIRLIFT_FLATPAK_LOG", logPath)
+	return logPath
+}
+
+func loggedCalls(t *testing.T, logPath string) []string {
+	t.Helper()
+	data, err := os.ReadFile(logPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	return strings.Split(strings.TrimSpace(string(data)), "\n")
+}
+
 func TestCommandTimeout(t *testing.T) {
 	if len(stateChangingCommands) != 4 {
 		t.Fatalf("stateChangingCommands has %d entries, want 4: update this test when the map changes", len(stateChangingCommands))
