@@ -98,7 +98,7 @@ Feature: Livery
     And no icon was written under the home directory
     And the "Cloud Native Computing Foundation" mark in the Livery "Top Bar Icon" gallery is selected
     And the "GNOME Foundation" mark in the Livery "Top Bar Icon" gallery is not selected
-    And a toast says "[DRY-RUN] Preview: the panel icon would change — no changes made"
+    And a toast says "[DRY-RUN] Preview: the top bar icon would change — no changes made"
 
   @stub.livery-tools @stub.livery-panel-on
   Scenario: Escape closes the chooser from its search field
@@ -179,7 +179,7 @@ Feature: Livery
     And the "Rotate at Login" switch in the Livery "Top Bar Icon" section is off
     And no Livery command changed any setting
     And no rotation unit was written under the home directory
-    And a toast says "[DRY-RUN] Preview: rotating the panel icon at login would be turned on — no changes made"
+    And a toast says "[DRY-RUN] Preview: rotating the top bar icon at login would be turned on — no changes made"
 
   @stub.livery-tools @stub.livery-offline
   Scenario: A profile picture that cannot be downloaded is never offered for Apply

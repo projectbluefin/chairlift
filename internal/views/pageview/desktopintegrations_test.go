@@ -21,12 +21,12 @@ func TestDesktopExtensionRowNeverShowsAnUnobservedEnable(t *testing.T) {
 			{
 				name: "load error",
 				err:  errors.New("gnome-extensions: not found"),
-				want: DesktopIntegrationRow{Subtitle: "Requires GNOME Shell and the gnome-extensions tool."},
+				want: DesktopIntegrationRow{Subtitle: "Only available on the GNOME desktop."},
 			},
 			{
 				name:   "not installed",
 				states: map[string]shellextensions.State{},
-				want:   DesktopIntegrationRow{Subtitle: "This GNOME extension is not installed."},
+				want:   DesktopIntegrationRow{Subtitle: "Not installed on this computer."},
 			},
 			{
 				name:   "installed and enabled",

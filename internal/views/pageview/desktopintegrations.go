@@ -19,11 +19,11 @@ type DesktopIntegrationRow struct {
 // is the error from shellextensions.Load; states is its result.
 func DesktopIntegration(extension shellextensions.Extension, states map[string]shellextensions.State, loadErr error) DesktopIntegrationRow {
 	if loadErr != nil {
-		return DesktopIntegrationRow{Subtitle: "Requires GNOME Shell and the gnome-extensions tool."}
+		return DesktopIntegrationRow{Subtitle: "Only available on the GNOME desktop."}
 	}
 	state := states[extension.UUID]
 	if !state.Installed {
-		return DesktopIntegrationRow{Subtitle: "This GNOME extension is not installed."}
+		return DesktopIntegrationRow{Subtitle: "Not installed on this computer."}
 	}
 	return DesktopIntegrationRow{Active: state.Enabled, Sensitive: true, Subtitle: extension.Description}
 }
