@@ -27,7 +27,8 @@ func TestSingleAppUpdateVerifiesTheRequestedIdentityInItsScope(t *testing.T) {
 				dir := t.TempDir()
 				script := "#!/bin/sh\ncase \"$1\" in\n" +
 					"update) [ \"$3\" = \"--" + scope + "\" ] && [ \"$4\" = org.mozilla.firefox ] || exit 1 ;;\n" +
-					"remote-ls) printf '%s\\n' '" + test.pending + "' ;;\n" +
+					"remotes) [ \"$2\" = \"--" + scope + "\" ] && echo flathub || exit 1 ;;\n" +
+					"remote-ls) [ \"$6\" = flathub ] && printf '%s\\n' '" + test.pending + "' ;;\n" +
 					"*) exit 1 ;;\nesac\n"
 				if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(script), 0o755); err != nil {
 					t.Fatal(err)

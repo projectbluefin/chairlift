@@ -86,11 +86,9 @@ func readComposefsStatus(fsys fs.FS) (*Status, error) {
 	}
 	if rollbackID != "" {
 		if rollback, err := readDeployment(fsys, rollbackID); err == nil {
-			// Its version label is only readable as root. The day it was
-			// deployed identifies it for a person choosing to go back.
-			if info, err := fs.Stat(fsys, originPath(rollbackID)); err == nil && !info.ModTime().IsZero() {
-				rollback.Image.Timestamp = info.ModTime().UTC().Format(time.RFC3339)
-			}
+			// Its version label and image creation time are only readable as
+			// root. The origin's mtime is the deploy day, not a release date,
+			// so Timestamp stays empty rather than mislabel it (#521).
 			status.Status.Rollback = rollback
 		}
 	}

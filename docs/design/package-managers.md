@@ -278,7 +278,7 @@ is stamped from the query, not inferred from optional parsed columns.
 | --- | --- |
 | `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version` |
 | `ListUserRuntimes()` / `ListSystemRuntimes()` | Same query with `--runtime` |
-| `ListUpdates(ctx, user)` | `remote-ls --updates --app --columns=name,application,version` in the selected scope |
+| `ListUpdates(ctx, user)` | `remotes --columns=name,options`, then `remote-ls --updates --app --columns=name,application,version <remote>` per enabled remote, in the selected scope |
 | `Install(appID, user)` / `InstallFromRemote(appID, remote, user)` | `install -y` in explicit scope, optionally naming a remote |
 | `Uninstall(appID, user)` | `uninstall -y` in explicit scope |
 | `Update(ctx, appID, user)` | `update -y` in explicit scope; empty ID updates that scope |
@@ -289,10 +289,30 @@ The update inventory deliberately lists applications only. A runtime extension
 such as Gaming's MangoHud requires the separate runtime inventory; it must
 not be classified absent from an application-only query.
 
+`ListUpdates` queries each enabled remote separately because a remote-less
+`remote-ls --updates` fails the whole installation when any one remote is
+unreachable: a remote left behind by an uninstalled application (issue #471)
+hid every other remote's updates and failed the Updates check, although
+`flatpak update` itself still succeeded. A remote whose query fails is checked
+against `list --app --columns=origin`: when no installed application in that
+scope comes from it, it is logged and ignored; otherwise it is reported as a
+`*flatpak.RemoteError` naming that remote and installation. The origin check
+matches the inventory's `--app` filter on purpose: a remote that still serves
+only runtimes — the usual leftover when an application is uninstalled without
+`--unused` — can hide no update this inventory would list, so it must not
+fail the check either. A cancelled
+caller context or a missing executable still aborts the whole query. The
+healthy remotes' updates are returned alongside that error, but the
+Applications source's check still fails: the coordinator keeps the last known
+inventory on any check error rather than adopting a partial one. The
+post-apply reconciliation and the single-item verification read through the
+same function, so an ignored remote cannot fail them either.
+
 Install, uninstall, remove and update are mutations: 30-minute timeout,
 preview-skipped dispatch, successful output discarded and bounded diagnostic
 tails. Other commands get 30 seconds and full parser output. `ListUpdates`
-and `Update` accept caller cancellation and apply their read/mutation budgets;
+and `Update` accept caller cancellation and apply their read/mutation budgets
+(`ListUpdates` per query, so one slow remote cannot starve the others);
 other exported operations own their contexts. Availability runs `--version`
 under five seconds, with a cached variant for providers.
 
@@ -351,7 +371,7 @@ state through the `hostRoot` filesystem seam:
 | Staged deployment | `depl_id` in `/run/composefs/staged-deployment` |
 | Reference and manifest digest | `/sysroot/state/deploy/<id>/<id>.origin` |
 | Booted version | `IMAGE_VERSION`, falling back to `VERSION_ID`, in `/usr/lib/os-release` |
-| Rollback identity/date | Newest non-booted/non-staged origin; its modification time |
+| Rollback identity | Newest non-booted/non-staged origin by modification time |
 
 A broken booted/staged read is an error, not evidence the system is current.
 Deployment IDs are validated before building paths. A missing/unreadable
@@ -366,7 +386,11 @@ against **both** booted and staged digests. No difference means no pending
 update. A missing platform digest or an untagged/digest reference is an error.
 When present, the created annotation supplies the available build date.
 Staged/rollback version labels unavailable to the account remain absent rather
-than introducing a privileged read.
+than introducing a privileged read. The rollback's origin mtime only selects
+it: it is the deploy time, not a release date, so the rollback carries no
+timestamp and the Roll Back row reads "Return to the previous version the
+next time you restart" — a row shown only when the deployment exists never
+says nothing is kept (#521).
 
 `Status.Booted()` inspects the booted entry; exit 0 alone is not the gate.
 `IsBootcBootedCached()` reads once under five seconds. A sentinel such as

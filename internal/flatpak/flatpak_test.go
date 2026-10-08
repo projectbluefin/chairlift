@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -108,6 +107,7 @@ func TestCommandWrappersUseExpectedArguments(t *testing.T) {
 
 	body := `case "$1" in
 list) printf 'Firefox\torg.mozilla.firefox\t120.0\n' ;;
+remotes) printf 'flathub\n' ;;
 remote-ls) printf 'Firefox\torg.mozilla.firefox\t121.0\n' ;;
 esac`
 	capture := installCapturingFlatpak(t, body)
@@ -181,7 +181,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user"},
+			want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user", "flathub"},
 		},
 		{name: "remove all user apps", run: RemoveAllUser, want: []string{"uninstall", "--user", "--all", "-y"}},
 	}
@@ -333,28 +333,184 @@ func TestDryRunSkipsEveryStateChangingCommand(t *testing.T) {
 
 func TestUpdateListArgs(t *testing.T) {
 	tests := []struct {
-		name        string
-		user        bool
-		wantFlag    string
-		notWantFlag string
+		name string
+		user bool
+		want []string
 	}{
-		{name: "user installation", user: true, wantFlag: "--user", notWantFlag: "--system"},
-		{name: "system installation", user: false, wantFlag: "--system", notWantFlag: "--user"},
+		{name: "user installation", user: true, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user", "flathub"}},
+		{name: "system installation", user: false, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--system", "flathub"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			args := updateListArgs(tt.user)
-
-			for _, want := range []string{"remote-ls", "--updates", "--app", tt.wantFlag} {
-				if !slices.Contains(args, want) {
-					t.Errorf("updateListArgs(%v) = %v, missing %q", tt.user, args, want)
-				}
-			}
-			if slices.Contains(args, tt.notWantFlag) {
-				t.Errorf("updateListArgs(%v) = %v, must not contain %q", tt.user, args, tt.notWantFlag)
+			if got := updateListArgs(tt.user, "flathub"); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("updateListArgs(%v, flathub) = %v, want %v", tt.user, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseUpdateRemotesSkipsOnlyDisabledRemotes(t *testing.T) {
+	output := "flathub\n" +
+		"testhub\toci,no-gpg-verify\n" +
+		"goose-origin\tdisabled,no-enumerate,no-gpg-verify\n" +
+		"flathub-beta\tno-enumerate\n" +
+		"\n"
+	want := []string{"flathub", "testhub", "flathub-beta"}
+	if got := parseUpdateRemotes(output); !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseUpdateRemotes = %q, want %q", got, want)
+	}
+}
+
+// fakeRemotesFlatpak installs a flatpak stand-in for the per-remote update
+// query of issue #471. It lists the user remotes flathub, test-center, and
+// fedora; flathub offers a Firefox update, fedora a GIMP update, and
+// test-center fails like a remote whose host no longer resolves. appOrigins
+// and runtimeOrigins are the origin remotes of the installed applications
+// and runtimes, which `list --columns=origin` reports according to its
+// `--app`/`--runtime` filter, as flatpak does. Every invocation is appended
+// to the returned log.
+func fakeRemotesFlatpak(t *testing.T, appOrigins, runtimeOrigins string) string {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "log")
+	source := `#!/bin/sh
+printf '%s\n' "$*" >> "$CHAIRLIFT_FLATPAK_LOG"
+case "$1" in
+remotes) printf 'flathub\ntest-center\tno-gpg-verify\nfedora\n' ;;
+list)
+	case "$*" in
+	*--app*) printf '` + appOrigins + `' ;;
+	*--runtime*) printf '` + runtimeOrigins + `' ;;
+	*) printf '` + appOrigins + runtimeOrigins + `' ;;
+	esac ;;
+remote-ls)
+	case "$6" in
+	flathub) printf 'Firefox\torg.mozilla.firefox\t131.0\n' ;;
+	fedora) printf 'GIMP\torg.gimp.GIMP\t3.0\n' ;;
+	*) echo "error: Unable to load summary from remote $6: Could not resolve hostname" >&2; exit 1 ;;
+	esac ;;
+*) exit 1 ;;
+esac
+`
+	if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("CHAIRLIFT_FLATPAK_LOG", logPath)
+	return logPath
+}
+
+var healthyRemoteUpdates = []UpdateInfo{
+	{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "131.0", Installation: "user"},
+	{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "3.0", Installation: "user"},
+}
+
+// Issue #471: a remote left behind after its application was uninstalled
+// made `remote-ls --updates` fail for the whole installation, so the update
+// check failed. A broken remote nothing installed comes from is ignored, and
+// every healthy remote's updates are still listed.
+func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
+	dryrun.Set(false)
+	logPath := fakeRemotesFlatpak(t, `flathub\nflathub\nfedora\n`, `flathub\n`)
+
+	updates, err := ListUpdates(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListUpdates error = %v, want the unused broken remote ignored", err)
+	}
+	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
+		t.Fatalf("ListUpdates = %#v, want %#v", updates, healthyRemoteUpdates)
+	}
+	want := []string{
+		"remotes --user --columns=name,options",
+		"remote-ls --updates --app --columns=name,application,version --user flathub",
+		"remote-ls --updates --app --columns=name,application,version --user test-center",
+		"remote-ls --updates --app --columns=name,application,version --user fedora",
+		"list --user --app --columns=origin",
+	}
+	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListUpdates ran %q, want %q", got, want)
+	}
+}
+
+// The usual leftover of an application uninstalled without `--unused` is a
+// remote that still serves runtimes. The update inventory lists applications
+// only, so no update it could show comes from that remote: it is ignored like
+// an unused one rather than failing the check.
+func TestListUpdatesIgnoresABrokenRemoteServingOnlyRuntimes(t *testing.T) {
+	dryrun.Set(false)
+	fakeRemotesFlatpak(t, `flathub\nfedora\n`, `flathub\ntest-center\n`)
+
+	updates, err := ListUpdates(context.Background(), true)
+	if err != nil {
+		t.Fatalf("ListUpdates error = %v, want the runtime-only broken remote ignored", err)
+	}
+	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
+		t.Fatalf("ListUpdates = %#v, want %#v", updates, healthyRemoteUpdates)
+	}
+}
+
+// A broken remote an installed application still comes from hides that
+// application's updates, so it stays an error naming that remote only,
+// alongside the updates the healthy remotes reported.
+func TestListUpdatesReportsABrokenRemoteInUse(t *testing.T) {
+	dryrun.Set(false)
+	fakeRemotesFlatpak(t, `flathub\ntest-center\nfedora\n`, `flathub\n`)
+
+	updates, err := ListUpdates(context.Background(), true)
+	var remoteErr *RemoteError
+	if !errors.As(err, &remoteErr) {
+		t.Fatalf("ListUpdates error = %v, want a *RemoteError", err)
+	}
+	if remoteErr.Remote != "test-center" || remoteErr.Installation != "user" {
+		t.Fatalf("RemoteError = %+v, want test-center in the user installation", remoteErr)
+	}
+	for _, want := range []string{`"test-center"`, "user installation", "Could not resolve hostname"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+	for _, healthy := range []string{"flathub", "fedora"} {
+		if strings.Contains(err.Error(), `"`+healthy+`"`) {
+			t.Errorf("error %q names healthy remote %q", err, healthy)
+		}
+	}
+	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
+		t.Fatalf("ListUpdates = %#v, want the healthy remotes' updates %#v", updates, healthyRemoteUpdates)
+	}
+}
+
+// When the origins cannot be read, no failed remote can be shown unused, so
+// it is still reported.
+func TestListUpdatesReportsABrokenRemoteWhenOriginsAreUnreadable(t *testing.T) {
+	dryrun.Set(false)
+	dir := t.TempDir()
+	source := "#!/bin/sh\ncase \"$1\" in\nremotes) printf 'test-center\\n' ;;\n*) echo \"$1 failed\" >&2; exit 1 ;;\nesac\n"
+	if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	t.Setenv("PATH", dir)
+
+	_, err := ListUpdates(context.Background(), false)
+	var remoteErr *RemoteError
+	if !errors.As(err, &remoteErr) || remoteErr.Remote != "test-center" || remoteErr.Installation != "system" {
+		t.Fatalf("ListUpdates error = %v, want test-center reported in the system installation", err)
+	}
+	if !strings.Contains(err.Error(), "list failed") {
+		t.Fatalf("ListUpdates error = %v, want the origin listing failure too", err)
+	}
+}
+
+func TestListUpdatesWithNoRemotesQueriesNothing(t *testing.T) {
+	dryrun.Set(false)
+	logPath := fakeFlatpakLog(t, "")
+
+	updates, err := ListUpdates(context.Background(), true)
+	if err != nil || len(updates) != 0 {
+		t.Fatalf("ListUpdates = %v, %v; want no updates and no error", updates, err)
+	}
+	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, []string{"remotes --user --columns=name,options"}) {
+		t.Fatalf("ListUpdates ran %q, want only the remote listing", got)
 	}
 }
 

@@ -64,6 +64,19 @@ func TestCatalogIdentifiersAndPathsAreUnique(t *testing.T) {
 	}
 }
 
+// TestCatalogSpeciesAreUnique keeps the chooser from offering one dinosaur
+// twice under two names (#536: "Torosaurus" and "Bob" were both
+// Torosaurus latus).
+func TestCatalogSpeciesAreUnique(t *testing.T) {
+	seen := make(map[string]string)
+	for _, entry := range Catalog() {
+		if previous, ok := seen[entry.Species]; ok {
+			t.Errorf("species %q is listed by both %q and %q", entry.Species, previous, entry.ID)
+		}
+		seen[entry.Species] = entry.ID
+	}
+}
+
 func TestCatalogPathsAreLiteralRepositoryPaths(t *testing.T) {
 	for _, entry := range Catalog() {
 		switch {

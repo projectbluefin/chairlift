@@ -69,7 +69,23 @@ state='{state}'
 printf '%s\\n' "$*" >> "$state/flatpak.calls"
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
+# The update check queries each remote separately (issue #471): every
+# installation has flathub, which its installed refs come from, and with
+# flatpak-leftover-remote also test-center, which is unreachable and serves
+# nothing installed.
+remotes)
+    echo flathub
+    [ -f "$state/flatpak-leftover-remote" ] && echo test-center
+    exit 0 ;;
+list)
+    case "$*" in *--columns=origin*) echo flathub ;; esac
+    exit 0 ;;
 remote-ls)
+    for arg in "$@"; do remote=$arg; done
+    if [ "$remote" = test-center ]; then
+        echo "error: Unable to load summary from remote test-center: Could not resolve hostname" >&2
+        exit 1
+    fi
     scope=system
     for arg in "$@"; do [ "$arg" = "--user" ] && scope=user; done
     if [ -f "$state/flatpak-remote-ls-$scope.hold" ]; then
@@ -151,6 +167,15 @@ def flatpak_check_fails(context):
     """Flatpak whose update queries both fail, as with an unreachable remote."""
     for scope in ("user", "system"):
         write_state(context, f"flatpak-remote-ls-{scope}.fail", "error: Unable to load summary from remote flathub\n")
+    _install_flatpak(context)
+
+
+@stub("updates-flatpak-leftover-remote")
+def flatpak_leftover_remote(context):
+    """Flatpak with Firefox pending on flathub beside a leftover, unreachable
+    test-center remote that no installed ref comes from (issue #471)."""
+    write_state(context, "flatpak-remote-ls-user", FIREFOX_UPDATE)
+    write_state(context, "flatpak-leftover-remote", "")
     _install_flatpak(context)
 
 

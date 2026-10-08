@@ -337,7 +337,11 @@ func gamingApps(count int) string {
 }
 
 // BootcRollbackRow returns the previous-version row text. version and
-// timestamp describe what the host would return to; either may be empty.
+// timestamp describe the deployment the host would return to; either may be
+// empty. The caller shows the row only once bootc reports that deployment,
+// so empty arguments mean its details are unreadable, never that nothing is
+// kept: a composefs host reads neither the rollback's version label nor its
+// image creation time without root (#521).
 //
 // It is deliberately a single row naming one destination, not a history
 // browser: going back has exactly one target — the version the host still
@@ -347,11 +351,7 @@ func BootcRollbackRow(version, timestamp string) Row {
 	row := Row{Title: "Go back to the previous version"}
 	date := formatReleaseDate(timestamp)
 	switch {
-	case version == "" && timestamp == "":
-		row.Subtitle = "No previous version is kept on this computer"
 	case version == "" && date == "":
-		// A destination exists; only its date is unreadable. Saying
-		// nothing is kept would be the one wrong answer here.
 		row.Subtitle = "Return to the previous version the next time you restart"
 	case version == "":
 		row.Subtitle = fmt.Sprintf("Return to the version from %s the next time you restart", date)
