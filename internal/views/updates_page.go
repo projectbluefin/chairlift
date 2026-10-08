@@ -415,7 +415,6 @@ func (uh *UserHome) onBootcStageClicked() {
 		// Re-read status so the subtitle and badge reflect reality
 		// (staged vs already-current) rather than guessing from output.
 		// The System version readout is re-rendered from the same read.
-		versionGeneration := uh.systemVersionRefresh.Begin()
 		statusCtx, statusCancel := bootc.DefaultContext()
 		status, statusErr := bootc.GetStatus(statusCtx)
 		statusCancel()
@@ -449,6 +448,7 @@ func (uh *UserHome) onBootcStageClicked() {
 
 			if statusErr == nil {
 				uh.refreshChangelogAvailability(status)
+				versionGeneration := uh.systemVersionRefresh.Begin()
 				uh.renderSystemVersion(versionGeneration, status)
 			}
 			if statusErr != nil {
