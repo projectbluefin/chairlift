@@ -735,7 +735,7 @@ surface in three layers that must stay separate:
   whose policy has `Configured` false reads "Disabled by administrator"; one
   that is configured but not `Available` — the provider's own `Available`
   probe says no, or `Policy.Supported` is false because the capability floor
-  cannot back it — reads "Not available on this system". `ItemRows` decides
+  cannot back it — reads "Not available on this computer". `ItemRows` decides
   which pending items get a child row: the Operating system source's one pending
   item is its deployment, so that source shows "Update available: <booted> → <new>"
   on its own row and gets no child row repeating its name. The fold is keyed on

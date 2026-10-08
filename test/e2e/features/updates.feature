@@ -84,7 +84,7 @@ Feature: Updates
   @stub.updates-flatpak-leftover-remote @stub.updates-brew-current
   Scenario: An unreachable remote nothing installed uses does not fail the check
     Given ChairLift is running
-    Then the Updates status reads "Updates available"
+    Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
     And the "Firefox" row says "Available: 131.0"
     And I do not see "Unable to load summary"
