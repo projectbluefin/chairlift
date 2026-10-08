@@ -306,6 +306,18 @@ User namespaces: operation not permitted
 	}
 }
 
+func TestPrerequisiteErrorKeepsRawErrorAndPlainMessage(t *testing.T) {
+	raw := errors.New("nsl [doctor]: exit status 1: MISSING ovmf")
+	err := error(&PrerequisiteError{Message: NeedsPrerequisite, Err: raw})
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != NeedsPrerequisite {
+		t.Fatalf("errors.As(*PrerequisiteError) = %+v", prerequisite)
+	}
+	if !errors.Is(err, raw) || err.Error() != raw.Error() {
+		t.Fatalf("PrerequisiteError lost the raw error: %v", err)
+	}
+}
+
 func TestParseNSLListCases(t *testing.T) {
 	t.Run("empty output", func(t *testing.T) {
 		output := "No nsl VM yet\nNo machines; create one with nsl create NAME --distro DISTRO:RELEASE\n"

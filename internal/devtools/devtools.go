@@ -43,6 +43,18 @@ type Tool struct {
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
 
+// PrerequisiteError means the host lacks something WSL Mode needs, so trying
+// again will not help. Message is a plain sentence for the user; Err keeps the
+// raw command output for the log.
+type PrerequisiteError struct {
+	Message string
+	Err     error
+}
+
+func (e *PrerequisiteError) Error() string { return e.Err.Error() }
+
+func (e *PrerequisiteError) Unwrap() error { return e.Err }
+
 // Plain prerequisite sentences shown on the WSL Mode row. ParseNSLDoctor and
 // the view share them so the same missing piece always reads the same way.
 const (
@@ -426,7 +438,10 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		}
 		stage("Checking this computer…")
 		// command's error already carries the doctor output for the log.
-		if _, err := command(ctx, false, "nsl", "doctor"); err != nil {
+		if output, err := command(ctx, false, "nsl", "doctor"); err != nil {
+			if actionable, _ := ParseNSLDoctor(output); actionable != "" {
+				return &PrerequisiteError{Message: actionable, Err: err}
+			}
 			return err
 		}
 		return startNSL(ctx, stage)

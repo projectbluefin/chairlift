@@ -432,7 +432,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 				if errors.Is(err, devtools.ErrNewLogin) {
 					item.row.SetSubtitle(pageview.KVMAccessNeedsNewLogin)
 				} else if err != nil && !pkexec.IsAuthDismissed(err) {
-					item.row.SetSubtitle(developerOptionFailure(item, enabled))
+					item.row.SetSubtitle(developerOptionFailure(item, enabled, err))
 				} else if item.kind == "tool" && stateErr == nil && !packagePresent(packages, item.tool.Package) {
 					item.row.SetSubtitle("Couldn't confirm it installed. Try again.")
 				}
@@ -440,9 +440,9 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 			if errors.Is(err, devtools.ErrNewLogin) {
 				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
 			} else if err != nil && item.kind == "tool" {
-				uh.toastAdder.ShowErrorToast(developerOptionFailure(item, enabled))
+				uh.toastAdder.ShowErrorToast(developerOptionFailure(item, enabled, err))
 			} else if err != nil {
-				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, developerOptionFailure(item, enabled)))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, developerOptionFailure(item, enabled, err)))
 			}
 			if !dryrun.Enabled() && err == nil {
 				go uh.loadHomebrewPackages()
@@ -454,8 +454,13 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 
 // developerOptionFailure is the plain sentence for a developer option that
 // could not do what was asked. The raw error names commands and is logged by
-// onDeveloperOption instead.
-func developerOptionFailure(item *developerOptionRow, enabled bool) string {
+// onDeveloperOption instead; a missing prerequisite shows its own sentence,
+// since trying again would not help.
+func developerOptionFailure(item *developerOptionRow, enabled bool, err error) string {
+	var prerequisite *devtools.PrerequisiteError
+	if errors.As(err, &prerequisite) {
+		return prerequisite.Message
+	}
 	name := "WSL Mode"
 	switch item.kind {
 	case "tool":
