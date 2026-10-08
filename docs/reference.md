@@ -90,7 +90,7 @@ Its sidebar title is "Apps"; `applications_page` is the configuration key.
 | Group | Key | Description |
 |-------|-----|-------------|
 | App collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
-| Homebrew packages | `brew_group` | Homebrew applications (installed casks), then Command line tools (explicitly requested formulae), then Packages from Homebrew containing the Brewfile exporter; uninstall and formula pin/unpin actions |
+| Homebrew packages | `brew_group` | Installed apps (installed casks), then Command line tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
 
 Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
 do not appear in the inventory. Apps has no Flatpak inventory, external catalog
@@ -140,11 +140,11 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Desktop integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming Mode | `gaming_group` | Selectively installs/removes chosen user-scope Flatpak applications and runtime extensions, adding a user-scope Flathub remote first when the account has none (images often configure Flathub system-wide only), reports installed scopes and persistent partial failures, and preserves system-scope entries; shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Gaming Mode | `gaming_group` | Selectively installs chosen Flatpak applications and runtime extensions system-wide (`flatpak install --system`) from the system Flathub remote Bluefin-family images configure, authorized by Flatpak's own PolicyKit rather than by ChairLift; reports user and system installed scopes and persistent partial failures. A copy an earlier release installed per-user counts as installed. Remove Selected removes each selected app from every scope it is installed in, after a confirmation that system-wide copies go for every account, except a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`), which is left in place; shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. A family may be turned on only when its web administration is authenticated or absent ([ADR-0016](adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting new enables are locked and the row says what is needed. Existing units remain manageable for disabling. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 
-Developer options include WSL Mode (persistent Linux machines in systemd-vmspawn
-via nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
+Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
+nsl by default, or Ubuntu LTS in Lima). nsl needs an x86-64 Linux host;
 Lima supports amd64 and arm64. Both require hardware virtualization and
 `/dev/kvm` access. The group also offers the base image's
 Docker daemon, and individually chosen IDEs/editors with one JetBrains Toolbox
@@ -154,16 +154,18 @@ the real daemon socket to be accessible, not just installed CLI tools. These
 privileged operations use only `kvm-enable`, `docker-enable`, and
 `docker-disable` with fixed argv and the account derived from `PKEXEC_UID`.
 
-The **WSL Backend** chooser changes the current window's backend without rewriting
+The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
 YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
-with no nsl machine resolves the nsl default to Lima.
+with no ChairLift nsl machine resolves the nsl default to Lima. nsl keeps using
+the `debian` machine an older ChairLift created instead of creating `ubuntu`
+beside it, and the chooser then says the built-in engine runs Debian.
 
 `dx_group` takes `wsl_backend`, the WSL Mode backend: `nsl` (default) or
 `lima`; any other value is a configuration error. It also supports optional steps that run off the GTK main
 thread after a confirmed live enable, and never on a disable, a page restore, a
 failed helper call, or a `--dry-run` preview:
 
-- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a user-scope Flatpak from Flathub. No `pkexec`, no root: the same unprivileged posture as gaming mode
+- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: like gaming mode, the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
 - `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
 
 The two outcomes are reported separately from developer access. The privileged

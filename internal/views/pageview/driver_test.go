@@ -43,7 +43,7 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 		},
 		{
 			name:    "nothing detected",
-			wantHas: "No graphics hardware was detected",
+			wantHas: "No graphics hardware found.",
 		},
 	}
 
@@ -66,10 +66,10 @@ func TestGraphicsDriverRowCoversEveryState(t *testing.T) {
 // your No graphics hardware detected graphics" (#489).
 func TestGraphicsDriverRowWithoutDetectedHardware(t *testing.T) {
 	none := (gpu.Set{}).Describe()
-	if got, want := GraphicsDriverRow("Standard", none, "").Subtitle, "Using the Standard driver"; got != want {
+	if got, want := GraphicsDriverRow("Standard", none, "").Subtitle, "Using the Standard driver."; got != want {
 		t.Errorf("GraphicsDriverRow(%q, %q, \"\").Subtitle = %q, want %q", "Standard", none, got, want)
 	}
-	if got, want := GraphicsDriverRow("", none, "").Subtitle, "No graphics hardware was detected"; got != want {
+	if got, want := GraphicsDriverRow("", none, "").Subtitle, "No graphics hardware found."; got != want {
 		t.Errorf("GraphicsDriverRow(\"\", %q, \"\").Subtitle = %q, want %q", none, got, want)
 	}
 	if got := GraphicsDriverRow("Standard", none, "NVIDIA (proprietary)").Subtitle; strings.Contains(got, none) {
@@ -79,14 +79,12 @@ func TestGraphicsDriverRowWithoutDetectedHardware(t *testing.T) {
 
 // Only the offering state may mention a restart; the informational states
 // describe the machine and must not imply an action is pending. The offer
-// also has to disclose that it replaces the operating system, and must not
-// promise a result it cannot know.
+// must not promise a result it cannot know. (The Advanced group's
+// description says both controls change the whole operating system.)
 func TestGraphicsDriverRowDisclosesTheCostOnlyWhenOffering(t *testing.T) {
 	offering := GraphicsDriverRow("Standard", "NVIDIA", "NVIDIA (proprietary)")
-	for _, want := range []string{"restart", "Replaces the operating system"} {
-		if !strings.Contains(offering.Subtitle, want) {
-			t.Errorf("the offering subtitle %q does not mention %q", offering.Subtitle, want)
-		}
+	if !strings.Contains(strings.ToLower(offering.Subtitle), "restart") {
+		t.Errorf("the offering subtitle %q does not mention a restart", offering.Subtitle)
 	}
 	for _, promise := range []string{"faster", "better", "performance"} {
 		if strings.Contains(strings.ToLower(offering.Subtitle), promise) {
@@ -106,7 +104,7 @@ func TestGraphicsDriverRowDisclosesTheCostOnlyWhenOffering(t *testing.T) {
 
 func TestGraphicsDriverResultDefersToARestart(t *testing.T) {
 	got := GraphicsDriverResultSubtitle("NVIDIA (proprietary)")
-	if !strings.Contains(got, "restart to apply") {
+	if !strings.Contains(strings.ToLower(got), "restart") {
 		t.Errorf("GraphicsDriverResultSubtitle() = %q, want it to ask for a restart", got)
 	}
 	if !strings.Contains(got, "NVIDIA (proprietary)") {

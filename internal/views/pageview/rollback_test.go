@@ -20,7 +20,7 @@ func TestBootcRollbackRowDescribesTheOneDestination(t *testing.T) {
 		timestamp string
 		wantHas   string
 	}{
-		{name: "version and timestamp", version: "42.20260810", timestamp: timestamp, wantHas: "version 42.20260810, released " + date},
+		{name: "version and timestamp", version: "42.20260810", timestamp: timestamp, wantHas: "version 42.20260810 from " + date},
 		{name: "version only", version: "42.20260810", wantHas: "version 42.20260810"},
 		{name: "timestamp only", timestamp: timestamp, wantHas: "the version from " + date},
 		{name: "unreadable timestamp still names a destination", timestamp: "not-a-time", wantHas: "Return to the previous version"},

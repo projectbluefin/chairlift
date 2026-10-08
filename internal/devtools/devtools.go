@@ -46,6 +46,52 @@ type Tool struct {
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
 
+// PrerequisiteError means the host lacks something WSL Mode needs, so trying
+// again will not help. Message is a plain sentence for the user; Err keeps the
+// raw command output for the log.
+type PrerequisiteError struct {
+	Message string
+	Err     error
+}
+
+func (e *PrerequisiteError) Error() string { return e.Err.Error() }
+
+func (e *PrerequisiteError) Unwrap() error { return e.Err }
+
+// Plain prerequisite sentences shown on the WSL Mode row. ParseNSLDoctor and
+// the view share them so the same missing piece always reads the same way.
+const (
+	// NeedsVirtualization means the processor's virtualization is off.
+	NeedsVirtualization = "Turn on virtualization in your computer's firmware settings."
+	// NeedsKVMAccess means this account cannot use virtualization yet.
+	NeedsKVMAccess = "Turning this on asks for your administrator password. Then log out and back in."
+	// NeedsPrerequisite means nsl doctor reported something else missing.
+	NeedsPrerequisite = "This computer is missing a part WSL Mode needs."
+)
+
+// nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
+// built-in engine when none exists.
+const (
+	nslNewMachine = "ubuntu"
+	nslNewDistro  = "ubuntu:26.04"
+)
+
+// nslManagedMachines lists, in order of preference, the nsl machine names
+// ChairLift has created: ubuntu now, debian before the built-in engine moved
+// to Ubuntu. WSL Mode adopts the first one that exists, so a host that already
+// has the older debian machine keeps using it rather than gaining a second
+// machine. Machines with other names belong to the user and are not WSL Mode's.
+var nslManagedMachines = []string{nslNewMachine, "debian"}
+
+// EngineSubtitle describes what the engines run, given the nsl machine WSL
+// Mode manages (WSLState.Machine; empty when none exists or it was not read).
+func EngineSubtitle(nslMachine string) string {
+	if nslMachine == "debian" {
+		return "Your built-in engine runs Debian. Lima runs Ubuntu."
+	}
+	return "Both engines run Ubuntu."
+}
+
 // Tools follows Common's ide.Brewfile and devmode terminal-editor choices.
 // The current Toolbox cask contains only the x86_64 Linux archive.
 func Tools() []Tool {
@@ -168,6 +214,9 @@ type WSLState struct {
 	Exists  bool
 	Running bool
 	Ready   bool
+	// Machine is the nsl machine WSL Mode manages when it exists (see
+	// nslManagedMachines); empty for Lima or when none exists.
+	Machine string
 }
 
 // NSLDoctor runs "nsl doctor" to check host prerequisites.
@@ -178,11 +227,12 @@ func NSLDoctor(ctx context.Context) (string, error) {
 	return command(ctx, false, "nsl", "doctor")
 }
 
-// ParseNSLDoctor parses the output of "nsl doctor". It returns an actionable
-// human-readable message if prerequisites are missing, and reports whether
-// the failure was due to KVM device access or group membership.
+// ParseNSLDoctor parses the output of "nsl doctor". It returns a plain
+// sentence if prerequisites are missing, and reports whether the failure was
+// due to KVM device access or group membership. The missing items themselves
+// name programs and devices, so callers log the raw output instead.
 func ParseNSLDoctor(output string) (actionable string, isKVM bool) {
-	var missing []string
+	missing := false
 	hasKVM := false
 	for _, rawLine := range strings.Split(output, "\n") {
 		line := strings.TrimSpace(rawLine)
@@ -191,71 +241,55 @@ func ParseNSLDoctor(output string) (actionable string, isKVM bool) {
 		}
 		if strings.HasPrefix(line, "MISSING") {
 			item := strings.TrimSpace(strings.TrimPrefix(line, "MISSING"))
-			lower := strings.ToLower(item)
-			if strings.Contains(lower, "kvm") || strings.Contains(item, "/dev/kvm") {
+			if strings.Contains(strings.ToLower(item), "kvm") {
 				hasKVM = true
-			} else if strings.HasPrefix(item, "UEFI firmware") {
-				missing = append(missing, "UEFI firmware (ovmf)")
 			} else {
-				missing = append(missing, item)
+				missing = true
 			}
 		} else if strings.HasPrefix(line, "KVM/vsock group access:") || strings.HasPrefix(line, "SESSION /dev/kvm:") {
 			hasKVM = true
-		} else if strings.HasPrefix(line, "User namespaces:") {
-			missing = append(missing, "user namespaces")
-		} else if strings.HasPrefix(line, "User systemd:") {
-			missing = append(missing, "user systemd")
+		} else if strings.HasPrefix(line, "User namespaces:") || strings.HasPrefix(line, "User systemd:") {
+			missing = true
 		}
 	}
-	if len(missing) > 0 {
-		if len(missing) == 1 {
-			return fmt.Sprintf("Needs host prerequisite: %s (run 'nsl doctor').", missing[0]), hasKVM
-		}
-		return fmt.Sprintf("Needs host prerequisites: %s (run 'nsl doctor').", strings.Join(missing, ", ")), hasKVM
+	if missing {
+		return NeedsPrerequisite, hasKVM
 	}
 	if hasKVM {
-		return "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.", true
+		return NeedsKVMAccess, true
 	}
 	return "", false
 }
 
-// ParseNSLList parses the output of "nsl list" into WSLState.
+// ParseNSLList parses the output of "nsl list" into the WSLState of the
+// machine WSL Mode manages: the first of nslManagedMachines that exists.
+// The shared VM's own state and other machines do not count.
 func ParseNSLList(output string) WSLState {
-	state := WSLState{}
-	lines := strings.Split(output, "\n")
+	running := map[string]bool{}
 	inMachines := false
-	for _, rawLine := range lines {
-		line := strings.TrimSpace(rawLine)
-		if line == "" || strings.HasPrefix(line, "No ") || strings.HasPrefix(line, "Pending ") {
+	for _, rawLine := range strings.Split(output, "\n") {
+		fields := strings.Fields(rawLine)
+		if len(fields) == 0 || fields[0] == "No" || fields[0] == "Pending" {
 			continue
 		}
-		fields := strings.Fields(line)
-		if len(fields) == 0 {
-			continue
-		}
-		if fields[0] == "MACHINE" {
+		switch fields[0] {
+		case "MACHINE":
 			inMachines = true
 			continue
-		}
-		if fields[0] == "VM" {
+		case "VM":
 			inMachines = false
 			continue
 		}
 		if inMachines {
-			state.Exists = true
-			if len(fields) >= 2 && fields[1] == "running" {
-				state.Running = true
-			}
-		} else {
-			if len(fields) >= 2 && fields[1] == "running" {
-				state.Running = true
-				state.Exists = true
-			} else if len(fields) >= 2 && fields[1] == "stopped" {
-				state.Exists = true
-			}
+			running[fields[0]] = len(fields) >= 2 && fields[1] == "running"
 		}
 	}
-	return state
+	for _, name := range nslManagedMachines {
+		if isRunning, ok := running[name]; ok {
+			return WSLState{Exists: true, Running: isRunning, Machine: name}
+		}
+	}
+	return WSLState{}
 }
 
 // statusTimeout bounds one whole status probe — every command it runs and the
@@ -278,7 +312,8 @@ func NSLStatus(ctx context.Context) (WSLState, error) {
 	}
 	state := ParseNSLList(output)
 	if state.Running {
-		_, err := command(ctx, false, "nsl", "run", "true")
+		name, args := nslProbe(state.Machine)
+		_, err := command(ctx, false, name, args...)
 		state.Ready = err == nil
 	}
 	return state, nil
@@ -371,9 +406,9 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 	}
 	if dryrun.Enabled() {
 		if enabled {
-			log.Print("[DRY-RUN] would install nsl, check host prerequisites, start nsl machine, and probe its shell")
+			log.Print("[DRY-RUN] would install nsl, check host prerequisites, start the existing ubuntu or debian machine (creating ubuntu only when neither exists), and probe its shell")
 		} else {
-			log.Print("[DRY-RUN] would stop nsl machines and VM without deleting data")
+			log.Print("[DRY-RUN] would stop the ubuntu or debian nsl machine WSL Mode manages, leaving other machines and all data alone")
 		}
 		return nil
 	}
@@ -386,14 +421,14 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 			return errors.New("hardware virtualization is unavailable: /dev/kvm is missing; enable it in firmware")
 		}
 		if !accessible {
-			stage("Requesting hardware virtualization access…")
+			stage("Asking for virtual machine access…")
 			if err := ublue.EnableKVMAccess(ctx); err != nil {
 				return err
 			}
 			return ErrNewLogin
 		}
 		if !NSLInstalled() {
-			stage("Installing nsl through Homebrew…")
+			stage("Installing…")
 			if err := homebrew.Tap("frostyard/tap"); err != nil {
 				return err
 			}
@@ -404,45 +439,64 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 				return err
 			}
 		}
-		stage("Checking host prerequisites…")
-		output, err := command(ctx, false, "nsl", "doctor")
-		if err != nil {
-			actionable, _ := ParseNSLDoctor(output)
-			if actionable != "" {
-				return errors.New(actionable)
+		stage("Checking this computer…")
+		// command's error already carries the doctor output for the log.
+		if output, err := command(ctx, false, "nsl", "doctor"); err != nil {
+			if actionable, _ := ParseNSLDoctor(output); actionable != "" {
+				return &PrerequisiteError{Message: actionable, Err: err}
 			}
-			return fmt.Errorf("nsl doctor: %w", err)
+			return err
 		}
+		return startNSL(ctx, stage)
 	}
+	state, err := NSLStatus(ctx)
+	if err != nil || !state.Running {
+		return err
+	}
+	stage("Stopping…")
+	// Stop only the managed machine: `nsl shutdown` stops every machine and
+	// every nsl VM, including the user's own (#546). The shared VM powers
+	// itself off once its last machine stops.
+	_, err = command(ctx, true, "nsl", "stop", state.Machine)
+	return err
+}
+
+// startNSL brings up the machine WSL Mode manages: the existing ubuntu or
+// debian machine, or a new ubuntu machine only when neither exists. Every
+// command names that machine, since nsl's default machine may be another one.
+func startNSL(ctx context.Context, stage func(string)) error {
 	state, err := NSLStatus(ctx)
 	if err != nil {
 		return err
 	}
-	if !enabled {
-		if !state.Exists && !state.Running {
-			return nil
-		}
-		stage("Stopping nsl machines…")
-		_, err := command(ctx, true, "nsl", "shutdown")
-		return err
-	}
+	machine := state.Machine
 	if !state.Exists {
-		stage("Creating default machine…")
-		if _, err := command(ctx, true, "nsl", "create", "debian", "--distro", "debian:13"); err != nil {
+		machine = nslNewMachine
+		stage("Creating your virtual machine…")
+		if _, err := command(ctx, true, "nsl", "create", machine, "--distro", nslNewDistro); err != nil {
 			return err
 		}
 	}
 	if !state.Running {
-		stage("Starting nsl machine…")
-		if _, err := command(ctx, true, "nsl", "start", "debian"); err != nil {
-			if _, runErr := command(ctx, true, "nsl", "run", "true"); runErr != nil {
+		stage("Starting…")
+		if _, err := command(ctx, true, "nsl", "start", machine); err != nil {
+			name, args := nslProbe(machine)
+			if _, runErr := command(ctx, true, name, args...); runErr != nil {
 				return err
 			}
 		}
 	}
-	stage("Checking nsl shell…")
-	_, err = command(ctx, false, "nsl", "run", "true")
+	stage("Checking that it works…")
+	name, args := nslProbe(machine)
+	_, err = command(ctx, false, name, args...)
 	return err
+}
+
+// nslProbe is the shell-readiness probe for machine. `--cd /` keeps it
+// independent of ChairLift's working directory: nsl run translates the host
+// directory into the guest and fails outright when it cannot (/tmp, /, …).
+func nslProbe(machine string) (string, []string) {
+	return "nsl", []string{"run", "-m", machine, "--cd", "/", "true"}
 }
 
 func setLima(ctx context.Context, enabled bool, progress func(string)) error {
@@ -468,13 +522,13 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 			return errors.New("hardware virtualization is unavailable: /dev/kvm is missing; enable it in firmware")
 		}
 		if !accessible {
-			stage("Requesting hardware virtualization access…")
+			stage("Asking for virtual machine access…")
 			if err := ublue.EnableKVMAccess(ctx); err != nil {
 				return err
 			}
 			return ErrNewLogin
 		}
-		stage("Installing Lima and its virtual-machine dependencies…")
+		stage("Installing…")
 		if err := homebrew.Install("lima", false); err != nil {
 			return err
 		}
@@ -490,7 +544,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 		if !state.Exists {
 			return nil
 		}
-		stage("Stopping Ubuntu; keeping its disk and your files…")
+		stage("Stopping Ubuntu…")
 		_, autoErr := command(ctx, true, "limactl", "autostart", "disable", "ubuntu")
 		var stopErr error
 		if state.Running {
@@ -498,7 +552,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 		}
 		return errors.Join(autoErr, stopErr)
 	}
-	stage("Starting Ubuntu LTS; the first image download is about 600 MB…")
+	stage("Starting Ubuntu…")
 	if !state.Exists {
 		_, err = command(ctx, true, "limactl", "start", "--name", "ubuntu", "--mount-writable", "--tty=false", "template:ubuntu-lts")
 	} else if !state.Running {
@@ -510,7 +564,7 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 	if _, err := command(ctx, true, "limactl", "autostart", "enable", "ubuntu"); err != nil {
 		return err
 	}
-	stage("Checking the Ubuntu shell…")
+	stage("Checking that Ubuntu works…")
 	_, err = command(ctx, false, "limactl", "shell", "ubuntu", "true")
 	return err
 }
@@ -614,17 +668,21 @@ func SetDocker(ctx context.Context, enabled bool, progress func(string)) error {
 		if !state.Available {
 			return errors.New("the base image does not provide Docker's daemon; installing its CLI cannot enable containers")
 		}
+		if progress != nil {
+			progress("Installing Docker tools…")
+		}
 		for _, pkg := range []string{"docker", "docker-compose", "lazydocker", "dive"} {
-			if progress != nil {
-				progress("Installing " + pkg + "…")
-			}
 			if err := homebrew.Install(pkg, false); err != nil {
 				return err
 			}
 		}
 	}
 	if progress != nil {
-		progress("Changing the Docker daemon…")
+		if enabled {
+			progress("Starting Docker…")
+		} else {
+			progress("Stopping Docker…")
+		}
 	}
 	return ublue.SetDocker(ctx, enabled)
 }

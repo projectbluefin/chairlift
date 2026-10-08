@@ -33,7 +33,7 @@ type GroupConfig struct {
 	BundlesPaths []string       `yaml:"bundles_paths,omitempty"`
 	// InstallPulp and StageFeeds are the optional developer feed onboarding
 	// steps `dx_group` may run after a confirmed Developer Mode enable. Both
-	// default to false: they have side effects (a user-scope Flatpak install
+	// default to false: they have side effects (a system-scope Flatpak install
 	// and a file written into the user's data directory), so the same
 	// conservative posture as reset_group applies — an administrator opts in
 	// explicitly rather than every enable performing them. Neither is

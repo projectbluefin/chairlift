@@ -61,3 +61,16 @@ func TestAuthDismissedClassification(t *testing.T) {
 		t.Error("a refused authorization must stay a persistent error")
 	}
 }
+
+// A view shows a plain sentence instead of raw stderr, but a dismissed
+// prompt must still reach the window as a dismissal, including the bare
+// exit-126 shape that carries no dismissal text.
+func TestUserMessageKeepsDismissalRecognisable(t *testing.T) {
+	const plain = "Couldn't finish. Try again."
+	if got := UserMessage(exitError(t, DismissedExitCode), plain); !MessageIsAuthDismissed(got) {
+		t.Errorf("UserMessage(exit 126) = %q, want a recognisable dismissal", got)
+	}
+	if got := UserMessage(exitError(t, 1), plain); got != plain {
+		t.Errorf("UserMessage(exit 1) = %q, want the plain sentence", got)
+	}
+}

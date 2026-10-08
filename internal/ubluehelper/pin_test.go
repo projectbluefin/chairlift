@@ -93,6 +93,7 @@ func TestPinCandidateOrderMatchesPublishedSpellings(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(args, want) || !reflect.DeepEqual(calls, tc.calls) {
 				t.Fatalf("args=%v err=%v calls=%v; want %v, %v", args, err, calls, want, tc.calls)
 			}
+
 		})
 	}
 }

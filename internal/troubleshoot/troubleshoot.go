@@ -176,7 +176,7 @@ type Step struct {
 func Steps() []Step {
 	return []Step{
 		{
-			Name:   "Adding the ublue-os tap",
+			Name:   "Getting ready",
 			Needed: func(s State) bool { return !s.Installed() },
 			Run:    func() error { return tapPackage(Tap) },
 		},
@@ -185,7 +185,7 @@ func Steps() []Step {
 		// ublue-os/tap package is trusted by its qualified name — not the
 		// tap — right before it is installed (#482). cpio is homebrew/core.
 		{
-			Name:   "Installing the system inspection tools",
+			Name:   "Installing Goose's troubleshooting tools",
 			Needed: func(s State) bool { return s.ServerPath == "" },
 			Run: func() error {
 				if err := trustPackage(ServerFormula, false); err != nil {

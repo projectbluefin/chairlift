@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"log"
 	"slices"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
@@ -118,7 +118,7 @@ func (uh *UserHome) buildFeaturesPage() {
 		// Build the features group (hidden once updex reports none)
 		uh.featuresGroup = adw.NewPreferencesGroup()
 		uh.featuresGroup.SetTitle("Optional features")
-		uh.featuresGroup.SetDescription("Checking what this system offers…")
+		uh.featuresGroup.SetDescription("Checking what this computer offers…")
 
 		// Add Update button as header suffix (disabled until features are listed)
 		updateBtn := gtk.NewButtonWithLabel("Update")
@@ -158,7 +158,7 @@ func (uh *UserHome) loadFeatures(updateBtn *gtk.Button, onListed func(optionalFe
 
 		if err != nil {
 			log.Printf("views: listing optional features failed: %v", err)
-			uh.featuresGroup.SetDescription("Could not check which features are available.")
+			uh.featuresGroup.SetDescription("Couldn't check which features are available.")
 			return
 		}
 
@@ -266,7 +266,8 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 			if err != nil {
 				// Revert switch to previous state
 				toggle.set(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change %s: %v", name, err))
+				log.Printf("views: changing feature %s failed: %v", name, err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change this feature. Try again."))
 				return
 			}
 
@@ -307,7 +308,8 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 			button.SetLabel("Update")
 
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not update the features: %v", err))
+				log.Printf("views: updating features failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't update features. Try again."))
 				return
 			}
 
@@ -387,7 +389,7 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	uh.developerCanToggle = status.Supports(ubluehelper.CommandDXEnable, ubluehelper.CommandDXDisable)
 	if !uh.developerCanToggle {
 		toggle.widget.SetSensitive(false)
-		row.SetSubtitle("Needs the installed Developer Mode actions in the system helper. Optional tools can still be selected below.")
+		row.SetSubtitle("Developer Mode isn't available on this computer. You can still install tools below.")
 	}
 
 	row.AddSuffix(&toggle.widget.Widget)
@@ -411,7 +413,7 @@ type gamingComponentRow struct {
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Choose the apps to install for your account. System-managed copies are left alone.")
+	group.SetDescription("Apps for playing games on this computer.")
 	row := adw.NewActionRow()
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
@@ -430,7 +432,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	for _, component := range gaming.Components() {
 		item := &gamingComponentRow{component: component, row: adw.NewActionRow(), choice: gtk.NewCheckButton()}
 		item.row.SetTitle(component.Name)
-		item.row.SetSubtitle(component.Description + " — checking installation…")
+		item.row.SetSubtitle(component.Description + " — Checking…")
 		item.choice.SetValign(gtk.AlignCenterValue)
 		item.choice.SetSensitive(false)
 		SetAccessibleLabel(item.choice, "Select "+component.Name)
@@ -448,7 +450,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 				log.Printf("views: gaming status unavailable: %v", err)
 				row.SetSubtitle(pageview.GamingUnavailableSubtitle)
 				for _, item := range uh.gamingComponents {
-					item.row.SetSubtitle(item.component.Description + " — installed state unavailable")
+					item.row.SetSubtitle(item.component.Description + " — Couldn't check")
 				}
 				return
 			}
@@ -461,12 +463,10 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 
 func (uh *UserHome) applyGamingState(state gaming.State) {
 	for _, item := range uh.gamingComponents {
-		status := "Not installed"
-		if slices.Contains(state.UserInstalled, item.component.ID) {
-			status = "Installed for your account"
-		} else if slices.Contains(state.SystemOnly, item.component.ID) {
-			status = "Installed system-wide; left in place"
-		}
+		status := pageview.GamingComponentStatus(
+			slices.Contains(state.UserInstalled, item.component.ID),
+			slices.Contains(state.SystemInstalled, item.component.ID),
+		)
 		item.row.SetSubtitle(item.component.Description + " — " + status)
 	}
 }
@@ -499,7 +499,7 @@ func (uh *UserHome) confirmGamingRemoval() {
 		return
 	}
 	uh.setGamingSensitive(false)
-	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "Only the selected apps installed for your account will be removed. System-managed copies and game data are kept.")
+	dialog := adw.NewAlertDialog("Remove selected gaming apps?", "The selected apps are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Apps that came with the system are left in place. Game data is kept.")
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("remove", "Remove")
 	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
@@ -554,11 +554,12 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 
 			if err != nil {
 				toggle.set(!enabled)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Could not change developer tools: %v", err))
+				log.Printf("views: changing Developer Mode failed: %v", err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't change Developer Mode. Try again."))
 				return
 			}
 			if menuErr != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Custom Command Menu update failed: %v", menuErr))
+				uh.toastAdder.ShowErrorToast("Couldn't update the developer entries in the top bar menu.")
 			}
 
 			decision := actionmsg.DeveloperMode(dryrun.Enabled(), enabled, skipped)
@@ -681,15 +682,18 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
 	setActivitySpinner(uh.gamingSpinner, true)
 	go func() {
-		var changed, skipped []string
+		var changed, kept []string
 		var failures []error
 		if enabled {
 			changed, failures = gaming.Enable(selected)
 		} else {
-			changed, skipped, failures = gaming.Disable(selected)
+			changed, kept, failures = gaming.Disable(selected)
 		}
 		for _, failure := range failures {
 			log.Printf("views: gaming component failed: %v", failure)
+		}
+		for _, id := range kept {
+			log.Printf("views: gaming component %s came with the system; its system-wide copy was left in place", id)
 		}
 		state, refreshErr := gaming.Status()
 		if refreshErr != nil {
@@ -699,19 +703,19 @@ func (uh *UserHome) runGamingSelected(enabled bool, selected []string) {
 			defer uh.gamingGate.Reset()
 			setActivitySpinner(uh.gamingSpinner, false)
 			uh.setGamingSensitive(true)
-			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(skipped))
+			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(kept))
 			if dryrun.Enabled() {
 				row.SetSubtitle(before)
 			} else {
 				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
-				if len(skipped) > 0 {
-					result += fmt.Sprintf(" %d system-managed app(s) left in place.", len(skipped))
+				if len(kept) > 0 {
+					result += " Apps installed for everyone were kept."
 				}
 				if len(failures) > 0 {
-					result += " Details are in the application log."
+					result += " Try again."
 				}
 				if refreshErr != nil {
-					result += " Installed state could not be refreshed; previous observations are kept."
+					result += " Couldn't refresh the list of installed apps."
 				}
 				row.SetSubtitle(result)
 			}

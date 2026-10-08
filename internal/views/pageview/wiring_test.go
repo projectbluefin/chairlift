@@ -316,7 +316,7 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		file, function string
 		required       []string
 	}{
-		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)", "if statusErr != nil {", "Could not verify staged update", "uh.updateShell.StartCheck()"}},
+		{"updates_page.go", "onBootcStageClicked", []string{"uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)", "if statusErr != nil {", "Couldn't confirm the update is ready", "uh.updateShell.StartCheck()"}},
 		{"views.go", "OnUpdateFinished", []string{"if final.Preview {", "range final.CompletedSources", "case updateflow.OperatingSystem:", "bootc.GetStatus(", "if err != nil {", "uh.refreshChangelogAvailability(status)", "uh.renderSystemVersion(versionGeneration, status)"}},
 		// W3-06: the System version readout re-renders from each observed
 		// status, ordered so an older read cannot replace a newer one.

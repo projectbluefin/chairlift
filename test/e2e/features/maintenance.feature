@@ -27,7 +27,7 @@ Feature: Maintenance and its Powerwash detail
     And the stubbed "brew" never ran "cleanup"
     And the stubbed "flatpak" answered a read-only query
     And the stubbed "flatpak" never ran "uninstall"
-    And the "Free up space" row says "Removes old downloads and supporting software nothing uses any more."
+    And the "Free up space" row says "Delete old downloads and app parts nothing uses."
     And I do not see "Freed"
     And I do not see "Cleanup finished."
     And the "Clean up" button in the "Free up space" row is sensitive
@@ -58,12 +58,12 @@ Feature: Maintenance and its Powerwash detail
     When I open the Powerwash detail
     Then the Powerwash detail is shown
     And I see "Go back to the previous version"
-    And I see "Reset the system"
+    And I see "Reset this computer"
     And I do not see "Powerwash and Factory Reset are turned off"
     When I go back from the Powerwash detail
     Then the "Maintenance" page is shown
     And I see "Free up space"
-    And I do not see "Reset the system"
+    And I do not see "Reset this computer"
 
   @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
   Scenario: The Powerwash back button names the page it returns to
@@ -81,7 +81,7 @@ Feature: Maintenance and its Powerwash detail
     And I open the Powerwash detail
     And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
     Then a dialog titled "Remove Flatpak Apps and Containers?" is shown
-    And the dialog says "This removes every Flatpak application and every Distrobox container for your account. It does not touch the system image or your files. This cannot be undone."
+    And the dialog says "Every Flatpak app and Distrobox container in your account will be removed. Your files and everything on the Apps page stay. This can't be undone."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
@@ -103,14 +103,14 @@ Feature: Maintenance and its Powerwash detail
     And I open the Powerwash detail
     And I click the "Remove…" button in the "Remove Flatpak apps and containers" row
     And I choose "Remove Apps and Containers" in the dialog
-    Then I see "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made"
+    Then I see "[DRY-RUN] Preview: would remove your Flatpak apps and containers — no changes made"
     And no dialog is shown
     And the application log contains "[DRY-RUN] Would execute: flatpak uninstall --user --all -y"
     And the application log contains "[DRY-RUN] would execute: distrobox rm --all --force"
     And the stubbed "flatpak" never ran "uninstall"
     And the stubbed "distrobox" never ran "rm"
-    And the "Remove Flatpak apps and containers" row says "Homebrew packages, your files, settings, and the system itself stay as they are."
-    And I do not see "Removed your Flatpak apps and containers"
+    And the "Remove Flatpak apps and containers" row says "Your files and everything on the Apps page stay."
+    And I do not see "Removed your Flatpak apps and containers."
     And the "Remove…" button in the "Remove Flatpak apps and containers" row is sensitive
     And the action journal is empty
     When I click the "Remove…" button in the "Remove Flatpak apps and containers" row
@@ -141,14 +141,14 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    And I click the "Reset…" button in the "Reset the system" row
-    Then a dialog titled "Factory Reset This System?" is shown
-    And the dialog says "This discards every local change and reinstalls the current system image from scratch, using bootc's --experimental reset path. Your applications and home directory are not touched, but this cannot be undone. The reset applies at the next restart."
+    And I click the "Reset…" button in the "Reset this computer" row
+    Then a dialog titled "Factory Reset This Computer?" is shown
+    And the dialog says "The operating system will be reinstalled and any changes made to it will be lost. Your files and apps stay. This uses a reset method that is still experimental, and it can't be undone. The reset happens the next time you restart."
     When I choose "Cancel" in the dialog
     Then no dialog is shown
-    And the "Reset…" button in the "Reset the system" row is sensitive
-    When I click the "Reset…" button in the "Reset the system" row
-    Then a dialog titled "Factory Reset This System?" is shown
+    And the "Reset…" button in the "Reset this computer" row is sensitive
+    When I click the "Reset…" button in the "Reset this computer" row
+    Then a dialog titled "Factory Reset This Computer?" is shown
     When I choose "Cancel" in the dialog
     Then no dialog is shown
     And the application log does not contain "chairlift-helper"
@@ -159,16 +159,16 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    And I click the "Reset…" button in the "Reset the system" row
+    And I click the "Reset…" button in the "Reset this computer" row
     And I choose "Factory Reset" in the dialog
-    Then I see "[DRY-RUN] Preview: would factory reset this system — no changes made"
+    Then I see "[DRY-RUN] Preview: would reset this computer — no changes made"
     And no dialog is shown
     And the action journal records "factory-reset" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper factory-reset --dry-run"
     And the journalled action carries no argument
     And the action journal has no "rollback" entry
-    And I do not see "Factory reset applied"
-    And the "Reset…" button in the "Reset the system" row is sensitive
+    And I do not see "Restart to finish resetting this computer."
+    And the "Reset…" button in the "Reset this computer" row is sensitive
 
   # ------------------------------------------------------------ Roll Back
 
@@ -177,9 +177,9 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    Then the "Go back to the previous version" row says "Return to version 44.20260913, released 13 September 2026, the next time you restart"
+    Then the "Go back to the previous version" row says "Return to version 44.20260913 from 13 September 2026 the next time you restart."
     When I click the "Roll Back" button in the "Go back to the previous version" row
-    Then I see "[DRY-RUN] Preview: would roll back to the previous system image — no changes made"
+    Then I see "[DRY-RUN] Preview: would go back to the previous version — no changes made"
     And the action journal records "rollback" as dry-run
     And the journalled command is "pkexec /usr/bin/chairlift-helper rollback --dry-run"
     And the journalled action carries no argument
@@ -192,10 +192,9 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     And I open the Powerwash detail
     Then I do not see "Published versions"
-    And I see "Reset the system"
+    And I see "Reset this computer"
     And I do not see "Go back to the previous version"
     And the "Roll Back" button is not shown
-
   # ------------------------------------------------ configuration & capability
 
   @config.maintenance-shipped @stub.maintenance_bootc_rollback @stub.maintenance_package_tools
@@ -210,7 +209,7 @@ Feature: Maintenance and its Powerwash detail
     Then I see "Go back to the previous version"
     And I see "Powerwash and Factory Reset are turned off in this computer's configuration."
     And I do not see "Published versions"
-    And I do not see "Reset the system"
+    And I do not see "Reset this computer"
     And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 
@@ -221,7 +220,7 @@ Feature: Maintenance and its Powerwash detail
     When I open the "Maintenance" page
     And I open the Powerwash detail
     Then I see "Go back to the previous version"
-    And I do not see "Reset the system"
+    And I do not see "Reset this computer"
     And I do not see "Remove Flatpak apps and containers"
     And the application log does not contain "views: reset group built"
 

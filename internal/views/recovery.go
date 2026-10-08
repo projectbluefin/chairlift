@@ -1,11 +1,12 @@
 package views
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
+
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
@@ -147,7 +148,7 @@ func (uh *UserHome) buildRecoveryRollbackGroup(page *adw.PreferencesPage) {
 
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Roll Back")
-	group.SetDescription("Return to the previous system version if an update went badly")
+	group.SetDescription("Go back if an update caused problems.")
 	group.Add(&uh.bootcRollbackRow.Widget)
 	group.SetVisible(false)
 	page.Add(group)
@@ -215,9 +216,10 @@ func (uh *UserHome) onBootcRollbackClicked() {
 
 		sgtk.RunOnMainThread(func() {
 			if err != nil {
+				log.Printf("views: rollback failed: %v", err)
 				uh.bootcRollbackGate.Reset()
 				button.SetSensitive(true)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Rollback failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't go back to the previous version. Try again."))
 				return
 			}
 
@@ -252,7 +254,7 @@ func (uh *UserHome) onBootcRollbackRestartClicked() {
 		sgtk.RunOnMainThread(func() {
 			button.SetSensitive(true)
 			if err != nil {
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Restart failed: %v", err))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't restart. Try again."))
 			}
 		})
 	}()

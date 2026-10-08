@@ -29,7 +29,7 @@ const (
 
 	// missingRegistrationSubtitle is shown with the RegistrationURL link
 	// control rather than spelling the URL out as unclickable text.
-	missingRegistrationSubtitle = "Register this machine with Hive first."
+	missingRegistrationSubtitle = "Sign up as a contributor first."
 )
 
 // DefaultRegistrationPath returns ~/.config/hive/contributor.env given a home directory.
@@ -136,7 +136,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRunner,
 			Ready:    false,
-			Subtitle: "xdg-terminal-exec is required to launch the terminal session.",
+			Subtitle: "Contribute needs a terminal app this computer doesn't have.",
 		}
 	}
 
@@ -145,7 +145,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingUjust,
 			Ready:    false,
-			Subtitle: "ujust is required to run the contribute recipe.",
+			Subtitle: "This computer is missing a part Contribute needs.",
 		}
 	}
 
@@ -154,7 +154,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRecipe,
 			Ready:    false,
-			Subtitle: "The contribute recipe is not available in ujust.",
+			Subtitle: "This version of Bluefin can't run Contribute yet.",
 		}
 	}
 	summary, err := p.RecipeSummary(ctx)
@@ -162,7 +162,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingRecipe,
 			Ready:    false,
-			Subtitle: "The contribute recipe is not available in ujust.",
+			Subtitle: "This version of Bluefin can't run Contribute yet.",
 		}
 	}
 
@@ -171,7 +171,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 		return Result{
 			Status:   StatusMissingPodman,
 			Ready:    false,
-			Subtitle: "podman is required to run the contributor container.",
+			Subtitle: "This computer is missing a part Contribute needs.",
 		}
 	}
 
@@ -188,7 +188,7 @@ func Preflight(ctx context.Context, p Prober) Result {
 	return Result{
 		Status:   StatusReady,
 		Ready:    true,
-		Subtitle: "Run the Hive contributor appliance in a terminal.",
+		Subtitle: "Opens a terminal to help build Bluefin.",
 	}
 }
 

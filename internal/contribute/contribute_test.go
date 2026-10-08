@@ -61,7 +61,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			mutateProber: func(p *Prober) {},
 			wantStatus:   StatusReady,
 			wantReady:    true,
-			wantSub:      "Run the Hive contributor appliance in a terminal.",
 		},
 		{
 			name: "missing xdg-terminal-exec runner",
@@ -76,7 +75,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRunner,
 			wantReady:  false,
-			wantSub:    "xdg-terminal-exec is required to launch the terminal session.",
 		},
 		{
 			name: "missing ujust executable",
@@ -91,7 +89,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingUjust,
 			wantReady:  false,
-			wantSub:    "ujust is required to run the contribute recipe.",
 		},
 		{
 			name: "ujust summary lacks contribute recipe",
@@ -102,7 +99,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRecipe,
 			wantReady:  false,
-			wantSub:    "The contribute recipe is not available in ujust.",
 		},
 		{
 			name: "ujust summary fails with an error",
@@ -113,7 +109,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRecipe,
 			wantReady:  false,
-			wantSub:    "The contribute recipe is not available in ujust.",
 		},
 		{
 			name: "missing podman executable",
@@ -128,7 +123,6 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingPodman,
 			wantReady:  false,
-			wantSub:    "podman is required to run the contributor container.",
 		},
 		{
 			name: "registration file does not exist",
@@ -167,8 +161,13 @@ func TestPreflightOutcomes(t *testing.T) {
 			if got.Ready != tt.wantReady {
 				t.Errorf("Preflight ready = %v, want %v", got.Ready, tt.wantReady)
 			}
-			if got.Subtitle != tt.wantSub {
-				t.Errorf("Preflight subtitle = %q, want %q", got.Subtitle, tt.wantSub)
+			if got.Subtitle == "" {
+				t.Error("Preflight subtitle is empty")
+			}
+			for _, jargon := range []string{"xdg-terminal-exec", "ujust", "podman", "recipe", "Hive", "/", ".env"} {
+				if strings.Contains(got.Subtitle, jargon) {
+					t.Errorf("Preflight subtitle %q names %q", got.Subtitle, jargon)
+				}
 			}
 			// A URL is offered as a link control, never as unclickable
 			// subtitle text.

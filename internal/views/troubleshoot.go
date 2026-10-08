@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -39,7 +38,7 @@ func (uh *UserHome) buildTroubleshootGroup(page *adw.PreferencesPage) {
 	// The subtitle embeds the model reference and setup-step names, neither
 	// of which is Pango markup.
 	gooseRow.SetUseMarkup(false)
-	gooseRow.SetSubtitle("Checking Goose readiness…")
+	gooseRow.SetSubtitle("Checking…")
 	uh.gooseRow = gooseRow
 	uh.gooseSpinner = newActivitySpinner()
 	gooseRow.AddSuffix(&uh.gooseSpinner.Widget)
@@ -126,7 +125,7 @@ func (uh *UserHome) applyGooseState(state agentmode.State, facts agentmode.Readi
 		return
 	}
 	uh.gooseState, uh.gooseFacts = state, facts
-	view := pageview.GooseRow(state, facts.ActiveModel)
+	view := pageview.GooseRow(state)
 	uh.gooseRow.SetSubtitle(view.Subtitle)
 	uh.gooseLaunchBtn.SetLabel(view.Action.Label())
 	uh.gooseLaunchBtn.SetSensitive(view.Action != pageview.GooseNoAction)
@@ -144,7 +143,7 @@ func (uh *UserHome) finishGooseAction(state agentmode.State, facts agentmode.Rea
 
 // onGooseClicked does whatever the row is currently offering.
 func (uh *UserHome) onGooseClicked() {
-	switch pageview.GooseRow(uh.gooseState, uh.gooseFacts.ActiveModel).Action {
+	switch pageview.GooseRow(uh.gooseState).Action {
 	case pageview.GooseLaunch:
 		uh.launchGoose()
 	case pageview.GooseSetUp:
@@ -182,7 +181,7 @@ func (uh *UserHome) setUpGoose() {
 			}
 			if err != nil {
 				log.Printf("views: goose setup failed: %v", err)
-				uh.toastAdder.ShowErrorToast(fmt.Sprintf("Setup failed: %v", err))
+				uh.toastAdder.ShowErrorToast("Couldn't set up Goose. Check your internet connection.")
 				return
 			}
 			if dryrun.Enabled() {
@@ -191,7 +190,7 @@ func (uh *UserHome) setUpGoose() {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: Goose would be set up — no changes made")
 				return
 			}
-			uh.toastAdder.ShowToast(pageview.GooseSetupToast(state, facts.ActiveModel))
+			uh.toastAdder.ShowToast(pageview.GooseSetupToast(state))
 		})
 	}()
 }
@@ -208,7 +207,7 @@ func (uh *UserHome) launchGoose() {
 	uh.gooseBusy = true
 	uh.gooseLaunchBtn.SetSensitive(false)
 	setActivitySpinner(uh.gooseSpinner, true)
-	uh.gooseRow.SetSubtitle("Launching Goose Desktop…")
+	uh.gooseRow.SetSubtitle("Opening Goose…")
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -220,7 +219,7 @@ func (uh *UserHome) launchGoose() {
 			result, launchErr = agentmode.Launch(ctx, facts, func(asyncErr error) {
 				sgtk.RunOnMainThread(func() {
 					log.Printf("views: goose desktop exited with error: %v", asyncErr)
-					uh.toastAdder.ShowErrorToast("Goose Desktop encountered an error.")
+					uh.toastAdder.ShowErrorToast("Goose closed unexpectedly.")
 				})
 			})
 		}
@@ -229,10 +228,10 @@ func (uh *UserHome) launchGoose() {
 			uh.finishGooseAction(state, facts)
 			switch {
 			case !state.Ready():
-				uh.toastAdder.ShowErrorToast("Goose cannot be launched: " + state.MissingPrerequisite())
+				uh.toastAdder.ShowErrorToast(state.MissingPrerequisite())
 			case launchErr != nil:
 				log.Printf("views: launch goose desktop failed: %v", launchErr)
-				uh.toastAdder.ShowErrorToast("Failed to launch Goose Desktop.")
+				uh.toastAdder.ShowErrorToast("Couldn't open Goose. Try again.")
 			case dryRun:
 				uh.toastAdder.ShowToast("[DRY-RUN] Would launch Goose Desktop")
 			default:

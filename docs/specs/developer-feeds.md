@@ -72,7 +72,7 @@ it does not enforce a maximum depth or category-to-group mapping.
    a hostname, opens a socket, or runs a command. `TestPackageStaysOffline`
    rejects direct imports of the listed network/command/GTK packages in
    production files. It is not a transitive dependency audit: Pulp provisioning
-   separately delegates user-scope execution to `internal/flatpak`.
+   separately delegates system-scope execution to `internal/flatpak`.
 9. The number of feeds per category is pinned in
    `internal/developerfeeds/developerfeeds_test.go`. Adding or removing a feed
    MUST update that count in the same change, which is what makes a catalog
@@ -177,6 +177,6 @@ Historical curation rationale from 2026-09-22 for entries absent from the catalo
 - Context: [design/overview.md](../design/overview.md)
 - Source: [`developerfeeds.go`](../../internal/developerfeeds/developerfeeds.go)
   (offline parser/validator), [`pulp.go`](../../internal/developerfeeds/pulp.go)
-  (user-scope provisioning/staging), and
+  (system-scope Pulp provisioning and user-data staging), and
   [`features_page.go`](../../internal/views/features_page.go)
   (`startDeveloperFeedSetup` opt-in admission and worker).

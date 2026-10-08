@@ -8,11 +8,16 @@ import (
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
 
-func TestPrintersGroupDescriptionSaysWhereItRuns(t *testing.T) {
+// The description names the one consequence of turning a family on — its
+// printers are shared on the network — and none of the machinery behind it.
+func TestPrintersGroupDescriptionSaysItSharesOnTheNetwork(t *testing.T) {
 	d := PrintersGroupDescription()
-	for _, want := range []string{"your account", "adds nothing to the system", "network"} {
-		if !strings.Contains(d, want) {
-			t.Errorf("description %q does not say %q", d, want)
+	if !strings.Contains(d, "network") {
+		t.Errorf("description %q does not say printers are shared on the network", d)
+	}
+	for _, jargon := range []string{"container", "Podman", "driverless", "system"} {
+		if strings.Contains(d, jargon) {
+			t.Errorf("description %q names %q", d, jargon)
 		}
 	}
 }
@@ -52,8 +57,9 @@ func TestPrinterAppSubtitleDistinguishesEveryState(t *testing.T) {
 	}
 }
 
-// Every diagnostic failure state is actionable and describes what went wrong
-// and what to do, without claiming running or paper output.
+// Every diagnostic failure state says what went wrong and what to do in a
+// person's words, without claiming running and without naming a command,
+// group, or registry.
 func TestPrinterAppDiagnosticSubtitlesAreActionable(t *testing.T) {
 	cases := []struct {
 		state printerapp.State
@@ -61,46 +67,51 @@ func TestPrinterAppDiagnosticSubtitlesAreActionable(t *testing.T) {
 	}{
 		{
 			state: printerapp.StateUnavailable,
-			wants: []string{"Not available", "Podman is not installed"},
+			wants: []string{"Not available"},
 		},
 		{
 			state: printerapp.StateFailedDeviceAccess,
-			wants: []string{"device access failed", "permission", "USB", "lp"},
+			wants: []string{"Couldn't reach the printer", "USB"},
 		},
 		{
 			state: printerapp.StateFailedImage,
-			wants: []string{"image unavailable", "download", "registry"},
+			wants: []string{"Couldn't download", "internet connection"},
 		},
 		{
 			state: printerapp.StateFailedPlugin,
-			wants: []string{"plugin verification failed", "signature"},
+			wants: []string{"security check", "wasn't installed"},
 		},
 		{
 			state: printerapp.StateFailedCrash,
-			wants: []string{"crashed unexpectedly", "journalctl", "restart"},
+			wants: []string{"stopped unexpectedly", "Turn it off and on again"},
 		},
 	}
 
 	for _, tc := range cases {
-		text := strings.ToLower(PrinterAppSubtitle(tc.state, 18010))
+		text := PrinterAppSubtitle(tc.state, 18010)
 		for _, want := range tc.wants {
-			if !strings.Contains(text, strings.ToLower(want)) {
+			if !strings.Contains(text, want) {
 				t.Errorf("state %d subtitle %q does not contain %q", tc.state, text, want)
 			}
 		}
-		if strings.HasPrefix(text, "running") {
+		if strings.HasPrefix(text, "Running") {
 			t.Errorf("failed state %d claims running: %q", tc.state, text)
+		}
+		for _, jargon := range []string{"journalctl", "Podman", "registry", "udev", "'lp'", "container"} {
+			if strings.Contains(text, jargon) {
+				t.Errorf("state %d subtitle %q names %q", tc.state, text, jargon)
+			}
 		}
 	}
 }
 
 // ADR-0016: the blocked row is an actionable, non-enabled state. It says the
-// administration page is what cannot be secured, what the image must accept,
-// and that the switch unlocks — without spelling an environment variable no
-// image ships yet.
+// settings page is what cannot be protected yet, and that the switch can be
+// turned on once it can — without spelling an environment variable no image
+// ships yet.
 func TestPrinterAppBlockedSubtitleIsActionable(t *testing.T) {
 	text := PrinterAppSubtitle(printerapp.StateBlocked, 18010)
-	for _, want := range []string{"Can't be turned on yet", "administration page", "secured", "credential", "unlocks"} {
+	for _, want := range []string{"Can't be turned on", "until", "settings page", "password"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("blocked subtitle %q does not say %q", text, want)
 		}
@@ -126,11 +137,11 @@ func TestPrinterAppReadySubtitleNamesTheWebPage(t *testing.T) {
 // toast has to keep saying it is running, and name which row it is about.
 func TestPrinterAppFailureToastNamesTheRowAndDoesNotClaimAStop(t *testing.T) {
 	off := strings.ToLower(PrinterAppFailureToast(false, "HP printers (HPLIP)"))
-	if !strings.Contains(off, "hp printers") || !strings.Contains(off, "still running") || !strings.Contains(off, "nothing was removed") {
+	if !strings.Contains(off, "hp printers") || !strings.Contains(off, "still running") || !strings.Contains(off, "couldn't turn it off") {
 		t.Errorf("failed-disable toast = %q", off)
 	}
 	on := PrinterAppFailureToast(true, "Gutenprint printers")
-	if !strings.HasPrefix(on, "Gutenprint printers") || !strings.Contains(on, "could not be turned on") {
+	if !strings.Contains(on, "Gutenprint printers") || !strings.HasPrefix(on, "Couldn't turn on") {
 		t.Errorf("failed-enable toast = %q", on)
 	}
 }

@@ -165,9 +165,9 @@ section above); administrators can remove them when convenient.
 - `features_group`: System features managed by updex (requires `updex` command)
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
   - `wsl_backend`: Backend for WSL Mode (`nsl` or `lima`). Defaults to `nsl`; any other value is a configuration error
-  - `install_pulp`: After a confirmed enable, install the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a user-scope Flatpak. Defaults to `false`. Unprivileged and opt-in: it installs for the invoking account only, and a failure here is reported as its own failure rather than rolling back developer access
+  - `install_pulp`: After a confirmed enable, install the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. Defaults to `false`. Opt-in and outside ChairLift's privilege boundary: the `flatpak` CLI authorizes the install through Flatpak's own PolicyKit, which may ask for an administrator password, and a failure here is reported as its own failure rather than rolling back developer access
   - `stage_feeds`: After a confirmed enable, write the curated developer feed catalog to `~/.local/share/chairlift/developer-feeds.opml` so the user can import it into their reader. Defaults to `false`. ChairLift writes the file and stops — nothing is imported automatically, and Pulp's own database is never touched. Disabling Developer Mode never removes Pulp, the staged file, or anything already imported from it
-- `gaming_group`: Selective Gaming applications and runtime extensions, with installed user/system states, preserved system entries and visible partial failures (shown only when `/usr/share/ublue-os/image-info.json` is present)
+- `gaming_group`: Selective Gaming applications and runtime extensions, installed system-wide from the system Flathub remote (authorized by Flatpak's own PolicyKit), with installed user/system states and visible partial failures; Remove Selected takes each selected app out of every scope it is installed in, leaving in place a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). A family can be turned on only when its image's web administration can be authenticated or disabled ([ADR-0016](docs/adr/0016-printer-app-admin-denied-until-authenticated.md)); until the published images accept that setting, new enables are locked and say so. An existing unit remains manageable so it can be turned off. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
 
 The Developer group also offers WSL Mode (nsl by default, with Lima as alternative),
@@ -177,9 +177,11 @@ Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
 helper actions disable only affected switches, not their discoverability.
 KVM permission changes require a new login; Docker needs an accessible daemon
 socket for this session. No user-configurable privileged argv is accepted.
-The **WSL Backend** chooser changes the backend used in the current window;
+The **Virtual machine engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
 `wsl_backend` configures the initial choice. With the nsl default, an existing
-Lima Ubuntu machine and no nsl machine select Lima instead of creating another.
+Lima Ubuntu machine and no ChairLift nsl machine select Lima instead of creating
+another. nsl creates an Ubuntu machine, but keeps using the Debian machine an
+older ChairLift created rather than adding a second one.
 
 
 ### Livery Page (`livery_page`)

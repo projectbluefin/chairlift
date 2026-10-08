@@ -84,7 +84,7 @@ func Feature(name string, results []updex.CheckResult) (Status, bool) {
 // checkFailedText is the single source of the failed-check subtitle wording, so
 // the row text cannot drift from the group description's.
 func checkFailedText(name string) string {
-	return fmt.Sprintf("%s — update check failed", name)
+	return fmt.Sprintf("%s — couldn't check for updates", name)
 }
 
 // subtitleText is only reached with a non-empty results slice; Feature handles
@@ -104,7 +104,7 @@ func subtitleText(name string, results, updates []updex.CheckResult) string {
 		return fmt.Sprintf("%s — update available for %s (v%s → v%s)",
 			name, up.Component, up.CurrentVersion, up.NewestVersion)
 	default:
-		return fmt.Sprintf("%s — updates available for %d components", name, len(updates))
+		return fmt.Sprintf("%s — %d updates available", name, len(updates))
 	}
 }
 
@@ -146,11 +146,11 @@ func GroupDescription(totalFeatures, featuresWithUpdates int) string {
 func GroupDescriptionIncomplete(totalFeatures, featuresWithUpdates int) string {
 	switch featuresWithUpdates {
 	case 0:
-		return fmt.Sprintf("%s — update check incomplete", available(totalFeatures))
+		return fmt.Sprintf("%s — some couldn't be checked for updates", available(totalFeatures))
 	case 1:
-		return fmt.Sprintf("%s (1 update) — update check incomplete", available(totalFeatures))
+		return fmt.Sprintf("%s (1 update) — some couldn't be checked for updates", available(totalFeatures))
 	default:
-		return fmt.Sprintf("%s (%d updates) — update check incomplete", available(totalFeatures), featuresWithUpdates)
+		return fmt.Sprintf("%s (%d updates) — some couldn't be checked for updates", available(totalFeatures), featuresWithUpdates)
 	}
 }
 
@@ -158,7 +158,7 @@ func GroupDescriptionIncomplete(totalFeatures, featuresWithUpdates int) string {
 // update check itself failed. It makes no claim about update state: a failed
 // check neither found updates nor established that there are none.
 func GroupDescriptionCheckFailed(totalFeatures int) string {
-	return fmt.Sprintf("%s — update check failed", available(totalFeatures))
+	return fmt.Sprintf("%s — couldn't check for updates", available(totalFeatures))
 }
 
 // available reproduces loadFeatures' own pre-check fragment verbatim, including

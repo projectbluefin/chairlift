@@ -221,8 +221,8 @@ type UserHome struct {
 	// developerFeedGate admits the optional Pulp/feed-staging work that
 	// follows a confirmed enable. It is a second gate rather than a reuse of
 	// developerGate because its lifetime is different: the switch is
-	// released as soon as the helper returns, while a user-scope Flatpak
-	// install keeps running off the main thread. Overlapping installs are
+	// released as soon as the helper returns, while a Flatpak install keeps
+	// running off the main thread. Overlapping installs are
 	// refused by this gate, not by holding the switch insensitive.
 	developerFeedGate actionstate.Gate
 	gamingGroup       *adw.PreferencesGroup

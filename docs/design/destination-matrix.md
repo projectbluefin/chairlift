@@ -111,14 +111,17 @@ Provider-specific safety remains with each live owner:
   generations reject stale workers. Visible retryable controls reset their gates.
 - Developer Mode opens one onboarding page and optional Pulp/feed work only after a
   confirmed live enable; developer groups the helper skipped are named in a
-  warning. `install_pulp` and `stage_feeds` are opt-in user-scope
+  warning. `install_pulp` (a system-scope Flatpak under Flatpak's own
+  PolicyKit) and `stage_feeds` (a user-data file) are opt-in
   work; their failures do not reverse or misreport the permission promotion.
   WSL defaults to nsl (Linux amd64), with Lima available explicitly and retained
   for an existing Lima-only machine. Both need KVM access; Docker requires an
   actually ready socket. Missing helper actions leave affected options visible
   but insensitive.
 - Gaming validates selected refs, distinguishes applications/runtimes and
-  user/system scope, preserves system installations and reports partial failures.
+  user/system scope, installs system-wide, removes a selected app from each
+  scope it is in after confirmation — leaving a system copy the image ships
+  in place — and reports partial failures.
 - Agent Mode is local and unprivileged: user service, loopback endpoint, no
   peer/offload controls. Readiness is observed HTTP health after the owned unit's
   restart/invocation-stamp boundary, not file presence or optimistic switch state.

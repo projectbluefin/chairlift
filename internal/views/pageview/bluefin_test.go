@@ -14,9 +14,9 @@ func TestChannelRowExplainsEveryState(t *testing.T) {
 		switchable bool
 		wantHas    string
 	}{
-		{name: "on stable, switchable", switchable: true, wantHas: "before they are fully tested"},
-		{name: "on testing, switchable", onTesting: true, switchable: true, wantHas: "Turning this off"},
-		{name: "nothing to switch to", wantHas: "does not offer early updates"},
+		{name: "on stable, switchable", switchable: true, wantHas: "less tested"},
+		{name: "on testing, switchable", onTesting: true, switchable: true, wantHas: "less tested"},
+		{name: "nothing to switch to", wantHas: "Not offered"},
 	}
 
 	for _, test := range tests {
@@ -32,17 +32,15 @@ func TestChannelRowExplainsEveryState(t *testing.T) {
 	}
 }
 
-// Both switchable states replace the running operating system and need a
+// Both switchable states change the running operating system and need a
 // restart. A row that offered the choice without saying so would be asking
-// for a decision on incomplete information.
+// for a decision on incomplete information. (The Advanced group's
+// description states the operating system is replaced.)
 func TestSwitchableChannelRowsDiscloseTheConsequence(t *testing.T) {
 	for _, onTesting := range []bool{true, false} {
 		row := ChannelRow(onTesting, true)
-		subtitle := strings.ToLower(row.Subtitle)
-		for _, want := range []string{"replaces the operating system", "restart"} {
-			if !strings.Contains(subtitle, want) {
-				t.Errorf("ChannelRow(%v, true).Subtitle = %q, want it to contain %q", onTesting, row.Subtitle, want)
-			}
+		if !strings.Contains(strings.ToLower(row.Subtitle), "restart") {
+			t.Errorf("ChannelRow(%v, true).Subtitle = %q, want it to mention a restart", onTesting, row.Subtitle)
 		}
 	}
 	if inert := ChannelRow(false, false); strings.Contains(inert.Subtitle, "restart") {
@@ -55,7 +53,7 @@ func TestSwitchableChannelRowsDiscloseTheConsequence(t *testing.T) {
 func TestChannelSwitchResultAlwaysAsksForARestart(t *testing.T) {
 	for _, toTesting := range []bool{true, false} {
 		got := ChannelSwitchResultSubtitle(toTesting)
-		if !strings.Contains(got, "restart to apply") {
+		if !strings.Contains(strings.ToLower(got), "restart") {
 			t.Errorf("ChannelSwitchResultSubtitle(%v) = %q, want it to ask for a restart", toTesting, got)
 		}
 	}
@@ -93,7 +91,7 @@ func TestDeveloperRowNamesTheCapabilityNotTheGroups(t *testing.T) {
 func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		got := DeveloperResultSubtitle(enabled)
-		if !strings.Contains(got, "log out") {
+		if !strings.Contains(strings.ToLower(got), "log out and back in") {
 			t.Errorf("DeveloperResultSubtitle(%v) = %q, want it to ask for a re-login", enabled, got)
 		}
 	}
@@ -113,7 +111,7 @@ func TestGamingResultReportsCountsAndFailures(t *testing.T) {
 		{name: "installed", enabled: true, changed: 6, wantHas: "Installed 6 gaming apps"},
 		{name: "removed", changed: 4, wantHas: "Removed 4 gaming apps"},
 		{name: "one app", enabled: true, changed: 1, wantHas: "1 gaming app."},
-		{name: "partial failure", enabled: true, changed: 4, failed: 2, wantHas: "2 could not be installed"},
+		{name: "partial failure", enabled: true, changed: 4, failed: 2, wantHas: "2 couldn't be installed"},
 		{name: "nothing to do", enabled: true, wantHas: "Nothing needed changing"},
 	}
 
@@ -125,5 +123,25 @@ func TestGamingResultReportsCountsAndFailures(t *testing.T) {
 					test.enabled, test.changed, test.failed, got, test.wantHas)
 			}
 		})
+	}
+}
+
+// Each of the four installation shapes reads differently, so a component
+// present in both scopes is not mistaken for a system-wide-only one, and the
+// e2e scenarios can tell them apart by suffix.
+func TestGamingComponentStatusNamesEveryScope(t *testing.T) {
+	tests := []struct {
+		user, system bool
+		want         string
+	}{
+		{want: "Not installed"},
+		{system: true, want: "Installed system-wide"},
+		{user: true, want: "Installed for your account"},
+		{user: true, system: true, want: "Installed system-wide and for your account"},
+	}
+	for _, test := range tests {
+		if got := GamingComponentStatus(test.user, test.system); got != test.want {
+			t.Errorf("GamingComponentStatus(%v, %v) = %q, want %q", test.user, test.system, got, test.want)
+		}
 	}
 }

@@ -97,21 +97,21 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**App collections** lead the page and identify Homebrew as a third-party
-source. Installs show native activity and streamed command progress while they
-run, using the same controls in the explicit setup flow. A collection whose
+**App collections** lead the page: each installs a group of apps and tools in
+one step. Installs show native activity and streamed command progress while
+they run, using the same controls in the explicit setup flow. A collection whose
 apps and tools are all already on the system reads **Installed** when the page
 loads, not only after an install in the same session.
 
-**Homebrew applications** and **Command line tools** follow: installed casks
-first, then explicitly requested formulae (the packages Homebrew manages).
+**Installed apps** and **Command line tools** follow: installed casks first,
+then explicitly requested formulae (the packages Homebrew manages).
 Dependency-only formulae do not crowd the inventory. Removing a package asks
 first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
 external catalog launcher, or package search here.
 
-Finally, **Packages from Homebrew** contains **Export package list**, which
-saves a Brewfile in your home folder, replacing any Brewfile already there, so
-you can restore your Homebrew packages on another machine.
+Finally, **Backup** contains **Export app list**, which saves a list of your
+apps and tools to your home folder (named Brewfile, replacing any file already
+there) so you can reinstall them later.
 Export shows **Exporting…** and an activity spinner until it finishes, then
 becomes available again, including after a failed export.
 
@@ -157,10 +157,10 @@ Everything here runs in your own account, without an administrator password.
 contribute tasks to Project Bluefin. Before launch, preflight verifies that
 `xdg-terminal-exec`, `ujust`, the `contribute` recipe, and `podman` are
 available, and that a Hive registration file is present. When a requirement is
-missing, the row explains what is needed and keeps the action button
-unavailable until ready; a missing registration offers a **Registration Guide**
-button that opens the setup instructions. In dry-run mode, it previews the launch without opening
-a terminal.
+missing, the row says in plain words what is needed and keeps the action
+button unavailable until ready; a missing sign-up also shows **Registration Guide**,
+which opens the setup instructions. In dry-run mode, it previews the launch
+without opening a terminal.
 
 ---
 
@@ -196,21 +196,27 @@ offered again. WSL needs hardware virtualization and access to
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected
 switch visible but locked with its prerequisite explained.
-Use **WSL Backend** to choose nsl or Lima. An existing Lima Ubuntu machine is
-kept as the choice when no nsl machine exists, rather than creating a second one.
-**Gaming** lets you select individual applications and tools. Installed states
-distinguish applications from runtime extensions and user from system scope.
-Only selected user-scope entries can be removed. Partial failures stay visible
-instead of being reported as an all-or-nothing success.
+Use **Virtual machine engine** to choose the built-in engine or Lima;
+both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
+built-in machine exists, rather than creating a second one. Likewise, a Debian
+machine the built-in engine made in an earlier release keeps being used, and
+the chooser says so, instead of an Ubuntu machine being created beside it.
+**Gaming** lets you select individual applications and tools, and installs
+them system-wide for every account on the computer, which may ask for an
+administrator password. Each row says whether that app is installed
+system-wide, for your account only (as earlier releases installed it), or
+both. **Remove Selected** asks first, then removes each selected app wherever
+it is installed, except a system-wide copy that came with the system (such as
+Flatseal), which is left in place. Partial failures stay visible instead of
+being reported as an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
-(HPLIP), and Gutenprint — for printers that need more than built-in
-driverless printing. Each runs as a small container in your own account,
-adds nothing to the system, and shares its printers with this computer and
-your network; when one is running, its row names the local web page where you
-add and manage printers. New enables are locked for now, and each row says
-why: a family can be turned on only once its driver image accepts an
-administrator credential for that web page, so nothing on your network can
-reach an unprotected administration screen. An existing unit can still be turned
+(HPLIP), and Gutenprint — offering extra drivers for printers that don't work
+on their own. Each runs as a small container in your own account and shares
+its printers on your network; when one is running, its row names the local
+web page where you add and manage printers. New enables are locked for now,
+and each row says why: a family can be turned on only once its settings page
+can be password-protected, so nothing on your network can reach an
+unprotected administration screen. An existing unit can still be turned
 off. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
@@ -244,7 +250,7 @@ Project Bluefin's dinosaurs and Control Center downloads that one illustration
 to preview it; nothing changes until you press Apply. If the download or the
 change fails, the chooser says so and your old picture stays put. Where
 AccountsService is unavailable the picture is saved to your home folder
-instead and appears after you next sign in, and the confirmation says which of
+instead and appears after you log out and back in, and the confirmation says which of
 the two happened.
 
 **App Launcher Icon** is your own mark on the Show Applications button on
@@ -274,7 +280,7 @@ straight from
 [cncf/artwork](https://github.com/cncf/artwork).
 
 Both **Top Bar Icon** and **Files Icon** can **Rotate at Login**, which moves
-one step down the list each time you sign in — so you stand somewhere slightly
+one step down the list each time you log in — so you stand somewhere slightly
 different every day without ever picking again.
 
 Any section will also take an SVG of your own, which is the way in for
@@ -299,15 +305,16 @@ default; an applet changed to another icon is left alone.
 
 ![Maintenance](screenshots/6-maintenance.png)
 
-One button. **Free up space** removes old downloads and supporting software
-nothing uses any more, and leaves your apps, files, and containers alone. It
+One button. **Free up space** deletes old downloads and app parts nothing uses,
+and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
 spinner remains visible while cleanup is running. Below it sit any
 **Maintenance tasks** whoever set up this computer added. **Powerwash**
 holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
-returns to the previous system version if an update went badly, **Powerwash**
-removes your Flatpak apps and Distrobox containers (Homebrew packages stay), and **Factory Reset**
-reinstalls the system from scratch.
+returns to the previous version if an update caused problems, **Powerwash**
+removes your Flatpak apps and Distrobox containers (everything on the Apps page
+stays), and **Factory Reset** reinstalls the operating system, warning first
+that its reset method is still experimental.
 Those stay hidden normally until turned on or until a rollback exists; the
 Powerwash entry's subtitle names only what the detail currently offers, and
 when the reset actions are off the detail says so at the top.
@@ -324,9 +331,10 @@ Three links, each shown only when it is configured: **Browse documentation**
 (the `website` URL), **Report a problem** (the `issues` URL, where bug reports
 go), and **Ask for help** (the `chat` URL, Ask Bluefin on Bluefin).
 
-A **Diagnostics** group offers a **System diagnostics** row that places
-scrubbed system information — OS, image, system version, full build digest,
-kernel, desktop, and GPU — onto the clipboard to include when asking for help.
+A **Diagnostics** group offers a **System diagnostics** row that copies
+details about this computer — OS, image, system version, full build digest,
+kernel, desktop, and GPU, without your user name or home folder — to the
+clipboard for a help request.
 The version and digest come from the same unprivileged status read as the
 Updates page's Details row, and are omitted where no deployment is readable.
 

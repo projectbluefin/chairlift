@@ -31,7 +31,7 @@ const (
 	GroupTitle       = "Storage"
 	GroupDescription = "Remove files this computer no longer needs."
 	RowTitle         = "Free up space"
-	RowSubtitle      = "Removes old downloads and supporting software nothing uses any more. Your apps, files, and containers are left alone."
+	RowSubtitle      = "Delete old downloads and app parts nothing uses."
 	// ButtonLabel carries no ellipsis: the button acts immediately, it does
 	// not open a dialog.
 	ButtonLabel = "Clean up"
@@ -98,7 +98,7 @@ func Label(id updateproviders.StepID) string {
 	case updateproviders.StepOldDownloads:
 		return "old downloads"
 	case updateproviders.StepUnusedSupport:
-		return "unused supporting software"
+		return "unused app parts"
 	default:
 		return ""
 	}
@@ -148,7 +148,7 @@ func Summarize(dryRun bool, results []updateproviders.StepResult, space Space) O
 		case updateproviders.OutcomeCleaned:
 			parts = append(parts, fmt.Sprintf("Removed %s.", label))
 		case updateproviders.OutcomeFailed:
-			parts = append(parts, fmt.Sprintf("Could not remove %s.", label))
+			parts = append(parts, fmt.Sprintf("Couldn't remove %s.", label))
 		case updateproviders.OutcomeCancelled:
 			parts = append(parts, fmt.Sprintf("Removing %s was cancelled.", label))
 		}

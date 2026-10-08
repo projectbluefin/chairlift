@@ -68,34 +68,31 @@ func (s State) CanSetUp() bool {
 func (s State) MissingPrerequisite() string {
 	switch s {
 	case StateDaemonUnavailable:
-		return "Agent Mode is not running."
+		return "Turn on Agent Mode to use Goose."
 	case StateModelUnavailable:
-		return "No model is selected in Agent Mode."
+		return "Choose a model in Agent Mode to use Goose."
 	case StatePackagesMissing:
-		return "Goose Desktop or linux-mcp-server is not installed."
+		return "Goose isn't set up yet."
 	case StateUnsupported:
-		return "Goose Desktop is only published for x86_64 computers."
+		return "Goose isn't available for this kind of computer."
 	default:
 		return ""
 	}
 }
 
 // Subtitle returns a user-facing explanation of the current state.
-func (s State) Subtitle(model string) string {
+func (s State) Subtitle() string {
 	switch s {
 	case StateReady:
-		if model != "" {
-			return fmt.Sprintf("Ready to launch with %s.", model)
-		}
 		return "Ready to launch."
 	case StateDaemonUnavailable:
-		return "Turn on Agent Mode to launch Goose."
+		return "Turn on Agent Mode to use Goose."
 	case StateModelUnavailable:
-		return "Choose a model to launch Goose."
+		return "Choose a model above to use Goose."
 	case StatePackagesMissing:
-		return "Goose Desktop or linux-mcp-server is not installed."
+		return "Set up Goose to start troubleshooting."
 	case StateUnsupported:
-		return "Goose Desktop is only published for x86_64 computers."
+		return "Goose isn't available for this kind of computer."
 	default:
 		return ""
 	}

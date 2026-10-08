@@ -177,7 +177,7 @@ second mutation. Render untrusted command/provider text with markup disabled.
 
 ### Deferred visibility (async startup)
 
-A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Could not read the list", "Could not check for tool updates") while keeping the last known rows and counts.
+A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Couldn't load this list.", "Could not check for tool updates") while keeping the last known rows and counts.
 
 Runtime query gates remain asynchronous: optional distribution features hide when no definitions exist; tap trust hides when there is nothing to trust; automatic updates stays hidden until its installed timer is observed. Query failures are not invented empty inventories. Discoverability is surface-specific: desktop integrations and unsupported Developer options deliberately remain visible with insensitive controls and explanations, and printer administration locks render visible off switches. Static navigation never reindexes after these workers finish.
 
@@ -659,10 +659,15 @@ children; it is an audit aid, not independent proof of execution.
 `chairlift-updex-helper` calls the updex library in-process and runs no
 subprocess, so its outcome records carry no `executed` list.
 
-Gaming mode, the third Bluefin-family feature, crosses no privilege boundary
-at all: every component is a user-scope Flatpak installed with
-`flatpak install --user`, the same reasoning that keeps Homebrew tap trust
-unprivileged.
+Gaming mode, the third Bluefin-family feature, adds no ChairLift privilege
+route: every component is installed as a **system-scope** Flatpak with
+`flatpak install --system` (#503), from the Flathub remote Bluefin-family
+images configure system-wide — a `--user` install cannot resolve a ref there
+at all (#501). The `flatpak` CLI authorizes system installs and uninstalls
+itself through Flatpak's own PolicyKit actions
+(`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
+`-uninstall` counterparts), so there is no `pkexec`, helper subcommand, or
+ChairLift PolicyKit action for gaming mode, and none may be added.
 
 Its components are not all applications, and `internal/gaming` models the
 difference rather than assuming it away. Each entry in the stack carries a
@@ -675,15 +680,42 @@ mutually exclusive filters, so the inventory runs one query per
 `gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
 inventory reported MangoHud missing however it had been installed, which
 made Enable reinstall it on every run and left Disable unable to remove the
-user-scope ref ChairLift had put there (issue #75). Failure handling follows
-the same shape one level up: a scope that cannot be listed is tolerated, but
-a *kind* that answered in neither scope is fatal, because reporting its
-components missing is exactly the loop that bug was.
+ref ChairLift had put there (issue #75). Failure handling follows the same
+shape one level up: every (scope, kind) query must answer, because an
+unreadable scope could hide a copy and reporting its components missing is
+exactly the loop that bug was.
+
+MangoHud is also the one multi-branch component: Flathub publishes the layer
+once per Platform release (21.08 through 26.08 today), so a bare
+`flatpak install -y` or `uninstall -y` of its ID stops at flatpak's
+"Which do you want to use?" prompt and, with no stdin, fails with "No ref
+chosen". Its `Component.BranchOf` names Steam, which loads the layer: Enable
+installs `ID//BRANCH` with the branch of the runtime Steam runs on
+(`flatpak info --show-runtime`, or `flatpak remote-info --system --app
+--show-runtime flathub` when Steam is not installed), and fails that one
+component rather than guess when neither answers. The inventory records each
+ref's installed branches per scope (`flatpak list --columns=…,branch`), and
+Disable removes every installed branch by its qualified ref.
 
 The Features page offers individual selections, not a single all-or-nothing
-switch. Enable and Disable validate the selected IDs before mutation. System
-entries are never removed, partial outcomes stay visible, and a dry-run keeps
-the confirmed inventory unchanged.
+switch. Enable and Disable validate the selected IDs before mutation. Enable
+installs only components missing from both scopes, so a copy an earlier
+release installed per-user is not duplicated system-wide. Disable removes a
+selected component from exactly the scopes it is installed in — `--user` for
+a per-user copy, `--system` for a system copy, both when both exist — and
+never touches an unselected component; its confirmation dialog says that a
+system-wide copy goes for every account. The exception is a system copy the
+OS image declares it ships — a `[Flatpak Preinstall]` group in
+`/usr/share/flatpak/preinstall.d` or `/etc/flatpak/preinstall.d`, or a
+`flatpak` entry in `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`
+(Flatseal on Bluefin and Dakota). That copy predates gaming mode and is left
+in place: removing it would take a distro default from every account, and
+Flatpak records that uninstall as a permanent opt-out, so `flatpak
+preinstall` would not restore it. Such a component is reported as left in
+place, not removed, and a declaration that cannot be read fails the removal
+before anything runs. A component with a removable copy left is reported as a
+failure, partial outcomes stay visible, and a dry-run keeps the confirmed
+inventory unchanged.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
@@ -1065,9 +1097,9 @@ neither reads nor writes those names today; once an image ships them,
 `Environment=` lines that carry the values — that is the whole follow-up
 that makes a switch live. Until then every family resolves to `StateBlocked`:
 the row is shown with its switch off **and insensitive** and
-`pageview.PrinterAppSubtitle` says the administration page cannot be secured
-until the image accepts an administrator credential and that the switch
-unlocks once it does. That is the actionable, non-enabled state the ADR asks
+`pageview.PrinterAppSubtitle` says it can't be turned on until its settings
+(administration) page can be password-protected — that is, until the image
+accepts an administrator credential. That is the actionable, non-enabled state the ADR asks
 for — never a false enabled indicator and never a switch that silently does
 nothing — and it encodes no unshipped environment variable. The toggle
 handler (`onPrinterAppToggled`) is admitted by a per-family
@@ -1483,7 +1515,7 @@ is handled by the migration described above, not a current System namespace.
 - `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
 - Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
 - Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with Flathub for selected user-scope gaming components and optional Pulp installation
+- Flatpak with a system-scope Flathub remote for selected gaming components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
 - GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
 
 ### Key external Go dependencies

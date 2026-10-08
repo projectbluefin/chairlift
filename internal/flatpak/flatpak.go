@@ -104,17 +104,21 @@ type Application struct {
 	Name          string `json:"name"`
 	ApplicationID string `json:"application"`
 	Version       string `json:"version"`
-	Installation  string `json:"installation"` // "user" or "system"
-	Kind          Kind   `json:"kind"`         // "app" or "runtime"
+	// Branch is the installed ref's branch ("stable" for most applications,
+	// a Platform version such as "25.08" for runtime extensions). A
+	// runtime extension can be installed in several branches at once, and
+	// then only a branch-qualified ref ("ID//BRANCH") names one of them.
+	Branch       string `json:"branch"`
+	Installation string `json:"installation"` // "user" or "system"
+	Kind         Kind   `json:"kind"`         // "app" or "runtime"
 }
 
 // stateChangingCommands are commands that modify system state
 var stateChangingCommands = map[string]bool{
-	"install":    true,
-	"uninstall":  true,
-	"remove":     true,
-	"update":     true,
-	"remote-add": true,
+	"install":   true,
+	"uninstall": true,
+	"remove":    true,
+	"update":    true,
 }
 
 // commandTimeout returns the timeout class for a flatpak invocation: the
@@ -265,7 +269,7 @@ func ListSystemRuntimes() ([]Application, error) {
 // listRefs lists installed refs of one kind for a given installation type
 func listRefs(installFlag string, kind Kind) ([]Application, error) {
 	// Use columns format for structured output
-	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version")
+	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version,branch")
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +321,9 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 		if len(fields) >= 3 {
 			app.Version = strings.TrimSpace(fields[2])
 		}
+		if len(fields) >= 4 {
+			app.Branch = strings.TrimSpace(fields[3])
+		}
 		apps = append(apps, app)
 	}
 
@@ -358,49 +365,6 @@ func InstallFromRemote(appID, remote string, user bool) error {
 	return err
 }
 
-// Flathub is the remote user-scope installs resolve against, and
-// FlathubRepoURL the descriptor `flatpak remote-add` reads it from.
-const (
-	Flathub        = "flathub"
-	FlathubRepoURL = "https://dl.flathub.org/repo/flathub.flatpakrepo"
-)
-
-// userRemoteListArgs lists the user installation's remote names, one per line.
-var userRemoteListArgs = []string{"remotes", "--user", "--columns=name"}
-
-// userFlathubAddArgs adds Flathub to the user installation. --if-not-exists
-// keeps it idempotent if the remote appears between the list and the add.
-var userFlathubAddArgs = []string{"remote-add", "--user", "--if-not-exists", Flathub, FlathubRepoURL}
-
-// HasRemote reports whether `flatpak remotes --columns=name` output names
-// remote.
-func HasRemote(output, remote string) bool {
-	for _, line := range strings.Split(output, "\n") {
-		if strings.TrimSpace(line) == remote {
-			return true
-		}
-	}
-	return false
-}
-
-// EnsureUserFlathub makes Flathub resolvable from the user installation.
-// Many images configure Flathub only system-wide, and a `--user` install
-// cannot resolve a ref against a system remote ("No remote refs found");
-// an unprivileged user also cannot refresh a system remote's appstream. A
-// user remote already present is left alone. The add is state-changing, so
-// the shared runner previews it under --dry-run.
-func EnsureUserFlathub() error {
-	output, err := runFlatpakCommand(userRemoteListArgs...)
-	if err != nil {
-		return err
-	}
-	if HasRemote(output, Flathub) {
-		return nil
-	}
-	_, err = runFlatpakCommand(userFlathubAddArgs...)
-	return err
-}
-
 // Uninstall removes a Flatpak application
 func Uninstall(appID string, user bool) error {
 	args := []string{"uninstall", "-y"}
@@ -413,6 +377,47 @@ func Uninstall(appID string, user bool) error {
 
 	_, err := runFlatpakCommand(args...)
 	return err
+}
+
+// AppRuntime returns the runtime ref ("ID/ARCH/BRANCH") the installed
+// application appID runs on. `flatpak info` without a scope flag searches
+// every installation, so a copy in either scope answers.
+func AppRuntime(appID string) (string, error) {
+	output, err := runFlatpakCommand("info", "--show-runtime", appID)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// RemoteAppRuntime returns the runtime ref ("ID/ARCH/BRANCH") the application
+// appID published on remote runs on, read from that remote as configured in
+// the user or system installation. It is the answer AppRuntime would give
+// once appID is installed from there.
+func RemoteAppRuntime(remote, appID string, user bool) (string, error) {
+	args := []string{"remote-info"}
+	if user {
+		args = append(args, "--user")
+	} else {
+		args = append(args, "--system")
+	}
+	args = append(args, "--app", "--show-runtime", remote, appID)
+
+	output, err := runFlatpakCommand(args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(output), nil
+}
+
+// RefBranch returns the branch of a full ref: "ID/ARCH/BRANCH", as
+// `--show-runtime` prints it, or "KIND/ID/ARCH/BRANCH".
+func RefBranch(ref string) (string, error) {
+	parts := strings.Split(strings.TrimSpace(ref), "/")
+	if (len(parts) != 3 && len(parts) != 4) || slices.Contains(parts, "") {
+		return "", fmt.Errorf("unrecognized Flatpak ref %q", ref)
+	}
+	return parts[len(parts)-1], nil
 }
 
 // Update updates a Flatpak application, or all applications when appID is

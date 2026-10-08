@@ -3,9 +3,7 @@ package pageview
 import (
 	"strings"
 
-	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/capability"
-	"github.com/projectbluefin/chairlift/internal/imageinfo"
 )
 
 // featureTitles names every group the capability floor can hide. Groups with
@@ -16,9 +14,9 @@ var featureTitles = map[[2]string]string{
 	{"updates_page", "bootc_updates_group"}:     "System updates",
 	{"updates_page", "flatpak_updates_group"}:   "App updates",
 	{"updates_page", "brew_updates_group"}:      "Developer tool updates",
-	{"updates_page", "brew_trust_group"}:        "Unverified Homebrew sources",
-	{"updates_page", "channel_group"}:           "Release channel",
-	{"applications_page", "brew_group"}:         "Packages from Homebrew",
+	{"updates_page", "brew_trust_group"}:        "Unverified sources",
+	{"updates_page", "channel_group"}:           "Early updates",
+	{"applications_page", "brew_group"}:         "Installed apps and tools",
 	{"applications_page", "brew_bundles_group"}: "App collections",
 	{"agents_page", "agents_group"}:             "Agent Mode",
 	{"agents_page", "troubleshooting_group"}:    "Troubleshooting",
@@ -28,16 +26,16 @@ var featureTitles = map[[2]string]string{
 	{"maintenance_page", "reset_group"}:         "Powerwash",
 }
 
-// capabilityNames is what a person would look for on their system to supply
-// one capability. Technical names are fine here: the rows sit behind an
-// expander the user opened to ask why.
+// capabilityNames is what a person would look for on their computer to
+// supply one capability. Product names a person can install are fine here;
+// file paths are not.
 var capabilityNames = map[capability.Capability]string{
 	capability.Flatpak:         "Flatpak",
 	capability.Homebrew:        "Homebrew",
 	capability.Distrobox:       "Distrobox",
 	capability.Podman:          "Podman",
-	capability.BootcStage:      bootc.StageScriptPath,
-	capability.ImageDescriptor: imageinfo.DescriptorPath,
+	capability.BootcStage:      "Bluefin's system updates",
+	capability.ImageDescriptor: "Bluefin",
 }
 
 // UnavailableFeatures lists the groups configuration enables but the host

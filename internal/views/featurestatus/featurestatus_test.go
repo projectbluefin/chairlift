@@ -52,14 +52,14 @@ func tableCases() []caseSpec {
 		{
 			name:    "zero components, nil results",
 			results: nil,
-			want:    "f — update check failed",
+			want:    "f — couldn't check for updates",
 			wantOK:  true,
 			branch:  branchFailed,
 		},
 		{
 			name:    "zero components, empty slice",
 			results: []updex.CheckResult{},
-			want:    "f — update check failed",
+			want:    "f — couldn't check for updates",
 			wantOK:  true,
 			branch:  branchFailed,
 		},
@@ -103,7 +103,7 @@ func tableCases() []caseSpec {
 				res("other", "1.0", "1.0", false),
 				res("third", "3.0", "4.0", true),
 			},
-			want:   "f — updates available for 2 components",
+			want:   "f — 2 updates available",
 			wantOK: true,
 			branch: branchMany,
 		},
@@ -114,7 +114,7 @@ func tableCases() []caseSpec {
 				res("other", "1.0", "2.0", true),
 				res("third", "3.0", "4.0", true),
 			},
-			want:   "f — updates available for 3 components",
+			want:   "f — 3 updates available",
 			wantOK: true,
 			branch: branchMany,
 		},
@@ -232,7 +232,7 @@ func TestFeatureWithZeroComponentsReportsFailedCheck(t *testing.T) {
 		if !ok {
 			t.Fatalf("Feature(%q, %#v) ok = false, want true", featureName, results)
 		}
-		want := fmt.Sprintf("%s — update check failed", featureName)
+		want := fmt.Sprintf("%s — couldn't check for updates", featureName)
 		if got.Subtitle != want {
 			t.Errorf("Subtitle = %q, want %q", got.Subtitle, want)
 		}
@@ -339,7 +339,7 @@ func TestSubtitlePluralMultipleUpdates(t *testing.T) {
 	}
 
 	got, _ := Feature(featureName, results)
-	const want = "f — updates available for 2 components"
+	const want = "f — 2 updates available"
 	if got.Subtitle != want {
 		t.Errorf("Subtitle = %q, want %q", got.Subtitle, want)
 	}
@@ -389,8 +389,8 @@ func TestGroupDescriptionZeroUpdates(t *testing.T) {
 func TestGroupDescriptionCheckFailedSaysSo(t *testing.T) {
 	got := GroupDescriptionCheckFailed(9)
 
-	if !strings.Contains(got, "update check failed") {
-		t.Errorf("GroupDescriptionCheckFailed(9) = %q, want it to contain %q", got, "update check failed")
+	if !strings.Contains(got, "couldn't check for updates") {
+		t.Errorf("GroupDescriptionCheckFailed(9) = %q, want it to contain %q", got, "couldn't check for updates")
 	}
 	for _, forbidden := range []string{"(0 updates)", "all up to date"} {
 		if strings.Contains(got, forbidden) {
@@ -405,7 +405,7 @@ func TestGroupDescriptionCheckFailedSaysSo(t *testing.T) {
 
 func TestGroupDescriptionIncompleteZeroUpdates(t *testing.T) {
 	got := GroupDescriptionIncomplete(9, 0)
-	const want = "9 features available — update check incomplete"
+	const want = "9 features available — some couldn't be checked for updates"
 	if got != want {
 		t.Errorf("GroupDescriptionIncomplete(9, 0) = %q, want %q", got, want)
 	}
@@ -422,7 +422,7 @@ func TestGroupDescriptionIncompleteZeroUpdates(t *testing.T) {
 
 func TestGroupDescriptionIncompleteSingular(t *testing.T) {
 	got := GroupDescriptionIncomplete(9, 1)
-	const want = "9 features available (1 update) — update check incomplete"
+	const want = "9 features available (1 update) — some couldn't be checked for updates"
 	if got != want {
 		t.Errorf("GroupDescriptionIncomplete(9, 1) = %q, want %q", got, want)
 	}
@@ -433,7 +433,7 @@ func TestGroupDescriptionIncompleteSingular(t *testing.T) {
 
 func TestGroupDescriptionIncompletePlural(t *testing.T) {
 	got := GroupDescriptionIncomplete(9, 3)
-	const want = "9 features available (3 updates) — update check incomplete"
+	const want = "9 features available (3 updates) — some couldn't be checked for updates"
 	if got != want {
 		t.Errorf("GroupDescriptionIncomplete(9, 3) = %q, want %q", got, want)
 	}

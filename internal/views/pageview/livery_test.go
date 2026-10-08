@@ -82,17 +82,14 @@ func TestAppGridTextCoversGNOMEAndPlasmaAvailability(t *testing.T) {
 	if got := LiveryAppGridRow().Title; got != "Customize the App Launcher Icon" {
 		t.Errorf("app-grid title = %q, want %q", got, "Customize the App Launcher Icon")
 	}
-	subtitle := strings.ToLower(LiveryAppGridRow().Subtitle)
-	for _, desktop := range []string{"gnome", "kickoff", "kde plasma"} {
-		if !strings.Contains(subtitle, desktop) {
-			t.Errorf("app-grid subtitle %q does not mention %q", subtitle, desktop)
-		}
+	if LiveryAppGridRow().Subtitle == "" {
+		t.Error("app-grid row has no subtitle")
 	}
 	if got := LiveryAppGridGroupDescription(true); got != LiveryAppGridFragment {
 		t.Errorf("available app-grid description = %q, want %q", got, LiveryAppGridFragment)
 	}
-	if got := LiveryAppGridGroupDescription(false); !strings.Contains(strings.ToLower(got), "unavailable") || !strings.Contains(strings.ToLower(got), "kickoff") {
-		t.Errorf("unavailable app-grid description = %q, want it to explain the missing Kickoff target", got)
+	if got := LiveryAppGridGroupDescription(false); !strings.Contains(strings.ToLower(got), "not available") {
+		t.Errorf("unavailable app-grid description = %q, want it to say the icon is not available", got)
 	}
 }
 
@@ -123,7 +120,7 @@ func TestRotationRowWarnsForASourceBuild(t *testing.T) {
 	if installed == source {
 		t.Fatal("a source build gets the same promise as an installed one")
 	}
-	if !strings.Contains(strings.ToLower(source), "path") {
+	if !strings.Contains(strings.ToLower(source), "moved or reinstalled") {
 		t.Errorf("source-build subtitle %q does not explain the dependency", source)
 	}
 }
@@ -152,9 +149,9 @@ func TestNoResultsRowNamesTheCatalogItSearched(t *testing.T) {
 		title   string
 		catalog string
 	}{
-		{livery.AppGrid, "No matching brand", "Simple Icons"},
-		{livery.Panel, "No matching mark", "foundation mark"},
-		{livery.Dock, "No matching project", "cncf/artwork"},
+		{livery.AppGrid, "No matching brand", "No brand matches"},
+		{livery.Panel, "No matching mark", "No mark matches"},
+		{livery.Dock, "No matching project", "No project matches"},
 	}
 	for _, tc := range cases {
 		row := LiveryNoResultsRow(tc.surface, "zzq")
@@ -189,5 +186,17 @@ func TestSelectedRowsNameTheCustomFileOnEverySurface(t *testing.T) {
 	}
 	if got := LiverySelectedProjectRow(livery.DefaultCNCFID, path).Subtitle; got == want {
 		t.Errorf("a catalog project row shows the custom path %q", got)
+	}
+}
+
+// A failed Livery step is logged in full; the toast stays plain.
+func TestLiveryFailureIsPlain(t *testing.T) {
+	download := LiveryFailure("fetching that brand mark")
+	if !strings.Contains(download, "internet connection") {
+		t.Errorf("download failure %q does not point at the connection", download)
+	}
+	other := LiveryFailure("saving the selection")
+	if other == download || !strings.HasPrefix(other, "Couldn't") {
+		t.Errorf("non-download failure %q is not a plain retry message", other)
 	}
 }

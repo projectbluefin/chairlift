@@ -19,10 +19,11 @@ func (e *LoadError) LogMessage() string {
 // authoritative configuration failure.
 //
 // Unlike LogMessage above, this reaches a user — internal/window feeds it to
-// ShowErrorToast — so it names the product, not the code name.
+// ShowErrorToast — so it names the product, not the code name, and leaves
+// the file path and parser detail to the log.
 func (e *LoadError) ToastMessage() string {
 	return fmt.Sprintf(
-		"Configuration error: %s. All feature groups are disabled. Fix the configuration file and restart %s.",
-		e.Error(), branding.AppName,
+		"%s's settings file has a mistake, so most features are off. Fix it, then restart %s.",
+		branding.AppName, branding.AppName,
 	)
 }

@@ -11,6 +11,7 @@ import time
 from behave import step, then
 
 import chairlift_atspi as atspi
+from common import read_log
 
 # The persistent AdwToast is published as an "alert" in the main window.
 TOAST_ROLE = "alert"
@@ -45,7 +46,7 @@ def _error_toasts(context):
             continue
         for child in atspi.descendants(node, only_showing=True):
             text = atspi.name(child) or atspi.text(child)
-            if text.startswith("Configuration error: "):
+            if text.startswith(f"{context.expected_app_name}'s settings file has a mistake"):
                 found.append((node, text))
                 break
     return found
@@ -118,25 +119,32 @@ def step_shortcuts_exactly(context):
 # ---------------------------------------------------------------- toast
 
 
+def _configuration_log_line(context):
+    for line in read_log(context).splitlines():
+        if "CONFIGURATION ERROR: " in line:
+            return line
+    raise AssertionError("chairlift.log has no CONFIGURATION ERROR line")
+
+
 @then('the configuration error toast reports a "{kind}" error: "{detail}"')
 def step_toast_reports(context, kind, detail):
-    """The toast is config.LoadError.ToastMessage for the fixture that failed."""
+    """The toast is the plain config.LoadError.ToastMessage; the cause is logged."""
     _, message = _toast_message(context)
-    prefix = f"Configuration error: config {kind} error: {context.config_path}: "
-    suffix = (
-        "All feature groups are disabled. Fix the configuration file and restart "
-        f"{context.expected_app_name}."
-    )
-    assert message.startswith(prefix), f"toast {message!r} does not start with {prefix!r}"
-    assert message.endswith(suffix), f"toast {message!r} does not end with {suffix!r}"
-    assert detail in message[len(prefix):-len(suffix)], f"toast {message!r} does not name {detail!r}"
+    app_name = context.expected_app_name
+    want = f"{app_name}'s settings file has a mistake, so most features are off. Fix it, then restart {app_name}."
+    assert message == want, f"toast {message!r} != {want!r}"
+    line = _configuration_log_line(context)
+    prefix = f"config {kind} error: {context.config_path}: "
+    assert prefix in line, f"log line {line!r} does not contain {prefix!r}"
+    assert detail in line, f"log line {line!r} does not name {detail!r}"
 
 
-@then('the configuration error toast states "{detail}" once')
-def step_toast_cause_once(context, detail):
-    _, message = _toast_message(context)
-    count = message.count(detail)
-    assert count == 1, f"toast names {detail!r} {count} times: {message!r}"
+@then('the configuration error log states "{detail}" once')
+def step_log_cause_once(context, detail):
+    _toast_message(context)
+    line = _configuration_log_line(context)
+    count = line.count(detail)
+    assert count == 1, f"log line names {detail!r} {count} times: {line!r}"
 
 
 @then("the configuration error toast is still shown after {seconds:d} seconds")

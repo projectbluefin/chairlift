@@ -222,8 +222,16 @@ An agent must not break these:
   reject unsupported argv because PolicyKit does not validate arguments after
   action selection. ChairLift ships no passwordless PolicyKit rules; normal
   administrator authentication applies. Homebrew tap trust (`brew trust`) is
-  deliberately per-user and does **not** use pkexec, and neither does gaming
-  mode, whose components are all user-scope Flatpaks. Do not add arbitrary
+  deliberately per-user and does **not** use pkexec. Neither do gaming mode
+  or the Developer Mode Pulp reader: both are **system-scope** Flatpaks
+  (`flatpak install/uninstall -y --system`, #503), because Bluefin's policy is
+  system-wide Flatpaks and its images configure Flathub only as a system
+  remote, where a `--user` install cannot resolve a ref (#501). The `flatpak`
+  CLI authorizes those operations itself through Flatpak's own PolicyKit
+  actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
+  `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
+  helper subcommand or PolicyKit action for them, or add a user Flathub
+  remote. Do not add arbitrary
   privileged command execution, broaden what pkexec runs, or route new
   mutations around the fixed helper/policy pair.
 - **Neither an image reference nor a username crosses the ublue pkexec
@@ -660,12 +668,17 @@ An agent must not break these:
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Developer options remain discoverable without privileged support.** WSL
-  Mode defaults to nsl (persistent Linux machines inside systemd-vmspawn and
+  Mode defaults to nsl (an Ubuntu machine inside systemd-vmspawn and
   QEMU/KVM) with Lima (Ubuntu LTS VM) as an alternative backend, both with an
   explicit `/dev/kvm` permission floor; the fixed `kvm-enable` action grants
-  access to the invoking account, effective after a new login. The backend
+  access to the invoking account, effective after a new login. nsl's managed
+  machine is `ubuntu`, or the `debian` machine an older ChairLift created
+  (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
+  creates `ubuntu` only when neither exists (never a second machine), and turns
+  off with `nsl stop <machine>` on that machine only, which keeps data
+  (`nsl shutdown` would stop the user's own machines too). The backend
   choice is not stored: `wsl_backend` sets the default, and the first read
-  follows an existing Lima machine when no nsl machine exists
+  follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
   the start prerequisites are unmet. Docker uses the
   fixed enable/disable actions for its system daemon and requires actual socket
@@ -673,8 +686,20 @@ An agent must not break these:
   helper actions leave the affected switches insensitive with an explanation
   rather than hiding the options. IDE and terminal-editor installs are
   individually selected, including one JetBrains Toolbox entry. Gaming selects
-  typed application/runtime refs, preserves system-scope installations, and
-  keeps partial failures visible.
+  typed application/runtime refs, installs missing ones system-wide, and
+  keeps partial failures visible. Its inventory reads both scopes, so a copy
+  an earlier release installed per-user counts as present and is not
+  reinstalled. Remove Selected uninstalls each *selected* component from
+  exactly the scopes it is observed in — the user copy with `--user`, the
+  system copy with `--system` — and nothing unselected; its confirmation says
+  system-wide copies go for every account. A system copy the OS image
+  declares it ships (`/usr/share/flatpak/preinstall.d`,
+  `/etc/flatpak/preinstall.d`, or
+  `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile` — Flatseal on
+  Bluefin and Dakota) is left in place and reported as such, so undoing
+  gaming mode never removes a distro default for every account; an
+  unreadable declaration fails the removal closed. A component with a
+  removable copy left is a failure, not a removal.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
@@ -750,9 +775,11 @@ An agent must not break these:
   `openDeveloperOnboarding` uses, behind
   `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)`: a
   `--dry-run` preview, a disable, a page restore, and a failed helper call all
-  produce an empty plan and start no worker. Everything is user-scope — a
-  Flatpak in the invoking account and one file under `~/.local/share/chairlift`
-  — so no `pkexec` route is involved, Pulp's sandboxed store is never written
+  produce an empty plan and start no worker. Pulp is a system-scope Flatpak
+  from the system Flathub remote (already present in either scope means no
+  install), authorized by Flatpak's own PolicyKit as above, and the catalog is
+  one file under `~/.local/share/chairlift` — so no `pkexec` route is
+  involved, Pulp's sandboxed store is never written
   to, and the feedback never claims a subscription was imported. The two
   optional outcomes are reported separately from the permission change, which
   has already succeeded: a failed install is a failed install, it rolls nothing
@@ -1190,8 +1217,8 @@ An agent must not break these:
   `pageview.PowerwashConfirmation`/`FactoryResetConfirmation`, which is where
   the `--experimental` disclosure for Factory Reset's `bootc install reset`
   argv lives; do not move that text inline where it stops being tested.
-  Powerwash needs no privilege (both steps run in the invoking account, like
-  gaming mode); Factory Reset is the new `factory-reset` action on
+  Powerwash needs no privilege (both steps run in the invoking account);
+  Factory Reset is the new `factory-reset` action on
   `chairlift-helper` and takes no argument, since it has exactly one
   target — the image already booted. It is not offered on a composefs host
   (`bootc.ComposefsBooted`): `bootc install reset` needs OSTree storage and

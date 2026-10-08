@@ -48,9 +48,9 @@ import (
 // something they can neither act on nor change.
 func BundleDump(dryRun bool) string {
 	if dryRun {
-		return "[DRY-RUN] Preview: your package list would be exported to your home folder — no changes made"
+		return "[DRY-RUN] Preview: your app list would be saved to your home folder — no changes made"
 	}
-	return "Package list exported to your home folder"
+	return "Saved your app list to your home folder."
 }
 
 // BundleInstallDecision is the result of installing one app collection.
@@ -164,7 +164,7 @@ func SystemStage(dryRun bool, staged bool) string {
 		return "[DRY-RUN] Preview: no changes made — system state was not checked or modified by this click"
 	}
 	if staged {
-		return "System update staged. Restart to apply."
+		return "Update downloaded. Restart to install it."
 	}
 	return "System is up to date"
 }
@@ -214,7 +214,7 @@ func TapTrust(dryRun bool, tapName string) TapTrustDecision {
 	}
 	return TapTrustDecision{
 		MutateUI: true,
-		Toast:    fmt.Sprintf("Trusted %s. Its packages can update again.", tapName),
+		Toast:    fmt.Sprintf("Trusted %s. Its software can update again.", tapName),
 	}
 }
 
@@ -306,12 +306,12 @@ func FeatureToggle(dryRun bool, enable bool, name string) FeatureToggleDecision 
 	if enable {
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("%s enabled. Update to download, reboot to apply.", name),
+			Toast:   fmt.Sprintf("%s turned on. Update, then restart to use it.", name),
 		}
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   fmt.Sprintf("%s disabled. Update to apply, reboot to complete.", name),
+		Toast:   fmt.Sprintf("%s turned off. Update, then restart to finish.", name),
 	}
 }
 
@@ -394,7 +394,7 @@ func FeatureUpdate(dryRun bool) string {
 	if dryRun {
 		return "[DRY-RUN] Preview: features would be updated — no changes made"
 	}
-	return "Features updated. Changes apply after reboot."
+	return "Features updated. Restart to apply."
 }
 
 // ChannelSwitch decides whether the Testing Channel switch should confirm
@@ -413,9 +413,13 @@ func ChannelSwitch(dryRun bool, toTesting bool) FeatureToggleDecision {
 			Toast:   fmt.Sprintf("[DRY-RUN] Preview: would switch to the %s channel — no changes made", channel),
 		}
 	}
+	state := "off"
+	if toTesting {
+		state = "on"
+	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   fmt.Sprintf("Switched to the %s channel. Restart to apply.", channel),
+		Toast:   fmt.Sprintf("Early updates are %s. Restart to finish.", state),
 	}
 }
 
@@ -447,28 +451,28 @@ func DeveloperMode(dryRun bool, enable bool, skipped []string) FeatureToggleDeci
 	if enable && len(skipped) > 0 {
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("Developer mode enabled (no %s). Log out and back in.", strings.Join(skipped, ", ")),
+			Toast:   fmt.Sprintf("Developer Mode is on (no %s). Log out and back in.", strings.Join(skipped, ", ")),
 		}
 	}
-	return FeatureToggleDecision{
-		Confirm: true,
-		Toast:   fmt.Sprintf("Developer mode %s. Log out and back in to apply.", verb),
+	if enable {
+		return FeatureToggleDecision{Confirm: true, Toast: "Developer Mode turned on. Log out and back in to use it."}
 	}
+	return FeatureToggleDecision{Confirm: true, Toast: "Developer Mode turned off. Log out and back in to finish."}
 }
 
 // GamingMode decides whether the Gaming Mode switch should confirm its new
 // state, and what toast to show.
 //
 // Gaming mode differs from the other two toggles in one way that matters
-// here: it installs user-scope Flatpaks one at a time, so a live run can
+// here: it installs or removes Flatpaks one at a time, so a live run can
 // partly succeed. Confirm therefore is not simply !dryRun — a live run that
 // changed nothing, or whose every component failed, must not confirm either.
 //
-// skipped counts components the image preinstalled system-wide, which
-// removal leaves alone. Those are neither a change nor a failure, so they
-// are reported separately: telling a user "0 removed" with no explanation
-// when the components are still visibly installed is the confusing outcome.
-func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureToggleDecision {
+// kept counts selected components whose system copy came with the OS image,
+// which removal leaves in place. Those are neither a change nor a failure, so
+// they are reported separately: "0 removed" with no explanation, while the
+// components are still visibly installed, is the confusing outcome.
+func GamingMode(dryRun bool, enable bool, changed, failed, kept int) FeatureToggleDecision {
 	verb := "removed"
 	if enable {
 		verb = "installed"
@@ -476,40 +480,44 @@ func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureT
 
 	if dryRun {
 		// A preview confirms nothing, but it still reports what the run
-		// would do: a removal whose every component belongs to the system
-		// image would remove nothing, and saying "would be removed" there
-		// promises a change the live run will not make.
+		// would do: a removal whose every component came with the image
+		// removes nothing, and saying "would be removed" there promises a
+		// change the live run will not make.
 		var toast string
 		switch {
 		case changed == 0 && failed > 0:
 			toast = fmt.Sprintf("[DRY-RUN] Preview: no gaming components could be %s (%d failed) — no changes made", verb, failed)
-		case changed == 0 && skipped > 0:
-			toast = fmt.Sprintf("[DRY-RUN] Preview: nothing to remove — %d component(s) installed system-wide would be left in place", skipped)
+		case changed == 0 && kept > 0:
+			toast = fmt.Sprintf("[DRY-RUN] Preview: nothing to remove — %d component(s) that came with the system would be left in place", kept)
 		case changed == 0:
 			toast = "[DRY-RUN] Preview: gaming mode is already in the requested state — no changes made"
 		default:
 			toast = fmt.Sprintf("[DRY-RUN] Preview: gaming components would be %s — no changes made", verb)
-			if skipped > 0 {
-				toast += fmt.Sprintf(". %d component(s) installed system-wide would be left in place", skipped)
+			if kept > 0 {
+				toast += fmt.Sprintf(". %d component(s) that came with the system would be left in place", kept)
 			}
 		}
 		return FeatureToggleDecision{Confirm: false, Toast: toast}
 	}
 
 	suffix := ""
-	if skipped > 0 {
-		suffix = fmt.Sprintf(" %d component(s) installed system-wide were left in place.", skipped)
+	if kept > 0 {
+		suffix = " Apps installed for everyone were kept."
+	}
+	done, base := "Removed", "remove"
+	if enable {
+		done, base = "Installed", "install"
 	}
 
 	switch {
 	case changed == 0 && failed > 0:
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   fmt.Sprintf("No gaming components could be %s (%d failed).%s", verb, failed, suffix),
+			Toast:   fmt.Sprintf("Couldn't %s any gaming apps. Try again.%s", base, suffix),
 		}
-	case changed == 0 && skipped > 0:
-		// Nothing was removed, but only because everything present belongs
-		// to the system image. The switch must not claim gaming mode is off.
+	case changed == 0 && kept > 0:
+		// Nothing was removed, only because everything selected came with
+		// the image. The switch must not claim gaming mode is off.
 		return FeatureToggleDecision{
 			Confirm: false,
 			Toast:   fmt.Sprintf("Nothing to remove.%s", suffix),
@@ -517,19 +525,26 @@ func GamingMode(dryRun bool, enable bool, changed, failed, skipped int) FeatureT
 	case changed == 0:
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   "Gaming mode is already in the requested state.",
+			Toast:   "Nothing needed changing.",
 		}
 	case failed > 0:
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("%d gaming component(s) %s, %d failed.%s", changed, verb, failed, suffix),
+			Toast:   fmt.Sprintf("%s %s. %d couldn't be %s.%s", done, gamingAppCount(changed), failed, verb, suffix),
 		}
 	default:
 		return FeatureToggleDecision{
 			Confirm: true,
-			Toast:   fmt.Sprintf("%d gaming component(s) %s.%s", changed, verb, suffix),
+			Toast:   fmt.Sprintf("%s %s.%s", done, gamingAppCount(changed), suffix),
 		}
 	}
+}
+
+func gamingAppCount(n int) string {
+	if n == 1 {
+		return "1 gaming app"
+	}
+	return fmt.Sprintf("%d gaming apps", n)
 }
 
 // Rollback decides whether the rollback row should adopt its
@@ -541,12 +556,12 @@ func Rollback(dryRun bool) FeatureToggleDecision {
 	if dryRun {
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   "[DRY-RUN] Preview: would roll back to the previous system image — no changes made",
+			Toast:   "[DRY-RUN] Preview: would go back to the previous version — no changes made",
 		}
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   "Rolled back. Restart to boot the previous image.",
+		Toast:   "Restart to use the previous version.",
 	}
 }
 
@@ -557,12 +572,12 @@ func FactoryReset(dryRun bool) FeatureToggleDecision {
 	if dryRun {
 		return FeatureToggleDecision{
 			Confirm: false,
-			Toast:   "[DRY-RUN] Preview: would factory reset this system — no changes made",
+			Toast:   "[DRY-RUN] Preview: would reset this computer — no changes made",
 		}
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   "Factory reset applied. Restart to complete it.",
+		Toast:   "Restart to finish resetting this computer.",
 	}
 }
 
@@ -576,7 +591,7 @@ func FactoryReset(dryRun bool) FeatureToggleDecision {
 // removal that would happen.
 func Powerwash(dryRun bool, succeeded, failed int) FeatureToggleDecision {
 	if dryRun {
-		toast := "[DRY-RUN] Preview: would remove your Flatpaks and Distrobox containers — no changes made"
+		toast := "[DRY-RUN] Preview: would remove your Flatpak apps and containers — no changes made"
 		switch {
 		case failed > 0:
 			toast = "[DRY-RUN] Preview: could not read everything Powerwash would remove — no changes made"
@@ -587,13 +602,13 @@ func Powerwash(dryRun bool, succeeded, failed int) FeatureToggleDecision {
 	}
 	switch {
 	case succeeded == 0 && failed == 0:
-		return FeatureToggleDecision{Confirm: true, Toast: "Nothing was installed to remove."}
+		return FeatureToggleDecision{Confirm: true, Toast: "There was nothing to remove."}
 	case failed > 0 && succeeded == 0:
-		return FeatureToggleDecision{Confirm: false, Toast: "Powerwash failed — nothing was removed."}
+		return FeatureToggleDecision{Confirm: false, Toast: "Couldn't remove anything. Try again."}
 	case failed > 0:
-		return FeatureToggleDecision{Confirm: true, Toast: "Powerwash finished with problems."}
+		return FeatureToggleDecision{Confirm: true, Toast: "Some apps or containers couldn't be removed. Try again."}
 	default:
-		return FeatureToggleDecision{Confirm: true, Toast: "Powerwash complete."}
+		return FeatureToggleDecision{Confirm: true, Toast: "Removed your Flatpak apps and containers."}
 	}
 }
 
@@ -632,7 +647,7 @@ func DriverSwitch(dryRun bool, driver string) FeatureToggleDecision {
 	}
 	return FeatureToggleDecision{
 		Confirm: true,
-		Toast:   fmt.Sprintf("Switched to the %s image. Restart to apply.", driver),
+		Toast:   fmt.Sprintf("Switched to the %s driver. Restart to finish.", driver),
 	}
 }
 
@@ -652,7 +667,7 @@ func AgentMode(dryRun bool, enable bool) FeatureToggleDecision {
 	if enable {
 		return FeatureToggleDecision{Confirm: true, Toast: "Agent Mode is on."}
 	}
-	return FeatureToggleDecision{Confirm: true, Toast: "Agent Mode is off. The software and its models were kept."}
+	return FeatureToggleDecision{Confirm: true, Toast: "Agent Mode is off. Your models were kept."}
 }
 
 // PrinterApp returns the decision for one printer application family's
@@ -675,7 +690,7 @@ func PrinterApp(dryRun bool, enable bool, rowTitle string) FeatureToggleDecision
 	if enable {
 		return FeatureToggleDecision{Confirm: true, Toast: rowTitle + " is on."}
 	}
-	return FeatureToggleDecision{Confirm: true, Toast: rowTitle + " is off. The driver and its printer settings were kept."}
+	return FeatureToggleDecision{Confirm: true, Toast: rowTitle + " is off. Your printer settings were kept."}
 }
 
 // AskBluefinMenuDecision is the outcome of flipping the Agents page's "Show

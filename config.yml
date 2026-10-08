@@ -81,7 +81,7 @@ features_page:
   #
   # install_pulp and stage_feeds are optional follow-on steps for a confirmed
   # Developer Mode enable, and both ship off. Turning the switch on grants
-  # developer access either way; these only add a user-scope Pulp Flatpak and
+  # developer access either way; these only add a system-wide Pulp Flatpak and
   # a staged feed list the user imports themselves. Switching Developer Mode
   # back off removes neither, and never touches feeds already imported.
   dx_group:

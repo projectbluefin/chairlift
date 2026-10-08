@@ -22,7 +22,7 @@ func (uh *UserHome) buildContributeGroup(page *adw.PreferencesPage) {
 	row := adw.NewActionRow()
 	row.SetTitle("Contribute to Bluefin")
 	row.SetUseMarkup(false)
-	row.SetSubtitle("Checking requirements…")
+	row.SetSubtitle("Checking…")
 
 	uh.contributeSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.contributeSpinner.Widget)
@@ -127,7 +127,7 @@ func (uh *UserHome) onContributeClicked() {
 			uh.refreshContributePreflight()
 			if exitErr != nil {
 				log.Printf("views: contribute session exited with error: %v", exitErr)
-				uh.toastAdder.ShowErrorToast("Contribute session exited with an error.")
+				uh.toastAdder.ShowErrorToast("Contribute closed unexpectedly.")
 			}
 		})
 	})
@@ -135,6 +135,6 @@ func (uh *UserHome) onContributeClicked() {
 		uh.contributeGate.Reset()
 		uh.refreshContributePreflight()
 		log.Printf("views: launch contribute failed: %v", err)
-		uh.toastAdder.ShowErrorToast("Could not launch Contribute to Bluefin.")
+		uh.toastAdder.ShowErrorToast("Couldn't open Contribute. Try again.")
 	}
 }

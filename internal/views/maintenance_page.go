@@ -239,7 +239,7 @@ func (uh *UserHome) onBrewBundleDumpClicked(button *gtk.Button, spinner *gtk.Spi
 			button.SetLabel("Export")
 			if err != nil {
 				log.Printf("Package list export failed: %v", err)
-				uh.toastAdder.ShowErrorToast("Could not export your package list")
+				uh.toastAdder.ShowErrorToast("Couldn't save your app list. Try again.")
 				return
 			}
 			uh.toastAdder.ShowToast(actionmsg.BundleDump(dryrun.Enabled()))

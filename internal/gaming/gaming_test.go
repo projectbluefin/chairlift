@@ -26,6 +26,18 @@ func allComponentIDs() []string {
 	return ids
 }
 
+// kindOf returns the ref kind the stack declares for id. An ID that is not
+// part of the stack is treated as an application, which is what an unrelated
+// Flatpak in an inventory almost always is.
+func kindOf(id string) flatpak.Kind {
+	for _, component := range components {
+		if component.ID == id {
+			return component.Kind
+		}
+	}
+	return flatpak.KindApplication
+}
+
 // refOf is the inventory key production code builds for an ID: its declared
 // kind plus the ID. Looking a component up under the other kind is the
 // mistake the Ref key exists to make visible.
@@ -39,6 +51,12 @@ func refsOf(ids ...string) map[Ref]bool {
 		refs[refOf(id)] = true
 	}
 	return refs
+}
+
+// systemScope builds a Scope in which every listed ID is installed in the
+// system scope only, where Enable puts it.
+func systemScope(ids []string) Scope {
+	return Scope{Installed: refsOf(ids...), User: refsOf(), System: refsOf(ids...)}
 }
 
 func TestComponentsHaveUniqueIDsAndDisplayText(t *testing.T) {
@@ -170,7 +188,7 @@ func TestDeriveClassifiesEveryInstallationShape(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			state := Derive(UserScope(test.installed))
+			state := Derive(systemScope(test.installed))
 			if state.Enabled != test.wantEnabled {
 				t.Errorf("Derive(%v).Enabled = %v, want %v", test.installed, state.Enabled, test.wantEnabled)
 			}
@@ -202,7 +220,7 @@ func TestSummaryDescribesEachState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got := Derive(UserScope(test.installed)).Summary()
+			got := Derive(systemScope(test.installed)).Summary()
 			if !strings.Contains(got, test.wantHas) {
 				t.Errorf("Summary() = %q, want it to contain %q", got, test.wantHas)
 			}
@@ -212,7 +230,7 @@ func TestSummaryDescribesEachState(t *testing.T) {
 
 func stubInstalled(t *testing.T, ids []string, err error) {
 	t.Helper()
-	stubScope(t, UserScope(ids), err)
+	stubScope(t, systemScope(ids), err)
 }
 
 func stubScope(t *testing.T, scope Scope, err error) {
@@ -221,17 +239,6 @@ func stubScope(t *testing.T, scope Scope, err error) {
 	previous := listInstalled
 	listInstalled = func() (Scope, error) { return scope, err }
 	t.Cleanup(func() { listInstalled = previous })
-	stubUserRemote(t, func() error { return nil })
-}
-
-// stubUserRemote replaces the user-Flathub step so install tests count only
-// the installs; TestEnableEnsuresTheUserRemoteBeforeInstalling covers it.
-func stubUserRemote(t *testing.T, ensure func() error) {
-	t.Helper()
-
-	previous := ensureUserRemote
-	ensureUserRemote = ensure
-	t.Cleanup(func() { ensureUserRemote = previous })
 }
 
 func TestStatusUsesTheFlatpakQuery(t *testing.T) {
@@ -262,18 +269,19 @@ func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 	if installed, failures := Enable(allComponentIDs()); installed != nil || len(failures) != 1 {
 		t.Errorf("Enable() = (%v, %v), want (nil, one error)", installed, failures)
 	}
-	if removed, skipped, failures := Disable(allComponentIDs()); removed != nil || skipped != nil || len(failures) != 1 {
-		t.Errorf("Disable() = (%v, %v, %v), want (nil, nil, one error)", removed, skipped, failures)
+	if removed, kept, failures := Disable(allComponentIDs()); removed != nil || kept != nil || len(failures) != 1 {
+		t.Errorf("Disable() = (%v, %v, %v), want (nil, nil, one error)", removed, kept, failures)
 	}
 }
 
-// A component the image preinstalled system-wide is present — it counts
-// toward gaming mode being on — but ChairLift did not install it and cannot
-// remove it without privilege gaming mode deliberately does not take.
+// Every present component counts toward gaming mode being on, whichever
+// scope holds it, and each scope a component is installed in is reported
+// separately — a component can be in both.
 func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 	scope := Scope{
 		Installed: refsOf(steam, protonUp, mangohud),
-		User:      refsOf(protonUp),
+		User:      refsOf(protonUp, mangohud),
+		System:    refsOf(steam, mangohud),
 	}
 
 	state := Derive(scope)
@@ -283,32 +291,10 @@ func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 	if !reflect.DeepEqual(state.Installed, []string{steam, protonUp, mangohud}) {
 		t.Errorf("Derive().Installed = %v, want every present component", state.Installed)
 	}
-	if !reflect.DeepEqual(state.UserInstalled, []string{protonUp}) {
-		t.Errorf("Derive().UserInstalled = %v, want only the user-scope component", state.UserInstalled)
+	if !reflect.DeepEqual(state.UserInstalled, []string{protonUp, mangohud}) {
+		t.Errorf("Derive().UserInstalled = %v, want the user-scope components", state.UserInstalled)
 	}
-	if !reflect.DeepEqual(state.SystemOnly, []string{steam, mangohud}) {
-		t.Errorf("Derive().SystemOnly = %v, want the system-scope components", state.SystemOnly)
-	}
-}
-
-// The regression this guards: iterating Installed rather than UserInstalled
-// makes Disable attempt a user-scope uninstall of a system-wide component,
-// which fails and is reported to the user as an error for a component that
-// was never ChairLift's to remove.
-func TestDisableSkipsSystemScopeComponentsInsteadOfFailingOnThem(t *testing.T) {
-	stubScope(t, Scope{
-		Installed: refsOf(steam, protonUp),
-		User:      refsOf(),
-	}, nil)
-
-	removed, skipped, failures := Disable(allComponentIDs())
-	if len(failures) != 0 {
-		t.Errorf("Disable() failures = %v, want none for components installed system-wide", failures)
-	}
-	if len(removed) != 0 {
-		t.Errorf("Disable() removed = %v, want none", removed)
-	}
-	if !reflect.DeepEqual(skipped, []string{steam, protonUp}) {
-		t.Errorf("Disable() skipped = %v, want both system-scope components", skipped)
+	if !reflect.DeepEqual(state.SystemInstalled, []string{steam, mangohud}) {
+		t.Errorf("Derive().SystemInstalled = %v, want the system-scope components", state.SystemInstalled)
 	}
 }

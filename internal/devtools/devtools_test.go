@@ -248,7 +248,7 @@ GUI /usr/bin/waypipe
 MISSING /usr/libexec/virtiofsd
 OK /usr/bin/systemctl
 `,
-			wantAction: "Needs host prerequisites: systemd-vmspawn, /usr/libexec/virtiofsd (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 		{
@@ -256,7 +256,7 @@ OK /usr/bin/systemctl
 			output: `OK /usr/bin/systemd-vmspawn
 MISSING UEFI firmware (vmspawn found no x86_64 firmware without Secure Boot; install ovmf)
 `,
-			wantAction: "Needs host prerequisite: UEFI firmware (ovmf) (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 		{
@@ -264,7 +264,7 @@ MISSING UEFI firmware (vmspawn found no x86_64 firmware without Secure Boot; ins
 			output: `OK /usr/bin/systemd-vmspawn
 MISSING you are not a member of the kvm group
 `,
-			wantAction: "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.",
+			wantAction: NeedsKVMAccess,
 			wantKVM:    true,
 		},
 		{
@@ -273,7 +273,7 @@ MISSING you are not a member of the kvm group
 OK kvm group membership
 KVM/vsock group access: permission denied
 `,
-			wantAction: "Needs hardware virtualization access. Enabling requests administrator authentication, then a new login before setup can continue.",
+			wantAction: NeedsKVMAccess,
 			wantKVM:    true,
 		},
 		{
@@ -281,7 +281,7 @@ KVM/vsock group access: permission denied
 			output: `OK /usr/bin/systemd-vmspawn
 User namespaces: operation not permitted
 `,
-			wantAction: "Needs host prerequisite: user namespaces (run 'nsl doctor').",
+			wantAction: NeedsPrerequisite,
 			wantKVM:    false,
 		},
 	}
@@ -295,7 +295,26 @@ User namespaces: operation not permitted
 			if gotKVM != tt.wantKVM {
 				t.Errorf("ParseNSLDoctor() isKVM = %v, want %v", gotKVM, tt.wantKVM)
 			}
+			// The row shows this text: it must not name programs, devices,
+			// or commands a person cannot act on.
+			for _, jargon := range []string{"nsl", "/", "systemd", "kvm", "ovmf"} {
+				if strings.Contains(gotAction, jargon) {
+					t.Errorf("ParseNSLDoctor() actionable = %q names %q", gotAction, jargon)
+				}
+			}
 		})
+	}
+}
+
+func TestPrerequisiteErrorKeepsRawErrorAndPlainMessage(t *testing.T) {
+	raw := errors.New("nsl [doctor]: exit status 1: MISSING ovmf")
+	err := error(&PrerequisiteError{Message: NeedsPrerequisite, Err: raw})
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != NeedsPrerequisite {
+		t.Fatalf("errors.As(*PrerequisiteError) = %+v", prerequisite)
+	}
+	if !errors.Is(err, raw) || err.Error() != raw.Error() {
+		t.Fatalf("PrerequisiteError lost the raw error: %v", err)
 	}
 }
 
@@ -335,6 +354,75 @@ debian  running  debian:13  shared  *
 	})
 }
 
+// WSL Mode manages the ubuntu machine, or the debian machine an older
+// ChairLift created; the shared VM and machines with other names are not its.
+func TestParseNSLListPicksTheManagedMachine(t *testing.T) {
+	header := "VM  STATE  IMAGE  RESOURCES  DATA DISK\nshared  running  ubuntu:26.04  4 CPUs, 8 GiB  20 GiB\n\nMACHINE  STATE  IMAGE  TIER  DEFAULT\n"
+	for _, tc := range []struct {
+		name     string
+		machines string
+		want     WSLState
+	}{
+		{"ubuntu only", "ubuntu  running  ubuntu:26.04  shared  *\n", WSLState{Exists: true, Running: true, Machine: "ubuntu"}},
+		{"legacy debian only", "debian  stopped  debian:13  shared  *\n", WSLState{Exists: true, Machine: "debian"}},
+		{"ubuntu preferred over debian", "debian  running  debian:13  shared  *\nubuntu  stopped  ubuntu:26.04  shared\n", WSLState{Exists: true, Machine: "ubuntu"}},
+		{"user's own machine is not WSL Mode's", "fedora  running  fedora:42  shared  *\n", WSLState{}},
+		{"running VM without machines", "", WSLState{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ParseNSLList(header + tc.machines); got != tc.want {
+				t.Fatalf("ParseNSLList = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEngineSubtitleNamesALegacyDebianMachine(t *testing.T) {
+	if got := EngineSubtitle("debian"); !strings.Contains(got, "Debian") {
+		t.Fatalf("EngineSubtitle(debian) = %q, want it to say the built-in engine runs Debian", got)
+	}
+	for _, machine := range []string{"", "ubuntu"} {
+		if got := EngineSubtitle(machine); got != "Both engines run Ubuntu." {
+			t.Fatalf("EngineSubtitle(%q) = %q", machine, got)
+		}
+	}
+}
+
+// A host whose WSL Mode machine is the debian one an older ChairLift created
+// must start and probe that machine, never create ubuntu beside it or start a
+// machine that does not exist.
+func TestNSLStartUsesTheExistingLegacyMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian stopped' ;;\n*) exit 0 ;;\nesac\n")
+	if err := startNSL(context.Background(), func(string) {}); err != nil {
+		t.Fatalf("startNSL: %v", err)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	want := []string{"list", "start debian", "run -m debian --cd / true"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("nsl calls = %q, want %q", got, want)
+	}
+}
+
+func TestNSLStartCreatesUbuntuOnlyWithoutAManagedMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'fedora running' ;;\n*) exit 0 ;;\nesac\n")
+	if err := startNSL(context.Background(), func(string) {}); err != nil {
+		t.Fatalf("startNSL: %v", err)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	want := []string{"list", "create ubuntu --distro ubuntu:26.04", "start ubuntu", "run -m ubuntu --cd / true"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("nsl calls = %q, want %q", got, want)
+	}
+}
+
 func TestNSLReadinessRequiresShellProbe(t *testing.T) {
 	fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian running' ;;\nrun) exit 1 ;;\nesac\n")
 	state, err := WSLStatus(context.Background(), BackendNSL)
@@ -346,8 +434,8 @@ func TestNSLReadinessRequiresShellProbe(t *testing.T) {
 	}
 }
 
-func TestNSLDisableShutsDownMachinesWithoutDeletingData(t *testing.T) {
-	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'MACHINE STATE' 'debian running' ;;\nshutdown) exit 0 ;;\nesac\n")
+func TestNSLDisableStopsOnlyTheManagedMachine(t *testing.T) {
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'VM STATE' 'shared running' 'MACHINE STATE' 'work running' 'debian running' ;;\n*) exit 0 ;;\nesac\n")
 	if err := SetWSL(context.Background(), BackendNSL, false, nil); err != nil {
 		t.Fatalf("SetWSL disable failed: %v", err)
 	}
@@ -355,11 +443,14 @@ func TestNSLDisableShutsDownMachinesWithoutDeletingData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(calls), "shutdown") {
-		t.Fatalf("SetWSL disable must call shutdown, got: %s", calls)
+	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
+	if got[len(got)-1] != "stop debian" {
+		t.Fatalf("disable must stop only the managed machine, got calls %q", got)
 	}
-	if strings.Contains(string(calls), "remove") {
-		t.Fatalf("SetWSL disable must not remove machine: %s", calls)
+	for _, call := range got {
+		if call == "shutdown" || strings.Contains(call, "work") || strings.HasPrefix(call, "remove") {
+			t.Fatalf("disable touched more than the managed machine: %q", got)
+		}
 	}
 }
 

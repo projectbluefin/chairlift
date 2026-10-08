@@ -79,6 +79,19 @@ func TestParseRefList(t *testing.T) {
 			}},
 		},
 		{
+			// Flathub publishes a runtime extension in one branch per
+			// Platform release, and several may be installed at once; the
+			// branch column is what tells those rows apart.
+			name:        "runtime extension rows carry their branch",
+			output:      "MangoHud\torg.freedesktop.Platform.VulkanLayer.MangoHud\t0.8.4\t25.08\nMangoHud\torg.freedesktop.Platform.VulkanLayer.MangoHud\t0.8.4\t26.08\n",
+			installFlag: "--system",
+			kind:        KindRuntime,
+			want: []Application{
+				{Name: "MangoHud", ApplicationID: "org.freedesktop.Platform.VulkanLayer.MangoHud", Version: "0.8.4", Branch: "25.08", Installation: "system", Kind: KindRuntime},
+				{Name: "MangoHud", ApplicationID: "org.freedesktop.Platform.VulkanLayer.MangoHud", Version: "0.8.4", Branch: "26.08", Installation: "system", Kind: KindRuntime},
+			},
+		},
+		{
 			name:        "malformed and blank rows are skipped",
 			output:      "\nnot-enough-fields\n",
 			installFlag: "--user",
@@ -101,6 +114,22 @@ func TestParseRefList(t *testing.T) {
 	}
 }
 
+func TestRefBranchReadsTheLastRefSegment(t *testing.T) {
+	for ref, want := range map[string]string{
+		"org.freedesktop.Platform/x86_64/26.08\n":                            "26.08",
+		"runtime/org.freedesktop.Platform.VulkanLayer.MangoHud/x86_64/25.08": "25.08",
+	} {
+		if got, err := RefBranch(ref); err != nil || got != want {
+			t.Errorf("RefBranch(%q) = %q, %v; want %q", ref, got, err, want)
+		}
+	}
+	for _, ref := range []string{"", "org.freedesktop.Platform", "org.freedesktop.Platform/x86_64/", "a/b/c/d/e"} {
+		if got, err := RefBranch(ref); err == nil {
+			t.Errorf("RefBranch(%q) = %q, want an error", ref, got)
+		}
+	}
+}
+
 func TestCommandWrappersUseExpectedArguments(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
@@ -109,6 +138,7 @@ func TestCommandWrappersUseExpectedArguments(t *testing.T) {
 list) printf 'Firefox\torg.mozilla.firefox\t120.0\n' ;;
 remotes) printf 'flathub\n' ;;
 remote-ls) printf 'Firefox\torg.mozilla.firefox\t121.0\n' ;;
+info|remote-info) printf 'org.freedesktop.Platform/x86_64/26.08\n' ;;
 esac`
 	capture := installCapturingFlatpak(t, body)
 
@@ -126,7 +156,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--user", "--app", "--columns=name,application,version"},
+			want: []string{"list", "--user", "--app", "--columns=name,application,version,branch"},
 		},
 		{
 			name: "list system applications",
@@ -137,7 +167,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--system", "--app", "--columns=name,application,version"},
+			want: []string{"list", "--system", "--app", "--columns=name,application,version,branch"},
 		},
 		{
 			// The regression this guards: a runtime extension is invisible
@@ -151,7 +181,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--user", "--runtime", "--columns=name,application,version"},
+			want: []string{"list", "--user", "--runtime", "--columns=name,application,version,branch"},
 		},
 		{
 			name: "list system runtimes",
@@ -162,7 +192,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--system", "--runtime", "--columns=name,application,version"},
+			want: []string{"list", "--system", "--runtime", "--columns=name,application,version,branch"},
 		},
 		{name: "install user", run: func() error { return Install("org.example.App", true) }, want: []string{"install", "-y", "--user", "org.example.App"}},
 		{name: "install system", run: func() error { return Install("org.example.App", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},
@@ -170,6 +200,28 @@ esac`
 		{name: "install from remote system default", run: func() error { return InstallFromRemote("org.example.App", "", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},
 		{name: "uninstall user", run: func() error { return Uninstall("org.example.App", true) }, want: []string{"uninstall", "-y", "--user", "org.example.App"}},
 		{name: "uninstall system", run: func() error { return Uninstall("org.example.App", false) }, want: []string{"uninstall", "-y", "--system", "org.example.App"}},
+		{
+			name: "installed app runtime",
+			run: func() error {
+				runtime, err := AppRuntime("org.example.App")
+				if err == nil && runtime != "org.freedesktop.Platform/x86_64/26.08" {
+					return errors.New("installed runtime was not returned trimmed")
+				}
+				return err
+			},
+			want: []string{"info", "--show-runtime", "org.example.App"},
+		},
+		{
+			name: "remote app runtime system",
+			run: func() error {
+				runtime, err := RemoteAppRuntime("flathub", "org.example.App", false)
+				if err == nil && runtime != "org.freedesktop.Platform/x86_64/26.08" {
+					return errors.New("remote runtime was not returned trimmed")
+				}
+				return err
+			},
+			want: []string{"remote-info", "--system", "--app", "--show-runtime", "flathub", "org.example.App"},
+		},
 		{name: "update one user app", run: func() error { return Update(context.Background(), "org.example.App", true) }, want: []string{"update", "-y", "--user", "org.example.App"}},
 		{name: "update all system apps", run: func() error { return Update(context.Background(), "", false) }, want: []string{"update", "-y", "--system"}},
 		{
@@ -596,24 +648,6 @@ func TestParseUpdateList(t *testing.T) {
 	}
 }
 
-func TestHasRemoteMatchesWholeNames(t *testing.T) {
-	tests := []struct {
-		output string
-		want   bool
-	}{
-		{output: "", want: false},
-		{output: "fedora\n", want: false},
-		{output: "flathub-beta\n", want: false},
-		{output: "fedora\nflathub\n", want: true},
-		{output: "  flathub  \n", want: true},
-	}
-	for _, tt := range tests {
-		if got := HasRemote(tt.output, Flathub); got != tt.want {
-			t.Errorf("HasRemote(%q) = %v, want %v", tt.output, got, tt.want)
-		}
-	}
-}
-
 // fakeFlatpakLog installs a flatpak stand-in that appends each invocation's
 // argument line to a log and answers `remotes` with remotes.
 func fakeFlatpakLog(t *testing.T, remotes string) string {
@@ -642,52 +676,9 @@ func loggedCalls(t *testing.T, logPath string) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-// Issue #501: with Flathub configured only system-wide, a --user install
-// failed with "No remote refs found". The user remote must be added first.
-func TestEnsureUserFlathubAddsAMissingUserRemote(t *testing.T) {
-	dryrun.Set(false)
-	logPath := fakeFlatpakLog(t, "")
-
-	if err := EnsureUserFlathub(); err != nil {
-		t.Fatalf("EnsureUserFlathub() error = %v", err)
-	}
-	want := []string{
-		"remotes --user --columns=name",
-		"remote-add --user --if-not-exists flathub " + FlathubRepoURL,
-	}
-	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
-		t.Errorf("EnsureUserFlathub() ran %q, want %q", got, want)
-	}
-}
-
-func TestEnsureUserFlathubLeavesAnExistingUserRemote(t *testing.T) {
-	dryrun.Set(false)
-	logPath := fakeFlatpakLog(t, "flathub\\n")
-
-	if err := EnsureUserFlathub(); err != nil {
-		t.Fatalf("EnsureUserFlathub() error = %v", err)
-	}
-	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, []string{"remotes --user --columns=name"}) {
-		t.Errorf("EnsureUserFlathub() ran %q, want only the remote listing", got)
-	}
-}
-
-func TestEnsureUserFlathubPreviewsTheAddUnderDryRun(t *testing.T) {
-	dryrun.Set(true)
-	t.Cleanup(func() { dryrun.Set(false) })
-	logPath := fakeFlatpakLog(t, "")
-
-	if err := EnsureUserFlathub(); err != nil {
-		t.Fatalf("EnsureUserFlathub() error = %v", err)
-	}
-	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, []string{"remotes --user --columns=name"}) {
-		t.Errorf("EnsureUserFlathub() under dry-run ran %q, want only the read", got)
-	}
-}
-
 func TestCommandTimeout(t *testing.T) {
-	if len(stateChangingCommands) != 5 {
-		t.Fatalf("stateChangingCommands has %d entries, want 5: update this test when the map changes", len(stateChangingCommands))
+	if len(stateChangingCommands) != 4 {
+		t.Fatalf("stateChangingCommands has %d entries, want 4: update this test when the map changes", len(stateChangingCommands))
 	}
 
 	for cmd := range stateChangingCommands {

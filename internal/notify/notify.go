@@ -62,7 +62,7 @@ func UpdateAllComplete(succeeded, failed int, restartRequired, maintenanceFailed
 	case failed > 0 && succeeded == 0:
 		return Notification{
 			Title:   "Update failed",
-			Body:    branding.AppName + " could not update this system. Open the app for details.",
+			Body:    branding.AppName + " couldn't update this computer. Open it to see what went wrong.",
 			Urgency: UrgencyHigh,
 		}
 	case failed > 0:
@@ -76,7 +76,7 @@ func UpdateAllComplete(succeeded, failed int, restartRequired, maintenanceFailed
 			Body:  "Updates were installed, but cleaning up afterwards failed. Open the app for details." + restartSuffix,
 		}
 	case restartRequired:
-		return Notification{Title: "Update complete", Body: "Restart to apply the new system image."}
+		return Notification{Title: "Update complete", Body: "Restart to finish updating."}
 	default:
 		return Notification{Title: "Update complete", Body: "All updates were installed."}
 	}

@@ -134,7 +134,8 @@ func TestLoadErrorErrorsAs(t *testing.T) {
 // TestParseErrorNamesItsCauseOnce holds issue #348: a parser or decoder
 // failure keeps the cause's own text as Detail (for its line attribution) and
 // the cause itself as Err (for errors.Is/As). The rendered diagnostic — and so
-// the persistent toast and the CONFIGURATION ERROR log — must state it once.
+// the CONFIGURATION ERROR log — must state it once. The toast states it not
+// at all; the person reading it is pointed at the file, not the parser.
 func TestParseErrorNamesItsCauseOnce(t *testing.T) {
 	const path = "/etc/chairlift/config.yml"
 	for name, data := range map[string]string{
@@ -147,10 +148,13 @@ func TestParseErrorNamesItsCauseOnce(t *testing.T) {
 				t.Fatalf("parseAndValidate(%q) error = %+v, want a failure carrying its cause", data, err)
 			}
 			cause := err.Err.Error()
-			for _, rendered := range []string{err.Error(), err.ToastMessage()} {
+			for _, rendered := range []string{err.Error(), err.LogMessage()} {
 				if got := strings.Count(rendered, cause); got != 1 {
 					t.Errorf("%q states its cause %q %d times, want once", rendered, cause, got)
 				}
+			}
+			if strings.Contains(err.ToastMessage(), cause) {
+				t.Errorf("toast %q repeats the parser cause %q", err.ToastMessage(), cause)
 			}
 		})
 	}

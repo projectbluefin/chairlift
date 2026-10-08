@@ -47,8 +47,7 @@ func (uh *UserHome) buildApplicationsPage() {
 	// Homebrew group
 	if uh.groupEnabled("applications_page", "brew_group") {
 		group := adw.NewPreferencesGroup()
-		group.SetTitle("Packages from Homebrew")
-		group.SetDescription("Apps and tools installed with Homebrew, a third-party source.")
+		group.SetTitle("Backup")
 
 		// Package-list export row
 		dumpRow := adw.NewActionRow()
@@ -75,7 +74,7 @@ func (uh *UserHome) buildApplicationsPage() {
 
 		// Applications — Homebrew casks
 		uh.installedCasks = adw.NewPreferencesGroup()
-		uh.installedCasks.SetTitle("Homebrew applications")
+		uh.installedCasks.SetTitle("Installed apps")
 		uh.installedCasks.SetDescription("Counting…")
 		page.Add(uh.installedCasks)
 		page.Add(uh.installedFormulae)
@@ -173,7 +172,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedFormulae.SetDescription("Could not read the list")
+				uh.installedFormulae.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			// Dependencies are managed by Homebrew, not individual choices here.
@@ -208,10 +207,10 @@ func (uh *UserHome) loadHomebrewPackages() {
 					row.SetSubtitle(presentation.Subtitle)
 
 					pinLabel := "Pin"
-					pinTooltip := "Keep this version and skip it during updates"
+					pinTooltip := "Keep this version during updates"
 					if pkg.Pinned {
 						pinLabel = "Unpin"
-						pinTooltip = "Let this be updated again"
+						pinTooltip = "Allow updates again"
 					}
 					pinBtn := gtk.NewButton()
 					setPackageButtonLabel(pinBtn, pinLabel, pkg.Name)
@@ -222,7 +221,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this tool from your system")
+					uninstallBtn.SetTooltipText("Remove this tool")
 
 					gate := uh.formulaGates.New()
 					controls := []*gtk.Button{pinBtn, uninstallBtn}
@@ -257,7 +256,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 				if !uh.brewPackagesRefresh.IsCurrent(generation) {
 					return
 				}
-				uh.installedCasks.SetDescription("Could not read the list")
+				uh.installedCasks.SetDescription("Couldn't load this list.")
 			})
 		} else {
 			sgtk.RunOnMainThread(func() {
@@ -293,7 +292,7 @@ func (uh *UserHome) loadHomebrewPackages() {
 					setPackageButtonLabel(uninstallBtn, "Uninstall", pkg.Name)
 					uninstallBtn.SetValign(gtk.AlignCenterValue)
 					uninstallBtn.AddCssClass("destructive-action")
-					uninstallBtn.SetTooltipText("Remove this app from your system")
+					uninstallBtn.SetTooltipText("Remove this app")
 
 					gate := uh.caskGates.New()
 					controls := []*gtk.Button{uninstallBtn}
@@ -321,10 +320,10 @@ func (uh *UserHome) confirmHomebrewPin(
 	gate *actionstate.Gate,
 ) {
 	action := "Unpin"
-	description := "It will be updated again with everything else."
+	description := "It will get updates again."
 	if pin {
 		action = "Pin"
-		description = "It stays at the version you have now and is skipped during updates, until you unpin it."
+		description = "It stays at this version until you unpin it."
 	}
 
 	dialog := adw.NewAlertDialog(fmt.Sprintf("%s %s?", action, name), description)
@@ -363,11 +362,11 @@ func (uh *UserHome) runHomebrewPin(
 
 	idleLabel := "Unpin"
 	completeLabel := "Unpinned"
-	errorMessage := fmt.Sprintf("Could not unpin %s", name)
+	errorMessage := fmt.Sprintf("Couldn't unpin %s. Try again.", name)
 	if pin {
 		idleLabel = "Pin"
 		completeLabel = "Pinned"
-		errorMessage = fmt.Sprintf("Could not pin %s", name)
+		errorMessage = fmt.Sprintf("Couldn't pin %s. Try again.", name)
 	}
 	uh.finishHomebrewPackageMutation(
 		name,
@@ -392,7 +391,7 @@ func (uh *UserHome) confirmHomebrewUninstall(
 ) {
 	dialog := adw.NewAlertDialog(
 		fmt.Sprintf("Uninstall %s?", name),
-		fmt.Sprintf("Removes %s and the files Homebrew installed with it. Anything you created yourself is left alone.", name),
+		fmt.Sprintf("This removes %s from this computer. Your own files are kept.", name),
 	)
 	dialog.AddResponse("cancel", "Cancel")
 	dialog.AddResponse("uninstall", "Uninstall")

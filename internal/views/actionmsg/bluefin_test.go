@@ -24,13 +24,13 @@ func TestChannelSwitchConfirmsAndNamesTheChannel(t *testing.T) {
 	if !testing_.Confirm {
 		t.Error("ChannelSwitch(false, true).Confirm = false, want true")
 	}
-	if !strings.Contains(testing_.Toast, "testing") || !strings.Contains(testing_.Toast, "Restart") {
-		t.Errorf("ChannelSwitch(false, true).Toast = %q, want it to name testing and ask for a restart", testing_.Toast)
+	if !strings.Contains(testing_.Toast, "on") || !strings.Contains(testing_.Toast, "Restart") {
+		t.Errorf("ChannelSwitch(false, true).Toast = %q, want it to say early updates are on and ask for a restart", testing_.Toast)
 	}
 
 	stable := ChannelSwitch(false, false)
-	if !strings.Contains(stable.Toast, "stable") {
-		t.Errorf("ChannelSwitch(false, false).Toast = %q, want it to name stable", stable.Toast)
+	if !strings.Contains(stable.Toast, "off") || testing_.Toast == stable.Toast {
+		t.Errorf("ChannelSwitch(false, false).Toast = %q, want it to say early updates are off", stable.Toast)
 	}
 }
 
@@ -93,35 +93,36 @@ func TestGamingModeConfirmsOnlyWhenSomethingChanged(t *testing.T) {
 		enable      bool
 		changed     int
 		failed      int
-		skipped     int
+		kept        int
 		wantConfirm bool
 		wantToast   string
 	}{
 		{name: "dry run", dryRun: true, enable: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be installed"},
 		{name: "dry run removal", dryRun: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be removed"},
-		// Issue #352: every component is system-wide, so a preview must not
-		// promise a removal the live run would not make.
-		{name: "dry run with only system-wide components", dryRun: true, skipped: 6, wantToast: "[DRY-RUN] Preview: nothing to remove — 6 component(s) installed system-wide would be left in place"},
-		{name: "dry run partial removal names the skipped ones", dryRun: true, changed: 3, skipped: 1, wantToast: "1 component(s) installed system-wide would be left in place"},
+		// Issue #352: everything selected came with the image, so a preview
+		// must not promise a removal the live run would not make.
+		{name: "dry run with only image-shipped components", dryRun: true, kept: 1, wantToast: "[DRY-RUN] Preview: nothing to remove — 1 component(s) that came with the system would be left in place"},
+		{name: "dry run partial removal names the kept ones", dryRun: true, changed: 3, kept: 1, wantToast: "1 component(s) that came with the system would be left in place"},
 		{name: "dry run with nothing to do", dryRun: true, enable: true, wantToast: "already in the requested state"},
 		{name: "dry run that could not read the inventory", dryRun: true, enable: true, failed: 1, wantToast: "could be installed (1 failed)"},
-		{name: "full install", enable: true, changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) installed"},
-		{name: "full removal", changed: 6, wantConfirm: true, wantToast: "6 gaming component(s) removed"},
-		{name: "partial install still confirms", enable: true, changed: 4, failed: 2, wantConfirm: true, wantToast: "2 failed"},
-		{name: "total failure does not confirm", enable: true, changed: 0, failed: 6, wantConfirm: false, wantToast: "No gaming components could be installed"},
-		{name: "nothing to do still confirms", enable: true, changed: 0, wantConfirm: true, wantToast: "already in the requested state"},
-		// Everything present belongs to the system image, so removal is a
-		// no-op and the switch must not claim gaming mode is now off.
-		{name: "only system-wide components", changed: 0, skipped: 2, wantConfirm: false, wantToast: "left in place"},
-		{name: "partial removal names the skipped ones", changed: 3, skipped: 1, wantConfirm: true, wantToast: "left in place"},
+		{name: "full install", enable: true, changed: 6, wantConfirm: true, wantToast: "Installed 6 gaming apps"},
+		{name: "full removal", changed: 6, wantConfirm: true, wantToast: "Removed 6 gaming apps"},
+		{name: "partial install still confirms", enable: true, changed: 4, failed: 2, wantConfirm: true, wantToast: "2 couldn't be installed"},
+		{name: "total failure does not confirm", enable: true, changed: 0, failed: 6, wantConfirm: false, wantToast: "Couldn't install any gaming apps"},
+		{name: "total removal failure does not confirm", changed: 0, failed: 2, wantConfirm: false, wantToast: "Couldn't remove any gaming apps"},
+		{name: "nothing to do still confirms", enable: true, changed: 0, wantConfirm: true, wantToast: "Nothing needed changing"},
+		// Everything selected came with the image, so removal is a no-op and
+		// must not claim gaming mode is now off.
+		{name: "only image-shipped components", changed: 0, kept: 1, wantConfirm: false, wantToast: "Apps installed for everyone were kept"},
+		{name: "partial removal names the kept ones", changed: 3, kept: 1, wantConfirm: true, wantToast: "Apps installed for everyone were kept"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			decision := GamingMode(test.dryRun, test.enable, test.changed, test.failed, test.skipped)
+			decision := GamingMode(test.dryRun, test.enable, test.changed, test.failed, test.kept)
 			if decision.Confirm != test.wantConfirm {
 				t.Errorf("GamingMode(%v, %v, %d, %d, %d).Confirm = %v, want %v",
-					test.dryRun, test.enable, test.changed, test.failed, test.skipped, decision.Confirm, test.wantConfirm)
+					test.dryRun, test.enable, test.changed, test.failed, test.kept, decision.Confirm, test.wantConfirm)
 			}
 			if !strings.Contains(decision.Toast, test.wantToast) {
 				t.Errorf("GamingMode(...).Toast = %q, want it to contain %q", decision.Toast, test.wantToast)
@@ -235,10 +236,10 @@ func TestPowerwashConfirmsOnlyWhenSomethingWasRemoved(t *testing.T) {
 		{name: "dry run", dryRun: true, succeeded: 2, wantToast: "[DRY-RUN] Preview: would remove"},
 		{name: "dry run with nothing installed", dryRun: true, wantToast: "[DRY-RUN] Preview: nothing is installed to remove"},
 		{name: "dry run with an unreadable inventory", dryRun: true, succeeded: 1, failed: 1, wantToast: "[DRY-RUN] Preview: could not read"},
-		{name: "both succeeded", succeeded: 2, wantConfirm: true, wantToast: "complete"},
-		{name: "nothing installed", wantConfirm: true, wantToast: "Nothing was installed"},
-		{name: "one failed, one succeeded", succeeded: 1, failed: 1, wantConfirm: true, wantToast: "problems"},
-		{name: "total failure does not confirm", failed: 2, wantConfirm: false, wantToast: "nothing was removed"},
+		{name: "both succeeded", succeeded: 2, wantConfirm: true, wantToast: "Removed"},
+		{name: "nothing installed", wantConfirm: true, wantToast: "nothing to remove"},
+		{name: "one failed, one succeeded", succeeded: 1, failed: 1, wantConfirm: true, wantToast: "couldn't be removed"},
+		{name: "total failure does not confirm", failed: 2, wantConfirm: false, wantToast: "Couldn't remove anything"},
 	}
 
 	for _, test := range tests {
