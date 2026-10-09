@@ -17,18 +17,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
-	"os/user"
-	"strconv"
-
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"io"
+	"os"
+	"os/exec"
+	"os/user"
+	"strconv"
 )
 
 func main() {
@@ -114,13 +115,16 @@ func runChannelSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 // with the fixed rollback argv is the switch the person asked for.
 func switchImage(ctx context.Context, args []string, failure string) {
 	target := args[len(args)-1]
-	if err := run(ctx, "bootc", args...); err != nil {
-		if status, statusErr := bootc.GetStatus(ctx); statusErr == nil && status.Status.Rollback.ImageRef() == target {
-			if rerr := run(ctx, "bootc", ubluehelper.RollbackArgs()...); rerr != nil {
-				fatal(fmt.Sprintf("%s: %v; rollback to %s failed: %v", failure, err, target, rerr))
+	var captured bytes.Buffer
+	if err := runCapture(ctx, &captured, "bootc", args...); err != nil {
+		if ubluehelper.IsSameRollbackRefusal(captured.String()) {
+			if status, statusErr := bootc.GetStatus(ctx); statusErr == nil && status.Status.Rollback.ImageRef() == target {
+				if rerr := run(ctx, "bootc", ubluehelper.RollbackArgs()...); rerr != nil {
+					fatal(fmt.Sprintf("%s: %v; rollback to %s failed: %v", failure, err, target, rerr))
+				}
+				fmt.Printf("switched to %s (the previous deployment) — restart to apply\n", target)
+				return
 			}
-			fmt.Printf("switched to %s (the previous deployment) — restart to apply\n", target)
-			return
 		}
 		fatal(fmt.Sprintf("%s: %v", failure, err))
 	}
@@ -323,17 +327,27 @@ func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
 	}
 }
 
-// run executes one privileged command, forwarding its output so the calling
-// GUI can surface a real failure message instead of a bare exit code.
-func run(ctx context.Context, name string, args ...string) error {
+// runCapture executes one privileged command, forwarding stdout/stderr to the caller's console
+// while also teeing stderr into the provided buffer for inspection.
+func runCapture(ctx context.Context, stderrBuf io.Writer, name string, args ...string) error {
 	full := append([]string{name}, args...)
 	if line, err := json.Marshal(full); err == nil {
 		fmt.Printf("%s%s\n", ubluehelper.HelperExecPrefix, line)
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if stderrBuf != nil {
+		cmd.Stderr = io.MultiWriter(os.Stderr, stderrBuf)
+	} else {
+		cmd.Stderr = os.Stderr
+	}
 	return cmd.Run()
+}
+
+// run executes one privileged command, forwarding its output so the calling
+// GUI can surface a real failure message instead of a bare exit code.
+func run(ctx context.Context, name string, args ...string) error {
+	return runCapture(ctx, nil, name, args...)
 }
 
 func fatal(msg string) {

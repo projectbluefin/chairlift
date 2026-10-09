@@ -394,6 +394,47 @@ func TestRollbackArgsTakeNoCallerControlledValues(t *testing.T) {
 	}
 }
 
+func TestSameRollbackRefusal(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{
+			name:   "exact composefs refusal message",
+			output: "error: Target image has the same fs-verity digest as the existing Some(Rollback) deployment",
+			want:   true,
+		},
+		{
+			name:   "generic fs-verity and rollback refusal",
+			output: "error: same fs-verity digest for Rollback",
+			want:   true,
+		},
+		{
+			name:   "network error",
+			output: "error: failed to fetch image: connection refused",
+			want:   false,
+		},
+		{
+			name:   "unrelated fs-verity error without rollback",
+			output: "error: Target image has the same fs-verity digest as the existing Booted deployment",
+			want:   false,
+		},
+		{
+			name:   "empty output",
+			output: "",
+			want:   false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsSameRollbackRefusal(tc.output); got != tc.want {
+				t.Errorf("IsSameRollbackRefusal(%q) = %v, want %v", tc.output, got, tc.want)
+			}
+		})
+	}
+}
+
 // "Off" has two on-disk representations, so enabling must unmask before it
 // enables — otherwise a machine ever set to bluefinctl's manual strategy or
 // focus mode would silently refuse to turn automatic updates back on.

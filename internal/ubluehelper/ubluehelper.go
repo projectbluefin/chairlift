@@ -296,6 +296,14 @@ func RollbackArgs() []string {
 	return []string{"rollback"}
 }
 
+// IsSameRollbackRefusal reports whether an error or stderr output from `bootc switch`
+// is the composefs refusal indicating the target matches the existing rollback deployment's
+// fs-verity digest.
+func IsSameRollbackRefusal(output string) bool {
+	return strings.Contains(output, "has the same fs-verity digest as the existing Some(Rollback) deployment") ||
+		(strings.Contains(output, "same fs-verity digest") && strings.Contains(output, "Rollback"))
+}
+
 // FactoryResetArgs returns the argv that replaces the running deployment
 // with a fresh install of the same image, discarding every local change:
 // `bootc install reset`.
