@@ -67,14 +67,14 @@ The source of truth is the `families` table in
 uses `Repo + "@" + Digest` when a digest is present; the version label does
 not replace that immutable reference.
 
-| Family | Version label | Multi-architecture index digest |
+| Family | Version label | Pinned image digest |
 | --- | --- | --- |
 | Ghostscript | `10.07.1-2` | `sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc` |
 | HPLIP | `3.26.4` | `sha256:1f81f507ce603f19eebb83fdcdc5b7de7bc7f52f728e9626c2c1224ea7477de8` |
 | Gutenprint | `5.3.6-4.1` | `sha256:3ca46b65bba16e258d7f93582beb9ccdf71a8b4e450b9d01f8cb545a945b93a1` |
 
 Each repository is `ghcr.io/projectbluefin/<family>-printer-app`. A pin bump
-requires multi-architecture index, signature, and attestation verification;
+requires digest, signature, and attestation verification;
 follow the [multi-arch digest-pinning skill](../skills/multi-arch-digest-pinning/SKILL.md)
 and the supply-chain requirement in [AGENTS.md](../../AGENTS.md). Signature
 verification does not substitute for the administration enable condition.

@@ -45,8 +45,8 @@ const (
 )
 
 // Family identifies one Printer Application family. Each publishes a
-// digest-pinned, multi-architecture index at GHCR (the projectbluefin
-// *-printer-app repositories). The index, pinned by an immutable
+// digest-pinned image reference at GHCR (the projectbluefin
+// *-printer-app repositories). The image, pinned by an immutable
 // application-version tag or manifest digest, is what we run — not a mutable
 // `:latest` or `:build` tag, which a re-pull could change under us.
 type Family struct {
@@ -58,7 +58,7 @@ type Family struct {
 	Repo string
 	// Version is the immutable application-version tag pinned for this family.
 	Version string
-	// Digest is the immutable multi-architecture manifest index digest.
+	// Digest is the immutable image manifest or index digest.
 	Digest string
 	// DefaultPort is the contracted host port for this family (ADR-0016).
 	DefaultPort int
@@ -142,7 +142,7 @@ func (a App) HostVolumeDir() (string, error) {
 
 // families is the set of Printer Application families ChairLift can drive.
 // Every reference was taken from the projectbluefin *-printer-app repositories,
-// which publish digest-pinned, multi-architecture indexes.
+// which publish digest-pinned container images.
 var families = []Family{
 	{
 		ID:          "ghostscript",

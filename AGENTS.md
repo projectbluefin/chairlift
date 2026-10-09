@@ -952,7 +952,7 @@ An agent must not break these:
   under `~/.config/containers/systemd` and drives it with `systemctl --user`
   in the invoking account; nothing here is privileged, and no `pkexec` route,
   helper subcommand, or PolicyKit action may be added for it. Each family is
-  a digest-pinned multi-architecture index from the projectbluefin
+  a digest-pinned container image from the projectbluefin
   `*-printer-app` repositories, on host networking so IPP and DNS-SD reach
   the LAN; a pin bump needs the cosign/attestation verification #393 asks for
   first. ADR-0016 is the enable condition: an application may be enabled only
