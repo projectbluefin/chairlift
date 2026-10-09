@@ -198,6 +198,13 @@ func runDevGroups(ctx context.Context, invocation ubluehelper.Invocation) {
 			fatal(fmt.Sprintf("unsupported group operation for command %q", invocation.Command))
 		}
 
+		if invocation.Command == ubluehelper.CommandDXEnable {
+			if err := ensureLocalGroup(group, invocation.DryRun); err != nil {
+				fmt.Fprintln(os.Stderr, ubluehelper.SkippedGroupLine(group, err))
+				continue
+			}
+		}
+
 		if invocation.DryRun {
 			fmt.Printf("[DRY-RUN] would execute: %s %v\n", name, args)
 			applied++
@@ -301,8 +308,12 @@ func runDeveloperAccess(ctx context.Context, invocation ubluehelper.Invocation) 
 		fatal(fmt.Sprintf("resolving uid %d: %v", uid, err))
 	}
 	name, args, ok := ubluehelper.AccessArgs(invocation.Command, account.Username)
-	if !ok {
+	group, groupOK := ubluehelper.AccessGroup(invocation.Command)
+	if !ok || !groupOK {
 		fatal("unsupported developer access command")
+	}
+	if err := ensureLocalGroup(group, invocation.DryRun); err != nil {
+		fatal(fmt.Sprintf("granting developer access: %v", err))
 	}
 	if invocation.DryRun {
 		fmt.Printf("[DRY-RUN] would execute: %s %v\n", name, args)
@@ -325,6 +336,23 @@ func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
 	if err := run(ctx, "systemctl", args...); err != nil {
 		fatal(fmt.Sprintf("changing Docker daemon: %v", err))
 	}
+}
+
+// ensureLocalGroup copies an image-only group into /etc/group so the usermod
+// that follows can add a member to it.
+func ensureLocalGroup(group string, dryRun bool) error {
+	copied, err := ubluehelper.EnsureLocalGroup(ubluehelper.EtcGroupPath, ubluehelper.LibGroupPath, group, dryRun)
+	if err != nil {
+		return fmt.Errorf("preparing group %s: %w", group, err)
+	}
+	if copied {
+		verb := "copied"
+		if dryRun {
+			verb = "[DRY-RUN] would copy"
+		}
+		fmt.Printf("%s group %s from %s to %s\n", verb, group, ubluehelper.LibGroupPath, ubluehelper.EtcGroupPath)
+	}
+	return nil
 }
 
 // runCapture executes one privileged command, forwarding stdout/stderr to the caller's console

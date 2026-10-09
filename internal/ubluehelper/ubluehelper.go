@@ -461,16 +461,22 @@ func SkippedGroups(output string) []string {
 // AccessArgs grants only the one group authorized by each developer option.
 // The username comes from PKEXEC_UID; no group or account arrives in argv.
 func AccessArgs(command, username string) (string, []string, bool) {
-	if username == "" {
+	group, ok := AccessGroup(command)
+	if username == "" || !ok {
 		return "", nil, false
 	}
+	return "usermod", []string{"-aG", group, username}, true
+}
+
+// AccessGroup names the one group each developer option grants.
+func AccessGroup(command string) (string, bool) {
 	switch command {
 	case CommandKVMEnable:
-		return "usermod", []string{"-aG", "kvm", username}, true
+		return "kvm", true
 	case CommandDockerEnable:
-		return "usermod", []string{"-aG", "docker", username}, true
+		return "docker", true
 	default:
-		return "", nil, false
+		return "", false
 	}
 }
 

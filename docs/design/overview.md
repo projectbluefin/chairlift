@@ -597,6 +597,11 @@ their installed actions are missing, with the affected switches insensitive.
 WSL Mode defaults to nsl on Linux amd64, with Lima as an alternative backend;
 an existing Lima-only machine retains Lima. Both require accessible `/dev/kvm`;
 a new permission grant needs a new login.
+`dx-enable`, `kvm-enable` and `docker-enable` first copy a group that only the
+image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
+them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
+`/etc/group` alone and otherwise refuses the group
+(`internal/ubluehelper.EnsureLocalGroup`).
 Docker reports ready only with an accessible live daemon socket. IDE/editor
 installs are selective and contain one JetBrains Toolbox entry.
 
