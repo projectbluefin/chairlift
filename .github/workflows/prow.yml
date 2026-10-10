@@ -41,8 +41,17 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize:
+    if: github.event_name == 'issue_comment'
+    permissions:
+      contents: read
+    uses: projectbluefin/.project/.github/workflows/prow-authorize.yml@ce7a3d4f3c0ef7a0b371cd73d8131291abe58051
+
   prow:
-    if: github.event_name != 'workflow_dispatch' && github.event_name != 'push'
+    needs: authorize
+    # Explicit status check keeps non-comment events running when authorize is skipped.
+    # A failed roster lookup blocks execution rather than granting public triage access.
+    if: ${{ !cancelled() && (needs.authorize.result == 'success' || needs.authorize.result == 'skipped') && github.event_name != 'workflow_dispatch' && github.event_name != 'push' }}
     permissions:
       contents: write
       issues: write
@@ -51,7 +60,19 @@ jobs:
       actions: write
     uses: cncf/prow-github-actions/.github/workflows/prow.yml@187c5e3cd95a329c43448e1bdb3b1f5249232e44 # v3.0.1
     with:
-      prow-commands: /kind /triage /priority /label /hold /lgtm /approve /assign /unassign /cc /uncc /close /reopen /retest /test /ok-to-test /help /good-first-issue /check-required-labels
+      prow-commands: /kind /area /hold /lgtm /approve /assign /unassign /cc /uncc /close /reopen /retest /test /ok-to-test /help /good-first-issue /check-required-labels ${{ needs.authorize.outputs.triage == 'true' && '/triage /priority /label' || '' }}
+
+  transfer:
+    needs: authorize
+    if: needs.authorize.outputs.triage == 'true' && github.event_name == 'issue_comment'
+    permissions:
+      issues: write
+    uses: projectbluefin/.project/.github/workflows/prow-transfer.yml@60f85e1310e9e723934bcf77a6af8b846db7d151
+    with:
+      authorized: ${{ needs.authorize.outputs.triage }}
+    secrets:
+      MERGERAPTOR_APP_ID: ${{ secrets.MERGERAPTOR_APP_ID }}
+      MERGERAPTOR_PRIVATE_KEY: ${{ secrets.MERGERAPTOR_PRIVATE_KEY }}
 
   label-sync:
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
