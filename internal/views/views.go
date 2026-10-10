@@ -243,6 +243,7 @@ type UserHome struct {
 	developerToolsMapped func(gtk.Widget)
 	wslBackend           string
 	wslCombo             *adw.ComboRow
+	wslDocBtn            *gtk.Button
 	wslSuppress          bool
 	wslBackendResolved   bool
 	wslBackendNotify     func(gobject.Object, uintptr)

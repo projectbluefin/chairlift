@@ -155,6 +155,8 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.DeveloperToolChecking(",
 				"pageview.DeveloperToolInstalling(",
 				"pageview.DeveloperToolUnverified(",
+				"pageview.WSLEngineDocumentationURL(",
+				"pageview.WSLEngineDocumentationTooltip(",
 				"SetAccessibleLabel(item.button, view.AccessibleLabel)",
 				// W3-10: a tool removed on Apps or in a terminal read
 				// "Installed" until restart. The re-read is connected once

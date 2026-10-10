@@ -73,6 +73,16 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 			}
 			uh.wslSuppress = false
 			uh.wslCombo = combo
+
+			docBtn := newIconButton("adw-external-link-symbolic", pageview.WSLEngineDocumentationTooltip(uh.wslBackend))
+			docBtn.SetValign(gtk.AlignCenterValue)
+			docClicked := func(_ gtk.Button) {
+				uh.openURL(pageview.WSLEngineDocumentationURL(uh.wslBackend))
+			}
+			docBtn.ConnectClicked(&docClicked)
+			combo.AddSuffix(&docBtn.Widget)
+			uh.wslDocBtn = docBtn
+
 			uh.wslBackendNotify = func(_ gobject.Object, _ uintptr) {
 				if uh.wslSuppress {
 					return
@@ -86,6 +96,11 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 					return
 				}
 				uh.wslBackend = target
+				if uh.wslDocBtn != nil {
+					tip := pageview.WSLEngineDocumentationTooltip(target)
+					uh.wslDocBtn.SetTooltipText(tip)
+					SetAccessibleLabel(uh.wslDocBtn, tip)
+				}
 				uh.refreshDeveloperOptions(status)
 			}
 			combo.ConnectNotify(&uh.wslBackendNotify)
@@ -198,6 +213,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						uh.wslSuppress = true
 						uh.wslCombo.SetSelected(1)
 						uh.wslSuppress = false
+					}
+					if uh.wslDocBtn != nil {
+						tip := pageview.WSLEngineDocumentationTooltip(backend)
+						uh.wslDocBtn.SetTooltipText(tip)
+						SetAccessibleLabel(uh.wslDocBtn, tip)
 					}
 				}
 			}
