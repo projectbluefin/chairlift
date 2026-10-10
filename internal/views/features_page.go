@@ -667,11 +667,13 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 // startDeveloperDevcontainerSetup automatically installs the Dev Container CLI
 // (devcontainer) when Developer Mode is first enabled. Like
 // startDeveloperFeedSetup, it is called from the one branch of
-// onDeveloperToggled that reached a successful live promotion, so a page
-// restore, a failed helper call, a disable, and a dry-run preview spawn
-// nothing. An install error reports its own failure and rolls nothing back.
+// onDeveloperToggled that reached a successful promotion, so a page restore,
+// a failed helper call, and a disable spawn nothing. A dry-run enable reaches
+// homebrew.Install, whose own dry-run gate logs the brew command it would run
+// instead of executing it. An install error reports its own failure and rolls
+// nothing back.
 func (uh *UserHome) startDeveloperDevcontainerSetup(enabled, succeeded bool) {
-	if !uh.capabilities[capability.Homebrew] || !enabled || !succeeded || dryrun.Enabled() {
+	if !uh.capabilities[capability.Homebrew] || !enabled || !succeeded {
 		return
 	}
 

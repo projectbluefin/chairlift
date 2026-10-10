@@ -602,8 +602,9 @@ image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
 them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
 `/etc/group` alone and otherwise refuses the group
 (`internal/ubluehelper.EnsureLocalGroup`).
-Docker reports ready only with an accessible live daemon socket. IDE/editor
-installs are selective and contain one JetBrains Toolbox entry.
+Docker reports ready only with an accessible live daemon socket. A confirmed
+Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
+Homebrew; IDEs and editors are not offered here (Bazaar or the Apps page).
 
 **Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it

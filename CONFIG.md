@@ -163,7 +163,7 @@ section above); administrators can remove them when convenient.
 
 - `desktop_integrations_group`: Tailscale Integration and Sync Folder Integration GNOME extension switches. Enabled by default; missing extensions or an unavailable GNOME session leave the switches insensitive with an explanation. Existing GNOME preferences are read on load and only explicit user actions change them.
 - `features_group`: System features managed by updex (requires `updex` command)
-- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups (shown only when `/usr/share/ublue-os/image-info.json` is present)
+- `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups, and after a confirmed enable installs the Dev Container CLI (`devcontainer`) through Homebrew when Homebrew is available — a failed install is reported on its own and does not roll back developer access (shown only when `/usr/share/ublue-os/image-info.json` is present)
   - `wsl_backend`: Backend for WSL Mode (`nsl` or `lima`). Defaults to `nsl`; any other value is a configuration error
   - `install_pulp`: After a confirmed enable, install the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. Defaults to `false`. Opt-in and outside ChairLift's privilege boundary: the `flatpak` CLI authorizes the install through Flatpak's own PolicyKit, which may ask for an administrator password, and a failure here is reported as its own failure rather than rolling back developer access
   - `stage_feeds`: After a confirmed enable, write the curated developer feed catalog to `~/.local/share/chairlift/developer-feeds.opml` so the user can import it into their reader. Defaults to `false`. ChairLift writes the file and stops — nothing is imported automatically, and Pulp's own database is never touched. Disabling Developer Mode never removes Pulp, the staged file, or anything already imported from it
@@ -237,8 +237,8 @@ agents_page:
   troubleshooting_group:
     enabled: false # Troubleshooting installs Goose and its tools through Homebrew
 
-# Developer IDE/editor installation also uses Homebrew; this disables the
-# whole Developer group, including its permission switches.
+# Developer Mode's Dev Container CLI install also uses Homebrew; this disables
+# the whole Developer group, including its permission switches.
 features_page:
   dx_group:
     enabled: false

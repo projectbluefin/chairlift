@@ -1,5 +1,5 @@
 // Package devtools implements the user-scope parts of Bluefin's documented
-// developer workstation: optional editors, Lima Ubuntu, and Docker CLI tools.
+// developer workstation: WSL Mode (nsl or Lima) and Docker CLI tools.
 // Only fixed ublue helper commands grant host access or control Docker.
 package devtools
 
@@ -32,16 +32,6 @@ const (
 	// BackendLima is the alternative backend using Lima.
 	BackendLima = "lima"
 )
-
-type Tool struct {
-	Name string
-	// Description is the one-line summary the tool's row shows, so the
-	// choices are distinguishable without already knowing each tool.
-	Description string
-	Package     string
-	Cask        bool
-	AMD64Only   bool
-}
 
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
@@ -92,23 +82,6 @@ func EngineSubtitle(nslMachine string) string {
 	return "Both engines run Ubuntu."
 }
 
-// Tools follows Common's ide.Brewfile and devmode terminal-editor choices.
-// The current Toolbox cask contains only the x86_64 Linux archive.
-func Tools() []Tool {
-	return []Tool{
-		{Name: "Dev Container CLI", Description: "Builds and runs development containers from a devcontainer.json.", Package: "devcontainer"},
-		{Name: "VSCode Stable", Description: "Microsoft's Visual Studio Code editor, monthly stable releases.", Package: "ublue-os/tap/visual-studio-code-linux", Cask: true},
-		{Name: "VSCode Insiders", Description: "Daily Visual Studio Code builds with features before they reach stable.", Package: "ublue-os/tap/visual-studio-code-linux@insiders", Cask: true},
-		{Name: "VSCodium", Description: "Visual Studio Code built from its open-source code, without Microsoft branding or telemetry.", Package: "ublue-os/tap/vscodium-linux", Cask: true},
-		{Name: "Antigravity", Description: "Google's agent-first code editor.", Package: "ublue-os/tap/antigravity-linux", Cask: true},
-		{Name: "JetBrains Toolbox", Description: "Installs and updates JetBrains IDEs such as IntelliJ IDEA and PyCharm.", Package: "ublue-os/tap/jetbrains-toolbox-linux", Cask: true, AMD64Only: true},
-		{Name: "Neovim", Description: "Extensible, Vim-based terminal text editor.", Package: "neovim"},
-		{Name: "Helix", Description: "Modal terminal editor with built-in language support.", Package: "helix"},
-		{Name: "Vim", Description: "The classic modal terminal text editor.", Package: "vim"},
-		{Name: "Micro", Description: "Terminal text editor with familiar keyboard shortcuts and mouse support.", Package: "micro"},
-	}
-}
-
 func HostSupported() bool {
 	return runtime.GOOS == "linux" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")
 }
@@ -127,26 +100,6 @@ func NSLInstalled() bool {
 // LimaInstalled reports whether the limactl binary is found on PATH or Homebrew bin.
 func LimaInstalled() bool {
 	return executable("limactl") != ""
-}
-
-func (t Tool) Supported() bool {
-	return HostSupported() && (!t.AMD64Only || runtime.GOARCH == "amd64")
-}
-
-func Install(t Tool) error {
-	if !t.Supported() {
-		return fmt.Errorf("%s is not available for this architecture", t.Name)
-	}
-	if t.Cask {
-		if err := homebrew.Tap("ublue-os/tap"); err != nil {
-			return err
-		}
-		// Trust only the package the user explicitly chose, not the whole tap.
-		if err := homebrew.TrustPackages(homebrew.UntrustedTap{Name: "ublue-os/tap", Casks: []string{t.Package}}); err != nil {
-			return err
-		}
-	}
-	return homebrew.Install(t.Package, t.Cask)
 }
 
 func executable(name string) string {

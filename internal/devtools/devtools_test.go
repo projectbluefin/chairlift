@@ -503,23 +503,3 @@ func TestStalledStatusProbeEndsAtItsBound(t *testing.T) {
 		t.Fatalf("WSLStatus took %v, want it bounded near statusTimeout", elapsed)
 	}
 }
-
-// Every optional tool row once carried the same generic subtitle, so the ten
-// choices could not be told apart without already knowing each tool (W3-10).
-func TestToolsCarryDistinctDescriptions(t *testing.T) {
-	seen := map[string]string{}
-	for _, tool := range Tools() {
-		description := strings.TrimSpace(tool.Description)
-		if description == "" {
-			t.Errorf("%s has no description", tool.Name)
-			continue
-		}
-		if !strings.HasSuffix(description, ".") {
-			t.Errorf("%s description %q is not a sentence", tool.Name, description)
-		}
-		if other, ok := seen[description]; ok {
-			t.Errorf("%s and %s share the description %q", tool.Name, other, description)
-		}
-		seen[description] = tool.Name
-	}
-}

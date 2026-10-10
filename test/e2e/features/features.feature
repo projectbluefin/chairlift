@@ -26,6 +26,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     Then the Developer Mode change is journalled as a dry run of the fixed helper
     And the Developer Mode preview toast is shown
     And the Developer Mode switch returns to its restored state
+    And the Dev Container CLI install is previewed only when enabling
 
   @stub.features-gaming-none @stub.features-devmenu
   Scenario: Developer Mode previews only the two Custom Command Menu entries

@@ -183,6 +183,8 @@ leaves GNOME preferences unchanged.
 **Developer tools** lets you run containers and virtual machines, and use USB
 and serial hardware, without being asked for permission each time. It needs
 your administrator password, and takes effect after you log out and back in.
+Switching it on also installs the Dev Container CLI (`devcontainer`) with
+Homebrew; if that install fails you are told, and developer access stays on.
 A distribution may also configure it to install the Pulp feed reader and stage
 a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the

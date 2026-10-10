@@ -120,6 +120,23 @@ def step_developer_journal(context):
     assert not entry.get("args"), f"{action} passed arguments across the pkexec boundary: {entry}"
 
 
+@then("the Dev Container CLI install is previewed only when enabling")
+def step_devcontainer_preview(context):
+    line = "[DRY-RUN] Would execute: brew install devcontainer"
+    if _developer_initial(context):
+        # Disabling must not install anything; give an install time to appear.
+        assert not atspi.poll(lambda: line in _log(context), timeout=2), \
+            "disabling Developer Mode previewed a Dev Container CLI install"
+    else:
+        assert atspi.poll(lambda: line in _log(context)), f"chairlift.log never contained {line!r}"
+    try:
+        with open(os.path.join(context.scenario_dir, "brew-default-calls.log"), encoding="utf-8") as handle:
+            brew_calls = [line.split() for line in handle if line.strip()]
+    except FileNotFoundError:
+        brew_calls = []
+    assert not [c for c in brew_calls if c[:1] == ["install"]], "a dry run executed brew install"
+
+
 @then("the Developer Mode switch returns to its restored state")
 def step_developer_reverted(context):
     initial = _developer_initial(context)

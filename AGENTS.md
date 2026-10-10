@@ -684,8 +684,9 @@ An agent must not break these:
   fixed enable/disable actions for its system daemon and requires actual socket
   readiness for this session, not installed CLI tools alone. Missing installed
   helper actions leave the affected switches insensitive with an explanation
-  rather than hiding the options. IDE and terminal-editor installs are
-  individually selected, including one JetBrains Toolbox entry. Gaming selects
+  rather than hiding the options. A confirmed Developer Mode enable installs
+  the Dev Container CLI (`devcontainer`) through Homebrew; IDEs and editors
+  are not offered in the Developer group (Bazaar or the Apps page). Gaming selects
   typed application/runtime refs, installs missing ones system-wide, and
   keeps partial failures visible. Its inventory reads both scopes, so a copy
   an earlier release installed per-user counts as present and is not
