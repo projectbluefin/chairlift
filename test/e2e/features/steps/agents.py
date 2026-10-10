@@ -20,11 +20,6 @@ from common import app, content, read_log
 AGENT_MODE_ROW = "Agent Mode"
 
 
-@step("I dismiss the model chooser with Escape")
-def step_dismiss_model_chooser(context):
-    atspi.press("Escape")
-
-
 def agent_mode_switch(context):
     row = atspi.row_containing(content(context), AGENT_MODE_ROW)
     return atspi.find(row, lambda n: atspi.role(n) == "switch", "the Agent Mode switch")
@@ -103,27 +98,6 @@ def step_switch_settles(context, state):
         f"(checked={atspi.checked(agent_mode_switch(context))}, "
         f"sensitive={atspi.sensitive(agent_mode_switch(context))})"
     )
-
-@then("the model chooser is {state:w}")
-def step_model_chooser_state(context, state):
-    if state not in ("sensitive", "insensitive"):
-        raise NotImplementedError(f"unknown chooser state {state!r}")
-    want = state == "sensitive"
-
-    def settled():
-        row = atspi.row_containing(content(context), "Recommended Presets", timeout=1)
-        button = atspi.find_button(row, "Choose…", timeout=1)
-        # Dakota reports local sensitivity, not effective GTK sensitivity:
-        # any disabled widget ancestor makes this button unavailable.
-        node = button
-        while node is not None and atspi.role(node) != "application":
-            if not atspi.sensitive(node):
-                return not want
-            node = node.parent
-        return want
-
-    assert atspi.poll(settled), f"the model chooser never became {state}"
-
 
 @then('the application log shows Agent Mode would {verb:w} its unit and fragment')
 def step_log_would(context, verb):

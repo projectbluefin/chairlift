@@ -133,11 +133,10 @@ only. Turning it off stops the server and keeps the software and any models you
 downloaded. The row shows an activity spinner throughout setup and shutdown, then
 restores the switch if the operation fails.
 
-**Active Model** and **Recommended Presets** remain visible, becoming usable
-only when the local server is ready. **Choose…** lists the model families with
-the recommended one first and highlighted; **Models and Chat**'s **Open llmman** opens llmman's
-own web interface for pulling, removing, and trying models. The connection
-address is directly selectable, not hidden in Details.
+**Active Model** remains visible, becoming usable only when the local server
+is ready; **Manage Models** opens llmman's own models page so users pull,
+remove, and try models there rather than through ChairLift's picker. The
+connection address is directly selectable, not hidden in Details.
 
 **Troubleshooting** sits below Agent Mode where Homebrew is installed. Its
 **Goose** row is the Agent Mode desktop GUI with read-only tools for this

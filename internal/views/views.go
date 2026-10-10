@@ -270,17 +270,13 @@ type UserHome struct {
 	bootcRollbackOffered bool
 
 	// Agent Mode (agents_page agents_group)
-	agentModeRow       *adw.ActionRow
-	agentModelRow      *adw.ActionRow
-	agentPresetRow     *adw.ActionRow
-	agentModeToggle    *guardedSwitch
-	agentPresetSpinner *gtk.Spinner
-	agentModeState     aistack.State
-	agentModeGate      actionstate.Gate
-	agentPresetGate    actionstate.Gate
-	agentRefresh       actionstate.RefreshGate
-	agentPresetDialogs dialogRoute
-	// agentManageRow opens llmman's own web UI, where models are managed.
+	agentModeRow    *adw.ActionRow
+	agentModelRow   *adw.ActionRow
+	agentModeToggle *guardedSwitch
+	agentModeState  aistack.State
+	agentModeGate   actionstate.Gate
+	agentRefresh    actionstate.RefreshGate
+	// agentManageRow opens llmman's models page, where users pick a model.
 	agentManageRow *adw.ActionRow
 
 	// Troubleshooting (agents_page troubleshooting_group): the Goose row, which

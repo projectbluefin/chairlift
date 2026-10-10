@@ -199,7 +199,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.AgentModeGroupDescription(",
 				"actionmsg.AgentMode(",
 				"pageview.AgentModeActiveModelTitle()",
-				"pageview.AgentModePresetsTitle()",
 			},
 			// A bare switch re-enters ::state-set on a programmatic revert,
 			// which would restart the service after a failed stop; the error

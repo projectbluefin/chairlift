@@ -779,8 +779,10 @@ Every mutation honors `dryrun.Enabled()`.
 within two seconds. `Resolve(Facts)` distinguishes unavailable, unconfigured,
 provisioning, ready, degraded and disabled. Unit presence or systemctl active
 alone is not readiness. Failed toggles re-observe state rather than invert an
-optimistic switch. Model/preset controls remain visible but insensitive until
-ready, with their unmet prerequisite explained.
+optimistic switch. The Active Model row stays visible but insensitive until
+ready, with its unmet prerequisite explained. Model selection itself happens
+in llmman's own models page (`http://127.0.0.1:17434/#/models`), which the
+Agents page's Manage Models row opens (#568).
 
 [`migration.go`](../../internal/aistack/migration.go) reconciles only an
 existing owned service. Matching file bytes alone do not prove that the daemon
@@ -792,17 +794,13 @@ failure preserves the unstamped unit and best-effort stops the old daemon.
 Live startup waits up to ten seconds for health after reconciliation; preview
 performs one bounded probe and writes nothing.
 
-[`models.go`](../../internal/aistack/models.go) owns candidate selection and
-the `bluefin-active` alias. Candidate resolution uses injectable live Hugging
-Face reads or the dated offline catalog, filters to supported text/chat GGUFs
-fitting observed node memory plus the safety margin, and ranks eligible
-artifacts. `PullModel` verifies storage through node observations.
-`ConfigureActiveModel` saves the canonical `hf.co/...` alias target, invokes
-the same restart/stamp boundary, and waits for health before confirming.
-A missing alias is the ordinary no-selected-model state, not an error or an
-invented default. Presets and service toggles share the view mutation gate;
-refresh generations reject stale health/alias reads. Dry-run selection keeps
-the displayed configured model.
+ChairLift does not choose, pull, or alias models. `ActiveModelAlias`
+(`bluefin-active`) in [`aistack.go`](../../internal/aistack/aistack.go) is
+read-only: `ReadActiveModel` runs `llmman config get aliases.bluefin-active`
+and returns the mapped reference. A missing alias is the ordinary
+no-selected-model state, not an error or an invented default. Users map the
+alias in llmman's own models page; refresh generations reject stale
+health/alias reads.
 
 ### Goose, Linux MCP and Ask Bluefin
 

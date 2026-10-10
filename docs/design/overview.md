@@ -939,7 +939,7 @@ Goose its provider through the environment. `hints.md` becomes the profile's
 `.goosehints`. Knowledge searches go online, so no copy claims a session's
 questions stay on this computer. The hint explicitly names the `linux-tools`
 tools (`get_system_information`, `get_disk_usage`, `get_cpu_information`,
-…) so a small local model — the default Qwen3-8B preset — reaches for them
+…) so a small local model — the recommended Qwen family — reaches for them
 instead of answering from training data (issue #523); it also forbids
 inventing system facts the tools would have returned.
 
@@ -958,8 +958,9 @@ boundary.
 `internal/aistack` is Agent Mode's runtime owner; [ADR-0015](../adr/0015-agent-mode-llmman.md)
 is the contract. [llmman](https://github.com/llmmanorg/llmman) chooses the
 engine and backend for the hardware (container runtime, prebuilt binary, or a
-`llama-server` on `$PATH`) and owns the model store. ChairLift presents active
-model selection and recommended presets without a GPU-vendor stack matrix.
+`llama-server` on `$PATH`) and owns the model store. ChairLift reads the
+selected model alias back through llmman and links to its models page for
+selection, so no GPU-vendor stack matrix lives here.
 Enabling:
 
 1. Renders `Brewfile(haveLLMMan)`, with `tap "llmmanorg/tap"` and
@@ -995,10 +996,11 @@ plus a JSON answer from `/llmman/node`), degraded (unit, no answer), and
 disabled (llmman installed, no unit). On page build the non-blocking facts
 render immediately and the health probe runs off the main thread.
 
-Model selection saves the canonical `hf.co/...` target as `bluefin-active`,
-restarts the owned user unit, and waits for `/llmman/node` readiness before
-confirming the selection. llmman reads aliases at startup, so configuration
-alone is not a serving-model guarantee. A missing alias renders no selection.
+Model selection happens in llmman's own models page
+(`http://127.0.0.1:17434/#/models`), opened from the Manage Models row.
+ChairLift only reads `bluefin-active` back (`ReadActiveModel`); it never
+writes the alias or restarts the unit for a model change. A missing alias
+renders no selection.
 The owned unit also sets empty `LLMMAN_PEERS=` to override existing aggregation
 configuration. Removing the remote-machine controls therefore cannot leave
 hidden offload enabled; unrelated llmman configuration is not rewritten.

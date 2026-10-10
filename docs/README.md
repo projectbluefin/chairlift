@@ -81,7 +81,7 @@ are listed in [org-adrs.md](org-adrs.md).
   — Agent Mode runs llmman (installed via a Homebrew Brewfile) as the
   ChairLift-owned user unit `chairlift-llmman.service` on
   loopback with the web shell and prompt history off; defines the six Agent
-  Mode states, local model/preset readiness, and artifact ownership
+  Mode states, local model readiness, and artifact ownership
 - [adr/0016-printer-app-admin-denied-until-authenticated.md](adr/0016-printer-app-admin-denied-until-authenticated.md)
   — printer application administration is denied until authenticated: PAPPL
   serves web admin and IPP on one listener, so the boundary is authorization

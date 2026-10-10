@@ -62,7 +62,6 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 	for file, gates := range map[string][]string{
 		"updates_page.go": {"driverGate"},
 		"reset.go":        {"powerwashGate", "factoryResetGate"},
-		"agents_page.go":  {"agentPresetGate"},
 		// Free up space is offered again after every run (#488).
 		"maintenance_page.go": {"freeUpSpaceGate"},
 		// Set Up and Launch share one gate, and both are offered again.

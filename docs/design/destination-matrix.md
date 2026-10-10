@@ -21,7 +21,7 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | --- | --- | --- |
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
-| `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
+| `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, the active model alias read from llmman, the Manage Models link to llmman's own page, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
 | `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and loopback-only printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Powerwash entry |
@@ -52,7 +52,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
 | `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
-| `agents_page` | `agents_group` | Agents service/model/presets, Models and Chat link and contributor launch; `internal/aistack`, `internal/contribute` |
+| `agents_page` | `agents_group` | Agents service, the active model alias and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
 | `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
 | `livery_page` | `livery_app_grid_group` | Livery app-grid mark; app-grid controller and `internal/livery` |

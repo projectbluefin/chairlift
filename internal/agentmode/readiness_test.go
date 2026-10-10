@@ -275,7 +275,7 @@ func TestLaunchFailed(t *testing.T) {
 		facts := readyFacts()
 		facts.ActiveModel = ""
 		_, err := Launch(context.Background(), facts, nil)
-		if err == nil || !strings.Contains(err.Error(), "Choose a model") {
+		if err == nil || !strings.Contains(err.Error(), "Pick a model") {
 			t.Errorf("Launch() = %v, want the missing prerequisite", err)
 		}
 		if len(h.cmds) != 0 {

@@ -67,25 +67,27 @@ existed. Every mutation is behind `dryrun.Enabled()`.
 
 The switch reflects the configured service after its first readiness probe;
 while that probe runs it is off and insensitive. `systemctl is-active` is
-never readiness on its own. The model and preset rows remain visible but
+never readiness on its own. The Active Model row remains visible but
 insensitive until ready, with the unmet prerequisite shown. An empty alias
 means no model is selected, never an invented Qwen default. Readiness and
-model reads are generation-guarded; selecting a preset and toggling the
-service share one mutation gate. A failed operation re-observes the unit and
-endpoint rather than assuming nothing changed.
-Selecting a model writes its canonical `hf.co/...` target to the
-`bluefin-active` alias, restarts the owned user unit, and waits for readiness
-before reporting selection. llmman reads aliases at startup: a saved alias
-alone does not prove that the running daemon can serve it. A missing alias is
-the ordinary no-selection state.
+model reads are generation-guarded. A failed operation re-observes the unit
+and endpoint rather than assuming nothing changed.
+The model alias lives in llmman's configuration: ChairLift only reads it
+back via `llmman config get`, never writes it (#568). Selection happens in
+llmman's own models page, which the Agents page's **Manage Models** row
+opens. llmman reads aliases at startup: a saved alias alone does not prove
+that the running daemon can serve it. A missing alias is the ordinary
+no-selection state.
 
 
 **Current Control Center surface (2026-10-03).** At the owner's request,
-the page focuses on this computer: one **Agent Mode** switch, visible
-**Active Model** and **Recommended Presets** rows, a **Goose** row with Launch
-action, a **Show Ask Bluefin in menu** preference, and the selectable local
-OpenAI-compatible connection address `http://127.0.0.1:17434/v1`.
-Connection instructions are not hidden behind an expander.
+the page focuses on this computer: one **Agent Mode** switch, a visible
+**Active Model** row, a **Manage Models** row that opens llmman's own
+models page at `http://127.0.0.1:17434/#/models`, a **Goose** row with
+Launch action, a **Show Ask Bluefin in menu** preference, and the
+selectable local OpenAI-compatible connection address
+`http://127.0.0.1:17434/v1`. Connection instructions are not hidden behind
+an expander.
 Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI.
 It is launched through llmman's invocation-scoped integration (`llmman launch goose-desktop --model <active-model>`)
 with the active model without persisting provider or model into Goose's configuration.
@@ -123,8 +125,9 @@ under `help_page` (still accepted and migrated); Help no longer offers a
 second Goose surface. The Ask Bluefin menu entry and `--ask-bluefin` are
 paths into it. Knowledge
 searches go online, so no copy claims a session's questions stay on this
-computer. The Agent Mode group also gains a **Models and Chat** row that
-opens llmman's own web UI while the daemon is ready.
+computer. The Agent Mode group also gains a **Manage Models** row that
+opens llmman's own models page (`http://127.0.0.1:17434/#/models`) while
+the daemon is ready.
 
 **Security boundaries.**
 

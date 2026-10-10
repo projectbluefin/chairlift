@@ -51,7 +51,7 @@ func TestDispatchAskBluefin(t *testing.T) {
 			facts:      ReadinessFacts{DaemonHealthy: true, Tools: installedTools()},
 			wantAction: DispatchPresentAgents,
 			wantState:  StateModelUnavailable,
-			wantReason: "Choose a model in Agent Mode to use Goose.",
+			wantReason: "Pick a model in Manage Models to use Goose.",
 		},
 		{
 			name:       "goose missing -> present agents",

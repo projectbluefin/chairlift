@@ -386,13 +386,38 @@ func TestExecutablePrefersPathThenBrewSibling(t *testing.T) {
 	}
 }
 
-// The Models and Chat row opens llmman's own web UI on the loopback address
-// the unit binds, never another host.
+// WebUIURL is the loopback daemon's models page; ChairLift links there
+// rather than re-implementing a picker (#568).
 func TestWebUIURLIsTheLoopbackDaemon(t *testing.T) {
-	if got, want := WebUIURL(), "http://"+Address+"/"; got != want {
+	if got, want := WebUIURL(), "http://"+Address+"/#/models"; got != want {
 		t.Errorf("WebUIURL() = %q, want %q", got, want)
 	}
 	if !strings.HasPrefix(Address, "127.0.0.1:") {
 		t.Errorf("Address %q is not loopback", Address)
+	}
+}
+
+// ReadActiveModel reads the alias llmman reports; a fresh runtime has no
+// alias set, which is the ordinary no-selection state, not an error. Other
+// failures still surface so a misconfigured daemon is not silently accepted.
+func TestReadActiveModelDistinguishesUnsetAliasFromFailure(t *testing.T) {
+	newHost(t)
+	failure := errors.New("command failed")
+	for _, test := range []struct {
+		name, output, model string
+		err                 error
+		wantError           bool
+	}{
+		{name: "fresh runtime", output: "Error: aliases.bluefin-active: not set", err: failure},
+		{name: "configured", output: "unsloth/example:Q4_K_M\n", model: "unsloth/example:Q4_K_M"},
+		{name: "config read failed", output: "Error: permission denied", err: failure, wantError: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			run = func(context.Context, string, ...string) (string, error) { return test.output, test.err }
+			model, err := ReadActiveModel(context.Background())
+			if model != test.model || (err != nil) != test.wantError {
+				t.Fatalf("ReadActiveModel = %q, %v", model, err)
+			}
+		})
 	}
 }

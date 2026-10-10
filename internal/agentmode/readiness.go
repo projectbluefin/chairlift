@@ -70,7 +70,7 @@ func (s State) MissingPrerequisite() string {
 	case StateDaemonUnavailable:
 		return "Turn on Agent Mode to use Goose."
 	case StateModelUnavailable:
-		return "Choose a model in Agent Mode to use Goose."
+		return "Pick a model in Manage Models to use Goose."
 	case StatePackagesMissing:
 		return "Goose isn't set up yet."
 	case StateUnsupported:
@@ -88,7 +88,7 @@ func (s State) Subtitle() string {
 	case StateDaemonUnavailable:
 		return "Turn on Agent Mode to use Goose."
 	case StateModelUnavailable:
-		return "Choose a model above to use Goose."
+		return "Pick a model in Manage Models to use Goose."
 	case StatePackagesMissing:
 		return "Set up Goose to start troubleshooting."
 	case StateUnsupported:

@@ -167,9 +167,10 @@ var (
 	nodeURL       = "http://" + Address + "/llmman/node"
 )
 
-// WebUIURL is llmman's built-in web UI — chat, model pulls and removal —
-// served by the Agent Mode daemon itself.
-func WebUIURL() string { return "http://" + Address + "/" }
+// WebUIURL is llmman's built-in models page — pulls, removal, and chat —
+// served by the Agent Mode daemon itself. ChairLift links directly to the
+// models view rather than re-implementing a picker (#568).
+func WebUIURL() string { return "http://" + Address + "/#/models" }
 
 func execCommand(ctx context.Context, name string, args ...string) (string, error) {
 	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
@@ -461,4 +462,28 @@ func writeAtomic(dest, content string) error {
 // `brew bundle` plus the engine fetch can take many minutes.
 func DefaultContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), commandTimeout)
+}
+
+// ActiveModelAlias is the llmman alias users configure through llmman's
+// own models page; ChairLift only reads it back, never writes it (#568).
+// The Goose launch uses the alias verbatim, so whatever model the user
+// mapped to it is what Goose starts on.
+const ActiveModelAlias = "bluefin-active"
+
+// ReadActiveModel returns the model ref currently mapped to ActiveModelAlias
+// via `llmman config get`. It returns ("", nil) when no alias has been set
+// yet, so a fresh runtime is not an error.
+func ReadActiveModel(ctx context.Context) (string, error) {
+	exe := Executable()
+	if exe == "" {
+		return "", errors.New("llmman executable not found")
+	}
+	out, err := run(ctx, exe, "config", "get", "aliases."+ActiveModelAlias)
+	if err != nil {
+		if strings.TrimSpace(out) == "Error: aliases."+ActiveModelAlias+": not set" {
+			return "", nil
+		}
+		return "", fmt.Errorf("llmman config get alias: %w", err)
+	}
+	return strings.TrimSpace(out), nil
 }

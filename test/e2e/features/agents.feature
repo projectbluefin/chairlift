@@ -24,9 +24,8 @@ Feature: Agents page
     When I open the "Agents" page
     Then the switch in the "Agent Mode" row is off
     And the "Agent Mode" row says "Turn on to download and set up Agent Mode."
-    And the "Active Model" row says "Turn on Agent Mode to choose a model."
-    And the model chooser is insensitive
-    And I do not see "Models and Chat"
+    And the "Active Model" row says "Turn on Agent Mode to see the current model."
+    And I do not see "Manage Models"
     And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
     And the "Local connection" row says "http://127.0.0.1:17434/v1"
@@ -39,19 +38,18 @@ Feature: Agents page
     And the "Agent Mode" row says "Ready."
     And the llmman node endpoint was probed
     And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
-    And the model chooser is sensitive
-    And the "Models and Chat" row says "Download, remove, and chat with models."
+    And the "Manage Models" row says "Open llmman's web UI to pull, remove, or chat with models."
     And the "Goose" row says "Set up Goose to start troubleshooting."
     And the "Set Up" button in the "Goose" row is sensitive
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.help-xdg-open
-  Scenario: Open llmman hands its loopback web interface to xdg-open
+  Scenario: Manage Models hands llmman's models page to xdg-open
     Given ChairLift is running
     When I open the "Agents" page
     # The button is announced by its visible label (WCAG 2.5.3), not by the
     # row title AdwActionRow would otherwise lend its activatable widget.
-    And I click the "Open llmman" button in the "Models and Chat" row
-    Then xdg-open was asked to open "http://127.0.0.1:17434/"
+    And I click the "Manage Models" button in the "Manage Models" row
+    Then xdg-open was asked to open "http://127.0.0.1:17434/#/models"
     And the action journal is empty
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node
@@ -59,8 +57,7 @@ Feature: Agents page
     Given ChairLift is running
     When I open the "Agents" page
     Then the "Agent Mode" row says "Ready."
-    And the "Active Model" row says "No model selected"
-    And the model chooser is sensitive
+    And the "Active Model" row says "No model selected. Use Manage Models to pick one."
 
   @stub.agents.llmman @stub.agents.unit
   Scenario: An installed unit whose daemon does not answer stays visibly unavailable
@@ -69,9 +66,7 @@ Feature: Agents page
     Then the Agent Mode switch settles on and sensitive
     And the "Agent Mode" row says "Agent Mode isn't responding."
     And the "Active Model" row says "Available when Agent Mode is ready."
-    And the "Recommended Presets" row says "Available when Agent Mode is ready."
-    And the model chooser is insensitive
-    And I do not see "Models and Chat"
+    And I do not see "Manage Models"
 
   Scenario: Turning Agent Mode on in a dry run installs and writes nothing
     Given ChairLift is running
@@ -114,48 +109,6 @@ Feature: Agents page
     And the Agents files on disk are unchanged
     And the systemctl tool was never asked to mutate
     And the action journal is empty
-
-  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
-  Scenario: Dismissing the preset chooser changes nothing and can be reopened
-    Given ChairLift is running
-    When I open the "Agents" page
-    And I click the "Choose…" button in the "Recommended Presets" row
-    Then a dialog titled "Choose a Model" is shown
-    When I dismiss the model chooser with Escape
-    Then no dialog is shown
-    And the application log does not contain "would configure alias"
-    When I click the "Choose…" button in the "Recommended Presets" row
-    Then a dialog titled "Choose a Model" is shown
-    When I choose "Cancel" in the dialog
-    Then no dialog is shown
-
-  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
-  Scenario: A preset in a dry run resolves a fitting model offline and pulls nothing
-    Given ChairLift is running
-    When I open the "Agents" page
-    And I click the "Choose…" button in the "Recommended Presets" row
-    Then a dialog titled "Choose a Model" is shown
-    And the dialog says "Qwen (Recommended)"
-    And the dialog says "Mistral / Ministral"
-    And the dialog says "DeepSeek"
-    And the dialog says "GPT-OSS"
-    When I choose "Gemma" in the dialog
-    Then the application log contains "[DRY-RUN] would configure alias bluefin-active to unsloth/gemma-3"
-    And I see "[DRY-RUN] Would switch to unsloth/gemma-3"
-    And llmman was never asked to "pull"
-    And llmman was never asked to "config set"
-    And the Agent Mode switch settles on and sensitive
-    And the model chooser is sensitive
-
-  @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias
-  Scenario: A dry-run preset leaves the Active Model row showing the model actually configured
-    Given ChairLift is running
-    When I open the "Agents" page
-    Then the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
-    When I click the "Choose…" button in the "Recommended Presets" row
-    And I choose "Gemma" in the dialog
-    Then the application log contains "[DRY-RUN] would configure alias bluefin-active to unsloth/gemma-3"
-    And the "Active Model" row says "unsloth/Qwen3-8B-GGUF:Q4_K_M"
 
   # ------------------------------------------------------------ troubleshooting
 
@@ -241,7 +194,7 @@ Feature: Agents page
   Scenario: Agent Mode running without a model asks for one
     Given ChairLift is running
     When I open the "Agents" page
-    Then the "Goose" row says "Choose a model above to use Goose."
+    Then the "Goose" row says "Pick a model in Manage Models to use Goose."
     And the "Launch" button in the "Goose" row is insensitive
 
   @stub.agents.llmman @stub.agents.unit @stub.agents.node @stub.agents.alias @stub.agents.goose

@@ -2,7 +2,6 @@ package views
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -17,8 +16,9 @@ import (
 )
 
 // Agent Mode is a loopback model server managed by a systemd user unit;
-// Troubleshooting is Goose on that server's model. No operation on this page is
-// privileged.
+// Troubleshooting is Goose on that server's model. Model selection happens
+// in llmman's own web UI; ChairLift links there rather than re-implementing
+// a picker (#568). No operation on this page is privileged.
 func (uh *UserHome) buildAgentsPage() {
 	page := uh.agentsPrefsPage
 	if page == nil {
@@ -66,20 +66,8 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	uh.agentModelRow = modelRow
 	group.Add(&modelRow.Widget)
 
-	presetRow := adw.NewActionRow()
-	presetRow.SetTitle(pageview.AgentModePresetsTitle())
-	uh.agentPresetSpinner = newActivitySpinner()
-	presetRow.AddSuffix(&uh.agentPresetSpinner.Widget)
-	choose := gtk.NewButtonWithLabel(pageview.AgentModeSwitchPresetLabel())
-	choose.SetValign(gtk.AlignCenterValue)
-	clicked := func(_ gtk.Button) { uh.presentModelPresetChooser() }
-	choose.ConnectClicked(&clicked)
-	presetRow.AddSuffix(&choose.Widget)
-	uh.agentPresetRow = presetRow
-	group.Add(&presetRow.Widget)
-
 	// Models, chat, and everything else llmman manages live in its own web
-	// UI; ChairLift links there rather than growing a second copy.
+	// UI; ChairLift links there rather than growing a second copy (#568).
 	manageRow := adw.NewActionRow()
 	manageRow.SetTitle(pageview.AgentModeManageTitle())
 	manageRow.SetSubtitle(pageview.AgentModeManageSubtitle())
@@ -89,10 +77,10 @@ func (uh *UserHome) buildAgentModeGroup(page *adw.PreferencesPage) {
 	manageBtn.ConnectClicked(&manageClicked)
 	manageRow.AddSuffix(&manageBtn.Widget)
 	manageRow.SetActivatableWidget(&manageBtn.Widget)
-	// AdwActionRow labels its activatable widget by the row title, so the
-	// "Open llmman" button would be announced as "Models and Chat" — a name
-	// that does not contain its visible label. Drop that relation so the
-	// button is announced by what it shows.
+	// AdwActionRow labels its activatable widget by the row title. The
+	// title matches the button label today, so the reset changes nothing
+	// audible; it keeps the button named by its own visible label if the
+	// title and label ever diverge (WCAG 2.5.3).
 	manageBtn.ResetRelation(gtk.AccessibleRelationLabelledByValue)
 	manageRow.SetVisible(false)
 	uh.agentManageRow = manageRow
@@ -149,9 +137,7 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeSubtitle(state))
 	ready := state == aistack.StateReady
 	uh.agentModelRow.SetSensitive(ready)
-	uh.agentPresetRow.SetSensitive(ready)
 	uh.agentModelRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
-	uh.agentPresetRow.SetSubtitle(pageview.AgentModeModelUnavailable(state))
 	if uh.agentManageRow != nil {
 		uh.agentManageRow.SetVisible(ready)
 	}
@@ -160,7 +146,6 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 	if !ready {
 		return
 	}
-	uh.agentPresetRow.SetSubtitle(pageview.AgentModePresetsSubtitle())
 	uh.agentModelRow.SetSubtitle("Checking…")
 	go func() {
 		ctx, cancel := aistack.DefaultContext()
@@ -172,116 +157,12 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 			}
 			if err != nil {
 				log.Printf("views: read active model failed: %v", err)
-				uh.agentModelRow.SetSubtitle("Couldn't check the model. Choose one below.")
+				uh.agentModelRow.SetSubtitle("Couldn't check the model. Use Manage Models to pick one.")
 				return
 			}
 			uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
 		})
 	}()
-}
-
-func (uh *UserHome) presentModelPresetChooser() {
-	if uh.agentModeState != aistack.StateReady || !uh.agentPresetGate.TryStart() {
-		return
-	}
-	dialog := adw.NewAlertDialog("Choose a Model", "Pick a model family. A size that fits this computer will be downloaded.")
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.SetCloseResponse("cancel")
-	for _, response := range pageview.AgentModePresetResponses() {
-		dialog.AddResponse(response.ID, response.Label)
-		if response.Suggested {
-			dialog.SetResponseAppearance(response.ID, adw.ResponseSuggestedValue)
-		}
-	}
-	uh.agentPresetDialogs.connect(dialog, func(response string) {
-		fam := aistack.Family(response)
-		valid := false
-		for _, available := range aistack.Families() {
-			valid = valid || fam == available
-		}
-		if !valid {
-			uh.agentPresetGate.Reset()
-			return
-		}
-		// The chooser may have remained open while a toggle changed readiness.
-		// One mutation gate protects the service and model configuration together.
-		if uh.agentModeState != aistack.StateReady || !uh.agentModeGate.TryStart() {
-			uh.agentPresetGate.Reset()
-			uh.toastAdder.ShowErrorToast("Wait until Agent Mode is ready before choosing a model.")
-			return
-		}
-		uh.agentRefresh.Begin()
-		previous := uh.agentModelRow.GetSubtitle()
-		uh.agentModeToggle.widget.SetSensitive(false)
-		uh.agentPresetRow.SetSensitive(false)
-		uh.agentModelRow.SetSubtitle(fmt.Sprintf("Downloading a %s model…", fam.DisplayName()))
-		setActivitySpinner(uh.agentPresetSpinner, true)
-		go uh.applyModelFamilyPreset(fam, previous)
-	})
-	dialog.Present(&uh.agentsPrefsPage.Widget)
-}
-
-// Pull first, then configure the alias. Failed pulls and previews keep the
-// previous model; controls and gates are restored together on the GTK thread.
-func (uh *UserHome) applyModelFamilyPreset(fam aistack.Family, previous string) {
-	ctx, cancel := aistack.DefaultContext()
-	defer cancel()
-	finish := func(modelRef, message string, failed bool) {
-		facts := aistack.Observe(true)
-		if facts.UnitPresent {
-			facts.Checked, facts.Healthy = true, aistack.Healthy(context.Background())
-		}
-		sgtk.RunOnMainThread(func() {
-			uh.agentModeGate.Reset()
-			uh.agentPresetGate.Reset()
-			uh.agentModeToggle.widget.SetSensitive(true)
-			setActivitySpinner(uh.agentPresetSpinner, false)
-			state := aistack.Resolve(facts)
-			uh.agentModeToggle.set(state.On())
-			uh.showAgentModeState(state)
-			if state == aistack.StateReady {
-				if modelRef == "" {
-					uh.agentModelRow.SetSubtitle(previous)
-				} else {
-					uh.agentModelRow.SetSubtitle(pageview.AgentModeActiveModelSubtitle(modelRef))
-				}
-			}
-			if failed {
-				uh.toastAdder.ShowErrorToast(message)
-			} else {
-				uh.toastAdder.ShowToast(message)
-			}
-		})
-	}
-	status, err := aistack.FetchNodeStatus(ctx)
-	if err != nil {
-		log.Printf("views: fetch node status failed: %v", err)
-		finish("", "Couldn't reach Agent Mode. Try again.", true)
-		return
-	}
-	candidate, err := aistack.ResolveCandidate(ctx, fam, status.Memory, aistack.DefaultFetch)
-	if err != nil {
-		log.Printf("views: resolve candidate failed: %v", err)
-		finish("", fmt.Sprintf("Couldn't find a %s model that fits this computer.", fam.DisplayName()), true)
-		return
-	}
-	modelRef := candidate.ModelRef()
-	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would configure alias %s to %s and pull", aistack.ActiveModelAlias, modelRef)
-		finish("", fmt.Sprintf("[DRY-RUN] Would switch to %s", modelRef), false)
-		return
-	}
-	if err := aistack.PullModel(ctx, modelRef); err != nil {
-		log.Printf("views: pull model failed: %v", err)
-		finish("", "Couldn't download the model. Check your internet connection.", true)
-		return
-	}
-	if err := aistack.ConfigureActiveModel(ctx, modelRef); err != nil {
-		log.Printf("views: configure alias failed: %v", err)
-		finish("", "Couldn't switch to the new model. Try again.", true)
-		return
-	}
-	finish(modelRef, fmt.Sprintf("Selected %s.", fam.DisplayName()), false)
 }
 
 func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
@@ -292,11 +173,9 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 	previous := uh.agentModeState
 	uh.agentRefresh.Begin()
 	toggle.widget.SetSensitive(false)
-	uh.agentPresetRow.SetSensitive(false)
 	uh.agentModelRow.SetSensitive(false)
 	uh.agentModeRow.SetSubtitle(pageview.AgentModeWorkingSubtitle(enabled))
 	uh.agentModelRow.SetSubtitle("Waiting for Agent Mode…")
-	uh.agentPresetRow.SetSubtitle("Waiting for Agent Mode…")
 	setActivitySpinner(uh.agentModeSpinner, true)
 	dryRun := dryrun.Enabled()
 	go func() {
