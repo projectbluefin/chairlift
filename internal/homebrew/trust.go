@@ -42,6 +42,31 @@ type UntrustedTap struct {
 	Casks    []string
 }
 
+// Without returns the tap with one package dropped from the namespace kind
+// names, after that package was trusted on its own. The receiver is left
+// untouched, so a copy handed to a running trust keeps its own list.
+func (t UntrustedTap) Without(kind PackageKind, name string) UntrustedTap {
+	drop := func(names []string) []string {
+		kept := make([]string, 0, len(names))
+		for _, n := range names {
+			if n != name {
+				kept = append(kept, n)
+			}
+		}
+		return kept
+	}
+	switch kind {
+	case Formula:
+		t.Formulae = drop(t.Formulae)
+	case Cask:
+		t.Casks = drop(t.Casks)
+	}
+	return t
+}
+
+// Count is how many installed packages from the tap are still untrusted.
+func (t UntrustedTap) Count() int { return len(t.Formulae) + len(t.Casks) }
+
 // parseUntrustedTapNames extracts names of untrusted taps from
 // `brew tap-info --installed --json` output. The "trusted" key was added in
 // Homebrew 6; older brew versions omit it entirely (and have no `brew

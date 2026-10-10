@@ -218,6 +218,36 @@ func TapTrust(dryRun bool, tapName string) TapTrustDecision {
 	}
 }
 
+// PackageTrustDecision is the result of trusting one package from an
+// untrusted tap (the per-package Trust button next to each formula/cask
+// inside the Manage source trust group). MutateUI is true when the package
+// was actually trusted (homebrew.TrustFormula/TrustCask ran `brew trust` for
+// real) and the per-package row should disappear; it is exactly !dryRun,
+// following the same shape TapTrust uses for the broader trust path.
+type PackageTrustDecision struct {
+	MutateUI bool
+	Toast    string
+}
+
+// PackageTrust decides whether trusting one Homebrew package (the
+// per-package button inside a tap's expander row) should mutate the Manage
+// source trust UI: remove the now-trusted package's row, and remove the tap
+// itself once its last package is trusted. It mirrors TapTrust but for the
+// finer-grained action; MutateUI is exactly !dryRun, and under dry-run the
+// package is not actually trusted so the row must not vanish.
+func PackageTrust(dryRun bool, packageName string) PackageTrustDecision {
+	if dryRun {
+		return PackageTrustDecision{
+			MutateUI: false,
+			Toast:    fmt.Sprintf("[DRY-RUN] Preview: %s would be trusted — no changes made", packageName),
+		}
+	}
+	return PackageTrustDecision{
+		MutateUI: true,
+		Toast:    fmt.Sprintf("Trusted %s. It can update again.", packageName),
+	}
+}
+
 // ScriptDecision is the result of deciding whether a configured custom
 // maintenance script should actually execute, and what toast to show for
 // that decision.

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 )
 
@@ -79,6 +80,58 @@ const BootcStageButtonLabel = "Download"
 // stage helper runs. It names both halves, because the helper checks first
 // and downloads only when a newer version exists.
 const BootcStageRunningSubtitle = "Looking for a newer version and downloading it…"
+
+// TapTrustConfirmation returns the title and body of the dialog that
+// confirms trusting a whole source. count is how many installed programs
+// from the source are still untrusted, so the body says exactly how much
+// the one click trusts — "all 1 programs" never reaches a person.
+func TapTrustConfirmation(name string, count int) (title, body string) {
+	title = fmt.Sprintf("Trust software from %s?", name)
+	const caution = "Only trust sources you recognize."
+	switch {
+	case count == 1:
+		body = fmt.Sprintf("This will trust the 1 installed program from %s, so it can install and update. %s", name, caution)
+	case count > 1:
+		body = fmt.Sprintf("This will trust all %d installed programs from %s at once, so they can install and update. %s", count, name, caution)
+	default:
+		body = fmt.Sprintf("This will trust software from %s, so it can install and update. %s", name, caution)
+	}
+	return title, body
+}
+
+// UntrustedTapPackage returns the row text for one installed package from an
+// untrusted tap. qualifiedName is the "user/tap/name" form ListUntrustedTaps
+// records; kind tells the row whether the package is a formula or a cask,
+// since the noun a person reads differs by namespace and Homebrew's own
+// output ("from untrusted tap … formula foo") uses the same distinction.
+//
+// The subtitle names what trusting the package actually buys — that this one
+// program will update again — rather than the implementation detail of which
+// tap trust list it joins. The noun is the user's word, not the system word:
+// formulae are still "programs" here even though Homebrew distinguishes them
+// internally.
+func UntrustedTapPackage(qualifiedName string, kind homebrew.PackageKind) Row {
+	noun := "program"
+	if kind == homebrew.Cask {
+		noun = "app"
+	}
+	return Row{
+		Title:    packageDisplayName(qualifiedName),
+		Subtitle: fmt.Sprintf("Updates are paused for this %s — Trust to update", noun),
+	}
+}
+
+// packageDisplayName strips the "user/tap/" prefix from a qualified package
+// name and returns the bare name a person recognizes (the same shape the
+// Apps page uses for Homebrew rows). It does no error handling because
+// ListUntrustedTaps already enforces the three-segment shape; a malformed
+// name returns the original string rather than panicking in a view.
+func packageDisplayName(qualified string) string {
+	if i := strings.LastIndex(qualified, "/"); i >= 0 && i < len(qualified)-1 {
+		return qualified[i+1:]
+	}
+	return qualified
+}
 
 // BootcUpdateSubtitle returns the system-update expander subtitle. A
 // downloaded update changes nothing until the machine restarts, so the

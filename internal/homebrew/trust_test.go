@@ -166,3 +166,36 @@ func TestTrustPackagesDryRun(t *testing.T) {
 		t.Fatalf("dry-run TrustPackages: %v", err)
 	}
 }
+
+// TestUntrustedTapWithoutDropsOnlyThatPackage pins the per-package trust
+// bookkeeping: trusting one formula leaves its siblings, a cask of the same
+// name, and the original tap value untouched.
+func TestUntrustedTapWithoutDropsOnlyThatPackage(t *testing.T) {
+	tap := UntrustedTap{
+		Name:     "vendor/tap",
+		Formulae: []string{"vendor/tap/a", "vendor/tap/b"},
+		Casks:    []string{"vendor/tap/a"},
+	}
+
+	got := tap.Without(Formula, "vendor/tap/a")
+	if !reflect.DeepEqual(got.Formulae, []string{"vendor/tap/b"}) {
+		t.Errorf("Formulae = %v, want [vendor/tap/b]", got.Formulae)
+	}
+	if !reflect.DeepEqual(got.Casks, []string{"vendor/tap/a"}) {
+		t.Errorf("Casks = %v, want the same-named cask kept", got.Casks)
+	}
+	if got.Count() != 2 {
+		t.Errorf("Count() = %d, want 2", got.Count())
+	}
+	if !reflect.DeepEqual(tap.Formulae, []string{"vendor/tap/a", "vendor/tap/b"}) || tap.Count() != 3 {
+		t.Errorf("receiver changed: %+v", tap)
+	}
+
+	got = got.Without(Cask, "vendor/tap/a").Without(Formula, "vendor/tap/b")
+	if got.Count() != 0 {
+		t.Errorf("Count() after trusting everything = %d, want 0", got.Count())
+	}
+	if got.Name != "vendor/tap" {
+		t.Errorf("Name = %q, want vendor/tap", got.Name)
+	}
+}

@@ -436,6 +436,49 @@ func TestTapTrust(t *testing.T) {
 	}
 }
 
+// TestPackageTrust mirrors TestTapTrust for the per-package Trust button:
+// a live run mutates the UI (the now-trusted package row is removed), a
+// dry-run preview does not, and the toast text distinguishes the two. The
+// test holds both halves (the gate and the wording) precisely so the gate
+// the Manage source trust UI depends on — that a package row cannot vanish
+// after a dry-run click — is what actionmsg_test.go asserts on.
+func TestPackageTrust(t *testing.T) {
+	tests := []struct {
+		name         string
+		dryRun       bool
+		packageName  string
+		wantMutateUI bool
+		wantToast    string
+	}{
+		{
+			name:         "live run trusts the package and mutates the UI",
+			dryRun:       false,
+			packageName:  "vendor/tap/demo",
+			wantMutateUI: true,
+			wantToast:    "Trusted vendor/tap/demo. It can update again.",
+		},
+		{
+			name:         "dry-run previews without mutating the UI",
+			dryRun:       true,
+			packageName:  "vendor/tap/demo",
+			wantMutateUI: false,
+			wantToast:    "[DRY-RUN] Preview: vendor/tap/demo would be trusted — no changes made",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PackageTrust(tt.dryRun, tt.packageName)
+			if got.MutateUI != tt.wantMutateUI {
+				t.Errorf("PackageTrust(%v, %q).MutateUI = %v, want %v", tt.dryRun, tt.packageName, got.MutateUI, tt.wantMutateUI)
+			}
+			if got.Toast != tt.wantToast {
+				t.Errorf("PackageTrust(%v, %q).Toast = %q, want %q", tt.dryRun, tt.packageName, got.Toast, tt.wantToast)
+			}
+		})
+	}
+}
+
 // TestMaintenanceScript covers both dry-run states for configured custom
 // maintenance scripts, asserting both the execution gate (Execute) and the
 // Toast text. Execute is the criterion that directly proves no

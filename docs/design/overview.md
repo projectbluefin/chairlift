@@ -826,7 +826,7 @@ Everything else the Updates page owns is built by `buildUpdatesPage` into
 `UserHome.updatesPrefsPage`; `Window.buildContentArea` mounts it below the
 shell's source rows with `UpdateShell.SetSecondaryContent`. The secondary
 groups, in order, are automatic updates, System version, System update details
-(dedicated download and Compare), Unverified sources, and Advanced
+(dedicated download and Compare), Manage source trust, and Advanced
 channel/graphics controls. Application/tool source rows and item actions belong
 to the shell rather than duplicated preference groups. Configuration,
 capability and asynchronous runtime gates determine which groups are shown.

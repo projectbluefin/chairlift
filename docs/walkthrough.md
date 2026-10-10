@@ -77,8 +77,10 @@ Each other source keeps its own group for when you want to update just one
 thing: **Apps** lists the Flatpak updates waiting, and **Developer tools**
 lists the command-line tools you installed with Homebrew, with a button to
 check for new versions. If a Homebrew package came from an unofficial source,
-**Unverified sources** asks you to trust that source before it will keep
-updating it.
+**Manage source trust** asks you to trust that source before it will keep
+updating it, with one row per source that opens to show each program with
+its own Trust button, and a Trust Tap button that trusts every program you
+installed from that source.
 
 **Advanced** sits last and holds the two choices that replace the operating
 system itself, because both land through an update and both need a restart.

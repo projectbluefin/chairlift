@@ -103,7 +103,7 @@ Feature: Updates
   @stub.updates-flatpak-current @stub.updates-brew-trust-check-fails
   Scenario: A failed source-trust check is not hidden as if every source were trusted
     Given ChairLift is running
-    Then I see "Unverified sources"
+    Then I see "Manage source trust"
     And the "Couldn't check for paused updates" row says "Check your internet connection and try again."
     And the "Retry" button in the "Couldn't check for paused updates" row is sensitive
     And the application log contains "untrusted tap check failed"
@@ -303,10 +303,24 @@ Feature: Updates
   Scenario: Trust remains reachable without opening an update disclosure
     Given ChairLift is running
     Then the "vendor/tap" row says "Updates are paused for 1 program"
-    When I click the "Trust…" button in the "vendor/tap" row
+    When I click the "Trust Tap" button in the "vendor/tap" row
     Then a dialog titled "Trust software from vendor/tap?" is shown
+    And the dialog says "This will trust the 1 installed program from vendor/tap"
+    When I choose "Trust Tap" in the dialog
+    Then the application log contains "[DRY-RUN] Would execute: brew trust --formula vendor/tap/example"
+    And the "Trust Tap" button in the "vendor/tap" row is sensitive
+    And the "vendor/tap" row says "Updates are paused"
+    And the brew tool was never asked to "trust"
+
+  @stub.updates-flatpak-current @stub.updates-brew-untrusted
+  Scenario: Trusting one program from a source in a dry run previews that program only
+    Given ChairLift is running
+    When I expand the "vendor/tap" list under "Manage source trust"
+    Then the "example" row says "Updates are paused for this program — Trust to update"
+    When I click the "Trust" button in the "example" row
+    Then a dialog titled "Trust example from vendor/tap?" is shown
     When I choose "Trust" in the dialog
     Then the application log contains "[DRY-RUN] Would execute: brew trust --formula vendor/tap/example"
-    And the "Trust…" button in the "vendor/tap" row is sensitive
-    And the "vendor/tap" row says "Updates are paused"
+    And the "Trust" button in the "example" row is sensitive
+    And the "example" row says "Updates are paused for this program"
     And the brew tool was never asked to "trust"

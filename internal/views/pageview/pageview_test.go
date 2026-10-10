@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 func TestApplicationRowsCoverEveryPresentation(t *testing.T) {
@@ -72,6 +74,86 @@ func TestUpdateRowsCoverEveryPresentation(t *testing.T) {
 		})
 	}
 
+	packageTests := []struct {
+		name          string
+		qualifiedName string
+		kind          homebrew.PackageKind
+		want          Row
+	}{
+		{
+			name:          "formula",
+			qualifiedName: "vendor/tap/demo",
+			kind:          homebrew.Formula,
+			want: Row{
+				Title:    "demo",
+				Subtitle: "Updates are paused for this program — Trust to update",
+			},
+		},
+		{
+			name:          "cask",
+			qualifiedName: "vendor/tap/demo",
+			kind:          homebrew.Cask,
+			want: Row{
+				Title:    "demo",
+				Subtitle: "Updates are paused for this app — Trust to update",
+			},
+		},
+		{
+			name:          "unqualified name passes through",
+			qualifiedName: "plain",
+			kind:          homebrew.Formula,
+			want: Row{
+				Title:    "plain",
+				Subtitle: "Updates are paused for this program — Trust to update",
+			},
+		},
+	}
+	for _, tt := range packageTests {
+		t.Run("untrusted tap package/"+tt.name, func(t *testing.T) {
+			got := UntrustedTapPackage(tt.qualifiedName, tt.kind)
+			if got != tt.want {
+				t.Fatalf("UntrustedTapPackage(%q, %v) = %#v, want %#v", tt.qualifiedName, tt.kind, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTapTrustConfirmationMatchesTheRemainingCount(t *testing.T) {
+	tests := []struct {
+		name  string
+		count int
+		body  string
+	}{
+		{
+			name:  "one program",
+			count: 1,
+			body:  "This will trust the 1 installed program from vendor/tap, so it can install and update. Only trust sources you recognize.",
+		},
+		{
+			name:  "several programs",
+			count: 3,
+			body:  "This will trust all 3 installed programs from vendor/tap at once, so they can install and update. Only trust sources you recognize.",
+		},
+		{
+			name:  "no count",
+			count: 0,
+			body:  "This will trust software from vendor/tap, so it can install and update. Only trust sources you recognize.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title, body := TapTrustConfirmation("vendor/tap", tt.count)
+			if title != "Trust software from vendor/tap?" {
+				t.Errorf("title = %q", title)
+			}
+			if body != tt.body {
+				t.Errorf("body = %q, want %q", body, tt.body)
+			}
+			if strings.Contains(body, "all 1 ") || strings.Contains(body, "1 installed programs") {
+				t.Errorf("body %q pluralizes a single program", body)
+			}
+		})
+	}
 }
 
 func TestBootcUpdateSubtitlesCoverEveryState(t *testing.T) {

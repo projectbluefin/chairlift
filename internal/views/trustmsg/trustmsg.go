@@ -17,7 +17,7 @@ import "fmt"
 // where brew_trust_group is disabled or its group has not been built.
 func UpgradeMessage(pkgName string, trustGroupAvailable bool) string {
 	if trustGroupAvailable {
-		return fmt.Sprintf("%s comes from an untrusted source — see Unverified sources below", pkgName)
+		return fmt.Sprintf("%s comes from an untrusted source — see Manage source trust below", pkgName)
 	}
 	return fmt.Sprintf("%s comes from an untrusted tap and cannot be upgraded until the tap is trusted", pkgName)
 }

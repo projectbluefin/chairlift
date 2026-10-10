@@ -11,7 +11,7 @@ func TestUpgradeMessage(t *testing.T) {
 		if !strings.Contains(got, "example") {
 			t.Errorf("UpgradeMessage must identify the affected package: %q", got)
 		}
-		for _, redirect := range []string{"Unverified sources", "below"} {
+		for _, redirect := range []string{"Manage source trust", "below"} {
 			if strings.Contains(got, redirect) != available {
 				t.Errorf("UpgradeMessage(group available=%v) = %q; redirect %q must only name an available section", available, got, redirect)
 			}
