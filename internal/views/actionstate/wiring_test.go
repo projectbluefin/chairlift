@@ -351,6 +351,7 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 		// The failure branch (partial install) and the live success.
 		{"bundle_install.go", "func (uh *UserHome) runBundleInstall(", 2},
 		{"developer_tools.go", "func (uh *UserHome) onDeveloperOption(", 1},
+		{"features_page.go", "func (uh *UserHome) startDeveloperDevcontainerSetup(", 1},
 	} {
 		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
 			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)

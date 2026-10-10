@@ -4,10 +4,12 @@ import (
 	"log"
 	"slices"
 
+	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/developerfeeds"
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/gaming"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
@@ -571,6 +573,7 @@ func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row 
 
 			uh.openDeveloperOnboarding(enabled, succeeded)
 			uh.startDeveloperFeedSetup(enabled, succeeded)
+			uh.startDeveloperDevcontainerSetup(enabled, succeeded)
 		})
 	}()
 }
@@ -657,6 +660,39 @@ func (uh *UserHome) startDeveloperFeedSetup(enabled, succeeded bool) {
 				return
 			}
 			uh.toastAdder.ShowToast(result.Message)
+		})
+	}()
+}
+
+// startDeveloperDevcontainerSetup automatically installs the Dev Container CLI
+// (devcontainer) when Developer Mode is first enabled. Like
+// startDeveloperFeedSetup, it is called from the one branch of
+// onDeveloperToggled that reached a successful live promotion, so a page
+// restore, a failed helper call, a disable, and a dry-run preview spawn
+// nothing. An install error reports its own failure and rolls nothing back.
+func (uh *UserHome) startDeveloperDevcontainerSetup(enabled, succeeded bool) {
+	if !uh.capabilities[capability.Homebrew] || !enabled || !succeeded || dryrun.Enabled() {
+		return
+	}
+
+	if !uh.developerDevcontainerGate.TryStart() {
+		return
+	}
+
+	go func() {
+		err := homebrew.Install("devcontainer", false)
+		sgtk.RunOnMainThread(func() {
+			defer uh.developerDevcontainerGate.Reset()
+
+			if err != nil {
+				log.Printf("views: developer devcontainer setup failed: %v", err)
+				if uh.toastAdder != nil {
+					uh.toastAdder.ShowErrorToast("Couldn't install Dev Container CLI.")
+				}
+				return
+			}
+
+			uh.homebrewInventoryChanged()
 		})
 	}()
 }

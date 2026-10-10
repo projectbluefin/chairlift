@@ -670,18 +670,11 @@ surface is not permission to make the fixed provider helpers configurable.
 
 ## Developer workstation and selected gaming components
 
-[`internal/devtools`](../../internal/devtools/devtools.go) owns optional
-Homebrew editor installs, WSL backends and Docker CLI setup under
-`features_page.dx_group`. The developer-access switch does not install every
-editor or switch to a different OS image. `Tools()` is the current typed
-inventory, including each tool's one-line description; architecture support
-is checked per tool. Row text and the Install button's per-tool accessible
-name come from `pageview.DeveloperTool`. The Developer group re-reads only the
-tools' installed state each time it is shown (one `map` handler connected at
-build), so an uninstall on Apps or in a terminal is reflected without a
-restart. That passive read stands aside while `developerGate` is held, and
-every gated action that publishes tool state begins a new
-`developerToolRefresh` generation, so an older read never overwrites it.
+[`internal/devtools`](../../internal/devtools/devtools.go) owns WSL backends
+and Docker CLI setup under `features_page.dx_group`. The developer-access switch
+does not install editors or switch to a different OS image (editors and IDEs
+are installed via Bazaar or the Apps page). Enabling Developer Mode
+automatically installs the Dev Container CLI (`devcontainer`).
 
 `dx_group.wsl_backend` defaults to **nsl**, with **Lima** as an administrator
 option and an in-session backend chooser. The first observation retains an

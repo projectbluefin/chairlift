@@ -170,9 +170,8 @@ section above); administrators can remove them when convenient.
 - `gaming_group`: Selective Gaming applications and runtime extensions, installed system-wide from the system Flathub remote (authorized by Flatpak's own PolicyKit), with installed user/system states and visible partial failures; Remove Selected takes each selected app out of every scope it is installed in, leaving in place a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) (shown only when `/usr/share/ublue-os/image-info.json` is present)
 - `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). Each unit runs its family's `ghcr.io/projectbluefin/<id>-printer-app:stable` image and is kept current by `podman-auto-update.timer`, which turning a family on enables. The application is published on `127.0.0.1` only ([ADR-0020](docs/adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)): its unauthenticated settings page and IPP are reachable only from this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`), so other computers on the network cannot print to it and it is not advertised over DNS-SD. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
 
-The Developer group also offers WSL Mode (nsl by default, with Lima as alternative),
-Docker, and individually selected IDEs and terminal editors, with one JetBrains
-Toolbox entry. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
+The Developer group also offers WSL Mode (nsl by default, with Lima as alternative)
+and Docker. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
 Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
 helper actions disable only affected switches, not their discoverability.
 KVM permission changes require a new login; Docker needs an accessible daemon

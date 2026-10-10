@@ -15,7 +15,7 @@ from behave import step, then
 
 import chairlift_atspi as atspi
 from apps import expander_header, expander_rows, focus_by_tab
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, MICRO_MARKER, account_is_developer
+from stubs_features import CALLS_LOG, GAMING_COMPONENTS, account_is_developer
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -235,25 +235,6 @@ def step_gaming_selected_preview(context, operation, name, preposition, scope):
         if app_id != chosen:
             for each in ("user", "system"):
                 assert f"flatpak {verb} -y --{each} {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
-
-
-@then("the developer editor choices match the documented catalog")
-def step_developer_editors(context):
-    expected = ["Dev Container CLI", "VSCode Stable", "VSCode Insiders", "VSCodium", "Antigravity", "JetBrains Toolbox", "Neovim", "Helix", "Vim", "Micro"]
-    for title in expected:
-        assert atspi.poll(lambda: atspi.row_containing(_content(context), title)), "missing tool choice: " + title
-    # A row and its label both publish the title. Count catalog rows, not
-    # every text-bearing accessibility node, and reject extra IDE choices.
-    titles = expander_rows(expander_header(context, "IDEs and terminal editors", "Developer"))
-    assert titles == expected, f"developer editor rows {titles} != {expected}"
-
-
-@step('Homebrew stops listing "{formula}"')
-def step_brew_stops_listing(context, formula):
-    # Only the features-developer-micro stub models a listing that changes.
-    if formula != "micro":
-        raise NotImplementedError(f"no stub models removing {formula!r}")
-    os.remove(os.path.join(context.scenario_dir, MICRO_MARKER))
 
 
 @then("the Gaming inventory is read again after the change")

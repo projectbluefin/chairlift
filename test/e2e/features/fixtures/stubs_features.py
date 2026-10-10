@@ -263,37 +263,6 @@ exit 0
 """)
 
 
-MICRO_MARKER = "brew-micro-installed"
-
-
-@stub("features-developer-micro")
-def developer_options_with_micro(context):
-    """features-developer, with Homebrew listing micro until the marker goes.
-
-    A scenario removes the marker to model an uninstall made outside the
-    Features page (Apps, or a terminal).
-    """
-    developer_options(context)
-    marker = os.path.join(context.scenario_dir, MICRO_MARKER)
-    open(marker, "w", encoding="utf-8").close()
-    fake_executable(context, "brew", _recorder(context) + f"""
-case "$1" in
-  --version) echo 'Homebrew 5.0.0' ;;
-  info)
-    case "$*" in
-      *--formula*)
-        if [ -e '{marker}' ]; then
-          echo '{{"formulae":[{{"name":"micro","installed":[{{"version":"2.0.14","installed_on_request":true}}]}}],"casks":[]}}'
-        else
-          echo '{{"formulae":[],"casks":[]}}'
-        fi ;;
-      *) echo '{{"formulae":[],"casks":[]}}' ;;
-    esac ;;
-esac
-exit 0
-""")
-
-
 def _shell_extensions(context, enabled, missing=False):
     installed = "" if missing else "tailscale-gnome-qs@tailscale-qs.github.io\nsyncthing-toggle@projectbluefin.io"
     fake_executable(

@@ -188,12 +188,8 @@ a curated list of developer feeds in your home folder once you switch it on —
 both are off by default, and turning Developer tools back off never removes the
 reader, the file, or anything you imported from it.
 Developer options also offer **WSL Mode** (nsl persistent Linux machines by
-default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64),
-**Enable Docker**, and individually selected IDEs and terminal editors, including
-one JetBrains Toolbox entry. Each editor row says what the tool is, and its
-Install button names the tool for screen readers. Installed state is read again
-whenever the page is shown, so a tool removed on Apps or in a terminal is
-offered again. WSL needs hardware virtualization and access to
+default on x86-64 Linux, with Lima Ubuntu LTS as an alternative on amd64 or arm64)
+and **Enable Docker**. WSL needs hardware virtualization and access to
 `/dev/kvm`; permission grants require a new login. Docker needs the base
 image's daemon and a socket this session can actually access; installing CLI
 tools is not readiness. Missing installed helper actions leave the affected

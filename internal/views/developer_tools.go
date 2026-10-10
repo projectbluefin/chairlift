@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"path/filepath"
-	"slices"
 	"strings"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
@@ -15,7 +13,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/devtools"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -24,17 +21,12 @@ import (
 
 type developerOptionRow struct {
 	kind      string
-	tool      devtools.Tool
 	row       *adw.ActionRow
 	toggle    *guardedSwitch
-	button    *gtk.Button
 	spinner   *gtk.Spinner
 	allowed   bool
 	canEnable bool
 	active    bool
-	// toolView is a tool row's last observed presentation; a dry run
-	// restores it after showing the transient installing state.
-	toolView pageview.DeveloperToolView
 }
 
 func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ublue.Status) {
@@ -92,72 +84,16 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 			group.Add(&combo.Widget)
 		}
 	}
-	editors := adw.NewExpanderRow()
-	editors.SetTitle("IDEs and terminal editors")
-	editors.SetSubtitle("Install only the tools you want.")
-	for _, tool := range devtools.Tools() {
-		item := &developerOptionRow{kind: "tool", tool: tool, row: adw.NewActionRow(), spinner: newActivitySpinner(), button: gtk.NewButtonWithLabel("Install")}
-		item.row.SetTitle(tool.Name)
-		item.toolView = pageview.DeveloperToolChecking(tool.Name, tool.Description)
-		uh.showDeveloperTool(item, item.toolView)
-		item.button.SetValign(gtk.AlignCenterValue)
-		item.button.SetSensitive(false)
-		item.row.AddSuffix(&item.spinner.Widget)
-		item.row.AddSuffix(&item.button.Widget)
-		uh.developerButtons.connect(item.button, func(gtk.Button) { uh.onDeveloperOption(item, true) })
-		editors.AddRow(&item.row.Widget)
-		uh.developerOptions = append(uh.developerOptions, item)
-	}
-	group.Add(&editors.Widget)
-	// Homebrew changes outside this page — an uninstall on Apps, a brew
-	// command in a terminal — would otherwise leave a row reading
-	// "Installed" until restart. Re-read whenever the group is shown; the
-	// handler is connected once, here, for the page's lifetime.
-	uh.developerToolsMapped = func(gtk.Widget) { uh.refreshDeveloperTools() }
-	group.ConnectMap(&uh.developerToolsMapped)
 	// Initial reads share the action gate too; an older load cannot overwrite
 	// a user's mutation or enable overlapping developer actions.
 	uh.developerSwitch.SetSensitive(false)
 	uh.refreshDeveloperOptions(status)
 }
 
-// refreshDeveloperTools re-reads only the optional tools' installed state. It
-// is passive: it stands aside while any developer action holds the gate, and
-// every gated action that publishes tool state begins a new generation, so a
-// read that started before that action can never overwrite its result.
-func (uh *UserHome) refreshDeveloperTools() {
-	if uh.developerGate.Running() || !slices.ContainsFunc(uh.developerOptions, func(item *developerOptionRow) bool { return item.kind == "tool" }) {
-		return
-	}
-	generation := uh.developerToolRefresh.Begin()
-	go func() {
-		formulae, formulaErr := homebrew.ListInstalledFormulae()
-		casks, caskErr := homebrew.ListInstalledCasks()
-		sgtk.RunOnMainThread(func() {
-			if !uh.developerToolRefresh.IsCurrent(generation) || uh.developerGate.Running() {
-				return
-			}
-			brew := uh.capabilities[capability.Homebrew]
-			for _, item := range uh.developerOptions {
-				if item.kind != "tool" {
-					continue
-				}
-				packages, err := formulae, formulaErr
-				if item.tool.Cask {
-					packages, err = casks, caskErr
-				}
-				uh.applyDeveloperTool(item, packages, err, brew)
-				item.button.SetSensitive(item.allowed)
-			}
-		})
-	}()
-}
-
 func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 	if !uh.developerGate.TryStart() {
 		return
 	}
-	uh.developerToolRefresh.Begin()
 	uh.setDeveloperSensitive(false)
 	backend := uh.wslBackend
 	resolve := !uh.wslBackendResolved
@@ -186,8 +122,6 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		}
 		docker, dockerErr := devtools.DockerStatus(ctx)
 		kvmExists, kvmAccess := devtools.KVMAvailable()
-		formulae, formulaErr := homebrew.ListInstalledFormulae()
-		casks, caskErr := homebrew.ListInstalledCasks()
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
 			if resolve {
@@ -279,49 +213,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 					if !status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) {
 						item.row.SetSubtitle("Docker isn't available on this computer.")
 					}
-				case "tool":
-					packages, err := formulae, formulaErr
-					if item.tool.Cask {
-						packages, err = casks, caskErr
-					}
-					uh.applyDeveloperTool(item, packages, err, brew)
 				}
 			}
 			uh.setDeveloperSensitive(true)
 		})
 	}()
-}
-
-func packagePresent(packages []homebrew.Package, name string) bool {
-	for _, pkg := range packages {
-		if pkg.Name == name || pkg.Name == filepath.Base(name) {
-			return true
-		}
-	}
-	return false
-}
-
-func (uh *UserHome) applyDeveloperTool(item *developerOptionRow, packages []homebrew.Package, err error, brew bool) {
-	item.toolView = pageview.DeveloperTool(item.tool.Name, item.tool.Description, pageview.DeveloperToolObservation{
-		Supported:  item.tool.Supported(),
-		Homebrew:   brew,
-		ReadFailed: err != nil,
-		Installed:  err == nil && packagePresent(packages, item.tool.Package),
-	})
-	item.allowed = item.toolView.Allowed
-	uh.showDeveloperTool(item, item.toolView)
-}
-
-// showDeveloperTool renders a tool row's subtitle and button. The visible
-// label is the same word on every row, so the accessible name carries the
-// tool's name. GtkButton names itself from its label child through a
-// LABELLED_BY relation, which outranks the LABEL property, so the relation
-// is dropped after every label change or every row would announce "Install".
-func (uh *UserHome) showDeveloperTool(item *developerOptionRow, view pageview.DeveloperToolView) {
-	item.row.SetSubtitle(view.Subtitle)
-	item.button.SetLabel(view.ButtonLabel)
-	item.button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
-	SetAccessibleLabel(item.button, view.AccessibleLabel)
 }
 
 func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
@@ -334,9 +230,6 @@ func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
 	for _, item := range uh.developerOptions {
 		if item.toggle != nil {
 			item.toggle.widget.SetSensitive(sensitive && item.allowed)
-		}
-		if item.button != nil {
-			item.button.SetSensitive(sensitive && item.allowed)
 		}
 	}
 }
@@ -389,17 +282,10 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 	if !item.allowed || !uh.developerGate.TryStart() {
 		return
 	}
-	if item.kind == "tool" {
-		uh.developerToolRefresh.Begin()
-	}
 	before := item.row.GetSubtitle()
 	uh.setDeveloperSensitive(false)
 	setActivitySpinner(item.spinner, true)
-	if item.kind == "tool" {
-		uh.showDeveloperTool(item, pageview.DeveloperToolInstalling(item.tool.Name))
-	} else {
-		item.row.SetSubtitle("Preparing…")
-	}
+	item.row.SetSubtitle("Preparing…")
 	title := item.row.GetTitle()
 	backend := uh.wslBackend
 	go func() {
@@ -419,7 +305,6 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 		var wsl devtools.WSLState
 		var docker devtools.DockerState
 		var stateErr error
-		var packages []homebrew.Package
 		switch item.kind {
 		case "wsl":
 			err = devtools.SetWSL(ctx, backend, enabled, progress)
@@ -427,14 +312,6 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 		case "docker":
 			err = devtools.SetDocker(ctx, enabled, progress)
 			docker, stateErr = devtools.DockerStatus(ctx)
-		case "tool":
-
-			err = devtools.Install(item.tool)
-			if item.tool.Cask {
-				packages, stateErr = homebrew.ListInstalledCasks()
-			} else {
-				packages, stateErr = homebrew.ListInstalledFormulae()
-			}
 		}
 		if err != nil && !errors.Is(err, devtools.ErrNewLogin) {
 			log.Printf("views: %s failed: %v", title, err)
@@ -446,11 +323,7 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 			defer uh.developerGate.Reset()
 			setActivitySpinner(item.spinner, false)
 			if dryrun.Enabled() {
-				if item.kind == "tool" {
-					uh.showDeveloperTool(item, item.toolView)
-				} else {
-					item.row.SetSubtitle(before)
-				}
+				item.row.SetSubtitle(before)
 				if item.toggle != nil {
 					item.toggle.set(item.active)
 				}
@@ -473,27 +346,15 @@ func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
 					}
 					item.toggle.set(item.active)
 					item.row.SetSubtitle(dockerSubtitle(docker, stateErr))
-				case "tool":
-					if stateErr == nil {
-						uh.applyDeveloperTool(item, packages, nil, uh.capabilities[capability.Homebrew])
-					} else {
-						view := pageview.DeveloperToolUnverified(item.tool.Name, item.tool.Description)
-						item.allowed = view.Allowed
-						uh.showDeveloperTool(item, view)
-					}
 				}
 				if errors.Is(err, devtools.ErrNewLogin) {
 					item.row.SetSubtitle(pageview.KVMAccessNeedsNewLogin)
 				} else if err != nil && !pkexec.IsAuthDismissed(err) {
 					item.row.SetSubtitle(developerOptionFailure(item, enabled, err))
-				} else if item.kind == "tool" && stateErr == nil && !packagePresent(packages, item.tool.Package) {
-					item.row.SetSubtitle(item.tool.Description + " Installation finished, but Homebrew has not reported this tool installed.")
 				}
 			}
 			if errors.Is(err, devtools.ErrNewLogin) {
 				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
-			} else if err != nil && item.kind == "tool" {
-				uh.toastAdder.ShowErrorToast(developerOptionFailure(item, enabled, err))
 			} else if err != nil {
 				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, developerOptionFailure(item, enabled, err)))
 			}
@@ -516,8 +377,6 @@ func developerOptionFailure(item *developerOptionRow, enabled bool, err error) s
 	}
 	name := "WSL Mode"
 	switch item.kind {
-	case "tool":
-		return "Couldn't install " + item.tool.Name + ". Try again."
 	case "docker":
 		name = "Docker"
 	}
