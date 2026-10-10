@@ -22,7 +22,7 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, model selection/presets, Models and Chat link, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
-| `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and locked printer applications |
+| `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and loopback-only printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free up space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
@@ -51,7 +51,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
 | `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
 | `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
-| `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` readiness and authenticated-administration enable gate |
+| `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
 | `agents_page` | `agents_group` | Agents service/model/presets, Models and Chat link and contributor launch; `internal/aistack`, `internal/contribute` |
 | `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
@@ -132,9 +132,9 @@ Provider-specific safety remains with each live owner:
   readiness dispatcher.
   Contribute requires terminal/ujust recipe/Podman/registration preflight and
   launches `xdg-terminal-exec ujust contribute`, without a privileged route.
-- Printers are rootless quadlets. New enables are refused until administration
-  is authenticated or absent; the locked rows remain visible and off. Existing
-  units stay disableable; a failed stop preserves the management file.
+- Printers are rootless quadlets published on 127.0.0.1 only, running each
+  family's `:stable` image with Podman auto-update; rows start off and stay
+  disableable once on; a failed stop preserves the management file.
   Installed units are diagnosed from systemd, user journal and Podman image
   observations; plugin, device-access, crash and image failures remain distinct.
 - Livery applies no mutations on load or preview, retains confirmed state across
@@ -204,8 +204,8 @@ Use actual filenames/subjects rather than copied issue numbering:
   capability floor. Its historical `0013` heading does not change file identity;
   accepted decision text remains untouched.
 - [ADR-0015](../adr/0015-agent-mode-llmman.md) covers Agent Mode using llmman.
-- [ADR-0016](../adr/0016-printer-app-admin-denied-until-authenticated.md) covers
-  printer administration authentication.
+- [ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
+  covers loopback-only printer applications on a moving `:stable` tag.
 - [Setup model](../specs/setup-model.md) records the existing-page, navigation-only
   flow. Future route proposals belong in live issues and require explicit
   implementation/decision changes, not a second proposed registry in this file.

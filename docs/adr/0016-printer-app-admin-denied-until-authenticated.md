@@ -6,7 +6,7 @@ ADRs are immutable once Accepted. To reverse one, write a new ADR and set the
 old one's Status to "Superseded by NNNN".
 -->
 
-- **Status:** Accepted
+- **Status:** Superseded by [0020](0020-printer-apps-loopback-only-on-moving-stable-tag.md)
 - **Date:** 2026-09-25
 
 ## Context

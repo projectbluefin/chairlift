@@ -851,12 +851,14 @@ and dry-run launches nothing.
 
 Printer applications, unlike Agent Mode, are rootless Podman quadlets.
 [`printer-applications.md`](printer-applications.md) is the detailed owner
-for the three shipped families, exact index pins, host-network administration
-boundary, artifacts and readiness model. `CanEnable` currently refuses every
-family before even the enable preview path. Existing units remain disableable;
-`ProbeDiagnostics` uses systemd's state word, recent journal messages and local
-image observations to classify failures, never unit presence as proof of
-running. No image/source change is permission to bypass the authentication gate.
+for the three shipped families, their auto-updating `:stable` images, the
+loopback-only network boundary
+([ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)),
+artifacts and readiness model. `RenderUnit` must never use `Network=host` or
+publish beyond `127.0.0.1`, because PAPPL's web administration is
+unauthenticated. Existing units remain disableable; `ProbeDiagnostics` uses
+systemd's state word, recent journal messages and local image observations to
+classify failures, never unit presence as proof of running.
 
 ## View-layer page presentation (`internal/views/pageview`)
 

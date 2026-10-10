@@ -8,21 +8,14 @@ import (
 )
 
 // State is one printer application's lifecycle state as the Features page
-// shows it. It is the printer port of aistack.State, with one addition:
-// Blocked, the ADR-0016 condition, so a family whose image cannot be given
-// an administration credential renders as an actionable non-enabled state
-// rather than as a switch that refuses when flipped.
+// shows it. It is the printer port of aistack.State.
 type State int
 
 const (
 	// StateUnavailable: this host cannot run printer applications (no
 	// Podman, so no quadlet to install into).
 	StateUnavailable State = iota
-	// StateBlocked: the family may not be enabled because its image cannot
-	// be handed an administration setting (CanEnable returned an error) and
-	// no unit is installed. The switch is off and locked.
-	StateBlocked
-	// StateOff: enableable, and ChairLift's unit is not installed.
+	// StateOff: ChairLift's unit is not installed.
 	StateOff
 	// StateStarting: the unit is installed and the service is either not
 	// yet checked or reported activating.
@@ -51,9 +44,6 @@ const (
 type Facts struct {
 	// Capable is the host capability floor (Podman present).
 	Capable bool
-	// Enableable is CanEnable's answer for the family: the ADR-0016
-	// condition is met.
-	Enableable bool
 	// UnitPresent reports whether ChairLift's quadlet file exists.
 	UnitPresent bool
 	// Checked is true once ProbeActive has answered.
@@ -63,13 +53,12 @@ type Facts struct {
 	Active string
 }
 
-// Observe returns the non-blocking facts — the unit file's presence and the
-// enable condition — and is safe on the GTK main thread. Readiness is a
-// systemctl query and comes from ProbeActive, off the main thread.
+// Observe returns the non-blocking facts — the unit file's presence — and is
+// safe on the GTK main thread. Readiness is a systemctl query and comes from
+// ProbeActive, off the main thread.
 func Observe(app App, capable bool) Facts {
 	return Facts{
 		Capable:     capable,
-		Enableable:  CanEnable(app.Family) == nil,
 		UnitPresent: IsEnabled(app),
 	}
 }
@@ -120,14 +109,11 @@ func WaitSettled(ctx context.Context, app App, limit time.Duration) (string, err
 
 // Resolve maps observations to a State. The unit file's presence decides
 // whether the application is on; the is-active word decides whether "on"
-// means running. A unit that is present is never Blocked: the user turned
-// it on, and turning it off must stay possible whatever the image's
-// administration surface is. Detailed failure classification comes from
-// Diagnose or ProbeDiagnostics.
+// means running. Detailed failure classification comes from Diagnose or
+// ProbeDiagnostics.
 func Resolve(f Facts) State {
 	return Diagnose(DiagnosticInput{
 		Capable:     f.Capable,
-		Enableable:  f.Enableable,
 		UnitPresent: f.UnitPresent,
 		Checked:     f.Checked,
 		Active:      f.Active,

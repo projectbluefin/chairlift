@@ -12,11 +12,11 @@ func PrintersGroupTitle() string {
 }
 
 // PrintersGroupDescription says what turning a family on does for a person:
-// extra drivers for printers that do not work on their own, shared on the
-// local network. That sharing is the one consequence worth knowing before
+// extra drivers for printers that do not work on their own, usable from this
+// computer only. That limit is the one consequence worth knowing before
 // flipping the switch, so it is named.
 func PrintersGroupDescription() string {
-	return "Extra drivers for printers that don't work on their own. Printers are shared on your network."
+	return "Extra drivers for printers that don't work on their own. Only this computer can use them."
 }
 
 // familyRowTitles overrides the derived "<family> printers" title where the
@@ -33,18 +33,13 @@ func PrinterFamilyRow(f printerapp.Family) string {
 	return f.DisplayName + " printers"
 }
 
-// PrinterAppSubtitle is the switch row's subtitle for a resolved state. The
-// blocked text is the ADR-0016 condition as a person meets it: the printer's
-// settings page cannot be password-protected yet, so the switch stays locked
-// until it can — an actionable, non-enabled state, never a switch that
-// silently does nothing. port is where the ready application serves both
-// IPP and its web page.
+// PrinterAppSubtitle is the switch row's subtitle for a resolved state. port
+// is where the ready application serves both IPP and its web page, on
+// localhost only.
 func PrinterAppSubtitle(s printerapp.State, port int) string {
 	switch s {
 	case printerapp.StateUnavailable:
 		return "Not available on this computer."
-	case printerapp.StateBlocked:
-		return "Can't be turned on until its settings page can be password-protected."
 	case printerapp.StateStarting:
 		return "Starting… The first start can take a few minutes."
 	case printerapp.StateReady:
@@ -60,7 +55,7 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	case printerapp.StateFailed:
 		return "The printer driver isn't running. Turn it off and on again."
 	default:
-		return "Turn on to use these printers and share them on your network."
+		return "Turn on to use these printers from this computer."
 	}
 }
 

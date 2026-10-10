@@ -48,7 +48,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
         ├── internal/devmenu/   Custom Command Menu tuple updater for developer tools and Ask Bluefin visibility
-        ├── internal/printerapp/ Rootless printer-application quadlets, one per driver family, with the ADR-0016 enable gate and the pure readiness model behind the Features page's Printers group
+        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets on auto-updating `:stable` images, one per driver family, and the pure readiness model behind the Features page's Printers group
         ├── internal/aistack/   Local llmman user service, observed health and canonical model aliases
         ├── internal/agentmode/ Goose Desktop readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch
         ├── internal/contribute/ Read-only contributor preflight and terminal command construction
@@ -179,7 +179,7 @@ second mutation. Render untrusted command/provider text with markup disabled.
 
 A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Couldn't load this list.", "Could not check for tool updates") while keeping the last known rows and counts.
 
-Runtime query gates remain asynchronous: optional distribution features hide when no definitions exist; tap trust hides when there is nothing to trust; automatic updates stays hidden until its installed timer is observed. Query failures are not invented empty inventories. Discoverability is surface-specific: desktop integrations and unsupported Developer options deliberately remain visible with insensitive controls and explanations, and printer administration locks render visible off switches. Static navigation never reindexes after these workers finish.
+Runtime query gates remain asynchronous: optional distribution features hide when no definitions exist; tap trust hides when there is nothing to trust; automatic updates stays hidden until its installed timer is observed. Query failures are not invented empty inventories. Discoverability is surface-specific: desktop integrations and unsupported Developer options deliberately remain visible with insensitive controls and explanations. Static navigation never reindexes after these workers finish.
 
 The *startup* path must not probe update providers on the main thread. The status-first update shell's initial `Coordinator.Check` runs in a worker (`UpdateShell.StartCheck`), and every provider's `Available` probe — some of which are `sync.Once`-cached subprocess checks, such as `flatpak --version` — is evaluated inside that worker, never while building the page. The automatic-updates group on the Updates page is built as a hidden shell (`buildAutomaticUpdatesGroup`) because its two `systemctl` queries can each approach a multi-second timeout on a slow or wedged host; `loadAutomaticUpdatesGroup` runs `autoupdate.Detect` in a worker under a five-second bound and reveals the switch on the GTK main thread only when the unattended-update timer is installed.
 
@@ -1046,13 +1046,13 @@ launch failures asynchronously through the UI toast surface; when the session en
 
 `internal/printerapp` writes rootless quadlets under
 `~/.config/containers/systemd`, driven with `systemctl --user` in the invoking
-account, with a unit, host port and state volume per app.
-[ADR-0016](../adr/0016-printer-app-admin-denied-until-authenticated.md)
+account, with a unit, port and state volume per app.
+[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
 is the contract; [printer-applications.md](printer-applications.md) records
-the network surface, the family inventory (units, ports, volumes), and the
-published-image state, and this section is the Control Center surface on
-top of it. Nothing is privileged: there is no helper subcommand and no PolicyKit
-action, and the package's one exec site is classified unprivileged in
+the network surface and the family inventory (units, ports, volumes), and
+this section is the Control Center surface on top of it. Nothing is
+privileged: there is no helper subcommand and no PolicyKit action, and the
+package's one exec site is classified unprivileged in
 `internal/installcheck`'s journal-contract inventory.
 
 The Features page renders it as the **Printers** group (`printers_group`,
@@ -1063,55 +1063,42 @@ and connected once at build time. What the row shows comes from the pure
 readiness model, never from the unit file alone (#331, #361):
 
 - `Observe(app, capable)` is the non-blocking half, safe on the GTK main
-  thread: the unit file's presence and `CanEnable`'s answer.
+  thread: the capability floor and the unit file's presence.
 - `ProbeActive(ctx, app)` is `systemctl --user is-active <service>`, off the
   main thread; it returns the state *word*, because systemctl's exit status
   is non-zero for every word but `active`, and treats multi-word output (no
   user manager, no bus) as a failed probe rather than a state. `WaitSettled`
   re-asks, bounded, while the word is `activating`/`reloading`, so a first
   start's image pull does not leave the row saying "Starting…" forever.
-- `Resolve(Facts)` maps to `StateUnavailable` (no Podman), `StateBlocked`
-  (`CanEnable` refused and no unit), `StateOff`, `StateStarting` (unit, not
-  yet checked or activating), `StateReady` (active — the subtitle names
-  `http://localhost:<port>/`, where PAPPL serves both IPP and the web page),
-  or `StateFailed` (unit present but failed, inactive, or uncheckable). A
-  present unit is never Blocked: the user turned it on, and turning it off
-  must stay possible whatever the image's administration surface.
+- `Resolve(Facts)` maps to `StateUnavailable` (no Podman), `StateOff` (no
+  unit), `StateStarting` (unit, not yet checked or activating), `StateReady`
+  (active — the subtitle names `http://localhost:<port>/`, where PAPPL serves
+  both IPP and the web page), or `StateFailed` (unit present but failed,
+  inactive, or uncheckable).
 - `ProbeDiagnostics` is the view's runtime observation: it combines the
   readiness facts with systemd properties, recent user-journal output and
   container-image presence. `Diagnose` distinguishes plugin verification,
   rootless device access, service crash and image failures from generic failure;
-  these diagnostics do not unlock administration or claim hardware testing.
+  these diagnostics do not claim hardware testing.
 
-`CanEnable(Family)` is the ADR-0016 enable condition as a queryable predicate
-— an application may be enabled only when its web administration is
-authenticated or absent — and `Enable` calls it before its dry-run branch, so
-a preview never describes a forbidden change. No published image accepts the
-setting yet. The image-side contract is specified in
-ghostscript-printer-app#65 (mirrored in hplip-printer-app#51 and
-gutenprint-printer-app#57): the entrypoint reads `PRINTER_APP_AUTH_SERVICE`,
-`PRINTER_APP_ADMIN_GROUP`, and `PRINTER_APP_SERVER_OPTIONS` and forwards them
-as `-o auth-service`, `-o admin-group`, and `-o server-options`. ChairLift
-neither reads nor writes those names today; once an image ships them,
-`CanEnable` returns nil for that family and `RenderUnit` gains the
-`Environment=` lines that carry the values — that is the whole follow-up
-that makes a switch live. Until then every family resolves to `StateBlocked`:
-the row is shown with its switch off **and insensitive** and
-`pageview.PrinterAppSubtitle` says it can't be turned on until its settings
-(administration) page can be password-protected — that is, until the image
-accepts an administrator credential. That is the actionable, non-enabled state the ADR asks
-for — never a false enabled indicator and never a switch that silently does
-nothing — and it encodes no unshipped environment variable. The toggle
-handler (`onPrinterAppToggled`) is admitted by a per-family
-`actionstate.Gate`, runs `Enable`/`Disable` off the main thread under a
-bounded context, and settles the switch from `actionmsg.PrinterApp`: a dry
-run and a failure both restore the switch and the row's last state, a failure
-toasts `pageview.PrinterAppFailureToast`, and a failed disable keeps the unit
-because the service could not be proven stopped. Structured marker:
-`views: printers group built families=<n> blocked=<n>`, asserted by the E2E
-walkthrough and the `@features` AT-SPI scenarios. Hardware behaviour —
-printing through a real device, USB passthrough, mDNS coexistence — remains
-unverified and unwired.
+Each unit runs `ghcr.io/projectbluefin/<id>-printer-app:stable` with
+`AutoUpdate=registry` and `PublishPort=127.0.0.1:<port>:<port>`, never
+`Network=host`: PAPPL's web administration is unauthenticated and shares the
+IPP listener, so the port is reachable only from this computer. LAN clients
+cannot print to it and its DNS-SD advertisement stays inside the container;
+the group description and off-state subtitle say "this computer" rather than
+claim network sharing. `Enable` writes the unit, reloads systemd, starts the
+service, and runs `systemctl --user enable --now podman-auto-update.timer`;
+a failure at any step rolls a fresh install back (stop, remove the unit,
+reload). The toggle handler (`onPrinterAppToggled`) is admitted by a
+per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
+under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
+a dry run and a failure both restore the switch and the row's last state, a
+failure toasts `pageview.PrinterAppFailureToast`, and a failed disable keeps
+the unit because the service could not be proven stopped. Structured marker:
+`views: printers group built families=<n>`, asserted by the E2E walkthrough
+and the `@features` AT-SPI scenarios. Hardware behaviour — printing through a
+real device, USB passthrough — remains unverified and unwired.
 
 ### Powerwash and Factory Reset
 

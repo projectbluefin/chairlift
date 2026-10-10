@@ -330,9 +330,8 @@ def step_features_not_blank(context):
 
 PRINTERS_GROUP = "Printers"
 
-# pageview.PrinterAppSubtitle for printerapp.StateBlocked: the ADR-0016
-# condition as a person meets it.
-PRINTER_BLOCKED_SUBTITLE = "Can't be turned on until its settings page can be password-protected."
+# pageview.PrinterAppSubtitle for printerapp.StateOff.
+PRINTER_OFF_SUBTITLE = "Turn on to use these printers from this computer."
 
 
 def _printer_rows(context):
@@ -342,20 +341,19 @@ def _printer_rows(context):
     return atspi.find_all(groups[0], lambda n: atspi.role(n) in atspi.ROW_ROLES)
 
 
-@then("the Printers group offers exactly these rows, each off and locked")
-def step_printer_rows_locked(context):
+@then("the Printers group offers exactly these rows, each off and ready to turn on")
+def step_printer_rows_off(context):
     want = [row["row"] for row in context.table]
     assert atspi.poll(lambda: _groups(context, PRINTERS_GROUP)), f"no {PRINTERS_GROUP!r} group on the Features page"
     group = _groups(context, PRINTERS_GROUP)[0]
     for title in want:
         row = atspi.row_containing(group, title)
         switch = atspi.find(row, lambda n: atspi.role(n) == "switch", f"a switch in the {title!r} row")
-        # ADR-0016: shown, off, and locked — never a switch that silently
-        # does nothing, never a false enabled indicator.
+        # Shown, off, and offered — never a false enabled indicator.
         assert atspi.checked(switch) is False, f"{title!r} switch is not off"
-        assert not atspi.sensitive(switch), f"{title!r} switch accepts input while its family is blocked"
+        assert atspi.sensitive(switch), f"{title!r} switch does not accept input"
         texts = atspi.all_text_under(row)
-        assert PRINTER_BLOCKED_SUBTITLE in texts, f"{title!r} row does not say why it is locked: {texts}"
+        assert PRINTER_OFF_SUBTITLE in texts, f"{title!r} row does not say what turning it on does: {texts}"
     got = [atspi.label_text(r) for r in _printer_rows(context)]
     assert len(got) == len(want), f"Printers group rows {got} != {want}"
 

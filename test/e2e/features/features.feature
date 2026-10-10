@@ -239,23 +239,21 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
 
   # ------------------------------------------------------------ Printers
   #
-  # ADR-0016: a printer application may be enabled only when its web
-  # administration is authenticated or absent. No published image accepts
-  # that setting yet, so every family is an actionable, non-enabled state:
-  # the row is shown, its switch is off and locked, and the subtitle says
-  # what is needed. Rendering the group runs nothing and writes nothing.
+  # Every family is offered with its switch off. Each runs on loopback only
+  # (ADR-0020), so the subtitle says only this computer can use it.
+  # Rendering the group runs nothing and writes nothing.
 
   @stub.printers @stub.features-gaming-none
-  Scenario: Every printer family is shown locked until its image can secure its administration page
+  Scenario: Every printer family is shown off and ready to turn on
     Given ChairLift is running
     When I open the "Features" page
     Then the Features page shows a "Printers" group
-    And the Printers group offers exactly these rows, each off and locked
+    And the Printers group offers exactly these rows, each off and ready to turn on
       | row                  |
       | Ghostscript printers |
       | HP printers (HPLIP)  |
       | Gutenprint printers  |
-    And the application log contains "views: printers group built families=3 blocked=3"
+    And the application log contains "views: printers group built families=3"
     And the systemctl tool was never asked to mutate
     And no printer quadlet was written
     And the action journal is empty

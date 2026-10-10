@@ -55,11 +55,6 @@ const printerSettleWait = time.Minute
 // on, and only a systemctl answer — never the file alone — decides whether
 // "on" means running (#331). That answer is a query and runs off the main
 // thread; until it lands an installed unit reads as starting.
-//
-// ADR-0016 is rendered, not hidden: a family whose image cannot be given
-// an administration credential is shown with its switch off and locked and
-// a subtitle saying what is needed, so the page is an actionable non-enabled
-// state rather than a switch that refuses when flipped (#361).
 func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle(pageview.PrintersGroupTitle())
@@ -67,15 +62,10 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 
 	families := printerapp.Families()
 	uh.printerRows = make([]*printerRow, 0, len(families))
-	blocked := 0
 	for _, family := range families {
 		app := printerapp.Select(family)
 		facts := printerapp.Observe(app, true)
 		state := printerapp.Resolve(facts)
-		if state == printerapp.StateBlocked {
-			blocked++
-		}
-
 		pr := &printerRow{app: app, title: pageview.PrinterFamilyRow(family)}
 		pr.row = adw.NewActionRow()
 		pr.row.SetTitle(pr.title)
@@ -103,17 +93,13 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 	// A single structured readiness marker. The screenshot walkthrough and
 	// the AT-SPI suite assert on this line to confirm the captured session
 	// really built the rows rather than silently hiding them.
-	log.Printf("views: printers group built families=%d blocked=%d", len(families), blocked)
+	log.Printf("views: printers group built families=%d", len(families))
 }
 
 // showPrinterAppState renders one state on a row. Main thread only.
 func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) {
 	pr.state = state
 	pr.row.SetSubtitle(pageview.PrinterAppSubtitle(state, pr.app.Port()))
-	// A blocked family's switch is locked, not merely off: flipping it could
-	// only ever fail, and a switch that fails on every flip is the silent
-	// no-op ADR-0016 rules out.
-	pr.toggle.widget.SetSensitive(state != printerapp.StateBlocked)
 }
 
 // probePrinterApp asks systemd and diagnostics whether an installed unit's
@@ -136,11 +122,10 @@ func (uh *UserHome) probePrinterApp(pr *printerRow, facts printerapp.Facts) {
 
 // onPrinterAppToggled turns one family on or off, off the main thread. Both
 // directions go through internal/printerapp, whose every mutation is behind
-// dryrun.Enabled(), and whose Enable refuses a family the ADR-0016 condition
-// does not admit before touching anything. A failure and a preview both put
-// the switch back where it was and restore the row's last state; a failed
-// disable in particular keeps the unit, because the service could not be
-// proven stopped, and the switch goes back on to say so.
+// dryrun.Enabled(). A failure and a preview both put the switch back where it
+// was and restore the row's last state; a failed disable in particular keeps
+// the unit, because the service could not be proven stopped, and the switch
+// goes back on to say so.
 func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 	if !pr.gate.TryStart() {
 		return

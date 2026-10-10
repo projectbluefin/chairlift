@@ -24,22 +24,10 @@ func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
 			t.Errorf("duplicate family ID %q", f.ID)
 		}
 		seen[f.ID] = true
-		if f.Repo == "" || f.Version == "" {
-			t.Errorf("family %q has an empty repo or version", f.ID)
-		}
-		// The pinned image is an immutable application-version tag, never the
-		// mutable :latest or :build tags the FSDK repositories refuse to reuse.
-		if strings.HasSuffix(f.Repo, ":latest") || strings.HasSuffix(f.Image(), ":build") {
-			t.Errorf("family %q pins a mutable image tag: %q", f.ID, f.Image())
-		}
-		// A family is pinned by digest, so a re-pushed tag cannot change the
-		// image under a running unit; the digest is what the readiness gate and
-		// the enable path both trust.
-		if !isSHA256Digest(f.Digest) {
-			t.Errorf("family %q is not pinned by a sha256 digest: %q", f.ID, f.Digest)
-		}
-		if !strings.Contains(f.Image(), "@"+f.Digest) {
-			t.Errorf("family %q Image() does not carry its pinned digest: %q", f.ID, f.Image())
+		// Built-in families run their own repository's moving :stable tag;
+		// the unit's AutoUpdate=registry keeps it current.
+		if want := "ghcr.io/projectbluefin/" + f.ID + "-printer-app:stable"; f.Image != want {
+			t.Errorf("family %q image = %q, want %q", f.ID, f.Image, want)
 		}
 	}
 	for _, id := range wantIDs {
@@ -61,10 +49,11 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 
 		for _, required := range []string{
 			"[Container]",
-			"Image=" + app.Family.Image(),
+			"Image=" + app.Family.Image,
+			"AutoUpdate=registry",
 			"ContainerName=" + app.ContainerName(),
 			"WantedBy=default.target",
-			"Network=host",
+			"PublishPort=127.0.0.1:" + strconv.Itoa(app.Port()) + ":" + strconv.Itoa(app.Port()),
 			"Volume=%h/printer-workspaces/" + app.Family.ID + "/" + app.Name + ":/var/lib/" + app.Family.ID + "-printer-app:z",
 			"Environment=PORT=" + strconv.Itoa(app.Port()),
 			"UserNS=keep-id:uid=65532,gid=65532",
@@ -74,9 +63,15 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 			}
 		}
 
-		// ADR-0016: RenderUnit must not publish ports (Network=host is used instead).
-		if strings.Contains(unit, "PublishPort=") {
-			t.Errorf("%s unit renders PublishPort under host networking:\n%s", app.UnitName(), unit)
+		// ADR-0020: PAPPL's web admin is unauthenticated, so the unit never
+		// joins the host network and never publishes on anything but loopback.
+		if strings.Contains(unit, "Network=host") {
+			t.Errorf("%s unit uses host networking:\n%s", app.UnitName(), unit)
+		}
+		for _, line := range strings.Split(unit, "\n") {
+			if strings.HasPrefix(line, "PublishPort=") && !strings.HasPrefix(line, "PublishPort=127.0.0.1:") {
+				t.Errorf("%s unit publishes beyond loopback: %q", app.UnitName(), line)
+			}
 		}
 	}
 }
@@ -181,73 +176,67 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	return tmp, &recorded
 }
 
-func TestEnableRefusesWhenWebAdminIsUnauthenticated(t *testing.T) {
-	_, calls := stubUnitDir(t)
-	app := Select(Families()[0])
-
-	err := Enable(context.Background(), app)
-	if !errors.Is(err, ErrAdminUnauthenticated) {
-		t.Fatalf("Enable error = %v, want %v", err, ErrAdminUnauthenticated)
-	}
-	if len(*calls) != 0 {
-		t.Errorf("refused Enable called systemctl: %v", *calls)
-	}
-}
-
-func TestEnableInternalWritesTheUnitAndStartsIt(t *testing.T) {
+func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
 	dir, calls := stubUnitDir(t)
 	app := Select(Families()[0])
 
 	if IsEnabled(app) {
-		t.Fatal("IsEnabled reported true before enableInternal")
+		t.Fatal("IsEnabled reported true before Enable")
 	}
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 
 	data, err := os.ReadFile(filepath.Join(dir, app.UnitName()))
 	if err != nil {
 		t.Fatalf("reading written unit: %v", err)
 	}
-	if !strings.Contains(string(data), app.Family.Image()) {
-		t.Errorf("written unit does not name %q:\n%s", app.Family.Image(), data)
+	if !strings.Contains(string(data), app.Family.Image) {
+		t.Errorf("written unit does not name %q:\n%s", app.Family.Image, data)
 	}
 
-	want := []string{"daemon-reload", "start " + app.ServiceName()}
+	want := []string{"daemon-reload", "start " + app.ServiceName(), "enable --now podman-auto-update.timer"}
 	if strings.Join(*calls, "|") != strings.Join(want, "|") {
 		t.Errorf("systemctl calls = %v, want %v", *calls, want)
 	}
 
 	if !IsEnabled(app) {
-		t.Error("IsEnabled reported false after enableInternal")
+		t.Error("IsEnabled reported false after Enable")
 	}
 }
 
-func TestEnableInternalRemovesTheUnitWhenTheServiceWillNotStart(t *testing.T) {
-	dir, _ := stubUnitDir(t)
+// A failed start or a failed auto-update timer enable both roll a fresh
+// install back: the service is stopped, the quadlet removed, systemd reloaded.
+func TestEnableRollsBackAFreshUnitOnFailure(t *testing.T) {
+	for _, failing := range []string{"start", "enable"} {
+		t.Run(failing, func(t *testing.T) {
+			dir, calls := stubUnitDir(t)
+			runSystemctl = func(_ context.Context, args ...string) error {
+				*calls = append(*calls, strings.Join(args, " "))
+				if args[0] == failing {
+					return errors.New("refused")
+				}
+				return nil
+			}
 
-	runSystemctl = func(_ context.Context, args ...string) error {
-		if args[0] == "start" {
-			return errors.New("unit not found")
-		}
-		return nil
-	}
+			app := Select(Families()[0])
+			if err := Enable(context.Background(), app); err == nil {
+				t.Fatalf("Enable returned no error when %s failed", failing)
+			}
 
-	app := Select(Families()[0])
-	if err := enableInternal(context.Background(), app); err == nil {
-		t.Fatal("enableInternal returned no error when the service failed to start")
-	}
-
-	if _, err := os.Stat(filepath.Join(dir, app.UnitName())); !os.IsNotExist(err) {
-		t.Error("a failed enableInternal left its quadlet on disk")
-	}
-	if IsEnabled(app) {
-		t.Error("IsEnabled reported true after a failed enableInternal")
+			if _, err := os.Stat(filepath.Join(dir, app.UnitName())); !os.IsNotExist(err) {
+				t.Error("a failed Enable left its quadlet on disk")
+			}
+			n := len(*calls)
+			if n < 2 || (*calls)[n-2] != "stop "+app.ServiceName() || (*calls)[n-1] != "daemon-reload" {
+				t.Errorf("systemctl calls = %v, want a stop then daemon-reload rollback", *calls)
+			}
+		})
 	}
 }
 
-func TestEnableInternalKeepsAPreexistingUnitWhenStartFails(t *testing.T) {
+func TestEnableKeepsAPreexistingUnitWhenStartFails(t *testing.T) {
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 
@@ -263,12 +252,12 @@ func TestEnableInternalKeepsAPreexistingUnitWhenStartFails(t *testing.T) {
 		return nil
 	}
 
-	if err := enableInternal(context.Background(), app); err == nil {
-		t.Fatal("enableInternal returned no error when the service failed to start")
+	if err := Enable(context.Background(), app); err == nil {
+		t.Fatal("Enable returned no error when the service failed to start")
 	}
 
 	if _, err := os.Stat(unitPath); os.IsNotExist(err) {
-		t.Error("enableInternal removed a preexisting unit when start failed")
+		t.Error("Enable removed a preexisting unit when start failed")
 	}
 }
 
@@ -276,8 +265,8 @@ func TestDisableRemovesTheUnit(t *testing.T) {
 	dir, calls := stubUnitDir(t)
 	app := Select(Families()[0])
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	*calls = nil
 
@@ -298,8 +287,8 @@ func TestDisableLeavesTheStateVolumeUntouched(t *testing.T) {
 	_, _ = stubUnitDir(t)
 	app := Select(Families()[0])
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	// The state volume is under the user's home, which stubUnitDir does not
 	// point at a temp dir, so assert Disable does not try to remove anything
@@ -313,8 +302,8 @@ func TestDisableSucceedsWhenTheServiceIsAlreadyDown(t *testing.T) {
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	runSystemctl = func(_ context.Context, args ...string) error {
 		if args[0] == "stop" {
@@ -341,8 +330,8 @@ func TestDisablePreservesTheUnitWhenStopFailsAndServiceRemainsActive(t *testing.
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	stopErr := errors.New("refused to stop")
 	runSystemctl = func(_ context.Context, args ...string) error {
@@ -371,8 +360,8 @@ func TestDryRunTouchesNothing(t *testing.T) {
 	dryrun.Set(true)
 	app := Select(Families()[0])
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	if err := Disable(context.Background(), app); err != nil {
 		t.Fatalf("Disable: %v", err)
@@ -413,16 +402,20 @@ func TestApplyOverridesReplacesTheImage(t *testing.T) {
 		}
 	})
 
-	if err := ApplyOverrides(map[string]string{"ghostscript": "mirror.example.internal/ghostscript-printer-app:10.07.1-1"}); err != nil {
+	const mirror = "mirror.example.internal/ghostscript-printer-app@sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc"
+	if err := ApplyOverrides(map[string]string{"ghostscript": mirror}); err != nil {
 		t.Fatalf("ApplyOverrides: %v", err)
 	}
 
-	if got := Select(Families()[0]).Family.Image(); got != "mirror.example.internal/ghostscript-printer-app:10.07.1-1" {
+	if got := Select(Families()[0]).Family.Image; got != mirror {
 		t.Errorf("image = %q, want the override", got)
+	}
+	if unit := RenderUnit(Select(Families()[0])); !strings.Contains(unit, "Image="+mirror+"\n") {
+		t.Errorf("rendered unit does not run the override:\n%s", unit)
 	}
 
 	// An override for one family leaves the others alone.
-	if Select(Families()[1]).Family.Image() != Families()[1].Image() {
+	if Families()[1].Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
 		t.Error("overriding ghostscript disturbed the hplip image")
 	}
 }
@@ -449,7 +442,7 @@ func TestApplyOverridesRejectsBadInput(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			before := Select(Families()[1]).Family.Image()
+			before := Families()[1].Image
 
 			err := ApplyOverrides(tt.images)
 			if tt.want == "" {
@@ -461,27 +454,10 @@ func TestApplyOverridesRejectsBadInput(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("ApplyOverrides error = %v, want it to mention %q", err, tt.want)
 			}
-			if got := Select(Families()[1]).Family.Image(); got != before {
+			if got := Families()[1].Image; got != before {
 				t.Errorf("a rejected override changed the hplip image to %q", got)
 			}
 		})
-	}
-}
-
-func TestDigestPartExtractsDigest(t *testing.T) {
-	tests := []struct {
-		image string
-		want  string
-	}{
-		{"ghcr.io/org/repo@sha256:abcdef1234567890", "sha256:abcdef1234567890"},
-		{"ghcr.io/org/repo:v1.0.0", ""},
-		{"ghcr.io/org/repo", ""},
-		{"", ""},
-	}
-	for _, tc := range tests {
-		if got := digestPart(tc.image); got != tc.want {
-			t.Errorf("digestPart(%q) = %q, want %q", tc.image, got, tc.want)
-		}
 	}
 }
 
@@ -498,23 +474,4 @@ func TestDefaultUnitDirReturnsPathUnderUserConfig(t *testing.T) {
 	if got != want {
 		t.Errorf("defaultUnitDir() = %q, want %q", got, want)
 	}
-}
-
-// isSHA256Digest reports whether d is a well-formed "sha256:<64 hex>" OCI
-// manifest index digest.
-func isSHA256Digest(d string) bool {
-	const prefix = "sha256:"
-	if !strings.HasPrefix(d, prefix) {
-		return false
-	}
-	hex := d[len(prefix):]
-	if len(hex) != 64 {
-		return false
-	}
-	for _, r := range hex {
-		if !strings.ContainsRune("0123456789abcdef", r) {
-			return false
-		}
-	}
-	return true
 }

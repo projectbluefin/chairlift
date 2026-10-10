@@ -85,7 +85,8 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0016-printer-app-admin-denied-until-authenticated.md](adr/0016-printer-app-admin-denied-until-authenticated.md)
   — printer application administration is denied until authenticated: PAPPL
   serves web admin and IPP on one listener, so the boundary is authorization
-  (authenticated or absent web admin), not loopback binding
+  (authenticated or absent web admin), not loopback binding; superseded by
+  ADR-0020
 - [adr/0017-pin-through-a-validated-day-word.md](adr/0017-pin-through-a-validated-day-word.md)
   — a pin is a `bootc switch` to a dated build named by the helper from a
   validated `YYYYMMDD` word plus the booted stream and `internal/imageinfo`'s
@@ -98,6 +99,10 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0019-retire-obsolete-docs-to-git-history.md](adr/0019-retire-obsolete-docs-to-git-history.md)
   — retain active issue-owned plans only; preserve retired artifacts in Git,
   accepted decision bodies, and source-backed documentation checks
+- [adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
+  — printer applications publish on 127.0.0.1 only (no LAN printing or
+  DNS-SD), run their image's moving `:stable` tag, and update through
+  `podman-auto-update.timer`
 
 ### Design
 

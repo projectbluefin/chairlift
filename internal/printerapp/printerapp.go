@@ -11,7 +11,7 @@
 // also means nothing is layered onto the image.
 //
 // A printer application is a Family (a published image, one per driver family:
-// Ghostscript, HPLIP, Gutenprint, PostScript) plus a unique app name. A family
+// Ghostscript, HPLIP, Gutenprint) plus a unique app name. A family
 // can host several printers, and each App gets its own unit, host port, and
 // state volume, so one logical device has exactly one owner and one
 // advertisement rather than two units fighting over the same port and volume.
@@ -19,7 +19,6 @@ package printerapp
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -44,32 +43,19 @@ const (
 	portRange = 1000
 )
 
-// Family identifies one Printer Application family. Each publishes a
-// digest-pinned image reference at GHCR (the projectbluefin
-// *-printer-app repositories). The image, pinned by an immutable
-// application-version tag or manifest digest, is what we run — not a mutable
-// `:latest` or `:build` tag, which a re-pull could change under us.
+// Family identifies one Printer Application family. Each runs its
+// projectbluefin *-printer-app image from GHCR at the moving `:stable` tag,
+// which the image's own release workflow advances; the unit carries
+// AutoUpdate=registry so podman-auto-update.timer pulls each new release.
 type Family struct {
 	// ID is the lowercase identifier used in unit names and volume paths.
 	ID string
 	// DisplayName is the human-readable family name.
 	DisplayName string
-	// Repo is the GHCR repository path for the family's image.
-	Repo string
-	// Version is the immutable application-version tag pinned for this family.
-	Version string
-	// Digest is the immutable image manifest or index digest.
-	Digest string
-	// DefaultPort is the contracted host port for this family (ADR-0016).
+	// Image is the container image reference the unit runs.
+	Image string
+	// DefaultPort is the contracted port for this family.
 	DefaultPort int
-}
-
-// Image returns the digest-pinned index for this family.
-func (f Family) Image() string {
-	if f.Digest != "" {
-		return f.Repo + "@" + f.Digest
-	}
-	return f.Repo + ":" + f.Version
 }
 
 // App is one namespaced printer application: a Family plus a unique app name.
@@ -141,31 +127,23 @@ func (a App) HostVolumeDir() (string, error) {
 }
 
 // families is the set of Printer Application families ChairLift can drive.
-// Every reference was taken from the projectbluefin *-printer-app repositories,
-// which publish digest-pinned container images.
 var families = []Family{
 	{
 		ID:          "ghostscript",
 		DisplayName: "Ghostscript",
-		Repo:        "ghcr.io/projectbluefin/ghostscript-printer-app",
-		Version:     "10.07.1-2",
-		Digest:      "sha256:82487bd81925b824f16d79a50b4237230d00429fca7761454299a8a4393368cc",
+		Image:       "ghcr.io/projectbluefin/ghostscript-printer-app:stable",
 		DefaultPort: 18010,
 	},
 	{
 		ID:          "hplip",
 		DisplayName: "HPLIP",
-		Repo:        "ghcr.io/projectbluefin/hplip-printer-app",
-		Version:     "3.26.4",
-		Digest:      "sha256:1f81f507ce603f19eebb83fdcdc5b7de7bc7f52f728e9626c2c1224ea7477de8",
+		Image:       "ghcr.io/projectbluefin/hplip-printer-app:stable",
 		DefaultPort: 18030,
 	},
 	{
 		ID:          "gutenprint",
 		DisplayName: "Gutenprint",
-		Repo:        "ghcr.io/projectbluefin/gutenprint-printer-app",
-		Version:     "5.3.6-4.1",
-		Digest:      "sha256:3ca46b65bba16e258d7f93582beb9ccdf71a8b4e450b9d01f8cb545a945b93a1",
+		Image:       "ghcr.io/projectbluefin/gutenprint-printer-app:stable",
 		DefaultPort: 18050,
 	},
 }
@@ -203,12 +181,12 @@ func sanitize(name string) string {
 	return b.String()
 }
 
-// ApplyOverrides replaces a family's pinned image from configuration. A site
-// that mirrors the indexes points its families at the mirror; the mirror must
-// serve the same digest-pinned index. This lives in the ordinary config
-// file rather than the root-only channels.yml because the container runs
-// rootless in the invoking account, so pointing it at another image grants
-// nothing a user could not get by running podman themselves.
+// ApplyOverrides replaces a family's image from configuration. A site that
+// mirrors the images points its families at the mirror, by tag or pinned by
+// digest (`repo@sha256:…`). This lives in the ordinary config file rather
+// than the root-only channels.yml because the container runs rootless in the
+// invoking account, so pointing it at another image grants nothing a user
+// could not get by running podman themselves.
 // An unknown family ID is an error rather than a silent no-op, since a typo'd
 // key would otherwise leave the site believing its mirror was in use.
 func ApplyOverrides(images map[string]string) error {
@@ -219,14 +197,7 @@ func ApplyOverrides(images map[string]string) error {
 		found := false
 		for i := range families {
 			if families[i].ID == id {
-				families[i].Repo = repoPart(image)
-				if strings.Contains(image, "@sha256:") {
-					families[i].Digest = digestPart(image)
-					families[i].Version = ""
-				} else {
-					families[i].Digest = ""
-					families[i].Version = versionPart(image)
-				}
+				families[i].Image = image
 				found = true
 				break
 			}
@@ -238,41 +209,15 @@ func ApplyOverrides(images map[string]string) error {
 	return nil
 }
 
-func digestPart(image string) string {
-	if i := strings.Index(image, "@"); i >= 0 {
-		return image[i+1:]
-	}
-	return ""
-}
-
-// repoPart splits an image reference into its repository path.
-func repoPart(image string) string {
-	if i := strings.Index(image, "@"); i >= 0 {
-		return image[:i]
-	}
-	if i := strings.LastIndex(image, ":"); i >= 0 {
-		return image[:i]
-	}
-	return image
-}
-
-// versionPart splits an image reference into its tag.
-func versionPart(image string) string {
-	if i := strings.Index(image, "@"); i >= 0 {
-		return ""
-	}
-	if i := strings.LastIndex(image, ":"); i >= 0 {
-		return image[i+1:]
-	}
-	return "latest"
-}
-
 // RenderUnit returns the quadlet .container file for one printer application.
 //
-// The unit runs on host networking per ADR-0016 so IPP is LAN-reachable and
-// DNS-SD advertisements carry a routable host address. The state volume is
-// bind-mounted read-write so the printer's cached driver state persists across
-// enable/disable.
+// The container's IPP and web-admin port is published on 127.0.0.1 only
+// (ADR-0020): PAPPL's web administration is unauthenticated, so it must never
+// be reachable from the LAN. The trade-off is that only this computer can
+// print to it and its DNS-SD advertisement stays inside the container.
+// AutoUpdate=registry lets podman-auto-update.timer move the unit to each new
+// `:stable` release. The state volume is bind-mounted read-write so the
+// printer's cached driver state persists across enable/disable.
 func RenderUnit(app App) string {
 	var b strings.Builder
 
@@ -281,10 +226,11 @@ func RenderUnit(app App) string {
 
 	b.WriteString("[Container]\n")
 	fmt.Fprintf(&b, "ContainerName=%s\n", app.ContainerName())
-	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image())
+	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
+	b.WriteString("AutoUpdate=registry\n")
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
-	b.WriteString("Network=host\n")
+	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%s\n\n", app.Volume())
 
 	b.WriteString("[Service]\nRestart=on-failure\nRestartSec=10\n\n")
@@ -399,54 +345,22 @@ func IsEnabled(app App) bool {
 	return err == nil
 }
 
-// ErrAdminUnauthenticated reports that the printer application image cannot be
-// safely enabled on host networking because its web administration interface is
-// reachable without authentication (ADR-0016).
-var ErrAdminUnauthenticated = errors.New("printer application web administration is unauthenticated; refused on host network (ADR-0016)")
+// autoUpdateTimer is Podman's user timer that pulls a newer image for every
+// unit labelled AutoUpdate=registry and restarts it.
+const autoUpdateTimer = "podman-auto-update.timer"
 
-// CanEnable is the ADR-0016 enable condition, queryable so the view can show
-// a family as a non-enabled state instead of offering a switch that refuses.
-// An application may be enabled only when its web administration is either
-// authenticated (an auth service, admin group, or password) or absent
-// (server-options=no-web-interface).
-//
-// No published image can be given either yet: every entrypoint forwards only
-// PORT and a log file, so ChairLift has no way to hand the credential over.
-// The image-side contract is requested in projectbluefin/ghostscript-printer-app#65
-// (mirrored in hplip-printer-app#51 and gutenprint-printer-app#57): the
-// entrypoint is to read PRINTER_APP_AUTH_SERVICE, PRINTER_APP_ADMIN_GROUP,
-// and PRINTER_APP_SERVER_OPTIONS and forward them as -o auth-service, -o
-// admin-group, and -o server-options. Once an image ships that, this is
-// where the family starts returning nil and RenderUnit gains the Environment
-// lines that carry the values; nothing reads or writes those names today.
-// Until then every family is refused, and the refusal is the same error
-// Enable returns.
-func CanEnable(f Family) error {
-	return ErrAdminUnauthenticated
-}
-
-// Enable writes the quadlet for the printer application and starts it. Enabling
-// only writes the unit and starts the service: the image pull happens inside
-// the container runtime afterwards, so the switch must not wait on it.
-//
-// CanEnable runs first, before the dry-run branch: a preview of an enable
-// ADR-0016 forbids would describe a change that must never happen.
+// Enable writes the quadlet for the printer application, starts it, and
+// enables Podman's auto-update timer. Enabling only writes the unit and starts
+// the service: the image pull happens inside the container runtime afterwards,
+// so the switch must not wait on it.
 func Enable(ctx context.Context, app App) error {
-	if err := CanEnable(app.Family); err != nil {
-		return err
-	}
-	return enableInternal(ctx, app)
-}
-
-// enableInternal writes the quadlet and starts the service once prerequisites are met.
-func enableInternal(ctx context.Context, app App) error {
 	path, err := UnitPath(app)
 	if err != nil {
 		return err
 	}
 
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would write %s for %s and start %s", path, app.Family.Image(), app.ServiceName())
+		log.Printf("[DRY-RUN] would write %s for %s, start %s, and enable --now %s", path, app.Family.Image, app.ServiceName(), autoUpdateTimer)
 		return nil
 	}
 
@@ -460,10 +374,13 @@ func enableInternal(ctx context.Context, app App) error {
 
 	_, statErr := os.Stat(path)
 	existed := statErr == nil
+	// rollback undoes a fresh install. The stop matters once start has
+	// succeeded: without it a removed unit would leave its container running.
 	rollback := func() {
 		if existed {
 			return
 		}
+		_ = runSystemctl(ctx, "stop", app.ServiceName())
 		_ = os.Remove(path)
 		_ = runSystemctl(ctx, "daemon-reload")
 	}
@@ -477,6 +394,10 @@ func enableInternal(ctx context.Context, app App) error {
 		return err
 	}
 	if err := runSystemctl(ctx, "start", app.ServiceName()); err != nil {
+		rollback()
+		return err
+	}
+	if err := runSystemctl(ctx, "enable", "--now", autoUpdateTimer); err != nil {
 		rollback()
 		return err
 	}

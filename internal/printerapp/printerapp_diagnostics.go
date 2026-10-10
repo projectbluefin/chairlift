@@ -13,8 +13,6 @@ import (
 type DiagnosticInput struct {
 	// Capable is the host capability floor (Podman present on $PATH).
 	Capable bool
-	// Enableable reports whether ADR-0016 administration prerequisites are met.
-	Enableable bool
 	// UnitPresent reports whether the quadlet container unit exists on disk.
 	UnitPresent bool
 	// Checked is true once readiness has been probed.
@@ -40,9 +38,6 @@ func Diagnose(input DiagnosticInput) State {
 		return StateUnavailable
 	}
 	if !input.UnitPresent {
-		if !input.Enableable {
-			return StateBlocked
-		}
 		return StateOff
 	}
 	if !input.Checked {
@@ -203,9 +198,6 @@ func ProbeDiagnostics(ctx context.Context, app App, capable bool) State {
 		return StateUnavailable
 	}
 	if !facts.UnitPresent {
-		if !facts.Enableable {
-			return StateBlocked
-		}
 		return StateOff
 	}
 
@@ -224,12 +216,11 @@ func ProbeDiagnostics(ctx context.Context, app App, capable bool) State {
 
 	journalOut, _ := runCommand(ctx, "journalctl", "--user", "-u", app.ServiceName(), "-n", "50", "--no-pager")
 
-	_, imageErr := runCommand(ctx, "podman", "image", "exists", app.Family.Image())
+	_, imageErr := runCommand(ctx, "podman", "image", "exists", app.Family.Image)
 	imageExists := imageErr == nil
 
 	return Diagnose(DiagnosticInput{
 		Capable:        facts.Capable,
-		Enableable:     facts.Enableable,
 		UnitPresent:    facts.UnitPresent,
 		Checked:        true,
 		Active:         active,

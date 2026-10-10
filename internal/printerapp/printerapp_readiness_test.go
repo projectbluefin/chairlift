@@ -8,36 +8,23 @@ import (
 	"time"
 )
 
-// TestCanEnableRefusesEveryFamilyUntilImagesAcceptAdminSettings pins the
-// ADR-0016 condition as it stands: no published image can be handed an
-// administration credential, so no family is enableable and the refusal is
-// the error Enable returns. When an image gains the knob, this test changes
-// with the family that gains it.
-func TestCanEnableRefusesEveryFamilyUntilImagesAcceptAdminSettings(t *testing.T) {
-	for _, f := range Families() {
-		if err := CanEnable(f); !errors.Is(err, ErrAdminUnauthenticated) {
-			t.Errorf("CanEnable(%s) = %v, want %v", f.ID, err, ErrAdminUnauthenticated)
-		}
-	}
-}
-
-func TestObserveReadsTheUnitAndTheEnableCondition(t *testing.T) {
+func TestObserveReadsTheUnit(t *testing.T) {
 	_, calls := stubUnitDir(t)
 	app := Select(Families()[0])
 
 	got := Observe(app, true)
-	want := Facts{Capable: true, Enableable: false, UnitPresent: false}
+	want := Facts{Capable: true, UnitPresent: false}
 	if got != want {
 		t.Errorf("Observe before enable = %+v, want %+v", got, want)
 	}
 
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 	*calls = nil
 
 	got = Observe(app, false)
-	want = Facts{Capable: false, Enableable: false, UnitPresent: true}
+	want = Facts{Capable: false, UnitPresent: true}
 	if got != want {
 		t.Errorf("Observe after enable = %+v, want %+v", got, want)
 	}
@@ -145,17 +132,13 @@ func TestResolveNeverReportsReadyFromUnitPresenceAlone(t *testing.T) {
 	}{
 		{name: "no podman", facts: Facts{}, want: StateUnavailable},
 		{name: "no podman even with a unit", facts: Facts{UnitPresent: true, Checked: true, Active: "active"}, want: StateUnavailable},
-		{name: "blocked by ADR-0016", facts: Facts{Capable: true}, want: StateBlocked},
-		{name: "off", facts: Facts{Capable: true, Enableable: true}, want: StateOff},
-		{name: "unit present, not yet checked", facts: Facts{Capable: true, Enableable: true, UnitPresent: true}, want: StateStarting, on: true},
-		{name: "unit present, activating", facts: Facts{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "activating"}, want: StateStarting, on: true},
-		{name: "unit present, active", facts: Facts{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "active"}, want: StateReady, on: true},
-		{name: "unit present, failed", facts: Facts{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "failed"}, want: StateFailed, on: true},
-		{name: "unit present, inactive", facts: Facts{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "inactive"}, want: StateFailed, on: true},
-		{name: "unit present, check failed", facts: Facts{Capable: true, Enableable: true, UnitPresent: true, Checked: true}, want: StateFailed, on: true},
-		// A unit the user already has is never locked: turning it off must
-		// stay possible whatever the image's administration surface.
-		{name: "blocked family with a unit is on, not blocked", facts: Facts{Capable: true, UnitPresent: true, Checked: true, Active: "active"}, want: StateReady, on: true},
+		{name: "off", facts: Facts{Capable: true}, want: StateOff},
+		{name: "unit present, not yet checked", facts: Facts{Capable: true, UnitPresent: true}, want: StateStarting, on: true},
+		{name: "unit present, activating", facts: Facts{Capable: true, UnitPresent: true, Checked: true, Active: "activating"}, want: StateStarting, on: true},
+		{name: "unit present, active", facts: Facts{Capable: true, UnitPresent: true, Checked: true, Active: "active"}, want: StateReady, on: true},
+		{name: "unit present, failed", facts: Facts{Capable: true, UnitPresent: true, Checked: true, Active: "failed"}, want: StateFailed, on: true},
+		{name: "unit present, inactive", facts: Facts{Capable: true, UnitPresent: true, Checked: true, Active: "inactive"}, want: StateFailed, on: true},
+		{name: "unit present, check failed", facts: Facts{Capable: true, UnitPresent: true, Checked: true}, want: StateFailed, on: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

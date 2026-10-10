@@ -946,43 +946,35 @@ An agent must not break these:
   cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
   `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`), at build and again each time the group is shown (one `ConnectMap` handler, generation-guarded and passive while a session holds the gate), checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive; a requirement fixed outside ChairLift is picked up the next time Agents is shown. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Run`, reporting failures asynchronously; when the session ends or fails to start, the button returns through a fresh preflight rather than a blind re-enable. Previews under `--dry-run` log only and launch nothing.
-- **Printer applications are rootless quadlets, locked until their
-  administration is authenticated, and never a false enabled indicator.**
+- **Printer applications are rootless, loopback-only quadlets on a moving
+  `:stable` tag, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
   under `~/.config/containers/systemd` and drives it with `systemctl --user`
   in the invoking account; nothing here is privileged, and no `pkexec` route,
-  helper subcommand, or PolicyKit action may be added for it. Each family is
-  a digest-pinned container image from the projectbluefin
-  `*-printer-app` repositories, on host networking so IPP and DNS-SD reach
-  the LAN; a pin bump needs the cosign/attestation verification #393 asks for
-  first. ADR-0016 is the enable condition: an application may be enabled only
-  when its web administration is authenticated or absent, and
-  `printerapp.CanEnable` is that condition as a predicate — `Enable` calls
-  it before its dry-run branch, and the Features page's **Printers** group
-  (`printers_group`, floored on the `Podman` capability, i.e. `podman` on
-  `$PATH`; `internal/views/printers_page.go`) renders a refused family as an
-  actionable, non-enabled state: the row is shown, the switch is off *and*
-  insensitive, and the subtitle says the administration page cannot be
-  secured until the image accepts an administrator credential. No published
-  image accepts one yet (ghostscript-printer-app#65, hplip-printer-app#51,
-  gutenprint-printer-app#57), so today every family is locked. The contract
-  those issues specify — the entrypoint reading `PRINTER_APP_AUTH_SERVICE`,
-  `PRINTER_APP_ADMIN_GROUP`, and `PRINTER_APP_SERVER_OPTIONS` — may be named
-  in comments and docs as what will be wired, but no ChairLift code reads or
-  writes those names until an image ships them; and do not turn the lock
-  into a hidden group or a switch that fails on every flip. Readiness and
-  failure classification on the row come from
+  helper subcommand, or PolicyKit action may be added for it. Each family runs
+  `ghcr.io/projectbluefin/<id>-printer-app:stable` with `AutoUpdate=registry`,
+  and `Enable` runs `systemctl --user enable --now podman-auto-update.timer`
+  after a successful start, rolling a fresh install back if either fails.
+  ADR-0020 is the network boundary: PAPPL's web administration is
+  unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
+  must never use `Network=host` or a non-loopback `PublishPort`. IPP and the
+  web page are reachable only from this computer; LAN printing and DNS-SD do
+  not work, and the copy must say so rather than claim network sharing. The
+  Features page's **Printers** group (`printers_group`, floored on the
+  `Podman` capability, i.e. `podman` on `$PATH`;
+  `internal/views/printers_page.go`) shows one switch per family. Readiness
+  and failure classification on the row come from
   `printerapp.Observe`/`ProbeActive`/`ProbeDiagnostics`/`Diagnose` —
   `systemctl --user is-active`'s state *word*, systemd Result/SubState
   properties, journal logs, and container image presence probes, off the main
-  thread — never from the unit file's presence alone, and a present unit is
-  never locked, so turning a family off always stays possible. Failure modes
-  — missing Podman, rootless device access failure, unavailable image, plugin
-  verification failure, and service crash — are classified as actionable
-  non-enabled or failed states, never a false enabled indicator. A failed
-  disable keeps the unit because the service could not be proven stopped.
-  Hardware behaviour — printing through a device, USB passthrough, mDNS
-  coexistence — is unverified and unwired; say so rather than claim it.
+  thread — never from the unit file's presence alone, so turning a family off
+  always stays possible. Failure modes — missing Podman, rootless device
+  access failure, unavailable image, plugin verification failure, and service
+  crash — are classified as actionable non-enabled or failed states, never a
+  false enabled indicator. A failed disable keeps the unit because the service
+  could not be proven stopped. Hardware behaviour — printing through a
+  device, USB passthrough — is unverified and unwired; say so rather than
+  claim it.
 - **Livery remains one primary with independent task groups.** Profile
   Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
   existing `livery_page` config keys and one built control set. Never add a

@@ -94,9 +94,8 @@ features_page:
   # Printer applications: one rootless Podman quadlet per driver family
   # (Ghostscript, HPLIP, Gutenprint), started with `systemctl --user` in the
   # invoking account; nothing here is privileged. The group hides itself where
-  # podman is absent. A family can be turned on only once its image's web
-  # administration can be secured (ADR-0016); until the published images
-  # accept that setting, every switch is shown locked and says so.
+  # podman is absent. Each application is published on 127.0.0.1 only
+  # (ADR-0020), so only this computer can print to it or open its settings.
   printers_group:
     enabled: true
   # Agent Mode (llmman, installed with Homebrew and run as a systemd user

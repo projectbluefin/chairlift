@@ -8,12 +8,12 @@ import (
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
 
-// The description names the one consequence of turning a family on — its
-// printers are shared on the network — and none of the machinery behind it.
-func TestPrintersGroupDescriptionSaysItSharesOnTheNetwork(t *testing.T) {
+// The description names the one consequence of turning a family on — only
+// this computer can use its printers — and none of the machinery behind it.
+func TestPrintersGroupDescriptionSaysOnlyThisComputer(t *testing.T) {
 	d := PrintersGroupDescription()
-	if !strings.Contains(d, "network") {
-		t.Errorf("description %q does not say printers are shared on the network", d)
+	if !strings.Contains(d, "this computer") {
+		t.Errorf("description %q does not say only this computer can use the printers", d)
 	}
 	for _, jargon := range []string{"container", "Podman", "driverless", "system"} {
 		if strings.Contains(d, jargon) {
@@ -41,8 +41,8 @@ func TestPrinterFamilyRowNamesEveryFamilyDistinctly(t *testing.T) {
 	}
 }
 
-// Every state reads differently, and only Ready says running: a starting,
-// failed, or blocked family can never be mistaken for one that works.
+// Every state reads differently, and only Ready says running: a starting or
+// failed family can never be mistaken for one that works.
 func TestPrinterAppSubtitleDistinguishesEveryState(t *testing.T) {
 	seen := map[string]printerapp.State{}
 	for s := printerapp.StateUnavailable; s <= printerapp.StateFailedCrash; s++ {
@@ -102,22 +102,6 @@ func TestPrinterAppDiagnosticSubtitlesAreActionable(t *testing.T) {
 				t.Errorf("state %d subtitle %q names %q", tc.state, text, jargon)
 			}
 		}
-	}
-}
-
-// ADR-0016: the blocked row is an actionable, non-enabled state. It says the
-// settings page is what cannot be protected yet, and that the switch can be
-// turned on once it can — without spelling an environment variable no image
-// ships yet.
-func TestPrinterAppBlockedSubtitleIsActionable(t *testing.T) {
-	text := PrinterAppSubtitle(printerapp.StateBlocked, 18010)
-	for _, want := range []string{"Can't be turned on", "until", "settings page", "password"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("blocked subtitle %q does not say %q", text, want)
-		}
-	}
-	if strings.Contains(text, "PRINTER_APP") || strings.Contains(text, "_") {
-		t.Errorf("blocked subtitle spells an unshipped knob: %q", text)
 	}
 }
 

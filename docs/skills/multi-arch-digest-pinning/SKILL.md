@@ -14,11 +14,11 @@ metadata:
 
 **When it applies:** Replacing a floating tag with an `@sha256:` reference, or
 rolling an existing digest, anywhere a container image is named. ChairLift's
-`internal/printerapp` pins printer application indexes; every roll must also
-verify the exact keyless workflow identity, provenance and signed SBOM before
-changing a pin. Agent Mode delegates engine fetching to llmman and has no
-ChairLift-owned container pin. Printer enablement remains independently locked
-until the published image's administration boundary is verified.
+`internal/printerapp` deliberately runs moving `:stable` tags with Podman
+auto-update (ADR-0020), so this applies there only to a site pinning a family
+through `ApplyOverrides`; any pin must also verify the exact keyless workflow
+identity, provenance and signed SBOM. Agent Mode delegates engine fetching to
+llmman and has no ChairLift-owned container pin.
 
 **What to do:** Resolve the *index* (manifest list) digest when the tag publishes
 one, never an architecture's child entry. A bare

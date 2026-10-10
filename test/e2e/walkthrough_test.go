@@ -363,15 +363,13 @@ func assertBluefinGroupsRendered(t *testing.T, outDir string) {
 	}
 
 	// The Printers group is floored on Podman, which capture_walkthrough.sh
-	// supplies through CHAIRLIFT_CAPABILITIES. Every family is blocked until
-	// its image accepts an administration credential (ADR-0016), and the
-	// marker says so: a screenshot of the Features page must show one locked
-	// row per family, not a page where the group silently hid itself. The
-	// count comes from the families table so adding a family does not touch
-	// this gate.
+	// supplies through CHAIRLIFT_CAPABILITIES. The marker says every family
+	// rendered a row: a screenshot of the Features page must not show a
+	// page where the group silently hid itself. The count comes from the
+	// families table so adding a family does not touch this gate.
 	printers := findLogLine(t, outDir, "views: printers group built")
 	families := len(printerapp.Families())
-	if want := fmt.Sprintf("families=%d blocked=%d", families, families); !strings.Contains(printers, want) {
+	if want := fmt.Sprintf("families=%d", families); !strings.Contains(printers, want) {
 		t.Errorf("printers group marker missing %q\n  %s", want, printers)
 	}
 }

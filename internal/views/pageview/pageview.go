@@ -184,8 +184,8 @@ func FeatureGroupDescription(count int) string {
 // Podman (so no Printers group), and no optional features for updex to list,
 // which reads as a broken page rather than an answer. bluefinGroups is
 // whether any Developer or Gaming group was built; printers is whether the
-// Printers group was built — its rows may all be locked, but a locked switch
-// that says why is an offering, not an empty page; optionalFeatures is
+// Printers group was built — a row of switches is an offering, not an empty
+// page; optionalFeatures is
 // whether the optional-features group is (or may still become) visible — a
 // group still checking, or one that could not check, is itself an
 // explanation.

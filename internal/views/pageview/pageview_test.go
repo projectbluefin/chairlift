@@ -378,8 +378,7 @@ func TestStagingLogSubtitleNamesTheCapWhenOneApplied(t *testing.T) {
 // TestFeaturesEmptyStateOnlyWhenNothingIsOffered holds issue #352: a host
 // with no Developer, Gaming, or Printers group and no optional features must
 // explain the empty page, and any one offering — including a features group
-// still checking, or a Printers group whose switches are all locked — must
-// suppress the explanation.
+// still checking, or a Printers group — must suppress the explanation.
 func TestFeaturesEmptyStateOnlyWhenNothingIsOffered(t *testing.T) {
 	for _, tc := range []struct {
 		bluefin, printers, optional, want bool

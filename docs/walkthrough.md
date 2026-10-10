@@ -211,13 +211,11 @@ Flatseal), which is left in place. Partial failures stay visible instead of
 being reported as an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — offering extra drivers for printers that don't work
-on their own. Each runs as a small container in your own account and shares
-its printers on your network; when one is running, its row names the local
-web page where you add and manage printers. New enables are locked for now,
-and each row says why: a family can be turned on only once its settings page
-can be password-protected, so nothing on your network can reach an
-unprotected administration screen. An existing unit can still be turned
-off. The rows evaluate systemd state,
+on their own. Each runs as a small container in your own account and only
+this computer can use it: other computers on your network can't print to it
+or reach its settings page. When one is running, its row names the local web
+page where you add and manage printers, and the driver updates itself in the
+background. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.

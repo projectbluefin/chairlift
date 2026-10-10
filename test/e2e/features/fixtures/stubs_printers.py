@@ -2,8 +2,8 @@
 
 Printer applications are rootless quadlets under the scenario HOME's
 ~/.config/containers/systemd, driven with `systemctl --user`. The group's
-scenarios assert that rendering it — three locked rows under ADR-0016 —
-runs no systemctl and writes no quadlet, so the one stub here is a
+scenarios assert that rendering it — three rows, each off — runs no
+systemctl and writes no quadlet, so the one stub here is a
 recording systemctl: without it "systemctl was never run" would hold
 vacuously.
 """

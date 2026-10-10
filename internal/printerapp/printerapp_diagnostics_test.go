@@ -26,16 +26,10 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			on:    false,
 		},
 
-		// Blocked & Off
+		// Off
 		{
-			name:  "blocked by ADR-0016 when unit not installed",
-			input: DiagnosticInput{Capable: true, Enableable: false, UnitPresent: false},
-			want:  StateBlocked,
-			on:    false,
-		},
-		{
-			name:  "off when enableable and unit not installed",
-			input: DiagnosticInput{Capable: true, Enableable: true, UnitPresent: false},
+			name:  "off when unit not installed",
+			input: DiagnosticInput{Capable: true, UnitPresent: false},
 			want:  StateOff,
 			on:    false,
 		},
@@ -43,19 +37,19 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 		// Starting & Ready
 		{
 			name:  "unit present but unchecked",
-			input: DiagnosticInput{Capable: true, Enableable: true, UnitPresent: true, Checked: false},
+			input: DiagnosticInput{Capable: true, UnitPresent: true, Checked: false},
 			want:  StateStarting,
 			on:    true,
 		},
 		{
 			name:  "unit present and activating",
-			input: DiagnosticInput{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "activating"},
+			input: DiagnosticInput{Capable: true, UnitPresent: true, Checked: true, Active: "activating"},
 			want:  StateStarting,
 			on:    true,
 		},
 		{
 			name:  "unit present and active",
-			input: DiagnosticInput{Capable: true, Enableable: true, UnitPresent: true, Checked: true, Active: "active"},
+			input: DiagnosticInput{Capable: true, UnitPresent: true, Checked: true, Active: "active"},
 			want:  StateReady,
 			on:    true,
 		},
@@ -65,7 +59,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "rootless device access failed on usb lp0",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -78,7 +71,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "rootless device access failed on usb bus",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -91,7 +83,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "device access denied error message",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -106,7 +97,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "image pull failure: unable to pull",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -119,7 +109,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "image pull failure: manifest unknown",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -132,7 +121,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "image not found locally and pull failed",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -148,7 +136,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "hplip plugin signature verification failed",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -161,7 +148,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "plugin verification failed on tampered payload",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -174,7 +160,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "plugin checksum mismatch",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -189,7 +174,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "crashed with core-dump result",
 			input: DiagnosticInput{
 				Capable:        true,
-				Enableable:     true,
 				UnitPresent:    true,
 				Checked:        true,
 				Active:         "failed",
@@ -203,7 +187,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "crashed with signal result",
 			input: DiagnosticInput{
 				Capable:        true,
-				Enableable:     true,
 				UnitPresent:    true,
 				Checked:        true,
 				Active:         "failed",
@@ -217,7 +200,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "crashed logged in journal",
 			input: DiagnosticInput{
 				Capable:     true,
-				Enableable:  true,
 				UnitPresent: true,
 				Checked:     true,
 				Active:      "failed",
@@ -232,7 +214,6 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 			name: "generic service exit without diagnostic matches",
 			input: DiagnosticInput{
 				Capable:        true,
-				Enableable:     true,
 				UnitPresent:    true,
 				Checked:        true,
 				Active:         "failed",
@@ -261,8 +242,8 @@ func TestPrinterAppDiagnoseCoversEveryFailureClass(t *testing.T) {
 func TestPrinterAppProbeDiagnosticsWithStubbedCommands(t *testing.T) {
 	_, _ = stubUnitDir(t)
 	app := Select(Families()[0])
-	if err := enableInternal(context.Background(), app); err != nil {
-		t.Fatalf("enableInternal: %v", err)
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
 	}
 
 	prevRunCommand := runCommand

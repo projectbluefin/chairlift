@@ -388,8 +388,7 @@ func defaultConfig() *Config {
 			"gaming_group": GroupConfig{Enabled: true},
 			// Printer applications: one rootless quadlet per driver family,
 			// floored on Podman by internal/capability. Enabled because the
-			// group does nothing until a switch is turned on, and today no
-			// switch can be (internal/printerapp.CanEnable, ADR-0016).
+			// group does nothing until a switch is turned on.
 			"printers_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
