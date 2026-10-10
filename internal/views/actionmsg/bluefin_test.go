@@ -181,6 +181,50 @@ func TestAutomaticUpdatesLiveToastsNameTheDirection(t *testing.T) {
 	}
 }
 
+// The post-action resume-timer probe (#558) is a warning, not an
+// action, so the decision is just a string: empty when no warning is
+// needed, the warning copy when there is. The three interesting cases:
+//
+//   - disable + resume timer still armed (the helper/GUI skew)
+//   - disable + resume timer masked or absent (no skew)
+//   - enable (the resume timer is left masked or absent regardless of
+//     helper version, so a "still armed" warning would be wrong)
+func TestAutomaticUpdatesResumeOutdatedReturnsWarningOnlyForDisableArmed(t *testing.T) {
+	tests := []struct {
+		name           string
+		enabled        bool
+		resumeOutdated bool
+		wantEmpty      bool
+	}{
+		{name: "disable with armed resume timer warns", enabled: false, resumeOutdated: true, wantEmpty: false},
+		{name: "disable with masked resume timer is silent", enabled: false, resumeOutdated: false, wantEmpty: true},
+		{name: "enable with armed resume timer is silent", enabled: true, resumeOutdated: true, wantEmpty: true},
+		{name: "enable with masked resume timer is silent", enabled: true, resumeOutdated: false, wantEmpty: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			toast := AutomaticUpdatesResumeOutdated(test.enabled, test.resumeOutdated)
+			if test.wantEmpty && toast != "" {
+				t.Errorf("AutomaticUpdatesResumeOutdated(%v, %v) = %q, want empty", test.enabled, test.resumeOutdated, toast)
+			}
+			if !test.wantEmpty && toast == "" {
+				t.Errorf("AutomaticUpdatesResumeOutdated(%v, %v) = empty, want a warning", test.enabled, test.resumeOutdated)
+			}
+		})
+	}
+}
+
+// The warning copy names the action the user has to take (re-pull the
+// image), not a one-click fix inside the GUI, because the new helper
+// only ships through the image's next pull.
+func TestAutomaticUpdatesResumeOutdatedToastNamesRePull(t *testing.T) {
+	toast := AutomaticUpdatesResumeOutdated(false, true)
+	if !strings.Contains(toast, "Re-pull") && !strings.Contains(toast, "re-pull") {
+		t.Errorf("warning toast = %q, want it to mention re-pulling the image", toast)
+	}
+}
+
 func TestDriverSwitchNeverConfirmsUnderDryRun(t *testing.T) {
 	decision := DriverSwitch(true, "NVIDIA (proprietary)")
 	if decision.Confirm {

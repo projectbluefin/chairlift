@@ -634,6 +634,32 @@ func AutomaticUpdates(dryRun bool, enable bool) FeatureToggleDecision {
 	}
 }
 
+// AutomaticUpdatesResumeOutdated returns the supplementary toast a
+// post-action resume-timer probe (#558) wants to show above the
+// automatic-updates switch. The probe only matters when the user just
+// turned automatic updates *off* and the on-image helper predates the
+// resume-timer mask work in #543: the main timer is silenced, the switch
+// reads "off", but uupd-resume.timer still fires uupd.service twenty
+// minutes after every resume. The toast names the action the user has
+// to take (re-pull the image) rather than offering a one-click fix
+// inside the GUI, because the only place the new helper lives is the
+// image's next pull.
+//
+// enabled is the switch position the user just asked for; resumeOutdated
+// is the post-probe skew signal. The toast is returned non-empty only
+// when both: the user disabled auto-updates AND the resume timer is
+// still armed. enable=true means the user turned auto-updates back on,
+// so a "still armed" warning would be wrong. enable=true with
+// resumeOutdated=true (the resume timer is enabled while the main timer
+// is not) is not a skew: that is the helper's own "enable" path, which
+// only unmasks the resume timer without enabling it.
+func AutomaticUpdatesResumeOutdated(enabled, resumeOutdated bool) string {
+	if enabled || !resumeOutdated {
+		return ""
+	}
+	return "Updates still run after suspend. Re-pull this image to get the helper that silences the resume timer."
+}
+
 // DriverSwitch decides whether the graphics-driver row should adopt its
 // switched subtitle, and what toast to show. Confirm is exactly !dryRun, for
 // the same reason as ChannelSwitch: under dry-run ublue.runHelper

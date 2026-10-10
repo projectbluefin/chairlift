@@ -128,6 +128,101 @@ func Detect(ctx context.Context) State {
 	return Classify(isEnabled, isActive)
 }
 
+// ResumeState reports whether the resume-from-suspend timer that fires
+// uupd.service is silenced. The switch's user-facing State is governed by
+// TimerUnit, but the same service is also triggered by ResumeTimerUnit
+// twenty minutes after every resume, so a "turn automatic updates off"
+// action that silences only the first timer leaves background updates
+// firing after every suspend — exactly the helper/GUI skew that left
+// the resume timer armed in #558.
+//
+// The probe is the same unprivileged `systemctl is-enabled
+// uupd-resume.timer` the helper itself would not have changed. Detecting
+// "still armed" only needs the empty/masked/enabled taxonomy, not
+// TimerUnit's full State enum, so the three-way answer is exposed as
+// ResumeState rather than a new State constant.
+//
+//   - ResumeStateMasked — the unit exists and is masked; the helper's
+//     disable path took effect.
+//   - ResumeStateAvailable — the unit exists and is enabled (or in any
+//     other non-masked state, which a default branch in classifyResume
+//     folds into "armed"). This is the skew signal: the helper ran, the
+//     switch reads "off", but the resume trigger is still live.
+//   - ResumeStateAbsent — `systemctl is-enabled` answers "" or
+//     "not-found". Either the image does not ship the unit, or it is
+//     loaded as a transient unit that has since been removed. Either
+//     way, there is no resume trigger to silence, and the post-check
+//     has nothing to warn about.
+type ResumeState int
+
+const (
+	ResumeStateMasked ResumeState = iota
+	ResumeStateAvailable
+	ResumeStateAbsent
+)
+
+// String reports the human-readable label of a ResumeState, so log lines
+// and toast copy can read the value without a switch on every call site.
+func (r ResumeState) String() string {
+	switch r {
+	case ResumeStateMasked:
+		return "masked"
+	case ResumeStateAvailable:
+		return "available"
+	case ResumeStateAbsent:
+		return "absent"
+	default:
+		return "unknown"
+	}
+}
+
+// classifyResume maps a single `systemctl is-enabled ResumeTimerUnit`
+// answer to the three-way ResumeState. The vocabulary matches Classify's
+// empty-string and masked branches, so a host whose helper masked the
+// unit reports ResumeStateMasked and one whose helper predates the
+// resume-timer work reports ResumeStateAvailable.
+func classifyResume(isEnabled string) ResumeState {
+	switch strings.TrimSpace(isEnabled) {
+	case "", "not-found", "disabled":
+		return ResumeStateAbsent
+	case "masked", "masked-runtime":
+		return ResumeStateMasked
+	default:
+		return ResumeStateAvailable
+	}
+}
+
+// resumeProbe is the injection seam for the unprivileged
+// `systemctl is-enabled ResumeTimerUnit` query DetectResume runs. The
+// production value runs the real query; tests substitute a function that
+// returns the canned is-enabled answer directly. No released or e2e
+// binary replaces it, so it has no exported setter and no environment
+// variable for internal/installcheck's stub-surface rule to track.
+var resumeProbe = systemctlResumeOutput
+
+// DetectResume classifies the resume-from-suspend timer's state. It is
+// the post-action read that backs the helper-skew warning: after the
+// helper has run auto-updates-disable, this answers whether it took
+// effect on the resume trigger.
+func DetectResume(ctx context.Context) ResumeState {
+	return classifyResume(resumeProbe(ctx))
+}
+
+// systemctlResumeOutput runs the unprivileged is-enabled query. As with
+// the main timer probe, exit status is ignored in favour of stdout
+// because systemctl exits non-zero for perfectly ordinary answers
+// ("disabled", "masked").
+func systemctlResumeOutput(ctx context.Context) string {
+	queryCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+
+	output, err := exec.CommandContext(queryCtx, "systemctl", "is-enabled", ResumeTimerUnit).Output()
+	if err != nil && len(output) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
 // systemctlProbe runs the two unprivileged queries. Both `is-enabled` and
 // `is-active` exit non-zero for perfectly ordinary answers ("disabled",
 // "inactive"), so the exit status is ignored and only stdout is read.

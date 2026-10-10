@@ -97,3 +97,84 @@ func TestResumeTimerUnitIsTheUniversalBlueResumeUnit(t *testing.T) {
 		t.Error("ResumeTimerUnit must differ from TimerUnit")
 	}
 }
+
+// classifyResume only needs to answer the skew-detection question the
+// GUI asks after a helper run: is the resume timer still armed? Every
+// `systemctl is-enabled` answer that matters to that question is
+// covered here, including the ones a default branch folds into
+// "available" so a future systemd vocabulary change does not silently
+// flip the post-check's verdict.
+func TestClassifyResumeMapsEverySystemdState(t *testing.T) {
+	tests := []struct {
+		name      string
+		isEnabled string
+		want      ResumeState
+	}{
+		{name: "masked", isEnabled: "masked", want: ResumeStateMasked},
+		{name: "masked at runtime", isEnabled: "masked-runtime", want: ResumeStateMasked},
+		{name: "not installed", isEnabled: "not-found", want: ResumeStateAbsent},
+		{name: "query failed", isEnabled: "", want: ResumeStateAbsent},
+		{name: "whitespace is trimmed", isEnabled: "  masked \n", want: ResumeStateMasked},
+		// Any non-masked answer is treated as "still armed" so the GUI
+		// surfaces the skew. enabled and enabled-runtime are the
+		// pre-disable states; disabled / static / indirect are transient
+		// conditions under which the helper's --now stop may have
+		// already taken effect. A default branch that folded them all
+		// into ResumeStateAvailable was the deliberate choice so a
+		// freshly-disabled unit does not read as "already silenced" while
+		// uupd-resume.timer is still pending a stop.
+		{name: "enabled", isEnabled: "enabled", want: ResumeStateAvailable},
+		{name: "enabled at runtime", isEnabled: "enabled-runtime", want: ResumeStateAvailable},
+		{name: "disabled", isEnabled: "disabled", want: ResumeStateAbsent},
+		{name: "static", isEnabled: "static", want: ResumeStateAvailable},
+		{name: "indirect", isEnabled: "indirect", want: ResumeStateAvailable},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classifyResume(test.isEnabled); got != test.want {
+				t.Errorf("classifyResume(%q) = %q, want %q", test.isEnabled, got, test.want)
+			}
+		})
+	}
+}
+
+func TestResumeStateString(t *testing.T) {
+	tests := []struct {
+		state ResumeState
+		want  string
+	}{
+		{state: ResumeStateMasked, want: "masked"},
+		{state: ResumeStateAvailable, want: "available"},
+		{state: ResumeStateAbsent, want: "absent"},
+		{state: ResumeState(99), want: "unknown"},
+	}
+
+	for _, test := range tests {
+		if got := test.state.String(); got != test.want {
+			t.Errorf("ResumeState(%d).String() = %q, want %q", test.state, got, test.want)
+		}
+	}
+}
+
+// DetectResume must route through the same injection seam Detect uses so
+// tests can stand in for systemctl without touching the real timer.
+func TestDetectResumeUsesTheProbe(t *testing.T) {
+	previous := resumeProbe
+	t.Cleanup(func() { resumeProbe = previous })
+
+	resumeProbe = func(context.Context) string { return "masked" }
+	if got := DetectResume(context.Background()); got != ResumeStateMasked {
+		t.Errorf("DetectResume() with masked probe = %q, want %q", got, ResumeStateMasked)
+	}
+
+	resumeProbe = func(context.Context) string { return "not-found" }
+	if got := DetectResume(context.Background()); got != ResumeStateAbsent {
+		t.Errorf("DetectResume() with not-found probe = %q, want %q", got, ResumeStateAbsent)
+	}
+
+	resumeProbe = func(context.Context) string { return "enabled" }
+	if got := DetectResume(context.Background()); got != ResumeStateAvailable {
+		t.Errorf("DetectResume() with enabled probe = %q, want %q", got, ResumeStateAvailable)
+	}
+}

@@ -87,6 +87,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/aistack/aistack.go", Func: "execCommand"},                   // systemctl --user / llmman / dbus-update-activation-environment
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                      // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},         // systemctl (query)
+	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlResumeOutput"},   // systemctl (query, post-check for #558 helper skew)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                     // bootc status (read-only)
 	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                   // bootc upgrade --check (read-only)
 	{File: "internal/contribute/contribute.go", Func: "Command"},                 // xdg-terminal-exec

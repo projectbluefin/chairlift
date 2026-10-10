@@ -1151,6 +1151,12 @@ privileged writes are `auto-updates-enable` / `auto-updates-disable` on
 `chairlift-helper`. Disabling also masks and stops `uupd-resume.timer`, the
 image's second trigger of the same `uupd.service` (20 minutes after every
 resume), and enabling unmasks it, so "off" stops every unattended run.
+Because the GUI (Homebrew) and the helper (image) ship separately, after a
+successful disable the GUI re-probes `uupd-resume.timer` unprivileged via
+`autoupdate.DetectResume`; if it is still enabled — an older helper that
+predates the mask — a follow-up warning toast asks the user to re-pull the
+image. The post-check is skipped on enable, on helper failure or PolicyKit
+cancel, and in dry-run mode, since the helper did not run in those cases.
 
 The package exists because ChairLift presents this as **one switch** where
 bluefinctl presents a strategy enum, a schedule picker, per-layer switches,
