@@ -373,7 +373,7 @@ An agent must not break these:
   regenerating and diffing per push would churn the repository for no signal.
   Adding a page or a user-facing feature means running `make screenshots` and
   extending `docs/walkthrough.md` in the same change. One capture is not a
-  page: `0-setup.png`, the explicit setup flow's Features start, which the
+  page: `0-setup.png`, the explicit setup flow's Welcome start, which the
   runner takes first by launching with `--dry-run --setup` and dismisses
   with Escape before the page walk; the orphan check counts it beside the
   pages, and the walkthrough opens with it.
@@ -532,16 +532,17 @@ An agent must not break these:
   never reads onboarding disposition or starts a wizard. `--first-run`,
   `--setup`/`-s`, and the setup menu action share `PresentFirstRun`.
   `internal/firstrun.Pages` filters the existing visible navigation inventory
-  into Features, Apps, Agents, Livery order; no welcome or update-preferences
-  step is added. The window hides its sidebar during the flow and builds
-  Back/Next/Finish/Dismiss controls once. Every step navigates through
-  `Window.navigateToPage` and uses the page's existing widgets, gates, and
-  operations; there is no dialog copy or `SetupHost` bridge.
-  Next and Back perform no configuration mutation. Repeated explicit
-  requests preserve the current step; an empty eligible inventory opens no
-  flow. Finish records completed plus version, intentional dismissal records
-  skip without demoting completed, and a crash records nothing. Disposition
-  writes remain off the GTK main thread and are previews under `--dry-run`.
+  into Features, Apps, Agents, Livery order between matching Welcome and
+  conclusion screens. The window hides its sidebar during the flow and builds
+  Back/Next/final-action/Dismiss controls once. Selection steps navigate through
+  `Window.navigateToPage` and use existing widgets, gates, and operations;
+  bookends use the setup stack, not sidebar routes. Next and Back mutate no
+  configuration. Repeated requests preserve progress; an empty inventory opens
+  no flow. **Launch Bazaar App Store** records completion and version, launches
+  Bazaar through its desktop entry off the GTK thread, then quits the app.
+  Save or launch failures leave a retryable conclusion. Dismiss records skip
+  without demoting completed; a crash records nothing. Dry-run previews writes
+  and suppresses Bazaar, but still exercises the final application exit.
   `test/e2e/features/setup.feature` covers both explicit flags, normal launch,
   navigation, and dismissal; `firstrun.Keys` remain held to the shipped schema.
 - **The Homebrew executable has one resolution.** `internal/homebrew.ExecutablePath`

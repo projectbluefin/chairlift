@@ -15,12 +15,14 @@ schedule choosers, no feature grids.
 ![Setup Assistant](screenshots/0-setup.png)
 
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
-the menu, `chairlift --setup`, or its `--first-run` alias to walk the existing
-**Features**, **Apps**, **Agents**, and **Livery** pages in that order. The
-first screenshot shows Features, not a welcome dialog. Pages unavailable on
-this computer are skipped. The ordinary page controls perform every action;
-**Back** and **Next** only navigate. **Finish** remembers completion, and
-**Dismiss setup** (or Escape) remembers a skip without undoing a previous completion.
+the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
+walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
+Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
+the ordinary page controls perform every action. **Back** and **Next** only
+navigate. The matching conclusion quotes Edith Wharton. **Launch Bazaar App
+Store** saves completion, opens Bazaar, and closes Control Center. A save or
+launch failure leaves the conclusion available to retry. **Dismiss setup**
+(or Escape) records a skip without undoing previous completion.
 
 ---
 

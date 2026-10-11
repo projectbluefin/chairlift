@@ -245,15 +245,14 @@ def launch_app(context, binary):
 
     # Presenting the window and registering its widgets on the accessibility
     # bus are separate events. Explicit setup hides the sidebar, so require
-    # its existing Features controls and the complete wizard footer instead.
+    # its Welcome screen and the complete wizard footer instead.
     context.app = atspi.find_application(timeout=STARTUP_TIMEOUT)
     if {"--first-run", "--setup"}.intersection(getattr(context, "launch_args", [])):
         def setup_ready():
             root = atspi.page_root(context.app)
             texts = atspi.all_text_under(root)
             return (
-                "Features" in texts
-                and "Developer Mode" in texts
+                "Welcome to" in texts
                 and all(
                     atspi.find_all(root, lambda node: atspi.is_button(node, label))
                     for label in ("Dismiss setup", "Back", "Next")

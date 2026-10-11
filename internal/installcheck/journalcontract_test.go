@@ -105,6 +105,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
 	{File: "internal/views/applications_page.go", Func: "UserHome.launchApp"},    // gtk-launch
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},              // xdg-open
+	{File: "internal/window/window.go", Func: "Window.finishFirstRun"},           // gtk-launch io.github.kolunmi.Bazaar
 }
 
 func TestEveryPrivilegedExecutorJournals(t *testing.T) {

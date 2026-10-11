@@ -1,4 +1,5 @@
 """Explicit setup uses the main window's existing destinations and controls."""
+import os
 from behave import step, then
 import chairlift_atspi as atspi
 
@@ -15,6 +16,20 @@ def wizard_page(context, title):
     def visible():
         root = atspi.page_root(context.app)
         texts = atspi.all_text_under(root)
+        if title == "Welcome":
+            return (
+                "Welcome to" in texts
+                and "Zavala" in " ".join(texts)
+                and "Your system is set up and ready to go." in " ".join(texts)
+                and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss setup"))
+            )
+        if title == "Conclusion":
+            return (
+                "You are ready" in texts
+                and "Edith Wharton" in " ".join(texts)
+                and "You have become legend." in " ".join(texts)
+                and atspi.find_all(root, lambda n: atspi.is_button(n, "Launch Bazaar App Store"))
+            )
         return (
             title in texts
             and (title != "Features" or "Developer Mode" in texts)
@@ -59,3 +74,17 @@ def step_would_record_nothing(context):
 @then("the setup dry run would record the completed version")
 def step_would_record_version(context):
     assert atspi.poll(lambda: f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} completed-version=" in read_log(context))
+
+
+@then("the setup dry run would launch Bazaar")
+def step_would_launch_bazaar(context):
+    assert atspi.poll(lambda: "[DRY-RUN] would launch bazaar" in read_log(context))
+    with open(os.path.join(context.scenario_dir, "setup-launch-calls.log"), encoding="utf-8") as calls:
+        assert calls.read() == "", "dry-run executed gtk-launch"
+
+
+@then("Control Center exits after setup")
+def step_setup_exits(context):
+    assert atspi.poll(lambda: context.app_process.poll() is not None)
+    assert context.app_process.returncode == 0
+    assert "main: application exited" in read_log(context)

@@ -328,3 +328,12 @@ the suite remains in `--dry-run`. Its masked `/proc/cmdline` ensures the
 fake `bootc` is used rather than reading the host's composefs deployment.
 Verify the staged state and the return to a visible pending-update panel;
 an unstaged screenshot or a string-search test cannot prove either layout.
+
+## Launch-and-exit setup actions
+
+For a final action that launches another app and exits, assert process exit and
+its normal-exit log before inspecting saved previews; the accessibility tree is
+gone. Prove unprivileged launch suppression with a recording `gtk-launch` stub
+and an empty calls file: a preview log and the privileged action journal alone
+cannot prove that no desktop app launched. Keep the native quit action disabled
+across save/launch, not only `close-request`, so Ctrl+Q cannot interrupt it.

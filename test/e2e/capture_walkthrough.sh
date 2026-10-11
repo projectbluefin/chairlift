@@ -126,7 +126,7 @@ export CHAIRLIFT_CAPABILITIES
 
 
 # Setup is explicit, including on a new account. The existing-page wizard
-# starts at Features with its navigation footer; Escape dismisses it before
+# starts at Welcome with its navigation footer; Escape dismisses it before
 # the ordinary sidebar walk. Disposition writes are previews only.
 G_DEBUG=fatal-criticals "$APP" --dry-run --setup >>"$LOG" 2>&1 &
 APP_PID=$!
@@ -155,7 +155,7 @@ done
 # the process.
 sleep 2
 
-# Capture the Features step and wizard footer under the stable setup name,
+# Capture the Welcome step and wizard footer under the stable setup name,
 # which the walkthrough and installcheck referential gate both reference.
 remote screenshot "$OUTDIR/0-setup.png"
 echo "captured 0-setup.png"

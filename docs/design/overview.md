@@ -2233,14 +2233,17 @@ The Agents page also offers a **Show Ask Bluefin in menu** preference. It manage
 ## Explicit setup flow
 
 Setup never opens automatically. `--setup`, its `--first-run` alias, and the
-menu action start `internal/firstrun.Pages` over the existing visible navigation
-inventory in Features → Apps → Agents → Livery order. The window hides its
-sidebar and shows one footer with Back, Next, Finish, and Dismiss. Each step
-uses the actual page controls and their existing gates; navigation goes through
-`Window.navigateToPage`. There is no separate assistant dialog or settings
-adapter. Missing pages are skipped; an empty inventory opens no flow.
+menu action open Welcome, then `internal/firstrun.Pages` selects the existing
+visible Features → Apps → Agents → Livery pages, followed by a conclusion.
+Both bookends share one layout and the embedded theme-aware Bluefin wordmark.
+Welcome has normal introductory text and the website's Zavala quote; the
+conclusion has the website's Edith Wharton quote. Selection steps use their
+existing widgets and `Window.navigateToPage`; bookends use the setup stack.
+Missing pages are skipped; an empty inventory opens no flow.
 
-Back and Next mutate no settings. Finish records completion and version;
-intentional dismissal records a skip without demoting prior completion. Dry-run
-logs disposition writes instead of persisting them. The `0-setup.png` capture
-shows the Features start of this explicit flow, not a welcome screen.
+Back and Next mutate no settings. **Launch Bazaar App Store** saves completed
+and version, runs `gtk-launch io.github.kolunmi.Bazaar` off the GTK thread, and
+quits only after success. A failed save or launch leaves the conclusion
+retryable with an error toast. Intentional dismissal records a skip without
+demoting prior completion. Dry-run previews persistence and suppresses Bazaar
+but still exits on the final action. `0-setup.png` captures Welcome.

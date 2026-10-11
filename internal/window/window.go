@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os/exec"
 	"time"
 	"unsafe"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
+	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/settings"
@@ -62,7 +64,9 @@ type Window struct {
 	firstRunSteps     []string
 	firstRunIndex     int
 	firstRunActive    bool
+	firstRunFinishing bool
 	firstRunCollapsed bool
+	firstRunContent   *gtk.Stack
 	firstRunFooter    *gtk.Box
 	firstRunBack      *gtk.Button
 	firstRunNext      *gtk.Button
@@ -214,8 +218,13 @@ func (w *Window) buildUI() {
 	// Create toast overlay for notifications
 	w.toasts = adw.NewToastOverlay()
 	root := gtk.NewBox(gtk.OrientationVerticalValue, 0)
-	w.splitView.SetVexpand(true)
-	root.Append(&w.splitView.Widget)
+	w.firstRunContent = gtk.NewStack()
+	w.firstRunContent.SetVexpand(true)
+	w.firstRunContent.SetTransitionType(gtk.StackTransitionTypeCrossfadeValue)
+	w.firstRunContent.AddNamed(&w.splitView.Widget, "pages")
+	w.firstRunContent.AddNamed(w.buildFirstRunBookend("Welcome to", "Your system is set up and ready to go. Feel free to customize your developer tools, set up troubleshooting, and customize other system defaults.", "Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
+	w.firstRunContent.AddNamed(w.buildFirstRunBookend("You are ready", "You can return to this app by choosing "+branding.AppName+" in your menu. You have become legend.", "There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton"), "conclusion")
+	root.Append(&w.firstRunContent.Widget)
 	w.buildFirstRunFooter(root)
 	w.toasts.SetChild(&root.Widget)
 
@@ -498,7 +507,7 @@ func (w *Window) setupActions() {
 // selection, and the only one that shows a detail: a detail keeps its
 // ancestor's row selected and records the primary its Back control returns to.
 func (w *Window) navigateToPage(pageName string) {
-	if w.firstRunActive && pageName != w.firstRunSteps[w.firstRunIndex] {
+	if w.firstRunActive && (w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) || pageName != w.firstRunSteps[w.firstRunIndex]) {
 		return
 	}
 	transition, ok := navigation.Resolve(pageName, w.navRoutes, func(name string) bool {
@@ -738,7 +747,7 @@ func (w *Window) PresentFirstRun() {
 	if len(w.firstRunSteps) == 0 {
 		return
 	}
-	w.firstRunIndex = 0
+	w.firstRunIndex = -1
 	w.firstRunActive = true
 	w.firstRunCollapsed = w.splitView.GetCollapsed()
 	w.sidebarList.SetSensitive(false)
@@ -792,7 +801,7 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 	w.firstRunFooter.Append(&w.firstRunBack.Widget)
 	w.firstRunFooter.Append(&w.firstRunNext.Widget)
 	back := func(gtk.Button) {
-		if w.firstRunActive && w.firstRunIndex > 0 {
+		if w.firstRunActive && w.firstRunIndex >= 0 {
 			w.firstRunIndex--
 			w.showFirstRunStep()
 		}
@@ -801,7 +810,7 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 		if !w.firstRunActive {
 			return
 		}
-		if w.firstRunIndex+1 == len(w.firstRunSteps) {
+		if w.firstRunIndex == len(w.firstRunSteps) {
 			w.finishFirstRun(true)
 			return
 		}
@@ -810,6 +819,9 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 	}
 	dismiss := func(gtk.Button) { w.finishFirstRun(false) }
 	closeRequest := func(gtk.Window) bool {
+		if w.firstRunFinishing {
+			return true
+		}
 		if w.firstRunActive {
 			w.finishFirstRun(false)
 			return true
@@ -835,21 +847,70 @@ func (w *Window) buildFirstRunFooter(root *gtk.Box) {
 }
 
 func (w *Window) showFirstRunStep() {
-	w.navigateToPage(w.firstRunSteps[w.firstRunIndex])
-	w.firstRunBack.SetSensitive(w.firstRunIndex > 0)
-	if w.firstRunIndex+1 == len(w.firstRunSteps) {
-		w.firstRunNext.SetLabel("Finish")
+	if w.firstRunIndex < 0 {
+		w.firstRunContent.SetVisibleChildName("welcome")
+	} else if w.firstRunIndex == len(w.firstRunSteps) {
+		w.firstRunContent.SetVisibleChildName("conclusion")
+	} else {
+		w.navigateToPage(w.firstRunSteps[w.firstRunIndex])
+		w.firstRunContent.SetVisibleChildName("pages")
+	}
+	w.firstRunBack.SetSensitive(w.firstRunIndex >= 0)
+	if w.firstRunIndex == len(w.firstRunSteps) {
+		w.firstRunNext.SetLabel("Launch Bazaar App Store")
 	} else {
 		w.firstRunNext.SetLabel("Next")
 	}
 }
 
 func (w *Window) finishFirstRun(completed bool) {
-	if !w.firstRunActive {
+	if !w.firstRunActive || w.firstRunFinishing {
+		return
+	}
+	if completed {
+		if w.updateShell != nil && w.updateShell.Busy() {
+			w.updateShell.RevealBusyBanner()
+			w.ShowErrorToast("Wait for updates to finish before launching Bazaar")
+			return
+		}
+		w.firstRunFinishing = true
+		w.firstRunNext.SetSensitive(false)
+		w.firstRunBack.SetSensitive(false)
+		quit := w.GetApplication().LookupAction("quit")
+		if quit != nil {
+			gio.SimpleActionNewFromInternalPtr(quit.GoPointer()).SetEnabled(false)
+		}
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
+			defer cancel()
+			err := firstrun.NewGSettingsStore().SetDisposition(ctx, firstrun.DispositionCompleted)
+			if err == nil {
+				if dryrun.Enabled() {
+					log.Print("[DRY-RUN] would launch bazaar")
+				} else {
+					err = exec.Command("gtk-launch", "io.github.kolunmi.Bazaar").Run()
+				}
+			}
+			sgtk.RunOnMainThread(func() {
+				w.firstRunFinishing = false
+				if quit != nil {
+					gio.SimpleActionNewFromInternalPtr(quit.GoPointer()).SetEnabled(true)
+				}
+				if err != nil {
+					w.firstRunNext.SetSensitive(true)
+					w.showFirstRunStep()
+					w.ShowErrorToast(err.Error())
+					return
+				}
+				w.firstRunActive = false
+				w.GetApplication().Quit()
+			})
+		}()
 		return
 	}
 	w.firstRunActive = false
 	w.firstRunFooter.SetVisible(false)
+	w.firstRunContent.SetVisibleChildName("pages")
 	w.sidebarList.SetSensitive(true)
 	w.contentPage.SetCanPop(true)
 	w.splitView.SetCollapsed(w.firstRunCollapsed)
@@ -857,14 +918,121 @@ func (w *Window) finishFirstRun(completed bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), firstrun.WriteTimeout)
 		defer cancel()
 		store := firstrun.NewGSettingsStore()
-		var err error
-		if completed {
-			err = store.SetDisposition(ctx, firstrun.DispositionCompleted)
-		} else {
-			_, _, err = firstrun.RecordSkip(ctx, store)
-		}
+		_, _, err := firstrun.RecordSkip(ctx, store)
 		if err != nil {
 			sgtk.RunOnMainThread(func() { w.ShowErrorToast(err.Error()) })
 		}
 	}()
+}
+
+func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string) *gtk.Widget {
+	toolbar := adw.NewToolbarView()
+	header := adw.NewHeaderBar()
+	header.SetShowStartTitleButtons(false)
+	header.SetShowEndTitleButtons(false)
+	toolbar.AddTopBar(&header.Widget)
+
+	scrolled := gtk.NewScrolledWindow()
+	scrolled.SetPolicy(gtk.PolicyNeverValue, gtk.PolicyAutomaticValue)
+	scrolled.SetVexpand(true)
+
+	clamp := adw.NewClamp()
+	clamp.SetMaximumSize(620)
+	clamp.SetTighteningThreshold(480)
+	clamp.SetMarginTop(36)
+	clamp.SetMarginBottom(36)
+	clamp.SetMarginStart(24)
+	clamp.SetMarginEnd(24)
+
+	box := gtk.NewBox(gtk.OrientationVerticalValue, 18)
+	box.SetHalign(gtk.AlignCenterValue)
+	box.SetValign(gtk.AlignCenterValue)
+
+	eyebrow := gtk.NewLabel(eyebrowText)
+	eyebrow.AddCssClass("title-4")
+	eyebrow.AddCssClass("dim-label")
+	eyebrow.SetHalign(gtk.AlignCenterValue)
+	box.Append(&eyebrow.Widget)
+
+	wordmark := gtk.NewPicture()
+	wordmark.SetCanShrink(true)
+	wordmark.SetKeepAspectRatio(true)
+	wordmark.SetContentFit(gtk.ContentFitContainValue)
+	wordmark.SetHalign(gtk.AlignCenterValue)
+	wordmark.SetSizeRequest(260, 106)
+	views.SetAccessibleLabel(wordmark, "Bluefin")
+
+	wordmarkClamp := adw.NewClamp()
+	wordmarkClamp.SetMaximumSize(260)
+	wordmarkClamp.SetTighteningThreshold(260)
+	wordmarkClamp.SetHalign(gtk.AlignCenterValue)
+	wordmarkClamp.SetChild(&wordmark.Widget)
+	box.Append(&wordmarkClamp.Widget)
+
+	styleManager := adw.StyleManagerGetDefault()
+	lightPath, lightErr := firstrun.AssetPath(firstrun.AssetWordmarkLight)
+	darkPath, darkErr := firstrun.AssetPath(firstrun.AssetWordmarkDark)
+	if lightErr != nil || darkErr != nil {
+		log.Printf("firstrun: loading welcome wordmark: %v, %v", lightErr, darkErr)
+	}
+	currentPath := ""
+	applyWordmark := func() {
+		path := lightPath
+		if styleManager != nil && styleManager.GetDark() {
+			path = darkPath
+		}
+		if path == currentPath {
+			return
+		}
+		currentPath = path
+		wordmark.SetFilename(path)
+	}
+	applyWordmark()
+	if styleManager != nil {
+		changed := func(gobject.Object, uintptr) { applyWordmark() }
+		styleManager.ConnectNotify(&changed)
+	}
+
+	body := gtk.NewLabel(message)
+	body.AddCssClass("body")
+	body.AddCssClass("dim-label")
+	body.SetWrap(true)
+	body.SetJustify(gtk.JustifyCenterValue)
+	body.SetMaxWidthChars(54)
+	body.SetMarginTop(12)
+	body.SetVisible(message != "")
+	box.Append(&body.Widget)
+
+	quoteCard := gtk.NewBox(gtk.OrientationVerticalValue, 8)
+	quoteCard.AddCssClass("card")
+	quoteCard.SetMarginTop(12)
+	quoteCard.SetMarginBottom(12)
+	quoteCard.SetMarginStart(18)
+	quoteCard.SetMarginEnd(18)
+
+	// The conclusion quote is from projectbluefin.io's Mission section.
+	quote := gtk.NewLabel("“" + quotation + "”")
+	quote.AddCssClass("body")
+	quote.SetWrap(true)
+	quote.SetJustify(gtk.JustifyCenterValue)
+	quote.SetMaxWidthChars(48)
+	quote.SetMarginTop(12)
+	quote.SetMarginStart(16)
+	quote.SetMarginEnd(16)
+	quoteCard.Append(&quote.Widget)
+
+	attribution := gtk.NewLabel("— " + author)
+	attribution.AddCssClass("caption")
+	attribution.AddCssClass("dim-label")
+	attribution.SetHalign(gtk.AlignEndValue)
+	attribution.SetMarginBottom(12)
+	attribution.SetMarginEnd(20)
+	quoteCard.Append(&attribution.Widget)
+
+	box.Append(&quoteCard.Widget)
+
+	clamp.SetChild(&box.Widget)
+	scrolled.SetChild(&clamp.Widget)
+	toolbar.SetContent(&scrolled.Widget)
+	return &toolbar.Widget
 }
