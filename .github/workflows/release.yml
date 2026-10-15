@@ -29,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.6"
+          go-version: "1.26.9"
 
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
@@ -56,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.6"
+          go-version: "1.26.9"
 
       # Both run inside ghcr.io/projectbluefin/dakota:testing under a private
       # headless Mutter Wayland session (test/e2e/dakota.sh); the runner
@@ -91,7 +91,7 @@ jobs:
           # `stable` would let an unchanged tag rebuild against a newer
           # compiler. See ci pin Go and GoReleaser in the write-capable
           # release job (#88).
-          go-version: "1.26.6"
+          go-version: "1.26.9"
           # Do not restore or save Go caches in the write-capable release build;
           # prevents caches populated or modified by preceding gate/e2e jobs
           # from reaching the release binaries.
