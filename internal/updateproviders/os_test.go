@@ -315,3 +315,23 @@ func TestOperatingSystemApplyRejectsUnknownScope(t *testing.T) {
 		t.Fatalf("bootc stage calls = %d, want 0 for an unknown scope", bootcCalls)
 	}
 }
+func TestParseStageFraction(t *testing.T) {
+	tests := []struct {
+		input string
+		want  float64
+	}{
+		{"[14/68] Fetching ostree chunk", 14.0 / 68.0},
+		{"(3/10) Downloading layers", 3.0 / 10.0},
+		{"Downloading 45% complete", 0.45},
+		{"Nothing to parse here", 0.0},
+		{"[0/0] invalid bounds", 0.0},
+		{"[10/5] out of bounds", 0.0},
+	}
+	for _, tc := range tests {
+		got := parseStageFraction(tc.input)
+		diff := got - tc.want
+		if diff < -0.001 || diff > 0.001 {
+			t.Errorf("parseStageFraction(%q) = %f, want %f", tc.input, got, tc.want)
+		}
+	}
+}

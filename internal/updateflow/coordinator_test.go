@@ -1103,3 +1103,71 @@ func TestCheckTreatsUnavailableAsUnsupportedNotFailed(t *testing.T) {
 		t.Fatalf("unavailable source = %#v, want Available=false, Enabled=false, CheckErr=nil", source)
 	}
 }
+func TestCoordinatorFractionTracksStages(t *testing.T) {
+	first := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "halfway", Fraction: 0.5})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	second := &testProvider{
+		id:        DeveloperTools,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: DeveloperTools, Message: "halfway", Fraction: 0.5})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	current := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+		{ID: DeveloperTools, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "tool"}}},
+	}}
+	c := New([]Provider{first, second}, nil)
+
+	type updateSnapshot struct {
+		fraction float64
+		phase    Phase
+	}
+	var snaps []updateSnapshot
+	c.UpdateAll(context.Background(), current, allPreferences(), func(s Snapshot) {
+		snaps = append(snaps, updateSnapshot{fraction: s.Fraction, phase: s.Phase})
+	})
+
+	if len(snaps) == 0 {
+		t.Fatal("no snapshots published")
+	}
+
+	// Verify fractions never decrease while phase is PhaseUpdating
+	var prevFraction float64
+	for i, s := range snaps {
+		if s.phase == PhaseUpdating {
+			if s.fraction < prevFraction {
+				t.Fatalf("fraction decreased from %f to %f at snapshot %d", prevFraction, s.fraction, i)
+			}
+			prevFraction = s.fraction
+		}
+	}
+
+	// Total stages = 2. Stage 1 halfway = (0 + 0.5)/2 = 0.25; stage 1 complete = 1/2 = 0.5.
+	// Stage 2 halfway = (1 + 0.5)/2 = 0.75; stage 2 complete = 2/2 = 1.0.
+	wantFractions := []float64{0.25, 0.5, 0.75, 1.0}
+	for _, want := range wantFractions {
+		found := false
+		for _, s := range snaps {
+			diff := s.fraction - want
+			if diff > -0.001 && diff < 0.001 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected fraction %f not found in published snapshots", want)
+		}
+	}
+}

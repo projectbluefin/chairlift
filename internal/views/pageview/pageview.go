@@ -430,6 +430,19 @@ func GamingWorkingSubtitle(enabled bool) string {
 	return "Removing…"
 }
 
+// GamingWorkingStepSubtitle returns the subtitle describing which gaming app
+// is currently being installed or removed and which step in the task.
+func GamingWorkingStepSubtitle(enabled bool, step, total int, componentName string) string {
+	verb := "Installing"
+	if !enabled {
+		verb = "Removing"
+	}
+	if componentName != "" {
+		return fmt.Sprintf("%s %s (%d of %d)…", verb, componentName, step+1, total)
+	}
+	return fmt.Sprintf("%s (%d of %d)…", verb, step+1, total)
+}
+
 // GamingResultSubtitle returns the subtitle after a gaming toggle completes.
 // changed is the number of apps installed or removed, and failed the number
 // that could not be.

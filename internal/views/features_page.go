@@ -732,12 +732,17 @@ func (uh *UserHome) onGamingToggledConfirmed(enabled bool, toggle *guardedSwitch
 	setActivitySpinner(uh.gamingSpinner, true)
 
 	go func() {
+		progressCb := func(step, total int, name string) {
+			sgtk.RunOnMainThread(func() {
+				row.SetSubtitle(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
+			})
+		}
 		var changed, kept []string
 		var failures []error
 		if enabled {
-			changed, failures = gaming.Enable()
+			changed, failures = gaming.EnableWithProgress(progressCb)
 		} else {
-			changed, kept, failures = gaming.Disable()
+			changed, kept, failures = gaming.DisableWithProgress(progressCb)
 		}
 		for _, failure := range failures {
 			log.Printf("views: gaming component failed: %v", failure)

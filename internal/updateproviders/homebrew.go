@@ -58,12 +58,24 @@ func (p *homebrewProvider) Check(context.Context) (updateflow.CheckResult, error
 	return updateflow.CheckResult{Items: items}, err
 }
 
-func (p *homebrewProvider) Apply(ctx context.Context, _ []updateflow.Item, _ func(updateflow.Progress)) (updateflow.ApplyResult, error) {
+func (p *homebrewProvider) Apply(ctx context.Context, _ []updateflow.Item, progress func(updateflow.Progress)) (updateflow.ApplyResult, error) {
+	if progress != nil {
+		progress(updateflow.Progress{
+			Source:  updateflow.DeveloperTools,
+			Message: "Updating software list…",
+		})
+	}
 	if err := ctx.Err(); err != nil {
 		return updateflow.ApplyResult{}, err
 	}
 	if err := p.deps.Update(ctx); err != nil {
 		return updateflow.ApplyResult{}, err
+	}
+	if progress != nil {
+		progress(updateflow.Progress{
+			Source:  updateflow.DeveloperTools,
+			Message: "Upgrading tools…",
+		})
 	}
 	if err := ctx.Err(); err != nil {
 		return updateflow.ApplyResult{}, err
@@ -77,7 +89,6 @@ func (p *homebrewProvider) Apply(ctx context.Context, _ []updateflow.Item, _ fun
 	}
 	return updateflow.ApplyResult{Changed: true}, nil
 }
-
 func (p *homebrewProvider) isDryRun() bool {
 	return p.deps.DryRun != nil && p.deps.DryRun()
 }

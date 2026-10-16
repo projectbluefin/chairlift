@@ -48,6 +48,17 @@ func (p *installProgress) start(bar *gtk.ProgressBar) {
 	p.timer = glib.TimeoutAdd(100, &p.pulse, 0)
 }
 
+func (p *installProgress) setDeterminate(bar *gtk.ProgressBar, fraction float64) {
+	if p.disposed {
+		return
+	}
+	if p.timer != 0 {
+		glib.SourceRemove(p.timer)
+		p.timer = 0
+	}
+	bar.SetVisible(true)
+	bar.SetFraction(fraction)
+}
 func (p *installProgress) stop(bar *gtk.ProgressBar) {
 	if p.disposed {
 		return
