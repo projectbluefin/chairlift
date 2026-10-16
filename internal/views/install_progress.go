@@ -52,7 +52,8 @@ func (p *installProgress) setDeterminate(bar *gtk.ProgressBar, fraction float64)
 	if p.disposed {
 		return
 	}
-	if p.timer != 0 {
+	delete(p.active, bar)
+	if len(p.active) == 0 && p.timer != 0 {
 		glib.SourceRemove(p.timer)
 		p.timer = 0
 	}
