@@ -112,16 +112,19 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 		return
 	}
 
-	uh.setBundleInstallProgress(true)
+	uh.setBundleInstallProgress(true, 0, len(toInstall), "")
 
 	go func() {
 		var failedNames []string
 		var hadTrustErr bool
 		var lastTrustErrName string
 
-		for _, item := range toInstall {
+		for idx, item := range toInstall {
 			b := item.bundle
 			collection := bundleview.Describe(b.Name, b.Description, item.total)
+			sgtk.RunOnMainThread(func() {
+				uh.setBundleInstallProgress(true, idx, len(toInstall), collection.Title)
+			})
 			var itemFailed bool
 
 			// Install primary and any configured member Brewfiles
@@ -156,8 +159,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 
 		sgtk.RunOnMainThread(func() {
 			defer uh.bundleInstallGate.Reset()
-			uh.setBundleInstallProgress(false)
-
+			uh.setBundleInstallProgress(false, len(toInstall), len(toInstall), "")
 			if dryrun.Enabled() {
 				if uh.toastAdder != nil {
 					uh.toastAdder.ShowToast("[DRY-RUN] Preview: selected collections would be installed — no changes made")
@@ -180,17 +182,23 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 	}()
 }
 
-func (uh *UserHome) setBundleInstallProgress(busy bool) {
+func (uh *UserHome) setBundleInstallProgress(busy bool, current, total int, currentName string) {
 	if uh.bundleInstallButton != nil {
 		uh.bundleInstallButton.SetSensitive(!busy)
 	}
-	if uh.bundleInstallSpinner != nil {
-		uh.bundleInstallSpinner.SetVisible(busy)
-		uh.bundleInstallSpinner.SetSpinning(busy)
-	}
 	if uh.bundleInstallBar != nil {
 		if busy {
-			uh.appInstallProgress.start(uh.bundleInstallBar)
+			text := fmt.Sprintf("%d of %d collections", current+1, total)
+			if currentName != "" {
+				text = fmt.Sprintf("%s (%d of %d)", currentName, current+1, total)
+			}
+			uh.bundleInstallBar.SetText(text)
+			fraction := float64(current) / float64(total)
+			if fraction <= 0 {
+				uh.appInstallProgress.start(uh.bundleInstallBar)
+			} else {
+				uh.appInstallProgress.setDeterminate(uh.bundleInstallBar, fraction)
+			}
 		} else {
 			uh.appInstallProgress.stop(uh.bundleInstallBar)
 		}

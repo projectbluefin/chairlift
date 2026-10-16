@@ -673,7 +673,27 @@ func (s *UpdateShell) renderPrimaryAction(presentation updatepresent.Presentatio
 func (s *UpdateShell) renderProgress(snapshot updateflow.Snapshot) {
 	visible := updatepresent.ShowProgress(snapshot.Phase)
 	s.progress.SetVisible(visible)
-	if visible && s.progressTimer == 0 {
+	if !visible {
+		if s.progressTimer != 0 {
+			glib.SourceRemove(s.progressTimer)
+			s.progressTimer = 0
+		}
+		s.progress.SetFraction(0)
+		return
+	}
+
+	presentation := updatepresent.Snapshot(snapshot)
+	if presentation.ProgressDeterminate {
+		if s.progressTimer != 0 {
+			glib.SourceRemove(s.progressTimer)
+			s.progressTimer = 0
+		}
+		s.progress.SetFraction(presentation.ProgressFraction)
+		return
+	}
+
+	// Indeterminate activity mode (checking or unquantified provider phase)
+	if s.progressTimer == 0 {
 		// Keep one callback identity across checks; provider snapshots can be
 		// silent for minutes while a command runs. GLib dispatches on GTK's thread.
 		if s.progressPulse == nil {
@@ -684,9 +704,6 @@ func (s *UpdateShell) renderProgress(snapshot updateflow.Snapshot) {
 		}
 		s.progress.Pulse()
 		s.progressTimer = glib.TimeoutAdd(100, &s.progressPulse, 0)
-	} else if !visible && s.progressTimer != 0 {
-		glib.SourceRemove(s.progressTimer)
-		s.progressTimer = 0
 	}
 }
 

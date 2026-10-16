@@ -221,12 +221,16 @@ func Setup(state State, progress func(string)) (State, error) {
 	if !state.Supported {
 		return state, ErrUnsupported
 	}
+	var neededSteps []Step
 	for _, step := range Steps() {
-		if !step.Needed(state) {
-			continue
+		if step.Needed(state) {
+			neededSteps = append(neededSteps, step)
 		}
+	}
+
+	for idx, step := range neededSteps {
 		if progress != nil {
-			progress(step.Name)
+			progress(fmt.Sprintf("%s (%d of %d)", step.Name, idx+1, len(neededSteps)))
 		}
 		if err := step.Run(); err != nil {
 			return Detect(), fmt.Errorf("%s: %w", strings.ToLower(step.Name), err)

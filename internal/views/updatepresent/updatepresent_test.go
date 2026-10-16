@@ -128,6 +128,20 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			want: Presentation{Status: "Applications: installing updates…"},
 		},
 		{
+			name: "updating with determinate progress",
+			state: updateflow.Snapshot{
+				Phase:    updateflow.PhaseUpdating,
+				Current:  updateflow.OperatingSystem,
+				Progress: "Downloading [14/68]",
+				Fraction: 0.25,
+			},
+			want: Presentation{
+				Status:              "Operating system: Downloading [14/68]",
+				ProgressFraction:    0.25,
+				ProgressDeterminate: true,
+			},
+		},
+		{
 			// Post-update maintenance: no source is updating, but the run
 			// is still cleaning up, so the panel keeps reporting it.
 			name: "maintenance before its first step",
