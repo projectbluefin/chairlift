@@ -315,6 +315,7 @@ func TestOperatingSystemApplyRejectsUnknownScope(t *testing.T) {
 		t.Fatalf("bootc stage calls = %d, want 0 for an unknown scope", bootcCalls)
 	}
 }
+
 func TestParseStageFraction(t *testing.T) {
 	tests := []struct {
 		input string

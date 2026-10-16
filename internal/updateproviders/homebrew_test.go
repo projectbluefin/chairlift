@@ -161,3 +161,30 @@ func TestHomebrewApplyDryRunReportsPreviewWithoutCompletedMutation(t *testing.T)
 		t.Fatal("dry-run Apply() does not report preview")
 	}
 }
+
+func TestHomebrewApplyReportsEachPhaseBeforeRunningIt(t *testing.T) {
+	var events []string
+	provider := newHomebrew(HomebrewDeps{
+		Update: func(context.Context) error {
+			events = append(events, "update")
+			return nil
+		},
+		Upgrade: func(context.Context, string) error {
+			events = append(events, "upgrade")
+			return nil
+		},
+	})
+
+	if _, err := provider.Apply(context.Background(), []updateflow.Item{{Name: "jq"}}, func(p updateflow.Progress) {
+		if p.Source != updateflow.DeveloperTools {
+			t.Errorf("progress source = %v, want %v", p.Source, updateflow.DeveloperTools)
+		}
+		events = append(events, p.Message)
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	want := []string{"Updating software list…", "update", "Upgrading tools…", "upgrade"}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("Apply() events = %q, want %q", events, want)
+	}
+}

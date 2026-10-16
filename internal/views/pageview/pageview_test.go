@@ -512,6 +512,7 @@ func TestHomebrewPackageButtonNameCarriesThePackage(t *testing.T) {
 		}
 	}
 }
+
 func TestGamingWorkingStepSubtitle(t *testing.T) {
 	tests := []struct {
 		enabled   bool

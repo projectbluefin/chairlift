@@ -60,6 +60,7 @@ func (p *installProgress) setDeterminate(bar *gtk.ProgressBar, fraction float64)
 	bar.SetVisible(true)
 	bar.SetFraction(fraction)
 }
+
 func (p *installProgress) stop(bar *gtk.ProgressBar) {
 	if p.disposed {
 		return
