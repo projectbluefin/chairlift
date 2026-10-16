@@ -89,6 +89,7 @@ func (p *homebrewProvider) Apply(ctx context.Context, _ []updateflow.Item, progr
 	}
 	return updateflow.ApplyResult{Changed: true}, nil
 }
+
 func (p *homebrewProvider) isDryRun() bool {
 	return p.deps.DryRun != nil && p.deps.DryRun()
 }

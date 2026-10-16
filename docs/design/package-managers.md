@@ -109,9 +109,11 @@ retryable and known inventory intact; verified live individual success starts
 a shared check. Do not add a second count or update-state owner in `UserHome`.
 
 [`UpdateShell`](../../internal/views/update_shell.go) renders snapshots with
-[`updatepresent`](../../internal/views/updatepresent/updatepresent.go). It
-pulses one reusable GLib timer while checking/updating, independent of provider
-output, and removes the timer at idle/disposal. Its visible toast overlay
+[`updatepresent`](../../internal/views/updatepresent/updatepresent.go). Its
+progress bar displays a determinate fraction when `snapshot.Fraction` is
+available (`Presentation.ProgressDeterminate`), or pulses from one reusable
+GLib timer during checking or unquantified operations, independent of provider
+output; idle, determinate progress and disposal remove the timer. Its visible toast overlay
 announces each phase's one status line, which sits under the primary action.
 `Presentation.ShowStatus` hides an empty header.
 `buildUpdatesPage` appends the rest of the Updates page to the shell's own

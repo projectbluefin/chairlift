@@ -206,6 +206,7 @@ func parseStageFraction(msg string) float64 {
 	}
 	return 0
 }
+
 func (p *operatingSystemProvider) bootcBooted() bool {
 	return p.deps.BootcBooted != nil && p.deps.BootcBooted()
 }

@@ -444,9 +444,6 @@ func DisableWithProgress(progress ProgressCallback) (removed, kept []string, fai
 		if progress != nil {
 			progress(idx, len(toRemove), component.Name)
 		}
-		if !slices.Contains(state.Installed, id) {
-			continue
-		}
 		ref := component.Ref()
 		var errs []error
 		if slices.Contains(state.UserInstalled, id) {

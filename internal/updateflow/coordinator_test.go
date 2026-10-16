@@ -1103,6 +1103,7 @@ func TestCheckTreatsUnavailableAsUnsupportedNotFailed(t *testing.T) {
 		t.Fatalf("unavailable source = %#v, want Available=false, Enabled=false, CheckErr=nil", source)
 	}
 }
+
 func TestCoordinatorFractionTracksStages(t *testing.T) {
 	first := &testProvider{
 		id:        Applications,
