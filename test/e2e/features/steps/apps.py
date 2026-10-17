@@ -129,6 +129,7 @@ def step_apps_progress_visibility(context, visibility):
         == (visibility == "shown")
     ), f"Apps progress bar is not {visibility}"
 
+
 @then("the Apps groups are ordered exactly")
 def step_group_order(context):
     want = [row["title"] for row in context.table]

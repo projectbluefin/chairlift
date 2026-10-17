@@ -104,10 +104,11 @@ duplicate it.
 **App Collections** lead the page: curated collections can be selected with
 checkboxes and installed in one step using the **Install** button. Expanding a
 collection reveals the names and kinds of the apps and tools inside, so you can
-read what an install will add before pressing the button. Installs show stepped progress while they run, using the same controls
-in the explicit setup flow. A collection whose apps and tools are all already on
-the system reads **(Installed)** when the page loads, not only after an install
-in the same session.
+read what an install will add before pressing the button. Installs show
+stepped progress while they run, using the same controls in the explicit setup
+flow. A collection whose apps and tools are all already on the system reads
+**(Installed)** when the page loads, not only after an install in the same
+session.
 
 **Installed Apps** and **Command-Line Tools** follow: installed casks first,
 then explicitly requested formulae (the packages Homebrew manages).

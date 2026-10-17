@@ -344,12 +344,21 @@ func (c *Coordinator) UpdateAll(
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
 
+		var lastMaintenanceFraction float64
 		maintenanceProgress := func(progress Progress) {
 			stateMu.Lock()
 			state.Current = progress.Source
 			state.Progress = progress.Message
-			state.Fraction = stageFraction(completedStages, progress.Fraction)
-			state.Determinate = progress.Fraction > 0
+			if progress.Fraction > 0 {
+				newF := stageFraction(completedStages, progress.Fraction)
+				if newF > lastMaintenanceFraction {
+					lastMaintenanceFraction = newF
+				}
+				state.Determinate = true
+			}
+			if lastMaintenanceFraction > state.Fraction {
+				state.Fraction = lastMaintenanceFraction
+			}
 			state.Generation = generation
 			progressState := derive(state)
 			stateMu.Unlock()

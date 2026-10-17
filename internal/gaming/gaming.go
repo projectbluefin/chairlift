@@ -449,27 +449,22 @@ func DisableWithProgress(progress ProgressCallback) (removed, kept []string, fai
 		id := component.ID
 		ref := component.Ref()
 		var errs []error
-		if slices.Contains(state.UserInstalled, id) {
+		hasUser := slices.Contains(state.UserInstalled, id)
+		hasUnshippedSystem := slices.Contains(state.SystemInstalled, id) && !shipped[id]
+		keep := slices.Contains(state.SystemInstalled, id) && shipped[id]
+		if (hasUser || hasUnshippedSystem) && progress != nil {
+			progress(step, toRemoveCount, component.Name)
+			step++
+		}
+		if hasUser {
 			if err := uninstallAll(removalRefs(component, scope.UserBranches[ref]), true); err != nil {
 				errs = append(errs, fmt.Errorf("user scope: %w", err))
 			}
 		}
-		keep := false
-		if slices.Contains(state.SystemInstalled, id) {
-			if shipped[id] {
-				keep = true
-			} else {
-				if progress != nil {
-					progress(step, toRemoveCount, component.Name)
-					step++
-				}
-				if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {
-					errs = append(errs, fmt.Errorf("system scope: %w", err))
-				}
+		if hasUnshippedSystem {
+			if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {
+				errs = append(errs, fmt.Errorf("system scope: %w", err))
 			}
-		} else if progress != nil {
-			progress(step, toRemoveCount, component.Name)
-			step++
 		}
 		switch {
 		case len(errs) != 0:

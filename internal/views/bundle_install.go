@@ -111,9 +111,8 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 		}
 		return
 	}
-
-	uh.setBundleInstallProgress(true, 0, len(toInstall), "")
-
+	firstCollection := bundleview.Describe(toInstall[0].bundle.Name, toInstall[0].bundle.Description, toInstall[0].total)
+	uh.setBundleInstallProgress(true, 0, len(toInstall), firstCollection.Title)
 	go func() {
 		var failedNames []string
 		var hadTrustErr bool
@@ -122,9 +121,11 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 		for idx, item := range toInstall {
 			b := item.bundle
 			collection := bundleview.Describe(b.Name, b.Description, item.total)
-			sgtk.RunOnMainThread(func() {
-				uh.setBundleInstallProgress(true, idx, len(toInstall), collection.Title)
-			})
+			if idx > 0 {
+				sgtk.RunOnMainThread(func() {
+					uh.setBundleInstallProgress(true, idx, len(toInstall), collection.Title)
+				})
+			}
 			var itemFailed bool
 
 			// Install primary and any configured member Brewfiles
@@ -188,9 +189,9 @@ func (uh *UserHome) setBundleInstallProgress(busy bool, current, total int, curr
 	}
 	if uh.bundleInstallBar != nil {
 		if busy {
-			text := fmt.Sprintf("%d of %d collections", current+1, total)
-			if currentName != "" {
-				text = fmt.Sprintf("%s (%d of %d)", currentName, current+1, total)
+			text := fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
+			if currentName == "" {
+				text = fmt.Sprintf("Installing (%d of %d)…", current+1, total)
 			}
 			uh.bundleInstallBar.SetText(text)
 			uh.appInstallProgress.start(uh.bundleInstallBar)

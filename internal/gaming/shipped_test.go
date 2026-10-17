@@ -1,10 +1,10 @@
 package gaming
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -113,28 +113,46 @@ func TestDisableLeavesAnImageShippedSystemCopyInPlace(t *testing.T) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
 	}
 }
+
 func TestDisableWithProgressDoesNotReportImageShippedComponents(t *testing.T) {
 	declareShipped(t, map[int]map[string]string{
-		0: {"protontrick.preinstall": "[Flatpak Preinstall " + protontrick + "]\n"},
+		0: {
+			"protonplus.preinstall":  "[Flatpak Preinstall " + protonPlus + "]\n",
+			"protontrick.preinstall": "[Flatpak Preinstall " + protontrick + "]\n",
+		},
 	}, "")
 	stubScope(t, Scope{
-		Installed: refsOf(protontrick, goverlay),
-		System:    refsOf(protontrick, goverlay),
+		Installed: refsOf(protonPlus, protontrick, goverlay),
+		User:      refsOf(protonPlus),
+		System:    refsOf(protonPlus, protontrick, goverlay),
 	}, nil)
-	fakeFlatpak(t, "exit 0")
+	log := fakeFlatpak(t, "exit 0")
 
-	var reported []string
+	var events []string
 	removed, kept, failures := DisableWithProgress(func(step, total int, name string) {
-		reported = append(reported, name)
+		if calls, err := os.ReadFile(log); err == nil && len(strings.TrimSpace(string(calls))) > 0 {
+			events = append(events, strings.Split(strings.TrimSpace(string(calls)), "\n")...)
+			_ = os.WriteFile(log, nil, 0o644)
+		}
+		events = append(events, fmt.Sprintf("progress:%d/%d:%s", step, total, name))
 	})
-	if len(failures) != 0 || len(removed) != 1 || removed[0] != goverlay {
+	if calls, err := os.ReadFile(log); err == nil && len(strings.TrimSpace(string(calls))) > 0 {
+		events = append(events, strings.Split(strings.TrimSpace(string(calls)), "\n")...)
+	}
+	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{goverlay}) {
 		t.Fatalf("DisableWithProgress: removed=%v, failures=%v", removed, failures)
 	}
-	if len(kept) != 1 || kept[0] != protontrick {
+	if !reflect.DeepEqual(kept, []string{protonPlus, protontrick}) {
 		t.Fatalf("DisableWithProgress: kept=%v", kept)
 	}
-	if slices.Contains(reported, "Protontricks") {
-		t.Errorf("reported = %v, should not include Protontricks (image-shipped, kept)", reported)
+	wantEvents := []string{
+		"progress:0/2:ProtonPlus",
+		"uninstall -y --user " + protonPlus,
+		"progress:1/2:GOverlay",
+		"uninstall -y --system " + goverlay,
+	}
+	if !reflect.DeepEqual(events, wantEvents) {
+		t.Errorf("DisableWithProgress events = %q, want %q", events, wantEvents)
 	}
 }
 

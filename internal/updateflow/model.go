@@ -101,10 +101,9 @@ type Snapshot struct {
 
 // Progress is one provider progress update.
 type Progress struct {
-	Source      SourceID
-	Message     string
-	Fraction    float64
-	Determinate bool
+	Source   SourceID
+	Message  string
+	Fraction float64
 }
 
 // CheckResult is the normalized result of a provider check.
