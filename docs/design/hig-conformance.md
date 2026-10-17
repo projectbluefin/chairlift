@@ -84,7 +84,6 @@ AdwApplicationWindow (360×294 minimum)
 | CSS | `dim-label` instead of `dimmed`; `GtkSpinner` instead of `AdwSpinner` | `dimmed` needs 1.7. `AdwSpinner` is within the floor but touches every spinner's lifecycle |
 | Dialogs | Switching the release channel and Roll Back confirm only through PolicyKit | A behavior change to the privileged flows, for its own review |
 | Dialogs | Closing during an update is refused with a banner rather than offered as a choice | Same |
-| Buttons | Gaming's Install Selected and Remove Selected stay sensitive with nothing selected | Same |
 | GSettings | Window size and maximized state are not remembered; no root schema | A new schema and its install surface |
 | Text | Many single-sentence subtitles end with a period; `[DRY-RUN]` toasts are long | Style churn across ~270 strings and their tests |
 | Color | Livery previews recolor SVGs with fixed Tango values | Previews are SVG files, not themed icons |

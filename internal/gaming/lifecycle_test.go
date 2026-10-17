@@ -561,6 +561,7 @@ func TestDisableReportsAComponentWithACopyLeftAsFailed(t *testing.T) {
 		t.Errorf("Disable() ran %v, want the user copy removed regardless", calls)
 	}
 }
+
 func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 	stubInstalled(t, []string{protonPlus, protontrick}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")

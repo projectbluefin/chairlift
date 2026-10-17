@@ -206,13 +206,16 @@ def step_fake_never(context, tool, subcommand):
 
 @then('the gaming preview {operation:w} all components {preposition:w} the system scope')
 def step_gaming_preview_all(context, operation, preposition):
-    verb = {"installs": "install", "removes": "uninstall"}[operation]
+    verb, want_preposition = {"installs": ("install", "into"), "removes": ("uninstall", "from")}[operation]
+    if preposition != want_preposition:
+        raise NotImplementedError(f"{operation} pairs with {want_preposition!r}, not {preposition!r}")
     for _, app_id, kind in GAMING_COMPONENTS:
         ref = app_id
         if kind == "runtime":
             ref = f"{app_id}//{STEAM_PLATFORM_BRANCH}"
         expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --system {ref}"
         assert atspi.poll(lambda: expected in _log(context)), f"{app_id} was not previewed: {expected!r}"
+
 
 @then('the switch in the "{row}" row {verdict:w} input')
 def step_switch_sensitivity(context, row, verdict):

@@ -723,6 +723,14 @@ removal before anything runs. A component with a removable copy left is
 reported as a failure, partial outcomes stay visible, and a dry-run keeps the
 confirmed inventory unchanged.
 
+Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
+toggle and are no longer gaming components. ChairLift deliberately leaves
+copies an earlier release installed in place: Disable acts only on the
+current stack, and uninstalling Steam would take the user's library and
+launcher with it. Removing them is left to the user (GNOME Software or
+`flatpak uninstall`). On such hosts the toggle reflects only the current
+components.
+
 ### Desktop integration switches (`internal/shellextensions`)
 
 `features_page.desktop_integrations_group` owns the Tailscale Integration and
@@ -1517,7 +1525,7 @@ is handled by the migration described above, not a current System namespace.
 - `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
 - Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
 - Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with a system-scope Flathub remote for selected gaming components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
+- Flatpak with a system-scope Flathub remote for the Gaming Mode components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
 - GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
 
 ### Key external Go dependencies

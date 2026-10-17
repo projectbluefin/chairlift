@@ -99,6 +99,7 @@ func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 		t.Error("DeveloperResultSubtitle does not distinguish the two directions")
 	}
 }
+
 func TestGamingRow(t *testing.T) {
 	on := GamingRow(true, 4, 0)
 	if on.Title != "Gaming Mode" || !strings.Contains(on.Subtitle, "installed") {
