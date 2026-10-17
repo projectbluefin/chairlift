@@ -236,6 +236,7 @@ type UserHome struct {
 	gamingGroup               *adw.PreferencesGroup
 	gamingRow                 *adw.ActionRow
 	gamingGate                actionstate.Gate
+	gamingDialogs             dialogRoute
 	developerOptions          []*developerOptionRow
 	wslBackend                string
 	wslCombo                  *adw.ComboRow

@@ -100,13 +100,17 @@ func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 	}
 }
 func TestGamingRow(t *testing.T) {
-	on := GamingRow(true)
+	on := GamingRow(true, 4, 0)
 	if on.Title != "Gaming Mode" || !strings.Contains(on.Subtitle, "installed") {
 		t.Errorf("GamingRow(true) = %+v, want title Gaming Mode and subtitle installed", on)
 	}
-	off := GamingRow(false)
+	off := GamingRow(false, 0, 4)
 	if off.Title != "Gaming Mode" || !strings.Contains(off.Subtitle, "Downloads can be large") {
 		t.Errorf("GamingRow(false) = %+v, want title Gaming Mode and subtitle mentioning Downloads can be large", off)
+	}
+	partial := GamingRow(false, 2, 2)
+	if !strings.Contains(partial.Subtitle, "Partly installed") || !strings.Contains(partial.Subtitle, "2 missing") {
+		t.Errorf("GamingRow(partial) = %+v, want subtitle describing partial installation", partial)
 	}
 }
 func TestGamingResultReportsCountsAndFailures(t *testing.T) {

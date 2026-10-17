@@ -359,9 +359,9 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) 
 // only when protontricksInstalled; remote-info answers when remoteAnswers.
 func fakeRealFlatpak(t *testing.T, l listing, protontricksInstalled, remoteAnswers bool) string {
 	t.Helper()
-	info := "echo 'error: com.github.Matoking.protontricks/*unspecified*/*unspecified* not installed' >&2; exit 1"
+	info := "echo 'error: app not installed' >&2; exit 1"
 	if protontricksInstalled {
-		info = "echo '" + protontricksRuntime + "'; exit 0"
+		info = "if [ \"$3\" = \"com.valvesoftware.Steam\" ]; then echo 'error: steam not installed' >&2; exit 1; fi; echo '" + protontricksRuntime + "'; exit 0"
 	}
 	remote := "echo 'error: Unable to load summary from remote flathub' >&2; exit 1"
 	if remoteAnswers {

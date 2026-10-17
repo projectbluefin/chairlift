@@ -126,11 +126,6 @@ func kinds() []flatpak.Kind {
 	return result
 }
 
-// ComponentCount returns the total number of components in the gaming stack.
-func ComponentCount() int {
-	return len(components)
-}
-
 // Components returns the ordered inventory without exposing mutable state.
 func Components() []Component {
 	return slices.Clone(components)

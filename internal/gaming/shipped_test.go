@@ -138,4 +138,13 @@ func TestDisableFailsClosedWhenImageDeclarationsAreUnreadable(t *testing.T) {
 	if calls := invocations(t, log); len(calls) != 0 {
 		t.Errorf("Disable() ran %q, want nothing", calls)
 	}
+
+	stubScope(t, Scope{
+		Installed: refsOf(protontrick),
+		User:      refsOf(protontrick),
+	}, nil)
+	removed, _, failures = Disable()
+	if len(failures) != 0 || len(removed) != 1 || removed[0] != protontrick {
+		t.Errorf("Disable() user-only = (%v, %v), want only protontrick removed without reading declarations", removed, failures)
+	}
 }

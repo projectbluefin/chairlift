@@ -471,7 +471,7 @@ func DeveloperMode(dryRun bool, enable bool, skipped []string) FeatureToggleDeci
 // partly succeed. Confirm therefore is not simply !dryRun — a live run that
 // changed nothing, or whose every component failed, must not confirm either.
 //
-// kept counts selected components whose system copy came with the OS image,
+// kept counts components whose system copy came with the OS image,
 // which removal leaves in place. Those are neither a change nor a failure, so
 // they are reported separately: "0 removed" with no explanation, while the
 // components are still visibly installed, is the confusing outcome.
@@ -519,7 +519,7 @@ func GamingMode(dryRun bool, enable bool, changed, failed, kept int) FeatureTogg
 			Toast:   fmt.Sprintf("Couldn't %s any gaming apps. Try again.%s", base, suffix),
 		}
 	case changed == 0 && kept > 0:
-		// Nothing was removed, only because everything selected came with
+		// Nothing was removed, only because everything came with
 		// the image. The switch must not claim gaming mode is off.
 		return FeatureToggleDecision{
 			Confirm: false,

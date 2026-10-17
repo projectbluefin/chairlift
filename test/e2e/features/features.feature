@@ -75,7 +75,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
   Scenario: Gaming Mode toggle previews system install under dry run
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming Mode" row is off
+    Then the switch in the "Gaming Mode" row accepts input
+    And the switch in the "Gaming Mode" row is off
     When I toggle the switch in the "Gaming Mode" row
     Then the gaming preview installs all components into the system scope
     And the switch in the "Gaming Mode" row is off
@@ -86,8 +87,11 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
   Scenario: Disabling Gaming Mode previews removal under dry run
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming Mode" row is on
+    Then the switch in the "Gaming Mode" row accepts input
+    And the switch in the "Gaming Mode" row is on
     When I toggle the switch in the "Gaming Mode" row
+    Then a dialog titled "Turn Off Gaming Mode?" is shown
+    When I choose "Remove" in the dialog
     Then the gaming preview removes all components from the system scope
     And the switch in the "Gaming Mode" row is on
     And the fake flatpak was never asked to "uninstall"

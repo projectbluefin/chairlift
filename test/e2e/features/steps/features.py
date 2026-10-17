@@ -1,4 +1,4 @@
-"""Features destination steps: Developer Mode, selective Gaming and Printers.
+"""Features destination steps: Developer Mode, Gaming Mode and Printers.
 
 The Developer Mode switch shows the invoking account's real developer-group
 membership (internal/ublue reads it from the OS, and no stub can change it),

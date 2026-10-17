@@ -414,7 +414,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	group.SetDescription("Apps for playing games on this computer.")
 
 	row := adw.NewActionRow()
-	row.SetTitle(pageview.GamingRow(false).Title)
+	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
 	row.SetSubtitle(pageview.GamingCheckingSubtitle)
 	uh.gamingSpinner = newActivitySpinner()
 	row.AddSuffix(&uh.gamingSpinner.Widget)
@@ -422,7 +422,11 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 	gamingRow := row
 	var toggle *guardedSwitch
 	toggle = newGuardedSwitch(false, func(state bool) {
-		uh.onGamingToggled(state, toggle, gamingRow)
+		if !state {
+			uh.confirmGamingDisable(toggle, gamingRow)
+			return
+		}
+		uh.onGamingToggled(true, toggle, gamingRow)
 	})
 	toggle.widget.SetSensitive(false)
 
@@ -442,11 +446,10 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 			}
 			toggle.widget.SetSensitive(true)
 			toggle.set(state.Enabled)
-			row.SetSubtitle(pageview.GamingRow(state.Enabled).Subtitle)
+			row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), len(state.MissingCore)).Subtitle)
 		})
 	}()
 }
-
 
 // onDeveloperToggled grants or withdraws this account's developer access.
 func (uh *UserHome) onDeveloperToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
@@ -692,11 +695,37 @@ func (uh *UserHome) startDeveloperDevcontainerSetup(enabled, succeeded bool) {
 	}()
 }
 
+func (uh *UserHome) confirmGamingDisable(toggle *guardedSwitch, row *adw.ActionRow) {
+	if !uh.gamingGate.TryStart() {
+		toggle.set(true)
+		return
+	}
+	dialog := adw.NewAlertDialog("Turn Off Gaming Mode?", "Gaming tools are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Tools that came with the system are left in place. Game data is kept.")
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("remove", "Remove")
+	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
+	dialog.SetDefaultResponse("cancel")
+	dialog.SetCloseResponse("cancel")
+	uh.gamingDialogs.connect(dialog, func(response string) {
+		if response == "remove" {
+			uh.onGamingToggledConfirmed(false, toggle, row)
+		} else {
+			uh.gamingGate.Reset()
+			toggle.set(true)
+		}
+	})
+	dialog.Present(&uh.featuresPage.Widget)
+}
+
 // onGamingToggled installs or removes the gaming tools stack.
 func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
 	if !uh.gamingGate.TryStart() {
 		return
 	}
+	uh.onGamingToggledConfirmed(enabled, toggle, row)
+}
+
+func (uh *UserHome) onGamingToggledConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
 	toggle.widget.SetSensitive(false)
 	before := row.GetSubtitle()
 	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))

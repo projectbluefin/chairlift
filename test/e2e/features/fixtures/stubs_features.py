@@ -125,18 +125,6 @@ def gaming_installed(context):
     _fake_flatpak(context, system=GAMING_COMPONENTS)
 
 
-@stub("features-gaming-partial")
-def gaming_partial(context):
-    """Only ProtonPlus installed: one core component of four, so gaming is off."""
-    _fake_flatpak(context, system=GAMING_COMPONENTS[:1])
-
-
-@stub("features-gaming-user")
-def gaming_user(context):
-    """Every gaming component installed per-user, as earlier releases did."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS)
-
-
 @stub("features-gaming-unlistable")
 def gaming_unlistable(context):
     """A flatpak that cannot list any installation."""

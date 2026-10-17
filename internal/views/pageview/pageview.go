@@ -406,14 +406,18 @@ const GamingCheckingSubtitle = "Checking what is installed…"
 const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
 
 // GamingRow returns the gaming switch row text. active reports whether
-// the gaming stack is installed (internal/gaming.State.Enabled).
-func GamingRow(active bool) Row {
+// the gaming stack is installed. installed and missing report component counts
+// so a partially-installed stack displays what is present.
+func GamingRow(active bool, installed, missing int) Row {
 	row := Row{Title: "Gaming Mode"}
-	if active {
+	switch {
+	case active:
 		row.Subtitle = "ProtonPlus, Protontricks, and gaming overlays are installed."
-		return row
+	case installed > 0 && missing > 0:
+		row.Subtitle = fmt.Sprintf("Partly installed — %d missing. Toggle on to finish installing.", missing)
+	default:
+		row.Subtitle = "Install the tools for running Windows games, with a performance overlay. Downloads can be large."
 	}
-	row.Subtitle = "Install the tools for running Windows games, with a performance overlay. Downloads can be large."
 	return row
 }
 
