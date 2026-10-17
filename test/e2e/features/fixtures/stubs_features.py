@@ -22,12 +22,10 @@ CALLS_LOG = "features-calls.log"
 # internal/gaming's stack, in install order, with the listing kind each
 # component is published as (MangoHud is a runtime extension).
 GAMING_COMPONENTS = (
-    ("Steam", "com.valvesoftware.Steam", "app"),
-    ("ProtonUp-Qt", "net.davidotek.pupgui2", "app"),
+    ("ProtonPlus", "com.vysp3r.ProtonPlus", "app"),
     ("Protontricks", "com.github.Matoking.protontricks", "app"),
     ("GOverlay", "io.github.benjamimgois.goverlay", "app"),
     ("MangoHud", "org.freedesktop.Platform.VulkanLayer.MangoHud", "runtime"),
-    ("Flatseal", "com.github.tchx84.Flatseal", "app"),
 )
 
 # ubluehelper.DevGroups: membership in any one is "developer mode on".
@@ -58,7 +56,8 @@ def _recorder(context):
     return f'printf "%s\\n" "$(basename "$0") $*" >> "{log}"\n'
 
 
-# The branch Steam's runtime is on, which MangoHud is installed in.
+# The runtime branch the stubbed `flatpak info`/`remote-info` report for any
+# app (Steam or Protontricks), which MangoHud is installed in.
 STEAM_PLATFORM_BRANCH = "26.08"
 
 
@@ -124,18 +123,6 @@ def gaming_none(context):
 def gaming_installed(context):
     """Every gaming component installed system-wide, where ChairLift puts it."""
     _fake_flatpak(context, system=GAMING_COMPONENTS)
-
-
-@stub("features-gaming-partial")
-def gaming_partial(context):
-    """Only Steam installed: one core component of two, so gaming is off."""
-    _fake_flatpak(context, system=GAMING_COMPONENTS[:1])
-
-
-@stub("features-gaming-user")
-def gaming_user(context):
-    """Every gaming component installed per-user, as earlier releases did."""
-    _fake_flatpak(context, user=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-unlistable")

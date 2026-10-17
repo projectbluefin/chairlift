@@ -678,13 +678,13 @@ ChairLift PolicyKit action for gaming mode, and none may be added.
 
 Its components are not all applications, and `internal/gaming` models the
 difference rather than assuming it away. Each entry in the stack carries a
-`flatpak.Kind` — five are `KindApplication`, and MangoHud
-(`org.freedesktop.Platform.VulkanLayer.MangoHud`) is `KindRuntime`, because
-it ships as a Vulkan-layer extension of `org.freedesktop.Platform` rather
-than as an app. `flatpak list --app` and `flatpak list --runtime` are
-mutually exclusive filters, so the inventory runs one query per
-(scope, kind) pair — four in total — and keys its result on a
-`gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
+`flatpak.Kind` — ProtonPlus, Protontricks, and GOverlay are `KindApplication`,
+and MangoHud (`org.freedesktop.Platform.VulkanLayer.MangoHud`) is
+`KindRuntime`, because it ships as a Vulkan-layer extension of
+`org.freedesktop.Platform` rather than as an app. `flatpak list --app` and
+`flatpak list --runtime` are mutually exclusive filters, so the inventory
+runs one query per (scope, kind) pair — four in total — and keys its result
+on a `gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
 inventory reported MangoHud missing however it had been installed, which
 made Enable reinstall it on every run and left Disable unable to remove the
 ref ChairLift had put there (issue #75). Failure handling follows the same
@@ -696,33 +696,40 @@ MangoHud is also the one multi-branch component: Flathub publishes the layer
 once per Platform release (21.08 through 26.08 today), so a bare
 `flatpak install -y` or `uninstall -y` of its ID stops at flatpak's
 "Which do you want to use?" prompt and, with no stdin, fails with "No ref
-chosen". Its `Component.BranchOf` names Steam, which loads the layer: Enable
-installs `ID//BRANCH` with the branch of the runtime Steam runs on
-(`flatpak info --show-runtime`, or `flatpak remote-info --system --app
---show-runtime flathub` when Steam is not installed), and fails that one
-component rather than guess when neither answers. The inventory records each
+chosen". Enable installs `ID//BRANCH` with the branch of the runtime of the
+app that loads the layer: an installed Flatpak Steam's runtime when there is
+one (`flatpak info --show-runtime com.valvesoftware.Steam`), otherwise the
+runtime of the app `Component.BranchOf` names, Protontricks (`flatpak info
+--show-runtime`, or `flatpak remote-info --system --app --show-runtime
+flathub` when Protontricks is not installed). It fails that one component
+rather than guess when none of these answers. The inventory records each
 ref's installed branches per scope (`flatpak list --columns=…,branch`), and
 Disable removes every installed branch by its qualified ref.
 
-The Features page offers individual selections, not a single all-or-nothing
-switch. Enable and Disable validate the selected IDs before mutation. Enable
+The Features page offers a single clean toggle for Gaming Mode. Enable
 installs only components missing from both scopes, so a copy an earlier
-release installed per-user is not duplicated system-wide. Disable removes a
-selected component from exactly the scopes it is installed in — `--user` for
-a per-user copy, `--system` for a system copy, both when both exist — and
-never touches an unselected component; its confirmation dialog says that a
-system-wide copy goes for every account. The exception is a system copy the
-OS image declares it ships — a `[Flatpak Preinstall]` group in
-`/usr/share/flatpak/preinstall.d` or `/etc/flatpak/preinstall.d`, or a
-`flatpak` entry in `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`
-(Flatseal on Bluefin and Dakota). That copy predates gaming mode and is left
-in place: removing it would take a distro default from every account, and
-Flatpak records that uninstall as a permanent opt-out, so `flatpak
-preinstall` would not restore it. Such a component is reported as left in
-place, not removed, and a declaration that cannot be read fails the removal
-before anything runs. A component with a removable copy left is reported as a
-failure, partial outcomes stay visible, and a dry-run keeps the confirmed
-inventory unchanged.
+release installed per-user is not duplicated system-wide. Disable removes
+each installed component from exactly the scopes it is installed in — `--user`
+for a per-user copy, `--system` for a system copy, both when both exist.
+The exception is a system copy the OS image declares it ships — a
+`[Flatpak Preinstall]` group in `/usr/share/flatpak/preinstall.d` or
+`/etc/flatpak/preinstall.d`, or a `flatpak` entry in
+`/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`. That copy predates
+gaming mode and is left in place: removing it would take a distro default from
+every account, and Flatpak records that uninstall as a permanent opt-out, so
+`flatpak preinstall` would not restore it. Such a component is reported as
+left in place, not removed, and a declaration that cannot be read fails the
+removal before anything runs. A component with a removable copy left is
+reported as a failure, partial outcomes stay visible, and a dry-run keeps the
+confirmed inventory unchanged.
+
+Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
+toggle and are no longer gaming components. ChairLift deliberately leaves
+copies an earlier release installed in place: Disable acts only on the
+current stack, and uninstalling Steam would take the user's library and
+launcher with it. Removing them is left to the user (GNOME Software or
+`flatpak uninstall`). On such hosts the toggle reflects only the current
+components.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
@@ -1518,7 +1525,7 @@ is handled by the migration described above, not a current System namespace.
 - `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
 - Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
 - Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with a system-scope Flathub remote for selected gaming components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
+- Flatpak with a system-scope Flathub remote for the Gaming Mode components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
 - GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
 
 ### Key external Go dependencies

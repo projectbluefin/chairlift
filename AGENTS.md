@@ -755,21 +755,19 @@ An agent must not break these:
   its own gate refuses overlapping installs, previews use Homebrew's dry-run
   boundary without refreshing inventories, and failures never reverse developer
   access. IDEs and editors are not offered in the Developer group (Bazaar or
-  the Apps page). Gaming selects
-  typed application/runtime refs, installs missing ones system-wide, and
-  keeps partial failures visible. Its inventory reads both scopes, so a copy
-  an earlier release installed per-user counts as present and is not
-  reinstalled. Remove Selected uninstalls each *selected* component from
-  exactly the scopes it is observed in — the user copy with `--user`, the
-  system copy with `--system` — and nothing unselected; its confirmation says
-  system-wide copies go for every account. A system copy the OS image
-  declares it ships (`/usr/share/flatpak/preinstall.d`,
-  `/etc/flatpak/preinstall.d`, or
-  `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile` — Flatseal on
-  Bluefin and Dakota) is left in place and reported as such, so undoing
-  gaming mode never removes a distro default for every account; an
-  unreadable declaration fails the removal closed. A component with a
-  removable copy left is a failure, not a removal.
+  the Apps page). Gaming Mode is a single toggle that manages the gaming
+  tools stack (ProtonPlus, Protontricks, GOverlay, MangoHud), installs
+  missing ones system-wide with `flatpak install --system`, and keeps partial
+  failures visible. Its inventory reads both scopes, so a copy an earlier
+  release installed per-user counts as present and is not reinstalled.
+  Turning Gaming Mode off uninstalls each component from exactly the scopes
+  it is observed in — the user copy with `--user`, the system copy with
+  `--system`. A system copy the OS image declares it ships
+  (`/usr/share/flatpak/preinstall.d`, `/etc/flatpak/preinstall.d`, or
+  `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) is left in place
+  and reported as such, so undoing gaming mode never removes a distro default
+  for every account; an unreadable declaration fails the removal closed. A
+  component with a removable copy left is a failure, not a removal.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget

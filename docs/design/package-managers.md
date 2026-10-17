@@ -679,7 +679,7 @@ sets a process group and bounded wait; a root descendant is still outside the
 unprivileged caller's signaling authority. This administrator-owned extension
 surface is not permission to make the fixed provider helpers configurable.
 
-## Developer workstation and selected gaming components
+## Developer workstation and gaming components
 
 [`internal/devtools`](../../internal/devtools/devtools.go) owns WSL backends
 and Docker CLI setup under `features_page.dx_group`. The developer-access switch
@@ -718,25 +718,23 @@ installed tools; fixed helper words own the daemon lifecycle and invoking
 account's access. View mutations share `developerGate` and render post-action
 observations instead of assuming the requested state.
 
-[`internal/gaming`](../../internal/gaming/gaming.go) manages explicitly
-selected refs from `Components()`. Enable installs missing refs in the
-**system** scope (`Install(id, false)`, #503): Bluefin-family images
+[`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
+stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing
+refs in the **system** scope (`Install(id, false)`, #503): Bluefin-family images
 configure Flathub only as a system remote, and their policy is system-wide
 Flatpaks. The `flatpak` CLI authorizes that through Flatpak's own PolicyKit
 (`org.freedesktop.Flatpak.app-install`/`runtime-install`), not ChairLift's
 `pkexec` boundary. Its inventory queries application/runtime kinds in both
 scopes, so a per-user copy from an earlier release counts as installed and is
-not duplicated. Disable removes each selected ref from exactly the scopes it
+not duplicated. Disable removes each component from exactly the scopes it
 is observed in (`Uninstall(id, true)` for a user copy, `Uninstall(id, false)`
-for a system copy); unselected refs are never touched, and a ref with a copy
-left is a failure. A system copy the image declares it ships (Flatpak
-`preinstall.d` or Bluefin's `system-flatpaks.Brewfile`, read by
-`imageShipped`) is left in place and returned as kept rather than removed.
-Invalid selections fail before mutation, duplicates run
-once, and per-item failures preserve partial outcomes. The Features view
-serializes action/refresh with `gamingGate`; failed refreshes preserve last
-known state. Neither gaming nor per-user Homebrew trust adds a ChairLift
-privilege route.
+for a system copy), and a ref with a copy left is a failure. A system copy the
+image declares it ships (Flatpak `preinstall.d` or Bluefin's
+`system-flatpaks.Brewfile`, read by `imageShipped`) is left in place and
+returned as kept rather than removed. Per-item failures preserve partial
+outcomes. The Features view serializes action/refresh with `gamingGate`;
+failed refreshes preserve last known state. Neither gaming nor per-user
+Homebrew trust adds a ChairLift privilege route.
 
 ## Agent Mode (`internal/aistack`)
 

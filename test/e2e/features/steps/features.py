@@ -1,4 +1,4 @@
-"""Features destination steps: Developer Mode, selective Gaming and Printers.
+"""Features destination steps: Developer Mode, Gaming Mode and Printers.
 
 The Developer Mode switch shows the invoking account's real developer-group
 membership (internal/ublue reads it from the OS, and no stub can change it),
@@ -14,8 +14,7 @@ import os
 from behave import step, then
 
 import chairlift_atspi as atspi
-from apps import expander_header, expander_rows, focus_by_tab
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, account_is_developer
+from stubs_features import CALLS_LOG, GAMING_COMPONENTS, STEAM_PLATFORM_BRANCH, account_is_developer
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -205,63 +204,17 @@ def step_fake_never(context, tool, subcommand):
 # ---------------------------------------------------------------- Gaming
 
 
-def _gaming_checkbox(context, name):
-    row = atspi.row_containing(_content(context), name)
-    return atspi.find(row, lambda n: atspi.role(n) == "check box", "gaming selection for " + name)
-
-
-@step('I select the "{name}" gaming component')
-def step_select_gaming(context, name):
-    assert atspi.poll(lambda: atspi.sensitive(_gaming_checkbox(context, name))), "gaming inventory never settled"
-    choice = _gaming_checkbox(context, name)
-    if not atspi.checked(choice):
-        # Dakota's GtkCheckButton is focusable but exposes no AT-SPI action.
-        # Use the same bounded keyboard traversal as the editor expander.
-        focus_by_tab(context, choice, f"the {name!r} gaming selection")
-        atspi.press("space")
-    assert atspi.poll(lambda: atspi.checked(_gaming_checkbox(context, name))), "gaming selection was not applied"
-
-
-@then("no gaming component is selected")
-def step_no_gaming_selection(context):
-    assert atspi.poll(lambda: atspi.sensitive(_gaming_checkbox(context, "Steam"))), "gaming inventory never settled"
-    for name, _, _ in GAMING_COMPONENTS:
-        assert not atspi.checked(_gaming_checkbox(context, name)), "hidden default selection: " + name
-
-
-@then('each gaming component says "{status}"')
-def step_gaming_component_status(context, status):
-    for name, _, _ in GAMING_COMPONENTS:
-        def observed():
-            row = atspi.row_containing(_content(context), name)
-            return any(text.endswith(status) for text in atspi.all_text_under(row))
-        assert atspi.poll(observed), name + " never reported " + status
-
-
-@then('the gaming preview {operation:w} only "{name}" {preposition:w} the {scope:w} scope')
-def step_gaming_selected_preview(context, operation, name, preposition, scope):
-    verb = {"installs": "install", "removes": "uninstall"}[operation]
-    if scope not in ("system", "user"):
-        raise NotImplementedError(f"unknown Flatpak scope {scope!r}")
-    chosen = next(app_id for title, app_id, _ in GAMING_COMPONENTS if title == name)
-    expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --{scope} {chosen}"
-    assert atspi.poll(lambda: expected in _log(context)), "chosen app was not previewed"
-    other = "user" if scope == "system" else "system"
-    assert f"flatpak {verb} -y --{other} {chosen}" not in _log(context), f"chosen app was mutated in the {other} scope"
-    for _, app_id, _ in GAMING_COMPONENTS:
-        if app_id != chosen:
-            for each in ("user", "system"):
-                assert f"flatpak {verb} -y --{each} {app_id}" not in _log(context), "unchosen app was mutated: " + app_id
-
-
-@then("the Gaming inventory is read again after the change")
-def step_gaming_reread(context):
-    # One inventory at page build, one inside Enable/Disable, one from the
-    # refresh that follows: the runtime listing is internal/gaming's alone.
-    def reread():
-        return sum(1 for c in _calls(context) if c[:4] == ["flatpak", "list", "--user", "--runtime"]) >= 3
-
-    assert atspi.poll(reread), f"gaming state was not re-read after the change; calls {_calls(context)}"
+@then('the gaming preview {operation:w} all components {preposition:w} the system scope')
+def step_gaming_preview_all(context, operation, preposition):
+    verb, want_preposition = {"installs": ("install", "into"), "removes": ("uninstall", "from")}[operation]
+    if preposition != want_preposition:
+        raise NotImplementedError(f"{operation} pairs with {want_preposition!r}, not {preposition!r}")
+    for _, app_id, kind in GAMING_COMPONENTS:
+        ref = app_id
+        if kind == "runtime":
+            ref = f"{app_id}//{STEAM_PLATFORM_BRANCH}"
+        expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --system {ref}"
+        assert atspi.poll(lambda: expected in _log(context)), f"{app_id} was not previewed: {expected!r}"
 
 
 @then('the switch in the "{row}" row {verdict:w} input')

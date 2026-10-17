@@ -11,9 +11,9 @@ import (
 )
 
 // The read-only places in which the OS image names the Flatpaks it ships
-// system-wide. Remove Selected leaves a component's system copy in place when
-// any of them declares it: undoing gaming mode must not take a distro default
-// (Flatseal, on Bluefin and Dakota) away from every account on the computer,
+// system-wide. Switching Gaming Mode off leaves a component's system copy in
+// place when any of them declares it: undoing gaming mode must not take a
+// distro default away from every account on the computer,
 // and Flatpak records such an uninstall as a permanent opt-out, so the next
 // `flatpak preinstall` does not bring it back either.
 var (

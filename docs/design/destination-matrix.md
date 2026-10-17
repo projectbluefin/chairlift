@@ -50,7 +50,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
 | `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
-| `features_page` | `gaming_group` | Features selected gaming refs; `onGamingSelected` / `runGamingSelected`, `internal/gaming` |
+| `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
 | `agents_page` | `agents_group` | Agents service, the active model selector and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
 | `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
@@ -118,10 +118,10 @@ Provider-specific safety remains with each live owner:
   for an existing Lima-only machine. Both need KVM access; Docker requires an
   actually ready socket. Missing helper actions leave affected options visible
   but insensitive.
-- Gaming validates selected refs, distinguishes applications/runtimes and
-  user/system scope, installs system-wide, removes a selected app from each
-  scope it is in after confirmation — leaving a system copy the image ships
-  in place — and reports partial failures.
+- Gaming distinguishes applications/runtimes and user/system scope, installs
+  system-wide with a single toggle, and removes each component from every
+  scope it is in when disabled — leaving a system copy the image ships in
+  place — and reports partial failures.
 - Agent Mode is local and unprivileged: user service, loopback endpoint, no
   peer/offload controls. Readiness is observed HTTP health after the owned unit's
   restart/invocation-stamp boundary, not file presence or optimistic switch state.

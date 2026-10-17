@@ -10,12 +10,10 @@ import (
 )
 
 const (
-	steam       = "com.valvesoftware.Steam"
-	protonUp    = "net.davidotek.pupgui2"
+	protonPlus  = "com.vysp3r.ProtonPlus"
 	protontrick = "com.github.Matoking.protontricks"
 	goverlay    = "io.github.benjamimgois.goverlay"
 	mangohud    = "org.freedesktop.Platform.VulkanLayer.MangoHud"
-	flatseal    = "com.github.tchx84.Flatseal"
 )
 
 func allComponentIDs() []string {
@@ -119,7 +117,7 @@ func TestStackKindsCoverApplicationsAndRuntimes(t *testing.T) {
 }
 
 func TestCoreComponentsDefineTheOnOffThreshold(t *testing.T) {
-	wantCore := []string{steam, protonUp}
+	wantCore := []string{protonPlus, protontrick, goverlay, mangohud}
 	var got []string
 	for _, component := range components {
 		if component.Core {
@@ -145,7 +143,7 @@ func TestDeriveClassifiesEveryInstallationShape(t *testing.T) {
 			wantEnabled:   false,
 			wantInstalled: nil,
 			// Reported in stack order, not alphabetical.
-			wantMissingCore: []string{steam, protonUp},
+			wantMissingCore: []string{protonPlus, protontrick, goverlay, mangohud},
 		},
 		{
 			name:            "everything installed",
@@ -155,33 +153,17 @@ func TestDeriveClassifiesEveryInstallationShape(t *testing.T) {
 			wantMissingCore: nil,
 		},
 		{
-			name:            "core only is still on",
-			installed:       []string{steam, protonUp},
-			wantEnabled:     true,
-			wantInstalled:   []string{steam, protonUp},
-			wantMissingCore: nil,
-		},
-		{
-			// The trap this guards: a host with the extras but no Steam must
-			// not read as gaming mode on.
-			name:            "extras without core is off",
-			installed:       []string{protontrick, goverlay, mangohud, flatseal},
+			name:            "core missing one",
+			installed:       []string{protonPlus, protontrick, goverlay},
 			wantEnabled:     false,
-			wantInstalled:   []string{protontrick, goverlay, mangohud, flatseal},
-			wantMissingCore: []string{steam, protonUp},
-		},
-		{
-			name:            "one core component missing",
-			installed:       []string{steam, mangohud},
-			wantEnabled:     false,
-			wantInstalled:   []string{steam, mangohud},
-			wantMissingCore: []string{protonUp},
+			wantInstalled:   []string{protonPlus, protontrick, goverlay},
+			wantMissingCore: []string{mangohud},
 		},
 		{
 			name:            "unrelated apps are ignored",
-			installed:       []string{"org.mozilla.firefox", steam, protonUp},
+			installed:       append([]string{"org.mozilla.firefox"}, allComponentIDs()...),
 			wantEnabled:     true,
-			wantInstalled:   []string{steam, protonUp},
+			wantInstalled:   allComponentIDs(),
 			wantMissingCore: nil,
 		},
 	}
@@ -212,10 +194,9 @@ func TestSummaryDescribesEachState(t *testing.T) {
 		installed []string
 		wantHas   string
 	}{
-		{name: "off", installed: nil, wantHas: "Install Steam"},
-		{name: "partial", installed: []string{steam}, wantHas: "Partly installed"},
-		{name: "on but incomplete", installed: []string{steam, protonUp}, wantHas: "of 6 gaming components"},
-		{name: "complete", installed: allComponentIDs(), wantHas: "All 6 gaming components"},
+		{name: "off", installed: nil, wantHas: "Install ProtonPlus"},
+		{name: "partial", installed: []string{protonPlus}, wantHas: "Partly installed"},
+		{name: "complete", installed: allComponentIDs(), wantHas: "All 4 gaming components"},
 	}
 
 	for _, test := range tests {
@@ -242,14 +223,14 @@ func stubScope(t *testing.T, scope Scope, err error) {
 }
 
 func TestStatusUsesTheFlatpakQuery(t *testing.T) {
-	stubInstalled(t, []string{steam, protonUp, flatseal}, nil)
+	stubInstalled(t, allComponentIDs(), nil)
 
 	state, err := Status()
 	if err != nil {
 		t.Fatalf("Status() error = %v, want nil", err)
 	}
 	if !state.Enabled {
-		t.Errorf("Status().Enabled = false, want true with both core components installed")
+		t.Errorf("Status().Enabled = false, want true with all core components installed")
 	}
 }
 
@@ -266,10 +247,10 @@ func TestStatusPropagatesQueryFailure(t *testing.T) {
 func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 	stubInstalled(t, nil, errors.New("flatpak not installed"))
 
-	if installed, failures := Enable(allComponentIDs()); installed != nil || len(failures) != 1 {
+	if installed, failures := Enable(); installed != nil || len(failures) != 1 {
 		t.Errorf("Enable() = (%v, %v), want (nil, one error)", installed, failures)
 	}
-	if removed, kept, failures := Disable(allComponentIDs()); removed != nil || kept != nil || len(failures) != 1 {
+	if removed, kept, failures := Disable(); removed != nil || kept != nil || len(failures) != 1 {
 		t.Errorf("Disable() = (%v, %v, %v), want (nil, nil, one error)", removed, kept, failures)
 	}
 }
@@ -279,22 +260,22 @@ func TestEnableAndDisableAbortOnQueryFailure(t *testing.T) {
 // separately — a component can be in both.
 func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 	scope := Scope{
-		Installed: refsOf(steam, protonUp, mangohud),
-		User:      refsOf(protonUp, mangohud),
-		System:    refsOf(steam, mangohud),
+		Installed: refsOf(protonPlus, protontrick, mangohud),
+		User:      refsOf(protontrick, mangohud),
+		System:    refsOf(protonPlus, mangohud),
 	}
 
 	state := Derive(scope)
-	if !state.Enabled {
-		t.Error("Derive().Enabled = false, want true — both core components are present regardless of scope")
+	if state.Enabled {
+		t.Error("Derive().Enabled = true, want false — goverlay is missing")
 	}
-	if !reflect.DeepEqual(state.Installed, []string{steam, protonUp, mangohud}) {
+	if !reflect.DeepEqual(state.Installed, []string{protonPlus, protontrick, mangohud}) {
 		t.Errorf("Derive().Installed = %v, want every present component", state.Installed)
 	}
-	if !reflect.DeepEqual(state.UserInstalled, []string{protonUp, mangohud}) {
+	if !reflect.DeepEqual(state.UserInstalled, []string{protontrick, mangohud}) {
 		t.Errorf("Derive().UserInstalled = %v, want the user-scope components", state.UserInstalled)
 	}
-	if !reflect.DeepEqual(state.SystemInstalled, []string{steam, mangohud}) {
+	if !reflect.DeepEqual(state.SystemInstalled, []string{protonPlus, mangohud}) {
 		t.Errorf("Derive().SystemInstalled = %v, want the system-scope components", state.SystemInstalled)
 	}
 }

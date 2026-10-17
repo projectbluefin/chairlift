@@ -51,20 +51,20 @@ func declareShipped(t *testing.T, preinstall map[int]map[string]string, brewfile
 func TestShippedDeclarationsReadPreinstallAndBrewfileEntries(t *testing.T) {
 	declareShipped(t, map[int]map[string]string{
 		0: {
-			"gaming.preinstall": "# vendor\n[Flatpak Preinstall " + steam + "]\nBranch=stable\n\n" +
-				"[Flatpak Preinstall " + protonUp + "]\nInstall=false\n",
+			"gaming.preinstall": "# vendor\n[Flatpak Preinstall " + protonPlus + "]\nBranch=stable\n\n" +
+				"[Flatpak Preinstall " + protontrick + "]\nInstall=false\n",
 			"overridden.preinstall": "[Flatpak Preinstall " + goverlay + "]\n",
-			"ignored.txt":           "[Flatpak Preinstall " + protontrick + "]\n",
+			"ignored.txt":           "[Flatpak Preinstall " + mangohud + "]\n",
 		},
 		// An administrator's file of the same name replaces the vendor's.
 		1: {"overridden.preinstall": "[Flatpak Preinstall " + goverlay + "]\nInstall=false\n"},
-	}, "# Default system-wide flatpaks\nbrew \"htop\"\nflatpak \""+flatseal+"\"\n  flatpak '"+mangohud+"', remote: \"flathub\"\n")
+	}, "# Default system-wide flatpaks\nbrew \"htop\"\nflatpak \""+protontrick+"\"\n  flatpak '"+mangohud+"', remote: \"flathub\"\n")
 
 	shipped, err := imageShipped()
 	if err != nil {
 		t.Fatalf("imageShipped() error = %v", err)
 	}
-	want := map[string]bool{steam: true, flatseal: true, mangohud: true}
+	want := map[string]bool{protonPlus: true, protontrick: true, mangohud: true}
 	if !reflect.DeepEqual(shipped, want) {
 		t.Errorf("imageShipped() = %v, want %v", shipped, want)
 	}
@@ -85,28 +85,28 @@ func TestShippedDeclarationsTreatMissingFilesAsNone(t *testing.T) {
 // of a component the image does not ship.
 func TestDisableLeavesAnImageShippedSystemCopyInPlace(t *testing.T) {
 	declareShipped(t, map[int]map[string]string{
-		0: {"steam.preinstall": "[Flatpak Preinstall " + steam + "]\n"},
-	}, "flatpak \""+flatseal+"\"\n")
+		0: {"protonplus.preinstall": "[Flatpak Preinstall " + protonPlus + "]\n"},
+	}, "flatpak \""+protontrick+"\"\n")
 	stubScope(t, Scope{
-		Installed: refsOf(steam, protonUp, flatseal),
-		User:      refsOf(steam),
-		System:    refsOf(steam, protonUp, flatseal),
+		Installed: refsOf(protonPlus, protontrick, goverlay),
+		User:      refsOf(protonPlus),
+		System:    refsOf(protonPlus, protontrick, goverlay),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, kept, failures := Disable(allComponentIDs())
+	removed, kept, failures := Disable()
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
-	if !reflect.DeepEqual(removed, []string{protonUp}) {
+	if !reflect.DeepEqual(removed, []string{goverlay}) {
 		t.Errorf("Disable() removed = %v, want only the component the image does not ship", removed)
 	}
-	if !reflect.DeepEqual(kept, []string{steam, flatseal}) {
+	if !reflect.DeepEqual(kept, []string{protonPlus, protontrick}) {
 		t.Errorf("Disable() kept = %v, want the image-shipped components", kept)
 	}
 	want := []string{
-		"uninstall -y --user " + steam,
-		"uninstall -y --system " + protonUp,
+		"uninstall -y --user " + protonPlus,
+		"uninstall -y --system " + goverlay,
 	}
 	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
@@ -125,13 +125,13 @@ func TestDisableFailsClosedWhenImageDeclarationsAreUnreadable(t *testing.T) {
 	preinstallDirs = []string{notADir}
 	t.Cleanup(func() { preinstallDirs = previous })
 	stubScope(t, Scope{
-		Installed: refsOf(steam, protonUp),
-		User:      refsOf(protonUp),
-		System:    refsOf(steam),
+		Installed: refsOf(protonPlus, protontrick),
+		User:      refsOf(protontrick),
+		System:    refsOf(protonPlus),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, kept, failures := Disable([]string{steam})
+	removed, kept, failures := Disable()
 	if removed != nil || kept != nil || len(failures) != 1 || !strings.Contains(failures[0].Error(), "system image") {
 		t.Errorf("Disable() = (%v, %v, %v), want one failure naming the image declarations", removed, kept, failures)
 	}
@@ -139,8 +139,12 @@ func TestDisableFailsClosedWhenImageDeclarationsAreUnreadable(t *testing.T) {
 		t.Errorf("Disable() ran %q, want nothing", calls)
 	}
 
-	removed, _, failures = Disable([]string{protonUp})
-	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{protonUp}) {
-		t.Errorf("Disable(user copy only) = (%v, %v), want it removed without reading declarations", removed, failures)
+	stubScope(t, Scope{
+		Installed: refsOf(protontrick),
+		User:      refsOf(protontrick),
+	}, nil)
+	removed, _, failures = Disable()
+	if len(failures) != 0 || len(removed) != 1 || removed[0] != protontrick {
+		t.Errorf("Disable() user-only = (%v, %v), want only protontrick removed without reading declarations", removed, failures)
 	}
 }

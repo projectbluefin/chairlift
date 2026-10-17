@@ -100,6 +100,20 @@ func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 	}
 }
 
+func TestGamingRow(t *testing.T) {
+	on := GamingRow(true, 4, 0)
+	if on.Title != "Gaming Mode" || !strings.Contains(on.Subtitle, "installed") {
+		t.Errorf("GamingRow(true) = %+v, want title Gaming Mode and subtitle installed", on)
+	}
+	off := GamingRow(false, 0, 4)
+	if off.Title != "Gaming Mode" || !strings.Contains(off.Subtitle, "Downloads can be large") {
+		t.Errorf("GamingRow(false) = %+v, want title Gaming Mode and subtitle mentioning Downloads can be large", off)
+	}
+	partial := GamingRow(false, 2, 2)
+	if !strings.Contains(partial.Subtitle, "Partly installed") || !strings.Contains(partial.Subtitle, "2 missing") {
+		t.Errorf("GamingRow(partial) = %+v, want subtitle describing partial installation", partial)
+	}
+}
 func TestGamingResultReportsCountsAndFailures(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -123,25 +137,5 @@ func TestGamingResultReportsCountsAndFailures(t *testing.T) {
 					test.enabled, test.changed, test.failed, got, test.wantHas)
 			}
 		})
-	}
-}
-
-// Each of the four installation shapes reads differently, so a component
-// present in both scopes is not mistaken for a system-wide-only one, and the
-// e2e scenarios can tell them apart by suffix.
-func TestGamingComponentStatusNamesEveryScope(t *testing.T) {
-	tests := []struct {
-		user, system bool
-		want         string
-	}{
-		{want: "Not installed"},
-		{system: true, want: "Installed system-wide"},
-		{user: true, want: "Installed for your account"},
-		{user: true, system: true, want: "Installed system-wide and for your account"},
-	}
-	for _, test := range tests {
-		if got := GamingComponentStatus(test.user, test.system); got != test.want {
-			t.Errorf("GamingComponentStatus(%v, %v) = %q, want %q", test.user, test.system, got, test.want)
-		}
 	}
 }

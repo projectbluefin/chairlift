@@ -60,13 +60,13 @@ func listRow(entry, kindFlag string) string {
 	return strings.Join([]string{id, id, "1.0", branch}, "\t")
 }
 
-// steamRuntime is what `flatpak info --show-runtime` and `flatpak remote-info
-// --show-runtime` print for Steam.
-const steamRuntime = "org.freedesktop.Platform/x86_64/26.08"
+// protontricksRuntime is what `flatpak info --show-runtime` and `flatpak remote-info
+// --show-runtime` print for Protontricks.
+const protontricksRuntime = "org.freedesktop.Platform/x86_64/26.08"
 
 // answersRuntime is a fake flatpak body that succeeds at every mutation and
-// reports Steam's runtime, which is what Enable reads MangoHud's branch from.
-const answersRuntime = "case \"$1\" in info|remote-info) echo '" + steamRuntime + "' ;; esac\nexit 0\n"
+// reports Protontricks' runtime, which is what Enable reads MangoHud's branch from.
+const answersRuntime = "case \"$1\" in info|remote-info) echo '" + protontricksRuntime + "' ;; esac\nexit 0\n"
 
 // installs returns the install commands among calls, dropping the runtime
 // reads that precede a branch-qualified install.
@@ -157,8 +157,8 @@ func listingScript(l listing) string {
 // established here.
 func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
-		userApps:       []string{protonUp},
-		systemApps:     []string{steam},
+		userApps:       []string{protonPlus},
+		systemApps:     []string{protontrick},
 		systemRuntimes: []string{mangohud},
 	}))
 
@@ -167,15 +167,15 @@ func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
 		t.Fatalf("installedComponents() error = %v, want nil", err)
 	}
 
-	for _, id := range []string{steam, protonUp, mangohud} {
+	for _, id := range []string{protonPlus, protontrick, mangohud} {
 		if !scope.Installed[refOf(id)] {
 			t.Errorf("scope.Installed[%q] = false, want true — present in either scope counts as installed", id)
 		}
 	}
-	if !scope.User[refOf(protonUp)] || scope.System[refOf(protonUp)] {
-		t.Errorf("scope of %q = user %v, system %v; want user only", protonUp, scope.User[refOf(protonUp)], scope.System[refOf(protonUp)])
+	if !scope.User[refOf(protonPlus)] || scope.System[refOf(protonPlus)] {
+		t.Errorf("scope of %q = user %v, system %v; want user only", protonPlus, scope.User[refOf(protonPlus)], scope.System[refOf(protonPlus)])
 	}
-	for _, id := range []string{steam, mangohud} {
+	for _, id := range []string{protontrick, mangohud} {
 		if scope.User[refOf(id)] || !scope.System[refOf(id)] {
 			t.Errorf("scope of %q = user %v, system %v; want system only", id, scope.User[refOf(id)], scope.System[refOf(id)])
 		}
@@ -189,10 +189,9 @@ func TestGamingInventoryMergesUserAndSystemScopes(t *testing.T) {
 // ChairLift release had put there.
 func TestGamingInventorySeesAUserInstalledRuntimeExtension(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
-		userApps:     []string{steam, protonUp},
+		userApps:     []string{protonPlus, protontrick},
 		userRuntimes: []string{mangohud},
 	}))
-
 	state, err := Status()
 	if err != nil {
 		t.Fatalf("Status() error = %v, want nil", err)
@@ -214,10 +213,9 @@ func TestGamingInventorySeesAUserInstalledRuntimeExtension(t *testing.T) {
 // as installed in the system scope and nowhere else.
 func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
-		userApps:       []string{steam, protonUp},
+		userApps:       []string{protonPlus, protontrick},
 		systemRuntimes: []string{mangohud},
 	}))
-
 	state, err := Status()
 	if err != nil {
 		t.Fatalf("Status() error = %v, want nil", err)
@@ -233,7 +231,7 @@ func TestGamingInventoryScopesASystemRuntimeExtensionCorrectly(t *testing.T) {
 func TestGamingInventoryFailsClosedWhenEitherScopeIsUnreadable(t *testing.T) {
 	for _, scope := range []string{"--system", "--user"} {
 		t.Run(scope, func(t *testing.T) {
-			fakeFlatpak(t, listingScript(listing{userApps: []string{steam}, fail: []string{scope}}))
+			fakeFlatpak(t, listingScript(listing{userApps: []string{protonPlus}, fail: []string{scope}}))
 			if _, err := installedComponents(); err == nil {
 				t.Fatal("an unreadable scope must not classify missing or system-only components")
 			}
@@ -246,11 +244,10 @@ func TestGamingInventoryFailsClosedWhenEitherScopeIsUnreadable(t *testing.T) {
 // change removes. Surface the failure instead.
 func TestGamingInventoryFailsWhenARequiredKindAnswersInNeitherScope(t *testing.T) {
 	fakeFlatpak(t, listingScript(listing{
-		userApps:   []string{steam, protonUp},
-		systemApps: []string{flatseal},
+		userApps:   []string{protonPlus},
+		systemApps: []string{protontrick},
 		fail:       []string{"--runtime"},
 	}))
-
 	scope, err := installedComponents()
 	if err == nil {
 		t.Fatal("installedComponents() error = nil, want the runtime query's failure surfaced rather than MangoHud reported missing")
@@ -278,17 +275,17 @@ func TestGamingInventoryFailsWhenBothScopesFail(t *testing.T) {
 // Status runs the real seam end to end: a host with only one core component
 // present must report gaming mode off.
 func TestStatusDerivesFromTheRealFlatpakQuery(t *testing.T) {
-	fakeFlatpak(t, listingScript(listing{userApps: []string{steam}}))
+	fakeFlatpak(t, listingScript(listing{userApps: []string{protonPlus}}))
 
 	state, err := Status()
 	if err != nil {
 		t.Fatalf("Status() error = %v, want nil", err)
 	}
 	if state.Enabled {
-		t.Error("Status().Enabled = true, want false — one core component is missing")
+		t.Error("Status().Enabled = true, want false — core components are missing")
 	}
-	if !reflect.DeepEqual(state.MissingCore, []string{protonUp}) {
-		t.Errorf("Status().MissingCore = %v, want %v", state.MissingCore, []string{protonUp})
+	if !slices.Contains(state.MissingCore, protontrick) {
+		t.Errorf("Status().MissingCore = %v, want it to contain %s", state.MissingCore, protontrick)
 	}
 }
 
@@ -297,15 +294,15 @@ func TestStatusDerivesFromTheRealFlatpakQuery(t *testing.T) {
 // installed is removed from the user scope, without authorization.
 func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 	log := fakeFlatpak(t, listingScript(listing{
-		userApps:     []string{steam},
+		userApps:     []string{protonPlus},
 		userRuntimes: []string{mangohud},
 	}))
 
-	removed, _, failures := Disable(allComponentIDs())
+	removed, _, failures := Disable()
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
-	if !reflect.DeepEqual(removed, []string{steam, mangohud}) {
+	if !reflect.DeepEqual(removed, []string{protonPlus, mangohud}) {
 		t.Fatalf("Disable() removed = %v, want both user-scope refs including the runtime extension", removed)
 	}
 	calls := invocations(t, log)
@@ -325,17 +322,17 @@ func TestDisableRemovesTheUserScopeRuntimeExtension(t *testing.T) {
 // remote is added and no user-scope command runs.
 func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam),
-		User:      refsOf(steam),
+		Installed: refsOf(protonPlus),
+		User:      refsOf(protonPlus),
 	}, nil)
 	log := fakeFlatpak(t, answersRuntime)
 
-	installed, failures := Enable(allComponentIDs())
+	installed, failures := Enable()
 	if len(failures) != 0 {
 		t.Fatalf("Enable() failures = %v, want none", failures)
 	}
 
-	want := []string{protonUp, protontrick, goverlay, mangohud, flatseal}
+	want := []string{protontrick, goverlay, mangohud}
 	if !reflect.DeepEqual(installed, want) {
 		t.Errorf("Enable() installed = %v, want %v", installed, want)
 	}
@@ -359,12 +356,12 @@ func TestEnableInstallsOnlyTheMissingComponentsIntoTheSystemScope(t *testing.T) 
 // MangoHud in one branch per Platform release: a bare MangoHud ref is
 // ambiguous, so install and uninstall stop at flatpak's "Which do you want to
 // use?" prompt and, with no stdin, fail with "No ref chosen". info answers
-// only when steamInstalled; remote-info answers when remoteAnswers.
-func fakeRealFlatpak(t *testing.T, l listing, steamInstalled, remoteAnswers bool) string {
+// only when protontricksInstalled; remote-info answers when remoteAnswers.
+func fakeRealFlatpak(t *testing.T, l listing, protontricksInstalled, remoteAnswers bool) string {
 	t.Helper()
-	info := "echo 'error: com.valvesoftware.Steam/*unspecified*/*unspecified* not installed' >&2; exit 1"
-	if steamInstalled {
-		info = "echo '" + steamRuntime + "'; exit 0"
+	info := "echo 'error: app not installed' >&2; exit 1"
+	if protontricksInstalled {
+		info = "if [ \"$3\" = \"com.valvesoftware.Steam\" ]; then echo 'error: steam not installed' >&2; exit 1; fi; echo '" + protontricksRuntime + "'; exit 0"
 	}
 	remote := "echo 'error: Unable to load summary from remote flathub' >&2; exit 1"
 	if remoteAnswers {
@@ -378,42 +375,65 @@ func fakeRealFlatpak(t *testing.T, l listing, steamInstalled, remoteAnswers bool
 }
 
 // Flathub publishes MangoHud in several branches, so the bare ID never
-// installs. Enable installs the branch Steam runs on: the installed Steam's,
-// or — when Steam is not installed — the one Flathub publishes Steam against.
-func TestEnableInstallsMangoHudInTheBranchSteamRunsOn(t *testing.T) {
+// installs. Enable installs the branch Protontricks runs on: the installed
+// Protontricks', or — when Protontricks is not installed — the one Flathub
+// publishes Protontricks against.
+func TestEnableInstallsMangoHudInTheBranchProtontricksRunsOn(t *testing.T) {
 	for _, tt := range []struct {
-		name           string
-		steamInstalled bool
-		want           string
+		name                  string
+		protontricksInstalled bool
+		want                  string
 	}{
-		{name: "installed Steam", steamInstalled: true, want: mangohud + "//26.08"},
-		{name: "Steam on Flathub", steamInstalled: false, want: mangohud + "//25.08"},
+		{name: "installed Protontricks", protontricksInstalled: true, want: mangohud + "//26.08"},
+		{name: "Protontricks on Flathub", protontricksInstalled: false, want: mangohud + "//25.08"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			l := listing{}
-			if tt.steamInstalled {
-				l.systemApps = []string{steam}
+			if tt.protontricksInstalled {
+				l.systemApps = []string{protontrick}
 			}
-			log := fakeRealFlatpak(t, l, tt.steamInstalled, true)
+			log := fakeRealFlatpak(t, l, tt.protontricksInstalled, true)
 
-			installed, failures := Enable([]string{mangohud})
-			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{mangohud}) {
+			installed, failures := Enable()
+			if len(failures) != 0 || !slices.Contains(installed, mangohud) {
 				t.Fatalf("Enable(MangoHud) = %v, %v; want it installed", installed, failures)
 			}
-			if calls := installs(invocations(t, log)); !reflect.DeepEqual(calls, []string{"install -y --system " + tt.want}) {
+			if calls := installs(invocations(t, log)); !slices.Contains(calls, "install -y --system "+tt.want) {
 				t.Errorf("Enable(MangoHud) installed %q, want %q", calls, "install -y --system "+tt.want)
 			}
 		})
 	}
 }
 
+// Steam is not part of the stack, but when a Flatpak Steam is installed it is
+// what loads MangoHud into games, so its Platform branch wins over
+// Protontricks'.
+func TestEnableInstallsMangoHudInTheBranchAnInstalledSteamRunsOn(t *testing.T) {
+	log := fakeFlatpak(t, "case \"$1\" in\n"+
+		"info) if [ \"$3\" = "+steamAppID+" ]; then echo 'org.freedesktop.Platform/x86_64/24.08'; exit 0; fi; echo '"+protontricksRuntime+"'; exit 0 ;;\n"+
+		"remote-info) echo 'org.freedesktop.Platform/x86_64/25.08'; exit 0 ;;\n"+
+		"install|uninstall) exit 0 ;;\n"+
+		"esac\n"+listingScript(listing{systemApps: []string{protonPlus, protontrick, goverlay}}))
+
+	installed, failures := Enable()
+	if len(failures) != 0 || !slices.Contains(installed, mangohud) {
+		t.Fatalf("Enable(MangoHud) = %v, %v; want it installed", installed, failures)
+	}
+	want := "install -y --system " + mangohud + "//24.08"
+	if calls := installs(invocations(t, log)); !slices.Contains(calls, want) {
+		t.Errorf("Enable(MangoHud) installed %q, want %q", calls, want)
+	}
+}
+
 // A branch that cannot be read is a MangoHud failure, never a bare-ID install
 // that would stop at flatpak's prompt anyway.
 func TestEnableReportsAnUnreadableMangoHudBranchAsAFailure(t *testing.T) {
-	log := fakeRealFlatpak(t, listing{}, false, false)
+	log := fakeRealFlatpak(t, listing{
+		systemApps: []string{protonPlus, protontrick, goverlay},
+	}, false, false)
 
-	installed, failures := Enable([]string{mangohud})
-	if len(installed) != 0 || len(failures) != 1 || !strings.Contains(failures[0].Error(), mangohud) {
+	installed, failures := Enable()
+	if slices.Contains(installed, mangohud) || len(failures) != 1 || !strings.Contains(failures[0].Error(), mangohud) {
 		t.Fatalf("Enable(MangoHud) = %v, %v; want one failure naming %q", installed, failures, mangohud)
 	}
 	if calls := installs(invocations(t, log)); len(calls) != 0 {
@@ -426,15 +446,17 @@ func TestEnableReportsAnUnreadableMangoHudBranchAsAFailure(t *testing.T) {
 // every scope, by qualified ref.
 func TestDisableRemovesEveryInstalledMangoHudBranchByQualifiedRef(t *testing.T) {
 	log := fakeRealFlatpak(t, listing{
+		userApps:       []string{protonPlus},
 		userRuntimes:   []string{mangohud + "//25.08", mangohud + "//26.08"},
 		systemRuntimes: []string{mangohud + "//26.08"},
 	}, false, false)
 
-	removed, kept, failures := Disable([]string{mangohud})
-	if len(failures) != 0 || len(kept) != 0 || !reflect.DeepEqual(removed, []string{mangohud}) {
+	removed, kept, failures := Disable()
+	if len(failures) != 0 || len(kept) != 0 || !slices.Contains(removed, mangohud) {
 		t.Fatalf("Disable(MangoHud) = %v, %v, %v; want it removed", removed, kept, failures)
 	}
 	want := []string{
+		"uninstall -y --user " + protonPlus,
 		"uninstall -y --user " + mangohud + "//25.08",
 		"uninstall -y --user " + mangohud + "//26.08",
 		"uninstall -y --system " + mangohud + "//26.08",
@@ -453,20 +475,20 @@ func TestDisableRemovesEveryInstalledMangoHudBranchByQualifiedRef(t *testing.T) 
 // One unavailable Flathub app must not abort the rest of the stack.
 func TestEnableIsolatesAPerComponentInstallFailure(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam, protontrick, goverlay, mangohud, flatseal),
-		User:      refsOf(steam, protontrick, goverlay, mangohud, flatseal),
+		Installed: refsOf(protontrick, goverlay, mangohud),
+		User:      refsOf(protontrick, goverlay, mangohud),
 	}, nil)
 	fakeFlatpak(t, "echo 'error: app not found' >&2\nexit 1\n")
 
-	installed, failures := Enable(allComponentIDs())
+	installed, failures := Enable()
 	if len(installed) != 0 {
 		t.Errorf("Enable() installed = %v, want none", installed)
 	}
 	if len(failures) != 1 {
 		t.Fatalf("Enable() failures = %v, want exactly one — the single missing component", failures)
 	}
-	if !strings.Contains(failures[0].Error(), protonUp) {
-		t.Errorf("Enable() failure = %q, want it to name the component %q", failures[0], protonUp)
+	if !strings.Contains(failures[0].Error(), protonPlus) {
+		t.Errorf("Enable() failure = %q, want it to name the component %q", failures[0], protonPlus)
 	}
 }
 
@@ -474,7 +496,7 @@ func TestEnableReportsNothingWhenEveryComponentIsPresent(t *testing.T) {
 	stubInstalled(t, allComponentIDs(), nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	installed, failures := Enable(allComponentIDs())
+	installed, failures := Enable()
 	if len(installed) != 0 || len(failures) != 0 {
 		t.Errorf("Enable() = (%v, %v), want (none, none)", installed, failures)
 	}
@@ -489,28 +511,28 @@ func TestEnableReportsNothingWhenEveryComponentIsPresent(t *testing.T) {
 // that is not installed runs nothing.
 func TestDisableRemovesEachComponentFromTheScopesItIsIn(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam, protonUp, flatseal),
-		User:      refsOf(steam, protonUp),
-		System:    refsOf(steam, flatseal),
+		Installed: refsOf(protonPlus, protontrick, goverlay),
+		User:      refsOf(protonPlus, protontrick),
+		System:    refsOf(protonPlus, goverlay),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
-	removed, kept, failures := Disable(allComponentIDs())
+	removed, kept, failures := Disable()
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
 	if len(kept) != 0 {
 		t.Errorf("Disable() kept = %v, want none — the image declares nothing here", kept)
 	}
-	if !reflect.DeepEqual(removed, []string{steam, protonUp, flatseal}) {
+	if !reflect.DeepEqual(removed, []string{protonPlus, protontrick, goverlay}) {
 		t.Errorf("Disable() removed = %v, want every installed component", removed)
 	}
 
 	want := []string{
-		"uninstall -y --user " + steam,
-		"uninstall -y --system " + steam,
-		"uninstall -y --user " + protonUp,
-		"uninstall -y --system " + flatseal,
+		"uninstall -y --user " + protonPlus,
+		"uninstall -y --system " + protonPlus,
+		"uninstall -y --user " + protontrick,
+		"uninstall -y --system " + goverlay,
 	}
 	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
@@ -522,36 +544,36 @@ func TestDisableRemovesEachComponentFromTheScopesItIsIn(t *testing.T) {
 // scope, not a removal, even though its user copy went.
 func TestDisableReportsAComponentWithACopyLeftAsFailed(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam),
-		User:      refsOf(steam),
-		System:    refsOf(steam),
+		Installed: refsOf(protonPlus),
+		User:      refsOf(protonPlus),
+		System:    refsOf(protonPlus),
 	}, nil)
 	log := fakeFlatpak(t, "if [ \"$3\" = --system ]; then echo 'error: not allowed' >&2; exit 1; fi\nexit 0\n")
 
-	removed, _, failures := Disable([]string{steam})
+	removed, _, failures := Disable()
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none — the system copy is still installed", removed)
 	}
-	if len(failures) != 1 || !strings.Contains(failures[0].Error(), steam) || !strings.Contains(failures[0].Error(), "system scope") {
-		t.Fatalf("Disable() failures = %v, want one naming %q and the system scope", failures, steam)
+	if len(failures) != 1 || !strings.Contains(failures[0].Error(), protonPlus) || !strings.Contains(failures[0].Error(), "system scope") {
+		t.Fatalf("Disable() failures = %v, want one naming %q and the system scope", failures, protonPlus)
 	}
-	if calls := invocations(t, log); !slices.Contains(calls, "uninstall -y --user "+steam) {
+	if calls := invocations(t, log); !slices.Contains(calls, "uninstall -y --user "+protonPlus) {
 		t.Errorf("Disable() ran %v, want the user copy removed regardless", calls)
 	}
 }
 
 func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
-	stubInstalled(t, []string{steam, protonUp}, nil)
+	stubInstalled(t, []string{protonPlus, protontrick}, nil)
 	fakeFlatpak(t, "echo 'error: app is running' >&2\nexit 1\n")
 
-	removed, _, failures := Disable(allComponentIDs())
+	removed, _, failures := Disable()
 	if len(removed) != 0 {
 		t.Errorf("Disable() removed = %v, want none", removed)
 	}
 	if len(failures) != 2 {
 		t.Fatalf("Disable() failures = %v, want one per attempted component", failures)
 	}
-	for _, id := range []string{steam, protonUp} {
+	for _, id := range []string{protonPlus, protontrick} {
 		found := false
 		for _, failure := range failures {
 			if strings.Contains(failure.Error(), id) {
@@ -561,48 +583,5 @@ func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 		if !found {
 			t.Errorf("Disable() failures = %v, want one naming %q", failures, id)
 		}
-	}
-}
-
-func TestGamingSelectionMutatesOnlyChosenComponents(t *testing.T) {
-	for _, component := range components {
-		t.Run(component.ID, func(t *testing.T) {
-			stubInstalled(t, nil, nil)
-			log := fakeFlatpak(t, answersRuntime)
-			installed, failures := Enable([]string{component.ID, component.ID})
-			if len(failures) != 0 || !reflect.DeepEqual(installed, []string{component.ID}) {
-				t.Fatalf("selection result = %v %v", installed, failures)
-			}
-			want := component.ID
-			if component.BranchOf != "" {
-				want += "//26.08"
-			}
-			if calls := installs(invocations(t, log)); !reflect.DeepEqual(calls, []string{"install -y --system " + want}) {
-				t.Fatalf("selection installed unchosen or duplicate components: %v", calls)
-			}
-		})
-	}
-}
-
-func TestGamingSelectionRejectsUnknownBeforeAnyMutation(t *testing.T) {
-	stubInstalled(t, nil, nil)
-	log := fakeFlatpak(t, "exit 0")
-	if _, failures := Enable([]string{steam, "org.example.Unknown"}); len(failures) != 1 {
-		t.Fatal("unknown selection must fail")
-	}
-	if calls := invocations(t, log); len(calls) != 0 {
-		t.Fatalf("unknown selection partially installed: %v", calls)
-	}
-}
-
-func TestGamingRemovalLeavesUnselectedComponents(t *testing.T) {
-	stubInstalled(t, []string{steam, protonUp}, nil)
-	log := fakeFlatpak(t, "exit 0")
-	removed, _, failures := Disable([]string{protonUp})
-	if len(failures) != 0 || !reflect.DeepEqual(removed, []string{protonUp}) {
-		t.Fatalf("removal = %v %v", removed, failures)
-	}
-	if calls := invocations(t, log); !reflect.DeepEqual(calls, []string{"uninstall -y --system " + protonUp}) {
-		t.Fatalf("removed unselected component: %v", calls)
 	}
 }

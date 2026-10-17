@@ -205,14 +205,12 @@ both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
 built-in machine exists, rather than creating a second one. Likewise, a Debian
 machine the built-in engine made in an earlier release keeps being used, and
 the chooser says so, instead of an Ubuntu machine being created beside it.
-**Gaming** lets you select individual applications and tools, and installs
-them system-wide for every account on the computer, which may ask for an
-administrator password. Each row says whether that app is installed
-system-wide, for your account only (as earlier releases installed it), or
-both. **Remove Selected** asks first, then removes each selected app wherever
-it is installed, except a system-wide copy that came with the system (such as
-Flatseal), which is left in place. Partial failures stay visible instead of
-being reported as an all-or-nothing success.
+**Gaming** is a single toggle that installs gaming tools (ProtonPlus,
+Protontricks, GOverlay, MangoHud) system-wide for every account on the
+computer, which may ask for an administrator password. Turning it off removes
+each tool from every scope it is installed in, leaving in place any copy that
+came with the system. Partial failures stay visible instead of being reported
+as an all-or-nothing success.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — offering extra drivers for printers that don't work
 on their own. Each runs as a small container in your own account and only

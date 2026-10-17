@@ -72,7 +72,7 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 		// the setup gate has to reopen when its worker finishes or a second
 		// enable could never install anything. Update Features is offered
 		// again after every run (#488).
-		"features_page.go": {"developerGate", "developerFeedGate", "updateFeaturesGate"},
+		"features_page.go": {"developerGate", "developerFeedGate", "gamingGate", "updateFeaturesGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {

@@ -1,19 +1,18 @@
 @features
-Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, and Printers
-  Optional tools are explicit choices. Gaming installs system-wide and removes
-  a selected app from every scope it is in, except a system copy the image
-  ships; the fixed helper grants only the access each developer option needs.
-  Dry runs restore every control and preserve observed installed state.
+Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Printers
+  Optional tools are explicit choices. Gaming Mode installs gaming tools
+  system-wide with a single toggle; the fixed helper grants only the access
+  each developer option needs. Dry runs restore every control and preserve
+  observed installed state.
 
   @stub.features-gaming-installed @stub.features-devmenu
-  Scenario: Showing installed gaming components and Developer Mode runs no mutation
+  Scenario: Showing installed Gaming Mode and Developer Mode runs no mutation
     Given ChairLift is running
     When I open the "Features" page
     Then the Developer Mode switch shows this account's developer-group membership
     And I do not see "IDEs and terminal editors"
     And the application log does not contain "brew install devcontainer"
-    And each gaming component says "Installed system-wide"
-    And no gaming component is selected
+    And the switch in the "Gaming Mode" row is on
     And the action journal is empty
     And the fake flatpak was never asked to "install"
     And the fake flatpak was never asked to "uninstall"
@@ -73,106 +72,47 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, selective Gaming, a
     And the action journal is empty
 
   @stub.features-gaming-none
-  Scenario: Gaming install requires explicit selection
+  Scenario: Gaming Mode toggle previews system install under dry run
     Given ChairLift is running
     When I open the "Features" page
-    Then no gaming component is selected
-    When I click the "Install Selected" button
-    Then the application log does not contain "flatpak install"
-    And the fake flatpak was never asked to "install"
-
-  @stub.features-gaming-none
-  Scenario: Installing one selected gaming app never installs the other components
-    Given ChairLift is running
-    When I open the "Features" page
-    And I select the "Steam" gaming component
-    And I click the "Install Selected" button
-    Then the gaming preview installs only "Steam" into the system scope
-    And the "Install Selected" button is sensitive
-    And each gaming component says "Not installed"
+    Then the switch in the "Gaming Mode" row accepts input
+    And the switch in the "Gaming Mode" row is off
+    When I toggle the switch in the "Gaming Mode" row
+    Then the gaming preview installs all components into the system scope
+    And the switch in the "Gaming Mode" row is off
     And the fake flatpak was never asked to "install"
     And the action journal is empty
-
-  # Flathub publishes MangoHud once per Platform release, so a bare ID stops
-  # at flatpak's "Which do you want to use?" prompt and fails.
-  @stub.features-gaming-none
-  Scenario: MangoHud is installed in the branch Steam's runtime uses
-    Given ChairLift is running
-    When I open the "Features" page
-    And I select the "MangoHud" gaming component
-    And I click the "Install Selected" button
-    Then the gaming preview installs only "MangoHud" into the system scope
-    And the application log contains "[DRY-RUN] Would execute: flatpak install -y --system org.freedesktop.Platform.VulkanLayer.MangoHud//26.08"
-    And the fake flatpak was never asked to "install"
-    And the action journal is empty
-
-  @stub.features-gaming-partial
-  Scenario: A selected already-installed component is not reinstalled
-    Given ChairLift is running
-    When I open the "Features" page
-    And I select the "Steam" gaming component
-    And I click the "Install Selected" button
-    Then the Gaming inventory is read again after the change
-    And the application log does not contain "flatpak install"
 
   @stub.features-gaming-installed
-  Scenario: Removing one selected app is confirmed and restores its installed state under dry run
+  Scenario: Disabling Gaming Mode previews removal under dry run
     Given ChairLift is running
     When I open the "Features" page
-    And I select the "ProtonUp-Qt" gaming component
-    And I click the "Remove Selected…" button
-    Then a dialog titled "Remove Selected Gaming Apps?" is shown
+    Then the switch in the "Gaming Mode" row accepts input
+    And the switch in the "Gaming Mode" row is on
+    When I toggle the switch in the "Gaming Mode" row
+    Then a dialog titled "Turn Off Gaming Mode?" is shown
     When I choose "Remove" in the dialog
-    Then the gaming preview removes only "ProtonUp-Qt" from the system scope
-    And each gaming component says "Installed system-wide"
-    And the "Remove Selected…" button is sensitive
+    Then the gaming preview removes all components from the system scope
+    And the switch in the "Gaming Mode" row is on
     And the fake flatpak was never asked to "uninstall"
+    And the action journal is empty
 
-  # Dakota's /usr/share/ublue-os/homebrew/system-flatpaks.Brewfile ships
-  # Flatseal system-wide, so undoing gaming mode must leave that copy alone.
-  @stub.features-gaming-installed
-  Scenario: A selected gaming app that came with the system is left in place
-    Given ChairLift is running
-    When I open the "Features" page
-    And I select the "Flatseal" gaming component
-    And I click the "Remove Selected…" button
-    And I choose "Remove" in the dialog
-    Then the Gaming inventory is read again after the change
-    And the application log contains "views: gaming component com.github.tchx84.Flatseal came with the system"
-    And the application log does not contain "flatpak uninstall"
-    And each gaming component says "Installed system-wide"
-    And the "Remove Selected…" button is sensitive
-
-  @stub.features-gaming-user
-  Scenario: Per-user gaming apps an earlier release installed are removed from your account
-    Given ChairLift is running
-    When I open the "Features" page
-    Then each gaming component says "Installed for your account"
-    When I select the "Steam" gaming component
-    And I click the "Remove Selected…" button
-    And I choose "Remove" in the dialog
-    Then the gaming preview removes only "Steam" from the user scope
-    And the Gaming inventory is read again after the change
-    And each gaming component says "Installed for your account"
-    And the fake flatpak was never asked to "uninstall"
 
   @stub.features-gaming-unlistable
   Scenario: Gaming fails closed when installed components cannot be listed
     Given ChairLift is running
     When I open the "Features" page
     Then the "Gaming Mode" row says "Couldn't check which gaming apps are installed."
-    And the "Install Selected" button is insensitive
-    And the "Remove Selected…" button is insensitive
+    And the switch in the "Gaming Mode" row refuses input
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
   @stub.features-gaming-image @stub.features-gaming-installed
-  Scenario: A gaming image lists its system-wide components
+  Scenario: A gaming image presents the Gaming Mode switch
     Given ChairLift is running
     When I open the "Features" page
-    Then each gaming component says "Installed system-wide"
+    Then the switch in the "Gaming Mode" row is on
     And I see "Gaming Mode"
-
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
   Scenario: Without a Bluefin descriptor Developer and Gaming are not offered
     Given ChairLift is running

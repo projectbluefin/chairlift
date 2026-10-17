@@ -59,12 +59,13 @@ so they cost nothing on any other host.
   of developer feeds in your home folder once you switch it on — both are off
   by default, and turning Developer Mode back off never removes the reader, the
   staged file, or anything you imported from it.
-- **Gaming Mode**: Install Steam, ProtonUp-Qt, Protontricks, MangoHud,
-  GOverlay, and Flatseal as user Flatpaks — nothing is layered onto the system
-  image, so a system update never has to reconcile it. MangoHud is a Vulkan
-  layer extending the freedesktop runtime rather than an application, and is
-  inventoried as such, so it is installed once and removed again with the
-  rest of the stack
+- **Gaming Mode**: One switch installs ProtonPlus, Protontricks, GOverlay,
+  and MangoHud as system-wide Flatpaks from Flathub — nothing is layered onto
+  the system image, so a system update never has to reconcile it. Switching
+  it off removes them again, leaving any copy the image ships in place.
+  MangoHud is a Vulkan layer extending the freedesktop runtime rather than an
+  application, and is inventoried as such, so it is installed once and
+  removed again with the rest of the stack
 
 ### 🔄 Unified Updates
 
