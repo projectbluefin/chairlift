@@ -56,7 +56,7 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 		return Presentation{
 			Status:              updatingStatus(state),
 			ProgressFraction:    state.Fraction,
-			ProgressDeterminate: state.Fraction > 0,
+			ProgressDeterminate: state.Determinate,
 		}
 	case updateflow.PhasePartialFailure:
 		presentation := partialFailurePresentation(state)

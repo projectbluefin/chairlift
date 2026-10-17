@@ -104,8 +104,7 @@ duplicate it.
 **App Collections** lead the page: curated collections can be selected with
 checkboxes and installed in one step using the **Install** button. Expanding a
 collection reveals the names and kinds of the apps and tools inside, so you can
-read what an install will add before pressing the button. Installs show native
-activity and streamed command progress while they run, using the same controls
+read what an install will add before pressing the button. Installs show stepped progress while they run, using the same controls
 in the explicit setup flow. A collection whose apps and tools are all already on
 the system reads **(Installed)** when the page loads, not only after an install
 in the same session.
@@ -228,8 +227,8 @@ no Developer tools, no Gaming, no Printers, no optional features — the page
 says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.
-Developer and Gaming actions show an activity spinner while their changes
-are running, and errors are shown immediately rather than hidden behind an
+Developer actions show an activity spinner, and Gaming actions show step progress
+while their changes are running; errors are shown immediately rather than hidden behind an
 older message.
 
 ---

@@ -193,12 +193,7 @@ func (uh *UserHome) setBundleInstallProgress(busy bool, current, total int, curr
 				text = fmt.Sprintf("%s (%d of %d)", currentName, current+1, total)
 			}
 			uh.bundleInstallBar.SetText(text)
-			fraction := float64(current) / float64(total)
-			if fraction <= 0 {
-				uh.appInstallProgress.start(uh.bundleInstallBar)
-			} else {
-				uh.appInstallProgress.setDeterminate(uh.bundleInstallBar, fraction)
-			}
+			uh.appInstallProgress.start(uh.bundleInstallBar)
 		} else {
 			uh.appInstallProgress.stop(uh.bundleInstallBar)
 		}

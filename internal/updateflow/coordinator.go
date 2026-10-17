@@ -161,6 +161,7 @@ func (c *Coordinator) UpdateAll(
 	state.Current = ""
 	state.Progress = ""
 	state.Fraction = 0
+	state.Determinate = false
 	if !retry {
 		state.CompletedSources = make([]SourceID, 0)
 	}
@@ -237,6 +238,7 @@ func (c *Coordinator) UpdateAll(
 		state.Current = id
 		state.Progress = ""
 		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		state.Sources[index].Updating = true
 		state = derive(state)
 		stateMu.Unlock()
@@ -255,6 +257,7 @@ func (c *Coordinator) UpdateAll(
 				if newF > lastFraction {
 					lastFraction = newF
 				}
+				state.Determinate = true
 			}
 			if lastFraction > state.Fraction {
 				state.Fraction = lastFraction
@@ -307,6 +310,7 @@ func (c *Coordinator) UpdateAll(
 		state.Current = id
 		state.Progress = ""
 		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		if nextID := nextTargetID(c.providers, targets, id); nextID != "" {
 			state.Current = nextID
 			if nextIndex := sourceIndex(state.Sources, nextID); nextIndex >= 0 {
@@ -323,6 +327,7 @@ func (c *Coordinator) UpdateAll(
 	state.Current = ""
 	state.Progress = ""
 	state.Fraction = 0
+	state.Determinate = false
 	state = derive(state)
 	stateMu.Unlock()
 
@@ -334,6 +339,7 @@ func (c *Coordinator) UpdateAll(
 		state.MaintenanceRan = true
 		state.Maintaining = true
 		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
@@ -343,6 +349,7 @@ func (c *Coordinator) UpdateAll(
 			state.Current = progress.Source
 			state.Progress = progress.Message
 			state.Fraction = stageFraction(completedStages, progress.Fraction)
+			state.Determinate = progress.Fraction > 0
 			state.Generation = generation
 			progressState := derive(state)
 			stateMu.Unlock()
@@ -358,6 +365,7 @@ func (c *Coordinator) UpdateAll(
 		state.Current = ""
 		state.Progress = ""
 		state.Fraction = 0
+		state.Determinate = false
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
@@ -367,6 +375,7 @@ func (c *Coordinator) UpdateAll(
 	state.Current = ""
 	state.Progress = ""
 	state.Fraction = 0
+	state.Determinate = false
 	state = derive(state)
 	stateMu.Unlock()
 	if !c.commit(generation, state, publish) {

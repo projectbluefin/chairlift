@@ -85,6 +85,7 @@ type Snapshot struct {
 	Current          SourceID
 	Progress         string
 	Fraction         float64
+	Determinate      bool
 	TotalUpdates     int
 	CompletedSources []SourceID
 	FailedSources    []SourceID
@@ -100,9 +101,10 @@ type Snapshot struct {
 
 // Progress is one provider progress update.
 type Progress struct {
-	Source   SourceID
-	Message  string
-	Fraction float64
+	Source      SourceID
+	Message     string
+	Fraction    float64
+	Determinate bool
 }
 
 // CheckResult is the normalized result of a provider check.
