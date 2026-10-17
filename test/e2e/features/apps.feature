@@ -110,7 +110,7 @@ Feature: Apps destination
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
     And the "Install" button in the "Install Selected Collections" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
 
@@ -157,7 +157,7 @@ Feature: Apps destination
     When I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "/bundles/team-tools.Brewfile"
     And the "Install" button in the "Install Selected Collections" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew
@@ -205,5 +205,5 @@ Feature: Apps destination
     And I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "/bundles/fonts-dev.Brewfile"
     And the "Install" button in the "Install Selected Collections" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And the application log does not contain "panic"

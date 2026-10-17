@@ -128,6 +128,26 @@ func TestSetupInstallsTheExtractorBeforeTheCask(t *testing.T) {
 	}
 }
 
+// Progress counts only the steps that still have work, so a resumed setup
+// reads "(1 of 2)" rather than skipping numbers.
+func TestSetupReportsStepProgressAgainstTheNeededSteps(t *testing.T) {
+	fakeHost(t, "amd64", "linux-mcp-server")
+	recordBrew(t, "")
+
+	var got []string
+	if _, err := Setup(Detect(), func(msg string) { got = append(got, msg) }); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+
+	want := []string{
+		"Getting ready (1 of 2)",
+		"Installing the Goose app (2 of 2)",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Setup progress = %q, want %q", got, want)
+	}
+}
+
 func TestSetupResumesAHalfDoneInstall(t *testing.T) {
 	fakeHost(t, "amd64", "linux-mcp-server")
 	calls := recordBrew(t, "")

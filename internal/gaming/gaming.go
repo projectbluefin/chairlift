@@ -284,19 +284,34 @@ func Status() (State, error) {
 	return Derive(scope), nil
 }
 
+// ProgressCallback reports progress for gaming component install or removal.
+type ProgressCallback func(step, total int, componentName string)
+
 // Enable installs every missing component into the system scope.
 // A component already present in either scope is not reinstalled, and a
 // component failure does not abort the remaining entries.
 func Enable() (installed []string, failures []error) {
+	return EnableWithProgress(nil)
+}
+
+// EnableWithProgress installs missing components while reporting progress per component.
+func EnableWithProgress(progress ProgressCallback) (installed []string, failures []error) {
 	state, err := Status()
 	if err != nil {
 		return nil, []error{err}
 	}
 
+	var toInstall []Component
 	for _, component := range components {
+		if slices.Contains(state.Missing, component.ID) {
+			toInstall = append(toInstall, component)
+		}
+	}
+
+	for idx, component := range toInstall {
 		id := component.ID
-		if !slices.Contains(state.Missing, id) {
-			continue
+		if progress != nil {
+			progress(idx, len(toInstall), component.Name)
 		}
 		ref := id
 		if component.BranchOf != "" {
@@ -400,6 +415,11 @@ func uninstallAll(refs []string, user bool) error {
 // from each scope by one qualified ref per branch observed there, because a
 // bare ID matching several installed branches fails at flatpak's prompt.
 func Disable() (removed, kept []string, failures []error) {
+	return DisableWithProgress(nil)
+}
+
+// DisableWithProgress removes installed components while reporting progress per component.
+func DisableWithProgress(progress ProgressCallback) (removed, kept []string, failures []error) {
 	scope, err := listInstalled()
 	if err != nil {
 		return nil, nil, []error{err}
@@ -412,11 +432,21 @@ func Disable() (removed, kept []string, failures []error) {
 		}
 	}
 
+	var toProcess []Component
+	var toRemoveCount int
 	for _, component := range components {
-		id := component.ID
-		if !slices.Contains(state.Installed, id) {
+		if !slices.Contains(state.Installed, component.ID) {
 			continue
 		}
+		toProcess = append(toProcess, component)
+		if !slices.Contains(state.SystemInstalled, component.ID) || slices.Contains(state.UserInstalled, component.ID) || !shipped[component.ID] {
+			toRemoveCount++
+		}
+	}
+
+	step := 0
+	for _, component := range toProcess {
+		id := component.ID
 		ref := component.Ref()
 		var errs []error
 		if slices.Contains(state.UserInstalled, id) {
@@ -428,9 +458,18 @@ func Disable() (removed, kept []string, failures []error) {
 		if slices.Contains(state.SystemInstalled, id) {
 			if shipped[id] {
 				keep = true
-			} else if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {
-				errs = append(errs, fmt.Errorf("system scope: %w", err))
+			} else {
+				if progress != nil {
+					progress(step, toRemoveCount, component.Name)
+					step++
+				}
+				if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {
+					errs = append(errs, fmt.Errorf("system scope: %w", err))
+				}
 			}
+		} else if progress != nil {
+			progress(step, toRemoveCount, component.Name)
+			step++
 		}
 		switch {
 		case len(errs) != 0:
