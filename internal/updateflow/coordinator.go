@@ -328,6 +328,7 @@ func (c *Coordinator) UpdateAll(
 	state.Progress = ""
 	state.Fraction = 0
 	state.Determinate = false
+	state.Generation = generation
 	state = derive(state)
 	stateMu.Unlock()
 
@@ -375,6 +376,7 @@ func (c *Coordinator) UpdateAll(
 		state.Progress = ""
 		state.Fraction = 0
 		state.Determinate = false
+		state.Generation = generation
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
@@ -385,6 +387,7 @@ func (c *Coordinator) UpdateAll(
 	state.Progress = ""
 	state.Fraction = 0
 	state.Determinate = false
+	state.Generation = generation
 	state = derive(state)
 	stateMu.Unlock()
 	if !c.commit(generation, state, publish) {
