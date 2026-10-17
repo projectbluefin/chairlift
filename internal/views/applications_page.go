@@ -193,7 +193,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		headerInstallBtn.AddCssClass("suggested-action")
 		uh.bundleInstallButton = headerInstallBtn
 
-		progress := newInstallProgress("")
+		progress := newInstallProgress()
 		uh.bundleInstallBar = progress
 		headerRow.AddSuffix(&progress.Widget)
 		headerRow.AddSuffix(&headerInstallBtn.Widget)

@@ -5,7 +5,7 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// installProgress owns one reusable GTK-thread timer for all active installs.
+// installProgress owns one reusable GTK-thread timer for active installs.
 // Homebrew exposes no fraction: pulse honestly while the command is running,
 // without consuming output or enqueueing a callback for every printed line.
 type installProgress struct {
@@ -15,10 +15,9 @@ type installProgress struct {
 	disposed bool
 }
 
-func newInstallProgress(text string) *gtk.ProgressBar {
+func newInstallProgress() *gtk.ProgressBar {
 	bar := gtk.NewProgressBar()
 	bar.SetShowText(true)
-	bar.SetText(text)
 	bar.SetSizeRequest(180, -1)
 	bar.SetVisible(false)
 	return bar
