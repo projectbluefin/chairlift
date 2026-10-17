@@ -432,44 +432,57 @@ func DisableWithProgress(progress ProgressCallback) (removed, kept []string, fai
 		}
 	}
 
-	var toProcess []Component
+	type disableItem struct {
+		component          Component
+		hasUser            bool
+		hasUnshippedSystem bool
+		keep               bool
+	}
+	var toProcess []disableItem
 	var toRemoveCount int
 	for _, component := range components {
-		if !slices.Contains(state.Installed, component.ID) {
+		id := component.ID
+		if !slices.Contains(state.Installed, id) {
 			continue
 		}
-		toProcess = append(toProcess, component)
-		if !slices.Contains(state.SystemInstalled, component.ID) || slices.Contains(state.UserInstalled, component.ID) || !shipped[component.ID] {
+		hasUser := slices.Contains(state.UserInstalled, id)
+		inSystem := slices.Contains(state.SystemInstalled, id)
+		hasUnshippedSystem := inSystem && !shipped[id]
+		keep := inSystem && shipped[id]
+		toProcess = append(toProcess, disableItem{
+			component:          component,
+			hasUser:            hasUser,
+			hasUnshippedSystem: hasUnshippedSystem,
+			keep:               keep,
+		})
+		if hasUser || hasUnshippedSystem {
 			toRemoveCount++
 		}
 	}
 
 	step := 0
-	for _, component := range toProcess {
-		id := component.ID
-		ref := component.Ref()
+	for _, item := range toProcess {
+		id := item.component.ID
+		ref := item.component.Ref()
 		var errs []error
-		hasUser := slices.Contains(state.UserInstalled, id)
-		hasUnshippedSystem := slices.Contains(state.SystemInstalled, id) && !shipped[id]
-		keep := slices.Contains(state.SystemInstalled, id) && shipped[id]
-		if (hasUser || hasUnshippedSystem) && progress != nil {
-			progress(step, toRemoveCount, component.Name)
+		if (item.hasUser || item.hasUnshippedSystem) && progress != nil {
+			progress(step, toRemoveCount, item.component.Name)
 			step++
 		}
-		if hasUser {
-			if err := uninstallAll(removalRefs(component, scope.UserBranches[ref]), true); err != nil {
+		if item.hasUser {
+			if err := uninstallAll(removalRefs(item.component, scope.UserBranches[ref]), true); err != nil {
 				errs = append(errs, fmt.Errorf("user scope: %w", err))
 			}
 		}
-		if hasUnshippedSystem {
-			if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {
+		if item.hasUnshippedSystem {
+			if err := uninstallAll(removalRefs(item.component, scope.SystemBranches[ref]), false); err != nil {
 				errs = append(errs, fmt.Errorf("system scope: %w", err))
 			}
 		}
 		switch {
 		case len(errs) != 0:
 			failures = append(failures, fmt.Errorf("%s: %w", id, errors.Join(errs...)))
-		case keep:
+		case item.keep:
 			kept = append(kept, id)
 		default:
 			removed = append(removed, id)

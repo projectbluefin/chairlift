@@ -228,9 +228,9 @@ no Developer tools, no Gaming, no Printers, no optional features — the page
 says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.
-Developer actions show an activity spinner, and Gaming actions show step progress
-while their changes are running; errors are shown immediately rather than hidden behind an
-older message.
+Developer actions show an activity spinner, and Gaming actions show step
+progress while their changes are running; errors are shown immediately rather
+than hidden behind an older message.
 
 ---
 
