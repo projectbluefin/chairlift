@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -110,6 +111,30 @@ func TestDisableLeavesAnImageShippedSystemCopyInPlace(t *testing.T) {
 	}
 	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
+	}
+}
+func TestDisableWithProgressDoesNotReportImageShippedComponents(t *testing.T) {
+	declareShipped(t, map[int]map[string]string{
+		0: {"protontrick.preinstall": "[Flatpak Preinstall " + protontrick + "]\n"},
+	}, "")
+	stubScope(t, Scope{
+		Installed: refsOf(protontrick, goverlay),
+		System:    refsOf(protontrick, goverlay),
+	}, nil)
+	fakeFlatpak(t, "exit 0")
+
+	var reported []string
+	removed, kept, failures := DisableWithProgress(func(step, total int, name string) {
+		reported = append(reported, name)
+	})
+	if len(failures) != 0 || len(removed) != 1 || removed[0] != goverlay {
+		t.Fatalf("DisableWithProgress: removed=%v, failures=%v", removed, failures)
+	}
+	if len(kept) != 1 || kept[0] != protontrick {
+		t.Fatalf("DisableWithProgress: kept=%v", kept)
+	}
+	if slices.Contains(reported, "Protontricks") {
+		t.Errorf("reported = %v, should not include Protontricks (image-shipped, kept)", reported)
 	}
 }
 

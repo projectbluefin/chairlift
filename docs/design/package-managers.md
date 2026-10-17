@@ -110,8 +110,8 @@ a shared check. Do not add a second count or update-state owner in `UserHome`.
 
 [`UpdateShell`](../../internal/views/update_shell.go) renders snapshots with
 [`updatepresent`](../../internal/views/updatepresent/updatepresent.go). Its
-progress bar displays a determinate fraction when `snapshot.Fraction` is
-available (`Presentation.ProgressDeterminate`), or pulses from one reusable
+progress bar displays a determinate fraction when `snapshot.Determinate` is
+true (`Presentation.ProgressDeterminate`), or pulses from one reusable
 GLib timer during checking or unquantified operations, independent of provider
 output; idle, determinate progress and disposal remove the timer. Its visible toast overlay
 announces each phase's one status line, which sits under the primary action.

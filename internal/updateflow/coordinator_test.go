@@ -1171,4 +1171,89 @@ func TestCoordinatorFractionTracksStages(t *testing.T) {
 			t.Errorf("expected fraction %f not found in published snapshots", want)
 		}
 	}
+
+	// Verify clamp against decreasing fractions within a stage
+	descending := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "sixty", Fraction: 0.6})
+				progress(Progress{Source: Applications, Message: "thirty", Fraction: 0.3})
+				progress(Progress{Source: Applications, Message: "zero", Fraction: 0.0})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	descendingCurrent := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+	}}
+	descendingCoordinator := New([]Provider{descending}, nil)
+	var descendingSnaps []Snapshot
+	finalSnap := descendingCoordinator.UpdateAll(context.Background(), descendingCurrent, allPreferences(), func(s Snapshot) {
+		descendingSnaps = append(descendingSnaps, s)
+	})
+	var prevF float64
+	for _, s := range descendingSnaps {
+		if s.Phase == PhaseUpdating {
+			if s.Fraction < prevF {
+				t.Fatalf("fraction clamped failed: dropped from %f to %f", prevF, s.Fraction)
+			}
+			prevF = s.Fraction
+		}
+	}
+	if finalSnap.Fraction != 0 {
+		t.Errorf("final snapshot Fraction = %f, want 0", finalSnap.Fraction)
+	}
+
+	// Two runs: run 2 first update snapshot starts from 0
+	var run2FirstUpdateFrac float64
+	var run2Started bool
+	descendingCoordinator.UpdateAll(context.Background(), descendingCurrent, allPreferences(), func(s Snapshot) {
+		if s.Phase == PhaseUpdating && !run2Started {
+			run2FirstUpdateFrac = s.Fraction
+			run2Started = true
+		}
+	})
+	if run2FirstUpdateFrac != 0 {
+		t.Errorf("second run initial update fraction = %f, want 0", run2FirstUpdateFrac)
+	}
+	// Verify unquantified stage has Determinate == false while Fraction > 0
+	unquantifiedFirst := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "done", Fraction: 1.0})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	unquantifiedSecond := &testProvider{
+		id:        DeveloperTools,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				// Provider reports progress message with NO fraction
+				progress(Progress{Source: DeveloperTools, Message: "working"})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	unquantifiedCoord := New([]Provider{unquantifiedFirst, unquantifiedSecond}, nil)
+	unquantifiedCurrent := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+		{ID: DeveloperTools, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "tool"}}},
+	}}
+	var stage2UnquantifiedSawDeterminateFalse bool
+	unquantifiedCoord.UpdateAll(context.Background(), unquantifiedCurrent, allPreferences(), func(s Snapshot) {
+		if s.Phase == PhaseUpdating && s.Current == DeveloperTools && s.Progress == "working" {
+			if s.Fraction > 0 && !s.Determinate {
+				stage2UnquantifiedSawDeterminateFalse = true
+			}
+		}
+	})
+	if !stage2UnquantifiedSawDeterminateFalse {
+		t.Error("unquantified stage 2 should have Determinate == false while Fraction > 0 (stage floor)")
+	}
 }

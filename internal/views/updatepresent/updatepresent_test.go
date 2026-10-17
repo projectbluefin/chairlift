@@ -130,13 +130,14 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 		{
 			name: "updating with determinate progress",
 			state: updateflow.Snapshot{
-				Phase:    updateflow.PhaseUpdating,
-				Current:  updateflow.OperatingSystem,
-				Progress: "Downloading [14/68]",
-				Fraction: 0.25,
+				Phase:       updateflow.PhaseUpdating,
+				Current:     updateflow.OperatingSystem,
+				Progress:    "Downloading [14/68]",
+				Fraction:    0.25,
+				Determinate: true,
 			},
 			want: Presentation{
-				Status:              "Operating system: Downloading [14/68]",
+				Status:              "Operating System: Downloading [14/68]",
 				ProgressFraction:    0.25,
 				ProgressDeterminate: true,
 			},

@@ -314,8 +314,8 @@ An agent must not break these:
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
-  Its progress bar displays a determinate fraction when snapshot.Fraction
-  is available, or pulses from one reusable GLib callback during checking or
+  Its progress bar displays a determinate fraction when snapshot.Determinate
+  is true, or pulses from one reusable GLib callback during checking or
   unquantified operations; idle, determinate progress, and disposal remove the
   timer. A quiet external command must not freeze the indicator.
   The shell hands `Coordinator.Check` each source's `updateflow.Policy` from

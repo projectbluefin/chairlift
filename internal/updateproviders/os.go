@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -161,50 +160,15 @@ func (p *operatingSystemProvider) stageBootc(
 				return <-done
 			}
 			if event.Type == bootc.EventMessage && progress != nil {
-				fraction := parseStageFraction(event.Message)
 				progress(updateflow.Progress{
-					Source:   updateflow.OperatingSystem,
-					Message:  event.Message,
-					Fraction: fraction,
+					Source:  updateflow.OperatingSystem,
+					Message: event.Message,
 				})
 			}
 		case err := <-done:
 			return err
 		}
 	}
-}
-
-// parseStageFraction parses progress ratios or percentages like "[14/68]" or "45%"
-// from bootc/ostree staging output lines. Returns 0 if none found.
-func parseStageFraction(msg string) float64 {
-	// Look for [N/M] or (N/M) pattern
-	start := strings.IndexAny(msg, "[(")
-	if start >= 0 {
-		end := strings.IndexAny(msg[start:], "])")
-		if end > 0 {
-			seg := msg[start+1 : start+end]
-			parts := strings.Split(seg, "/")
-			if len(parts) == 2 {
-				var n, m float64
-				if _, err := fmt.Sscanf(strings.TrimSpace(parts[0]), "%f", &n); err == nil {
-					if _, err := fmt.Sscanf(strings.TrimSpace(parts[1]), "%f", &m); err == nil && m > 0 && n <= m {
-						return n / m
-					}
-				}
-			}
-		}
-	}
-	// Look for percentage like "45%"
-	if pctIdx := strings.Index(msg, "%"); pctIdx > 0 {
-		fields := strings.Fields(msg[:pctIdx])
-		if len(fields) > 0 {
-			var val float64
-			if _, err := fmt.Sscanf(fields[len(fields)-1], "%f", &val); err == nil && val >= 0 && val <= 100 {
-				return val / 100.0
-			}
-		}
-	}
-	return 0
 }
 
 func (p *operatingSystemProvider) bootcBooted() bool {
