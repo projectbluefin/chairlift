@@ -867,7 +867,7 @@ already-current system succeeds without staging anything (on composefs
 primary button; its one status line reads "Restart to finish updating".
 The header is a plain box built once in `UpdateShell.build`: the wordmark,
 then the primary action (or, while checking or installing, the progress
-bar in its place — determinate when the snapshot carries a fraction,
+bar in its place — determinate when `snapshot.Determinate` is true,
 otherwise pulsing), then one status line from
 `updatepresent.Presentation.Status`, with a second `Detail` line only for
 the two failure phases. `Presentation.ShowStatus` hides the header box

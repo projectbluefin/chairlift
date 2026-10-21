@@ -316,8 +316,10 @@ An agent must not break these:
   decision into the widget file or a string into the coordinator.
   Its progress bar displays a determinate fraction when snapshot.Determinate
   is true, or pulses from one reusable GLib callback during checking or
-  unquantified operations; idle, determinate progress, and disposal remove the
-  timer. A quiet external command must not freeze the indicator.
+  unquantified operations (a fraction-less progress event returns to pulsing
+  while Fraction preserves its monotonic floor); idle, determinate progress,
+  and disposal remove the timer. A quiet external command must not freeze the
+  indicator.
   The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:

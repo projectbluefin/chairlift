@@ -258,6 +258,8 @@ func (c *Coordinator) UpdateAll(
 					lastFraction = newF
 				}
 				state.Determinate = true
+			} else {
+				state.Determinate = false
 			}
 			if lastFraction > state.Fraction {
 				state.Fraction = lastFraction
@@ -356,6 +358,8 @@ func (c *Coordinator) UpdateAll(
 					lastMaintenanceFraction = newF
 				}
 				state.Determinate = true
+			} else {
+				state.Determinate = false
 			}
 			if lastMaintenanceFraction > state.Fraction {
 				state.Fraction = lastMaintenanceFraction
