@@ -48,7 +48,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
         ├── internal/devmenu/   Custom Command Menu tuple updater for developer tools and Ask Bluefin visibility
-        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets on auto-updating `:stable` images, one per driver family, and the pure readiness model behind the Features page's Printers group
+        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets pinned to signature-verified digests, one per driver family, and the pure readiness model behind the Features page's Printers group
         ├── internal/aistack/   Local llmman user service, observed health and canonical model aliases
         ├── internal/agentmode/ Goose Desktop readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch
         ├── internal/contribute/ Read-only contributor preflight and terminal command construction
@@ -1098,16 +1098,19 @@ readiness model, never from the unit file alone (#331, #361):
   rootless device access, service crash and image failures from generic failure;
   these diagnostics do not claim hardware testing.
 
-Each unit runs `ghcr.io/projectbluefin/<id>-printer-app:stable` with
-`AutoUpdate=registry` and `PublishPort=127.0.0.1:<port>:<port>`, never
+Each newly enabled unit runs a cosign-verified digest resolved from
+`ghcr.io/projectbluefin/<id>-printer-app:stable`, without registry auto-update,
+and with `PublishPort=127.0.0.1:<port>:<port>`, never
 `Network=host`: PAPPL's web administration is unauthenticated and shares the
 IPP listener, so the port is reachable only from this computer. LAN clients
 cannot print to it and its DNS-SD advertisement stays inside the container;
 the group description explains driver availability without claiming network sharing.
-`Enable` writes the unit, reloads systemd, starts the
-service, and runs `systemctl --user enable --now podman-auto-update.timer`;
-a failure at any step rolls a fresh install back (stop, remove the unit,
-reload). The toggle handler (`onPrinterAppToggled`) is admitted by a
+`Enable` verifies before writing the unit, reloads systemd and starts the
+service; a reload/start failure rolls a fresh install back (stop, remove,
+reload). `Refresh` verifies before rewriting and restarting an existing unit.
+Verification failure changes neither disk nor service state. ADR-0023 records
+this change from ADR-0020: old units require disable/re-enable to migrate;
+there is no scheduled verified refresh or Updates-page integration yet. The toggle handler (`onPrinterAppToggled`) is admitted by a
 per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
 under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
 a dry run and a failure both restore the switch and the row's last state, a

@@ -1023,15 +1023,19 @@ An agent must not break these:
   cold and running instances.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
   `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`), at build and again each time the group is shown (one `ConnectMap` handler, generation-guarded and passive while a session holds the gate), checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive; a requirement fixed outside ChairLift is picked up the next time Agents is shown. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Run`, reporting failures asynchronously; when the session ends or fails to start, the button returns through a fresh preflight rather than a blind re-enable. Previews under `--dry-run` log only and launch nothing.
-- **Printer applications are rootless, loopback-only quadlets on a moving
-  `:stable` tag, and never a false enabled indicator.**
+- **Printer applications are rootless, loopback-only quadlets pinned after
+  signature verification, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
   under `~/.config/containers/systemd` and drives it with `systemctl --user`
   in the invoking account; nothing here is privileged, and no `pkexec` route,
-  helper subcommand, or PolicyKit action may be added for it. Each family runs
-  `ghcr.io/projectbluefin/<id>-printer-app:stable` with `AutoUpdate=registry`,
-  and `Enable` runs `systemctl --user enable --now podman-auto-update.timer`
-  after a successful start, rolling a fresh install back if either fails.
+  helper subcommand, or PolicyKit action may be added for it. `Enable` and
+  `Refresh` verify each family's `:stable` reference with cosign against that
+  family's GitHub Actions publishing identity and issuer before writing a
+  unit. Only the digest from the verified payload reaches `Image=`; no
+  `AutoUpdate=registry` or Podman timer enable is emitted (ADR-0023).
+  Missing cosign, rejected signatures and malformed payloads fail closed.
+  Existing units are not automatically migrated; disabling and re-enabling
+  installs a verified pin. Scheduled verified refresh remains unimplemented.
   ADR-0020 is the network boundary: PAPPL's web administration is
   unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
   must never use `Network=host` or a non-loopback `PublishPort`. IPP and the

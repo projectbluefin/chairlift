@@ -45,8 +45,8 @@ const (
 
 // Family identifies one Printer Application family. Each runs its
 // projectbluefin *-printer-app image from GHCR at the moving `:stable` tag,
-// which the image's own release workflow advances; the unit carries
-// AutoUpdate=registry so podman-auto-update.timer pulls each new release.
+// which the image's own release workflow advances. Enable verifies the
+// signature and writes an immutable digest, never an auto-updating tag.
 type Family struct {
 	// ID is the lowercase identifier used in unit names and volume paths.
 	ID string
@@ -215,8 +215,8 @@ func ApplyOverrides(images map[string]string) error {
 // (ADR-0020): PAPPL's web administration is unauthenticated, so it must never
 // be reachable from the LAN. The trade-off is that only this computer can
 // print to it and its DNS-SD advertisement stays inside the container.
-// AutoUpdate=registry lets podman-auto-update.timer move the unit to each new
-// `:stable` release. The state volume is bind-mounted read-write so the
+// The caller supplies a signature-verified digest. No registry auto-update
+// label is emitted. The state volume is bind-mounted read-write so the
 // printer's cached driver state persists across enable/disable.
 func RenderUnit(app App) string {
 	var b strings.Builder
@@ -227,7 +227,6 @@ func RenderUnit(app App) string {
 	b.WriteString("[Container]\n")
 	fmt.Fprintf(&b, "ContainerName=%s\n", app.ContainerName())
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
-	b.WriteString("AutoUpdate=registry\n")
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
@@ -345,24 +344,38 @@ func IsEnabled(app App) bool {
 	return err == nil
 }
 
-// autoUpdateTimer is Podman's user timer that pulls a newer image for every
-// unit labelled AutoUpdate=registry and restarts it.
-const autoUpdateTimer = "podman-auto-update.timer"
-
-// Enable writes the quadlet for the printer application, starts it, and
-// enables Podman's auto-update timer. Enabling only writes the unit and starts
-// the service: the image pull happens inside the container runtime afterwards,
-// so the switch must not wait on it.
+// Enable verifies the image signature before writing or starting a unit.
+// The runtime pulls only the verified digest, even if the tag moves afterwards.
 func Enable(ctx context.Context, app App) error {
+	return installVerified(ctx, app, "start")
+}
+
+// Refresh verifies the current family reference and restarts an installed app
+// with that digest. A failed verification leaves its unit and service untouched.
+// Callers must serialize lifecycle operations for the same app.
+func Refresh(ctx context.Context, app App) error {
+	if !IsEnabled(app) {
+		return fmt.Errorf("printerapp: %s is not enabled", app.UnitName())
+	}
+	return installVerified(ctx, app, "restart")
+}
+
+func installVerified(ctx context.Context, app App, action string) error {
 	path, err := UnitPath(app)
 	if err != nil {
 		return err
 	}
 
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would write %s for %s, start %s, and enable --now %s", path, app.Family.Image, app.ServiceName(), autoUpdateTimer)
+		log.Printf("[DRY-RUN] would verify %s, write its digest to %s, and %s %s", app.Family.Image, path, action, app.ServiceName())
 		return nil
 	}
+
+	image, err := verifiedImage(ctx, app.Family)
+	if err != nil {
+		return err
+	}
+	app.Family.Image = image
 
 	volDir, err := app.HostVolumeDir()
 	if err != nil {
@@ -393,11 +406,7 @@ func Enable(ctx context.Context, app App) error {
 		rollback()
 		return err
 	}
-	if err := runSystemctl(ctx, "start", app.ServiceName()); err != nil {
-		rollback()
-		return err
-	}
-	if err := runSystemctl(ctx, "enable", "--now", autoUpdateTimer); err != nil {
+	if err := runSystemctl(ctx, action, app.ServiceName()); err != nil {
 		rollback()
 		return err
 	}

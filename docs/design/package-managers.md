@@ -883,7 +883,7 @@ and dry-run launches nothing.
 
 Printer applications, unlike Agent Mode, are rootless Podman quadlets.
 [`printer-applications.md`](printer-applications.md) is the detailed owner
-for the three shipped families, their auto-updating `:stable` images, the
+for the three shipped families, their signature-verified digest pins, the
 loopback-only network boundary
 ([ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)),
 artifacts and readiness model. `RenderUnit` must never use `Network=host` or

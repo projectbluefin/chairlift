@@ -216,8 +216,11 @@ as an all-or-nothing success.
 on their own. Each runs as a small container in your own account and only
 this computer can use it: other computers on your network can't print to it
 or reach its settings page. When one is running, its row names the local web
-page where you add and manage printers, and the driver updates itself in the
-background. The rows evaluate systemd state,
+page where you add and manage printers. Turning a driver on checks that its
+image was signed by its publisher and keeps that exact version. Turn it off
+and back on to get a newer checked version; automatic driver updates are not
+yet available. Older installations need the same off/on step to gain this
+protection. The rows evaluate systemd state,
 journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.

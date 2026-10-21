@@ -102,6 +102,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},            // brew
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},                 // brew --version
 	{File: "internal/livery/apply.go", Func: "execCommand"},                      // gsettings / dconf / gtk-update-icon-cache / systemctl --user
+	{File: "internal/printerapp/signature.go", Func: "execCosign"},               // cosign verify (unprivileged registry signature check)
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},     // systemctl --user
 	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop

@@ -25,7 +25,7 @@ func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
 		}
 		seen[f.ID] = true
 		// Built-in families run their own repository's moving :stable tag;
-		// the unit's AutoUpdate=registry keeps it current.
+		// Enable verifies and pins this reference before installing the unit.
 		if want := "ghcr.io/projectbluefin/" + f.ID + "-printer-app:stable"; f.Image != want {
 			t.Errorf("family %q image = %q, want %q", f.ID, f.Image, want)
 		}
@@ -50,7 +50,6 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 		for _, required := range []string{
 			"[Container]",
 			"Image=" + app.Family.Image,
-			"AutoUpdate=registry",
 			"ContainerName=" + app.ContainerName(),
 			"WantedBy=default.target",
 			"PublishPort=127.0.0.1:" + strconv.Itoa(app.Port()) + ":" + strconv.Itoa(app.Port()),
@@ -151,9 +150,14 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	tmp := t.TempDir()
 	previousDir := unitDir
 	previousHomeDir := userHomeDir
+	previousCosign := runCosign
+	runCosign = func(context.Context, ...string) ([]byte, error) {
+		return []byte(`[{"critical":{"image":{"docker-manifest-digest":"sha256:` + strings.Repeat("a", 64) + `"}}}]`), nil
+	}
 	previousSystemctl := runSystemctl
 	previousSystemctlOutput := runSystemctlOutput
 	t.Cleanup(func() {
+		runCosign = previousCosign
 		unitDir = previousDir
 		userHomeDir = previousHomeDir
 		runSystemctl = previousSystemctl
@@ -176,7 +180,7 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	return tmp, &recorded
 }
 
-func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
+func TestEnableWritesVerifiedDigestAndStartsWithoutAutoUpdate(t *testing.T) {
 	dir, calls := stubUnitDir(t)
 	app := Select(Families()[0])
 
@@ -192,11 +196,11 @@ func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading written unit: %v", err)
 	}
-	if !strings.Contains(string(data), app.Family.Image) {
-		t.Errorf("written unit does not name %q:\n%s", app.Family.Image, data)
+	if !strings.Contains(string(data), "Image=ghcr.io/projectbluefin/ghostscript-printer-app@sha256:"+strings.Repeat("a", 64)) || strings.Contains(string(data), "AutoUpdate=") || strings.Contains(string(data), ":stable") {
+		t.Errorf("written unit is not pinned without auto-update:\n%s", data)
 	}
 
-	want := []string{"daemon-reload", "start " + app.ServiceName(), "enable --now podman-auto-update.timer"}
+	want := []string{"daemon-reload", "start " + app.ServiceName()}
 	if strings.Join(*calls, "|") != strings.Join(want, "|") {
 		t.Errorf("systemctl calls = %v, want %v", *calls, want)
 	}
@@ -206,10 +210,9 @@ func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
 	}
 }
 
-// A failed start or a failed auto-update timer enable both roll a fresh
-// install back: the service is stopped, the quadlet removed, systemd reloaded.
+// A failed reload or start rolls a fresh install back.
 func TestEnableRollsBackAFreshUnitOnFailure(t *testing.T) {
-	for _, failing := range []string{"start", "enable"} {
+	for _, failing := range []string{"start", "daemon-reload"} {
 		t.Run(failing, func(t *testing.T) {
 			dir, calls := stubUnitDir(t)
 			runSystemctl = func(_ context.Context, args ...string) error {
