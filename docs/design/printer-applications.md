@@ -24,6 +24,9 @@ Neither building the group nor observing state installs or starts a unit.
 
 Turning a family on verifies its image with cosign before writing its unit
 and starting it. A missing verifier or failed signature check rejects enable.
+The error toast distinguishes an unavailable cosign executable (install it and
+make it available on PATH) from a rejected signature, rather than suggesting
+that retrying alone will fix either.
 An already-present unit stays controllable so the user can turn it off. Its
 presence means configured, not ready. The readiness model below distinguishes
 starting, running, and failed service observations.
@@ -69,7 +72,9 @@ containers. Existing units are not automatically migrated: turn the family
 off and back on to install a verified pin. `Refresh` is a verified package
 API, not a scheduled job or an Updates-page action. Automatic verified refresh
 and migration remain tracked by issue #582; installed pins otherwise remain
-fixed until disable/re-enable or an explicit API refresh.
+fixed until disable/re-enable or an explicit API refresh. Diagnostic image
+presence probes read `Image=` from the installed quadlet, not the family's
+moving tag; a cached verified digest need not have a local `:stable` tag.
 
 `Select(family)` returns the default `App{Family: family, Name: family.ID}`.
 Its quadlet filename is the unit/container identity below plus `.container`;

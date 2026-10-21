@@ -32,8 +32,8 @@ func execCosign(ctx context.Context, args ...string) ([]byte, error) {
 // Never resolve the tag a second time: it may move after verification.
 func verifiedImage(ctx context.Context, family Family) (string, error) {
 	known := false
-	for _, id := range []string{"ghostscript", "hplip", "gutenprint"} {
-		known = known || family.ID == id
+	for _, candidate := range families {
+		known = known || family.ID == candidate.ID
 	}
 	if !known {
 		return "", fmt.Errorf("%w: unknown family %q", ErrSignatureUnverified, family.ID)

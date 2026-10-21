@@ -26,7 +26,10 @@ ChairLift-owned container pin.
 payloads, invalid or conflicting digests, and a mismatched explicit pin before
 writing a unit or calling systemctl. Assert the exact issuer and anchored
 per-family workflow identity in runner tests. A shape test containing
-`@sha256:` alone proves none of these trust properties.
+`@sha256:` alone proves none of these trust properties. After installation, diagnostics
+must probe the persisted `Image=` reference, not the original moving tag:
+pulling a digest does not guarantee that the tag exists in local storage.
+Regression fixtures should reject the tag probe while accepting the pin.
 
 **What to do:** Resolve the *index* (manifest list) digest when the tag publishes
 one, never an architecture's child entry. A bare

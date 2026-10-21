@@ -1034,6 +1034,9 @@ An agent must not break these:
   unit. Only the digest from the verified payload reaches `Image=`; no
   `AutoUpdate=registry` or Podman timer enable is emitted (ADR-0023).
   Missing cosign, rejected signatures and malformed payloads fail closed.
+  Failure to find cosign gets an install/PATH hint, not a retry-only toast.
+  Diagnostics probe the installed quadlet's `Image=`, never the moving family
+  tag after a verified pin was installed.
   Existing units are not automatically migrated; disabling and re-enabling
   installs a verified pin. Scheduled verified refresh remains unimplemented.
   ADR-0020 is the network boundary: PAPPL's web administration is

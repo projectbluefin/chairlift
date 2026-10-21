@@ -1,7 +1,9 @@
 package pageview
 
 import (
+	"errors"
 	"fmt"
+	"os/exec"
 
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
@@ -70,7 +72,13 @@ func PrinterAppWorkingSubtitle(enabling bool) string {
 // The error itself is logged: it names commands and unit files. A failed
 // disable keeps the unit, because the service could not be proven stopped,
 // so that toast says the driver is still running.
-func PrinterAppFailureToast(enabling bool, rowTitle string) string {
+func PrinterAppFailureToast(enabling bool, rowTitle string, failure ...error) string {
+	if enabling && len(failure) > 0 && errors.Is(failure[0], printerapp.ErrSignatureUnverified) {
+		if errors.Is(failure[0], exec.ErrNotFound) {
+			return "Couldn't turn on " + rowTitle + ". Install cosign and make it available on PATH."
+		}
+		return "Couldn't turn on " + rowTitle + ". The printer driver's signature could not be verified."
+	}
 	if enabling {
 		return "Couldn't turn on " + rowTitle + ". Try again."
 	}

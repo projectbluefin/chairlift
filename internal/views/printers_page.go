@@ -170,7 +170,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 				log.Printf("views: printer application %s toggle to %v failed: %v", pr.app.Family.ID, enabled, err)
 				pr.toggle.set(!enabled)
 				uh.showPrinterAppState(pr, pr.state)
-				uh.toastAdder.ShowErrorToast(pageview.PrinterAppFailureToast(enabled, pr.title))
+				uh.toastAdder.ShowErrorToast(pageview.PrinterAppFailureToast(enabled, pr.title, err))
 				return
 			}
 
