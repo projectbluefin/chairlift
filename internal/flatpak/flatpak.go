@@ -111,6 +111,10 @@ type Application struct {
 	Branch       string `json:"branch"`
 	Installation string `json:"installation"` // "user" or "system"
 	Kind         Kind   `json:"kind"`         // "app" or "runtime"
+	// Origin is the remote the ref was installed from ("flathub" for the
+	// remote Bluefin ships). It is what tells where an application
+	// actually came from, as opposed to where it would be installed from.
+	Origin string `json:"origin"`
 }
 
 // stateChangingCommands are commands that modify system state
@@ -269,7 +273,7 @@ func ListSystemRuntimes() ([]Application, error) {
 // listRefs lists installed refs of one kind for a given installation type
 func listRefs(installFlag string, kind Kind) ([]Application, error) {
 	// Use columns format for structured output
-	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version,branch")
+	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version,branch,origin")
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +286,10 @@ func listRefs(installFlag string, kind Kind) ([]Application, error) {
 // out of the ref column, so a row that falls through to the whitespace
 // fallback below — where the ref may not have been captured at all — is still
 // classified correctly.
+//
+// The columns are read by position and a short row is tolerated: a flatpak
+// that answers fewer columns than asked for must not cost the listing the
+// rows it did report.
 func parseRefList(output string, installFlag string, kind Kind) ([]Application, error) {
 	var apps []Application
 	lines := strings.Split(strings.TrimSpace(output), "\n")
@@ -324,10 +332,51 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 		if len(fields) >= 4 {
 			app.Branch = strings.TrimSpace(fields[3])
 		}
+		if len(fields) >= 5 {
+			app.Origin = strings.TrimSpace(fields[4])
+		}
 		apps = append(apps, app)
 	}
 
 	return apps, nil
+}
+
+// ListInstalledOrigins returns every installed Flatpak application id mapped
+// to the remote it was installed from.
+//
+// It is the query `brew bundle` itself uses to decide which Flatpaks a
+// Brewfile's `flatpak` entries already cover, and it is deliberately
+// narrower than the column listings above: it names no display name,
+// version or branch, because the only two things an install decision needs
+// are which applications are present and where each came from.
+func ListInstalledOrigins() (map[string]string, error) {
+	output, err := runFlatpakCommand("list", "--app", "--columns=application,origin")
+	if err != nil {
+		return nil, err
+	}
+	return parseApplicationOrigins(output), nil
+}
+
+// parseApplicationOrigins reads the application/origin pairs out of
+// `flatpak list --app --columns=application,origin` output.
+func parseApplicationOrigins(output string) map[string]string {
+	origins := make(map[string]string)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		application, origin, found := strings.Cut(line, "\t")
+		if !found {
+			application, origin, found = strings.Cut(line, " ")
+		}
+		application = strings.TrimSpace(application)
+		if !found || application == "" {
+			continue
+		}
+		origins[application] = strings.TrimSpace(origin)
+	}
+	return origins
 }
 
 // Install installs a Flatpak application
@@ -360,6 +409,29 @@ func InstallFromRemote(appID, remote string, user bool) error {
 		args = append(args, remote)
 	}
 	args = append(args, appID)
+
+	_, err := runFlatpakCommand(args...)
+	return err
+}
+
+// InstallMany installs several applications in one Flatpak transaction:
+// `flatpak install -y --system flathub <id>…`. One transaction keeps a
+// partially selected collection's Flatpak install to a single command.
+//
+// The scope is always the system installation and the remote is always
+// Flathub, for the reason the privilege boundary records: Bluefin's policy
+// is system-wide Flatpaks, and its images configure Flathub only as a
+// system remote, where a `--user` install cannot resolve a ref.
+//
+// An empty list is a no-op: flatpak refuses an install with no ref, so the
+// caller must never reach it.
+func InstallMany(appIDs []string) error {
+	if len(appIDs) == 0 {
+		return nil
+	}
+
+	args := []string{"install", "-y", "--system", "flathub"}
+	args = append(args, appIDs...)
 
 	_, err := runFlatpakCommand(args...)
 	return err

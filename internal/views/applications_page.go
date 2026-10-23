@@ -186,8 +186,8 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 
 		// Add group-level Install button header row
 		headerRow := adw.NewActionRow()
-		headerRow.SetTitle("Install Selected Collections")
-		headerRow.SetSubtitle("Installs all checked collections in one step.")
+		headerRow.SetTitle("Install Selected")
+		headerRow.SetSubtitle("Installs every checked app and tool in one step.")
 		headerInstallBtn := gtk.NewButtonWithLabel("Install")
 		headerInstallBtn.SetValign(gtk.AlignCenterValue)
 		headerInstallBtn.AddCssClass("suggested-action")
@@ -208,26 +208,37 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		uh.brewBundlesGroup.Add(&headerRow.Widget)
 
 		uh.bundleItems = nil
+		uh.bundleChecks.clear()
+		uh.bundleSelectAlls.clear()
 		for _, p := range parsedBundles {
-			row, choice := newBundleRow(p.bundle, p.items, p.total)
-			uh.brewBundlesGroup.Add(&row.Widget)
-			uh.bundleItems = append(uh.bundleItems, &bundleItemRow{
-				bundle:      p.bundle,
-				memberPaths: p.memberPaths,
-				total:       p.total,
-				row:         row,
-				choice:      choice,
-			})
+			item := newBundleItemRow(p.bundle, p.memberPaths, p.total)
+			uh.buildBundleRow(item, p.items)
+			uh.brewBundlesGroup.Add(&item.row.Widget)
+			uh.bundleItems = append(uh.bundleItems, item)
 		}
 		uh.refreshBundleStatuses()
 	})
 }
 
-// newBundleRow builds one collection expander row with a CheckButton prefix.
-// total is the merged item count across the row's super-bundle members, the
-// same count refreshBundleStatuses describes the row with.
-func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int) (*adw.ExpanderRow, *gtk.CheckButton) {
-	collection := bundleview.Describe(bundle.Name, bundle.Description, total)
+// newBundleItemRow starts the record of one collection row.
+func newBundleItemRow(bundle homebrew.Bundle, memberPaths []string, total int) *bundleItemRow {
+	return &bundleItemRow{
+		bundle:      bundle,
+		memberPaths: memberPaths,
+		total:       total,
+	}
+}
+
+// buildBundleRow builds one collection expander row and the entry rows
+// inside it.
+//
+// The row's suffix holds a "Select All" button in front of the chevron, the
+// slot the design used for the per-collection Install button before
+// selections moved to the entries. There is no prefix checkbox: a
+// collection is selected by its entries, and a checkbox here would claim a
+// selection the entries do not carry.
+func (uh *UserHome) buildBundleRow(item *bundleItemRow, items []homebrew.BundleItem) {
+	collection := bundleview.Describe(item.bundle.Name, item.bundle.Description, item.total)
 	row := adw.NewExpanderRow()
 	// Collection titles and descriptions may carry free-form text from a
 	// shipped Brewfile (comment lines, the humanize() fallback for unknown
@@ -238,56 +249,81 @@ func newBundleRow(bundle homebrew.Bundle, items []homebrew.BundleItem, total int
 	row.SetSubtitle(collection.Subtitle)
 	row.SetTitleLines(1)
 
-	choice := gtk.NewCheckButton()
-	choice.SetValign(gtk.AlignCenterValue)
-	choice.SetActive(bundleview.DefaultSelected(bundle.Name))
-	SetAccessibleLabel(choice, "Select "+collection.Title)
-	row.AddPrefix(&choice.Widget)
+	selectAll := gtk.NewButtonWithLabel("Select All")
+	selectAll.SetValign(gtk.AlignCenterValue)
+	setNamedButtonLabel(selectAll, "Select All", bundleview.SelectAllAccessibleName(collection.Title))
+	row.AddSuffix(&selectAll.Widget)
 
-	addContentsRows(row, items, total)
-	return row, choice
+	item.row = row
+	item.title = collection.Title
+	item.selectAll = selectAll
+
+	uh.bundleSelectAlls.connect(selectAll, func(gtk.Button) {
+		uh.selectAllBundleEntries(item)
+	})
+
+	uh.addBundleEntryRows(item, items)
 }
 
-// addContentsRows fills the expander with one row per package the
+// addBundleEntryRows fills the expander with one row per entry the
 // collection would install. The expander starts collapsed (AdwExpanderRow's
-// default); the Install button stays in view on the expander's suffix
-// whether or not the row is open, so a person who never expands the row
-// still has the affordance they had before. A row whose parser returned
-// nothing renders the empty placeholder so the expanded view still has
-// something to read. total is the Brewfile's own entry count, which can
-// exceed the items slice when the parser hit its own cap; passing it lets
-// the presenter show an honest "showing N of M" notice instead of
-// pretending the truncated tail is the whole file.
-func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, total int) {
-	presentation := bundleview.PresentContents(items, total)
+// default), so a person who never expands the row still sees the
+// collection's title, its count and the "Select All" button.
+//
+// Every entry carries a checkbox on its right edge. The checkbox is what
+// the install acts on, and it is empty until the entry is chosen: an
+// install is opt-in, entry by entry.
+func (uh *UserHome) addBundleEntryRows(item *bundleItemRow, items []homebrew.BundleItem) {
+	presentation := bundleview.PresentContents(items, item.total)
 	if !presentation.HasRows() {
 		placeholder := adw.NewActionRow()
 		placeholder.SetTitle(presentation.EmptyTitle)
 		if presentation.EmptySubtitle != "" {
 			placeholder.SetSubtitle(presentation.EmptySubtitle)
 		}
-		expander.AddRow(&placeholder.Widget)
+		item.row.AddRow(&placeholder.Widget)
 		return
 	}
-	for _, item := range presentation.Rows {
-		entry := adw.NewActionRow()
+	for _, entry := range presentation.Rows {
+		row := adw.NewActionRow()
 		// AdwActionRow parses title/subtitle as Pango markup by default;
 		// the Brewfile token may contain a free-form identifier or '&'/'<'
 		// that would otherwise render as a GTK warning (#437).
-		entry.SetUseMarkup(false)
-		entry.SetTitle(item.Name)
-		if item.KindLabel != "" {
-			entry.SetSubtitle(item.KindLabel)
+		row.SetUseMarkup(false)
+		row.SetTitle(entry.Name)
+		if entry.Label != "" {
+			row.SetSubtitle(entry.Label)
 		}
-		SetAccessibleLabel(entry, item.AccessibleName)
-		expander.AddRow(&entry.Widget)
+		SetAccessibleLabel(row, entry.AccessibleName)
+
+		check := gtk.NewCheckButton()
+		check.SetValign(gtk.AlignCenterValue)
+		SetAccessibleLabel(check, entry.CheckAccessibleName)
+		row.AddSuffix(&check.Widget)
+
+		entryRow := &bundleEntryRow{
+			item:       entry.Item,
+			row:        row,
+			check:      check,
+			selectable: entry.Selectable,
+		}
+		item.entries = append(item.entries, entryRow)
+
+		// One ::toggled callback serves every entry checkbox in the
+		// page; the route maps the emitting checkbox back to its
+		// collection.
+		uh.bundleChecks.connect(check, func(gtk.CheckButton) {
+			uh.updateBundleSelectionState(item)
+		})
+
+		item.row.AddRow(&row.Widget)
 	}
 	if presentation.OverflowNotice != "" {
 		overflow := adw.NewActionRow()
 		overflow.SetUseMarkup(false)
 		overflow.SetTitle(presentation.OverflowNotice)
 		overflow.SetTitleLines(1)
-		expander.AddRow(&overflow.Widget)
+		item.row.AddRow(&overflow.Widget)
 	}
 }
 

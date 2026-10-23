@@ -101,20 +101,33 @@ duplicate it.
 
 ![Apps](screenshots/2-applications.png)
 
-**App Collections** lead the page: curated collections can be selected with
-checkboxes and installed in one step using the **Install** button. Expanding a
-collection reveals the names and kinds of the apps and tools inside, so you can
-read what an install will add before pressing the button. Installs show native
-activity and streamed command progress while they run, using the same controls
-in the explicit setup flow. A collection whose apps and tools are all already on
-the system reads **(Installed)** when the page loads, not only after an install
-in the same session.
+**App Collections** lead the page. Each collection expands into the apps and
+tools it holds, and every one of them carries a checkbox on its right edge,
+so you choose what you want rather than a whole collection at once. A
+**Select All** button at the end of the collection's title checks everything
+in it in one press, and each entry says where it comes from — **from
+Homebrew**, **from Brew Tap** or **from Flathub**. An app that is already on
+the system is checked and cannot be chosen again, and says **Installed from
+…** instead.
+
+The **Install Selected** button at the top installs exactly what you
+checked. A collection you selected in full installs as a whole, the way its
+own definition says; a partly selected one installs just the entries you
+picked. Where an app comes from a source this computer does not trust yet,
+the app is trusted on its own first, and the confirmation that follows says
+how much was trusted. Installs show native activity and streamed command
+progress while they run, using the same controls in the explicit setup flow.
+A collection whose apps and tools are all already on the system reads
+**(Installed)** when the page loads, not only after an install in the same
+session.
 
 **Installed Apps** and **Command-Line Tools** follow: installed casks first,
 then explicitly requested formulae (the packages Homebrew manages).
 Dependency-only formulae do not crowd the inventory. Removing a package asks
-first; formulae also offer pin and unpin actions. There is no Flatpak inventory,
-external catalog launcher, or package search here.
+first; formulae also offer pin and unpin actions. There is no Flatpak list,
+external catalog launcher, or package search here — a collection entry may
+say that a Flatpak is already installed, but Flatpaks are not listed as
+their own group.
 
 Finally, **Backup** contains **Export app list**, which saves a list of your
 apps and tools to your home folder (named Brewfile, replacing any file already

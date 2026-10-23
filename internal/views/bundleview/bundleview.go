@@ -63,11 +63,10 @@ type Collection struct {
 }
 
 type catalogEntry struct {
-	title    string
-	summary  string
-	curated  bool
-	order    int
-	defaults bool
+	title   string
+	summary string
+	curated bool
+	order   int
 	// members are sibling collections installed and checked together with
 	// this one (a super-bundle). A member gets no row of its own while its
 	// parent is discovered; see Visible.
@@ -76,48 +75,42 @@ type catalogEntry struct {
 
 var catalog = map[string]catalogEntry{
 	"artwork": {
-		title:    "Extra Wallpapers",
-		summary:  "More dinosaur artwork, and wallpaper tools.",
-		curated:  true,
-		order:    1,
-		defaults: true,
-		members:  []string{"wallpaper-slideshow"},
+		title:   "Extra Wallpapers",
+		summary: "More dinosaur artwork, and wallpaper tools.",
+		curated: true,
+		order:   1,
+		members: []string{"wallpaper-slideshow"},
 	},
 	"cli": {
-		title:    "Bluefin CLI",
-		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
-		curated:  true,
-		order:    2,
-		defaults: true,
+		title:   "Bluefin CLI",
+		summary: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
+		curated: true,
+		order:   2,
 	},
 	"fonts": {
-		title:    "Fonts",
-		summary:  "A broad selection of everyday, design, office, and accessibility fonts.",
-		curated:  true,
-		order:    3,
-		defaults: true,
-		members:  []string{"dakota-fonts"},
+		title:   "Fonts",
+		summary: "A broad selection of everyday, design, office, and accessibility fonts.",
+		curated: true,
+		order:   3,
+		members: []string{"dakota-fonts"},
 	},
 	"fonts-dev": {
-		title:    "Monospace Fonts",
-		summary:  "Fixed-width fonts made for reading code.",
-		curated:  true,
-		order:    4,
-		defaults: true,
+		title:   "Monospace Fonts",
+		summary: "Fixed-width fonts made for reading code.",
+		curated: true,
+		order:   4,
 	},
 	"ai-tools": {
-		title:    "Agentic Tools",
-		summary:  "AI assistants and model runners for the terminal.",
-		curated:  true,
-		order:    5,
-		defaults: true,
+		title:   "Agentic Tools",
+		summary: "AI assistants and model runners for the terminal.",
+		curated: true,
+		order:   5,
 	},
 	"full-desktop": {
-		title:    "Full Desktop Suite",
-		summary:  "A complete set of desktop apps for everyday productivity.",
-		curated:  true,
-		order:    6,
-		defaults: false,
+		title:   "Full Desktop Suite",
+		summary: "A complete set of desktop apps for everyday productivity.",
+		curated: true,
+		order:   6,
 	},
 }
 
@@ -165,15 +158,6 @@ func Curated(id string) bool {
 	return ok && entry.curated
 }
 
-// DefaultSelected reports whether id defaults to checked.
-// All collections default to checked except Full Desktop Suite.
-func DefaultSelected(id string) bool {
-	if entry, ok := catalog[id]; ok {
-		return entry.defaults
-	}
-	return true
-}
-
 // Order returns the sort order for a collection.
 func Order(id string) int {
 	if entry, ok := catalog[id]; ok && entry.curated {
@@ -205,30 +189,11 @@ func MemberBundles(id string, discovered map[string]homebrew.Bundle) []homebrew.
 	return result
 }
 
-// AggregateInstalled combines the observed states of every Brewfile a row
-// covers. Any member observed not installed makes the row not installed;
-// otherwise an undecided member leaves the row as it was (known is false),
-// and only when every member is observed installed is the row installed.
-func AggregateInstalled(statuses []homebrew.BundleStatus) (installed, known bool) {
-	if len(statuses) == 0 {
-		return false, false
-	}
-	undecided := false
-	for _, status := range statuses {
-		got, ok := ObservedInstalled(status)
-		if !ok {
-			undecided = true
-			continue
-		}
-		if !got {
-			return false, true
-		}
-	}
-	if undecided {
-		return false, false
-	}
-	return true, true
-}
+// ContentsHiddenTitle is what the list rows call themselves when nothing
+// is left to show: it appears once a parse produced no recognised entries,
+// so the user knows the row is not a glitch and that the Install button is
+// still safe to press.
+const ContentsHiddenTitle = "No entries could be read for this collection."
 
 const fallbackSummary = "A set of apps and tools put together for this computer."
 
@@ -258,16 +223,6 @@ func Describe(id, comment string, itemCount int) Collection {
 
 	sub := joinSentences(summary, itemPhrase(itemCount))
 	return Collection{Title: entry.title, Subtitle: sub}
-}
-
-// DescribeInstalled returns the row text for one app collection, appending
-// "(Installed)" when installed is true.
-func DescribeInstalled(id, comment string, itemCount int, installed bool) Collection {
-	c := Describe(id, comment, itemCount)
-	if installed {
-		c.Subtitle += " (Installed)"
-	}
-	return c
 }
 
 // usableSummary returns the collection's own comment when it reads as a
@@ -366,40 +321,10 @@ func endSentence(text string) string {
 	return text + "."
 }
 
-// ObservedInstalled maps a `brew bundle check` status onto a collection's
-// installed state. known is false when the check could not decide, which
-// must leave the row as it was. Update Available counts as installed: every
-// item is present, and upgrading them is the Updates page's job, not a
-// reason to offer the collection again.
-func ObservedInstalled(status homebrew.BundleStatus) (installed, known bool) {
-	switch status {
-	case homebrew.BundleInstalled, homebrew.BundleUpdateAvailable:
-		return true, true
-	case homebrew.BundleNotInstalled:
-		return false, true
-	default:
-		return false, false
-	}
-}
-
-// ContentsHiddenTitle is what the list rows call themselves when nothing
-// is left to show: it appears once a parse produced no recognised entries,
-// so the user knows the row is not a glitch and that the Install button is
-// still safe to press.
-const ContentsHiddenTitle = "No entries could be read for this collection."
-
 // ContentsHiddenSubtitle names the limit that hid them: a Brewfile too
 // large for one read. Keeping the message concrete avoids the "could not
 // load" tone that would otherwise admit a real failure has happened.
 const ContentsHiddenSubtitle = "The Brewfile is larger than the display limit."
-
-// ContentsRowName is the accessible name of an entry inside the expanded
-// list. The bare formula or cask token is enough for a screen reader to
-// distinguish one item from the next, so the affordance stays predictable
-// without inventing a description a person may not recognize.
-func ContentsRowName(name string) string {
-	return name
-}
 
 // PresentContents derives the package-list presentation one collection row
 // renders when a person opens it. The items come in the order the Brewfile
@@ -414,6 +339,10 @@ func ContentsRowName(name string) string {
 // parser produced nothing at all (an empty or unrecognised file), total
 // will be 0 too — that case is the "no recognised entries" placeholder
 // rather than the "Brewfile is larger" one.
+//
+// Every entry's subtitle names its source, not its kind: "from Homebrew",
+// "from Brew Tap" or "from Flathub". A person reads where an entry comes
+// from, not which directive in a Brewfile it came from.
 func PresentContents(items []homebrew.BundleItem, total int) ContentsPresentation {
 	if len(items) == 0 {
 		if total > 0 {
@@ -430,10 +359,16 @@ func PresentContents(items []homebrew.BundleItem, total int) ContentsPresentatio
 
 	rows := make([]ContentsRow, 0, len(items))
 	for _, item := range items {
+		entry := PresentEntry(EntryState{Item: item})
 		rows = append(rows, ContentsRow{
-			Name:           item.Name,
-			KindLabel:      ContentsKindLabel(item.Kind),
-			AccessibleName: ContentsRowName(item.Name),
+			Item: item,
+			Name: entry.Name,
+			// The row names itself after the token it holds; the
+			// checkbox names the action it performs.
+			Label:               entry.Label,
+			AccessibleName:      item.Name,
+			CheckAccessibleName: entry.AccessibleName,
+			Selectable:          entry.Selectable,
 		})
 	}
 
@@ -445,28 +380,6 @@ func PresentContents(items []homebrew.BundleItem, total int) ContentsPresentatio
 	return ContentsPresentation{
 		Rows:           rows,
 		OverflowNotice: overflow,
-	}
-}
-
-// ContentsKindLabel names the kind of one entry as a person would read it:
-// formulae are "Command-line tool", casks are "App", the rest keep their
-// on-disk identifiers so an "App Store" item does not read like a "Flatpak".
-// The labels are stable across collections so a screen reader user can
-// tell the shape of an entry from its kind text alone.
-func ContentsKindLabel(kind homebrew.BundleItemKind) string {
-	switch kind {
-	case homebrew.BundleItemBrew:
-		return "Command-line tool"
-	case homebrew.BundleItemCask:
-		return "App"
-	case homebrew.BundleItemFlatpak:
-		return "Flatpak"
-	case homebrew.BundleItemMas:
-		return "App Store"
-	case homebrew.BundleItemVSCode:
-		return "VS Code extension"
-	default:
-		return ""
 	}
 }
 
@@ -488,11 +401,20 @@ func (p ContentsPresentation) HasRows() bool {
 }
 
 // ContentsRow is one entry in the expanded package list. Name is the
-// on-disk identifier a person sees, KindLabel is the human-readable kind
-// used as the row's subtitle, and AccessibleName is the name a screen
-// reader announces when this row is focused.
+// on-disk identifier a person sees, Label is the source it comes from,
+// AccessibleName names the row itself and CheckAccessibleName names the
+// row's checkbox for a screen reader.
 type ContentsRow struct {
-	Name           string
-	KindLabel      string
+	// Item is the entry as the Brewfile named it.
+	Item homebrew.BundleItem
+	// Name is the on-disk identifier a person sees.
+	Name string
+	// Label is the row's subtitle: where the entry comes from.
+	Label string
+	// AccessibleName names the row for a screen reader.
 	AccessibleName string
+	// CheckAccessibleName names the row's checkbox for a screen reader.
+	CheckAccessibleName string
+	// Selectable reports whether the entry can be chosen for an install.
+	Selectable bool
 }

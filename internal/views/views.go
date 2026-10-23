@@ -78,13 +78,20 @@ type UserHome struct {
 	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
-	// Bundle collection checkboxes and unified install controls.
+	// Bundle collection entries and unified install controls.
 	bundleItems          []*bundleItemRow
 	bundleInstallButton  *gtk.Button
 	bundleInstallSpinner *gtk.Spinner
 	bundleInstallBar     *gtk.ProgressBar
 	bundleInstallGate    actionstate.Gate
 	developerAppsGate    actionstate.Gate
+	// bundleChecks routes every collection entry's checkbox through one
+	// ::toggled callback, and bundleSelectAlls every collection's
+	// "Select All" button through one ::clicked callback. Both lists are
+	// rebuilt with the page, so a fresh closure per row would burn the
+	// puregotk callback table.
+	bundleChecks     checkRoute
+	bundleSelectAlls buttonRoute
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate

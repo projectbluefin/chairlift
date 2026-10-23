@@ -54,6 +54,35 @@ func (r *dialogRoute) connect(dialog *adw.AlertDialog, action func(response stri
 	dialog.ConnectResponse(&r.response)
 }
 
+// checkRoute shares one ::toggled callback across every checkbox of a list,
+// so a list of a hundred entries allocates one puregotk trampoline instead
+// of a hundred (see internal/views/signalroute). It must live in a
+// long-lived struct field and never be copied: its toggled field's address
+// is the callback identity puregotk caches.
+//
+// A checkbox whose state changes programmatically — Select All, or the
+// refresh that marks an installed entry — emits ::toggled too, so the
+// action behind it must be idempotent: it reads the widget's own state
+// rather than counting changes.
+type checkRoute struct {
+	actions signalroute.Table[gtk.CheckButton]
+	toggled func(gtk.CheckButton)
+}
+
+// connect binds action to check and connects the shared callback.
+func (r *checkRoute) connect(check *gtk.CheckButton, action func(gtk.CheckButton)) {
+	if r.toggled == nil {
+		r.toggled = func(emitter gtk.CheckButton) { r.actions.Dispatch(emitter.GoPointer(), emitter) }
+	}
+	r.actions.Bind(check.GoPointer(), action)
+	check.ConnectToggled(&r.toggled)
+}
+
+// clear drops every action when the list is rebuilt.
+func (r *checkRoute) clear() {
+	r.actions.Clear()
+}
+
 func newIconButton(icon, label string) *gtk.Button {
 	button := gtk.NewButtonFromIconName(icon)
 	// Rows do not flatten their suffix buttons; a header bar does, so
@@ -64,10 +93,25 @@ func newIconButton(icon, label string) *gtk.Button {
 	return button
 }
 
+// SetAccessibleLabel sets a widget's accessible name.
 func SetAccessibleLabel(widget interface {
 	UpdateProperty(gtk.AccessibleProperty, ...interface{})
 }, label string) {
 	widget.UpdateProperty(gtk.AccessiblePropertyLabelValue, label, -1)
+}
+
+// setNamedButtonLabel gives a button an accessible name of its own.
+//
+// GtkButton names itself from its label child through a LABELLED_BY
+// relation, which outranks the LABEL property, so six buttons that all
+// read "Select All" would be indistinguishable to a screen reader. The
+// relation is dropped and the name set directly; the visible label stays
+// the leading words of the name, which is what the "label in name" rule
+// asks for.
+func setNamedButtonLabel(button *gtk.Button, label, name string) {
+	button.SetLabel(label)
+	button.ResetRelation(gtk.AccessibleRelationLabelledByValue)
+	SetAccessibleLabel(button, name)
 }
 
 // describeFor names what a repeated row button acts on. Every pending item

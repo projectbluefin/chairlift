@@ -247,12 +247,17 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			retired: []string{"buildRecoveryVersionsGroup(", "buildReturnToStreamRow(", "ublue.Pin(", "ublue.Unpin("},
 		},
 		{
-			// Collection controls are named after the collection (W2-APPS-5).
+			// Collection and entry controls are named after what they
+			// act on (W2-APPS-5): the collection's "Select All" button
+			// names the collection, and every entry checkbox names its
+			// own token.
 			file:     "applications_page.go",
-			required: []string{`SetAccessibleLabel(choice, "Select "+collection.Title)`},
+			required: []string{`setNamedButtonLabel(selectAll, "Select All", bundleview.SelectAllAccessibleName(collection.Title))`, `SetAccessibleLabel(check, entry.CheckAccessibleName)`},
+			retired:  []string{`SetAccessibleLabel(choice, "Select "+collection.Title)`, "row.AddPrefix(&choice.Widget)"},
 		},
 		{
-			// App collections group uses a single install button and checkboxes.
+			// App collections group uses a single install button and the
+			// entries' own checkboxes.
 			file:     "bundle_install.go",
 			required: []string{"func (uh *UserHome) runSelectedBundlesInstall()"},
 			retired:  []string{"bundleview.InstallButtonName("},

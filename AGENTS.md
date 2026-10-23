@@ -231,8 +231,9 @@ An agent must not break these:
   reject unsupported argv because PolicyKit does not validate arguments after
   action selection. ChairLift ships no passwordless PolicyKit rules; normal
   administrator authentication applies. Homebrew tap trust (`brew trust`) is
-  deliberately per-user and does **not** use pkexec. Neither do gaming mode
-  or the Developer Mode Pulp reader: both are **system-scope** Flatpaks
+  deliberately per-user and does **not** use pkexec. Neither do gaming mode,
+  the Developer Mode Pulp reader, or the Apps page's Flatpak entries: all
+  are **system-scope** Flatpaks
   (`flatpak install/uninstall -y --system`, #503), because Bluefin's policy is
   system-wide Flatpaks and its images configure Flathub only as a system
   remote, where a `--user` install cannot resolve a ref (#501). The `flatpak`
@@ -240,7 +241,9 @@ An agent must not break these:
   actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
   `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
   helper subcommand or PolicyKit action for them, or add a user Flathub
-  remote. Do not add arbitrary
+  remote. The Apps page's Flatpak install names the remote explicitly
+  (`flatpak install -y --system flathub <ids…>`), which is the same argv
+  `brew bundle` uses for a Brewfile's `flatpak` entries. Do not add arbitrary
   privileged command execution, broaden what pkexec runs, or route new
   mutations around the fixed helper/policy pair.
 - **Neither an image reference nor a username crosses the ublue pkexec
@@ -674,15 +677,53 @@ An agent must not break these:
   changing rows or counts. A live package success removes its row, decrements
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
-- **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
-  groups are `brew_bundles_group` and `brew_group`: app collections come first
-  as checkbox rows with a unified Install action (curated collections default
-  checked; Full Desktop Suite defaults unchecked), installed casks and
-  explicitly requested formulae next, then the Brewfile exporter (also gated
-  by `brew_group`). No Flatpak inventory, external catalog launcher, or package
-  search belongs here. Installed-package refreshes use
+- **Apps selects entry by entry, and its collections stay Homebrew-owned.**
+  Its only runtime configuration groups are `brew_bundles_group` and
+  `brew_group`: app collections come first, installed casks and explicitly
+  requested formulae next, then the Brewfile exporter (also gated by
+  `brew_group`). There is still no Flatpak *inventory group*, external
+  catalog launcher, or package search here, and the page's capability floor
+  is still Homebrew — but a collection entry may report that a Flatpak is
+  already installed, because a collection's Brewfile can name one. Read
+  that state with `flatpak list --app --columns=application,origin`, the
+  query `brew bundle` itself uses; never add a Flatpak *listing* to this
+  page.
+- **A collection row selects its entries, never itself.** A collection is an
+  `AdwExpanderRow` whose suffix holds a **Select All** `GtkButton` in front
+  of the chevron; it has no prefix checkbox, because a collection-level
+  checkbox claimed a selection its entries did not carry. The button is
+  one-way — it selects and never deselects — and is insensitive once every
+  selectable entry is checked. Each entry is an `AdwActionRow` with a
+  suffix `GtkCheckButton`, empty by default: an install is opt-in, entry by
+  entry. An entry whose package is already installed is checked and
+  insensitive, and its row says where it is installed from.
+- **An entry names its source, not its kind.** The subtitle is "from
+  Homebrew", "from Brew Tap", "from Flathub", "from the App Store" or "from
+  the VS Code Marketplace", and an installed entry reads "Installed from
+  …". The static source comes from the token's shape (a `/` means a tap);
+  the installed wording uses the *observed* source — the package's `tap`
+  field, the Flatpak's `origin` — and falls back to the static shape when
+  the inventory knew none. The vocabulary is closed: `bundleview` owns it,
+  and an observation with no word for it falls back rather than inventing a
+  label.
+- **One Install action, two strategies.** The group header row is
+  **Install Selected**, and it installs exactly the checked entries. A
+  collection whose every entry is checked installs as a whole through
+  `brew bundle install`, which is what keeps the collection's own tap
+  directives and `trusted: true` flags in force. A partially selected
+  collection installs its checked entries one by one, batched per package
+  manager (`brew install`, `brew install --cask`, `flatpak install -y
+  --system flathub`), because `brew bundle` can only install a whole file.
+  The per-item path re-derives trust: it clones a missing tap, then trusts
+  the package on its own — unless the collection's own Brewfile marks the
+  tap `trusted: true`, which `brew bundle` honours by trusting the whole
+  tap. A toast must say what the trust store gained; trusting a source is
+  a change to what this computer will load and is never silent.
+- **Apps is refresh-safe.** Installed-package refreshes use
   `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
-  Installed formula/cask rows likewise confirm uninstall, formula rows confirm
+  The collection entry states come from their own read — the installed
+  Homebrew formulae and casks, and the installed Flatpak applications — so
+  the two paths stay independent. Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so
   actions cannot overlap. A live success completes the old controls and starts
   a generation-guarded inventory refresh; failure or dry-run restores them.
@@ -1158,6 +1199,12 @@ An agent must not break these:
   in a `UserHome` field, with `internal/views/signalroute` mapping each
   emitting button's address to its action; the list's `clear()` runs beside
   its row tracker's `Clear`, and a row removed on its own calls `forget`.
+  The Apps page's collection entry checkboxes use `checkRoute`, the same
+  pattern for one `::toggled` func variable across every checkbox of a
+  list. A checkbox's state changes programmatically too — Select All, and
+  the refresh that marks an installed entry — and `SetActive` emits
+  `::toggled` when it changes, so the action behind it must be idempotent:
+  it reads the widget's own state rather than counting changes.
   Their confirmation dialogs share one `dialogRoute`, whose actions run once.
   A new per-row or per-dialog callback in a refresh path must use one of
   these, not a fresh closure.

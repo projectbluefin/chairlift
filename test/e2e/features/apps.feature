@@ -1,11 +1,13 @@
 @apps
 Feature: Apps destination
   The Apps page offers Homebrew collections first, installed packages next,
-  and the app list exporter last. Package mutations require confirmation.
-  ChairLift runs with --dry-run: commands are previewed, controls restored,
-  and known inventory preserved. Stubs record every actual invocation.
-  Each scenario names its configuration: behave lists a Feature's tags after
-  a Scenario's, so a Feature-level @config would override any scenario's.
+  and the app list exporter last. A collection's entries are chosen one by
+  one; an installed entry says where it is installed from and cannot be
+  chosen again. Package mutations require confirmation. ChairLift runs with
+  --dry-run: commands are previewed, controls restored, and known inventory
+  preserved. Stubs record every actual invocation. Each scenario names its
+  configuration: behave lists a Feature's tags after a Scenario's, so a
+  Feature-level @config would override any scenario's.
 
   @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=brew
   Scenario: Collections lead the Homebrew-only inventory and exporter
@@ -19,7 +21,7 @@ Feature: Apps destination
       | Backup             |
     And I do not see "Firefox"
     And I do not see "Text Editor"
-    And Flatpak was never asked to "list"
+    And Flatpak was asked to "list"
     Then the "Command-Line Tools" apps group says "2 installed"
     And the "Installed Apps" apps group says "1 installed"
     Then the "Command-Line Tools" apps group shows exactly
@@ -90,7 +92,7 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Command-Line Tools" apps group says "Couldn't load this list."
     And the "Installed Apps" apps group says "Couldn't load this list."
-    And the "Install" button in the "Install Selected Collections" row is sensitive
+    And the "Install" button in the "Install Selected" row is sensitive
     And the "Export" button in the "Export Package List" row is sensitive
 
   @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
@@ -99,36 +101,53 @@ Feature: Apps destination
     Then the sidebar omits "Apps"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
-  Scenario: A confirmed app collection install is previewed and its button restored
+  Scenario: Every entry of a collection starts unchecked and names its source
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    And the "Monospace Fonts" collection is checked
-    And the "Full Desktop Suite" collection is unchecked
-    When I click the "Install" button in the "Install Selected Collections" row
-    Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
-    And a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
-    And the "Install" button in the "Install Selected Collections" row is sensitive
-    And I do not see "Installing collections…"
-    And Homebrew was asked to "bundle check"
-    And Homebrew was never asked to "bundle install"
+    When I expand the "Monospace Fonts" list under "App Collections"
+    Then the "font-fira-code" entry checkbox is unchecked
+    And the "font-fira-code" row says "from Homebrew"
+    And the "font-jetbrains-mono" row says "from Homebrew"
+    And the "Select All in Monospace Fonts" button is sensitive
+    When I expand the "Team tools" list under "App Collections"
+    Then the "just" entry checkbox is unchecked
+    And the "just" row says "from Homebrew"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: Select All checks a collection's entries and then goes insensitive
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Team tools" list under "App Collections"
+    Then the "just" entry checkbox is unchecked
+    When I click the "Select All in Team tools" button
+    Then the "just" entry checkbox is checked
+    And the "Select All in Team tools" button is insensitive
+    And the "Install" button in the "Install Selected" row is sensitive
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: An installed entry reads where it is installed from and cannot be chosen again
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Team tools" list under "App Collections"
+    Then the "just" entry checkbox is checked
+    And the "just" entry checkbox is insensitive
+    And the "just" row says "Installed from Homebrew"
+    And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
 
   @config.apps-bundles @stub.apps-brew-team-tools-installed @stub.apps-collections
   Scenario: A collection already on the system reads Installed when the page loads
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
-    And the "Install" button in the "Install Selected Collections" row is sensitive
-    And Homebrew was asked to "bundle check"
-    And Homebrew was never asked to "bundle install"
+    And the "Install" button in the "Install Selected" row is sensitive
 
   @config.apps-bundles @stub.apps-brew-wallpapers-installed @stub.apps-collections
   Scenario: A super-bundle reads Installed only when every member is installed
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Extra Wallpapers" row says "Includes 2 apps and tools. (Installed)"
-    And Homebrew was never asked to "bundle install"
 
   @config.apps-bundles @stub.apps-brew-wallpapers-partly-installed @stub.apps-collections
   Scenario: A super-bundle with a missing member stays offered
@@ -137,8 +156,7 @@ Feature: Apps destination
     Then the "Extra Wallpapers" row says "Includes 2 apps and tools."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
     And the "Extra Wallpapers" row does not say "(Installed)"
-    And the "Extra Wallpapers" collection is checked
-    And Homebrew was never asked to "bundle install"
+    And the "Extra Wallpapers" row says "1 of 2 installed."
 
   @config.apps-bundles @stub.apps-brew
   Scenario: A system with no app collections says none are offered
@@ -154,9 +172,10 @@ Feature: Apps destination
     Then the Apps page does not show the "Backup" group
     And the Apps page does not show the "Command-Line Tools" group
     And the Apps page does not show the "Installed Apps" group
-    When I click the "Install" button in the "Install Selected Collections" row
+    When I click the "Select All in Team tools" button
+    And I click the "Install" button in the "Install Selected" row
     Then the application log contains "/bundles/team-tools.Brewfile"
-    And the "Install" button in the "Install Selected Collections" row is sensitive
+    And the "Install" button in the "Install Selected" row is sensitive
     And I do not see "Installing collections…"
     And the application log does not contain "panic"
 
@@ -176,9 +195,10 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     Then the "Pin jq" button in the "jq" row is sensitive
-    And the "Install" button in the "Install Selected Collections" row is sensitive
+    And the "Install" button in the "Install Selected" row is sensitive
     And the "Uninstall visual-studio-code" button in the "visual-studio-code" row is sensitive
     And the "Export" button in the "Export Package List" row is sensitive
+    And the "Select All in Monospace Fonts" button is sensitive
     And every visible action control has an accessible name and an action
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
@@ -190,7 +210,7 @@ Feature: Apps destination
     Then the "Team tools" list shows exactly
       | title |
       | just  |
-    And the "just" row says "Command-line tool"
+    And the "just" row says "from Homebrew"
     When I expand the "Monospace Fonts" list under "App Collections"
     Then the "Monospace Fonts" list shows exactly
       | title            |
@@ -199,11 +219,90 @@ Feature: Apps destination
       | font-hack        |
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: A fully selected collection installs through the collection itself
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I click the "Select All in Monospace Fonts" button
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
+    And the application log contains "/bundles/fonts-dev.Brewfile"
+    And a toast on the Apps page says "[DRY-RUN] Preview: selected apps would be installed — no changes made"
+    And the "Install" button in the "Install Selected" row is sensitive
+    And I do not see "Installing collections…"
+    And Homebrew was never asked to "bundle install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: A partially selected collection installs the checked entries on their own
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Monospace Fonts" list under "App Collections"
+    And I check the "font-fira-code" entry
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "brew install font-fira-code" exactly once
+    And the application log previews no "brew bundle install"
+    And a toast on the Apps page says "[DRY-RUN] Preview: selected apps would be installed — no changes made"
+    And the "Install" button in the "Install Selected" row is sensitive
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  Scenario: A checked Flatpak entry installs from Flathub in the system scope
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Full Desktop Suite" list under "App Collections"
+    And I check the "org.gnome.Calculator" entry
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "flatpak install -y --system flathub org.gnome.Calculator" exactly once
+    And the application log previews no "brew bundle install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  Scenario: An installed Flatpak entry reads where it is installed from
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Full Desktop Suite" list under "App Collections"
+    Then the "app.drey.Damask" entry checkbox is checked
+    And the "app.drey.Damask" entry checkbox is insensitive
+    And the "app.drey.Damask" row says "Installed from Flathub"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: An entry from an untrusted tap is trusted on its own before it installs
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Tap Tools" list under "App Collections"
+    And I check the "anomalyco/tap/opencode-v2" entry
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "brew tap anomalyco/tap" exactly once
+    And the application log previews "brew trust --formula anomalyco/tap/opencode-v2" exactly once
+    And the application log previews "brew install anomalyco/tap/opencode-v2" exactly once
+    And the application log previews no "brew bundle install"
+
+  @config.apps-bundles @stub.apps-brew-tap-trusted @stub.apps-collections
+  Scenario: An entry from a tap this computer already trusts needs no new trust
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Tap Tools" list under "App Collections"
+    And I check the "anomalyco/tap/opencode-v2" entry
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "brew install anomalyco/tap/opencode-v2" exactly once
+    And the application log previews no "brew trust"
+    And the application log previews no "brew tap"
+    And the application log previews no "brew bundle install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: An install with nothing checked says so
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I click the "Install" button in the "Install Selected" row
+    Then a toast on the Apps page says "No apps selected to install."
+    And the application log previews no "brew install"
+    And the application log previews no "brew bundle install"
+    And the "Install" button in the "Install Selected" row is sensitive
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
   Scenario: Collections install with the group Install button without expanding
     Given ChairLift is running
     When I open the "Apps" page
-    And I click the "Install" button in the "Install Selected Collections" row
+    And I click the "Select All in Monospace Fonts" button
+    And I click the "Install" button in the "Install Selected" row
     Then the application log contains "/bundles/fonts-dev.Brewfile"
-    And the "Install" button in the "Install Selected Collections" row is sensitive
+    And the "Install" button in the "Install Selected" row is sensitive
     And I do not see "Installing collections…"
     And the application log does not contain "panic"
