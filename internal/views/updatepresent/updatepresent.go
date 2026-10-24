@@ -26,6 +26,10 @@ type Presentation struct {
 	ActionLabel string
 	ShowAction  bool
 	ActionStyle string
+	// ProgressFraction is the determinate progress fraction (0.0 to 1.0) when applicable.
+	ProgressFraction float64
+	// ProgressDeterminate reports whether the operation has a determinate progress fraction.
+	ProgressDeterminate bool
 }
 
 // ShowStatus keeps active status controls visible but collapses an empty
@@ -49,7 +53,11 @@ func Snapshot(state updateflow.Snapshot) Presentation {
 		addAction(&presentation, state.Action, gotext.Get("Try Again"))
 		return presentation
 	case updateflow.PhaseUpdating:
-		return Presentation{Status: updatingStatus(state)}
+		return Presentation{
+			Status:              updatingStatus(state),
+			ProgressFraction:    state.Fraction,
+			ProgressDeterminate: state.Determinate,
+		}
 	case updateflow.PhasePartialFailure:
 		presentation := partialFailurePresentation(state)
 		addAction(&presentation, state.Action, gotext.Get("Retry Failed"))

@@ -512,3 +512,26 @@ func TestHomebrewPackageButtonNameCarriesThePackage(t *testing.T) {
 		}
 	}
 }
+
+func TestGamingWorkingStepSubtitle(t *testing.T) {
+	tests := []struct {
+		enabled   bool
+		step      int
+		total     int
+		component string
+		want      string
+	}{
+		{true, 0, 4, "ProtonPlus", "Installing ProtonPlus (1 of 4)…"},
+		{true, 2, 4, "GOverlay", "Installing GOverlay (3 of 4)…"},
+		{true, 1, 4, "", "Installing (2 of 4)…"},
+		{false, 0, 4, "ProtonPlus", "Removing ProtonPlus (1 of 4)…"},
+		{false, 3, 4, "MangoHud", "Removing MangoHud (4 of 4)…"},
+	}
+	for _, tc := range tests {
+		got := GamingWorkingStepSubtitle(tc.enabled, tc.step, tc.total, tc.component)
+		if got != tc.want {
+			t.Errorf("GamingWorkingStepSubtitle(%t, %d, %d, %q) = %q, want %q",
+				tc.enabled, tc.step, tc.total, tc.component, got, tc.want)
+		}
+	}
+}

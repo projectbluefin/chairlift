@@ -1103,3 +1103,228 @@ func TestCheckTreatsUnavailableAsUnsupportedNotFailed(t *testing.T) {
 		t.Fatalf("unavailable source = %#v, want Available=false, Enabled=false, CheckErr=nil", source)
 	}
 }
+
+func TestCoordinatorFractionTracksStages(t *testing.T) {
+	first := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "halfway", Fraction: 0.5})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	second := &testProvider{
+		id:        DeveloperTools,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: DeveloperTools, Message: "halfway", Fraction: 0.5})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	current := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+		{ID: DeveloperTools, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "tool"}}},
+	}}
+	c := New([]Provider{first, second}, nil)
+
+	type updateSnapshot struct {
+		fraction float64
+		phase    Phase
+	}
+	var snaps []updateSnapshot
+	c.UpdateAll(context.Background(), current, allPreferences(), func(s Snapshot) {
+		snaps = append(snaps, updateSnapshot{fraction: s.Fraction, phase: s.Phase})
+	})
+
+	if len(snaps) == 0 {
+		t.Fatal("no snapshots published")
+	}
+
+	// Verify fractions never decrease while phase is PhaseUpdating
+	var prevFraction float64
+	for i, s := range snaps {
+		if s.phase == PhaseUpdating {
+			if s.fraction < prevFraction {
+				t.Fatalf("fraction decreased from %f to %f at snapshot %d", prevFraction, s.fraction, i)
+			}
+			prevFraction = s.fraction
+		}
+	}
+
+	// Total stages = 2. Stage 1 halfway = (0 + 0.5)/2 = 0.25; stage 1 complete = 1/2 = 0.5.
+	// Stage 2 halfway = (1 + 0.5)/2 = 0.75; stage 2 complete = 2/2 = 1.0.
+	wantFractions := []float64{0.25, 0.5, 0.75, 1.0}
+	for _, want := range wantFractions {
+		found := false
+		for _, s := range snaps {
+			diff := s.fraction - want
+			if diff > -0.001 && diff < 0.001 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("expected fraction %f not found in published snapshots", want)
+		}
+	}
+
+	// Verify clamp against decreasing fractions within a stage
+	descending := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "sixty", Fraction: 0.6})
+				progress(Progress{Source: Applications, Message: "thirty", Fraction: 0.3})
+				progress(Progress{Source: Applications, Message: "zero", Fraction: 0.0})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	descendingCurrent := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+	}}
+	descendingCoordinator := New([]Provider{descending}, nil)
+	var descendingSnaps []Snapshot
+	finalSnap := descendingCoordinator.UpdateAll(context.Background(), descendingCurrent, allPreferences(), func(s Snapshot) {
+		descendingSnaps = append(descendingSnaps, s)
+	})
+	var prevF float64
+	for _, s := range descendingSnaps {
+		if s.Phase == PhaseUpdating {
+			if s.Fraction < prevF {
+				t.Fatalf("fraction clamped failed: dropped from %f to %f", prevF, s.Fraction)
+			}
+			prevF = s.Fraction
+		}
+	}
+	if finalSnap.Fraction != 0 {
+		t.Errorf("final snapshot Fraction = %f, want 0", finalSnap.Fraction)
+	}
+
+	// Two runs: run 2 first update snapshot starts from 0
+	var run2FirstUpdateFrac float64
+	var run2Started bool
+	descendingCoordinator.UpdateAll(context.Background(), descendingCurrent, allPreferences(), func(s Snapshot) {
+		if s.Phase == PhaseUpdating && !run2Started {
+			run2FirstUpdateFrac = s.Fraction
+			run2Started = true
+		}
+	})
+	if run2FirstUpdateFrac != 0 {
+		t.Errorf("second run initial update fraction = %f, want 0", run2FirstUpdateFrac)
+	}
+	// Verify unquantified stage has Determinate == false while Fraction > 0
+	unquantifiedFirst := &testProvider{
+		id:        Applications,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				progress(Progress{Source: Applications, Message: "done", Fraction: 1.0})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	unquantifiedSecond := &testProvider{
+		id:        DeveloperTools,
+		available: true,
+		apply: func(ctx context.Context, items []Item, progress func(Progress)) (ApplyResult, error) {
+			if progress != nil {
+				// Provider reports progress message with NO fraction
+				progress(Progress{Source: DeveloperTools, Message: "working"})
+			}
+			return ApplyResult{Changed: true}, nil
+		},
+	}
+	unquantifiedCoord := New([]Provider{unquantifiedFirst, unquantifiedSecond}, nil)
+	unquantifiedCurrent := Snapshot{Sources: []SourceState{
+		{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+		{ID: DeveloperTools, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "tool"}}},
+	}}
+	var stage2UnquantifiedSawDeterminateFalse bool
+	unquantifiedCoord.UpdateAll(context.Background(), unquantifiedCurrent, allPreferences(), func(s Snapshot) {
+		if s.Phase == PhaseUpdating && s.Current == DeveloperTools && s.Progress == "working" {
+			if s.Fraction > 0 && !s.Determinate {
+				stage2UnquantifiedSawDeterminateFalse = true
+			}
+		}
+	})
+	if !stage2UnquantifiedSawDeterminateFalse {
+		t.Error("unquantified stage 2 should have Determinate == false while Fraction > 0 (stage floor)")
+	}
+}
+
+func TestCoordinatorResumesPulsingForUnquantifiedWork(t *testing.T) {
+	for _, maintenanceStage := range []bool{false, true} {
+		name := "provider"
+		if maintenanceStage {
+			name = "maintenance"
+		}
+		t.Run(name, func(t *testing.T) {
+			updates := []Progress{
+				{Message: "downloading", Fraction: 0.6},
+				{Message: "older fraction", Fraction: 0.3},
+				{Message: "deploying"},
+				{Message: "verifying", Fraction: 0.8},
+				{Message: "finishing"},
+			}
+			report := func(progress func(Progress)) {
+				for _, update := range updates {
+					progress(update)
+				}
+			}
+			provider := &testProvider{
+				id:        Applications,
+				available: true,
+				apply: func(_ context.Context, _ []Item, progress func(Progress)) (ApplyResult, error) {
+					if !maintenanceStage {
+						report(progress)
+					}
+					return ApplyResult{Changed: true}, nil
+				},
+			}
+			var maintenance Maintenance
+			if maintenanceStage {
+				maintenance = &testMaintenance{run: func(_ context.Context, progress func(Progress)) error {
+					report(progress)
+					return nil
+				}}
+			}
+			preferences := allPreferences()
+			preferences.MaintenanceAfterUpdates = maintenanceStage
+			current := Snapshot{Sources: []SourceState{
+				{ID: Applications, Configured: true, Available: true, Enabled: true, Items: []Item{{Name: "app"}}},
+			}}
+			var observed []Snapshot
+			final := New([]Provider{provider}, maintenance).UpdateAll(context.Background(), current, preferences, func(snapshot Snapshot) {
+				if snapshot.Progress != "" {
+					observed = append(observed, snapshot)
+				}
+			})
+			if len(observed) != len(updates) {
+				t.Fatalf("progress snapshots = %d, want %d", len(observed), len(updates))
+			}
+			wantFractions := []float64{0.6, 0.6, 0.6, 0.8, 0.8}
+			for i, snapshot := range observed {
+				wantFraction := wantFractions[i]
+				if maintenanceStage {
+					wantFraction = (1 + wantFraction) / 2
+				}
+				if snapshot.Phase != PhaseUpdating || snapshot.Maintaining != maintenanceStage {
+					t.Errorf("%s: phase = %v, maintaining = %v", snapshot.Progress, snapshot.Phase, snapshot.Maintaining)
+				}
+				if snapshot.Determinate != (updates[i].Fraction > 0) || snapshot.Fraction != wantFraction {
+					t.Errorf("%s: determinate = %v, fraction = %v; want %v, %v", snapshot.Progress,
+						snapshot.Determinate, snapshot.Fraction, updates[i].Fraction > 0, wantFraction)
+				}
+			}
+			if final.Phase != PhaseReady || final.Determinate || final.Fraction != 0 {
+				t.Errorf("completion: phase = %v, determinate = %v, fraction = %v", final.Phase, final.Determinate, final.Fraction)
+			}
+		})
+	}
+}

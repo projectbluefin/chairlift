@@ -79,12 +79,11 @@ type UserHome struct {
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
 	// Bundle collection checkboxes and unified install controls.
-	bundleItems          []*bundleItemRow
-	bundleInstallButton  *gtk.Button
-	bundleInstallSpinner *gtk.Spinner
-	bundleInstallBar     *gtk.ProgressBar
-	bundleInstallGate    actionstate.Gate
-	developerAppsGate    actionstate.Gate
+	bundleItems         []*bundleItemRow
+	bundleInstallButton *gtk.Button
+	bundleInstallBar    *gtk.ProgressBar
+	bundleInstallGate   actionstate.Gate
+	developerAppsGate   actionstate.Gate
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate

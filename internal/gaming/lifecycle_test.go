@@ -585,3 +585,66 @@ func TestDisableIsolatesAPerComponentRemovalFailure(t *testing.T) {
 		}
 	}
 }
+
+type progressCall struct {
+	step, total int
+	name        string
+}
+
+func recordProgress(calls *[]progressCall) ProgressCallback {
+	return func(step, total int, name string) {
+		*calls = append(*calls, progressCall{step, total, name})
+	}
+}
+
+// EnableWithProgress reports one step per missing component, before its
+// install, numbered against the missing set only.
+func TestEnableWithProgressReportsEachMissingComponentInOrder(t *testing.T) {
+	stubScope(t, Scope{
+		Installed: refsOf(protonPlus),
+		User:      refsOf(protonPlus),
+	}, nil)
+	fakeFlatpak(t, answersRuntime)
+
+	var calls []progressCall
+	installed, failures := EnableWithProgress(recordProgress(&calls))
+	if len(failures) != 0 {
+		t.Fatalf("EnableWithProgress() failures = %v, want none", failures)
+	}
+	want := []progressCall{
+		{0, 3, "Protontricks"},
+		{1, 3, "GOverlay"},
+		{2, 3, "MangoHud"},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("EnableWithProgress() progress = %v, want %v", calls, want)
+	}
+	if len(installed) != len(want) {
+		t.Errorf("EnableWithProgress() installed = %v, want %d components", installed, len(want))
+	}
+}
+
+// DisableWithProgress reports one step per installed component, numbered
+// against the installed set only.
+func TestDisableWithProgressReportsEachInstalledComponentInOrder(t *testing.T) {
+	fakeFlatpak(t, listingScript(listing{
+		userApps:     []string{protonPlus},
+		userRuntimes: []string{mangohud},
+	}))
+
+	var calls []progressCall
+	removed, _, failures := DisableWithProgress(recordProgress(&calls))
+	if len(failures) != 0 {
+		t.Fatalf("DisableWithProgress() failures = %v, want none", failures)
+	}
+	want := []progressCall{
+		{0, 2, "ProtonPlus"},
+		{1, 2, "MangoHud"},
+	}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("DisableWithProgress() progress = %v, want %v", calls, want)
+	}
+	if !reflect.DeepEqual(removed, []string{protonPlus, mangohud}) {
+		t.Errorf("DisableWithProgress() removed = %v, want %v", removed, []string{protonPlus, mangohud})
+	}
+}

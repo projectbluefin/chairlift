@@ -121,6 +121,15 @@ def step_group_absent(context, title):
     assert gone, f"the Apps page still shows a group titled {title!r}"
 
 
+@then("the Apps progress bar is {visibility:w}")
+def step_apps_progress_visibility(context, visibility):
+    assert visibility in ("shown", "hidden")
+    assert atspi.poll(
+        lambda: bool(atspi.find_all(content(context), lambda n: atspi.role(n) == "progress bar"))
+        == (visibility == "shown")
+    ), f"Apps progress bar is not {visibility}"
+
+
 @then("the Apps groups are ordered exactly")
 def step_group_order(context):
     want = [row["title"] for row in context.table]

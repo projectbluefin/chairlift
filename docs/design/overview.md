@@ -874,8 +874,9 @@ already-current system succeeds without staging anything (on composefs
 `bootc upgrade` fails on a current system) — and the header offers no
 primary button; its one status line reads "Restart to finish updating".
 The header is a plain box built once in `UpdateShell.build`: the wordmark,
-then the primary action (or, while checking or installing, the pulsing
-progress bar in its place), then one status line from
+then the primary action (or, while checking or installing, the progress
+bar in its place — determinate when `snapshot.Determinate` is true,
+otherwise pulsing), then one status line from
 `updatepresent.Presentation.Status`, with a second `Detail` line only for
 the two failure phases. `Presentation.ShowStatus` hides the header box
 whenever a presentation leaves it empty, so it adds no spacing. The shell

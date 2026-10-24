@@ -207,7 +207,7 @@ func TestSetupReportsOnlyTheStepsItRuns(t *testing.T) {
 	if _, err := Setup(Detect(), func(name string) { progress = append(progress, name) }); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	if want := []string{"Getting ready", "Installing the Goose app"}; !reflect.DeepEqual(progress, want) {
+	if want := []string{"Getting ready (1 of 2)", "Installing the Goose app (2 of 2)"}; !reflect.DeepEqual(progress, want) {
 		t.Errorf("progress = %v, want %v", progress, want)
 	}
 }
