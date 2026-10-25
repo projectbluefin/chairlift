@@ -185,6 +185,7 @@ for each mutation and observation.
 | Keyboard Shortcuts | `Window.onShowShortcuts`; advertised and registered inventory from `internal/navigation` |
 | About Control Center | `Window.onShowAbout`; application About dialog, not a machine-information route |
 | `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose (off the GTK thread) without presenting a window, otherwise open Agents with prerequisite, open-session, or start-failure feedback |
+| `--dx-mode` | `internal/app` command-line handler and `Window.NavigateToDXModePage`; open Control Center directly to the Features page where Developer Mode is toggled |
 | Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
 
 The visible primary inventory is fixed for the session and Alt+number compacts

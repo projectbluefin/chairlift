@@ -728,6 +728,14 @@ func (w *Window) NavigateToAgentsPage() {
 	w.navigateToPage(navigation.AgentModeRoute)
 }
 
+// NavigateToDXModePage opens the Features page (where the Developer Mode toggle lives).
+// It is the GTK half of the --dx-mode launch intent: internal/app resolves the
+// decision and calls this from either the running-instance (onCommandLine) or
+// cold-start (onActivate) path, and the route is the canonical Features page.
+func (w *Window) NavigateToDXModePage() {
+	w.navigateToPage(navigation.DXModeRoute)
+}
+
 // ShowMissingPrerequisite shows an error toast naming the prerequisite preventing
 // Goose Desktop / Ask Bluefin from launching.
 func (w *Window) ShowMissingPrerequisite(reason string) {

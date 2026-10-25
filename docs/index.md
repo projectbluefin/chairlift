@@ -54,6 +54,7 @@ always retained so the window always has a valid destination.
 | `--dry-run`, `-d` | Run without making any changes to the system. Propagated to all package manager wrappers. |
 | `--first-run`, `--setup`, `-s` | Start the same explicit Features → Apps → Agents → Livery tour on existing page controls. A running tour retains its current step. Ordinary activation never starts setup. |
 | `--ask-bluefin` | Launch Goose Desktop with the active model when Agent Mode is ready, or open Control Center to the Agents page naming the missing requirement. |
+| `--dx-mode` | Open Control Center directly to the Developer Mode toggle screen on the Features page. |
 
 ## Optional Dependencies
 
