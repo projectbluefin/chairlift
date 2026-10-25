@@ -211,3 +211,56 @@ Feature: Livery
     And the Livery "Top Bar Icon" section is shown
     And the Livery "Files Icon" section is shown
     And the Livery page announced no dry-run change
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: Wallpaper collections load without installing and preview preserves status
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "Wallpapers" section is shown
+    And the "Wallpaper Collections" row says "Artwork · Not Installed"
+    When I expand the "Wallpaper Collections" list under "Wallpapers"
+    Then the "Wallpaper Collections" list under "Wallpapers" shows exactly
+      | title              |
+      | bluefin-wallpapers |
+    And Homebrew was never asked to "bundle install"
+    When I click the "Install" button in the "Wallpaper Collections" row
+    Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
+    And the "Install" button in the "Wallpaper Collections" row is sensitive
+    And the "Wallpaper Collections" row says "Artwork · Not Installed"
+    And Homebrew was never asked to "bundle install"
+    When I open the "Apps" page
+    Then I do not see "Wallpaper Collections"
+    And I do not see "Extra Wallpapers"
+
+  @config.apps-bundles @stub.apps-brew-wallpapers-installed @stub.apps-collections
+  Scenario: Installed wallpapers are observed independently of slideshow tools
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "Wallpaper Collections" row says "Artwork · Installed"
+    And the "Install" button in the "Wallpaper Collections" row is insensitive
+    And Homebrew was never asked to "bundle install"
+
+  @config.apps-bundles @stub.apps-brew
+  Scenario: A missing wallpaper manifest leaves the other Livery controls available
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "Files Icon" section is shown
+    And the Livery "Wallpapers" section is not shown
+
+  @config.apps-bundles @env.CHAIRLIFT_CAPABILITIES=flatpak
+  Scenario: A host without Homebrew keeps Livery without a wallpaper package card
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "Files Icon" section is shown
+    And the Livery "Wallpapers" section is not shown
+
+  @config.livery-wallpapers-only @stub.apps-brew @stub.apps-collections
+  Scenario: Wallpaper actions work when Apps groups are unconstructed
+    Given ChairLift is running
+    Then the sidebar omits "Apps"
+    When I open the "Livery" page
+    Then the "Wallpaper Collections" row says "Artwork · Not Installed"
+    When I click the "Install" button in the "Wallpaper Collections" row
+    Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
+    And the "Install" button in the "Wallpaper Collections" row is sensitive
+    And Homebrew was never asked to "bundle install"

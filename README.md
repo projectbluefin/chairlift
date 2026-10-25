@@ -102,6 +102,9 @@ never asks for a reboot.
   search all 214 projects that publish artwork, from Kubernetes to bootc
 - **Rotate at Login**: the two foundation sections can advance one step each
   time you sign in. Any section also accepts an SVG of your own
+- **Wallpapers**: install or update the curated wallpaper collection
+  (`artwork.Brewfile`) with Homebrew, shown when Homebrew and the collection
+  are available
 
 ### 🔧 Updates & Maintenance
 
@@ -328,9 +331,10 @@ Suite; a collection already on the system reads Installed and its checkbox
 is locked. Each row is named and described from a curated table rather than
 from the file, because the shipped collections are identified on disk by
 tooling names such as `cli` and `fonts-dev`; some rows also cover a sibling
-Brewfile (Extra Wallpapers includes `wallpaper-slideshow`, Fonts includes
-`dakota-fonts`) and count its items too; a sibling shipped without its
-parent keeps a row of its own. Retired Bluefin collections are not
+Brewfile (Fonts includes `dakota-fonts`) and count its items too; a sibling
+shipped without its parent keeps a row of its own. The `artwork` wallpaper
+collection is offered on Livery instead, and `wallpaper-slideshow` keeps its
+own row here. Retired Bluefin collections are not
 offered. A collection that table does not know gets a readable form of its
 identifier, and its leading `#` comment only when that comment reads as a
 human sentence. Every row states how many apps and tools it installs.

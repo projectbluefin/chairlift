@@ -410,3 +410,14 @@ func TestRowGatesRebuildForgetsReplacedRowsAndDebt(t *testing.T) {
 		t.Fatal("a replaced row's gate still blocks rebuilds")
 	}
 }
+
+func TestBundleInstallOnlyRefreshesConfirmedLiveSuccess(t *testing.T) {
+	for _, success := range []bool{false, true} {
+		for _, preview := range []bool{false, true} {
+			got := BundleInstall(success, preview)
+			if !got.RestoreControl || got.CompleteControl || got.Refresh != (success && !preview) {
+				t.Fatalf("success=%v preview=%v: %+v", success, preview, got)
+			}
+		}
+	}
+}

@@ -238,3 +238,9 @@ func completedPackageMutation(succeeded, dryRun bool) Decision {
 		return Decision{Refresh: true, CompleteControl: true}
 	}
 }
+
+// BundleInstall preserves observed collection state unless a live install
+// succeeds. The next check, rather than command exit alone, establishes state.
+func BundleInstall(succeeded, dryRun bool) Decision {
+	return Decision{RestoreControl: true, Refresh: succeeded && !dryRun}
+}

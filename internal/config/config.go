@@ -409,6 +409,7 @@ func defaultConfig() *Config {
 			"livery_app_grid_group":   GroupConfig{Enabled: true},
 			"livery_foundation_group": GroupConfig{Enabled: true},
 			"livery_dock_group":       GroupConfig{Enabled: true},
+			"wallpapers_group":        GroupConfig{Enabled: true},
 		},
 		HelpPage: PageConfig{
 			"help_resources_group": GroupConfig{

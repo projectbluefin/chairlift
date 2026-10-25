@@ -643,3 +643,13 @@ func TestLiveryDecisionsGateTheMirrorAndAnnounceEveryPreview(t *testing.T) {
 		t.Errorf("rotation preview does not say which way it would go: %q", on)
 	}
 }
+
+func TestBundleInstallPreviewDoesNotClaimSuccess(t *testing.T) {
+	preview := BundleInstall(true)
+	if !strings.Contains(preview, "[DRY-RUN]") || !strings.Contains(preview, "no changes made") || strings.Contains(preview, "successfully") {
+		t.Fatal(preview)
+	}
+	if strings.Contains(BundleInstall(false), "DRY-RUN") {
+		t.Fatal("live install described as preview")
+	}
+}

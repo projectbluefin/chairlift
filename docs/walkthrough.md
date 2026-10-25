@@ -387,3 +387,11 @@ commit with `make screenshots` and commits any changed PNGs to its branch;
 the push re-runs CI. It runs on request rather than per push for the same
 drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.
+
+Within Livery, **Wallpapers** appears when Homebrew and the configured external
+wallpaper collection are available. Expand **Wallpaper Collections** to inspect
+its actual packages. Its subtitle reports Installed, Update Available,
+Not Installed or Indeterminate; choose **Install** or **Update** explicitly.
+Opening the page never installs anything. A preview restores the action and
+keeps the observed status. Other Livery controls remain available when the
+collection is absent. Wallpaper packages are managed here rather than in Apps.

@@ -64,13 +64,6 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
 		},
 		{
-			name:         "curated collection Extra Wallpapers",
-			id:           "artwork",
-			itemCount:    4,
-			wantTitle:    "Extra Wallpapers",
-			wantSubtitle: "More dinosaur artwork, and wallpaper tools. Includes 4 apps and tools.",
-		},
-		{
 			name:         "curated collection Fonts",
 			id:           "fonts",
 			itemCount:    21,
@@ -122,13 +115,14 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
-// Dakota collections are curated, a curated super-bundle member, or explicitly retired.
+// Dakota collections are curated, a curated super-bundle member, or explicitly
+// retired. Livery owns artwork; wallpaper-slideshow keeps a standalone Apps row
+// until its own slideshow controls exist.
 func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
-		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
+		"ai-tools", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
-		"wallpaper-slideshow",
 	} {
 		_, inCatalog := catalog[id]
 		_, inRetired := retired[id]
@@ -153,7 +147,7 @@ func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 }
 
 func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
-	curatedIDs := []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
+	curatedIDs := []string{"cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
 	for _, id := range curatedIDs {
 		if !Curated(id) {
 			t.Errorf("Curated(%q) = false, want true", id)
@@ -165,13 +159,25 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 	if DefaultSelected("full-desktop") {
 		t.Errorf("DefaultSelected(full-desktop) = true, want false")
 	}
-	for _, id := range []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools"} {
+	for _, id := range []string{"cli", "fonts", "fonts-dev", "ai-tools"} {
 		if !DefaultSelected(id) {
 			t.Errorf("DefaultSelected(%q) = false, want true", id)
 		}
 	}
 	if !DefaultSelected("custom-admin-pack") {
 		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
+	}
+}
+
+func TestWallpaperCollectionsLeaveTheAppsCatalog(t *testing.T) {
+	if !WallpaperCollection("artwork") {
+		t.Fatal("WallpaperCollection(artwork) = false, want Livery to own it")
+	}
+	if _, ok := catalog["artwork"]; ok {
+		t.Error("artwork is in the Apps catalog, want it owned by Livery only")
+	}
+	if !Visible("wallpaper-slideshow", nil) {
+		t.Error("Visible(wallpaper-slideshow) = false, want a standalone Apps row")
 	}
 }
 
@@ -245,15 +251,15 @@ func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
 // itself, and resolve only against collections actually discovered.
 func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
 	discovered := map[string]homebrew.Bundle{
-		"artwork":             {Name: "artwork", Path: "/b/artwork.Brewfile", ItemCount: 2},
-		"wallpaper-slideshow": {Name: "wallpaper-slideshow", Path: "/b/wallpaper-slideshow.Brewfile", ItemCount: 1},
-		"fonts":               {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+		"fonts":        {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+		"dakota-fonts": {Name: "dakota-fonts", Path: "/b/dakota-fonts.Brewfile", ItemCount: 1},
 	}
 
-	got := MemberBundles("artwork", discovered)
-	if len(got) != 1 || got[0].Path != "/b/wallpaper-slideshow.Brewfile" {
-		t.Errorf("MemberBundles(artwork) = %v, want only wallpaper-slideshow", got)
+	got := MemberBundles("fonts", discovered)
+	if len(got) != 1 || got[0].Path != "/b/dakota-fonts.Brewfile" {
+		t.Errorf("MemberBundles(fonts) = %v, want only dakota-fonts", got)
 	}
+	delete(discovered, "dakota-fonts")
 	if got := MemberBundles("fonts", discovered); len(got) != 0 {
 		t.Errorf("MemberBundles(fonts) = %v, want none when dakota-fonts was not discovered", got)
 	}
