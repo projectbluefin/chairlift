@@ -49,6 +49,41 @@ func TestBundleDescriptionsFailure(t *testing.T) {
 	}
 }
 
+func TestBundleDescriptionsRetriesNamesAfterBatchFailure(t *testing.T) {
+	log := fakeBrewOnPath(t, `case "$*" in
+ 'info --json=v2 --formula jq') echo '{"formulae":[{"name":"jq","desc":"JSON processor"}]}' ;;
+ 'info --json=v2 --formula just') echo '{"formulae":[{"name":"just","desc":"Save and run commands"}]}' ;;
+ *) echo 'Error: No available formula' >&2; exit 1 ;;
+ esac`)
+	got, err := DescribeBundleItems(context.Background(), []BundleItem{
+		{Name: "jq", Kind: BundleItemBrew},
+		{Name: "vendor/untapped/tool", Kind: BundleItemBrew},
+		{Name: "just", Kind: BundleItemBrew},
+	})
+	if err == nil {
+		t.Fatal("want error for the unresolvable name")
+	}
+	for i, want := range []string{"JSON processor", "", "Save and run commands"} {
+		if got[i].Description != want {
+			t.Errorf("item %d: %q, want %q", i, got[i].Description, want)
+		}
+	}
+	assertArgv(t, log, []string{
+		"info --json=v2 --formula jq vendor/untapped/tool just",
+		"info --json=v2 --formula jq",
+		"info --json=v2 --formula vendor/untapped/tool",
+		"info --json=v2 --formula just",
+	})
+}
+
+func TestBundleDescriptionsSingleNameFailureIsNotRetried(t *testing.T) {
+	log := fakeBrewOnPath(t, "exit 1")
+	if _, err := DescribeBundleItems(context.Background(), []BundleItem{{Name: "jq", Kind: BundleItemBrew}}); err == nil {
+		t.Fatal("want error")
+	}
+	assertArgv(t, log, []string{"info --json=v2 --formula jq"})
+}
+
 func TestBundleDescriptionTokens(t *testing.T) {
 	for _, name := range []string{"", "--help", "/tmp/formula", "../formula", "https://bad/formula", "bad.rb", "x\ny", "$(bad)"} {
 		if validDescriptionToken(name) {

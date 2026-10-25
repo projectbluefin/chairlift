@@ -12,6 +12,9 @@ import (
 // Non-Homebrew entries and missing metadata retain an empty description. Lookups
 // are batched by namespace and bounded by one shared read timeout. This does not
 // install packages or trust taps; Homebrew may fetch its package metadata.
+// `brew info` never auto-taps: names in untapped taps fail and are reported
+// unavailable. A failed batch is retried per name so one unresolvable entry
+// does not blank the rest of its namespace.
 func DescribeBundleItems(ctx context.Context, items []BundleItem) ([]BundleItem, error) {
 	ctx, cancel := context.WithTimeout(ctx, readTimeout)
 	defer cancel()
@@ -22,26 +25,42 @@ func DescribeBundleItems(ctx context.Context, items []BundleItem) ([]BundleItem,
 		if kind == BundleItemCask {
 			flag = "--cask"
 		}
-		args := []string{"info", "--json=v2", flag}
+		var names []string
 		seen := make(map[string]bool)
 		for _, item := range items {
 			if item.Kind == kind && validDescriptionToken(item.Name) && !seen[item.Name] {
-				args = append(args, item.Name)
+				names = append(names, item.Name)
 				seen[item.Name] = true
 			}
 		}
-		if len(seen) == 0 {
+		if len(names) == 0 {
 			continue
 		}
-		output, err := runBrewCommandCtx(ctx, args...)
-		if err != nil {
-			problems = append(problems, err)
-			continue
+		descriptions, err := describeNames(ctx, flag, kind, names)
+		if err != nil && len(names) > 1 && ctx.Err() == nil {
+			// Homebrew emits no JSON when any single name is unresolvable
+			// (untapped tap, renamed formula, typo), so retry each name alone
+			// to keep the resolvable ones.
+			descriptions = make(map[string]string)
+			var nameErrs []error
+			for _, name := range names {
+				if ctx.Err() != nil {
+					nameErrs = append(nameErrs, ctx.Err())
+					break
+				}
+				one, oneErr := describeNames(ctx, flag, kind, []string{name})
+				if oneErr != nil {
+					nameErrs = append(nameErrs, oneErr)
+					continue
+				}
+				for key, value := range one {
+					descriptions[key] = value
+				}
+			}
+			err = errors.Join(nameErrs...)
 		}
-		descriptions, err := parseBundleDescriptions(output, kind)
 		if err != nil {
 			problems = append(problems, err)
-			continue
 		}
 		for i := range result {
 			if result[i].Kind == kind && seen[result[i].Name] {
@@ -50,6 +69,14 @@ func DescribeBundleItems(ctx context.Context, items []BundleItem) ([]BundleItem,
 		}
 	}
 	return result, errors.Join(problems...)
+}
+
+func describeNames(ctx context.Context, flag string, kind BundleItemKind, names []string) (map[string]string, error) {
+	output, err := runBrewCommandCtx(ctx, append([]string{"info", "--json=v2", flag}, names...)...)
+	if err != nil {
+		return nil, err
+	}
+	return parseBundleDescriptions(output, kind)
 }
 
 // Accept package identifiers only, never options, URLs or local Ruby paths.

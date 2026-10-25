@@ -498,14 +498,23 @@ type ContentsRow struct {
 }
 
 // ContentsSubtitle preserves the package type when metadata is unavailable.
+// Kinds with no description provider show the type alone, so the row does
+// not read as a failed lookup.
 func ContentsSubtitle(item homebrew.BundleItem) string {
+	kind := ContentsKindLabel(item.Kind)
 	description := strings.TrimSpace(item.Description)
 	if description == "" {
+		if !hasDescriptionProvider(item.Kind) {
+			return kind
+		}
 		description = "Description unavailable"
 	}
-	kind := ContentsKindLabel(item.Kind)
 	if kind == "" {
 		return description
 	}
 	return kind + " · " + description
+}
+
+func hasDescriptionProvider(kind homebrew.BundleItemKind) bool {
+	return kind == homebrew.BundleItemBrew || kind == homebrew.BundleItemCask
 }
