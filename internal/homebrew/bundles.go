@@ -205,8 +205,9 @@ const (
 // a Flatpak ref, an App Store id, a VS Code extension id); Kind records
 // which directive it came from so a presenter can group or label the list.
 type BundleItem struct {
-	Name string
-	Kind BundleItemKind
+	Name        string
+	Kind        BundleItemKind
+	Description string
 }
 
 // AvailableItems is the cap used by both the bundle scanner and the

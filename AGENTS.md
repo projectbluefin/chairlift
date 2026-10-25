@@ -699,7 +699,11 @@ An agent must not break these:
   checked; Full Desktop Suite defaults unchecked), installed casks and
   explicitly requested formulae next, then the Brewfile exporter (also gated
   by `brew_group`). No Flatpak inventory, external catalog launcher, or package
-  search belongs here. Installed-package refreshes use
+  search belongs here. Expanding a collection loads formula/cask descriptions
+  once, off-thread, with a shared read timeout and cancellation on row destruction.
+  Missing metadata keeps the package name/type and reports Description unavailable.
+  Other package managers currently have no description lookup.
+  Installed-package refreshes use
   `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm
   pin/unpin, and every row shares one gate across its mutation controls so

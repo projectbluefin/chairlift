@@ -91,6 +91,7 @@ case "$1" in
 --prefix) echo "{context.scenario_dir}/brew-prefix"; exit 0 ;;
 info)
     {info_fail}case "$*" in
+    'info --json=v2 --formula just') echo '{{"formulae":[{{"name":"just","desc":"Save and run project commands"}}]}}' ;;
     *--formula*) cat <<'EOF'
 {formulae}
 EOF

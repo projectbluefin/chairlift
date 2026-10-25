@@ -396,3 +396,19 @@ func TestPresentContentsReportsOverflowWhenItemsAreCropped(t *testing.T) {
 		t.Errorf("EmptySubtitle = %q, want %q", got.EmptySubtitle, ContentsHiddenSubtitle)
 	}
 }
+
+func TestContentsSubtitle(t *testing.T) {
+	for _, tc := range []struct {
+		item homebrew.BundleItem
+		want string
+	}{
+		{homebrew.BundleItem{Kind: homebrew.BundleItemBrew, Description: "JSON processor"}, "Command-line tool · JSON processor"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemCask}, "App · Description unavailable"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Flatpak · Description unavailable"},
+		{homebrew.BundleItem{Description: "  "}, "Description unavailable"},
+	} {
+		if got := ContentsSubtitle(tc.item); got != tc.want {
+			t.Errorf("got %q, want %q", got, tc.want)
+		}
+	}
+}

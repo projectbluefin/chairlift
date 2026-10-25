@@ -1,6 +1,7 @@
 package views
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
@@ -265,6 +267,7 @@ func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, tot
 		expander.AddRow(&placeholder.Widget)
 		return
 	}
+	entries := make([]*adw.ActionRow, 0, len(presentation.Rows))
 	for _, item := range presentation.Rows {
 		entry := adw.NewActionRow()
 		// AdwActionRow parses title/subtitle as Pango markup by default;
@@ -277,7 +280,9 @@ func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, tot
 		}
 		SetAccessibleLabel(entry, item.AccessibleName)
 		expander.AddRow(&entry.Widget)
+		entries = append(entries, entry)
 	}
+	bindBundleDescriptions(expander, entries, items)
 	if presentation.OverflowNotice != "" {
 		overflow := adw.NewActionRow()
 		overflow.SetUseMarkup(false)
@@ -653,4 +658,35 @@ func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 	for _, button := range controls {
 		button.SetSensitive(sensitive)
 	}
+}
+
+// Each expander owns one lookup and its rows. Destruction cancels the worker;
+// callbacks never publish into a replacement page or a destroyed widget.
+func bindBundleDescriptions(expander *adw.ExpanderRow, rows []*adw.ActionRow, items []homebrew.BundleItem) {
+	started, disposed := false, false
+	ctx, cancel := context.WithCancel(context.Background())
+	destroyed := func(_ gtk.Widget) { disposed = true; cancel() }
+	expander.ConnectDestroy(&destroyed)
+	expanded := func(_ gobject.Object, _ uintptr) {
+		if started || disposed || !expander.GetExpanded() {
+			return
+		}
+		started = true
+		go func() {
+			defer cancel()
+			described, err := homebrew.DescribeBundleItems(ctx, items)
+			if err != nil {
+				log.Printf("Could not load collection descriptions: %v", err)
+			}
+			sgtk.RunOnMainThread(func() {
+				if disposed {
+					return
+				}
+				for i, item := range described {
+					rows[i].SetSubtitle(bundleview.ContentsSubtitle(item))
+				}
+			})
+		}()
+	}
+	expander.ConnectNotify(&expanded)
 }

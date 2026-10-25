@@ -496,3 +496,16 @@ type ContentsRow struct {
 	KindLabel      string
 	AccessibleName string
 }
+
+// ContentsSubtitle preserves the package type when metadata is unavailable.
+func ContentsSubtitle(item homebrew.BundleItem) string {
+	description := strings.TrimSpace(item.Description)
+	if description == "" {
+		description = "Description unavailable"
+	}
+	kind := ContentsKindLabel(item.Kind)
+	if kind == "" {
+		return description
+	}
+	return kind + " · " + description
+}

@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.2
-last_updated: 2026-10-21
+version: 2.1.3
+last_updated: 2026-10-25
 tags:
   - testing
   - gtk
@@ -383,3 +383,11 @@ gone. Prove unprivileged launch suppression with a recording `gtk-launch` stub
 and an empty calls file: a preview log and the privileged action journal alone
 cannot prove that no desktop app launched. Keep the native quit action disabled
 across save/launch, not only `close-request`, so Ctrl+Q cannot interrupt it.
+
+## Asynchronous collection metadata
+
+When a package subtitle changes after expanding a collection, the AT-SPI
+scenario should wait for the final subtitle and assert the metadata command.
+Keep package-name assertions separate: a visible identifier alone does not
+prove that the description lookup completed. Stub description queries separately
+from installed inventory queries so uninstalled collection entries are covered.
