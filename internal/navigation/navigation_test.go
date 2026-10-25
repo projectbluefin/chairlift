@@ -570,6 +570,28 @@ func TestLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
 	}
 }
 
+func TestDXModeLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
+	// The --dx-mode launch intent reaches the Features page (where the Developer Mode
+	// toggle resides) the same way the sidebar row does.
+	route := routeByName(t, DXModeRoute)
+	if !isPrimary(route) {
+		t.Fatalf("DXModeRoute %q is not a canonical primary", DXModeRoute)
+	}
+
+	routes := VisibleRoutes(everythingEnabled)
+	if !containsPage(routes, DXModeRoute) {
+		t.Fatalf("VisibleRoutes with everything enabled did not offer %q", DXModeRoute)
+	}
+
+	transition, ok := Resolve(DXModeRoute, routes, alwaysConstructed)
+	if !ok {
+		t.Fatalf("Resolve(%q) rejected the launch route", DXModeRoute)
+	}
+	if transition.Name != DXModeRoute || transition.VisibleChild != DXModeRoute {
+		t.Fatalf("Resolve(%q) = %#v, want it entered as a primary", DXModeRoute, transition)
+	}
+}
+
 func TestWindowAndAppUseCanonicalNavigation(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {

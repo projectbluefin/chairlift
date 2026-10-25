@@ -37,6 +37,11 @@ const optionFirstRun = "first-run"
 // the primary instance.
 const optionAgentMode = "agent-mode"
 
+// optionDXMode is the long name of the --dx-mode option, and with it the
+// key GLib uses for the option in the command-line dictionary it forwards to
+// the primary instance.
+const optionDXMode = "dx-mode"
+
 // optionAskBluefin is the long name of the --ask-bluefin option, and with it the
 // key GLib uses for the option in the command-line dictionary it forwards to
 // the primary instance.
@@ -53,6 +58,7 @@ type Application struct {
 	window              *window.Window
 	setupRequested      bool
 	agentModeRequested  bool
+	dxModeRequested     bool
 	askBluefinRequested bool
 	askBluefinReason    string
 }
@@ -161,6 +167,7 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 	setup := commandLineRequestsSetup(cl)
 	agentMode := commandLineRequestsAgentMode(cl)
 	askBluefin := commandLineRequestsAskBluefin(cl)
+	dxMode := commandLineRequestsDXMode(cl)
 	running := a.window != nil
 
 	if askBluefin {
@@ -207,6 +214,7 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 	// racing it to Present.
 	a.setupRequested = setup
 	a.agentModeRequested = agentMode
+	a.dxModeRequested = dxMode
 
 	a.Activate()
 
@@ -218,6 +226,10 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 	// launch intent is handled here, mirroring --setup.
 	if agentMode && running && a.window != nil {
 		a.window.NavigateToAgentsPage()
+	}
+	// A running instance opens the Features page directly for DX Mode.
+	if dxMode && running && a.window != nil {
+		a.window.NavigateToDXModePage()
 	}
 	return 0
 }
@@ -250,6 +262,19 @@ func commandLineRequestsAgentMode(cl *gio.ApplicationCommandLine) bool {
 		return false
 	}
 	return opts.Contains(optionAgentMode)
+}
+
+// commandLineRequestsDXMode reports whether the invocation carried --dx-mode.
+// GLib keys the dictionary on the long option name.
+func commandLineRequestsDXMode(cl *gio.ApplicationCommandLine) bool {
+	if cl == nil {
+		return false
+	}
+	opts := cl.GetOptionsDict()
+	if opts == nil {
+		return false
+	}
+	return opts.Contains(optionDXMode)
 }
 
 // commandLineRequestsAskBluefin reports whether the invocation carried
@@ -288,7 +313,9 @@ func (a *Application) onActivate() {
 	a.setupKeyboardShortcuts(win.NavigationItems())
 	win.Present()
 	win.CheckFirstRun(a.setupRequested)
-	if a.agentModeRequested || a.askBluefinRequested {
+	if a.dxModeRequested {
+		win.NavigateToDXModePage()
+	} else if a.agentModeRequested || a.askBluefinRequested {
 		win.NavigateToAgentsPage()
 		if a.askBluefinRequested && a.askBluefinReason != "" {
 			win.ShowMissingPrerequisite(a.askBluefinReason)
@@ -358,6 +385,14 @@ func (a *Application) registerOptions() {
 		glib.GOptionFlagNoneValue,
 		glib.GOptionArgNoneValue,
 		"Launch Ask Bluefin (Goose) or open Agent Mode.",
+		"",
+	)
+	a.AddMainOption(
+		optionDXMode,
+		0,
+		glib.GOptionFlagNoneValue,
+		glib.GOptionArgNoneValue,
+		"Open the Developer Mode toggle screen.",
 		"",
 	)
 }

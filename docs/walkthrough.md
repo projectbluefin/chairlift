@@ -203,7 +203,8 @@ success. Turning it off keeps your containers and installed packages. Missing
 UID-map tools or an unavailable user session keep the switch visible but locked,
 with an explanation; a missing Docker installation can be installed with one click.
 Use **Virtual Machine Engine** to choose the built-in engine or Lima;
-both run Ubuntu. An existing Lima Ubuntu machine is kept as the choice when no
+both run Ubuntu. An external documentation button beside the chooser opens the
+engine's documentation. An existing Lima Ubuntu machine is kept as the choice when no
 built-in machine exists, rather than creating a second one. Likewise, a Debian
 machine the built-in engine made in an earlier release keeps being used, and
 the chooser says so, instead of an Ubuntu machine being created beside it.
