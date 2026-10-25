@@ -75,14 +75,6 @@ type catalogEntry struct {
 }
 
 var catalog = map[string]catalogEntry{
-	"artwork": {
-		title:    "Extra Wallpapers",
-		summary:  "More dinosaur artwork, and wallpaper tools.",
-		curated:  true,
-		order:    1,
-		defaults: true,
-		members:  []string{"wallpaper-slideshow"},
-	},
 	"cli": {
 		title:    "Bluefin CLI",
 		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
@@ -139,7 +131,7 @@ var retired = map[string]struct{}{
 
 // Visible reports whether an on-disk collection should be offered as a row.
 // Retired Bluefin bundles are excluded; user-added collections remain visible.
-// A super-bundle member (e.g. wallpaper-slideshow) is folded into its parent's
+// A super-bundle member (e.g. dakota-fonts) is folded into its parent's
 // row when that parent was discovered, and keeps its own row otherwise so it
 // stays installable.
 func Visible(id string, discovered map[string]homebrew.Bundle) bool {

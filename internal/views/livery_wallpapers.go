@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	"log"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
@@ -11,6 +12,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
+	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 )
 
 // buildWallpapersGroup discovers the external collection without constructing
@@ -105,7 +107,12 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 							button.SetSensitive(true)
 							if err != nil {
 								log.Printf("wallpapers: install: %v", err)
-								uh.toastAdder.ShowErrorToast("Couldn't install wallpaper collections. Try again.")
+								var trustErr *homebrew.UntrustedTapError
+								if errors.As(err, &trustErr) {
+									uh.toastAdder.ShowErrorToast(trustmsg.BundleMessage("wallpaper collections"))
+								} else {
+									uh.toastAdder.ShowErrorToast("Couldn't install wallpaper collections. Try again.")
+								}
 								return
 							}
 							uh.toastAdder.ShowToast(actionmsg.BundleInstall(preview))

@@ -132,18 +132,8 @@ def apps_brew_team_tools_installed(context):
 
 @stub("apps-brew-wallpapers-installed")
 def apps_brew_wallpapers_installed(context):
-    """Homebrew on which both Extra Wallpapers member Brewfiles are installed."""
+    """Homebrew on which both the artwork and wallpaper-slideshow Brewfiles are installed."""
     _brew(context, installed_collections=("artwork.Brewfile", "wallpaper-slideshow.Brewfile"))
-
-
-@stub("apps-brew-wallpapers-partly-installed")
-def apps_brew_wallpapers_partly_installed(context):
-    """Homebrew holding artwork but not its wallpaper-slideshow sibling.
-
-    Team tools is installed too, so its later "(Installed)" subtitle proves
-    the Extra Wallpapers check already ran.
-    """
-    _brew(context, installed_collections=("artwork.Brewfile", "team-tools.Brewfile"))
 
 
 @stub("apps-brew-unreadable")
