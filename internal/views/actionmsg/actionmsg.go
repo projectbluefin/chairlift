@@ -754,3 +754,12 @@ func AskBluefinMenu(dryRun, requested, observed bool, err, readErr error) AskBlu
 	}
 	return AskBluefinMenuDecision{Active: observed}
 }
+
+// BundleInstall describes a completed collection action without claiming that
+// a dry-run changed installed packages.
+func BundleInstall(dryRun bool) string {
+	if dryRun {
+		return "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+	}
+	return "Selected collections installed successfully."
+}

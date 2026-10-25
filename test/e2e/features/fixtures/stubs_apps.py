@@ -42,8 +42,7 @@ APP_COLLECTIONS = {
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
-    # Extra Wallpapers super-bundle: artwork plus its retired
-    # wallpaper-slideshow sibling, merged into one row by bundleview.Members.
+    # Artwork belongs to Livery; standalone slideshow tools remain in Apps.
     "artwork.Brewfile": (
         'cask "bluefin-wallpapers"\n'
     ),

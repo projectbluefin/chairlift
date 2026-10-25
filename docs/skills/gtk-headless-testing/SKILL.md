@@ -383,3 +383,12 @@ gone. Prove unprivileged launch suppression with a recording `gtk-launch` stub
 and an empty calls file: a preview log and the privileged action journal alone
 cannot prove that no desktop app launched. Keep the native quit action disabled
 across save/launch, not only `close-request`, so Ctrl+Q cannot interrupt it.
+
+## Collections hosted outside Apps
+
+Exercise a collection on its owning page with Apps inventory disabled as well
+as enabled. Share the install gate, but never assume the Apps widgets exist.
+Keep discovery fixtures in the scenario directory and assert that page opening
+runs only bundle checks, while preview actions preserve the observed subtitle.
+For Wallpapers, use the `@livery` scenarios in `features/livery.feature`; this
+retains the existing shard assignment without adding a separate route or tag.

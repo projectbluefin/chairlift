@@ -87,6 +87,8 @@ type UserHome struct {
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate
+	wallpaperRefresh    func()
+	wallpapersGroup     *adw.PreferencesGroup
 
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.

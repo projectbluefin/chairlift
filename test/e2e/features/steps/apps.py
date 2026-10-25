@@ -280,3 +280,11 @@ def step_log_previews_none(context, program, command):
 def step_home_lacks(context, name):
     path = os.path.join(context.home, name)
     assert not os.path.exists(path), f"{path} was written under --dry-run"
+
+
+@then('the "{title}" list under "{group_title}" shows exactly')
+def step_scoped_expander_rows_exact(context, title, group_title):
+    want = [row["title"] for row in context.table]
+    header = expander_header(context, title, group_title, timeout=1)
+    assert atspi.poll(lambda: expander_rows(header) == want, timeout=2.0), \
+        f"the {title!r} list shows {expander_rows(header)}, want {want}"

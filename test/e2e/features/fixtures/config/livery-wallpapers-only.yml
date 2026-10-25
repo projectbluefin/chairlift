@@ -1,0 +1,8 @@
+# Livery consumes the configured bundle paths without constructing Apps widgets.
+applications_page:
+  brew_group:
+    enabled: false
+  brew_bundles_group:
+    enabled: false
+    bundles_paths:
+      - bundles

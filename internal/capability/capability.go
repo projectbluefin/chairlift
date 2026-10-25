@@ -260,6 +260,7 @@ var prerequisites = []Prerequisite{
 	{Page: "features_page", Group: "printers_group", AnyOf: []Capability{Podman}},
 
 	// Livery.
+	{Page: "livery_page", Group: "wallpapers_group", AnyOf: []Capability{Homebrew}},
 	{Page: "livery_page", Group: "account_group"},
 	{Page: "livery_page", Group: "livery_app_grid_group"},
 	{Page: "livery_page", Group: "livery_dock_group"},

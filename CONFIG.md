@@ -191,17 +191,19 @@ older ChairLift created rather than adding a second one.
 
 ### Livery Page (`livery_page`)
 
-Who you are, who you stand with, and what you roll with. Each livery section
+Who you are, who you stand with, and what you roll with. Each icon section
 shadows one icon-theme name inside the user's own theme, and the profile
 picture goes through AccountsService as the invoking user, so nothing here is
-privileged. Apart from the profile picture (staged in `$XDG_CACHE_HOME`, with a
-face-file fallback in `$HOME`), nothing is written outside `$XDG_DATA_HOME` and
-`$XDG_CONFIG_HOME`.
+privileged. Icon settings and assets stay in `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME`.
+Profile pictures are staged in `$XDG_CACHE_HOME`, with a face-file fallback
+in `$HOME`. Wallpaper packages use Homebrew’s normal installation locations.
 
 - `account_group`: Profile Picture; the account's picture, chosen from Project Bluefin's dinosaur artwork. Nothing is downloaded until a picture is picked, and it is set only on Apply, through AccountsService (`busctl`, unprivileged) with a `~/.face.icon`/`~/.face` fallback that takes effect at the next sign-in
 - `livery_app_grid_group`: App Launcher Icon; the Show Applications mark on GNOME or the configured Kickoff applets on KDE Plasma, fetched from simpleicons.org by brand name. Set once — there is no rotation; unavailable on Plasma if no Kickoff applet is configured
 - `livery_foundation_group`: Top Bar Icon; the GNOME top-bar menu mark, optionally advancing at each login (requires the Custom Command Menu GNOME extension; omitted on Plasma)
 - `livery_dock_group`: Files Icon; the Files application icon, set to a CNCF project's own color mark from cncf/artwork and chosen with a searchable picker, optionally advancing at each login. GNOME stores one icon per application, so this changes Files everywhere it is drawn, not only on the dock
+
+- `wallpapers_group`: Wallpapers; discovers `artwork.Brewfile` through the existing Apps `bundles_paths`, independently of whether either Apps group is enabled. Homebrew and a readable manifest are required. Only clicking Install or Update changes packages; this uses Homebrew’s existing install and tap-trust checks. No wallpaper setting or second settings store is created.
 
 ### Help Page (`help_page`)
 

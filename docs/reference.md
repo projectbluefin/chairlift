@@ -109,7 +109,7 @@ accepted and ignored for compatibility, as described in [CONFIG.md](../CONFIG.md
   collapsed, but same-named files in different directories remain separate.
 
 Row text is resolved by `internal/views/bundleview`'s `Describe`, not taken
-from the file: the curated collections Bluefin ships (`artwork`, `cli`, `fonts`,
+from the file: the curated collections Bluefin ships (`cli`, `fonts`,
 `fonts-dev`, `ai-tools`, `full-desktop`) have user-facing titles and descriptions
 written here. Retired collections (`cncf`, `swift`, etc.) are filtered out, while
 administrator-added collections remain visible. Each row also states how many apps
@@ -192,6 +192,7 @@ authorization rule.
 
 | Group | Key | Description |
 |-------|-----|-------------|
+| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only |
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
 | App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
 | Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
@@ -310,3 +311,13 @@ maintenance_page:
 
 All other groups remain enabled by default since they are not listed (except
 `maintenance_cleanup_group` and `reset_group`, which default to disabled).
+
+The Livery Wallpapers group owns `artwork.Brewfile`; Apps omits that collection
+and retains its other collection owners, including standalone slideshow tools.
+The configured Apps bundle directories supply discovery even when Apps inventory
+or collections are disabled. Missing Homebrew or a missing/unreadable manifest
+omits the package group without affecting profile or icon controls. Capability
+reasons are available in Help. Check failures display Indeterminate and remain
+retryable. Failed installs and dry-run previews preserve the last observation;
+a confirmed live success refreshes collection states and constructed Homebrew
+inventories. The pure `internal/livery` backend does not import Homebrew.

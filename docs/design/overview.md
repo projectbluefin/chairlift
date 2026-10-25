@@ -1613,3 +1613,11 @@ Back and Next mutate no settings. **Finish** saves completed
 and version and returns to Control Center; a save failure reports an
 error toast. Intentional dismissal records a skip without
 demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.
+
+Livery's optional `wallpapers_group` composes the external artwork collection
+with `internal/homebrew` at the view layer. Discovery reads the existing Apps
+bundle paths even if Apps widgets are unconstructed. Its rows and callbacks
+are constructed once; status requests use generation guards, and installation
+invalidates earlier observations through the shared bundle install gate.
+Only a successful live install refreshes inventories. The headless Livery
+backend and rotation retain no Homebrew dependency.

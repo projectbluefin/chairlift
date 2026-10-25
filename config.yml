@@ -127,6 +127,10 @@ livery_page:
   livery_dock_group:
     enabled: true
 
+  # Curated wallpaper collections discovered through the Apps bundle paths.
+  wallpapers_group:
+    enabled: true
+
 help_page:
   # website is titled "Browse Documentation" and chat "Ask for Help", matching
   # projectbluefin/common's shipped configuration.

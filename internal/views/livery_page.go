@@ -17,8 +17,7 @@ import (
 )
 
 // buildLiveryPage keeps one Livery primary with independent policy groups.
-// Profile Picture is followed by the three icon surfaces; Wallpapers joins
-// only after #200 supplies working controls for its separate group.
+// Profile Picture is followed by the three icon surfaces and optional Wallpapers.
 //
 // Every control starts insensitive. Reading current state calls gsettings
 // off the GTK main thread, so refreshLiveryState populates the built page.
@@ -40,6 +39,10 @@ func (uh *UserHome) buildLiveryPage() {
 	}
 	if uh.groupEnabled("livery_page", "livery_dock_group") {
 		uh.buildLiveryDockGroup(page)
+	}
+
+	if uh.groupEnabled("livery_page", "wallpapers_group") {
+		uh.buildWallpapersGroup(page)
 	}
 
 	go uh.refreshLiveryState()

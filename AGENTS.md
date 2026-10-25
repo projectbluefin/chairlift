@@ -1372,6 +1372,13 @@ An agent must not break these:
   regenerating `docs/screenshots/` deliberately, from the E2E job's
   `walkthrough-screenshots` artifact with the capture byproducts stripped.
 
+- **Wallpaper collections belong to Livery.** `livery_page.wallpapers_group`
+  discovers the external `artwork.Brewfile` through Apps bundle paths, without
+  depending on Apps widgets. Apps excludes artwork but retains other collection
+  owners. Opening/refreshing never installs; explicit actions share the bundle
+  install gate, invalidate old status generations, and refresh inventories only
+  on live success. The pure `internal/livery` backend stays Homebrew-free.
+
 ## Documentation
 
 Documentation lives in `docs/`, with the local four-category layout from
