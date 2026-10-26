@@ -1666,3 +1666,14 @@ are constructed once; status requests use generation guards, and installation
 invalidates earlier observations through the shared bundle install gate.
 Only a successful live install refreshes inventories. The headless Livery
 backend and rotation retain no Homebrew dependency.
+
+The same Livery Wallpapers builder adds a video-path action independently of
+collection discovery. `livery.LoadHanabi` checks the current desktop and the
+real Hanabi schema through the existing unprivileged command runner; absence
+omits the action, while command/read failures expose a diagnostic with Retry.
+`livery.ApplyHanabi` validates the selected file, rechecks support, skips writes
+in preview, and reads back a live write. Invalid files, rejected writes,
+refresh failures and mismatched observations retain the previous confirmed
+path. The GTK adapter keeps chooser selection pending until Apply, marshals
+worker results to the main thread, and rejects stale or disabled-group results.
+This observes a configured path, not whether Hanabi is rendering video.

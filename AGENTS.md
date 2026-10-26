@@ -1136,9 +1136,9 @@ An agent must not break these:
   claim it.
 - **Livery remains one primary with independent task groups.** Profile
   Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
-  existing `livery_page` config keys and one built control set. Never add a
-  wallpaper entry until `wallpapers_group` has a working builder (#200); do not
-  clone the icon controls behind a second overview or a new sidebar route.
+  existing `livery_page` config keys and one built control set. Wallpapers
+  uses the optional `wallpapers_group` builder; do not clone controls behind
+  a second overview or a new sidebar route.
 
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** GNOME's app-grid button (`view-app-grid-symbolic`), panel
@@ -1418,6 +1418,18 @@ An agent must not break these:
   owners. Opening/refreshing never installs; explicit actions share the bundle
   install gate, invalidate old status generations, and refresh inventories only
   on live success. The pure `internal/livery` backend stays Homebrew-free.
+- **Hanabi is optional and never activated by ChairLift.** The existing
+  Wallpapers group probes `io.github.jeffshee.hanabi-extension` through
+  out-of-process `gsettings list-schemas` on a worker, independently of the
+  booted image. Only GNOME with that schema offers Choose Video and Apply
+  Video. Unsupported desktops and absent schemas omit the action; failed
+  probes retain diagnostic/retry UI without a write. Selection validates a
+  local regular readable video container but does not save it. Explicit Apply
+  rechecks support, validates again, writes only `video-path`, and reads back
+  before changing the confirmed path. A readback is not proof of playback.
+  Preview writes nothing; rejected writes and failed verification retain the
+  previous confirmed path. Worker completions check generation, page identity
+  and group policy on the main thread.
 
 ## Documentation
 
