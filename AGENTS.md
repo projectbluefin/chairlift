@@ -1167,7 +1167,10 @@ An agent must not break these:
   went with the catalog change. The panel catalog's *default* depends on the
   booted image: `DefaultFoundationID` returns the Open Gaming Collective's
   mark when `imageinfo.Info.IsGaming()` is true, because that is whose work
-  the gaming images ship. It is applied in `resolveID` at load, so switching
+  the gaming images ship. The schema stores an empty `panel-foundation`
+  default so `resolveID` can choose by image; a concrete schema default would mask that fallback.
+  This chooses the mark in the picker; `panel-enabled` remains opt-in.
+  It is applied in `resolveID` at load, so switching
   images adopts the new default without overwriting a selection the user made
   — `TestADeliberateSelectionSurvivesOnAGamingImage` holds that distinction.
   Whether this branding should be an org-wide convention rather than one

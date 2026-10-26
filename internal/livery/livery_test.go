@@ -3,6 +3,7 @@ package livery
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -1068,24 +1069,61 @@ func TestEverySymbolicMarkIsThemeColored(t *testing.T) {
 // The seam matters: without it this would assert nothing on a non-gaming
 // machine and silently pass, which is the same as having no test.
 func TestLoadAppliesTheGamingDefaultForTheBootedImage(t *testing.T) {
-	for name, gaming := range map[string]bool{"gaming image": true, "ordinary image": false} {
-		t.Run(name, func(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "data", "io.projectbluefin.chairlift.livery.gschema.xml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Keys []struct {
+			Name    string `xml:"name,attr"`
+			Default string `xml:"default"`
+		} `xml:"schema>key"`
+	}
+	if err := xml.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	var defaults strings.Builder
+	for _, key := range schema.Keys {
+		defaults.WriteString(SchemaID + " " + key.Name + " " + key.Default + "\n")
+	}
+	if defaults.Len() == 0 {
+		t.Fatal("schema contains no defaults")
+	}
+
+	for _, tc := range []struct {
+		name   string
+		gaming bool
+		chosen string
+		want   string
+	}{
+		{"fresh gaming image", true, "", GamingDefaultID},
+		{"fresh ordinary image", false, "", DefaultID},
+		{"explicit CNCF on gaming image", true, "cncf", "cncf"},
+		{"explicit custom on gaming image", true, CustomID, CustomID},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			fake := newFakeCommands(t)
-			// An unset selection, which is what a fresh install has.
-			fake.reply["gsettings list-recursively"] = SchemaID + " " + KeyPanelID + " ''\n" +
-				SchemaID + " " + KeyDockID + " 'kubernetes'\n"
+			// list-recursively includes schema defaults, even without a user
+			// selection. Use the shipped values, not an invented empty value.
+			reply := defaults.String()
+			if tc.chosen != "" {
+				reply += SchemaID + " " + KeyPanelID + " '" + tc.chosen + "'\n"
+			}
+			fake.reply["gsettings list-recursively"] = reply
 
 			original := detectGaming
-			detectGaming = func() bool { return gaming }
+			detectGaming = func() bool { return tc.gaming }
 			t.Cleanup(func() { detectGaming = original })
 
 			state, err := Load(context.Background())
 			if err != nil {
 				t.Fatalf("Load: %v", err)
 			}
-			want := DefaultFoundationID(gaming)
-			if state.PanelID != want {
-				t.Errorf("panel selection = %q, want %q", state.PanelID, want)
+			if state.PanelID != tc.want {
+				t.Errorf("panel selection = %q, want %q", state.PanelID, tc.want)
+			}
+			if state.PanelEnabled {
+				t.Error("loading the default must not enable the panel override")
 			}
 		})
 	}
