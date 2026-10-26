@@ -84,7 +84,15 @@ func ValidateHanabiVideo(path string) error {
 		return fmt.Errorf("reading video: %w", err)
 	}
 	ext := strings.ToLower(filepath.Ext(path))
-	valid := (ext == ".mp4" || ext == ".mov" || ext == ".m4v") && string(header[4:8]) == "ftyp" || ext == ".webm" && string(header[:4]) == "\x1a\x45\xdf\xa3" || ext == ".ogv" && string(header[:4]) == "OggS"
+	var valid bool
+	switch ext {
+	case ".mp4", ".mov", ".m4v":
+		valid = string(header[4:8]) == "ftyp"
+	case ".webm":
+		valid = string(header[:4]) == "\x1a\x45\xdf\xa3"
+	case ".ogv":
+		valid = string(header[:4]) == "OggS"
+	}
 	if !valid {
 		return fmt.Errorf("choose an MP4, MOV, M4V, WebM or OGV video file")
 	}

@@ -31,6 +31,9 @@ func (uh *UserHome) buildHanabiControl(page *adw.PreferencesPage) {
 		}
 		return "Saved video: " + confirmed.Path + ". Playback is managed by Hanabi."
 	}
+	selected := func() string {
+		return "Selected: " + filepath.Base(pending) + " — not applied. Choose Apply to save the path."
+	}
 	report := func(err error) {
 		log.Printf("hanabi: %v", err)
 		uh.toastAdder.ShowErrorToast(err.Error())
@@ -109,7 +112,7 @@ func (uh *UserHome) buildHanabiControl(page *adw.PreferencesPage) {
 							return
 						}
 						pending = path
-						row.SetSubtitle("Selected: " + filepath.Base(path) + " — not applied. Choose Apply to save the path.")
+						row.SetSubtitle(selected())
 						apply.SetSensitive(true)
 					})
 				}()
@@ -174,6 +177,7 @@ func (uh *UserHome) buildHanabiControl(page *adw.PreferencesPage) {
 					return
 				}
 				if err == nil && !state.Available {
+					pending = ""
 					if row != nil {
 						row.SetVisible(false)
 					}
@@ -181,12 +185,12 @@ func (uh *UserHome) buildHanabiControl(page *adw.PreferencesPage) {
 				}
 				build()
 				row.SetVisible(true)
-				pending = ""
 				choose.SetVisible(err == nil)
 				apply.SetVisible(err == nil)
 				retry.SetVisible(err != nil)
-				apply.SetSensitive(false)
 				if err != nil {
+					pending = ""
+					apply.SetSensitive(false)
 					confirmed.Available = false
 					log.Printf("hanabi: %v", err)
 					row.SetTitle("Check Video Wallpaper Support")
@@ -195,6 +199,13 @@ func (uh *UserHome) buildHanabiControl(page *adw.PreferencesPage) {
 				}
 				confirmed = state
 				row.SetTitle("Video Wallpaper")
+				// A chosen-but-unapplied video survives unrelated refreshes
+				// (e.g. Homebrew inventory changes) while Hanabi stays available.
+				apply.SetSensitive(pending != "")
+				if pending != "" {
+					row.SetSubtitle(selected())
+					return
+				}
 				row.SetSubtitle(subtitle())
 			})
 		}()
