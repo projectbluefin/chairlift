@@ -508,5 +508,5 @@ func ContentsSubtitle(item homebrew.BundleItem) string {
 }
 
 func hasDescriptionProvider(kind homebrew.BundleItemKind) bool {
-	return kind == homebrew.BundleItemBrew || kind == homebrew.BundleItemCask
+	return kind == homebrew.BundleItemBrew || kind == homebrew.BundleItemCask || kind == homebrew.BundleItemFlatpak
 }

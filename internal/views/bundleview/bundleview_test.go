@@ -410,7 +410,7 @@ func TestContentsSubtitle(t *testing.T) {
 	}{
 		{homebrew.BundleItem{Kind: homebrew.BundleItemBrew, Description: "JSON processor"}, "Command-line tool · JSON processor"},
 		{homebrew.BundleItem{Kind: homebrew.BundleItemCask}, "App · Description unavailable"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Flatpak"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Flatpak · Description unavailable"},
 		{homebrew.BundleItem{Kind: homebrew.BundleItemMas}, "App Store"},
 		{homebrew.BundleItem{Kind: homebrew.BundleItemVSCode}, "VS Code extension"},
 		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak, Description: "Calculator"}, "Flatpak · Calculator"},

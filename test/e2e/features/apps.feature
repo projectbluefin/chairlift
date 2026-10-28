@@ -183,6 +183,18 @@ Feature: Apps destination
       | font-hack        |
     And the "font-fira-code" row says "Command-line tool · Description unavailable"
 
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  Scenario: Expanding a collection shows Flatpak app descriptions
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Full Desktop Suite" list under "App Collections"
+    Then the "Full Desktop Suite" list shows exactly
+      | title                |
+      | org.gnome.Calculator |
+    And the "org.gnome.Calculator" row says "Flatpak · Perform arithmetic calculations"
+    And Flatpak was asked to "search --columns=application,description org.gnome.Calculator"
+    And Flatpak was never asked to "install"
+
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
   Scenario: Collections install with the group Install button without expanding
     Given ChairLift is running

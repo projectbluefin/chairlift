@@ -6,12 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/projectbluefin/chairlift/internal/flatpak"
 )
 
-// DescribeBundleItems returns a copy enriched with Homebrew's short descriptions.
-// Non-Homebrew entries and missing metadata retain an empty description. Lookups
-// are batched by namespace and bounded by one shared read timeout. This does not
-// install packages or trust taps; Homebrew may fetch its package metadata.
+// describeFlatpakApps reads Flatpak application summaries; tests replace it.
+var describeFlatpakApps = flatpak.DescribeApps
+
+// DescribeBundleItems returns a copy enriched with short descriptions: formulae
+// and casks from Homebrew, Flatpak applications from Flatpak's cached
+// AppStream data. App Store and VS Code entries and missing metadata retain an
+// empty description. Lookups are batched by namespace and bounded by one
+// shared read timeout. This does not install packages or trust taps; Homebrew
+// may fetch its package metadata, while the Flatpak lookup stays offline.
 // `brew info` never auto-taps: names in untapped taps fail and are reported
 // unavailable. A failed batch is retried per name so one unresolvable entry
 // does not blank the rest of its namespace.
@@ -68,7 +75,29 @@ func DescribeBundleItems(ctx context.Context, items []BundleItem) ([]BundleItem,
 			}
 		}
 	}
+	if err := describeFlatpaks(ctx, result); err != nil {
+		problems = append(problems, err)
+	}
 	return result, errors.Join(problems...)
+}
+
+func describeFlatpaks(ctx context.Context, items []BundleItem) error {
+	var ids []string
+	for _, item := range items {
+		if item.Kind == BundleItemFlatpak {
+			ids = append(ids, item.Name)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	descriptions, err := describeFlatpakApps(ctx, ids)
+	for i := range items {
+		if items[i].Kind == BundleItemFlatpak {
+			items[i].Description = descriptions[items[i].Name]
+		}
+	}
+	return err
 }
 
 func describeNames(ctx context.Context, flag string, kind BundleItemKind, names []string) (map[string]string, error) {

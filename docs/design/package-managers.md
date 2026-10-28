@@ -1137,5 +1137,15 @@ The row owns cancellation and rejects publication after destruction.
 
 Full identifiers and formula aliases match the returned metadata; formula and
 cask namespaces remain separate. Option-like tokens, URLs and Ruby paths are
-excluded from metadata commands. Flatpak, App Store and VS Code entries show
-their package type only until their own metadata providers are implemented.
+excluded from metadata commands.
+
+Flatpak entries take their summary from `flatpak.DescribeApps`, which runs
+`flatpak search --columns=application,description <id>` once per application
+ID under the same deadline. `flatpak search` reads only the remotes' cached
+AppStream data, so it works offline and never refreshes, installs or adds a
+remote. It matches substrings, so only the row whose application ID equals the
+Brewfile entry is used. Entries that are not plain reverse-DNS application IDs
+are never passed to flatpak. A missing `flatpak`, an uncached remote or a
+failed search shows “Description unavailable” without affecting the Homebrew
+descriptions. App Store and VS Code entries show their package type only until
+their own metadata providers are implemented.

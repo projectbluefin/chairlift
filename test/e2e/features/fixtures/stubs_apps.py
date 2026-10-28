@@ -149,6 +149,12 @@ def apps_flatpak(context):
     script = _record(context, "flatpak") + f"""
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
+search)
+    case "$3" in
+    org.gnome.Calculator) printf 'org.gnome.Calculator\tPerform arithmetic calculations\n' ;;
+    *) echo "No matches found" ;;
+    esac
+    exit 0 ;;
 list)
     case "$*" in
     *--runtime*) exit 0 ;;

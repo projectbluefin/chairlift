@@ -709,10 +709,11 @@ An agent must not break these:
   explicitly requested formulae next, then the Brewfile exporter (also gated
   by `brew_group`). No Flatpak inventory, external catalog launcher, or package
   search belongs here. Expanding a collection loads formula/cask descriptions
-  once, off-thread, with a shared read timeout and cancellation on row destruction.
+  and Flatpak AppStream summaries (`flatpak search`, cached data only) once,
+  off-thread, with a shared read timeout and cancellation on row destruction.
   Missing metadata keeps the package name/type and reports Description unavailable;
   a failed batch is retried per name so one unresolvable entry does not blank the rest.
-  Other package managers currently have no description lookup and show the type only.
+  App Store and VS Code entries have no description lookup and show the type only.
   Installed-package refreshes use
   `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   Installed formula/cask rows likewise confirm uninstall, formula rows confirm

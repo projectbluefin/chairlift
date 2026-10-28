@@ -256,6 +256,16 @@ def step_flatpak_never(context, command):
     assert not ran, f"flatpak ran {command!r} for real: {ran}"
 
 
+@then('Flatpak was asked to "{command}"')
+def step_flatpak_asked(context, command):
+    words = command.split()
+
+    def ran():
+        return [line for line in calls(context, "flatpak") if line.split()[: len(words)] == words]
+
+    assert atspi.poll(ran), f"flatpak was never asked to {command!r}"
+
+
 
 @then('the application log previews "{command}" exactly once')
 def step_log_previews_once(context, command):
