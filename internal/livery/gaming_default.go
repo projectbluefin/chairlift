@@ -15,10 +15,12 @@ import (
 // user has never chosen, and it is written here once the mark lands, so the
 // default is applied a single time and a later opt-out stays an opt-out.
 //
-// It is a no-op off a gaming image, when the session has no panel surface, or
-// when the schema is not installed.
+// It is a no-op off a gaming image, when the session has no panel surface or
+// the Custom Command Menu extension is absent (the same PanelAvailable gate the
+// Livery page uses, so nothing is half-written and retried on every launch),
+// or when the schema is not installed.
 func EnsureGamingPanelDefault(ctx context.Context) error {
-	if !detectGaming() || !surfaceSupported(Panel, detectDesktop()) {
+	if !detectGaming() || !PanelAvailable(ctx) {
 		return nil
 	}
 	values, err := readAll(ctx)

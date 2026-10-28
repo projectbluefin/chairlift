@@ -2,6 +2,7 @@ package livery
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -55,5 +56,23 @@ func TestEnsureGamingPanelDefaultLeavesChoicesAlone(t *testing.T) {
 				t.Fatalf("settings changed: %v", calls)
 			}
 		})
+	}
+}
+
+func TestEnsureGamingPanelDefaultSkipsWithoutPanelExtension(t *testing.T) {
+	f := rotateState(t, map[string]string{KeyPanelEnabled: "false", KeyPanelID: "''"})
+	detectGaming = func() bool { return true }
+	originalDesktop := detectDesktop
+	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
+	t.Cleanup(func() { detectDesktop = originalDesktop })
+	probe := "gsettings get " + extensionSchema
+	f.reply[probe] = "No such schema \u201c" + extensionSchema + "\u201d"
+	f.fail[probe] = errors.New("exit status 1")
+
+	if err := EnsureGamingPanelDefault(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.sawPrefix("gsettings set") {
+		t.Fatalf("settings written without the panel extension: %v", f.calls)
 	}
 }

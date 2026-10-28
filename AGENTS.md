@@ -1202,7 +1202,12 @@ An agent must not break these:
   mark when `imageinfo.Info.IsGaming()` is true, because that is whose work
   the gaming images ship. The schema stores an empty `panel-foundation`
   default so `resolveID` can choose by image; a concrete schema default would mask that fallback.
-  This chooses the mark in the picker; `panel-enabled` remains opt-in.
+  This chooses the mark in the picker. On a gaming image,
+  `livery.EnsureGamingPanelDefault` (started from `cmd/chairlift` at launch)
+  also turns the panel on once: only while `panel-foundation` is empty and
+  `panel-enabled` is false, gated on `PanelAvailable`, and it writes
+  `panel-foundation` last so a later opt-out stays an opt-out. Off gaming
+  images `panel-enabled` remains opt-in.
   It is applied in `resolveID` at load, so switching
   images adopts the new default without overwriting a selection the user made
   — `TestADeliberateSelectionSurvivesOnAGamingImage` holds that distinction.
@@ -1337,7 +1342,12 @@ An agent must not break these:
   `livery.ReconcileRotationUnit`, which rewrites an existing rotation unit
   only when its `ExecStart` names a versioned Caskroom binary; it never
   creates a unit, touches a setting, or repoints any other path, and it is
-  dry-run gated like every install. `internal/livery.Fetch` is
+  dry-run gated like every install. The one app-start settings write is
+  `livery.EnsureGamingPanelDefault`, run from `cmd/chairlift` before the
+  window exists, not from the page: it applies the gaming panel default only
+  when `panel-foundation` is empty, and writing `panel-foundation` is its
+  one-shot guard. It is not a violation of this rule; do not move it into the
+  page's load path. `internal/livery.Fetch` is
   the page's single network round trip, following `internal/sbom`'s shape so
   the package's tests point it at a loopback `httptest` server and no gated
   test makes an outbound request; slugs are validated against a closed
