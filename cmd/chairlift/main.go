@@ -50,6 +50,16 @@ func main() {
 		return
 	}
 
+	// A gaming image's panel mark is applied here, off the main thread,
+	// rather than waiting for the user to open the Livery page.
+	go func() {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+		if err := livery.EnsureGamingPanelDefault(ctx); err != nil {
+			log.Printf("livery: gaming panel default: %v", err)
+		}
+	}()
+
 	application := app.New()
 	defer application.Unref()
 	log.Printf("main: application created in %s", time.Since(processStart))
