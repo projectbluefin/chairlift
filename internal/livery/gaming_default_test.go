@@ -9,9 +9,17 @@ import (
 	"github.com/projectbluefin/chairlift/internal/deskenv"
 )
 
+func enablePanelGroup(t *testing.T, enabled bool) {
+	t.Helper()
+	original := panelGroupEnabled
+	panelGroupEnabled = func() bool { return enabled }
+	t.Cleanup(func() { panelGroupEnabled = original })
+}
+
 func gamingDefaultCalls(t *testing.T, gaming bool, values map[string]string) []string {
 	t.Helper()
 	f := rotateState(t, values)
+	enablePanelGroup(t, true)
 	detectGaming = func() bool { return gaming }
 	originalDesktop := detectDesktop
 	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
@@ -61,6 +69,7 @@ func TestEnsureGamingPanelDefaultLeavesChoicesAlone(t *testing.T) {
 
 func TestEnsureGamingPanelDefaultSkipsWithoutPanelExtension(t *testing.T) {
 	f := rotateState(t, map[string]string{KeyPanelEnabled: "false", KeyPanelID: "''"})
+	enablePanelGroup(t, true)
 	detectGaming = func() bool { return true }
 	originalDesktop := detectDesktop
 	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
@@ -74,5 +83,21 @@ func TestEnsureGamingPanelDefaultSkipsWithoutPanelExtension(t *testing.T) {
 	}
 	if f.sawPrefix("gsettings set") {
 		t.Fatalf("settings written without the panel extension: %v", f.calls)
+	}
+}
+
+func TestEnsureGamingPanelDefaultSkipsWhenGroupDisabled(t *testing.T) {
+	f := rotateState(t, map[string]string{KeyPanelEnabled: "false", KeyPanelID: "''"})
+	enablePanelGroup(t, false)
+	detectGaming = func() bool { return true }
+	originalDesktop := detectDesktop
+	detectDesktop = func() deskenv.Desktop { return deskenv.GNOME }
+	t.Cleanup(func() { detectDesktop = originalDesktop })
+
+	if err := EnsureGamingPanelDefault(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if f.sawPrefix("gsettings set") {
+		t.Fatalf("settings written with livery_foundation_group disabled: %v", f.calls)
 	}
 }

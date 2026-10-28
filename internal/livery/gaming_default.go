@@ -4,7 +4,17 @@ import (
 	"context"
 	"errors"
 	"log"
+
+	"github.com/projectbluefin/chairlift/internal/config"
 )
+
+// panelGroupEnabled reports whether the administrator's configuration shows
+// the Livery page's Top Bar Icon section. It is a seam for tests; Load fails
+// closed, so an unreadable configuration also suppresses the default.
+var panelGroupEnabled = func() bool {
+	cfg, _ := config.Load()
+	return cfg.IsGroupEnabled("livery_page", "livery_foundation_group")
+}
 
 // EnsureGamingPanelDefault puts the Open Gaming Collective mark on the panel
 // of a gaming image that has never been configured.
@@ -18,9 +28,11 @@ import (
 // It is a no-op off a gaming image, when the session has no panel surface or
 // the Custom Command Menu extension is absent (the same PanelAvailable gate the
 // Livery page uses, so nothing is half-written and retried on every launch),
-// or when the schema is not installed.
+// or when the schema is not installed. It is also a no-op when the
+// configuration disables the Livery page's livery_foundation_group, since the
+// user would then have no switch to turn the mark back off.
 func EnsureGamingPanelDefault(ctx context.Context) error {
-	if !detectGaming() || !PanelAvailable(ctx) {
+	if !detectGaming() || !panelGroupEnabled() || !PanelAvailable(ctx) {
 		return nil
 	}
 	values, err := readAll(ctx)
