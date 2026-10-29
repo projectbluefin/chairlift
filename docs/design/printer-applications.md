@@ -74,7 +74,7 @@ whose installed unit still carries `AutoUpdate=registry`
 (`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
 that off-and-on, so an unchecked older install is not silent. `Refresh` is a verified package
 API, not a scheduled job or an Updates-page action. Automatic verified refresh
-and migration remain tracked by issue #582; installed pins otherwise remain
+is tracked by issue #652; installed pins otherwise remain
 fixed until disable/re-enable or an explicit API refresh. Diagnostic image
 presence probes read `Image=` from the installed quadlet, not the family's
 moving tag; a cached verified digest need not have a local `:stable` tag.

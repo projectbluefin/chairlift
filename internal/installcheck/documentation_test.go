@@ -217,6 +217,7 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"all features default to enabled except\n`maintenance_cleanup_group`, which defaults to disabled",
 			"all groups are enabled except\n`maintenance_cleanup_group`.",
 			"every group except `maintenance_cleanup_group`, which\n    defaults to `false`",
+			"kept current by `podman-auto-update.timer`",
 		} {
 			if strings.Contains(current, stale) {
 				t.Errorf("current documentation still contains stale claim %q", stale)

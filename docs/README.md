@@ -102,7 +102,8 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
   — printer applications publish on 127.0.0.1 only (no LAN printing or
   DNS-SD), run their image's moving `:stable` tag, and update through
-  `podman-auto-update.timer`
+  `podman-auto-update.timer`; the moving-tag and auto-update parts are
+  superseded by ADR-0023
 - [adr/0021-active-model-selection-from-downloaded-models.md](adr/0021-active-model-selection-from-downloaded-models.md)
   — Active Model selects among downloaded models in llmman via a live combo row,
   mapping `aliases.bluefin-active` in-app while retaining Manage Models for downloads
