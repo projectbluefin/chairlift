@@ -52,6 +52,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/devtools` for observed readiness and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
+| `features_page` | `compass_group` | Features Compass launcher; `buildCompassGroup`, `runCompassToggle`, `internal/compass` over `internal/flatpak` from the image's FlatPark system remote |
 | `agents_page` | `agents_group` | Agents service, the active model selector and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
 | `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |

@@ -429,6 +429,60 @@ func DockerEditorFailure(preview bool) string {
 	return "Docker access is enabled, but VS Code setup couldn't finish. See the application log for details."
 }
 
+// Compass row text. The check reads both Flatpak installations and the
+// remote list before the switch can be used.
+const (
+	CompassTitle               = "Compass"
+	CompassCheckingSubtitle    = "Checking whether Compass is installed…"
+	CompassUnavailableSubtitle = "Couldn't check whether Compass is installed."
+)
+
+// CompassSubtitle returns the Compass row's subtitle for an observed state.
+// supported reports whether Compass is published for this architecture and
+// remote whether the FlatPark remote Compass installs from exists.
+func CompassSubtitle(installed, supported, remote bool) string {
+	switch {
+	case installed:
+		return "Installed for everyone on this computer. Open Compass from the app grid."
+	case !supported:
+		return "Compass is only available for x86_64 computers."
+	case !remote:
+		return "Compass installs from FlatPark, which isn't set up on this computer."
+	default:
+		return "A fast, keyboard-first launcher for apps, files, and commands. Installs from FlatPark."
+	}
+}
+
+// CompassWorkingSubtitle returns the subtitle while Compass is being
+// installed or removed.
+func CompassWorkingSubtitle(enable bool) string {
+	if enable {
+		return "Installing…"
+	}
+	return "Removing…"
+}
+
+// CompassToast returns the toast after a Compass toggle. failed reports an
+// install or removal error; changed reports whether a command actually ran.
+func CompassToast(dryRun, enable, changed, failed bool) (toast string, isError bool) {
+	verb := "removed"
+	if enable {
+		verb = "installed"
+	}
+	switch {
+	case failed && enable:
+		return "Couldn't install Compass. Try again.", true
+	case failed:
+		return "Couldn't remove Compass. Try again.", true
+	case dryRun:
+		return fmt.Sprintf("[DRY-RUN] Preview: Compass would be %s — no changes made", verb), false
+	case !changed:
+		return "Nothing needed changing.", false
+	default:
+		return fmt.Sprintf("Compass %s.", verb), false
+	}
+}
+
 // GamingCheckingSubtitle is the gaming row's subtitle while ChairLift is still
 // finding out what is installed. The switch cannot be used until that answer
 // arrives, so the row has to say why.

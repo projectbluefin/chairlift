@@ -24,6 +24,7 @@ var featureTitles = map[[2]string]string{
 	{"features_page", "dx_group"}:               "Developer Mode",
 	{"features_page", "gaming_group"}:           "Gaming Mode",
 	{"features_page", "printers_group"}:         "Printers",
+	{"features_page", "compass_group"}:          "Compass",
 	{"maintenance_page", "reset_group"}:         "Powerwash",
 }
 

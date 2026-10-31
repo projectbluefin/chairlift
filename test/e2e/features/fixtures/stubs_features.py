@@ -69,8 +69,12 @@ def _listing(components):
     )
 
 
-def _fake_flatpak(context, user=(), system=(), list_fails=False):
-    """A flatpak whose four gaming listings return the given components."""
+def _fake_flatpak(context, user=(), system=(), list_fails=False, remotes=("flathub", "flatpark")):
+    """A flatpak whose four gaming listings return the given components.
+
+    `remotes` is the system remote list: Bluefin-family images ship
+    Flathub and FlatPark, which Compass installs from."""
+    remote_rows = "".join(f"{name}\\t\\n" for name in remotes)
     listings = {}
     for scope, components in (("user", user), ("system", system)):
         for kind in ("app", "runtime"):
@@ -104,6 +108,7 @@ def _fake_flatpak(context, user=(), system=(), list_fails=False):
         + f"""
 case "$1" in
   --version) echo "Flatpak 1.16.0" ;;
+  remotes) printf "{remote_rows}" ;;
   list) {list_branch}
     ;;
   info|remote-info) echo "org.freedesktop.Platform/x86_64/{STEAM_PLATFORM_BRANCH}" ;;
@@ -129,6 +134,22 @@ def gaming_installed(context):
 def gaming_unlistable(context):
     """A flatpak that cannot list any installation."""
     _fake_flatpak(context, list_fails=True)
+
+
+# internal/compass's application, as `flatpak list` reports it.
+COMPASS = ("Compass", "org.tunaos.compass", "app")
+
+
+@stub("features-compass-installed")
+def compass_installed(context):
+    """Compass installed system-wide, where ChairLift puts it."""
+    _fake_flatpak(context, system=(COMPASS,))
+
+
+@stub("features-compass-no-remote")
+def compass_no_remote(context):
+    """A host whose system installation has Flathub but no FlatPark."""
+    _fake_flatpak(context, remotes=("flathub",))
 
 
 def _tuple(label, command, icon, visible):

@@ -91,6 +91,10 @@ func (uh *UserHome) buildFeaturesPage() {
 	if printers {
 		uh.buildPrintersGroup(page)
 	}
+	compassEnabled := uh.groupEnabled("features_page", "compass_group")
+	if compassEnabled {
+		uh.buildCompassGroup(page)
+	}
 
 	// A host that offers nothing here — no ublue-os descriptor, no Podman,
 	// and no optional features — would otherwise show a blank page. The
@@ -105,7 +109,7 @@ func (uh *UserHome) buildFeaturesPage() {
 	emptyGroup.Add(&emptyState.Widget)
 	emptyGroup.SetVisible(false)
 	showEmptyState := func(optionalFeatures bool) {
-		text, empty := pageview.FeaturesEmptyState(bluefinGroups || desktopIntegrations, printers, optionalFeatures)
+		text, empty := pageview.FeaturesEmptyState(bluefinGroups || desktopIntegrations || compassEnabled, printers, optionalFeatures)
 		if empty {
 			emptyState.SetTitle(text.Title)
 			emptyState.SetDescription(text.Subtitle)

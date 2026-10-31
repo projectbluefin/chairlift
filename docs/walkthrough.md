@@ -267,9 +267,16 @@ journal logs, and container images to diagnose and surface actionable failures
 — device access permissions, image availability, plugin verification, or
 service crashes — rather than displaying a false enabled or running state.
 Printing through a real device has not yet been verified against hardware.
+**Compass** is one switch that installs Compass, TunaOS's fast,
+keyboard-first launcher for apps, files, and commands, for every account on
+the computer. It comes from FlatPark, the community Flatpak remote the system
+already lists, and may ask for an administrator password. Turning it off asks
+first, then removes Compass and keeps your Compass settings. Where FlatPark is
+not set up, the row says so and the switch cannot install anything. Compass
+is published for x86_64 computers only; on other computers the row says so.
 **Optional Features** is the distribution's own feature manager; it is hidden
 where the distribution ships none. When a computer offers none of these —
-no Developer Mode, no Gaming Mode, no Printers, no optional features — the page
+no Developer Mode, no Gaming Mode, no Printers, no Compass, no optional features — the page
 says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.

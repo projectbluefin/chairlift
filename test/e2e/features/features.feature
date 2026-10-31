@@ -1,5 +1,5 @@
 @features
-Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Printers
+Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printers, and Compass
   Optional tools are explicit choices. Package disclosures are informational:
   expanding a row must never toggle it or start setup. Docker uses the system
   image's daemon through fixed administrator-authorized helpers. Enabling
@@ -451,6 +451,69 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     And the application log contains "views: gaming status unavailable"
     And the action journal is empty
 
+  # ------------------------------------------------------------ Compass
+  #
+  # Compass installs system-wide from the image's FlatPark remote. Previews
+  # restore the observed state and stay retryable.
+
+  @stub.features-gaming-none
+  Scenario: Compass previews a system install from FlatPark and stays retryable
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Features page shows a "Compass" group
+    And the switch in the "Compass" row accepts input
+    And the switch in the "Compass" row is off
+    When I toggle the switch in the "Compass" row
+    Then the application log contains "[DRY-RUN] Would execute: flatpak install -y --system flatpark org.tunaos.compass"
+    And the switch in the "Compass" row is off
+    And the switch in the "Compass" row accepts input
+    And the fake flatpak was never asked to "install"
+    And the action journal is empty
+
+  @stub.features-compass-installed
+  Scenario: Removing Compass asks first and previews a system removal
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Compass" row accepts input
+    And the switch in the "Compass" row is on
+    When I toggle the switch in the "Compass" row
+    Then a dialog titled "Remove Compass?" is shown
+    When I choose "Cancel" in the dialog
+    Then the switch in the "Compass" row is on
+    And the application log does not contain "flatpak uninstall"
+    When I toggle the switch in the "Compass" row
+    Then a dialog titled "Remove Compass?" is shown
+    When I choose "Remove" in the dialog
+    Then the application log contains "[DRY-RUN] Would execute: flatpak uninstall -y --system org.tunaos.compass"
+    And the switch in the "Compass" row is on
+    And the fake flatpak was never asked to "uninstall"
+    And the action journal is empty
+
+  @stub.features-compass-no-remote
+  Scenario: Without the FlatPark remote Compass explains why it cannot install
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the "Compass" row says "Compass installs from FlatPark, which isn't set up on this computer."
+    And the switch in the "Compass" row refuses input
+    And the switch in the "Compass" row is off
+    And the fake flatpak was never asked to "remote-add"
+
+  @stub.features-gaming-unlistable
+  Scenario: Compass fails closed when installations cannot be listed
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the "Compass" row says "Couldn't check whether Compass is installed."
+    And the switch in the "Compass" row refuses input
+    And the application log contains "views: compass status unavailable"
+
+  @config.features-no-compass @stub.features-gaming-none
+  Scenario: Disabling compass_group in configuration removes the group
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Features page shows a "Gaming" group
+    And the application log does not contain "views: compass group built"
+    And the Features page shows no "Compass" group
+
   @stub.features-gaming-image @stub.features-gaming-installed
   Scenario: A gaming image presents the Gaming Mode switch
     Given ChairLift is running
@@ -484,7 +547,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     And I do not see "Enable Docker"
 
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
-  @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,bootc-stage
+  @env.CHAIRLIFT_CAPABILITIES=image-descriptor,brew,bootc-stage
   Scenario: A host with nothing to offer does not advertise a blank Features page
     Given ChairLift is running
     Then the Features destination is hidden or says why it offers nothing

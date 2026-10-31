@@ -264,7 +264,12 @@ An agent must not break these:
   actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
   `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
   helper subcommand or PolicyKit action for them, or add a user Flathub
-  remote. Do not add arbitrary
+  remote. The Features page's Compass switch (`compass_group`,
+  `internal/compass`) is the same shape: it installs `org.tunaos.compass`
+  with `--system` from the image-shipped FlatPark system remote and never
+  adds a remote itself; without that remote, or off x86_64 (the only
+  architecture FlatPark publishes it for), it can only remove a copy.
+  Do not add arbitrary
   privileged command execution, broaden what pkexec runs, or route new
   mutations around the fixed helper/policy pair.
 - **Neither an image reference nor a username crosses the ublue pkexec
