@@ -22,6 +22,7 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) | Goose/Linux MCP installation and ChairLift's own Goose profile | Invoking account |
 | [`internal/devtools`](../../internal/devtools/devtools.go) | WSL backends, image-provided system Docker, native VS Code setup and canonical package provenance | WSL/editor work is user-scoped; KVM and system Docker use the existing fixed helper |
 | [`internal/devsetup`](../../internal/devsetup/setup.go) | Ordered developer setup and retry outcomes over injected tasks | Adds no privileged route; initial Developer Mode promotion uses the existing ublue helper |
+| [`internal/compass`](../../internal/compass/compass.go) | Compass launcher state and system install/removal from the image's FlatPark remote | Flatpak's own authorization; adds no remote and no pkexec route |
 
 Mutation wrappers read the single process-wide `dryrun.Enabled()` flag from
 [`internal/dryrun`](../../internal/dryrun/dryrun.go). There are no per-wrapper
