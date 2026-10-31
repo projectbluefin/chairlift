@@ -432,10 +432,22 @@ the push re-runs CI. It runs on request rather than per push for the same
 drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.
 
-Within Livery, **Wallpapers** appears when Homebrew and the configured external
-wallpaper collection are available. Expand **Wallpaper Collections** to inspect
+Within Livery, **Wallpapers** appears when a configured external wallpaper
+collection or supported video wallpaper action is available. Expand **Wallpaper Collections** to inspect
 its actual packages. Its subtitle reports Installed, Update Available,
 Not Installed or Indeterminate; choose **Install** or **Update** explicitly.
 Opening the page never installs anything. A preview restores the action and
 keeps the observed status. Other Livery controls remain available when the
 collection is absent. Wallpaper packages are managed here rather than in Apps.
+
+On GNOME with Hanabi's settings schema installed, **Video Wallpaper** shows
+its saved video path. Choose **Choose Video…**, select a local MP4, MOV, M4V,
+WebM or OGV file, then choose **Apply Video** to save it. Selection and
+cancellation never save settings. Preview mode validates the selection but
+writes nothing. A saved path confirms the setting only: Hanabi manages actual
+playback, and Control Center does not install or enable the extension.
+Unsupported desktops and missing schemas omit this action. **Check Video
+Wallpaper Support** with **Retry** means the probe failed, not that Hanabi is
+absent. Failed writes or readbacks keep the previously confirmed path.
+The AT-SPI fixture checks visibility and chooser dismissal; it does not prove
+live playback. A supported GNOME/Hanabi session is needed for that check.

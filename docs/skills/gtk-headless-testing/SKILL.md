@@ -400,3 +400,15 @@ scenario should wait for the final subtitle and assert the metadata command.
 Keep package-name assertions separate: a visible identifier alone does not
 prove that the description lookup completed. Stub description queries separately
 from installed inventory queries so uninstalled collection entries are covered.
+
+
+## Optional desktop settings schemas
+
+When adding an optional desktop control, probe its actual schema ID with an
+out-of-process command on a worker before offering writes. An extension UUID
+is not a schema ID, and creating an in-process GSettings object for a missing
+schema can abort before an error handler runs. Keep command failure distinct
+from absence: offer diagnostic/retry UI for the former and omit unsupported
+writes for the latter. A settings readback verifies the stored value, not a
+visible desktop effect. Test those separately, as the Hanabi video-path tests
+in `internal/livery/hanabi_test.go` do; a command fixture cannot prove playback.

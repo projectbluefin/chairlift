@@ -539,3 +539,10 @@ def step_button_announced(context, label, section, announced):
     assert atspi.name(button) == announced, (
         f"the button showing {label!r} is announced as {atspi.name(button)!r}, want {announced!r}"
     )
+
+
+@step("I choose the Hanabi video fixture")
+def step_hanabi_video_fixture(context):
+    atspi.press("<Control>l")
+    atspi.type_text(os.path.join(context.home, "wallpaper.mp4"))
+    atspi.press("Return")

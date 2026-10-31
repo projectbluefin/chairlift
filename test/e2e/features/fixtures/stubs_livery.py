@@ -64,6 +64,16 @@ def _install(context):
         record
         + f"""
 REAL="{real_gsettings}"
+if [ "$1" = "list-schemas" ]; then
+    if [ -e "{scenario}/hanabi-probe-error" ]; then echo 'schema probe failed' >&2; exit 1; fi
+    if [ -e "{scenario}/hanabi-supported" ]; then echo 'io.github.jeffshee.hanabi-extension'; fi
+    exit 0
+fi
+if [ "$2" = "io.github.jeffshee.hanabi-extension" ]; then
+    if [ "$1 $3" = "get video-path" ]; then echo "'/saved/video.mp4'"; exit 0; fi
+    echo 'unexpected Hanabi mutation' >&2
+    exit 1
+fi
 if [ "$2" = "{EXTENSION_SCHEMA}" ]; then
     if [ -e "{scenario}/{EXTENSION_MISSING}" ]; then
         echo "No such schema \\"{EXTENSION_SCHEMA}\\"" >&2
@@ -196,3 +206,20 @@ def livery_offline(context):
         context.launch_env[key] = "http://127.0.0.1:9"
     for key in ("NO_PROXY", "no_proxy"):
         context.launch_env.pop(key, None)
+
+
+@stub("hanabi-supported")
+def hanabi_supported(context):
+    """A real-schema-shaped fixture; not evidence of live playback."""
+    _install(context)
+    open(os.path.join(context.scenario_dir, "hanabi-supported"), "w").close()
+    # Container-header fixture for validation only; never a playback claim.
+    with open(os.path.join(context.home, "wallpaper.mp4"), "wb") as handle:
+        handle.write(b"\x00\x00\x00\x18ftypisom1234")
+
+
+@stub("hanabi-probe-error")
+def hanabi_probe_error(context):
+    """An unsuccessful schema probe must retain diagnostic/retry UI."""
+    _install(context)
+    open(os.path.join(context.scenario_dir, "hanabi-probe-error"), "w").close()

@@ -41,6 +41,10 @@ export CHAIRLIFT_WAYLAND_SIZE="${CHAIRLIFT_ATSPI_WIDTH:-1400}x${CHAIRLIFT_ATSPI_
 # inherited WAYLAND_DISPLAY with its own compositor's absolute socket.
 unset AT_SPI_BUS_ADDRESS || true
 export LANG=C LC_ALL=C GSETTINGS_BACKEND=memory GDK_DEBUG=no-portals
+# Keep GIO on the local VFS and the plain unix volume monitor: GtkFileDialog
+# otherwise D-Bus-activates gvfsd, goa-daemon, wsdd and Avahi, which outlive
+# dbus-run-session and hold the harness's stdout open.
+export GIO_USE_VFS=local GIO_USE_VOLUME_MONITOR=unix
 # The accessibility bridge must be loaded, and the toolkit must publish to
 # it, or there is no tree to read. The bus it publishes on lives inside the
 # private dbus-run-session below, never on the developer's session.

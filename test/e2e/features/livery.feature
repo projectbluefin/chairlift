@@ -264,3 +264,63 @@ Feature: Livery
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And the "Install" button in the "Wallpaper Collections" row is sensitive
     And Homebrew was never asked to "bundle install"
+
+
+  @stub.livery-tools @stub.hanabi-supported @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: Supported video wallpaper requires a separate Apply after choosing
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "Video Wallpaper" row in the Livery "Wallpapers" section says "Saved video: /saved/video.mp4. Playback is managed by Hanabi."
+    And the "Apply Video" button is insensitive
+    When I click the "Choose Video…" button
+    Then a dialog titled "Choose a Video Wallpaper" is shown
+    When I press "Escape"
+    Then no dialog is shown
+    And the "Apply Video" button is insensitive
+    And no Livery command changed any setting
+
+  @stub.livery-tools @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: Missing Hanabi schema omits its write action
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the Livery page ran "gsettings list-schemas"
+    And the "Choose Video…" button is not shown
+    And the "Apply Video" button is not shown
+    And no Livery command changed any setting
+
+  @stub.livery-tools @stub.hanabi-probe-error @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: A failed Hanabi probe keeps a retry without offering a write
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "Check Video Wallpaper Support" row in the Livery "Wallpapers" section says "Could not check Hanabi settings. Retry to check support; no setting was changed."
+    And the "Choose Video…" button is not shown
+    And the "Apply Video" button is not shown
+    When I click the "Retry" button in the "Check Video Wallpaper Support" row
+    Then the "Check Video Wallpaper Support" row in the Livery "Wallpapers" section says "Could not check Hanabi settings. Retry to check support; no setting was changed."
+    And no Livery command changed any setting
+
+  @stub.livery-tools @stub.hanabi-supported @env.XDG_CURRENT_DESKTOP=KDE
+  Scenario: Hanabi installed on another desktop does not offer a write
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Choose Video…" button is not shown
+    And the "Apply Video" button is not shown
+    And no Livery command changed any setting
+
+
+  @stub.livery-tools @stub.hanabi-supported @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: Applying a chosen video in preview never writes the setting
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "Video Wallpaper" row in the Livery "Wallpapers" section says "Saved video: /saved/video.mp4. Playback is managed by Hanabi."
+    When I click the "Choose Video…" button
+    Then a dialog titled "Choose a Video Wallpaper" is shown
+    When I choose the Hanabi video fixture
+    Then no dialog is shown
+    And the "Apply Video" button is sensitive
+    And the "Video Wallpaper" row in the Livery "Wallpapers" section says "Selected: wallpaper.mp4 — not applied. Choose Apply to save the path."
+    When I click the "Apply Video" button
+    Then a toast says "Preview only: the video wallpaper setting was not changed."
+    And no Livery command changed any setting

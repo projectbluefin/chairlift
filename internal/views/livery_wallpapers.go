@@ -18,6 +18,7 @@ import (
 // buildWallpapersGroup discovers the external collection without constructing
 // an unavailable-tool card. Other Livery controls have independent lifetimes.
 func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
+	uh.buildHanabiControl(page)
 	var paths []string
 	if cfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); cfg != nil {
 		paths = append(paths, cfg.BundlesPaths...)
@@ -37,13 +38,10 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 				continue
 			}
 			sgtk.RunOnMainThread(func() {
-				if uh.wallpapersGroup == nil {
-					uh.wallpapersGroup = adw.NewPreferencesGroup()
-					uh.wallpapersGroup.SetTitle("Wallpapers")
-					uh.wallpapersGroup.SetDescription("Curated wallpaper collections for your desktop.")
-					page.Add(uh.wallpapersGroup)
+				if uh.liveryPrefsPage != page || !uh.groupEnabled("livery_page", "wallpapers_group") {
+					return
 				}
-				group := uh.wallpapersGroup
+				group := uh.ensureWallpapersGroup(page)
 				row := adw.NewExpanderRow()
 				row.SetUseMarkup(false)
 				row.SetTitle("Wallpaper Collections")
@@ -127,4 +125,16 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 			})
 		}
 	}()
+}
+
+// ensureWallpapersGroup is called only on the GTK main thread. Collection
+// discovery and Hanabi support share the one optional group owned by Livery.
+func (uh *UserHome) ensureWallpapersGroup(page *adw.PreferencesPage) *adw.PreferencesGroup {
+	if uh.wallpapersGroup == nil {
+		uh.wallpapersGroup = adw.NewPreferencesGroup()
+		uh.wallpapersGroup.SetTitle("Wallpapers")
+		uh.wallpapersGroup.SetDescription("Wallpaper collections and supported video wallpapers for your desktop.")
+		page.Add(uh.wallpapersGroup)
+	}
+	return uh.wallpapersGroup
 }
