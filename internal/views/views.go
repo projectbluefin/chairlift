@@ -244,6 +244,11 @@ type UserHome struct {
 	driverButton       *gtk.Button
 	driverGate         actionstate.Gate
 
+	// Compass (features_page compass_group).
+	compassSpinner *gtk.Spinner
+	compassGate    actionstate.Gate
+	compassDialogs dialogRoute
+
 	// Staged-update changelog (SBOM diff), with visible Compare and optional
 	// result details in the system-update secondary group.
 	changelogRow      *adw.ActionRow

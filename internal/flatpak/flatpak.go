@@ -488,6 +488,16 @@ func parseUpdateRemotes(output string) []string {
 	return remotes
 }
 
+// EnabledRemotes returns the enabled remotes configured in one installation,
+// in listed order. It is read-only.
+func EnabledRemotes(user bool) ([]string, error) {
+	output, err := runFlatpakCommand(updateRemoteListArgs(user)...)
+	if err != nil {
+		return nil, err
+	}
+	return parseUpdateRemotes(output), nil
+}
+
 // originListArgs lists the origin remote of every installed application in
 // the scope. "--app" matches the update query's own filter: runtimes never
 // appear in the update inventory, so a remote that serves only runtimes —

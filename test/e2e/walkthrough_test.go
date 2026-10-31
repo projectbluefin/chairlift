@@ -372,4 +372,8 @@ func assertBluefinGroupsRendered(t *testing.T, outDir string) {
 	if want := fmt.Sprintf("families=%d", families); !strings.Contains(printers, want) {
 		t.Errorf("printers group marker missing %q\n  %s", want, printers)
 	}
+
+	// Compass is floored on Flatpak, which the capture also supplies, and
+	// renders below the Features screenshot's viewport.
+	findLogLine(t, outDir, "views: compass group built")
 }
