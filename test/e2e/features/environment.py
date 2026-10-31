@@ -184,6 +184,9 @@ def before_scenario(context, scenario):
             "XDG_CACHE_HOME": os.path.join(home, ".cache"),
             "CHAIRLIFT_IMAGE_INFO": image_info,
             "CHAIRLIFT_ACTION_JOURNAL": os.path.join(context.scenario_dir, "journal.jsonl"),
+            # Absent unless @stub.livery-wallpaper-channels creates it, so the
+            # runner's /usr/share/backgrounds never becomes a wallpaper channel.
+            "CHAIRLIFT_WALLPAPER_ROOT": os.path.join(context.scenario_dir, "backgrounds"),
             "PATH": stub_bin + os.pathsep + env.get("PATH", ""),
         }
     )

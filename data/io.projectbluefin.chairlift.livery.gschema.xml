@@ -102,5 +102,34 @@
       <description>Idempotence key: a rotation pass whose token matches this value does nothing, so re-running it cannot double-advance the selection.</description>
     </key>
 
+    <!-- Wallpaper: what you sit behind. The active channel is stored here so
+         the headless rotation pass knows which channel to advance. The
+         selected image itself is written to GNOME's own background schema,
+         not ChairLift's, so there is deliberately no wallpaper-uri key here. -->
+
+    <key name="wallpaper-channel" type="s">
+      <default>''</default>
+      <summary>Active wallpaper channel</summary>
+      <description>A channel id from internal/livery's wallpaper catalog, or empty when none has been chosen. Rotation advances the selected image within this channel.</description>
+    </key>
+
+    <key name="wallpaper-image" type="s">
+      <default>''</default>
+      <summary>Selected wallpaper image</summary>
+      <description>The image id, within the active channel, that is applied to GNOME's background schema. Rotation advances from this image.</description>
+    </key>
+
+    <key name="wallpaper-rotate" type="b">
+      <default>false</default>
+      <summary>Advance the wallpaper at each login</summary>
+      <description>When true, the headless rotation pass advances the selected image within the active channel at each login.</description>
+    </key>
+
+    <key name="last-wallpaper-rotation-token" type="s">
+      <default>''</default>
+      <summary>Graphical session the wallpaper already rotated for</summary>
+      <description>Idempotence key for wallpaper rotation, kept apart from last-rotation-token so the icon and wallpaper passes cannot suppress each other within one session.</description>
+    </key>
+
   </schema>
 </schemalist>

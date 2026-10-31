@@ -88,6 +88,43 @@ type UserHome struct {
 	bundleStatusRefresh actionstate.RefreshGate
 	wallpaperRefresh    func()
 	wallpapersGroup     *adw.PreferencesGroup
+	// wallpaperRotate is the Wallpapers group's rotation switch, wired to
+	// ConfigureWallpaperRotation. It is nil unless the group was built.
+	wallpaperRotate *gtk.Switch
+	// wallpaperRotateSpinner shows activity while the rotation unit is
+	// installed or removed. nil unless the group was built.
+	wallpaperRotateSpinner *gtk.Spinner
+	// wallpaperGrid is the channel thumbnail selector; nil unless built.
+	// wallpaperGridIDs snapshots the channel catalog the tiles were built
+	// from, index-aligned with the tiles and wallpaperGridChecks, so a sync
+	// never re-reads the backgrounds directory or drifts from the tiles.
+	wallpaperGrid       *gtk.FlowBox
+	wallpaperGridIDs    []string
+	wallpaperGridImages map[string]*gtk.Image
+	wallpaperGridChecks []*gtk.Image
+	// wallpaperDamaskRow is the single stateful Damask control (install when
+	// absent, open when installed). nil unless the group was built.
+	wallpaperDamaskRow     *adw.ActionRow
+	wallpaperDamaskButton  *gtk.Button
+	wallpaperDamaskSpinner *gtk.Spinner
+	// wallpaperDamaskAvailable records what the first Damask probe found, so
+	// the control's label and action never flip out from under the user.
+	wallpaperDamaskAvailable bool
+	// wallpaperNativeBackground records whether GNOME owned the background
+	// schema when the group was discovered, so syncing the rotation switch
+	// never shells out to gsettings on the main thread.
+	wallpaperNativeBackground bool
+	// wallpaperProbeFailedRow is the read-only "couldn't check" row shown when
+	// the GNOME-background probe failed, so the absent selector and rotation
+	// switch read as unknown rather than unsupported. nil unless built.
+	wallpaperProbeFailedRow *adw.ActionRow
+	// wallpaperRotationGate admits one rotation toggle at a time; the unit
+	// write is a single shared unit, so a rapid on/off flip must not land
+	// RemoveWallpaperRotation before an earlier InstallWallpaperRotation.
+	wallpaperRotationGate actionstate.Gate
+	// wallpaperDamaskGate admits one install/open at a time, so a rapid
+	// reinstall over a launch never double-runs the Flatpak command.
+	wallpaperDamaskGate actionstate.Gate
 
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.

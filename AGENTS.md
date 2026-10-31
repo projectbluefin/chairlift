@@ -479,12 +479,13 @@ An agent must not break these:
   The E2E workflows also pass `CHAIRLIFT_SCHEMA_DIR=build/schemas` to the
   capture script; without it, the real Livery page shows a missing-schema
   toast that obscures screenshots even though every page capture test passes.
-- **The `chairlift_e2e` stub surface is capped and centralized.** Four
+- **The `chairlift_e2e` stub surface is capped and centralized.** Five
   behaviors are stubbed so the screenshot walkthrough can render features a CI
   runner cannot have: the image descriptor (`CHAIRLIFT_IMAGE_INFO`), the
   unattended-update timer state (`CHAIRLIFT_AUTO_UPDATES`), the graphics
-  hardware (`CHAIRLIFT_GPU_VENDORS`), and the host capability set that floors
-  visibility (`CHAIRLIFT_CAPABILITIES`). Every stub must be
+  hardware (`CHAIRLIFT_GPU_VENDORS`), the host capability set that floors
+  visibility (`CHAIRLIFT_CAPABILITIES`), and the wallpaper directory the
+  Livery channel selector discovers (`CHAIRLIFT_WALLPAPER_ROOT`). Every stub must be
   read in `internal/app/imageinfo_override_e2e.go` and nowhere else, behind
   the `chairlift_e2e` tag that only `make e2e` sets, with a no-op counterpart
   in `imageinfo_override.go`.
@@ -1309,7 +1310,13 @@ An agent must not break these:
   the dock's fetch is retried in-process (`rotateRetryDelays`) while the
   failure still looks like a network that is not up yet: a user manager cannot
   order against `network-online.target`, so a login that beats connectivity
-  would otherwise rotate nothing and say so only in the journal. The unit's
+  would otherwise rotate nothing and say so only in the journal. Wallpaper
+  rotation is a separate oneshot enabled under `graphical-session.target`
+  (no timer: one would fire before the session and fall back to the boot
+  token) running `chairlift --rotate-wallpaper` (also short-circuited before
+  `app.New()`), with its own
+  `last-wallpaper-rotation-token`: sharing the icon pass's token would let
+  whichever pass ran first suppress the other for the whole session. The unit's
   `ExecStart` must survive upgrades: `os.Executable` resolves a cask install
   to `<prefix>/Caskroom/chairlift/<version>/chairlift`, which the next
   `brew upgrade` deletes, so `livery.unitExecutable` names the prefix's

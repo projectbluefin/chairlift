@@ -14,6 +14,9 @@ files in the scenario directory, so the stubs below compose in any order:
     livery-user-panel-icon     the user-layer value dconf reports for the
                                extension's icon key (otherwise none: the key
                                resolves to the distro default)
+    livery-native-background   GNOME owns org.gnome.desktop.background, so a
+                               read of its picture-uri answers (otherwise the
+                               real gsettings answers, schema permitting)
 
 The real gsettings still answers ChairLift's own schema (GSETTINGS_BACKEND is
 memory, so nothing persists), and the real systemctl/dconf answer everything
@@ -22,6 +25,8 @@ the Livery page does not own, so other pages behave as they would unstubbed.
 
 import os
 import shutil
+import struct
+import zlib
 
 from stubs import fake_executable, stub
 
@@ -29,6 +34,8 @@ CALLS = "livery-calls.log"
 SEED = "livery-seed.sed"
 EXTENSION_MISSING = "livery-extension-missing"
 USER_PANEL_ICON = "livery-user-panel-icon"
+NATIVE_BACKGROUND = "livery-native-background"
+BACKGROUND_SCHEMA = "org.gnome.desktop.background"
 
 EXTENSION_SCHEMA = "org.gnome.shell.extensions.custom-command-list"
 EXTENSION_PATH = "/org/gnome/shell/extensions/custom-command-list"
@@ -73,6 +80,10 @@ if [ "$2" = "{EXTENSION_SCHEMA}" ]; then
         "get menuicon-setting") echo "{DISTRO_PANEL_ICON}"; exit 0 ;;
         "get menuoptions-setting") echo "{DISTRO_PANEL_MODE}"; exit 0 ;;
     esac
+    exit 0
+fi
+if [ "$1 $2" = "get {BACKGROUND_SCHEMA}" ] && [ -e "{scenario}/{NATIVE_BACKGROUND}" ]; then
+    echo "'file:///usr/share/backgrounds/default.png'"
     exit 0
 fi
 [ -n "$REAL" ] || {{ echo "gsettings is not installed" >&2; exit 1; }}
@@ -196,3 +207,43 @@ def livery_offline(context):
         context.launch_env[key] = "http://127.0.0.1:9"
     for key in ("NO_PROXY", "no_proxy"):
         context.launch_env.pop(key, None)
+
+
+def _png():
+    """A valid 1x1 PNG, so GdkPixbuf can decode a channel's preview."""
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    pixels = zlib.compress(b"\x00\x33\x66\x99")
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", pixels) + chunk(b"IEND", b"")
+
+
+# The channel tree the wallpaper casks install, rooted in the scenario so the
+# runner's own /usr/share/backgrounds never reaches the page. Bluefin leads
+# with a GNOME slideshow XML, as the real pack does.
+WALLPAPER_CHANNELS = {
+    "bluefin/01-bluefin.xml": b"<background></background>\n",
+    "bluefin/aurora.png": None,
+    "bazzite/cosmic.png": None,
+}
+
+
+@stub("livery-wallpaper-channels")
+def livery_wallpaper_channels(context):
+    """Two installed wallpaper channels on a desktop that owns GNOME's background keys."""
+    _install(context)
+    open(os.path.join(context.scenario_dir, NATIVE_BACKGROUND), "w").close()
+    root = context.launch_env["CHAIRLIFT_WALLPAPER_ROOT"]
+    for rel, body in WALLPAPER_CHANNELS.items():
+        path = os.path.join(root, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as handle:
+            handle.write(_png() if body is None else body)
+
+
+@stub("livery-wallpaper-chosen")
+def livery_wallpaper_chosen(context):
+    """The Bluefin channel was chosen in an earlier session."""
+    _seed(context, {"wallpaper-channel": "'bluefin'", "wallpaper-image": "'bluefin/aurora.png'"})

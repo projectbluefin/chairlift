@@ -240,19 +240,82 @@ Feature: Livery
     And the "Install" button in the "Wallpaper Collections" row is insensitive
     And Homebrew was never asked to "bundle install"
 
-  @config.apps-bundles @stub.apps-brew
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak
   Scenario: A missing wallpaper manifest leaves the other Livery controls available
     Given ChairLift is running
     When I open the "Livery" page
     Then the Livery "Files Icon" section is shown
-    And the Livery "Wallpapers" section is not shown
+    And the Livery "Wallpapers" section is shown
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a live wallpaper manager."
+    And I do not see "Wallpaper Collections"
 
-  @config.apps-bundles @env.CHAIRLIFT_CAPABILITIES=flatpak
+  @config.apps-bundles @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=flatpak
   Scenario: A host without Homebrew keeps Livery without a wallpaper package card
     Given ChairLift is running
     When I open the "Livery" page
     Then the Livery "Files Icon" section is shown
+    And the Livery "Wallpapers" section is shown
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a live wallpaper manager."
+    And I do not see "Wallpaper Collections"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=brew
+  Scenario: A host without Flatpak offers no Damask and never asks Flatpak
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "Files Icon" section is shown
     And the Livery "Wallpapers" section is not shown
+    And Flatpak was never asked to "list"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.livery-tools
+  Scenario: Installing Damask previews under dry run without running Flatpak
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a live wallpaper manager."
+    When I press the "Install" button in the Livery "Wallpapers" section
+    Then a toast says "[DRY-RUN] Preview: installing Damask would add a live wallpaper manager — no changes made"
+    And Flatpak was never asked to "install"
+    And no Livery command changed any setting
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak-damask @stub.livery-tools
+  Scenario: Opening an installed Damask previews under dry run without launching it
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Damask" row in the Livery "Wallpapers" section says "Manage live wallpaper feeds from Bing, Wallhaven, and more."
+    When I press the "Open" button in the Livery "Wallpapers" section
+    Then a toast says "[DRY-RUN] Preview: opening Damask would start a live wallpaper manager — no changes made"
+    And Flatpak was never asked to "run"
+    And Flatpak was never asked to "install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.livery-wallpaper-channels @stub.livery-wallpaper-chosen
+  Scenario: Picking a wallpaper channel previews the desktop background and keeps the saved channel
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Bazzite" button in the Livery "Wallpapers" section is sensitive
+    And the "Bluefin" wallpaper channel is selected
+    And the "Bazzite" wallpaper channel is not selected
+    When I press the "Bazzite" button in the Livery "Wallpapers" section
+    Then the Livery dry run would set the desktop background to "bazzite/cosmic.png"
+    And a toast says "[DRY-RUN] Preview: switching the wallpaper channel would change the desktop — no changes made"
+    And the "Bluefin" wallpaper channel is selected
+    And the "Bazzite" wallpaper channel is not selected
+    And the Livery dry run would not set wallpaper-channel
+    And no Livery command changed any setting
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.livery-wallpaper-channels @stub.livery-wallpaper-chosen
+  Scenario: Wallpaper rotation at login is scheduled as a dry run and writes no unit
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    When I toggle the "Rotate Wallpaper at Login" switch in the Livery "Wallpapers" section
+    Then the Livery dry run would set wallpaper-rotate to true
+    And the Livery dry run would write and enable the wallpaper rotation unit
+    And a toast says "[DRY-RUN] Preview: rotating the wallpaper at login would be turned on — no changes made"
+    And the "Rotate Wallpaper at Login" switch in the Livery "Wallpapers" section is off
+    And no Livery command changed any setting
+    And no wallpaper rotation unit was written under the home directory
 
   @config.livery-wallpapers-only @stub.apps-brew @stub.apps-collections
   Scenario: Wallpaper actions work when Apps groups are unconstructed

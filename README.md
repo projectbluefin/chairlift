@@ -103,8 +103,11 @@ never asks for a reboot.
 - **Rotate at Login**: the two foundation sections can advance one step each
   time you sign in. Any section also accepts an SVG of your own
 - **Wallpapers**: install or update the curated wallpaper collection
-  (`artwork.Brewfile`) with Homebrew, shown when Homebrew and the collection
-  are available
+  (`artwork.Brewfile`) with Homebrew, pick an installed wallpaper channel and
+  optionally advance it at each login, or install and open the Damask
+  live-wallpaper manager; shown when the collection is configured or, where
+  Flatpak is present, Damask can be installed or opened — Damask needs no
+  Homebrew
 
 ### 🔧 Updates & Maintenance
 

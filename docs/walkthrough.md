@@ -432,10 +432,20 @@ the push re-runs CI. It runs on request rather than per push for the same
 drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.
 
-Within Livery, **Wallpapers** appears when Homebrew and the configured external
-wallpaper collection are available. Expand **Wallpaper Collections** to inspect
-its actual packages. Its subtitle reports Installed, Update Available,
+Within Livery, **Wallpapers** appears when the configured external wallpaper
+collection is present or, where Flatpak is available, Damask can be installed
+or opened; Damask does not require Homebrew. Expand **Wallpaper Collections** to
+inspect its actual packages. Its subtitle reports Installed, Update Available,
 Not Installed or Indeterminate; choose **Install** or **Update** explicitly.
 Opening the page never installs anything. A preview restores the action and
 keeps the observed status. Other Livery controls remain available when the
 collection is absent. Wallpaper packages are managed here rather than in Apps.
+
+Each installed channel under `/usr/share/backgrounds` (Bluefin, Bazzite,
+Framework, or any other directory of wallpapers) is a tile; choosing one sets GNOME's desktop picture in both light
+and dark styles and remembers the channel. **Rotate Wallpaper at Login**
+appears with the channels and is available once a channel is chosen on a
+GNOME session; it installs a user service, started with the graphical session, that shows the channel's next image
+once per login session. Where Flatpak is present, the **Damask** row installs the
+Damask live-wallpaper manager from Flathub when it is absent and opens it when
+it is installed; ChairLift never installs it without that click.

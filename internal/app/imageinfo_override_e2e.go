@@ -10,6 +10,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 )
 
@@ -52,5 +53,12 @@ func applyImageInfoOverride() {
 	// walkthrough never resolves a capability production would not.
 	if capabilities := os.Getenv("CHAIRLIFT_CAPABILITIES"); capabilities != "" {
 		capability.SetProbe(capability.ProbeFromNames(strings.Split(capabilities, ",")...))
+	}
+
+	// $CHAIRLIFT_WALLPAPER_ROOT replaces the system wallpaper directory the
+	// Livery channel selector discovers, so a scenario controls exactly
+	// which channels exist instead of inheriting the runner's backgrounds.
+	if root := os.Getenv("CHAIRLIFT_WALLPAPER_ROOT"); root != "" {
+		livery.WallpaperBackgroundsRoot = root
 	}
 }

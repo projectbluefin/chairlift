@@ -7,22 +7,31 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 	sgtk "github.com/frostyard/snowkit/gtk"
+	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 )
 
 // buildWallpapersGroup discovers the external collection without constructing
-// an unavailable-tool card. Other Livery controls have independent lifetimes.
+// an unavailable-tool card. Damask is independent of Homebrew, so its probe
+// runs in the same background discovery and an installed or installable
+// Damask builds the group even when the collection is absent (pageview.WallpaperGroupVisible).
+// The Damask probe runs only on a host with the Flatpak capability, so a
+// Homebrew-only host never asks flatpak anything.
 func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 	var paths []string
 	if cfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); cfg != nil {
 		paths = append(paths, cfg.BundlesPaths...)
 	}
+	flatpakCapable := uh.capabilities[capability.Flatpak]
 	go func() {
+		probe := probeWallpaperHost(flatpakCapable)
+		collectionFound := false
 		bundles, err := homebrew.AvailableBundles(paths)
 		if err != nil {
 			log.Printf("wallpapers: discovery: %v", err)
@@ -36,14 +45,9 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 				log.Printf("wallpapers: contents: %v", err)
 				continue
 			}
+			collectionFound = true
 			sgtk.RunOnMainThread(func() {
-				if uh.wallpapersGroup == nil {
-					uh.wallpapersGroup = adw.NewPreferencesGroup()
-					uh.wallpapersGroup.SetTitle("Wallpapers")
-					uh.wallpapersGroup.SetDescription("Curated wallpaper collections for your desktop.")
-					page.Add(uh.wallpapersGroup)
-				}
-				group := uh.wallpapersGroup
+				group := uh.publishWallpaperGroup(page, probe)
 				row := adw.NewExpanderRow()
 				row.SetUseMarkup(false)
 				row.SetTitle("Wallpaper Collections")
@@ -126,5 +130,14 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 				refresh()
 			})
 		}
+		// Publish once more even if brew found nothing, so a Damask-only
+		// group still gets built. publishWallpaperGroup is idempotent: the
+		// nil-guards build the group and its controls once.
+		if !pageview.WallpaperGroupVisible(collectionFound, probe.damask) {
+			return
+		}
+		sgtk.RunOnMainThread(func() {
+			uh.publishWallpaperGroup(page, probe)
+		})
 	}()
 }

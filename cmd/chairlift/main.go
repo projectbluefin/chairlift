@@ -49,6 +49,15 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) == 2 && os.Args[1] == livery.WallpaperRotateFlag {
+		ctx, cancel := livery.RotationContext()
+		defer cancel()
+		if err := livery.RotateWallpaper(ctx); err != nil {
+			log.Printf("livery: wallpaper rotation: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// A gaming image's panel mark is applied here, off the main thread,
 	// rather than waiting for the user to open the Livery page.

@@ -87,7 +87,8 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 	const autoUpdatesEnvVar = "CHAIRLIFT_AUTO_UPDATES"
 	const gpuEnvVar = "CHAIRLIFT_GPU_VENDORS"
 	const capabilitiesEnvVar = "CHAIRLIFT_CAPABILITIES"
-	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar}
+	const wallpaperRootEnvVar = "CHAIRLIFT_WALLPAPER_ROOT"
+	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar, wallpaperRootEnvVar}
 
 	taggedOverrideRel := filepath.Join("internal", "app", "imageinfo_override_e2e.go")
 	overrideSource := readRepoFile(t, taggedOverrideRel)
@@ -99,7 +100,7 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 	}
 	// The automatic-updates probe override shares the same file and the same
 	// build tag, so it is covered by the same guard.
-	for _, required := range []string{autoUpdatesEnvVar, gpuEnvVar} {
+	for _, required := range []string{autoUpdatesEnvVar, gpuEnvVar, wallpaperRootEnvVar} {
 		if !strings.Contains(overrideSource, required) {
 			t.Errorf("the tagged override does not read %s", required)
 		}
@@ -246,7 +247,7 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 			t.Errorf("AGENTS.md's stub-surface rule does not name %s", name)
 		}
 	}
-	for _, count := range []string{"Two\n  behaviors", "Three\n  behaviors"} {
+	for _, count := range []string{"Two\n  behaviors", "Three\n  behaviors", "Four\n  behaviors"} {
 		if strings.Contains(agents, count) {
 			t.Errorf("AGENTS.md's stub-surface rule says %q but %d behaviors are stubbed", count, len(stubbed))
 		}

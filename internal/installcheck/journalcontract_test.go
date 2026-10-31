@@ -102,6 +102,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/flatpak/flatpak.go", Func: "IsInstalled"},                   // flatpak --version
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},            // brew
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},                 // brew --version
+	{File: "internal/livery/damask.go", Func: "damaskCommand"},                   // flatpak run (launches the user's Damask app)
 	{File: "internal/livery/apply.go", Func: "execCommand"},                      // gsettings / dconf / gtk-update-icon-cache / systemctl --user
 	{File: "internal/printerapp/signature.go", Func: "execCosign"},               // cosign verify (unprivileged registry signature check)
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},     // systemctl --user

@@ -386,6 +386,59 @@ func liveryPreview(what string) string {
 	return fmt.Sprintf("[DRY-RUN] Preview: %s — no changes made", what)
 }
 
+// WallpaperSelection decides whether a wallpaper-channel pick may apply
+// immediately through GNOME's background keys. Under dry-run the picture is
+// not written, so the preview toast is what says the pick was understood;
+// a live run mutates the page's remembered channel and lets the changed
+// desktop confirm itself, exactly as the other Livery selections do.
+func WallpaperSelection(dryRun bool) LiveryDecision {
+	if dryRun {
+		return LiveryDecision{Toast: liveryPreview("switching the wallpaper channel would change the desktop")}
+	}
+	return LiveryDecision{MutateUI: true}
+}
+
+// WallpaperRotation decides whether the Wallpapers rotation switch may
+// advance the confirmed rotation state. Under dry-run the switch springs
+// back and the preview toast says what would have been scheduled; a live run
+// mutates the page's remembered state and lets the login unit's presence
+// confirm itself.
+func WallpaperRotation(dryRun bool, enable bool) LiveryDecision {
+	if dryRun {
+		return LiveryDecision{Toast: liveryPreview("rotating the wallpaper at login would be " + liveryTurned(enable))}
+	}
+	return LiveryDecision{MutateUI: true}
+}
+
+// DamaskInstall is the toast for the single Damask control's install handoff.
+//
+// Damask is an external Flatpak, so this is never a ChairLift completion the
+// way a bundled install is: a live run says the manager was installed, and a
+// preview says it would be, without claiming the store launch that follows.
+func DamaskInstall(dryRun bool) string {
+	if dryRun {
+		return "[DRY-RUN] Preview: installing Damask would add a live wallpaper manager — no changes made"
+	}
+	return "Damask installed. Open it from the applications menu."
+}
+
+// DamaskStoreHandoff is the toast when Flatpak itself turns out to be absent
+// at click time. ChairLift launches nothing; the toast only points the user to
+// their software store and never reports Damask as installed.
+func DamaskStoreHandoff() string {
+	return "Open your software store to install Damask."
+}
+
+// DamaskOpenPreview is the dry-run toast for opening the installed manager.
+func DamaskOpenPreview() string {
+	return "[DRY-RUN] Preview: opening Damask would start a live wallpaper manager — no changes made"
+}
+
+// DamaskOpen is the toast that launches the installed manager.
+func DamaskOpen() string {
+	return "Damask opened."
+}
+
 // FeatureUpdate returns the toast text for the Features page's "Update"
 // button (onUpdateFeaturesClicked). The wrapper package (internal/updex)
 // already skips the state-changing update via updex.runHelper's own

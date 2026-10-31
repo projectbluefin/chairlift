@@ -146,6 +146,16 @@ def apps_brew_unreadable(context):
 @stub("apps-flatpak")
 def apps_flatpak(context):
     """Flatpak with one app installed for the user and one for everyone."""
+    _flatpak(context, FLATPAK_USER)
+
+
+@stub("apps-flatpak-damask")
+def apps_flatpak_damask(context):
+    """apps-flatpak, plus the Damask wallpaper manager for the user."""
+    _flatpak(context, FLATPAK_USER + (("Damask", "app.drey.Damask", "0.3.0"),))
+
+
+def _flatpak(context, user_rows):
     script = _record(context, "flatpak") + f"""
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
@@ -159,7 +169,7 @@ list)
     case "$*" in
     *--runtime*) exit 0 ;;
     *--user*) cat <<'EOF'
-{_rows(FLATPAK_USER)}EOF
+{_rows(user_rows)}EOF
     ;;
     *--system*) cat <<'EOF'
 {_rows(FLATPAK_SYSTEM)}EOF

@@ -294,6 +294,9 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 		// window — including one GTK delivers after this function returns —
 		// would look like a user edit and write to dconf on page load.
 		uh.liveryLoaded = true
+		// The channel selector's sensitivity follows liveryLoaded, so it
+		// can only be enabled once the flag is set.
+		uh.syncWallpaperChannels()
 	}()
 	uh.liveryState = state
 	uh.liveryAppGridAvailable = appGridAvailable
@@ -308,6 +311,10 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 
 	uh.liveryState.PanelID = pageview.LiveryIDForIndex(panelChoice.Selected)
 	uh.syncLiveryFoundationGrid()
+	// The Wallpapers group may have been built before this load completed —
+	// its discovery runs in a goroutine — so re-sync the controls now that
+	// the persisted state is in place.
+	uh.syncWallpaperState()
 
 	if uh.liveryAppGridSwitch != nil {
 		uh.liveryAppGridSwitch.SetSensitive(appGridAvailable)

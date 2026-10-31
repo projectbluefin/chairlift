@@ -18,6 +18,10 @@ import chairlift_atspi as atspi
 LIVERY_SCHEMA = "io.projectbluefin.chairlift.livery"
 EXTENSION_SCHEMA = "org.gnome.shell.extensions.custom-command-list"
 ROTATION_UNIT = "chairlift-livery-rotate.service"
+WALLPAPER_ROTATION_UNIT = "chairlift-livery-wallpaper-rotate.service"
+BACKGROUND_SCHEMA = "org.gnome.desktop.background"
+# The check a selected tile shows (pageview.LiveryFoundationSelectedLabel).
+SELECTED_LABEL = "Selected"
 CALLS = "livery-calls.log"
 
 # Command lines that change state. Reads (gsettings get/list-recursively,
@@ -448,6 +452,28 @@ def step_would_write_unit(context):
     assert ok, f"chairlift.log never contained {line!r}"
 
 
+@then("the Livery dry run would write and enable the wallpaper rotation unit")
+def step_would_write_wallpaper_unit(context):
+    path = os.path.join(context.launch_env["XDG_CONFIG_HOME"], "systemd", "user", WALLPAPER_ROTATION_UNIT)
+    line = f"[DRY-RUN] would write {path} and enable it"
+    ok = atspi.poll(lambda: line in _log(context))
+    assert ok, f"chairlift.log never contained {line!r}"
+
+
+@then('the Livery dry run would set the desktop background to "{image}"')
+def step_would_set_background(context, image):
+    """ApplyNativeBackground's preview names both GNOME keys and the image URI."""
+    path = os.path.join(context.launch_env["CHAIRLIFT_WALLPAPER_ROOT"], image)
+
+    def previewed():
+        return any(
+            f"[DRY-RUN] would set {BACKGROUND_SCHEMA} picture-uri " in line and f"file://{path}" in line
+            for line in _log(context).splitlines()
+        )
+
+    assert atspi.poll(previewed), f"chairlift.log never previewed {path} as the desktop background"
+
+
 @then("the Livery page announced no dry-run change")
 def step_no_dry_run(context):
     # Give a late notify-driven handler the chance to misfire before judging.
@@ -491,6 +517,12 @@ def step_no_icons(context):
 @then("no rotation unit was written under the home directory")
 def step_no_unit(context):
     path = os.path.join(context.launch_env["XDG_CONFIG_HOME"], "systemd", "user", ROTATION_UNIT)
+    assert not os.path.exists(path), f"{path} was written"
+
+
+@then("no wallpaper rotation unit was written under the home directory")
+def step_no_wallpaper_unit(context):
+    path = os.path.join(context.launch_env["XDG_CONFIG_HOME"], "systemd", "user", WALLPAPER_ROTATION_UNIT)
     assert not os.path.exists(path), f"{path} was written"
 
 
@@ -539,3 +571,64 @@ def step_button_announced(context, label, section, announced):
     assert atspi.name(button) == announced, (
         f"the button showing {label!r} is announced as {atspi.name(button)!r}, want {announced!r}"
     )
+
+
+@then('the "{label}" button in the Livery "{section}" section is {state:w}')
+def step_section_button_state(context, label, section, state):
+    if state not in ("sensitive", "insensitive"):
+        raise NotImplementedError(f"unknown button state {state!r}")
+    want = state == "sensitive"
+    root = _section(context, section)
+    button = atspi.find(
+        root,
+        lambda n: atspi.is_button(n) and (atspi.name(n) == label or label in _texts(n)),
+        f"a button showing {label!r} in {section!r}",
+    )
+    ok = atspi.poll(lambda: _operable(button, root) == want)
+    assert ok, f"the {label!r} button in {section!r} never became {state}"
+
+
+def _operable(node, root):
+    """node and every ancestor up to root are sensitive.
+
+    GTK does not publish an insensitive container's state on its children, so
+    a button inside an insensitive FlowBox still reports itself sensitive
+    while GTK ignores its activation.
+    """
+    while node is not None:
+        if not atspi.sensitive(node):
+            return False
+        if node == root or (atspi.role(node) == atspi.role(root) and atspi.name(node) == atspi.name(root)):
+            return True
+        node = atspi.safe(lambda: node.parent, None)
+    return True
+
+
+# ---------------------------------------------------------------- wallpapers
+
+
+def _wallpaper_tile(context, name):
+    """A channel tile: a button named by its channel in the Wallpapers group."""
+    return atspi.find(
+        _section(context, "Wallpapers"),
+        lambda n: atspi.is_button(n) and atspi.name(n) == name,
+        f"the {name!r} wallpaper channel",
+    )
+
+
+@then('the "{name}" wallpaper channel is {state}')
+def step_wallpaper_channel_state(context, name, state):
+    if state not in ("selected", "not selected"):
+        raise NotImplementedError(f"unknown wallpaper channel state {state!r}")
+    want = state == "selected"
+
+    def marked():
+        tile = _wallpaper_tile(context, name)
+        return any(
+            atspi.name(n) == SELECTED_LABEL
+            for n in atspi.descendants(tile, only_showing=True)
+            if n is not tile
+        )
+
+    ok = atspi.poll(lambda: marked() == want)
+    assert ok, f"the {name!r} wallpaper channel is not {state}"
