@@ -258,6 +258,7 @@ var prerequisites = []Prerequisite{
 	{Page: "features_page", Group: "desktop_integrations_group"},
 	{Page: "features_page", Group: "gaming_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "features_page", Group: "printers_group", AnyOf: []Capability{Podman}},
+	{Page: "features_page", Group: "compass_group", AnyOf: []Capability{Flatpak}},
 
 	// Livery.
 	{Page: "livery_page", Group: "wallpapers_group", AnyOf: []Capability{Homebrew}},

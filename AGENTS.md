@@ -287,7 +287,12 @@ An agent must not break these:
   actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
   `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
   helper subcommand or PolicyKit action for them, or add a user Flathub
-  remote. The one Homebrew-sourced root install, the system Docker daemon,
+  remote. The Features page's Compass switch (`compass_group`,
+  `internal/compass`) is the same shape: it installs `org.tunaos.compass`
+  with `--system` from the image-shipped FlatPark system remote and never
+  adds a remote itself; without that remote, or off x86_64 (the only
+  architecture FlatPark publishes it for), it can only remove a copy.
+  The one Homebrew-sourced root install, the system Docker daemon,
   goes through the fixed `docker-enable`/`docker-update` helper commands
   from bottles the helper fetches and verifies itself; root never executes
   or loads anything from the user-owned Homebrew prefix (ADR-0024). Do not

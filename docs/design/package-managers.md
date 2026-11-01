@@ -23,6 +23,7 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/devtools`](../../internal/devtools/devtools.go) | WSL backends, system Docker status/enable (rootless cleanup, user-scope Docker CLI formulae), native VS Code setup and canonical package provenance | WSL/editor/CLI work is user-scoped; KVM and system Docker use the existing fixed helper |
 | [`internal/dockerbrew`](../../internal/dockerbrew/) | Verified Homebrew-bottle Docker daemon runtime: signed index, bottle download and extraction, ELF patching, manifest, managed units | Pure library; its writes run only inside the fixed `docker-enable`/`docker-update` helper commands |
 | [`internal/devsetup`](../../internal/devsetup/setup.go) | Ordered developer setup and retry outcomes over injected tasks | Adds no privileged route; initial Developer Mode promotion uses the existing ublue helper |
+| [`internal/compass`](../../internal/compass/compass.go) | Compass launcher state and system install/removal from the image's FlatPark remote | Flatpak's own authorization; adds no remote and no pkexec route |
 
 Mutation wrappers read the single process-wide `dryrun.Enabled()` flag from
 [`internal/dryrun`](../../internal/dryrun/dryrun.go). There are no per-wrapper

@@ -200,6 +200,7 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"dx_group":                   "Developer tools",
 		"gaming_group":               "**Gaming**",
 		"printers_group":             "**Printers**",
+		"compass_group":              "**Compass**",
 		// livery_page
 		"wallpapers_group":        "**Wallpapers**",
 		"account_group":           "Profile Picture",
