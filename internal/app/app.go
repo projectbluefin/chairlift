@@ -184,9 +184,11 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 		go func() {
 			// The prompt is read here, off the main thread, and kept only in
 			// memory; its text is never logged.
+			promptUnreadable := false
 			if promptPath != "" {
 				if prompt, err := agentmode.ReadPromptFile(promptPath); err != nil {
 					log.Printf("app: ask bluefin prompt file not used: %v", err)
+					promptUnreadable = true
 				} else {
 					agentmode.HoldPrompt(prompt)
 				}
@@ -205,16 +207,25 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 					log.Printf("app: goose desktop exited with error: %v", asyncErr)
 				})
 				if launchErr == nil {
-					sgtk.RunOnMainThread(a.Release)
-					return
+					if !promptUnreadable {
+						sgtk.RunOnMainThread(a.Release)
+						return
+					}
+					// Goose opened with an empty chat; open Agents with
+					// a toast saying why the question is missing.
+					decision.Reason = ""
+				} else {
+					log.Printf("app: launch goose desktop failed: %v", launchErr)
+					decision.Reason = "Couldn't open Goose. Try again."
 				}
-				log.Printf("app: launch goose desktop failed: %v", launchErr)
-				decision.Reason = "Couldn't open Goose. Try again."
 			}
 			// Unready or failed, a held prompt waits for the next Goose
 			// launch from the Agents page; say so, so it isn't lost.
 			if agentmode.PendingPrompt() != "" && decision.State != agentmode.StateUnsupported {
 				decision.Reason = agentmode.HeldPromptReason(decision.Reason)
+			}
+			if promptUnreadable {
+				decision.Reason = agentmode.UnreadablePromptReason(decision.Reason)
 			}
 			sgtk.RunOnMainThread(func() {
 				defer a.Release()

@@ -24,6 +24,10 @@ const MaxPromptBytes = 4096
 // --ask-bluefin prompt could not open yet, so the user knows it is kept.
 const PromptHeldNote = "Your question will be waiting in Goose once it opens."
 
+// PromptUnreadableNote tells the user an --ask-bluefin prompt file could not
+// be used, so Goose opening with an empty chat is not left unexplained.
+const PromptUnreadableNote = "Your question couldn't be read, so Goose won't have it."
+
 var (
 	// ErrPromptEmpty is a prompt file with no text in it.
 	ErrPromptEmpty = errors.New("prompt is empty")
@@ -47,7 +51,7 @@ func ReadPromptFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	info, err := f.Stat()
 	if err != nil {
 		return "", err
@@ -133,6 +137,16 @@ func HeldPromptReason(reason string) string {
 		return PromptHeldNote
 	}
 	return reason + " " + PromptHeldNote
+}
+
+// UnreadablePromptReason is the Agents page message for an --ask-bluefin
+// whose prompt file could not be used: why Goose did not open, if it did not,
+// then that the question was dropped.
+func UnreadablePromptReason(reason string) string {
+	if reason == "" {
+		return PromptUnreadableNote
+	}
+	return reason + " " + PromptUnreadableNote
 }
 
 // releasePrompt drops prompt once a launch delivered it, unless a newer

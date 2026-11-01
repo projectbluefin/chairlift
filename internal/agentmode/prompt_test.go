@@ -115,6 +115,16 @@ func TestHeldPromptReason(t *testing.T) {
 	}
 }
 
+func TestUnreadablePromptReason(t *testing.T) {
+	if got := UnreadablePromptReason(""); got != PromptUnreadableNote {
+		t.Errorf("UnreadablePromptReason(\"\") = %q, want %q", got, PromptUnreadableNote)
+	}
+	reason := StatePackagesMissing.MissingPrerequisite()
+	if got, want := UnreadablePromptReason(reason), reason+" "+PromptUnreadableNote; got != want {
+		t.Errorf("UnreadablePromptReason(%q) = %q, want %q", reason, got, want)
+	}
+}
+
 // The prompt is the user's text: a dry-run log shows the link it travels in
 // but not what it says.
 func TestCommandForLogRedactsThePrompt(t *testing.T) {
