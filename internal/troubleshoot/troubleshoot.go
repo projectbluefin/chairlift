@@ -25,6 +25,7 @@ package troubleshoot
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -331,6 +332,11 @@ func (p Profile) ConfigPath() string {
 	return filepath.Join(p.GooseRoot(), "config", "config.yaml")
 }
 
+// DesktopSettingsPath is Goose Desktop's Electron settings file.
+func (p Profile) DesktopSettingsPath() string {
+	return filepath.Join(p.DesktopConfigHome(), "Goose", "settings.json")
+}
+
 // HintsPath is the profile's global hints file, which Goose adds to every
 // session's instructions.
 func (p Profile) HintsPath() string {
@@ -465,10 +471,67 @@ func (p Profile) Write(serverPath string) error {
 	if err := writeFile(p.HintsPath(), []byte(Hints())); err != nil {
 		return err
 	}
+	if err := p.disableGlobalShortcuts(); err != nil {
+		return err
+	}
 	if user, err := userConfigDir(); err == nil {
 		return p.linkDesktopSettings(user)
 	}
 	return nil
+}
+
+// gooseGlobalShortcutDefaults are Goose Desktop's default global
+// accelerators. Goose writes its merged defaults back to settings.json when any
+// setting changes, so a stored default is not evidence of a user's choice.
+var gooseGlobalShortcutDefaults = map[string]string{
+	"focusWindow":   "CommandOrControl+Alt+G",
+	"quickLauncher": "CommandOrControl+Alt+Shift+G",
+}
+
+// disableGlobalShortcuts turns off Goose's default system-wide shortcuts. On
+// GNOME Wayland, Electron registers them through the GlobalShortcuts portal,
+// which opens a keyboard-shortcut approval dialog at launch. Missing entries
+// and Goose's persisted defaults are disabled; a different accelerator chosen
+// in Goose's Settings, a legacy globalShortcut choice, and every other setting
+// are preserved.
+func (p Profile) disableGlobalShortcuts() error {
+	settings := map[string]json.RawMessage{}
+	data, err := os.ReadFile(p.DesktopSettingsPath())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err == nil && json.Unmarshal(data, &settings) != nil {
+		settings = map[string]json.RawMessage{}
+	}
+	if settings["keyboardShortcuts"] == nil && settings["globalShortcut"] != nil {
+		return nil
+	}
+	shortcuts := map[string]json.RawMessage{}
+	if raw := settings["keyboardShortcuts"]; raw != nil && json.Unmarshal(raw, &shortcuts) != nil {
+		shortcuts = map[string]json.RawMessage{}
+	}
+	changed := false
+	for name, fallback := range gooseGlobalShortcutDefaults {
+		var value string
+		raw, ok := shortcuts[name]
+		if !ok || (json.Unmarshal(raw, &value) == nil && value == fallback) {
+			shortcuts[name] = json.RawMessage("null")
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	raw, err := json.Marshal(shortcuts)
+	if err != nil {
+		return err
+	}
+	settings["keyboardShortcuts"] = raw
+	data, err = json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFile(p.DesktopSettingsPath(), append(data, '\n'))
 }
 
 // userConfigDir is an injection seam for the user's own XDG_CONFIG_HOME.
