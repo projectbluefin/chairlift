@@ -99,6 +99,11 @@ type UserHome struct {
 	wallpaperDamaskState   pageview.DamaskState
 	wallpaperDamaskGate    actionstate.Gate
 
+	// The channel selector in the Wallpapers group: installed collections as
+	// thumbnails, applied to GNOME's background on an explicit pick. Nil until
+	// its first observation lands; see livery_wallpaper_channels.go.
+	wallpaperChannels *wallpaperChannels
+
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.
 	formulaButtons buttonRoute

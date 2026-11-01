@@ -1,5 +1,7 @@
 package pageview
 
+import "fmt"
+
 // WallpaperGroupTitle labels the optional Livery Wallpapers group.
 const WallpaperGroupTitle = "Wallpapers"
 
@@ -79,4 +81,75 @@ func DamaskFailure(state DamaskState) string {
 	default:
 		return "Couldn't install Damask. Try again."
 	}
+}
+
+// WallpaperChannelsState is what the Wallpapers group can offer for choosing
+// a picture from the installed collections.
+type WallpaperChannelsState int
+
+const (
+	// WallpaperChannelsHidden means no picture can be offered: the desktop is
+	// not GNOME, GNOME's background schema is absent, or no collection is
+	// installed. Nothing about channels is shown.
+	WallpaperChannelsHidden WallpaperChannelsState = iota
+	// WallpaperChannelsAvailable means GNOME takes the background and at least
+	// one installed collection has pictures to pick.
+	WallpaperChannelsAvailable
+	// WallpaperChannelsUnknown means a check failed. The group says so and
+	// offers to check again rather than reading the failure as unsupported.
+	WallpaperChannelsUnknown
+)
+
+// WallpaperChannelsOffer decides the channel selector's state from the desktop
+// probe and the catalog read. A failed check is never "unsupported", and an
+// unreadable catalog never hides the channels that were read.
+func WallpaperChannelsOffer(supported, probeFailed bool, channels int, discoveryFailed bool) WallpaperChannelsState {
+	switch {
+	case probeFailed && (channels > 0 || discoveryFailed):
+		return WallpaperChannelsUnknown
+	case !supported:
+		return WallpaperChannelsHidden
+	case channels > 0:
+		return WallpaperChannelsAvailable
+	case discoveryFailed:
+		return WallpaperChannelsUnknown
+	default:
+		return WallpaperChannelsHidden
+	}
+}
+
+// WallpaperChannelsRow describes the selector's row in each visible state.
+func WallpaperChannelsRow(state WallpaperChannelsState) Row {
+	if state == WallpaperChannelsUnknown {
+		return Row{Title: "Wallpaper Channels", Subtitle: "Couldn't check which wallpapers this desktop can use."}
+	}
+	return Row{Title: "Wallpaper Channel", Subtitle: "Pick a picture to make it your desktop background."}
+}
+
+// WallpaperRetryLabel is the unknown state's button.
+const WallpaperRetryLabel = "Try Again"
+
+// WallpaperSelectedLabel announces the badge on the current picture.
+const WallpaperSelectedLabel = "Current wallpaper"
+
+// WallpaperApplyFailure is the error toast for a failed selection. The tiles
+// keep the last confirmed picture marked and stay pickable, so it is a retry.
+const WallpaperApplyFailure = "Couldn't set the wallpaper. Try again."
+
+// WallpaperCount is a channel's size, for its subtitle.
+func WallpaperCount(n int) string {
+	if n == 1 {
+		return "1 wallpaper"
+	}
+	return fmt.Sprintf("%d wallpapers", n)
+}
+
+// WallpaperChannelSubtitle is the selector's subtitle for the channel on
+// screen. When a catalog could not be read, it says so: the list shown is
+// then not every collection on this computer.
+func WallpaperChannelSubtitle(count int, incomplete bool) string {
+	if incomplete {
+		return WallpaperCount(count) + " · Some collections couldn't be read."
+	}
+	return WallpaperCount(count)
 }

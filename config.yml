@@ -133,7 +133,10 @@ livery_page:
   livery_dock_group:
     enabled: true
 
-  # Curated wallpaper collections discovered through the Apps bundle paths.
+  # Curated wallpaper collections discovered through the Apps bundle paths,
+  # the Damask wallpaper manager (with Flatpak), and on GNOME a picker over
+  # the collections already installed that sets the desktop background only
+  # when a picture is chosen.
   wallpapers_group:
     enabled: true
 
