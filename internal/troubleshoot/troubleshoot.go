@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -525,17 +526,35 @@ func writeAtomic(dest string, data []byte) error {
 	return os.Rename(tmp.Name(), dest)
 }
 
+// NewSessionURLPrefix starts the deep link Goose's desktop app opens as a new
+// chat. With a prompt query parameter Goose prefills that chat's input
+// without sending it, and the link names no recipe, extension, or setting,
+// so it cannot change the profile's tools or configuration.
+const NewSessionURLPrefix = "goose://new-session"
+
+// NewSessionURL is the deep link that opens a new Goose chat prefilled with
+// prompt. The prompt is query-escaped, so no text in it can change which
+// link Goose sees.
+func NewSessionURL(prompt string) string {
+	return NewSessionURLPrefix + "?" + url.Values{"prompt": {prompt}}.Encode()
+}
+
 // Command returns the launch: llmman starts Goose's desktop app pointed at
 // model, inside the profile. The environment is the caller's plus the two
-// profile roots.
-func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
+// profile roots. A non-empty prompt is forwarded to Goose, after llmman's
+// own arguments, as a new-session link that prefills the first message.
+func Command(state State, profile Profile, model, prompt string) (*exec.Cmd, error) {
 	if !state.Ready() {
 		return nil, errors.New("goose and its tools are not set up")
 	}
 	if model == "" {
 		return nil, errors.New("no Agent Mode model is selected")
 	}
-	cmd := exec.Command(state.LLMManPath, "launch", "goose-desktop", "--model", model)
+	args := []string{"launch", "goose-desktop", "--model", model}
+	if prompt != "" {
+		args = append(args, "--", NewSessionURL(prompt))
+	}
+	cmd := exec.Command(state.LLMManPath, args...)
 	sessionIO(cmd, profile)
 	return cmd, nil
 }
@@ -546,12 +565,17 @@ func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
 // it; the new process then exits. Raising the window is left to the
 // compositor: no activation token is passed, and GNOME may show a "Goose is
 // ready" notification instead. llmman is not involved: it refuses a launch
-// while the lock is held.
-func ReopenCommand(state State, profile Profile) (*exec.Cmd, error) {
+// while the lock is held. A non-empty prompt travels as a new-session link,
+// which the running session opens as a new chat with the prompt prefilled.
+func ReopenCommand(state State, profile Profile, prompt string) (*exec.Cmd, error) {
 	if state.DesktopPath == "" {
 		return nil, errors.New("goose desktop is not installed")
 	}
-	cmd := exec.Command(state.DesktopPath)
+	var args []string
+	if prompt != "" {
+		args = append(args, NewSessionURL(prompt))
+	}
+	cmd := exec.Command(state.DesktopPath, args...)
 	sessionIO(cmd, profile)
 	return cmd, nil
 }
