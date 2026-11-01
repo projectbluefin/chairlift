@@ -1026,7 +1026,10 @@ Goose added — is carried over disabled, and Goose 1.53's platform extensions
 a missing platform extension with its own default and keeps an `enabled`
 value already present. No provider, model, or key is written: llmman hands
 Goose its provider through the environment. `hints.md` becomes the profile's
-`.goosehints`. Knowledge searches go online, so no copy claims a session's
+`.goosehints`. Missing or Goose-default `focusWindow` and `quickLauncher`
+entries in the desktop profile's `Goose/settings.json` are set to null, while
+different choices and other settings are preserved, so GNOME does not open a
+keyboard-shortcut approval dialog for Goose's defaults at launch. Knowledge searches go online, so no copy claims a session's
 questions stay on this computer. The hint explicitly names the `linux-tools`
 tools (`get_system_information`, `get_disk_usage`, `get_cpu_information`,
 …) so a small local model — the recommended Qwen family — reaches for them
