@@ -1,0 +1,5 @@
+# Features scenarios: the administrator turned the Compass group off while
+# leaving Gaming at its default. Loaded from an untrusted path; no sudo.
+features_page:
+  compass_group:
+    enabled: false

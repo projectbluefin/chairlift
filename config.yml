@@ -100,6 +100,12 @@ features_page:
   # (ADR-0020), so only this computer can print to it or open its settings.
   printers_group:
     enabled: true
+  # Compass, TunaOS's keyboard-first launcher: one switch that installs or
+  # removes org.tunaos.compass system-wide (`flatpak install --system`) from
+  # the FlatPark remote the image ships, authorized by Flatpak's own
+  # PolicyKit. Hidden where flatpak is absent.
+  compass_group:
+    enabled: true
   # Agent Mode (llmman, installed with Homebrew and run as a systemd user
   # unit) lives on its own Agents page; see agents_page above.
 

@@ -112,7 +112,7 @@ def _never(predicate, what, window=NEGATIVE_WINDOW):
 # ---------------------------------------------------------------- package disclosures
 
 
-FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Gaming Mode")
+FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Gaming Mode", "Compass")
 
 # internal/dockerbrew's daemon set (root-owned, for the whole computer) and its
 # user-scope CLI formulae, with the provenance each disclosure row states.

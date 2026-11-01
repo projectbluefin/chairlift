@@ -399,6 +399,9 @@ func defaultConfig() *Config {
 			// floored on Podman by internal/capability. Enabled because the
 			// group does nothing until a switch is turned on.
 			"printers_group": GroupConfig{Enabled: true},
+			// Compass, TunaOS's launcher, installed system-wide from the
+			// FlatPark remote the image ships; floored on Flatpak.
+			"compass_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
 		// into the user's own icon theme and dconf, so neither needs a
