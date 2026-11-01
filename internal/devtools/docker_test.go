@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
@@ -34,19 +35,25 @@ func dockerReport(load, active string) string {
 
 // Every external command is a local fixture. In particular, neither systemctl
 // nor a helper can reach the host, even when testing the exported functions.
+// HOME is private, Homebrew and the Docker CLI are absent, and the account is
+// a configured docker member whose session predates the grant unless a test
+// says otherwise.
 func fakeSystemDocker(t *testing.T, service, socket string) (string, string) {
 	t.Helper()
 	dir := fakeSystemctl(t, "")
 	calls := filepath.Join(dir, "calls")
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("DOCKER_TEST_CALLS", calls)
 	t.Setenv("DOCKER_TEST_STATE", dir)
 	t.Setenv("DOCKER_TEST_STATUS_ERROR", "")
+	t.Setenv("DOCKER_TEST_CONTEXT", "default")
 	writeDockerReports(t, dir, service, socket)
 	script := `#!/bin/sh
 printf 'systemctl %s\n' "$*" >> "$DOCKER_TEST_CALLS"
 case "$*" in
 'show docker.service --property=LoadState,ActiveState') unit=service ;;
 'show docker.socket --property=LoadState,ActiveState') unit=socket ;;
+'--user disable --now docker.service') exit 0 ;;
 *) exit 99 ;;
 esac
 if [ "$DOCKER_TEST_STATUS_ERROR" = "$unit" ]; then
@@ -60,8 +67,50 @@ while IFS= read -r line; do printf '%s\n' "$line"; done < "$DOCKER_TEST_STATE/$u
 	}
 	previous := dryrun.Enabled()
 	dryrun.Set(false)
-	t.Cleanup(func() { dryrun.Set(previous) })
+	previousDocker, previousBrew, previousInstall, previousGroups := dockerExecutable, dockerBrewExecutable, dockerInstallFormula, dockerGroupMembership
+	dockerExecutable = func() string { return "" }
+	dockerBrewExecutable = func() string { return "" }
+	dockerInstallFormula = func(name string) error {
+		t.Errorf("installed %s without a test Homebrew", name)
+		return errors.New("unexpected Homebrew install")
+	}
+	dockerGroupMembership = func() (bool, bool, error) { return true, false, nil }
+	t.Cleanup(func() {
+		dryrun.Set(previous)
+		dockerExecutable, dockerBrewExecutable, dockerInstallFormula, dockerGroupMembership = previousDocker, previousBrew, previousInstall, previousGroups
+	})
 	return calls, dir
+}
+
+// fakeDockerCLI provides a docker client whose current context is
+// $DOCKER_TEST_CONTEXT and whose calls land in the shared call log.
+func fakeDockerCLI(t *testing.T, dir string) {
+	t.Helper()
+	path := filepath.Join(dir, "docker")
+	script := `#!/bin/sh
+printf 'docker %s\n' "$*" >> "$DOCKER_TEST_CALLS"
+case "$*" in
+'context show') [ "$DOCKER_TEST_CONTEXT" = fail ] && { echo 'context store corrupt' >&2; exit 3; }; echo "$DOCKER_TEST_CONTEXT" ;;
+'context use default') exit 0 ;;
+*) exit 99 ;;
+esac
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dockerExecutable = func() string { return path }
+}
+
+func appendCall(t *testing.T, calls, call string) {
+	t.Helper()
+	file, err := os.OpenFile(calls, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	if _, err := file.WriteString(call + "\n"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func writeDockerReports(t *testing.T, dir, service, socket string) {
@@ -91,18 +140,6 @@ func routeDockerSocket(t *testing.T, socket string) {
 	})
 }
 
-func TestDockerPackagesDescribeOnlyImageProvidedRPMs(t *testing.T) {
-	want := []string{"containerd.io", "docker-buildx-plugin", "docker-ce", "docker-ce-cli", "docker-compose-plugin"}
-	if got := DockerPackages(); !reflect.DeepEqual(got, want) {
-		t.Fatalf("system image inventory = %v, want %v", got, want)
-	}
-	packages := DockerPackages()
-	packages[0] = "changed"
-	if !reflect.DeepEqual(DockerPackages(), want) {
-		t.Fatal("caller changed the image package inventory")
-	}
-}
-
 func TestDockerSystemUnitCombinations(t *testing.T) {
 	for _, service := range []string{"inactive", "active", "failed", "activating", "deactivating", "reloading", "maintenance", "refreshing"} {
 		for _, socketState := range []string{"inactive", "active", "failed"} {
@@ -112,7 +149,7 @@ func TestDockerSystemUnitCombinations(t *testing.T) {
 				routeDockerSocket(t, socket)
 				state, err := DockerStatus(context.Background())
 				active := (service != "inactive" && service != "failed") || socketState == "active"
-				if err != nil || !state.Available || state.Active != active || state.Ready != active || state.NeedsLogin || state.Unavailable != "" {
+				if err != nil || !state.Available || !state.Installed || state.Active != active || state.Ready != active || state.NeedsLogin || state.NoAccess || state.Unavailable != "" {
 					t.Fatalf("system Docker = %+v %v, want active/ready %v", state, err, active)
 				}
 				if (hits.Load() == 1) != active {
@@ -137,34 +174,108 @@ func TestDockerReadinessUsesOnlyTheFixedSystemSocket(t *testing.T) {
 	}
 }
 
-func TestDockerMissingAndUnusableUnitsAreNotInstallable(t *testing.T) {
+func TestDockerUnusableUnitsAreNotInstallable(t *testing.T) {
 	for _, unit := range []string{"service", "socket"} {
-		for _, load := range []string{"not-found", "masked", "error", "bad-setting", "merged", "stub"} {
+		for _, load := range []string{"masked", "error", "bad-setting", "merged", "stub"} {
 			t.Run(unit+"/"+load, func(t *testing.T) {
-				service, socket := dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive")
-				if unit == "service" {
-					service = dockerReport(load, "inactive")
-				} else {
-					socket = dockerReport(load, "inactive")
+				// The paired unit is missing: an unusable unit must still win
+				// over the installable state a missing unit alone would mean.
+				service, socket := dockerReport(load, "inactive"), dockerReport("not-found", "inactive")
+				if unit == "socket" {
+					service, socket = socket, service
 				}
 				calls, _ := fakeSystemDocker(t, service, socket)
 				state, err := DockerStatus(context.Background())
-				if err != nil || state.Available || state.Active || state.Ready || state.Unavailable == "" {
+				if err != nil || state.Available || state.Installed || state.Active || state.Ready || state.Unavailable == "" {
 					t.Fatalf("unusable unit = %+v %v", state, err)
-				}
-				if load == "not-found" && !strings.Contains(state.Unavailable, "system image") {
-					t.Fatalf("missing unit lacks image prerequisite: %q", state.Unavailable)
 				}
 				var prerequisite *PrerequisiteError
 				if err := setDocker(context.Background(), true, nil, func(context.Context, bool) error {
-					t.Fatal("unavailable image attempted a privileged mutation")
+					t.Fatal("unusable units attempted a privileged mutation")
 					return nil
-				}); !errors.As(err, &prerequisite) {
-					t.Fatalf("unusable image did not refuse activation: %v", err)
+				}); !errors.As(err, &prerequisite) || prerequisite.Message != state.Unavailable {
+					t.Fatalf("unusable units did not refuse activation: %v", err)
 				}
 				assertCalls(t, calls, dockerServiceCall, dockerSocketCall, dockerServiceCall, dockerSocketCall)
 			})
 		}
+	}
+}
+
+// A host without Docker's units is where ChairLift installs them: the helper
+// downloads the verified bottles and writes the units, so not-found is an
+// installable state rather than a request for a different image.
+func TestDockerMissingUnitsAreInstallableThroughTheHelper(t *testing.T) {
+	for _, missing := range []string{"service", "socket", "both"} {
+		t.Run(missing, func(t *testing.T) {
+			service, socket := dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive")
+			if missing != "socket" {
+				service = dockerReport("not-found", "inactive")
+			}
+			if missing != "service" {
+				socket = dockerReport("not-found", "inactive")
+			}
+			calls, dir := fakeSystemDocker(t, service, socket)
+			state, err := DockerStatus(context.Background())
+			if err != nil || !state.Available || state.Installed || state.Active || state.Unavailable != "" {
+				t.Fatalf("missing units = %+v %v, want installable", state, err)
+			}
+			if err := setDocker(context.Background(), false, nil, func(context.Context, bool) error {
+				t.Fatal("disabling an uninstalled Docker dispatched the helper")
+				return nil
+			}); err != nil {
+				t.Fatalf("disable with nothing installed = %v", err)
+			}
+			socketPath, _ := pingServer(t, http.StatusOK, "OK")
+			routeDockerSocket(t, socketPath)
+			var stages []string
+			var dispatched []bool
+			err = setDocker(context.Background(), true, func(stage string) { stages = append(stages, stage) }, func(_ context.Context, enabled bool) error {
+				dispatched = append(dispatched, enabled)
+				writeDockerReports(t, dir, dockerReport("loaded", "active"), dockerReport("loaded", "active"))
+				return nil
+			})
+			if err != nil || !reflect.DeepEqual(dispatched, []bool{true}) {
+				t.Fatalf("install = %v, helper calls %v", err, dispatched)
+			}
+			if !reflect.DeepEqual(stages, []string{"Installing Docker for this computer…"}) {
+				t.Fatalf("install stages = %q", stages)
+			}
+			if got := mutationCalls(t, calls); len(got) != 0 {
+				t.Fatalf("install ran commands outside the helper: %q", got)
+			}
+		})
+	}
+}
+
+// Permission to the socket separates two situations: a configured docker
+// member whose session predates the grant needs a new login, and anyone else
+// needs the grant docker-enable makes.
+func TestDockerPermissionDeniedDistinguishesNewLoginFromNoAccess(t *testing.T) {
+	membershipFailure := errors.New("group database unreadable")
+	for _, test := range []struct {
+		name                string
+		configured, session bool
+		err                 error
+		login               bool
+	}{
+		{"configured, not in this session", true, false, nil, true},
+		{"not configured", false, false, nil, false},
+		{"configured and in this session", true, true, nil, false},
+		{"membership unreadable", true, false, membershipFailure, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fakeSystemDocker(t, dockerReport("loaded", "active"), dockerReport("loaded", "active"))
+			dockerGroupMembership = func() (bool, bool, error) { return test.configured, test.session, test.err }
+			dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) { return nil, os.ErrPermission })
+			state, err := DockerStatus(context.Background())
+			if !errors.Is(err, os.ErrPermission) || !state.Active || state.Ready {
+				t.Fatalf("denied socket = %+v %v", state, err)
+			}
+			if state.NeedsLogin != test.login || state.NoAccess == test.login || errors.Is(err, ErrDockerNewLogin) != test.login {
+				t.Fatalf("denied socket = %+v %v, want new login %v", state, err, test.login)
+			}
+		})
 	}
 }
 
@@ -212,7 +323,7 @@ func TestDockerSocketFailuresPreserveTheirCause(t *testing.T) {
 			dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) { return nil, failure })
 			state, err := DockerStatus(context.Background())
 			login := errors.Is(failure, os.ErrPermission)
-			if !errors.Is(err, failure) || !state.Available || state.Ready || !state.Active || state.NeedsLogin != login || errors.Is(err, ErrDockerNewLogin) != login {
+			if !errors.Is(err, failure) || !state.Available || state.Ready || !state.Active || state.NeedsLogin != login || state.NoAccess || errors.Is(err, ErrDockerNewLogin) != login {
 				t.Fatalf("socket failure lost state/cause: %+v %v", state, err)
 			}
 		})
@@ -465,4 +576,292 @@ func TestDockerPingBodyReadFailureRemainsAnError(t *testing.T) {
 	if !state.Active || state.Ready || state.NeedsLogin || !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("truncated ping body hid its cause: %+v %v", state, err)
 	}
+}
+
+// enableDockerHelper stands in for the fixed helper: it records its place in
+// the call log and leaves both units running behind a responding socket.
+func enableDockerHelper(t *testing.T, calls, dir string) func(context.Context, bool) error {
+	t.Helper()
+	socket, _ := pingServer(t, http.StatusOK, "OK")
+	routeDockerSocket(t, socket)
+	return func(_ context.Context, enabled bool) error {
+		if !enabled {
+			t.Fatal("enable dispatched disable")
+		}
+		appendCall(t, calls, "helper docker-enable")
+		writeDockerReports(t, dir, dockerReport("loaded", "active"), dockerReport("loaded", "active"))
+		return nil
+	}
+}
+
+func mutationCalls(t *testing.T, calls string) []string {
+	t.Helper()
+	var got []string
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			got = append(got, call)
+		}
+	}
+	return got
+}
+
+func writeUserDockerUnit(t *testing.T, unit string) {
+	t.Helper()
+	path := filepath.Join(os.Getenv("HOME"), ".config", "systemd", "user", "docker.service")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(unit), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// v26.10.10 ran dockerd-rootless-setuptool.sh, leaving a per-user daemon and a
+// "rootless" CLI context. Enabling system Docker retires exactly that setup
+// after the helper succeeds, and leaves any other user unit alone.
+func TestDockerEnableRetiresOnlyTheRootlessSetuptoolSetup(t *testing.T) {
+	const setuptoolUnit = "[Unit]\nDescription=Docker Application Container Engine (Rootless)\n[Service]\nEnvironment=PATH=/home/linuxbrew/.linuxbrew/bin\nExecStart=/home/linuxbrew/.linuxbrew/bin/dockerd-rootless.sh\n"
+	for _, test := range []struct {
+		name, unit, context string
+		cli, preview        bool
+		want                []string
+	}{
+		{"setuptool unit and context", setuptoolUnit, "rootless", true, false, []string{"helper docker-enable", "systemctl --user disable --now docker.service", "docker context show", "docker context use default"}},
+		{"setuptool unit without a CLI", setuptoolUnit, "", false, false, []string{"helper docker-enable", "systemctl --user disable --now docker.service"}},
+		{"user's own unit", "[Service]\nExecStart=/opt/proxy/docker-shim --listen\n", "default", true, false, []string{"helper docker-enable", "docker context show"}},
+		{"commented mention", "[Service]\n# ExecStart=dockerd-rootless.sh\nExecStart=/usr/bin/true\n", "default", true, false, []string{"helper docker-enable", "docker context show"}},
+		{"rootless context only", "", "rootless", true, false, []string{"helper docker-enable", "docker context show", "docker context use default"}},
+		{"other user context", "", "remote-build", true, false, []string{"helper docker-enable", "docker context show"}},
+		{"preview reads only", setuptoolUnit, "rootless", true, true, []string{"helper docker-enable", "docker context show"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls, dir := fakeSystemDocker(t, dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive"))
+			if test.unit != "" {
+				writeUserDockerUnit(t, test.unit)
+			}
+			if test.cli {
+				fakeDockerCLI(t, dir)
+				t.Setenv("DOCKER_TEST_CONTEXT", test.context)
+			}
+			dryrun.Set(test.preview)
+			if err := setDocker(context.Background(), true, nil, enableDockerHelper(t, calls, dir)); err != nil {
+				t.Fatalf("enable = %v", err)
+			}
+			if got := mutationCalls(t, calls); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("calls = %q, want %q", got, test.want)
+			}
+			if test.unit != "" {
+				if data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".config", "systemd", "user", "docker.service")); err != nil || string(data) != test.unit {
+					t.Fatalf("user unit changed: %q %v", data, err)
+				}
+			}
+		})
+	}
+}
+
+// A dismissed prompt or failed install must leave a working rootless daemon
+// and its CLI context exactly as they were.
+func TestDockerEnableFailureKeepsTheRootlessSetup(t *testing.T) {
+	calls, dir := fakeSystemDocker(t, dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive"))
+	writeUserDockerUnit(t, "[Service]\nExecStart=/home/linuxbrew/.linuxbrew/bin/dockerd-rootless.sh\n")
+	fakeDockerCLI(t, dir)
+	t.Setenv("DOCKER_TEST_CONTEXT", "rootless")
+	failure := errors.New("authentication dismissed")
+	if err := setDocker(context.Background(), true, nil, func(context.Context, bool) error { return failure }); !errors.Is(err, failure) {
+		t.Fatalf("enable = %v, want helper failure", err)
+	}
+	if got := mutationCalls(t, calls); len(got) != 0 {
+		t.Fatalf("failed enable touched the rootless setup: %q", got)
+	}
+}
+
+func TestDockerEnableReportsAnUnreadableCLIContextAfterTheHelper(t *testing.T) {
+	calls, dir := fakeSystemDocker(t, dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive"))
+	fakeDockerCLI(t, dir)
+	t.Setenv("DOCKER_TEST_CONTEXT", "fail")
+	err := setDocker(context.Background(), true, nil, enableDockerHelper(t, calls, dir))
+	if err == nil || !strings.Contains(err.Error(), "context store corrupt") {
+		t.Fatalf("context read failure = %v", err)
+	}
+	if got := mutationCalls(t, calls); !reflect.DeepEqual(got, []string{"helper docker-enable", "docker context show"}) {
+		t.Fatalf("calls = %q", got)
+	}
+}
+
+// fakeDockerBrew provides a Homebrew prefix whose formula installs land in
+// the call log and which ships both CLI plugins.
+func fakeDockerBrew(t *testing.T, calls string, failing string) string {
+	t.Helper()
+	prefix := t.TempDir()
+	plugins := filepath.Join(prefix, "lib", "docker", "cli-plugins")
+	if err := os.MkdirAll(plugins, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"docker-buildx", "docker-compose"} {
+		if err := os.WriteFile(filepath.Join(plugins, name), []byte("plugin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dockerBrewExecutable = func() string { return filepath.Join(prefix, "bin", "brew") }
+	dockerInstallFormula = func(name string) error {
+		appendCall(t, calls, "brew install "+name)
+		if name == failing {
+			return errors.New("bottle download failed")
+		}
+		return nil
+	}
+	return prefix
+}
+
+func TestDockerEnableInstallsTheHomebrewCLIAfterTheHelper(t *testing.T) {
+	calls, dir := fakeSystemDocker(t, dockerReport("not-found", "inactive"), dockerReport("not-found", "inactive"))
+	prefix := fakeDockerBrew(t, calls, "")
+	var stages []string
+	if err := setDocker(context.Background(), true, func(stage string) { stages = append(stages, stage) }, enableDockerHelper(t, calls, dir)); err != nil {
+		t.Fatalf("enable = %v", err)
+	}
+	want := []string{"helper docker-enable"}
+	for _, name := range dockerbrew.CLIFormulae() {
+		want = append(want, "brew install "+name)
+	}
+	if got := mutationCalls(t, calls); !reflect.DeepEqual(got, want) {
+		t.Fatalf("calls = %q, want %q", got, want)
+	}
+	if len(stages) != 1+len(dockerbrew.CLIFormulae()) || stages[0] != "Installing Docker for this computer…" {
+		t.Fatalf("stages = %q", stages)
+	}
+	for _, name := range []string{"docker-buildx", "docker-compose"} {
+		link := filepath.Join(os.Getenv("HOME"), ".docker", "cli-plugins", name)
+		if target, err := os.Readlink(link); err != nil || target != filepath.Join(prefix, "lib", "docker", "cli-plugins", name) {
+			t.Fatalf("%s link = %q %v", name, target, err)
+		}
+	}
+}
+
+// The daemon is the point of the switch; a CLI that failed to install is
+// reported after the helper ran, not by skipping the helper.
+func TestDockerCLIFailureFollowsASuccessfulHelper(t *testing.T) {
+	for _, login := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ready", true: "new login"}[login], func(t *testing.T) {
+			calls, dir := fakeSystemDocker(t, dockerReport("loaded", "inactive"), dockerReport("loaded", "inactive"))
+			fakeDockerBrew(t, calls, "docker-buildx")
+			apply := enableDockerHelper(t, calls, dir)
+			if login {
+				dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) { return nil, os.ErrPermission })
+			}
+			err := setDocker(context.Background(), true, nil, apply)
+			var cli *DockerCLIError
+			if !errors.As(err, &cli) || !strings.Contains(err.Error(), "bottle download failed") || errors.Is(err, ErrDockerNewLogin) != login {
+				t.Fatalf("CLI failure = %v", err)
+			}
+			if got := mutationCalls(t, calls); !reflect.DeepEqual(got, []string{"helper docker-enable", "brew install docker", "brew install docker-buildx"}) {
+				t.Fatalf("calls = %q", got)
+			}
+			if _, err := os.Lstat(filepath.Join(os.Getenv("HOME"), ".docker")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("failed install still linked plugins: %v", err)
+			}
+		})
+	}
+}
+
+func TestDockerPluginLinksNeverReplaceUserFiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	previous := dryrun.Enabled()
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(previous) })
+	prefix := t.TempDir()
+	plugins := filepath.Join(prefix, "lib", "docker", "cli-plugins")
+	if err := os.MkdirAll(plugins, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"docker-buildx", "docker-compose"} {
+		if err := os.WriteFile(filepath.Join(plugins, name), []byte("plugin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dir := filepath.Join(home, ".docker", "cli-plugins")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	buildx, compose := filepath.Join(dir, "docker-buildx"), filepath.Join(dir, "docker-compose")
+	reset := func() {
+		for _, path := range []string{buildx, compose} {
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, test := range []struct {
+		name                 string
+		setup                func()
+		wantBuildx, wantComp string // "" means the Homebrew target
+	}{
+		{"user binary and foreign symlink", func() {
+			if err := os.WriteFile(buildx, []byte("my buildx"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink("/opt/compose/docker-compose", compose); err != nil {
+				t.Fatal(err)
+			}
+		}, "file:my buildx", "/opt/compose/docker-compose"},
+		{"relative symlink outside the prefix", func() {
+			if err := os.Symlink("../../bin/docker-buildx", buildx); err != nil {
+				t.Fatal(err)
+			}
+		}, "../../bin/docker-buildx", ""},
+		{"stale Homebrew symlink", func() {
+			if err := os.Symlink(filepath.Join(prefix, "Cellar", "docker-compose", "2.0.0", "bin", "docker-compose"), compose); err != nil {
+				t.Fatal(err)
+			}
+		}, "", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			reset()
+			test.setup()
+			if err := linkDockerCLIPlugins(prefix); err != nil {
+				t.Fatal(err)
+			}
+			for path, want := range map[string]string{buildx: test.wantBuildx, compose: test.wantComp} {
+				if want == "" {
+					want = filepath.Join(plugins, filepath.Base(path))
+				}
+				if content, ok := strings.CutPrefix(want, "file:"); ok {
+					if data, err := os.ReadFile(path); err != nil || string(data) != content {
+						t.Fatalf("%s user file changed: %q %v", path, data, err)
+					}
+					continue
+				}
+				if got, err := os.Readlink(path); err != nil || got != want {
+					t.Fatalf("%s -> %q %v, want %q", path, got, err, want)
+				}
+			}
+		})
+	}
+
+	t.Run("preview links nothing", func(t *testing.T) {
+		reset()
+		dryrun.Set(true)
+		defer dryrun.Set(false)
+		if err := linkDockerCLIPlugins(prefix); err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{buildx, compose} {
+			if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("preview created %s: %v", path, err)
+			}
+		}
+	})
+	t.Run("missing Homebrew plugin is an error", func(t *testing.T) {
+		reset()
+		if err := os.Remove(filepath.Join(plugins, "docker-compose")); err != nil {
+			t.Fatal(err)
+		}
+		if err := linkDockerCLIPlugins(prefix); err == nil || !strings.Contains(err.Error(), "docker-compose") {
+			t.Fatalf("dangling link accepted: %v", err)
+		}
+		if _, err := os.Lstat(compose); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("dangling link created: %v", err)
+		}
+	})
 }

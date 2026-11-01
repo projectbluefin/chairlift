@@ -57,8 +57,8 @@ func TestSetupVSCodeRequiresNativeExecutableBeforeWriting(t *testing.T) {
 			vsCodeExecutable = func() string { return "" }
 			t.Cleanup(func() { vsCodeExecutable = original })
 			dryrun.Set(preview)
-			if err := SetupVSCode(context.Background(), nil); err == nil || !strings.Contains(err.Error(), "native Microsoft VS Code") {
-				t.Fatalf("missing native code error = %v", err)
+			if err := SetupVSCode(context.Background(), nil); !errors.Is(err, ErrVSCodeNotInstalled) {
+				t.Fatalf("missing native code error = %v, want ErrVSCodeNotInstalled", err)
 			}
 			if entries, err := os.ReadDir(home); err != nil || len(entries) != 0 {
 				t.Fatalf("missing code seeded user state: %v, %v", entries, err)

@@ -113,6 +113,11 @@ are listed in [org-adrs.md](org-adrs.md).
   connects signals; blueprints stay within the libadwaita 1.6 floor
 - [adr/0023-verify-printer-images-before-installing.md](adr/0023-verify-printer-images-before-installing.md)
   — Verify printer image signatures and install immutable digests instead of unchecked auto-updating tags.
+- [adr/0024-rootful-docker-from-verified-homebrew-bottles.md](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)
+  — the fixed `docker-enable` helper installs the system Docker daemon from
+  Homebrew bottles it verifies itself against the signed formula index, into
+  root-owned `/var/lib/chairlift/docker`; root never executes the user's
+  Homebrew prefix
 
 ### Design
 

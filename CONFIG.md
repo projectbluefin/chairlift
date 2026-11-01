@@ -119,7 +119,7 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 - `automatic_updates_group`: The automatic-background-updates switch, and nothing else — whether this system installs updates on its own schedule. Updating now is the update shell's single primary action and has no configuration key. Hidden entirely on a host with no unattended-update timer
 - `bootc_updates_group`: System-wide bootc updates
 - `flatpak_updates_group`: Available Flatpak application updates (user and system)
-- `brew_updates_group`: Homebrew package updates and outdated packages
+- `brew_updates_group`: Homebrew package updates and outdated packages, plus the Docker engine when Enable Docker installed it from Homebrew bottles
 - `brew_trust_group`: Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); only shown when there is something to trust
 - `channel_group`: Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present
 - `bootc_status_group`: Compact system-version readout, with build identifiers behind a details row (when available)
@@ -184,27 +184,38 @@ nsl requires an x86-64 Linux host; Lima supports amd64 and arm64. Both require
 hardware virtualization and access to `/dev/kvm`; its fixed permission grant
 may also ask for authentication and requires a new login. Missing helper
 actions leave affected controls visible but insensitive.
-Docker uses image-provided Docker CE, not a Homebrew engine or user service.
-Its package disclosure labels `containerd.io`, `docker-buildx-plugin`, `docker-ce`,
-`docker-ce-cli`, and `docker-compose-plugin` as **Provided by system image**;
-they are RPM provenance, not downloads this action requests. The existing fixed
-`docker-enable` helper grants account access and enables `docker.service` and
-`docker.socket`; it may ask for administrator approval separately from
-`dx-enable`. Missing image units need an image/administrator fix, not a package
-install from ChairLift. Homebrew and UID-map tools are not Docker prerequisites.
+Docker is rootful system Docker with Bluefin DX parity. On an image that ships
+`/usr/lib/systemd/system/docker.service`, the fixed `docker-enable` helper
+enables that Docker. Otherwise the helper installs the daemon from Homebrew
+bottles it verifies against Homebrew's signed formula index into root-owned
+`/var/lib/chairlift/docker`, writes marker-bearing units to
+`/etc/systemd/system`, and creates the `docker` group when missing; root never
+executes the user's Homebrew prefix
+([ADR-0024](docs/adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
+No configuration key selects the formulae, index, install root, or unit
+paths; they are fixed in the helper. The action needs network access and may
+ask for administrator approval separately from `dx-enable`. When Homebrew is
+available, ChairLift then installs the user-scope `docker`, `docker-buildx`,
+and `docker-compose` formulae. Once system Docker is on, enable also turns off
+a rootless Docker daemon an earlier ChairLift set up. The package disclosure labels the daemon formulae
+**Homebrew, installed for the whole computer**. Masked units or missing helper
+actions need an image/administrator fix.
 Readiness requires `/var/run/docker.sock` to answer HTTP 200 `OK`; installed
 CLI tools or active units alone are insufficient. Newly granted group access
 needs a new login, and awaiting login is not ready. A known active unit remains
 stoppable with a supported disable action even after a socket probe failure.
-Disable stops both system units for all accounts and keeps packages, data,
-group membership, and Developer Mode.
+Disable stops both system units for all accounts and keeps the runtime, data,
+group membership, and Developer Mode. With `updates_page.brew_updates_group`
+enabled, the Developer tools update source also refreshes a Homebrew-installed
+daemon through the fixed `docker-update` helper.
 Docker enable also attempts native Microsoft VS Code setup as a separate optional
 outcome, without installing the editor. It seeds defaults only when
 `~/.config/Code/User/settings.json` is absent, preserving existing JSONC and
 symlinks, and installs Bluefin DX's Dev Containers, Remote SSH, and Container
 Tools extensions. The upstream version-1 marker is written only after success
-and checked against installed extensions on later runs. A missing native `code`
-or an editor setup failure stays visible and retryable without undoing access.
+and checked against installed extensions on later runs. Without native `code`
+the step is skipped; an editor setup failure stays visible and retryable
+without undoing access.
 Preview writes no settings or marker and launches no editor CLI. No
 user-configurable privileged argv is accepted.
 The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;

@@ -34,6 +34,8 @@ jobs:
       # The nested daemon keeps its normal firewall rules. Only the hosted
       # runner's administrator loads modules; Podman itself always stays
       # rootless, with private system/user managers and no host bus or socket.
+      # Docker itself is not prepared here: the gate's real helper installs it
+      # from Homebrew's signed index and bottles inside the Dakota fixture.
       - name: Prepare the runner kernel for nested Docker
         run: |
           if ! sudo modprobe -a ip_tables iptable_nat br_netfilter overlay; then

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -93,6 +94,7 @@ func TestExportedActionsSendTheirOwnCommandWord(t *testing.T) {
 			call:     func(ctx context.Context) error { return SetDocker(ctx, false) },
 			wantArgs: []string{ubluehelper.CommandDockerDisable},
 		},
+		{name: "UpdateDocker", call: UpdateDocker, wantArgs: []string{ubluehelper.CommandDockerUpdate}},
 		{
 			name:     "Restart",
 			call:     Restart,
@@ -184,6 +186,7 @@ func TestEmittedCommandsAreAllHelperSupported(t *testing.T) {
 		ubluehelper.CommandKVMEnable,
 		ubluehelper.CommandDockerEnable,
 		ubluehelper.CommandDockerDisable,
+		ubluehelper.CommandDockerUpdate,
 	}
 	for _, command := range emitted {
 		if !supported[command] {
@@ -268,12 +271,17 @@ func TestSwitchTimeoutsCoverAFullImagePull(t *testing.T) {
 	}
 	gui := time.Until(deadline)
 
-	for _, command := range []string{
+	// docker-enable and docker-update download the daemon's bottles, which a
+	// slow link cannot finish in the default budget either.
+	long := []string{
 		ubluehelper.CommandChannelSwitch,
 		ubluehelper.CommandDriverSwitch,
 		ubluehelper.CommandPin,
 		ubluehelper.CommandUnpin,
-	} {
+		ubluehelper.CommandDockerEnable,
+		ubluehelper.CommandDockerUpdate,
+	}
+	for _, command := range long {
 		helper := ubluehelper.Timeout(command)
 		if helper < bootc.DefaultTimeout {
 			t.Errorf("ubluehelper.Timeout(%q) = %v, want at least bootc.DefaultTimeout %v", command, helper, bootc.DefaultTimeout)
@@ -286,9 +294,7 @@ func TestSwitchTimeoutsCoverAFullImagePull(t *testing.T) {
 	// Every other command keeps the default budget, which DefaultContext
 	// outlasts (TestDefaultContextCarriesTheDefaultDeadline).
 	for _, command := range ubluehelper.SupportedCommands() {
-		switch command {
-		case ubluehelper.CommandChannelSwitch, ubluehelper.CommandDriverSwitch,
-			ubluehelper.CommandPin, ubluehelper.CommandUnpin:
+		if slices.Contains(long, command) {
 			continue
 		}
 		if got := ubluehelper.Timeout(command); got != ubluehelper.DefaultTimeout {
@@ -384,16 +390,32 @@ func TestStatusCachedDetectsOnceAndRepeats(t *testing.T) {
 	}
 }
 
-func TestSetDockerUsesFixedHelperAndPreservesAuthenticationFailures(t *testing.T) {
-	for _, enabled := range []bool{true, false} {
+// dockerMutations are every Docker action ChairLift sends across pkexec,
+// with the one command word each must emit.
+func dockerMutations() []struct {
+	command string
+	call    func(context.Context) error
+} {
+	return []struct {
+		command string
+		call    func(context.Context) error
+	}{
+		{ubluehelper.CommandDockerEnable, func(ctx context.Context) error { return SetDocker(ctx, true) }},
+		{ubluehelper.CommandDockerDisable, func(ctx context.Context) error { return SetDocker(ctx, false) }},
+		{ubluehelper.CommandDockerUpdate, UpdateDocker},
+	}
+}
+
+func TestDockerMutationsUseFixedHelperAndPreserveAuthenticationFailures(t *testing.T) {
+	for _, mutation := range dockerMutations() {
 		for _, code := range []int{0, 1, 126, 127} {
-			t.Run(strconv.FormatBool(enabled)+"/"+strconv.Itoa(code), func(t *testing.T) {
+			t.Run(mutation.command+"/"+strconv.Itoa(code), func(t *testing.T) {
 				path := withJournalSink(t)
 				fake := writeCustomFakePkexec(t, "#!/bin/sh\necho 'helper diagnostic' >&2\nexit "+strconv.Itoa(code)+"\n")
 				previous := pkexecCommand
 				pkexecCommand = fake
 				t.Cleanup(func() { pkexecCommand = previous })
-				err := SetDocker(context.Background(), enabled)
+				err := mutation.call(context.Background())
 				if (err == nil) != (code == 0) {
 					t.Fatalf("helper exit %d returned %v", code, err)
 				}
@@ -406,10 +428,7 @@ func TestSetDockerUsesFixedHelperAndPreservesAuthenticationFailures(t *testing.T
 						t.Fatalf("authentication failure misclassified: %v", err)
 					}
 				}
-				command := "docker-disable"
-				if enabled {
-					command = "docker-enable"
-				}
+				command := mutation.command
 				entries := readJournal(t, path)
 				want := []string{fake, "/usr/bin/chairlift-helper", command}
 				if len(entries) != 2 || !reflect.DeepEqual(entries[0].WouldRun, want) || entries[0].Action != command || entries[1].Action != command {
@@ -429,18 +448,18 @@ func TestSetDockerUsesFixedHelperAndPreservesAuthenticationFailures(t *testing.T
 	}
 }
 
-func TestSetDockerPreservesCancellation(t *testing.T) {
-	for _, enabled := range []bool{true, false} {
+func TestDockerMutationsPreserveCancellation(t *testing.T) {
+	for _, mutation := range dockerMutations() {
 		withJournalSink(t)
 		fake := writeCustomFakePkexec(t, "#!/bin/sh\nexit 0\n")
 		previous := pkexecCommand
 		pkexecCommand = fake
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		err := SetDocker(ctx, enabled)
+		err := mutation.call(ctx)
 		pkexecCommand = previous
 		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Docker mutation lost cancellation: %v", err)
+			t.Fatalf("%s lost cancellation: %v", mutation.command, err)
 		}
 	}
 }

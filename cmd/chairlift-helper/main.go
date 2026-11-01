@@ -1,8 +1,9 @@
 // chairlift-helper is a privileged helper binary for the
 // Bluefin-family write operations ChairLift exposes on Bluefin, Bluefin LTS,
 // and Dakota: switching the bootc release channel between stable and
-// testing, and adding or removing the invoking user's developer-mode group
-// membership.
+// testing, adding or removing the invoking user's developer-mode group
+// membership, and installing, enabling, updating, or disabling rootful
+// system Docker.
 //
 // It is invoked only as `pkexec /usr/bin/chairlift-helper <command>`,
 // with each command selected by one PolicyKit action in
@@ -19,16 +20,24 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/projectbluefin/chairlift/internal/bootc"
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/registrytags"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"io"
+	"io/fs"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/user"
 	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 func main() {
@@ -69,10 +78,9 @@ func main() {
 		runFactoryReset(ctx, invocation)
 	case ubluehelper.CommandKVMEnable:
 		runDeveloperAccess(ctx, invocation)
-	case ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable:
-		if invocation.Command == ubluehelper.CommandDockerEnable {
-			runDeveloperAccess(ctx, invocation)
-		}
+	case ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerUpdate:
+		runDockerRuntime(ctx, invocation)
+	case ubluehelper.CommandDockerDisable:
 		runDocker(ctx, invocation)
 	default:
 		// Unreachable: ParseInvocation accepts only the commands above. The
@@ -269,16 +277,10 @@ func runAutoUpdates(ctx context.Context, invocation ubluehelper.Invocation) {
 	}
 }
 
+// runDeveloperAccess grants the invoking account the one group KVM access
+// needs.
 func runDeveloperAccess(ctx context.Context, invocation ubluehelper.Invocation) {
-	uid, err := ubluehelper.TargetUID(os.Getenv("PKEXEC_UID"))
-	if err != nil {
-		fatal(err.Error())
-	}
-	account, err := user.LookupId(strconv.Itoa(uid))
-	if err != nil {
-		fatal(fmt.Sprintf("resolving uid %d: %v", uid, err))
-	}
-	name, args, ok := ubluehelper.AccessArgs(invocation.Command, account.Username)
+	name, args, ok := ubluehelper.AccessArgs(invocation.Command, invokingUsername())
 	group, groupOK := ubluehelper.AccessGroup(invocation.Command)
 	if !ok || !groupOK {
 		fatal("unsupported developer access command")
@@ -295,6 +297,8 @@ func runDeveloperAccess(ctx context.Context, invocation ubluehelper.Invocation) 
 	}
 }
 
+// runDocker disables system Docker. The runtime, its data, and the docker
+// group are kept, so turning Docker back on restores the same containers.
 func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
 	args, ok := ubluehelper.DockerArgs(invocation.Command)
 	if !ok {
@@ -307,6 +311,156 @@ func runDocker(ctx context.Context, invocation ubluehelper.Invocation) {
 	if err := run(ctx, "systemctl", args...); err != nil {
 		fatal(fmt.Sprintf("changing Docker daemon: %v", err))
 	}
+}
+
+// runDockerRuntime enables Docker or updates its Homebrew runtime through
+// ubluehelper.EnableDocker and UpdateDocker, which own the ordering and
+// dry-run decisions. This wrapper wires them to internal/dockerbrew and the
+// real host. Root only ever executes the runtime from dockerbrew.Root, a
+// root-owned copy of verified bottles — never the user-writable Homebrew
+// prefix.
+func runDockerRuntime(ctx context.Context, invocation ubluehelper.Invocation) {
+	host := dockerHost()
+	var err error
+	if invocation.Command == ubluehelper.CommandDockerUpdate {
+		err = ubluehelper.UpdateDocker(ctx, host, invocation.DryRun, os.Stdout)
+	} else {
+		username := invokingUsername()
+		err = ubluehelper.EnableDocker(ctx, host, username, invocation.DryRun, os.Stdout)
+	}
+	if err != nil {
+		fatal(err.Error())
+	}
+}
+
+// dockerHost observes the host and binds every dockerbrew operation to its
+// fixed root and unit directory.
+func dockerHost() ubluehelper.DockerHost {
+	_, imageUnitErr := os.Stat(dockerbrew.ImageUnitPath)
+	// The file exists whenever SELinux is enabled; "1" means enforcing.
+	enforce, _ := os.ReadFile("/sys/fs/selinux/enforce")
+	_, restoreconErr := exec.LookPath("restorecon")
+	_, semanageErr := exec.LookPath("semanage")
+	return ubluehelper.DockerHost{
+		ImageUnits:       imageUnitErr == nil,
+		SELinuxEnforcing: strings.TrimSpace(string(enforce)) == "1",
+		Restorecon:       restoreconErr == nil,
+		Semanage:         semanageErr == nil,
+		HasEquivalence:   hasDockerEquivalence,
+		Root:             dockerbrew.Root,
+		UnitDir:          dockerbrew.UnitDir,
+		IndexURL:         dockerbrew.IndexURL,
+		Formulae:         dockerbrew.Formulae(),
+		Run:              runCapture,
+		EnsureGroup:      ensureLocalGroup,
+		GroupExists: func(group string) bool {
+			// Built with CGO_ENABLED=0, os/user reads /etc/group directly,
+			// which is the database groupadd and usermod edit.
+			_, err := user.LookupGroup(group)
+			return err == nil
+		},
+		Install: func(ctx context.Context) ([]byte, bool, error) {
+			manifest, changed, err := dockerbrew.Install(ctx, dockerbrew.Client{}, dockerbrew.Root)
+			if err != nil {
+				return nil, false, err
+			}
+			data, err := json.Marshal(manifest)
+			return data, changed, err
+		},
+		CheckUnits:  func() error { return dockerbrew.CheckUnits(dockerbrew.UnitDir) },
+		RestartDone: func() error { return dockerbrew.ClearRestartPending(dockerbrew.Root) },
+		RuntimeInstalled: func() (bool, error) {
+			_, err := dockerbrew.ReadManifest(dockerbrew.Root)
+			if errors.Is(err, fs.ErrNotExist) {
+				return false, nil
+			}
+			return err == nil, err
+		},
+		WriteUnits: func() (bool, error) {
+			return dockerbrew.WriteUnits(dockerbrew.UnitDir, dockerbrew.Root)
+		},
+		RemoveManagedUnits: func() (bool, error) {
+			return dockerbrew.RemoveManagedUnits(dockerbrew.UnitDir)
+		},
+		ContainersRunning: dockerContainersRunning,
+	}
+}
+
+// dockerContainersRunning asks the daemon on /run/docker.sock for its
+// running containers. A stopped docker.service is not queried, because a
+// connection would socket-activate it; a missing socket or a refused
+// connection likewise means no daemon is serving, so nothing can be
+// interrupted.
+func dockerContainersRunning(ctx context.Context) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	// is-active exits non-zero for every state but active; read-only query.
+	if err := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", "docker.service").Run(); err != nil {
+		// Only "not active" (3) or "no such unit" (4) mean stopped. A timeout
+		// or a D-Bus failure proves nothing, so the caller defers the restart.
+		var exit *exec.ExitError
+		if ctx.Err() == nil && errors.As(err, &exit) && (exit.ExitCode() == 3 || exit.ExitCode() == 4) {
+			return false, nil
+		}
+		return false, fmt.Errorf("docker.service state: %w", err)
+	}
+	client := http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", "/run/docker.sock")
+		},
+	}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker/containers/json", nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) {
+			return false, nil
+		}
+		return false, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("docker containers query: %s", resp.Status)
+	}
+	var containers []json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&containers); err != nil {
+		return false, fmt.Errorf("decoding docker containers: %w", err)
+	}
+	return len(containers) > 0, nil
+}
+
+// hasDockerEquivalence reports whether the local SELinux equivalence rule
+// mapping dockerbrew.Root onto ubluehelper.SELinuxSource already exists.
+// `semanage fcontext -l -C` lists local customizations as "<target> = <source>".
+func hasDockerEquivalence(ctx context.Context) (bool, error) {
+	out, err := exec.CommandContext(ctx, "semanage", "fcontext", "-l", "-C").Output()
+	if err != nil {
+		return false, err
+	}
+	want := dockerbrew.Root + " = " + ubluehelper.SELinuxSource
+	for line := range strings.SplitSeq(string(out), "\n") {
+		if strings.TrimSpace(line) == want {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// invokingUsername resolves the account pkexec authenticated for from
+// PKEXEC_UID; no username crosses the pkexec boundary.
+func invokingUsername() string {
+	uid, err := ubluehelper.TargetUID(os.Getenv("PKEXEC_UID"))
+	if err != nil {
+		fatal(err.Error())
+	}
+	account, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil {
+		fatal(fmt.Sprintf("resolving uid %d: %v", uid, err))
+	}
+	return account.Username
 }
 
 // ensureLocalGroup copies an image-only group into /etc/group so the usermod

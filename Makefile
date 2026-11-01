@@ -175,6 +175,11 @@ else
 	@echo "==> e2e statement coverage written to e2e-coverage.out"
 endif
 
+# The live system-Docker gate (TestIntegrationDockerSystem), nightly in
+# .github/workflows/docker-system.yml. It runs the pinned Dakota image
+# unchanged under rootless Podman with private system and user managers; the
+# real chairlift-helper downloads and installs Docker from Homebrew's signed
+# index and bottles, so it needs network access to formulae.brew.sh and ghcr.io.
 .PHONY: e2e-docker
 e2e-docker: build-e2e schemas
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \

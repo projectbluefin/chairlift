@@ -173,13 +173,15 @@ func TestDockerSubtitleDistinguishesSystemAndClientState(t *testing.T) {
 		err   error
 		want  string
 	}{
-		{"inactive image units", devtools.DockerState{Available: true}, nil, "No engine packages are installed"},
-		{"ready", devtools.DockerState{Available: true, Active: true, Ready: true}, nil, "System Docker is ready for this account"},
+		{"installable, nothing installed", devtools.DockerState{Available: true}, nil, "installs Docker from verified Homebrew packages"},
+		{"installed and stopped", devtools.DockerState{Available: true, Installed: true}, nil, "turns on system Docker for all accounts"},
+		{"ready", devtools.DockerState{Available: true, Installed: true, Active: true, Ready: true}, nil, "System Docker is ready for this account"},
 		{"new login flag before ready", devtools.DockerState{Active: true, Ready: true, NeedsLogin: true}, probeErr, "Log out and back in"},
 		{"wrapped new login", devtools.DockerState{Active: true}, errors.Join(probeErr, devtools.ErrDockerNewLogin), "Log out and back in"},
+		{"running without access", devtools.DockerState{Available: true, Installed: true, Active: true, NoAccess: true}, probeErr, "your account can't use it yet. Turn this on to get access."},
 		{"active failed ping", devtools.DockerState{Active: true}, probeErr, "running, but its socket is not responding"},
 		{"failed units read", devtools.DockerState{}, probeErr, "Couldn't check Docker's system service"},
-		{"missing paired unit", devtools.DockerState{Active: true, Unavailable: "Repair the image units."}, probeErr, "Repair the image units."},
+		{"masked paired unit", devtools.DockerState{Active: true, Unavailable: "Repair the image units."}, probeErr, "Repair the image units."},
 		{"new login before unavailable", devtools.DockerState{Active: true, NeedsLogin: true, Unavailable: "Repair the image units."}, probeErr, "Log out and back in"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -191,6 +193,42 @@ func TestDockerSubtitleDistinguishesSystemAndClientState(t *testing.T) {
 				t.Fatalf("new login rendered as ready: %q", got)
 			}
 		})
+	}
+}
+
+// The switch reads on whenever the daemon runs, unless this account has no
+// access: an unresponsive daemon must stay stoppable, while a daemon this
+// account cannot reach reads off so turning it on asks for the grant.
+func TestDockerSwitchOnFollowsThisAccountsAccess(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		state devtools.DockerState
+		want  bool
+	}{
+		{"not installed", devtools.DockerState{Available: true}, false},
+		{"installed and stopped", devtools.DockerState{Available: true, Installed: true}, false},
+		{"ready", devtools.DockerState{Available: true, Installed: true, Active: true, Ready: true}, true},
+		{"new login", devtools.DockerState{Available: true, Installed: true, Active: true, NeedsLogin: true}, true},
+		{"running without access", devtools.DockerState{Available: true, Installed: true, Active: true, NoAccess: true}, false},
+		{"running but not responding", devtools.DockerState{Available: true, Installed: true, Active: true}, true},
+		{"running with paired unit missing", devtools.DockerState{Available: true, Active: true}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			on := DockerSwitchOn(test.state)
+			if on != test.want {
+				t.Fatalf("DockerSwitchOn(%+v) = %v, want %v", test.state, on, test.want)
+			}
+			// A daemon without access must dispatch enable, never disable.
+			if test.state.NoAccess && (DockerControlAllowed(on, false, true) || !DockerControlAllowed(on, true, false)) {
+				t.Fatalf("running without access is not routed to docker-enable")
+			}
+		})
+	}
+}
+
+func TestDockerDisclosureLabelsNameHomebrewScope(t *testing.T) {
+	if DockerRuntimeContents == DockerCLIContents || !strings.Contains(DockerRuntimeContents, "whole computer") || !strings.HasPrefix(DockerCLIContents, "Homebrew") {
+		t.Fatalf("disclosure labels = %q / %q", DockerRuntimeContents, DockerCLIContents)
 	}
 }
 

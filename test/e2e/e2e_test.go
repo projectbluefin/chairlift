@@ -261,6 +261,9 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		{name: "Docker enable outside pkexec", helper: "chairlift-helper", args: []string{"docker-enable"}, wantStderr: "PKEXEC_UID is not set"},
 		{name: "Docker disable refuses unit", helper: "chairlift-helper", args: []string{"docker-disable", "other.service"}, wantStderr: "usage: chairlift-helper docker-disable"},
 		{name: "Docker disable refuses flag", helper: "chairlift-helper", args: []string{"docker-disable", "--force"}, wantStderr: "usage: chairlift-helper docker-disable"},
+		{name: "Docker update refuses formula", helper: "chairlift-helper", args: []string{"docker-update", "docker-engine"}, wantStderr: "usage: chairlift-helper docker-update"},
+		{name: "Docker update refuses install root", helper: "chairlift-helper", args: []string{"docker-update", "/home/linuxbrew/.linuxbrew"}, wantStderr: "usage: chairlift-helper docker-update"},
+		{name: "Docker update refuses misplaced flag", helper: "chairlift-helper", args: []string{"docker-update", "--dry-run", "--force"}, wantStderr: "usage: chairlift-helper docker-update"},
 		// Restart takes no delay and no target: either would be a value the
 		// caller controls crossing an authenticated boundary.
 		{name: "ublue restart with a delay", helper: "chairlift-helper", args: []string{"restart", "02:00"}, wantStderr: "usage: chairlift-helper restart"},

@@ -13,8 +13,9 @@ parent is off, the fixed `dx-enable` prerequisite must succeed first; canceled
 or failed authentication starts neither child setup nor feed work. A later
 Docker/WSL or optional setup failure never revokes confirmed developer access,
 and turning a child off never demotes the parent or removes feed artifacts.
-Docker activation uses the image's existing system daemon through the fixed
-Docker helper; neither Docker's image RPM disclosure nor its optional native
+Docker activation uses the image's Docker units when present, or a daemon the
+fixed Docker helper installs from verified Homebrew bottles; neither Docker's
+Homebrew package disclosure nor its optional native
 VS Code setup changes these feed opt-ins. See the
 [developer workstation contract](../design/package-managers.md#developer-workstation-and-gaming-components).
 

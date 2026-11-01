@@ -19,6 +19,8 @@
 #     the bootc reader look for deployments the container does not have;
 #   - /usr/libexec/bootc-update-stage replaced by /usr/bin/false, so the
 #     image's real stage helper is never what a fixture's update run reaches;
+#   - an empty private /var/run (the unbooted image has none), so the fixed
+#     system Docker socket path is absent unless a scenario's stub plants one;
 #   - the host's Go toolchain mounted read-only, with its module and build
 #     caches shared;
 #   - a venv from test/e2e/requirements-atspi.txt (created on first use);
@@ -119,7 +121,9 @@ for name in CHAIRLIFT_ATSPI_TAGS CHAIRLIFT_ATSPI_KNOWN_ISSUES; do
     [ -n "${!name:-}" ] && ENVIRONMENT+=(-e "$name=${!name}")
 done
 
-# The live Docker gate provisions an image-supplied system daemon and real PolicyKit.
+# The live Docker gate runs the pinned image unchanged, with real PolicyKit:
+# the checkout's fixed helper installs Docker from verified Homebrew bottles
+# over the container's network, exactly as on a user's machine.
 # --privileged is permitted ONLY inside rootless Podman: it removes the outer
 # container's seccomp/cgroup restrictions without acquiring host root powers.
 if [ "${CHAIRLIFT_DOCKER_INTEGRATION:-}" = 1 ]; then
@@ -138,25 +142,21 @@ if [ "${CHAIRLIFT_DOCKER_INTEGRATION:-}" = 1 ]; then
         -e CHAIRLIFT_ATSPI_PYTHON=/opt/chairlift-atspi-venv/bin/python
     )
     NAME="chairlift-docker-e2e-$$"
-    DOCKER_FIXTURE="localhost/chairlift-system-docker-e2e:$$"
     cleanup_docker() {
         status=$?
         if [ "$status" -ne 0 ]; then
-            podman exec --user 0 "$NAME" journalctl -b --unit docker.service --unit docker.socket --unit containerd.service --no-pager || true
+            podman exec --user 0 "$NAME" journalctl -b --unit docker.service --unit docker.socket --no-pager || true
         fi
         podman rm --force "$NAME" >/dev/null 2>&1 || true
-        podman image rm "$DOCKER_FIXTURE" >/dev/null 2>&1 || true
     }
     trap cleanup_docker EXIT
-    podman build --pull=never --build-arg DAKOTA_BASE="$IMAGE" \
-        -f "$ROOT/test/e2e/docker-system.Containerfile" -t "$DOCKER_FIXTURE" "$ROOT/test/e2e"
-    podman run --detach --name "$NAME" --pull=never --userns=keep-id --user 0 \
+    podman run --detach --name "$NAME" --pull=missing --userns=keep-id --user 0 \
         --privileged --systemd=always --tmpfs /tmp:rw,mode=1777 \
         --mount type=bind,source=/dev/null,destination=/proc/cmdline,ro \
         --mount type=bind,source=/usr/bin/false,destination=/usr/libexec/bootc-update-stage,ro \
         --tmpfs /usr/share/chairlift:ro,notmpcopyup \
         "${MOUNTS[@]}" "${ENVIRONMENT[@]}" -e CHAIRLIFT_DOCKER_INTEGRATION=1 \
-        -w /opt/chairlift-checkout "$DOCKER_FIXTURE" /usr/lib/systemd/systemd --unit=basic.target
+        -w /opt/chairlift-checkout "$IMAGE" /usr/lib/systemd/systemd --unit=basic.target
     podman exec --user 0 "$NAME" bash /opt/chairlift-checkout/test/e2e/docker_fixture.sh "$(id -u)" "$(id -g)" "$ROOT"
     podman exec --user "$(id -u):$(id -g)" --workdir "$ROOT" "${ENVIRONMENT[@]}" \
         -e XDG_RUNTIME_DIR=/tmp/chairlift-docker-runtime -e CHAIRLIFT_DOCKER_INTEGRATION=1 "$NAME" \
@@ -167,6 +167,7 @@ fi
 
 exec podman run --rm --pull=missing --userns=keep-id --security-opt label=disable \
     --tmpfs /tmp:rw,mode=1777 \
+    --tmpfs /var/run:rw,mode=1777 \
     --mount type=bind,source=/dev/null,destination=/proc/cmdline,ro \
     --mount type=bind,source=/usr/bin/false,destination=/usr/libexec/bootc-update-stage,ro \
     --tmpfs /usr/share/chairlift:ro,notmpcopyup \

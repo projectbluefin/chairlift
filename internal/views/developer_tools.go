@@ -14,6 +14,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/devsetup"
 	"github.com/projectbluefin/chairlift/internal/devtools"
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
@@ -72,8 +73,11 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		item.toggle.widget.SetSensitive(false)
 		item.row.AddSuffix(&item.toggle.widget.Widget)
 		if choice.kind == "docker" {
-			for _, name := range devtools.DockerPackages() {
-				addSetupContents(item.row, name, "Provided by system image")
+			for _, name := range dockerbrew.Formulae() {
+				addSetupContents(item.row, name, pageview.DockerRuntimeContents)
+			}
+			for _, name := range dockerbrew.CLIFormulae() {
+				addSetupContents(item.row, name, pageview.DockerCLIContents)
 			}
 		} else {
 			item.packageRow = addSetupContents(item.row, "", "")
@@ -275,9 +279,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						}
 					}
 				case "docker":
+					// A running daemon this account cannot reach still counts as
+					// observed; it reads off so the switch dispatches enable.
 					observed := dockerErr == nil || docker.Active
 					if observed {
-						item.active = docker.Active
+						item.active = pageview.DockerSwitchOn(docker)
 					}
 					item.canEnable = docker.Available && status.Supports(ubluehelper.CommandDockerEnable)
 					item.canDisable = status.Supports(ubluehelper.CommandDockerDisable)
@@ -397,19 +403,26 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 			case "docker":
 				if retry && enabled && !request.Preview && previous[devsetup.Tools] {
 					// A completed activation is not repeated to acquire groups in
-					// this process. Observe first; only a stopped daemon needs enable.
+					// this process. Observe first; only a daemon this account
+					// cannot use yet needs enable.
 					docker, stateErr = devtools.DockerStatus(ctx)
-					if docker.Active {
+					if docker.Ready || docker.NeedsLogin {
 						return nil
 					}
-					if stateErr != nil {
+					if stateErr != nil && !docker.NoAccess {
 						operationErr = stateErr
 						return operationErr
 					}
 				}
 				operationErr = devtools.SetDocker(ctx, enabled, progress)
 				if errors.Is(operationErr, devtools.ErrDockerNewLogin) {
-					return nil // The helper enabled Docker; Verify still awaits login.
+					// The helper enabled Docker; Verify still awaits login. A
+					// CLI that failed to install is still this stage's failure.
+					var cliErr *devtools.DockerCLIError
+					if errors.As(operationErr, &cliErr) {
+						return cliErr
+					}
+					return nil
 				}
 			}
 			return operationErr
@@ -430,6 +443,11 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 					return devsetup.ErrAwaitingLogin
 				}
 				ready = (!enabled && !docker.Active) || (enabled && docker.Ready)
+				if request.Preview && docker != (devtools.DockerState{}) {
+					// A preview changed nothing; once the units were read, a
+					// socket this session cannot ping says nothing about it.
+					stateErr = nil
+				}
 			}
 			if stateErr != nil {
 				return stateErr
@@ -445,7 +463,11 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 			if operationErr != nil && !errors.Is(operationErr, devtools.ErrDockerNewLogin) {
 				return devsetup.ErrSkipped
 			}
-			editorErr = devtools.SetupVSCode(ctx, progress)
+			err := devtools.SetupVSCode(ctx, progress)
+			if errors.Is(err, devtools.ErrVSCodeNotInstalled) {
+				return devsetup.ErrSkipped // No editor to set up is not a failure.
+			}
+			editorErr = err
 			return editorErr
 		}})
 	}
@@ -507,7 +529,7 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 					item.row.SetSubtitle(wslSubtitle(backend, wsl, stateErr))
 				case "docker":
 					if stateErr == nil || docker.Active {
-						item.active = docker.Active
+						item.active = pageview.DockerSwitchOn(docker)
 					}
 					item.allowed = (stateErr == nil || docker.Active) && pageview.DockerControlAllowed(item.active, item.canEnable, item.canDisable)
 					item.row.SetSubtitle(pageview.DockerSubtitle(docker, stateErr))

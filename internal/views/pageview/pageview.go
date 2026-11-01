@@ -400,9 +400,27 @@ func DeveloperResultSubtitle(enabled bool) string {
 
 // DockerControlAllowed follows the requested direction, including after a
 // successful mutation changes which helper action the switch would dispatch.
-func DockerControlAllowed(active, canEnable, canDisable bool) bool {
-	return (!active && canEnable) || (active && canDisable)
+// on is DockerSwitchOn's answer, not merely whether a unit runs.
+func DockerControlAllowed(on, canEnable, canDisable bool) bool {
+	return (!on && canEnable) || (on && canDisable)
 }
+
+// DockerSwitchOn reports whether the Docker switch reads on: the daemon runs
+// and this account is not shut out of it. A running daemon whose socket does
+// not answer (or whose paired unit is missing) stays on, so it can be stopped.
+// A daemon that runs without access for this account reads off, so turning
+// the switch on dispatches docker-enable, which grants that access.
+func DockerSwitchOn(state devtools.DockerState) bool {
+	return state.Active && !state.NoAccess
+}
+
+// Disclosure subtitles for the Docker row's package list. The daemon set is
+// installed by the privileged helper from verified Homebrew bottles into a
+// root-owned location; the CLI set is ordinary user-scope Homebrew formulae.
+const (
+	DockerRuntimeContents = "Homebrew, installed for the whole computer"
+	DockerCLIContents     = "Homebrew formula"
+)
 
 // DockerSubtitle distinguishes system activation from this session's access.
 func DockerSubtitle(state devtools.DockerState, err error) string {
@@ -413,12 +431,16 @@ func DockerSubtitle(state devtools.DockerState, err error) string {
 		return state.Unavailable
 	case state.Ready:
 		return "System Docker is ready for this account."
+	case state.NoAccess:
+		return "Docker is running, but your account can't use it yet. Turn this on to get access."
 	case state.Active:
 		return "Docker is running, but its socket is not responding."
 	case err != nil:
 		return "Couldn't check Docker's system service."
+	case !state.Installed:
+		return "Enables Developer Mode first if needed, then installs Docker from verified Homebrew packages for all accounts. Administrator approval is required."
 	default:
-		return "Enables Developer Mode first if needed, then system Docker for all accounts. Administrator approval is required. No engine packages are installed."
+		return "Enables Developer Mode first if needed, then turns on system Docker for all accounts. Administrator approval is required."
 	}
 }
 

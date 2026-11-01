@@ -12,12 +12,14 @@ import (
 	"github.com/projectbluefin/chairlift/internal/config"
 )
 
-// TestIntegrationDockerSystem drives the real fixed helpers in the dedicated
-// rootless-Podman Dakota fixture. Docker packages are supplied by its signed
-// prerequisite image; the live GUI manages only the system daemon and access.
+// TestIntegrationDockerSystem drives the real GUI and fixed helpers in the
+// dedicated rootless-Podman Dakota fixture. The image ships no Docker: the
+// helper downloads Homebrew's signed formula index and bottles, installs a
+// root-owned runtime with managed units, creates the docker group, and grants
+// access; the GUI retires a planted rootless daemon. Network access is required.
 func TestIntegrationDockerSystem(t *testing.T) {
 	if os.Getenv("CHAIRLIFT_DOCKER_INTEGRATION") != "1" {
-		t.Skip("run make e2e-docker: a private native system manager and signed Docker prerequisite image are required")
+		t.Skip("run make e2e-docker: a private native system manager and network access to Homebrew's bottles are required")
 	}
 	app := filepath.Join(e2eBuildDir(t), "e2e", "chairlift")
 	requireExecutable(t, app)

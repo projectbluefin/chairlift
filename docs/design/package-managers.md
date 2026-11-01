@@ -20,7 +20,8 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/printerapp`](../../internal/printerapp/printerapp.go) | Rootless printer quadlets, administration gate and observed diagnostics | Invoking account |
 | [`internal/agentmode`](../../internal/agentmode/readiness.go) | Goose launch readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch | Invoking account |
 | [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) | Goose/Linux MCP installation and ChairLift's own Goose profile | Invoking account |
-| [`internal/devtools`](../../internal/devtools/devtools.go) | WSL backends, image-provided system Docker, native VS Code setup and canonical package provenance | WSL/editor work is user-scoped; KVM and system Docker use the existing fixed helper |
+| [`internal/devtools`](../../internal/devtools/devtools.go) | WSL backends, system Docker status/enable (rootless cleanup, user-scope Docker CLI formulae), native VS Code setup and canonical package provenance | WSL/editor/CLI work is user-scoped; KVM and system Docker use the existing fixed helper |
+| [`internal/dockerbrew`](../../internal/dockerbrew/) | Verified Homebrew-bottle Docker daemon runtime: signed index, bottle download and extraction, ELF patching, manifest, managed units | Pure library; its writes run only inside the fixed `docker-enable`/`docker-update` helper commands |
 | [`internal/devsetup`](../../internal/devsetup/setup.go) | Ordered developer setup and retry outcomes over injected tasks | Adds no privileged route; initial Developer Mode promotion uses the existing ublue helper |
 
 Mutation wrappers read the single process-wide `dryrun.Enabled()` flag from
@@ -45,7 +46,7 @@ configuration namespaces in [`internal/window/window.go`](../../internal/window/
 | Source | Constructor | Policy group | Apply operation |
 | --- | --- | --- | --- |
 | `applications` | `NewFlatpak` | `updates_page.flatpak_updates_group` | Update the user/system scopes represented by pending items |
-| `developer-tools` | `NewHomebrew` | `updates_page.brew_updates_group` | `homebrew.Update(ctx)` followed by `homebrew.Upgrade(ctx, "")` |
+| `developer-tools` | `NewHomebrew` | `updates_page.brew_updates_group` | `homebrew.Update(ctx)` followed by `homebrew.Upgrade(ctx, "")`, then `ublue.UpdateDocker(ctx)` when the `docker-runtime` item is pending |
 | `system-components` | `NewSystemComponents` | `features_page.features_group` | `updex.UpdateFeatures(ctx)` |
 | `operating-system` | `NewOperatingSystem` | `updates_page.bootc_updates_group` | `bootc.StageUpdate(ctx, events)` |
 
@@ -90,7 +91,14 @@ Adapter completion is source-specific:
 - Homebrew checks `ListOutdated`. Apply runs metadata refresh **and** package
   upgrade under the caller's cancellation context. Its live success reports
   Changed; the subsequent shared check refreshes inventory. It does not
-  re-list inside the bulk Apply method.
+  re-list inside the bulk Apply method. When `dockerbrew.ReadManifest` finds
+  a Homebrew-bottle Docker runtime and the installed helper supports
+  `docker-update`, Check also compares Homebrew's unsigned per-formula API
+  (`dockerbrew.Client.Latest`) with the manifest and adds a `docker-runtime`
+  item named "Docker engine" only when `dockerbrew.Outdated` reports a
+  difference. Apply then calls `ublue.UpdateDocker` after the brew upgrade;
+  the root helper ignores that hint and re-verifies against the signed index
+  ([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
 - Updex counts each affected feature once if any component has an update.
   Captured warnings fail the unified check as incomplete. Successful live
   helper execution reports Changed; preview reports Preview instead.
@@ -542,17 +550,18 @@ insensitive. Writes bind `helperexec.Run` to
 `HelperPath=/usr/bin/chairlift-helper`.
 
 [`ubluehelper.SupportedCommands()`](../../internal/ubluehelper/ubluehelper.go)
-is the complete fourteen-command surface:
+is the complete fifteen-command surface:
 `channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
 `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
 `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
-`docker-disable`. Every command has exactly one action in
+`docker-disable`, `docker-update`. Every command has exactly one action in
 [`data/io.projectbluefin.chairlift.ublue.policy`](../../data/io.projectbluefin.chairlift.ublue.policy).
 The helper dispatcher rejects unhandled commands; parser acceptance alone is
 not evidence a command executes.
 
 `ubluehelper.Timeout` is the helper's per-command budget: 30 minutes for the
-image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin` (the same
+image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin`, and for
+the bottle-downloading `docker-enable` and `docker-update` (the same
 as OS staging's `bootc.DefaultTimeout`), 10 minutes for everything else. The
 GUI's `ublue.ImageSwitchContext` and `ublue.DefaultContext` add a five-minute
 `AuthenticationAllowance`, because the caller's clock also runs during the
@@ -690,8 +699,9 @@ surface is not permission to make the fixed provider helpers configurable.
 ## Developer workstation and gaming components
 
 [`internal/devtools`](../../internal/devtools/devtools.go) owns WSL backends
-and image-provided system Docker under `features_page.dx_group`, plus optional
-native VS Code setup.
+and the GUI side of system Docker under `features_page.dx_group`, plus optional
+native VS Code setup. [`internal/dockerbrew`](../../internal/dockerbrew/) owns
+the daemon runtime the fixed helper installs.
 [`internal/devsetup`](../../internal/devsetup/setup.go) owns the widget-free
 ordered run and its stage outcomes. `PostStages` selects eligible post-promotion
 work from a `PostOptions` snapshot; the view supplies execution callbacks.
@@ -724,9 +734,10 @@ Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
 expanders matching Apps collections. Header activation expands an informational
 package list; a separate suffix switch runs the action, with no
 `SetActivatableWidget` binding to that switch. WSL disclosure shares
-`devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` instead
-lists five image RPMs as **Provided by system image**, not Homebrew requests or
-download progress. Gaming uses `gaming.Components`. Developer Mode discloses
+`devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
+the daemon formulae as **Homebrew, installed for the whole computer** and the
+CLI formulae as user-scope Homebrew formulae, not download progress.
+Gaming uses `gaming.Components`. Developer Mode discloses
 its Dev Container CLI and enabled
 follow-ons, subject to the same capability/config gates as execution. An opaque
 Homebrew bundle remains one operation: its static package disclosure is not a
@@ -758,37 +769,126 @@ enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM
 alone is not shell readiness.
 
-After the Developer Mode prerequisite above, `devtools.SetDocker` calls
-`ublue.SetDocker` through the existing fixed `/usr/bin/chairlift-helper`
-`docker-enable` or `docker-disable` PolicyKit action. These actions accept no
-caller-supplied account or unit. Enable grants the invoking account membership
-in `docker` and runs the fixed `systemctl enable --now docker.socket docker.service`;
-disable uses `disable --now` on both units and retains packages, data, and group
-membership. This is the computer's native Docker CE daemon, not an additional
-Homebrew engine or account-owned service. Both `dx-enable` and `docker-enable`
-can ask for authentication in the same run; a refused parent prerequisite
-starts no Docker work, and a later refusal never revokes already-granted access.
+**System Docker from verified Homebrew bottles.**
+System Docker matches Bluefin DX: a rootful daemon behind `docker.socket`,
+`docker` group membership, and a CLI with buildx and compose. Its packages
+come from Homebrew, but root never executes, loads, or copies anything from the
+user-owned `/home/linuxbrew/.linuxbrew` prefix
+([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
 
-`devtools.DockerPackages` records the image's RPM provenance in upstream order:
-`containerd.io`, `docker-buildx-plugin`, `docker-ce`, `docker-ce-cli`, and
-`docker-compose-plugin`. ChairLift neither installs these packages nor treats
-them as current-action downloads. Missing image units require an image or
-administrator fix, not a Homebrew fallback. Neither Homebrew, UID-map tools,
-nor a user service manager is a Docker availability prerequisite.
+Enable runs in this order, after the Developer Mode prerequisite above:
+
+1. **Daemon (fixed helper).** `devtools.SetDocker` calls `ublue.SetDocker`,
+   that is `pkexec /usr/bin/chairlift-helper docker-enable`. No account,
+   unit, formula, URL, or path crosses the boundary.
+2. **Rootless cleanup (user scope), only after the helper succeeds.**
+   v26.10.10 shipped rootless Docker. A user
+   `~/.config/systemd/user/docker.service` whose `ExecStart` runs
+   `dockerd-rootless.sh` is stopped with `systemctl --user disable --now
+   docker.service`. A `docker context show` of `rootless` is switched back with
+   `docker context use default`. Other user units and contexts are left alone.
+   A dismissed prompt or failed install therefore leaves a working rootless
+   daemon untouched; it uses its own socket, so the brief overlap is harmless.
+3. **CLI (user scope).** With Homebrew available, `homebrew.Install` installs
+   `dockerbrew.CLIFormulae` (`docker`, `docker-buildx`, `docker-compose`).
+   `~/.docker/cli-plugins/docker-buildx` and `docker-compose` are linked to
+   Homebrew's `lib/docker/cli-plugins` only when absent or already pointing
+   into Homebrew; a user's own file is never replaced. This runs after the
+   helper, so a CLI failure is reported while the daemon still works.
+
+`docker-enable` has two branches:
+
+- **Image units.** When `/usr/lib/systemd/system/docker.service` exists, as on
+  Bluefin DX, the image's Docker wins. The helper removes only the units it
+  wrote earlier (`dockerbrew.RemoveManagedUnits`) and reloads systemd if any
+  were removed. It then grants the invoking account `docker` membership and
+  runs `systemctl enable --now docker.socket docker.service`.
+- **Homebrew bottles.** Otherwise `dockerbrew.Install` installs the daemon:
+  1. It fetches `https://formulae.brew.sh/api/formula.jws.json` and verifies
+     its PS512 JWS with the `homebrew-1` key compiled into the package.
+  2. `SelectBottles` takes the fixed `dockerbrew.Formulae` set (`docker-engine`,
+     `containerd`, `runc`, `tini`, `libpathrs`, `libseccomp`) for
+     `x86_64_linux` or `arm64_linux`. The dependency closure must equal that set
+     plus system `nftables`. Each URL must be the GHCR blob of its indexed
+     SHA-256.
+  3. `Client.Bottle` downloads each blob anonymously and rejects a SHA-256
+     mismatch.
+  4. `Extract` writes only mapped regular files: the daemon, proxy,
+     containerd, its shim, `runc`, `tini-static` as `docker-init`, and the two
+     libraries. It refuses traversal, absolute names, and devices, and never
+     follows symlink members.
+  5. `PatchELF` replaces the `@@HOMEBREW_PREFIX@@` interpreter with the system
+     loader and every RPATH/RUNPATH with `$ORIGIN/../lib`. Static binaries are
+     left alone.
+  6. Under a lock, `Install` smoke-runs `runc --version` and
+     `dockerd --version`. It writes `manifest.json`, renames the set to
+     `/var/lib/chairlift/docker/<set-id>`, swaps the `current` link
+     atomically, and prunes older sets (best-effort once the swap is done).
+     Before the swap it writes a root-owned `.restart-pending` marker; while
+     it exists, a rerun over the same set still reports a change, and the
+     helper clears it only after `try-restart` succeeds. A reinstall of the
+     same set moves the old directory aside for pruning, and a `current` whose
+     target is missing reads as not installed. It refuses an install root or
+     `current` that is a foreign symlink or not root-owned. Bottle downloads
+     are capped at 1 GiB.
+
+  The helper then copies an image-only `docker` group into `/etc/group` or
+  creates it with `groupadd -f -r docker`. It writes `docker.service` and
+  `docker.socket` to `/etc/systemd/system` (`dockerbrew.WriteUnits`); both
+  `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
+  downloading, so an unmanaged unit is refused before any fetch. They
+  are moby's upstream units, with `ExecStart` and `PATH` pointing at
+  `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
+  existing file without that marker is never overwritten. Next it runs
+  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  equivalence rule `semanage fcontext -a -e /usr/libexec/docker
+  /var/lib/chairlift/docker` if missing and runs `restorecon -RF
+  /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
+  an enforcing host without both tools is refused before any download. When the runtime changed and the
+  daemon on `/run/docker.sock` reports no containers running, it runs
+  `systemctl try-restart docker.service`, which does nothing to a stopped
+  service. If containers are running, or the query fails, it prints
+  `docker runtime restart deferred: containers are running` instead; the
+  `.restart-pending` marker stays, so the next enable or update retries the
+  restart and a reboot starts the new runtime. Finally it adds the `PKEXEC_UID` account, enables `docker.socket`,
+  and starts `docker.service`. It prints the manifest as
+  `chairlift-helper: docker runtime <json>`.
+
+`docker-update` prints `no Homebrew Docker runtime to update` and exits 0 when
+image units exist or no manifest does. Otherwise it repeats the verified
+install, rewrites the managed units, reloads systemd when either changed, and
+when the bottle set changed relabels the new set under the same SELinux
+condition before restarting an active daemon.
+`docker-disable` runs `systemctl disable --now docker.socket docker.service`
+and keeps the runtime, container data, and group membership. Every command's
+`--dry-run` is offline: it prints the index it would fetch, the formula set,
+the unit paths, and each `groupadd`, `usermod`, `restorecon`, and
+`systemctl` line it would run. Both `dx-enable` and `docker-enable` can ask
+for authentication in the same run. A refused parent prerequisite starts no
+Docker work, and a later refusal never revokes access already granted.
 
 `DockerStatus` reads `LoadState` and `ActiveState` for both system units without
 escalation, then pings `/var/run/docker.sock`; only HTTP 200 `OK` is Ready.
-`DOCKER_HOST` and `XDG_RUNTIME_DIR` do not redirect that probe. Missing or masked
-units are classified as unavailable, but a known running unit remains stoppable
-with a supported disable action. A failed unit read or parse returns zero state
-and the original error; once both reads succeeded, a failed socket probe retains
-observed `Active`/`Available`. The view preserves prior known state on unreadable
-observations rather than inventing off. Socket permission refusal sets
-`NeedsLogin` and wraps `ErrDockerNewLogin`: newly granted group access requires
-a new login and is not Ready. Live disable verifies both units stopped, preventing
-socket activation from silently starting the daemon again. Dry-run performs no
-mutations and preserves switches. The same `developerGate` covers the whole run;
-widget observations are rendered on the GTK main thread.
+`DOCKER_HOST` and `XDG_RUNTIME_DIR` do not redirect that probe. `not-found`
+units mean Docker is not installed yet but can be (`Available`, not
+`Installed`). Masked or erroring units stay unavailable with an
+image/administrator explanation, but a known running unit remains stoppable
+with a supported disable action. A failed unit read or parse returns zero
+state and the original error. Once both reads succeeded, a failed socket probe
+keeps the observed `Active`/`Available`. The view preserves prior known state
+on unreadable observations rather than inventing off. A socket permission
+refusal sets `NeedsLogin` and wraps `ErrDockerNewLogin` only when the account
+database (`user.LookupGroup` and the account's group IDs) lists the account in
+`docker` but the session's `os.Getgroups` lacks it. That access needs a new
+login and is not Ready. Otherwise the refusal sets `NoAccess`: the daemon runs,
+but this account is not a member. The switch reads on whenever the daemon is
+`Active` and not `NoAccess`, so an unresponsive daemon stays on and stoppable. For `NoAccess` it reads off with the subtitle "Docker is running,
+but your account can't use it yet. Turn this on to get access." Turning it on
+runs `docker-enable`. Live disable verifies that both units stopped, so socket
+activation cannot silently restart the daemon. A dry-run disable ignores ping
+errors once the units were read, makes no changes, and preserves switches.
+The same `developerGate` covers the whole run. Widget observations are
+rendered on the GTK main thread.
 
 Docker enable orders system activation, readiness verification, then optional
 native Microsoft VS Code setup and independent post-promotion opt-ins. Awaiting
@@ -809,21 +909,29 @@ completion, so ChairLift checks installed extension IDs before honoring it and
 installs any missing IDs. It preserves unrelated marker fields and writes version
 1 atomically only after successful setup; partial failures remain retryable.
 Preview writes no settings or marker and starts no editor CLI. Missing native
-`code`, malformed marker data, or an extension failure is an optional setup
-failure, not a false Docker or Developer Mode failure.
+`code` returns `devsetup.ErrSkipped`, so the step reads as skipped without an
+error toast. Malformed marker data or an extension failure is an optional
+setup failure, not a false Docker or Developer Mode failure.
 
 `make e2e-docker` selects `TestIntegrationDockerSystem` in
-[`docker_system_test.go`](../../test/e2e/docker_system_test.go). The pinned Dakota
-fixture supplies real Docker binaries/system units before app launch, separately
-from ChairLift. It uses private native managers in rootless Podman's namespace
-and no host socket or bus. Its live assertions send EOF to a real prerequisite
-authentication prompt, preserving the actual journal outcome and exit code in
-the summary. Exit 127 with "Not authorized" proves refusal/Failed, not live
-cancellation; Canceled is asserted only for exit 126 or "Request dismissed".
-The gate also covers ordered authentication, awaiting login, a real `sg` new-group
-session's HTTP 200 socket readiness and non-rootless system daemon, and stop
-preserving packages/data/groups and Developer Mode. Dry-run AT-SPI scenarios and
-screenshots do not establish live readiness.
+[`docker_system_test.go`](../../test/e2e/docker_system_test.go). It runs the
+pinned Dakota image unchanged, with no Docker binaries, units, or `docker`
+group, so the real helper takes the Homebrew branch and downloads Homebrew's
+signed index and bottles over the network. The fixture also plants a
+v26.10.10-style rootless user unit. It uses private native managers in
+rootless Podman's namespace and no host socket or bus. Its live assertions send
+EOF to a real prerequisite authentication prompt, preserving the actual journal
+outcome and exit code in the summary. Exit 127 with "Not authorized" proves
+refusal/Failed, not live cancellation; Canceled is asserted only for exit 126
+or "Request dismissed". The gate also covers ordered authentication, the
+helper-reported argv, a root-owned runtime whose manifest names the six
+formulae and whose ELF loader fields never reach the Homebrew prefix,
+marker-bearing units, the retired rootless unit, awaiting login, a real `sg`
+new-group session's HTTP 200 socket readiness from `current/bin/dockerd`, stop
+preserving the runtime/data/groups and Developer Mode, and a no-op
+`docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
+step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
+establish live readiness.
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
 stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing

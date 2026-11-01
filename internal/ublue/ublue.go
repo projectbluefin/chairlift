@@ -31,7 +31,7 @@ import (
 const (
 	// HelperPath is the fixed, absolute installed path of the privileged
 	// ublue helper binary. It must match the
-	// org.freedesktop.policykit.exec.path annotation on all fourteen actions in
+	// org.freedesktop.policykit.exec.path annotation on all fifteen actions in
 	// data/io.projectbluefin.chairlift.ublue.policy exactly, and each action
 	// additionally selects one supported helper command through the
 	// exec.argv1 annotation. A path mismatch (for example a bare,
@@ -57,6 +57,8 @@ func DefaultContext() (context.Context, context.CancelFunc) {
 
 // ImageSwitchContext returns a context for a channel switch, driver switch,
 // pin, or unpin: each runs `bootc switch`, which pulls a full image.
+// Installing or updating the Homebrew Docker runtime shares the same budget
+// (ubluehelper.Timeout).
 func ImageSwitchContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), ubluehelper.ImageSwitchTimeout+AuthenticationAllowance)
 }
@@ -305,16 +307,28 @@ func EnableKVMAccess(ctx context.Context) error {
 	return err
 }
 
-// SetDocker enables or disables image-provided system Docker. The helper grants
-// the invoking account access on enable; disable retains that access and data.
+// SetDocker enables or disables rootful system Docker. Enabling installs the
+// daemon runtime from verified Homebrew bottles when the image does not ship
+// Docker, so it gets the download budget; the helper grants the invoking
+// account access. Disabling retains that access, the runtime, and data.
 func SetDocker(ctx context.Context, enabled bool) error {
-	ctx, cancel := context.WithTimeout(ctx, ubluehelper.DefaultTimeout+AuthenticationAllowance)
-	defer cancel()
 	command := ubluehelper.CommandDockerDisable
 	if enabled {
 		command = ubluehelper.CommandDockerEnable
 	}
+	ctx, cancel := context.WithTimeout(ctx, ubluehelper.Timeout(command)+AuthenticationAllowance)
+	defer cancel()
 	_, _, err := runHelper(ctx, pkexecCommand, command)
+	return err
+}
+
+// UpdateDocker replaces the Homebrew Docker runtime with the latest verified
+// bottles and restarts a running daemon when it changed. A host whose image
+// ships Docker, or that never installed the runtime, succeeds unchanged.
+func UpdateDocker(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, ubluehelper.Timeout(ubluehelper.CommandDockerUpdate)+AuthenticationAllowance)
+	defer cancel()
+	_, _, err := runHelper(ctx, pkexecCommand, ubluehelper.CommandDockerUpdate)
 	return err
 }
 
