@@ -15,7 +15,7 @@ from behave import step, then
 
 import chairlift_atspi as atspi
 from stubs_features import (
-    CALLS_LOG, GAMING_COMPONENTS, STEAM_PLATFORM_BRANCH, account_is_developer,
+    CALLS_LOG, GAMING_COMPONENTS, ROOTLESS_UNIT, STEAM_PLATFORM_BRANCH, account_is_developer,
     docker_held_failure, docker_inactive, docker_no_manager,
 )
 from apps import expander_header, expander_rows, focus_by_tab
@@ -114,6 +114,15 @@ def _never(predicate, what, window=NEGATIVE_WINDOW):
 
 FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Gaming Mode")
 
+# internal/dockerbrew's daemon set (root-owned, for the whole computer) and its
+# user-scope CLI formulae, with the provenance each disclosure row states.
+DOCKER_DAEMON_FORMULAE = ("docker-engine", "containerd", "runc", "tini", "libpathrs", "libseccomp")
+DOCKER_CLI_FORMULAE = ("docker", "docker-buildx", "docker-compose")
+DOCKER_PROVENANCE = {
+    **{name: "Homebrew, installed for the whole computer" for name in DOCKER_DAEMON_FORMULAE},
+    **{name: "Homebrew formula" for name in DOCKER_CLI_FORMULAE},
+}
+
 
 def _mutation_calls(context):
     mutations = []
@@ -201,8 +210,8 @@ def step_packages_informational(context, title):
         )
         assert not controls, f"package {package!r} offers individual mutation controls: {atspi.describe(controls)}"
         if title == "Enable Docker":
-            assert "Provided by system image" in atspi.all_text_under(row), \
-                f"{package!r} is not labelled as system-image provenance"
+            want = DOCKER_PROVENANCE[package]
+            assert want in atspi.all_text_under(row), f"{package!r} is not labelled {want!r}"
 
 
 @then("expanding disclosures changes no Features switch and requests no mutation")
@@ -449,9 +458,57 @@ def step_docker_preview(context, operation, count):
         f"expected {count} {action} previews: {_journal(context)}"
     _assert_parent_preview(context, count, action)
     output = _log(context)
-    for retired in ("dockerd-rootless-setuptool.sh", "brew install docker", "brew install rootlesskit",
-                    "brew install slirp4netns", "brew install lazydocker", "brew install dive"):
-        assert retired not in output, f"system Docker used a retired download/setup path: {retired}"
+    for retired in ("dockerd-rootless-setuptool.sh", "brew install rootlesskit",
+                    "brew install slirp4netns", "brew install lazydocker", "brew install dive",
+                    "brew install docker-engine", "brew install containerd", "brew install runc"):
+        assert retired not in output, f"system Docker used a retired or user-scope daemon path: {retired}"
+
+
+@then("the Docker command-line tools are previewed from Homebrew {count:d} time")
+@then("the Docker command-line tools are previewed from Homebrew {count:d} times")
+def step_docker_cli_preview(context, count):
+    def lines(suffix):
+        return sum(line.endswith(suffix) for line in _log(context).splitlines())
+
+    for name in DOCKER_CLI_FORMULAE:
+        marker = f"[DRY-RUN] Would execute: brew install {name}"
+        assert atspi.poll(lambda: lines(marker) == count), \
+            f"expected {count} previews of {marker!r}, saw {lines(marker)}"
+    # The fake brew sits in the scenario's bin directory, so its prefix is that
+    # directory's parent, and plugins link from <prefix>/lib/docker/cli-plugins.
+    prefix = os.path.dirname(context.stub_bin)
+    plugins = os.path.join(context.home, ".docker", "cli-plugins")
+    for name in ("docker-buildx", "docker-compose"):
+        marker = (f"[DRY-RUN] would link {os.path.join(plugins, name)} -> "
+                  f"{os.path.join(prefix, 'lib', 'docker', 'cli-plugins', name)}")
+        assert atspi.poll(lambda: lines(marker) == count), \
+            f"expected {count} previews of {marker!r}, saw {lines(marker)}"
+    assert not [call for call in _calls(context) if call[:2] == ["brew", "install"]], "a preview executed brew install"
+    assert not os.path.lexists(plugins), "a preview created Docker CLI plugin links"
+
+
+@then("the Docker command-line tools are never previewed")
+def step_docker_cli_never(context):
+    _never(lambda: next((line for line in _log(context).splitlines()
+                         if "brew install docker" in line or "would link" in line), None),
+           "a Docker CLI install preview")
+
+
+@then("retiring the earlier rootless Docker is previewed without touching it")
+def step_rootless_retirement_preview(context):
+    wanted = (
+        "[DRY-RUN] would execute: systemctl [--user disable --now docker.service]",
+        f"[DRY-RUN] would execute: {os.path.join(context.stub_bin, 'docker')} [context use default]",
+    )
+    for line in wanted:
+        assert atspi.poll(lambda: line in _log(context)), f"chairlift.log never contained {line!r}"
+    docker_calls = [call[1:] for call in _calls(context) if call[0] == "docker"]
+    assert docker_calls and all(call == ["context", "show"] for call in docker_calls), \
+        f"the docker CLI was asked for more than its current context: {docker_calls}"
+    with open(context.rootless_unit, encoding="utf-8") as handle:
+        assert handle.read() == ROOTLESS_UNIT, "a preview changed the rootless unit file"
+    assert not [call for call in _calls(context) if call[:2] == ["systemctl", "--user"]], \
+        "a preview ran a user-manager command"
 
 
 @step("Docker's system-unit check is held before failing")
@@ -491,6 +548,17 @@ def step_vscode_preview(context):
     else:
         assert not os.path.lexists(settings), "preview created native editor settings"
     assert not os.path.lexists(context.launch_env["SETUP_CHECKER_FILE"]), "preview recorded successful editor setup"
+
+
+@then("VS Code setup is skipped without reporting an editor failure")
+def step_vscode_skipped(context):
+    def feedback():
+        return next((text for text in _texts(context)
+                     if "VS Code setup needs attention" in text or "VS Code setup couldn't finish" in text), None)
+    _never(feedback, "an editor failure for a computer without VS Code")
+    settings = os.path.join(context.home, ".config", "Code", "User", "settings.json")
+    assert not os.path.lexists(settings), "a skipped editor setup created settings"
+    assert not os.path.lexists(context.launch_env["SETUP_CHECKER_FILE"]), "a skipped editor setup recorded a version"
 
 
 @then("the editor preview failure reports that no Docker changes were made")

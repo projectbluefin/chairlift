@@ -78,7 +78,7 @@ checked separately after the page is built.
 | Automatic Updates | `automatic_updates_group` | The switch deciding whether this system installs updates on its own schedule; hidden on a host with no unattended-update timer. Updating now is the Updates page's own action and has no config key. |
 | bootc Updates | `bootc_updates_group` | Download and stage the next bootc system image update (applies on restart); shown only when bootc-booted and the fixed `/usr/libexec/bootc-update-stage` helper is present. A distribution must provide a trusted implementation there before enabling this group; ChairLift's release archive does not supply one. |
 | Flatpak Updates | `flatpak_updates_group` | Pending Flatpak application updates |
-| Homebrew Updates | `brew_updates_group` | Outdated Homebrew packages with upgrade buttons |
+| Homebrew Updates | `brew_updates_group` | Outdated Homebrew packages with upgrade buttons, plus a **Docker engine** item when Enable Docker installed the daemon from Homebrew bottles |
 | Untrusted Taps | `brew_trust_group` | Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); trust a tap to resume its updates. Shown only when there is something to trust |
 | Release Channel | `channel_group` | Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | System Version | `bootc_status_group` | Compact booted/staged version readout, with image reference and build identifiers behind a details row; shown only when `bootc.IsBootcBootedCached()` reports a booted deployment |
@@ -147,8 +147,8 @@ awaiting a new login, and preview without percentage estimates. Awaiting login
 is not ready and is not a failed action to repeat. Each of **Developer Mode**,
 **WSL Mode**, **Enable Docker**, and **Gaming Mode** expands to disclose its
 packages and changes; the independent suffix switch runs the action. Lists
-name directly requested software or, for Docker, image-provided RPM provenance,
-not every package-manager dependency, and offer no individual install choices.
+name directly requested software (for Docker, Homebrew formulae), not every
+package-manager dependency, and offer no individual install choices.
 An opaque bundle command does not produce a
 fabricated per-package completion stream.
 
@@ -168,26 +168,44 @@ hardware virtualization and `/dev/kvm` access. nsl also requires your account
 to belong to the `kvm` group, even when `/dev/kvm` is writable without it.
 Granting `/dev/kvm` access requires a new login; adding only `kvm` group
 membership does not.
-**Enable Docker** uses the image's native Docker CE system service and socket.
-Its expander names `containerd.io`, `docker-buildx-plugin`, `docker-ce`,
-`docker-ce-cli`, and `docker-compose-plugin` as **Provided by system image**,
-not downloads from Homebrew. The existing fixed `docker-enable` helper grants
-your account Docker group access and enables both `docker.service` and
-`docker.socket`. This may ask for administrator approval separately from the
-Developer Mode prerequisite. No second Homebrew engine or user service is
-installed. Missing image units or helper actions require an image or
-administrator fix; Homebrew, UID-map tools, and a user service manager are not
-Docker prerequisites.
+**Enable Docker** provides Bluefin DX-style rootful Docker: a system daemon
+behind `docker.socket`, `docker` group access, and the `docker` CLI with buildx
+and compose. On images that ship Docker's units
+(`/usr/lib/systemd/system/docker.service`, as Bluefin DX does), the fixed
+`docker-enable` helper enables the image's Docker. Elsewhere it installs the
+daemon from Homebrew itself: it verifies Homebrew's signed formula index
+against a key built into ChairLift, downloads the `docker-engine`,
+`containerd`, `runc`, `tini`, `libpathrs`, and `libseccomp` bottles, checks
+each SHA-256, and installs them root-owned under `/usr/local/libexec/docker`.
+Root never runs anything from your Homebrew prefix
+([ADR-0024](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)). The
+helper writes `docker.service` and `docker.socket` to `/etc/systemd/system`
+(marked `# Managed by chairlift-helper`; it never overwrites an unmarked unit),
+creates the `docker` group when missing, adds your account, and starts the
+socket and service. This may ask for administrator approval separately from
+the Developer Mode prerequisite, and it needs a network connection. ChairLift
+then installs the `docker`, `docker-buildx`, and `docker-compose` Homebrew
+formulae for your account when Homebrew is available and links absent CLI
+plugins in `~/.docker/cli-plugins`. Once system Docker is on, a rootless Docker
+daemon an earlier ChairLift set up is turned off, and a `rootless` CLI context
+is switched back to `default`; a declined prompt or failed install leaves them
+alone. The expander lists the daemon formulae as
+**Homebrew, installed for the whole computer**.
 
 Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent of
 `DOCKER_HOST` or `XDG_RUNTIME_DIR`; installed CLI tools or active units alone
 are insufficient. Newly granted group access needs a new login (`NeedsLogin`),
-shown as awaiting login rather than ready or a generic daemon failure. Both
+shown as awaiting login rather than ready or a generic daemon failure. When
+Docker runs but your account is not in the `docker` group at all, the switch
+reads off and says so; turning it on grants access. Both
 system units must be read before their active state is trusted; a later socket
 failure retains known active state so a supported stop stays available.
+Masked units or missing helper actions need an image or administrator fix.
 Turning Docker off uses fixed `docker-disable` to stop both system units for
-all accounts, retaining packages, container data, group membership, and
-Developer Mode.
+all accounts, retaining the runtime, container data, group membership, and
+Developer Mode. **Update all**'s Developer tools source updates a
+Homebrew-installed daemon through fixed `docker-update` when newer bottles are
+published.
 
 Docker enable also attempts native Microsoft VS Code setup as a separate
 optional outcome; it does not install the editor. It seeds defaults only when
@@ -197,9 +215,10 @@ Remote SSH (`ms-vscode-remote.remote-ssh`), and Container Tools
 (`ms-azuretools.vscode-containers`). The upstream marker
 `${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_versioning.json}` records
 `.version.user.vscode == "1"` only after successful setup; an existing marker
-is checked against installed extension IDs, not trusted by itself. Missing
-native `code` or an editor failure does not reverse access. Failed optional
-stages can be retried without repeating a completed privileged enable. Preview
+is checked against installed extension IDs, not trusted by itself. Without
+native `code` the step is skipped; an editor failure does not reverse access.
+Failed optional stages can be retried without repeating a completed privileged
+enable. Preview
 writes no settings or marker and launches no editor CLI.
 A confirmed Developer Mode enable also installs the Dev Container CLI
 (`devcontainer`) when Homebrew is available; an install failure does not reverse

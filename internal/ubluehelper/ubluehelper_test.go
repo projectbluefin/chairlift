@@ -111,6 +111,16 @@ func TestParseInvocationAcceptsSupportedShapes(t *testing.T) {
 			args: []string{"driver-switch", "standard", "--dry-run"},
 			want: Invocation{Command: CommandDriverSwitch, Driver: imageinfo.DriverStandard, DryRun: true},
 		},
+		{
+			name: "docker update",
+			args: []string{"docker-update"},
+			want: Invocation{Command: CommandDockerUpdate},
+		},
+		{
+			name: "docker update dry run",
+			args: []string{"docker-update", "--dry-run"},
+			want: Invocation{Command: CommandDockerUpdate, DryRun: true},
+		},
 	}
 
 	for _, test := range tests {
@@ -194,6 +204,12 @@ func TestParseInvocationRejectsEveryUnsupportedShape(t *testing.T) {
 		{name: "driver switch with an image ref", args: []string{"driver-switch", "ghcr.io/evil/image:latest"}},
 		{name: "driver switch with a suffix", args: []string{"driver-switch", "asus"}},
 		{name: "driver switch with extra argument", args: []string{"driver-switch", "nvidia", "--dry-run", "now"}},
+		// The formula set, versions, and install root are fixed in the
+		// helper; none may arrive from the caller.
+		{name: "docker update with a formula", args: []string{"docker-update", "docker-engine"}},
+		{name: "docker update with a version", args: []string{"docker-update", "29.9.2", "--dry-run"}},
+		{name: "docker update with misplaced flag", args: []string{"docker-update", "--dry-run", "--force"}},
+		{name: "docker enable with an install root", args: []string{"docker-enable", "/home/linuxbrew/.linuxbrew"}},
 		{name: "updex command is not accepted here", args: []string{"enable-feature", "demo"}},
 	}
 
@@ -227,6 +243,7 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 		CommandKVMEnable,
 		CommandDockerEnable,
 		CommandDockerDisable,
+		CommandDockerUpdate,
 	}
 	if !reflect.DeepEqual(commands, want) {
 		t.Fatalf("SupportedCommands() = %v, want %v", commands, want)

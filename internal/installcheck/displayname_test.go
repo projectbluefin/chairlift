@@ -37,9 +37,11 @@ var codeNameExemptions = map[string]string{
 	"group %q enables sudo action %q; sudo actions are only permitted in trusted configurations (/etc/chairlift, /usr/share/chairlift)": "same: the code name appears only as filesystem paths the user must actually navigate to",
 	"chairlift-printer-": "unit and container name prefix for rootless printer applications (issue #329); a path/name component, never shown as prose",
 
-	"org.frostyard.ChairLift.desktop": "legacy launcher filename from older frostyard installs (issue #443)",
-	"chairlift --ask-bluefin":         "Custom Command Menu command string matched against dconf, never displayed as prose",
-	"chairlift-helper: exec ":         "machine-readable execution prefix emitted by the privileged helper to communicate derived commands to the GUI",
+	"org.frostyard.ChairLift.desktop":   "legacy launcher filename from older frostyard installs (issue #443)",
+	"chairlift --ask-bluefin":           "Custom Command Menu command string matched against dconf, never displayed as prose",
+	"chairlift-helper: exec ":           "machine-readable execution prefix emitted by the privileged helper to communicate derived commands to the GUI",
+	"chairlift-helper: docker runtime ": "machine-readable manifest line the privileged helper prints after docker-enable/docker-update; parsed by test/e2e/docker_system_integration.py, never shown as prose",
+	"# Managed by chairlift-helper":     "systemd unit marker comment (dockerbrew.ManagedMarker) identifying the Docker units the helper owns; machine-matched, never shown as prose",
 }
 
 // exemptStructurally reports whether a literal spelling the code name is a

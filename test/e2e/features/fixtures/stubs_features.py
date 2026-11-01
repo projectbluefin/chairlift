@@ -14,6 +14,7 @@ Updates pages that share the fake see an empty, healthy host.
 import grp
 import json
 import os
+import shutil
 
 from stubs import fake_executable, stub
 
@@ -219,7 +220,7 @@ def no_descriptor(context):
 
 @stub("features-developer")
 def developer_options(context):
-    """Running WSL guests and image-provided, inactive system Docker units."""
+    """Running WSL guests and installed, inactive system Docker units."""
     fake_executable(context, "nsl", _recorder(context) + """
 case "$1" in
   list) printf '%s\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*' ;;
@@ -262,7 +263,7 @@ def developer_packages(context):
         )
 
 def docker_inactive(context):
-    """Both image-provided system units are readable and stopped."""
+    """Both installed system units are readable and stopped."""
     fake_executable(context, "systemctl", _recorder(context) + """
 case "$1" in
   show) printf '%s\\n' 'LoadState=loaded' 'ActiveState=inactive' ;;
@@ -317,13 +318,89 @@ exit 1
 
 @stub("features-docker-missing")
 def docker_missing(context):
-    """The system image has neither required Docker unit."""
+    """Docker is not installed yet: neither system unit exists, so it is installable."""
     fake_executable(context, "systemctl", _recorder(context) + """
 case "$1" in
   show) printf '%s\\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
   *) exit 1 ;;
 esac
 """)
+
+
+# internal/devtools' fixed system socket. dakota.sh gives every AT-SPI run an
+# empty private tmpfs at /var/run, so only a stub can make this path exist.
+DOCKER_SOCKET = "/var/run/docker.sock"
+
+
+@stub("features-docker-no-access")
+def docker_no_access(context):
+    """Docker runs, but this account is not in its group, so the socket refuses it.
+
+    A real socket inode with no permission bits makes connect(2) fail with
+    EACCES exactly as root:docker 0660 does for a non-member. The Dakota
+    container defines no docker group, so the account cannot be a configured
+    member: that is "no access", not "log in again".
+    """
+    import socket
+
+    directory = os.path.dirname(DOCKER_SOCKET)
+    # Never plant a socket on a real host: only the harness's private,
+    # writable /var/run mount (never the /run symlink) qualifies.
+    if os.path.islink(directory) or not os.path.ismount(directory) or not os.access(directory, os.W_OK):
+        raise RuntimeError(f"{directory} is not the harness's private tmpfs; run the suite through test/e2e/dakota.sh")
+    if os.path.lexists(DOCKER_SOCKET):
+        raise RuntimeError(f"{DOCKER_SOCKET} already exists; refusing to replace it")
+    try:
+        grp.getgrnam("docker")
+    except KeyError:
+        pass
+    else:
+        raise RuntimeError("this stub needs a host without a docker group")
+    docker_active(context)
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(DOCKER_SOCKET)
+    context.add_cleanup(os.unlink, DOCKER_SOCKET)
+    os.chmod(DOCKER_SOCKET, 0)
+
+
+# What ChairLift v26.10.10's dockerd-rootless-setuptool.sh left in HOME.
+ROOTLESS_UNIT = """[Unit]
+Description=Docker Application Container Engine (Rootless)
+
+[Service]
+ExecStart=/home/user/bin/dockerd-rootless.sh
+Type=simple
+
+[Install]
+WantedBy=default.target
+"""
+
+
+@stub("features-docker-rootless")
+def docker_rootless(context):
+    """A rootless user daemon and a docker CLI on its "rootless" context."""
+    path = os.path.join(context.home, ".config", "systemd", "user", "docker.service")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(ROOTLESS_UNIT)
+    context.rootless_unit = path
+    fake_executable(context, "docker", _recorder(context) + """
+case "$*" in
+  'context show') echo rootless ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-vscode-absent")
+def vscode_absent(context):
+    """Native VS Code is not installed; apply after features-developer."""
+    fake = os.path.join(context.stub_bin, "code")
+    if os.path.lexists(fake):
+        os.unlink(fake)
+    path = context.launch_env.get("PATH", "")
+    if shutil.which("code", path=path) or os.path.lexists("/home/linuxbrew/.linuxbrew/bin/code"):
+        raise RuntimeError("this stub needs a host without native VS Code")
 
 
 @stub("features-docker-masked")

@@ -218,28 +218,37 @@ changes none of the observed switch states.
 WSL also needs hardware virtualization and access to `/dev/kvm`; nsl also needs
 membership in the `kvm` group. Granting `/dev/kvm` access requires a new login;
 adding only `kvm` group membership does not.
-Docker uses the system's existing Docker CE installation. Its expanded package
-list labels `containerd.io`, `docker-buildx-plugin`, `docker-ce`, `docker-ce-cli`,
-and `docker-compose-plugin` as **Provided by system image**, not downloads this
-action installs. Administrator approval through the fixed Docker helper enables
-the computer's service and socket and grants your account access; this can ask
-for authentication again after Developer Mode. Newly granted access requires
-logging out and back in. Until then, **Awaiting new login** is not ready.
-A responding `/var/run/docker.sock`, not installed CLI tools or an active unit
-alone, confirms readiness. Turning Docker off stops both system units for all
-accounts but keeps containers, installed packages, group membership, and
-Developer Mode. Missing system units or helper actions require an image or
-administrator fix; no second Homebrew engine or user service is installed.
-Docker does not require Homebrew or UID-map tools. A known running daemon stays
-stoppable even if its socket check fails.
+**Enable Docker** sets up the same rootful Docker that Bluefin DX ships: a
+system Docker service for the computer, membership in the `docker` group for
+you, and the `docker` command with buildx and compose. Its expanded package
+list names the Homebrew formulae involved, with the daemon's labelled
+**Homebrew, installed for the whole computer**. If your system image already
+includes Docker, that Docker is used. Otherwise administrator approval lets the
+fixed Docker helper download Homebrew's packages itself, check them against
+Homebrew's signature, and install them in a system location; nothing your
+account can change is ever run as administrator. This needs a network
+connection and can ask for authentication again after Developer Mode. The
+`docker` command itself is installed into your Homebrew afterwards. A rootless
+Docker set up by an earlier release is turned off once system Docker is on.
+Newly granted access requires logging out and back in. Until then,
+**Awaiting new login** is not ready. If Docker is already running but your
+account cannot use it, the switch shows off and says so; turn it on to get
+access. A responding `/var/run/docker.sock`, not installed CLI tools or an
+active unit alone, confirms readiness. Turning Docker off stops both system
+units for all accounts but keeps containers, installed packages, group
+membership, and Developer Mode. New Docker engine versions arrive through
+**Update all** with your other developer tools. Masked system units or
+missing helper actions require an image or administrator fix. A known running
+daemon stays stoppable even if its socket check fails.
 
 Enable also attempts native Microsoft VS Code setup separately; it does not
 install the editor. It seeds defaults only if settings are absent and installs
 Bluefin's Dev Containers, Remote SSH, and Container Tools extensions. Existing
 settings, including JSONC comments and symlinks, stay untouched. Successful setup
 records the upstream version-1 marker; later runs check extension IDs rather
-than trusting that marker alone. Missing native VS Code or an editor setup error
-stays retryable without undoing Docker or developer access. Preview writes no
+than trusting that marker alone. Without native VS Code this step is skipped;
+an editor setup error stays retryable without undoing Docker or developer
+access. Preview writes no
 settings or marker and launches no editor CLI.
 Use **Virtual Machine Engine** to choose the built-in engine or Lima;
 both run Ubuntu. An external documentation button beside the chooser opens the
@@ -411,7 +420,9 @@ Docker. Live activation belongs to `make e2e-docker`
 evidence. Its real authentication prompt receives EOF, and the summary reports
 the actual outcome and exit code: exit 127 with "Not authorized" proves refusal,
 not live cancellation. Only exit 126 or "Request dismissed" proves a dismissed
-prompt. Readiness still requires a real new-group session and HTTP 200 from the
+prompt. The gate starts from an image without Docker, so its real helper
+installs Docker from Homebrew's verified packages over the network.
+Readiness still requires a real new-group session and HTTP 200 from the
 system daemon. Capture needs podman and Go on the host.
 
 Run it locally when something's appearance changes and you want to preview

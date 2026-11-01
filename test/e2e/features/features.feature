@@ -1,25 +1,30 @@
 @features
 Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Printers
   Optional tools are explicit choices. Package disclosures are informational:
-  expanding a row must never toggle it or start setup. Docker uses the system
-  image's daemon through fixed administrator-authorized helpers. Enabling
+  expanding a row must never toggle it or start setup. Docker is rootful system
+  Docker that a fixed administrator-authorized helper installs from verified
+  Homebrew bottles, plus the user's Homebrew command-line tools. Enabling
   Docker or WSL first enables Developer Mode when needed. Dry runs restore
   every control and preserve observed installed state.
 
   @stub.features-gaming-none @stub.features-developer
-  Scenario: Docker discloses five system-image RPMs without enabling anything
+  Scenario: Docker discloses its system and command-line Homebrew formulae without enabling anything
     Given ChairLift is running
     When I open the "Features" page
     And I record the Features switches and mutation evidence
     Then each Features switch is named and separately keyboard reachable
     And I expand the "Enable Docker" package disclosure with the keyboard
     Then the "Enable Docker" package disclosure shows exactly
-      | package               |
-      | containerd.io         |
-      | docker-buildx-plugin  |
-      | docker-ce             |
-      | docker-ce-cli         |
-      | docker-compose-plugin |
+      | package        |
+      | docker-engine  |
+      | containerd     |
+      | runc           |
+      | tini           |
+      | libpathrs      |
+      | libseccomp     |
+      | docker         |
+      | docker-buildx  |
+      | docker-compose |
     And the "Enable Docker" package disclosure is informational
     And expanding disclosures changes no Features switch and requests no mutation
     And the Features page shows no "Setup activity" group
@@ -200,6 +205,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     When I open the "Features" page
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
+    And the "Enable Docker" row says "Enables Developer Mode first if needed, then turns on system Docker for all accounts. Administrator approval is required."
     When I toggle the switch in the "Enable Docker" row
     Then system Docker enable is previewed 1 time
     And I see "[DRY-RUN] Preview: Enable Docker — no changes made"
@@ -220,6 +226,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     And the switch in the "Enable Docker" row accepts input
     And the Developer Mode switch returns to its restored state
     And Developer onboarding is previewed once per implicit promotion
+    And the Docker command-line tools are previewed from Homebrew 2 times
     And the Docker activity contains only this run's stages
     And the Features CLI fixtures received no mutation commands
     And the systemctl tool was never asked to mutate
@@ -332,14 +339,72 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, and Pr
     And the systemctl tool was never asked to mutate
 
   @stub.features-gaming-none @stub.features-developer @stub.features-docker-missing
-  Scenario: Missing system Docker is an image prerequisite rather than a second daemon install
+  Scenario: Docker that is not installed yet is offered as an administrator-approved Homebrew install
     Given ChairLift is running
     When I open the "Features" page
-    Then I see "Enable Docker"
+    Then the Developer Mode switch shows this account's developer-group membership
+    And I see "Enable Docker"
     And the switch in the "Enable Docker" row is off
-    And the switch in the "Enable Docker" row refuses input
-    And the "Enable Docker" row says "Docker CE must be provided by your system image. Ask your administrator to use a Docker-enabled image."
+    And the switch in the "Enable Docker" row accepts input
+    And the "Enable Docker" row says "Enables Developer Mode first if needed, then installs Docker from verified Homebrew packages for all accounts. Administrator approval is required."
     And the action journal is empty
+    When I toggle the switch in the "Enable Docker" row
+    Then system Docker enable is previewed 1 time
+    And the Docker command-line tools are previewed from Homebrew 1 time
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the Developer Mode switch returns to its restored state
+    And the Features CLI fixtures received no mutation commands
+    And the systemctl tool was never asked to mutate
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-docker-no-access
+  Scenario: A running Docker this account cannot use is off and offers to grant access
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Developer Mode switch shows this account's developer-group membership
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the "Enable Docker" row says "Docker is running, but your account can't use it yet. Turn this on to get access."
+    And the action journal is empty
+    When I toggle the switch in the "Enable Docker" row
+    Then system Docker enable is previewed 1 time
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the Developer Mode switch returns to its restored state
+    And the Features CLI fixtures received no mutation commands
+    And the systemctl tool was never asked to mutate
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-docker-rootless
+  Scenario: Enabling system Docker previews retiring the rootless Docker an earlier release set up
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Developer Mode switch shows this account's developer-group membership
+    And the switch in the "Enable Docker" row accepts input
+    When I toggle the switch in the "Enable Docker" row
+    Then system Docker enable is previewed 1 time
+    And retiring the earlier rootless Docker is previewed without touching it
+    And the switch in the "Enable Docker" row is off
+    And the Developer Mode switch returns to its restored state
+    And the Features CLI fixtures received no mutation commands
+    And the systemctl tool was never asked to mutate
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-vscode-absent
+  Scenario: A computer without VS Code skips editor setup instead of failing it
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Developer Mode switch shows this account's developer-group membership
+    And the switch in the "Enable Docker" row accepts input
+    When I toggle the switch in the "Enable Docker" row
+    Then system Docker enable is previewed 1 time
+    And Setup activity shows these stage statuses
+      | stage             | status  |
+      | Tools and service | Preview |
+      | Verify readiness  | Preview |
+      | VS Code setup     | Skipped |
+    And VS Code setup is skipped without reporting an editor failure
+    And the switch in the "Enable Docker" row is off
+    And the switch in the "Enable Docker" row accepts input
+    And the Developer Mode switch returns to its restored state
     And the Features CLI fixtures received no mutation commands
 
   @stub.features-gaming-none @stub.features-developer @stub.features-docker-masked

@@ -41,7 +41,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `updates_page` | `automatic_updates_group` | Updates; `onAutomaticUpdatesToggled`, observed through `internal/autoupdate`, writes via `ublue.SetAutomaticUpdates` |
 | `updates_page` | `bootc_updates_group` | Updates staging/Compare and Powerwash Roll Back; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked` |
 | `updates_page` | `flatpak_updates_group` | Updates applications source; `updateflow.Coordinator` / `UpdateShell` |
-| `updates_page` | `brew_updates_group` | Updates developer-tools source; `updateflow.Coordinator` / `UpdateShell` |
+| `updates_page` | `brew_updates_group` | Updates developer-tools source, including a Homebrew-bottle Docker runtime refreshed through fixed `docker-update`; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_trust_group` | Updates; `confirmTrustTap` / `trustTap`, unprivileged `homebrew.TrustPackages` |
 | `updates_page` | `channel_group` | Updates Advanced; `onChannelToggled` / `onDriverSwitchClicked`, fixed ublue helper |
 | `updates_page` | `bootc_status_group` | Updates system-version readout; `loadSystemVersion`, read-only bootc state |
@@ -49,7 +49,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
-| `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/devtools` for observed readiness and optional native VS Code setup |
+| `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
 | `agents_page` | `agents_group` | Agents service, the active model selector and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
@@ -118,18 +118,25 @@ Provider-specific safety remains with each live owner:
   for an existing Lima-only machine. Both need KVM access. WSL/Docker enable
   first promotes Developer Mode through fixed `dx-enable` when needed;
   canceled/failed authentication blocks the child, later failure keeps access,
-  and child disable never demotes the parent. Docker uses the image's native
-  service and socket through fixed `docker-enable` / `docker-disable`, with a
-  possible second authentication; no Homebrew engine or user service is installed.
-  Its expander labels the five Docker CE RPMs **Provided by system image**, not
-  requested downloads. Readiness requires HTTP 200 `OK` on `/var/run/docker.sock`.
-  New group access needs a new login (`NeedsLogin`), not a Ready result. After
-  both unit reads succeed, socket failure retains known active state and stop
-  access. Missing units/helper actions need an image/administrator fix, not
-  Homebrew or UID-map tools. Stop retains packages/data/groups and the parent.
+  and child disable never demotes the parent. Docker enable runs fixed
+  `docker-enable` (a possible second authentication) and only after it
+  succeeds retires a rootless user daemon. Image units (Bluefin DX) win; otherwise the helper
+  installs the daemon from Homebrew bottles it verifies against the signed
+  formula index into root-owned `/usr/local/libexec/docker`, writes
+  marker-bearing units, and creates the `docker` group when missing; root
+  never executes the user's Homebrew prefix (ADR-0024). The user-scope CLI
+  formulae follow. Its expander labels the daemon formulae **Homebrew,
+  installed for the whole computer**, not requested downloads. Readiness
+  requires HTTP 200 `OK` on `/var/run/docker.sock`. New group access needs a
+  new login (`NeedsLogin`), not a Ready result; a non-member is `NoAccess` and
+  reads off. After both unit reads succeed, socket failure retains known
+  active state and stop access. Masked units or missing helper actions need
+  an image/administrator fix. Stop retains the runtime, data, groups, and the
+  parent; Updates' Developer tools source refreshes the runtime through fixed
+  `docker-update`.
   Optional native VS Code setup preserves existing JSONC/symlinks, seeds only
   absent settings, checks extension IDs against the upstream version-1 marker,
-  and never reverses access on failure. Four package expanders and the bounded
+  skips without native `code`, and never reverses access on failure. Four package expanders and the bounded
   Setup activity checklist retain distinct preview/failure/cancellation/login
   outcomes; failed optional stages retry without repeating a completed grant.
 - Gaming distinguishes applications/runtimes and user/system scope, installs

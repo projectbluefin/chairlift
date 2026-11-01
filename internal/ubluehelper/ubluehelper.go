@@ -1,7 +1,8 @@
 // Package ubluehelper holds the argv-parsing logic for
 // cmd/chairlift-helper, the privileged helper binary invoked via
 // pkexec to perform the Bluefin-family write operations: switching the bootc
-// release channel and toggling developer-mode group membership.
+// release channel, toggling developer-mode group membership, and turning on
+// or updating rootful system Docker.
 //
 // It mirrors internal/updexhelper's contract and exists for the same reason:
 // PolicyKit selects an action from the executable path and the first
@@ -52,6 +53,7 @@ const (
 	CommandKVMEnable     = "kvm-enable"
 	CommandDockerEnable  = "docker-enable"
 	CommandDockerDisable = "docker-disable"
+	CommandDockerUpdate  = "docker-update"
 )
 
 // HelperExecPrefix is the machine-readable execution prefix emitted by the
@@ -114,6 +116,7 @@ func SupportedCommands() []string {
 		CommandKVMEnable,
 		CommandDockerEnable,
 		CommandDockerDisable,
+		CommandDockerUpdate,
 	}
 }
 
@@ -133,6 +136,7 @@ func SupportedCommands() []string {
 //	kvm-enable [--dry-run]
 //	docker-enable [--dry-run]
 //	docker-disable [--dry-run]
+//	docker-update [--dry-run]
 //
 // Everything else — extra arguments, a misplaced flag, an unknown channel
 // word, an unknown command — is rejected.
@@ -189,7 +193,7 @@ func ParseInvocation(args []string) (Invocation, error) {
 
 	case CommandDXEnable, CommandDXDisable, CommandRestart, CommandRollback,
 		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset, CommandUnpin,
-		CommandKVMEnable, CommandDockerEnable, CommandDockerDisable:
+		CommandKVMEnable, CommandDockerEnable, CommandDockerDisable, CommandDockerUpdate:
 		if len(args) > 2 || (len(args) == 2 && args[1] != "--dry-run") {
 			return Invocation{}, fmt.Errorf("usage: chairlift-helper %s [--dry-run]", args[0])
 		}
@@ -218,11 +222,14 @@ const (
 	// DefaultTimeout bounds a helper command that does not pull an image.
 	DefaultTimeout = 10 * time.Minute
 
-	// ImageSwitchTimeout bounds a command that runs `bootc switch`. A switch
-	// to another channel, driver variant, or dated build pulls the same
-	// multi-gigabyte image an OS update stages, so it gets the OS staging
-	// budget (bootc.DefaultTimeout) rather than the default: at ten minutes a
-	// slow link had its pull killed mid-transfer.
+	// ImageSwitchTimeout bounds a command that runs `bootc switch` or
+	// downloads the Docker runtime. A switch to another channel, driver
+	// variant, or dated build pulls the same multi-gigabyte image an OS update
+	// stages, so it gets the OS staging budget (bootc.DefaultTimeout) rather
+	// than the default: at ten minutes a slow link had its pull killed
+	// mid-transfer. docker-enable and docker-update fetch the signed Homebrew
+	// index and the daemon's bottles, which a slow link cannot finish in the
+	// default budget either.
 	ImageSwitchTimeout = 30 * time.Minute
 )
 
@@ -231,7 +238,8 @@ const (
 // its own outcome instead of the caller giving up first.
 func Timeout(command string) time.Duration {
 	switch command {
-	case CommandChannelSwitch, CommandDriverSwitch, CommandPin, CommandUnpin:
+	case CommandChannelSwitch, CommandDriverSwitch, CommandPin, CommandUnpin,
+		CommandDockerEnable, CommandDockerUpdate:
 		return ImageSwitchTimeout
 	default:
 		return DefaultTimeout
@@ -480,8 +488,10 @@ func AccessGroup(command string) (string, bool) {
 	}
 }
 
-// DockerArgs contains the entire daemon lifecycle surface. Stopping both
-// socket and service prevents socket activation from undoing Disable.
+// DockerArgs returns the systemctl argv that enables the image's own Docker
+// units, or disables whichever units are installed. Stopping both socket and
+// service prevents socket activation from undoing Disable. Enabling a
+// Homebrew-installed runtime is EnableDocker's ordered sequence instead.
 func DockerArgs(command string) ([]string, bool) {
 	switch command {
 	case CommandDockerEnable:

@@ -33,6 +33,10 @@ const vsCodeDefaultSettings = `{
 // The seam covers both PATH and the Homebrew fallback used by executable.
 var vsCodeExecutable = func() string { return executable("code") }
 
+// ErrVSCodeNotInstalled means native Microsoft VS Code is absent, so editor
+// setup does not apply to this computer; it is not a setup failure.
+var ErrVSCodeNotInstalled = errors.New("native Microsoft VS Code (code) is not installed")
+
 // SetupVSCode seeds absent native Microsoft VS Code settings and installs the
 // Bluefin DX extensions once per user at setup version 1. Existing settings,
 // including JSONC and symlinks, are never rewritten. Errors are optional-setup
@@ -43,7 +47,7 @@ func SetupVSCode(ctx context.Context, progress func(string)) error {
 	}
 	code := vsCodeExecutable()
 	if code == "" {
-		return errors.New("native Microsoft VS Code (code) is not installed")
+		return ErrVSCodeNotInstalled
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

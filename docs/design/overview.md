@@ -40,7 +40,8 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/avatar/    Dinosaur avatar catalog, its bundled WebP illustrations and 256x256 preview PNGs, and the pure-Go WebP-to-PNG avatar transcoder (whole character fitted inside the 512x512 avatar circle, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling; the preview path encodes 256x256 under 512 KiB)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/developerfeeds/ Pure-Go developer feed OPML catalog (go:embed) and offline validator
-        ├── internal/devtools/  WSL backends, image-provided system Docker, native VS Code setup and package provenance
+        ├── internal/devtools/  WSL backends, system Docker status/enable (rootless cleanup, Homebrew CLI), native VS Code setup and package provenance
+        ├── internal/dockerbrew/ Pure-Go verified Homebrew-bottle Docker runtime: signed index, bottle download/extract, ELF patching, managed units
         ├── internal/devsetup/  Widget-free ordered developer setup, promotion outcomes and retry stages
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
@@ -109,8 +110,9 @@ of command output. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
 use native expanders like Apps collections: the header discloses informational
 package rows, while an independent suffix switch starts work. Homebrew bundles
 are opaque operations, so package lists are static disclosures, not invented
-per-package progress. Docker's five RPM rows are **Provided by system image**,
-not Homebrew requests or current-action downloads. `internal/devsetup` owns
+per-package progress. Docker's rows name Homebrew formulae: the daemon set as
+**Homebrew, installed for the whole computer** (the root helper fetches those
+bottles itself) and the CLI set as user-scope Homebrew formulae. `internal/devsetup` owns
 developer-run ordering and outcomes; the view owns GTK wiring, and
 `internal/devtools` owns execution and Docker/WSL package provenance shared with
 those disclosures. Gaming names come from `gaming.Components`.
@@ -620,8 +622,8 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 `data/io.projectbluefin.chairlift.updex.policy`, and
 `data/io.projectbluefin.chairlift.ublue.policy`.
 
-The fourteen ublue commands include fixed `kvm-enable`, `docker-enable`, and
-`docker-disable` actions alongside pin/unpin. The parser accepts no arbitrary
+The fifteen ublue commands include fixed `kvm-enable`, `docker-enable`,
+`docker-disable`, and `docker-update` actions alongside pin/unpin. The parser accepts no arbitrary
 account, service, image or command argv. Privileged developer options stay
 visible when their installed actions are missing, with affected controls insensitive.
 WSL Mode defaults to nsl on Linux amd64, with Lima as an alternative backend;
@@ -636,22 +638,46 @@ them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
 The GUI first promotes Developer Mode through the fixed `dx-enable` helper
 when Docker or WSL is enabled with developer access off. Refused or canceled
 authentication aborts child setup. Docker then calls `ublue.SetDocker` through
-the fixed `docker-enable` helper, which grants invoking-account Docker access
-and enables the image's `docker.service` and `docker.socket`. This second action
-may ask for authentication separately; it installs no Homebrew engine or user
-service. Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent
+the fixed `docker-enable` helper and, only once that succeeds, retires
+v26.10.10's rootless user daemon and `rootless` CLI context. On a host whose image ships
+`/usr/lib/systemd/system/docker.service` (Bluefin DX), that helper removes any
+units it wrote earlier and enables the image's `docker.service` and
+`docker.socket`. Elsewhere it installs the daemon itself
+([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)):
+`internal/dockerbrew` verifies Homebrew's JWS-signed formula index against
+the compiled-in `homebrew-1` key, downloads the fixed daemon formula set's
+bottles from GHCR by the SHA-256s that index names, extracts only mapped
+files into root-owned `/usr/local/libexec/docker`, patches dynamic ELF
+interpreters and search paths to the system loader and `$ORIGIN/../lib`,
+smoke-runs `runc` and `dockerd`, and swaps the `current` link atomically. The
+helper then writes marker-bearing `docker.service`/`docker.socket` units to
+`/etc/systemd/system` (never overwriting an unmarked file), creates the
+`docker` group with `groupadd -f -r` when the account database lacks it,
+relabels the runtime with `restorecon` only under enforcing SELinux, adds the
+invoking account, enables the socket, and starts the service. Root never
+executes or loads anything from the user-owned Homebrew prefix. After the
+helper, the GUI installs the user-scope `docker`, `docker-buildx`, and
+`docker-compose` formulae and links absent CLI plugins. This second action may
+ask for authentication separately. `docker-update` repeats the verified
+install and restarts the daemon only when the bottle set changed; it is a
+no-op on image-unit hosts. The Updates page's Developer tools source offers it
+when Homebrew's unsigned per-formula API is newer than the installed manifest.
+Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent
 of `DOCKER_HOST` and `XDG_RUNTIME_DIR`. Newly granted group access requires a new
-login, not a false Ready result (`NeedsLogin` / `ErrDockerNewLogin`). Both unit
+login, not a false Ready result (`NeedsLogin` / `ErrDockerNewLogin`); an account
+not listed in `docker` at all is `NoAccess`, shown off so enable grants access.
+Not-found units are installable, not unavailable. Both unit
 reads must succeed before `Active` is trustworthy; a later socket error preserves
 that observed state so supported stop remains available. Disable uses the fixed
-`docker-disable` helper, stops both units for all accounts, and retains packages,
-data, group membership, and Developer Mode. Missing image units or helper actions
-need an image/administrator fix; Homebrew and UID-map tools are not Docker gates.
+`docker-disable` helper, stops both units for all accounts, and retains the
+runtime, data, group membership, and Developer Mode. Masked units or missing
+helper actions need an image/administrator fix.
 Native VS Code setup is a separate optional user-scoped outcome: seed absent
 settings without rewriting JSONC or symlinks, install Bluefin DX's three
 extensions, and commit the upstream version-1 marker only after success. Marker
 presence alone is not proof the extensions were installed. Missing native `code`
-or editor failure never reverses Docker/developer access and remains retryable;
+skips the step; an editor failure never reverses Docker/developer access and
+remains retryable;
 preview writes no settings or marker and launches no editor CLI. A confirmed
 Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
 Homebrew when available; installation failure does not reverse developer access.
@@ -661,7 +687,7 @@ Editor selection/installation remains in Bazaar or Apps.
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on each
 action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's fourteen actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's fifteen actions annotate
 `/usr/bin/chairlift-helper`. Both helper policies use
 `org.freedesktop.policykit.exec.argv1` to select exactly one action for the
 first helper argument. PolicyKit does not validate the remainder of argv, so
@@ -674,8 +700,8 @@ accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
 `driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
 [--dry-run]`, `pin <YYYYMMDD> [--dry-run]`, `unpin [--dry-run]`,
-`kvm-enable [--dry-run]`, `docker-enable [--dry-run]`, and
-`docker-disable [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
+`kvm-enable [--dry-run]`, `docker-enable [--dry-run]`,
+`docker-disable [--dry-run]`, and `docker-update [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
 action. The wrapper packages therefore always invoke their fixed `HelperPath`

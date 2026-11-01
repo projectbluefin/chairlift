@@ -95,6 +95,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/devmenu/devmenu.go", Func: "execCommand"},                   // dconf
 	{File: "internal/devtools/devtools.go", Func: "command"},                     // limactl / systemctl read; privilege mutations dispatch through ublue.runHelper
 	{File: "internal/devtools/devtools.go", Func: "NSLKVMGroupMember"},           // getent group kvm / id -G -- <user> (read-only account-group queries)
+	{File: "internal/dockerbrew/install.go", Func: "runSmoke"},                   // staged runc/dockerd --version inside chairlift-helper docker-enable/update (already root; never pkexec)
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},                 // distrobox
 	{File: "internal/distrobox/distrobox.go", Func: "HasContainers"},             // distrobox list (query)
 	{File: "internal/firstrun/settings.go", Func: "execCommand"},                 // gsettings
