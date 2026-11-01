@@ -672,3 +672,16 @@ func TestDamaskPreviewsDoNotClaimSuccess(t *testing.T) {
 		}
 	}
 }
+
+// TestWallpaperApplyPreviewDoesNotClaimAChange keeps a dry-run selection from
+// reading as an applied background, and names the picture either way.
+func TestWallpaperApplyPreviewDoesNotClaimAChange(t *testing.T) {
+	preview := WallpaperApply(true, "Bluefin 01 - January")
+	if !strings.Contains(preview, "[DRY-RUN]") || !strings.Contains(preview, "no changes made") || !strings.Contains(preview, "Bluefin 01 - January") {
+		t.Errorf("preview %q must name the picture and say nothing changed", preview)
+	}
+	live := WallpaperApply(false, "Bluefin 01 - January")
+	if strings.Contains(live, "DRY-RUN") || !strings.Contains(live, "Bluefin 01 - January") {
+		t.Errorf("live toast %q", live)
+	}
+}

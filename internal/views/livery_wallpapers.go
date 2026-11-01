@@ -18,10 +18,11 @@ import (
 )
 
 // buildWallpapersGroup discovers the external collection without constructing
-// an unavailable-tool card, then the Damask control. The collection needs
-// Homebrew and Damask needs Flatpak; neither hides the other. One background
-// pass discovers both so the rows land in a stable order. Other Livery
-// controls have independent lifetimes.
+// an unavailable-tool card, then the Damask control, then the channel
+// selector. The collection needs Homebrew, Damask needs Flatpak, and the
+// selector needs GNOME and an installed collection; none hides another. One
+// background pass discovers all three so the rows land in a stable order.
+// Other Livery controls have independent lifetimes.
 func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 	var paths []string
 	if cfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); cfg != nil {
@@ -30,6 +31,9 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 	homebrewCapable := uh.capabilities.Has(capability.Homebrew)
 	flatpakCapable := uh.capabilities.Has(capability.Flatpak)
 	go func() {
+		// Deferred calls run last-registered first: Damask lands before the
+		// channel selector, whose desktop check may take up to its timeout.
+		defer uh.discoverWallpaperChannels(page)
 		if flatpakCapable {
 			defer uh.discoverDamask(page)
 		}

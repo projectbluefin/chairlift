@@ -1693,3 +1693,12 @@ are constructed once; status requests use generation guards, and installation
 invalidates earlier observations through the shared bundle install gate.
 Only a successful live install refreshes inventories. The headless Livery
 backend and rotation retain no Homebrew dependency.
+The group's Wallpaper Channel selector is `internal/livery/wallpaper.go` plus
+`internal/views/livery_wallpaper_channels.go`. The backend reads GNOME's
+`gnome-background-properties` catalogs with GNOME Settings' rules and writes
+only GNOME's own background keys through the existing `gsettings` seam,
+confirming by readback; it adds no ChairLift setting. The view builds its
+combo, grid and handlers once, swaps the model and tiles on refresh (chained
+into the group's `wallpaperRefresh`, so a collection installed from the same
+group appears), decodes thumbnails at tile size off the main thread, and
+guards observations and thumbnails with generations.
