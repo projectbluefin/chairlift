@@ -403,6 +403,6 @@ and unknown desktops run no background read at all. A failed read is shown as
 Settings does, and confirms both by reading them back; the badge moves only
 then; every read that can fail happens before the first write, and each pick
 ends by reading the desktop again. A catalog that cannot be read is named in
-the subtitle ("Some collections couldn't be read."). The selector shares the
-Wallpapers group's Homebrew-or-Flatpak floor. Dry-run logs the write and
-changes nothing.
+the subtitle ("Some collections couldn't be read."). The selector needs
+neither Homebrew nor Flatpak; it appears on GNOME whenever a collection is
+installed. Dry-run logs the write and changes nothing.

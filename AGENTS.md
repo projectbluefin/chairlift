@@ -1552,8 +1552,8 @@ An agent must not break these:
   fabricated. It is GNOME-only: off GNOME nothing is read or written, and a
   failed check is unknown with **Try Again**, never "unsupported" (with no
   collection installed there is nothing to offer, so nothing is shown). It
-  is built inside the group, so it shares the group's Homebrew-or-Flatpak
-  floor; it adds no capability of its own. A catalog that cannot be read is
+  is built inside the group but needs neither Homebrew nor Flatpak; it adds
+  no capability of its own. A catalog that cannot be read is
   reported in the subtitle rather than passing for a complete list. Only an
   explicit pick writes `org.gnome.desktop.background` `picture-uri` and
   `picture-uri-dark` (and `picture-options` when it is `none`); success is a
