@@ -49,6 +49,17 @@ func main() {
 		}
 		return
 	}
+	// Wallpaper rotation is the same shape: its user timer runs
+	// `chairlift --rotate-wallpaper <channel>` with no display.
+	if len(os.Args) == 3 && os.Args[1] == livery.WallpaperRotateFlag {
+		ctx, cancel := livery.DefaultContext()
+		defer cancel()
+		if err := livery.RotateWallpaper(ctx, os.Args[2]); err != nil {
+			log.Printf("livery: wallpaper rotation: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// A gaming image's panel mark is applied here, off the main thread,
 	// rather than waiting for the user to open the Livery page.

@@ -38,6 +38,8 @@ type wallpaperObservation struct {
 	channels     []livery.WallpaperChannel
 	probeErr     error
 	discoveryErr error
+	rotation     livery.WallpaperRotation
+	rotationErr  error
 }
 
 func (o wallpaperObservation) state() pageview.WallpaperChannelsState {
@@ -60,6 +62,12 @@ func observeWallpaperChannels() wallpaperObservation {
 	o.channels, o.discoveryErr = livery.WallpaperChannels(livery.WallpaperDataDirs())
 	if o.discoveryErr != nil {
 		log.Printf("wallpapers: %v", o.discoveryErr)
+	}
+	if o.supported {
+		o.rotation, o.rotationErr = livery.ObserveWallpaperRotation(ctx)
+		if o.rotationErr != nil {
+			log.Printf("wallpapers: %v", o.rotationErr)
+		}
 	}
 	return o
 }
@@ -91,6 +99,17 @@ type wallpaperChannels struct {
 	gate    actionstate.Gate
 	observe actionstate.RefreshGate
 	thumbs  actionstate.RefreshGate
+
+	// The opt-in rotation switch. rotation is the last observed state, kept
+	// when a later check fails; rotateSuppress silences the switch's
+	// state-set while the page restores that state.
+	rotateRow      *adw.ActionRow
+	rotateSwitch   *gtk.Switch
+	rotateSpinner  *gtk.Spinner
+	rotateSuppress bool
+	rotation       livery.WallpaperRotation
+	rotationErr    error
+	rotateGate     actionstate.Gate
 }
 
 // discoverWallpaperChannels runs off the main thread from buildWallpapersGroup.
@@ -126,7 +145,7 @@ func (uh *UserHome) refreshWallpaperChannels() {
 	go func() {
 		observation := observeWallpaperChannels()
 		sgtk.RunOnMainThread(func() {
-			if !wc.observe.IsCurrent(ticket) || wc.gate.Running() {
+			if !wc.observe.IsCurrent(ticket) || wc.gate.Running() || wc.rotateGate.Running() {
 				// A pick's completion re-reads, and a newer refresh lands on
 				// its own; only the retry control needs restoring here.
 				if wc.retry != nil {
@@ -149,6 +168,7 @@ func (uh *UserHome) showWallpaperChannels(o wallpaperObservation) {
 	case pageview.WallpaperChannelsAvailable:
 		uh.ensureWallpaperSelector(wc)
 		uh.setWallpaperChannels(wc, o.channels, o.currentURI, o.discoveryErr != nil)
+		uh.setWallpaperRotation(wc, o.rotation, o.rotationErr)
 	}
 	if wc.unknownRow != nil {
 		wc.unknownRow.SetVisible(state == pageview.WallpaperChannelsUnknown)
@@ -156,6 +176,7 @@ func (uh *UserHome) showWallpaperChannels(o wallpaperObservation) {
 	}
 	if wc.row != nil {
 		wc.row.SetVisible(state == pageview.WallpaperChannelsAvailable)
+		wc.rotateRow.SetVisible(state == pageview.WallpaperChannelsAvailable)
 		wc.grid.SetVisible(state == pageview.WallpaperChannelsAvailable)
 	}
 }
@@ -203,6 +224,17 @@ func (uh *UserHome) ensureWallpaperSelector(wc *wallpaperChannels) {
 	wc.onSelect = func(_ gobject.Object, _ uintptr) { uh.onWallpaperChannelSelected() }
 	row.ConnectNotify(&wc.onSelect)
 	group.Add(&row.Widget)
+
+	// Rotation is opt-in: the switch starts insensitive and off, and only a
+	// user's toggle (never a restore, which is suppressed) writes a timer.
+	wc.rotateSpinner = newActivitySpinner()
+	wc.rotateRow, wc.rotateSwitch = newSwitchRow(
+		pageview.Row{Title: pageview.WallpaperRotationTitle},
+		uh.onWallpaperRotationToggled,
+		wc.rotateSpinner,
+	)
+	wc.rotateRow.SetUseMarkup(false)
+	group.Add(&wc.rotateRow.Widget)
 
 	grid := gtk.NewFlowBox()
 	grid.SetSelectionMode(gtk.SelectionNoneValue)
@@ -300,6 +332,7 @@ func (uh *UserHome) drawWallpaperChannel(wc *wallpaperChannels, index int) {
 	}
 	channel := wc.channels[index]
 	wc.row.SetSubtitle(pageview.WallpaperChannelSubtitle(len(channel.Wallpapers), wc.incomplete))
+	uh.renderWallpaperRotation(wc)
 	previews := make([]string, len(channel.Wallpapers))
 	for i, wallpaper := range channel.Wallpapers {
 		picture, check, tile := newWallpaperTile(wallpaper.Name)
@@ -451,4 +484,101 @@ func (uh *UserHome) finishWallpaperPick(wc *wallpaperChannels, wallpaper livery.
 	}
 	wc.currentURI = livery.BackgroundURI(wallpaper.File)
 	uh.markCurrentWallpaper(wc)
+}
+
+// setWallpaperRotation records one rotation observation and redraws the
+// switch. A failed check keeps the last observed state and says so, rather
+// than reading as off. Main thread only.
+func (uh *UserHome) setWallpaperRotation(wc *wallpaperChannels, rotation livery.WallpaperRotation, err error) {
+	if err == nil {
+		wc.rotation = rotation
+	}
+	wc.rotationErr = err
+	uh.renderWallpaperRotation(wc)
+}
+
+// renderWallpaperRotation puts the observed rotation state on the switch and
+// its subtitle. Main thread only.
+func (uh *UserHome) renderWallpaperRotation(wc *wallpaperChannels) {
+	if wc.rotateRow == nil {
+		return
+	}
+	view := pageview.WallpaperRotationView{
+		On:            wc.rotation.On,
+		ChannelName:   wc.rotation.ChannelID,
+		Scheduled:     wc.rotation.Scheduled,
+		LastRunFailed: wc.rotation.LastRunFailed,
+		CheckFailed:   wc.rotationErr != nil,
+	}
+	for _, channel := range wc.channels {
+		if channel.ID == wc.rotation.ChannelID {
+			view.ChannelName = channel.Name
+		}
+	}
+	if !wc.rotation.Next.IsZero() {
+		view.Next = wc.rotation.Next.Local().Format("Mon 2 Jan 15:04")
+	}
+	shown := ""
+	if wc.shown >= 0 && wc.shown < len(wc.channels) {
+		shown = wc.channels[wc.shown].Name
+	}
+	wc.rotateRow.SetSubtitle(pageview.WallpaperRotationSubtitle(view, shown))
+	wc.rotateSuppress = true
+	wc.rotateSwitch.SetActive(wc.rotation.On)
+	wc.rotateSuppress = false
+	wc.rotateSwitch.SetSensitive(!wc.rotateGate.Running())
+}
+
+// onWallpaperRotationToggled turns rotation on for the channel on screen, or
+// off. It runs only for a user's toggle; the switch then shows the state the
+// user manager reports afterwards, so a failure or a preview springs back to
+// what is really scheduled and the switch stays retryable.
+func (uh *UserHome) onWallpaperRotationToggled(on bool) {
+	wc := uh.wallpaperChannels
+	if wc == nil || wc.rotateSuppress || wc.rotateSwitch == nil {
+		return
+	}
+	if on == wc.rotation.On && wc.rotationErr == nil {
+		return
+	}
+	if on && (wc.shown < 0 || wc.shown >= len(wc.channels)) {
+		return
+	}
+	if !wc.rotateGate.TryStart() {
+		return
+	}
+	var channel livery.WallpaperChannel
+	if on {
+		channel = wc.channels[wc.shown]
+	}
+	wc.observe.Begin() // An observation that predates this toggle must not land.
+	wc.rotateSwitch.SetSensitive(false)
+	setActivitySpinner(wc.rotateSpinner, true)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), wallpaperCommandTimeout)
+		defer cancel()
+		preview := dryrun.Enabled()
+		var err error
+		if on {
+			err = livery.EnableWallpaperRotation(ctx, channel.ID)
+		} else {
+			err = livery.DisableWallpaperRotation(ctx)
+		}
+		observed, observeErr := livery.ObserveWallpaperRotation(ctx)
+		if observeErr != nil {
+			log.Printf("wallpapers: %v", observeErr)
+		}
+		sgtk.RunOnMainThread(func() {
+			wc.observe.Begin() // An observation read during the change must not land.
+			wc.rotateGate.Reset()
+			setActivitySpinner(wc.rotateSpinner, false)
+			uh.setWallpaperRotation(wc, observed, observeErr)
+			if err != nil {
+				log.Printf("wallpapers: rotation: %v", err)
+				uh.toastAdder.ShowErrorToast(pageview.WallpaperRotationFailure(on))
+				return
+			}
+			uh.toastAdder.ShowToast(actionmsg.WallpaperRotation(preview, on, channel.Name))
+		})
+	}()
 }

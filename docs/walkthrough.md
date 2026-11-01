@@ -466,4 +466,7 @@ as Bluefin or Bazzite, and shows the chosen collection as thumbnails with the
 current picture marked. Picking a thumbnail makes it the desktop background
 for both light and dark styles; opening the page changes nothing. Another
 desktop shows no selector, and if the desktop could not be checked the row
-says so and offers **Try Again**.
+says so and offers **Try Again**. **Rotate Wallpapers** is off until you turn
+it on; it then changes the background once a day to the next picture in the
+collection on screen, and its row shows when the next change is due or why it
+is not running. Turning it off stops it.
