@@ -153,3 +153,58 @@ func WallpaperChannelSubtitle(count int, incomplete bool) string {
 	}
 	return WallpaperCount(count)
 }
+
+// WallpaperRotationTitle labels the opt-in rotation switch.
+const WallpaperRotationTitle = "Rotate Wallpapers"
+
+// WallpaperRotationView is the observed rotation state the switch's row
+// describes. It carries display values only, so the wording is testable
+// without GTK.
+type WallpaperRotationView struct {
+	// On means the user turned rotation on and the timer is installed.
+	On bool
+	// ChannelName is the rotating collection's name, or empty when unknown.
+	ChannelName string
+	// Scheduled means the user manager reports the timer enabled and active.
+	Scheduled bool
+	// Next is the formatted next change, or empty when unknown.
+	Next string
+	// LastRunFailed means the most recent change did not succeed.
+	LastRunFailed bool
+	// CheckFailed means the state could not be read.
+	CheckFailed bool
+}
+
+// WallpaperRotationSubtitle says what rotation is doing, from what the user
+// manager reported. It never claims a schedule that was not observed: a timer
+// that is installed but not running, or whose last change failed, says so
+// and points at the switch as the retry.
+func WallpaperRotationSubtitle(v WallpaperRotationView, shownChannel string) string {
+	switch {
+	case v.CheckFailed:
+		return "Couldn't check wallpaper rotation. Turn it off and on to try again."
+	case !v.On:
+		return fmt.Sprintf("Change to the next picture in %s once a day.", shownChannel)
+	case !v.Scheduled:
+		return "Rotation is turned on but isn't scheduled. Turn it off and on to try again."
+	case v.LastRunFailed:
+		return "The last wallpaper change failed. Check that the collection is still installed."
+	}
+	channel := v.ChannelName
+	if channel == "" {
+		channel = "a collection"
+	}
+	if v.Next != "" {
+		return fmt.Sprintf("Rotating through %s daily · Next change %s", channel, v.Next)
+	}
+	return fmt.Sprintf("Rotating through %s daily.", channel)
+}
+
+// WallpaperRotationFailure is the error toast for a failed toggle. The switch
+// returns to the observed state, so it is a retry.
+func WallpaperRotationFailure(enable bool) string {
+	if enable {
+		return "Couldn't turn on wallpaper rotation. Try again."
+	}
+	return "Couldn't turn off wallpaper rotation. Try again."
+}

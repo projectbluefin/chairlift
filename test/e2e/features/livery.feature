@@ -312,6 +312,22 @@ Feature: Livery
     And the "Bluefin 01 - January" mark in the Livery "Wallpapers" gallery is selected
     And no Livery command changed any setting
 
+  @stub.livery-tools @stub.livery-wallpaper-channels @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: Wallpaper rotation stays off until turned on, and a preview schedules nothing
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Rotate Wallpapers" switch in the Livery "Wallpapers" section is off
+    And the "Rotate Wallpapers" row in the Livery "Wallpapers" section says "Change to the next picture in Chairlift E2e once a day."
+    And no Livery command changed any setting
+    When I toggle the "Rotate Wallpapers" switch in the Livery "Wallpapers" section
+    Then a toast says "[DRY-RUN] Preview: daily wallpaper rotation through Chairlift E2e would be turned on — no changes made"
+    And the application log contains "[DRY-RUN] would write"
+    And the "Rotate Wallpapers" switch in the Livery "Wallpapers" section is off
+    And the "Rotate Wallpapers" switch in the Livery "Wallpapers" section is sensitive
+    And no Livery command changed any setting
+    And no wallpaper rotation timer was written under the home directory
+
   @stub.livery-tools @stub.livery-wallpaper-channels @env.XDG_CURRENT_DESKTOP=KDE
   Scenario: Another desktop is never offered a GNOME wallpaper write
     Given ChairLift is running
