@@ -139,3 +139,31 @@ func TestWallpaperChannelSubtitleSaysWhenSomeCollectionsWereUnreadable(t *testin
 		t.Fatalf("incomplete subtitle = %q; an unreadable catalog must not pass for a complete list", got)
 	}
 }
+
+func TestWallpaperRotationSubtitleReportsOnlyTheObservedSchedule(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		view WallpaperRotationView
+		want string
+	}{
+		{"off names the channel on screen", WallpaperRotationView{}, "Change to the next picture in Bluefin once a day."},
+		{"scheduled names its channel and next change", WallpaperRotationView{On: true, ChannelName: "Bazzite", Scheduled: true, Next: "Mon 2 Nov 00:00"}, "Rotating through Bazzite daily · Next change Mon 2 Nov 00:00"},
+		{"scheduled without a next time", WallpaperRotationView{On: true, ChannelName: "Bazzite", Scheduled: true}, "Rotating through Bazzite daily."},
+		{"installed but not running", WallpaperRotationView{On: true, ChannelName: "Bazzite"}, "isn't scheduled"},
+		{"last change failed", WallpaperRotationView{On: true, Scheduled: true, LastRunFailed: true}, "last wallpaper change failed"},
+		{"check failed", WallpaperRotationView{On: true, Scheduled: true, CheckFailed: true}, "Couldn't check wallpaper rotation"},
+	} {
+		got := WallpaperRotationSubtitle(tc.view, "Bluefin")
+		if !strings.Contains(got, tc.want) {
+			t.Errorf("%s: subtitle %q lacks %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestWallpaperRotationFailureIsARetry(t *testing.T) {
+	for _, enable := range []bool{true, false} {
+		if msg := WallpaperRotationFailure(enable); !strings.Contains(msg, "Try again") {
+			t.Errorf("failure toast %q must offer a retry", msg)
+		}
+	}
+}

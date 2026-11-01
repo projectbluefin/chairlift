@@ -790,3 +790,18 @@ func WallpaperApply(dryRun bool, name string) string {
 	}
 	return fmt.Sprintf("Wallpaper set to %s.", name)
 }
+
+// WallpaperRotation describes a confirmed rotation toggle. A preview writes
+// no timer and must not read as rotation having started or stopped.
+func WallpaperRotation(dryRun, enabled bool, channel string) string {
+	switch {
+	case dryRun && enabled:
+		return fmt.Sprintf("[DRY-RUN] Preview: daily wallpaper rotation through %s would be turned on — no changes made", channel)
+	case dryRun:
+		return "[DRY-RUN] Preview: wallpaper rotation would be turned off — no changes made"
+	case enabled:
+		return fmt.Sprintf("Wallpaper will change daily through %s.", channel)
+	default:
+		return "Wallpaper rotation turned off."
+	}
+}

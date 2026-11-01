@@ -1562,6 +1562,18 @@ An agent must not break these:
   leaves a stale badge. Opening or refreshing the page only reads.
   Thumbnails decode at tile size off the main thread (a 4K picture decoded
   whole is ~33 MB); the combo, grid and their signals are connected once.
+  **Rotate Wallpapers** is opt-in and never written on load: only a user's
+  toggle (the restore is suppressed) writes the `chairlift-wallpaper-rotate`
+  service and daily timer to `~/.config/systemd/user` and `enable --now`s the
+  timer, for the collection on screen. The service runs
+  `chairlift --rotate-wallpaper <collection>`, which short-circuits before
+  `app.New()` like `--rotate-livery` and applies the next picture through
+  `livery.ApplyBackground`. The unit files are rotation's only state — no
+  GSettings key — and the row reports the user manager's observed schedule,
+  a stopped timer, a failed last pass, or a failed check, never an assumed
+  one. Enable and disable are idempotent and restore the previous units on
+  failure; the collection ID is validated against a closed character set
+  before it reaches a unit file; everything is `dryrun.Enabled()`-gated.
 
 ## Documentation
 

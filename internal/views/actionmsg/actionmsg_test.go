@@ -685,3 +685,20 @@ func TestWallpaperApplyPreviewDoesNotClaimAChange(t *testing.T) {
 		t.Errorf("live toast %q", live)
 	}
 }
+
+// TestWallpaperRotationPreviewDoesNotClaimAChange keeps a dry-run toggle from
+// reading as rotation having started or stopped.
+func TestWallpaperRotationPreviewDoesNotClaimAChange(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		preview := WallpaperRotation(true, enabled, "Bluefin")
+		if !strings.Contains(preview, "[DRY-RUN]") || !strings.Contains(preview, "no changes made") {
+			t.Errorf("preview %q must say nothing changed", preview)
+		}
+		if live := WallpaperRotation(false, enabled, "Bluefin"); strings.Contains(live, "DRY-RUN") {
+			t.Errorf("live toast %q", live)
+		}
+	}
+	if on := WallpaperRotation(false, true, "Bluefin"); !strings.Contains(on, "Bluefin") {
+		t.Errorf("turning rotation on must name the channel: %q", on)
+	}
+}

@@ -206,7 +206,7 @@ The Updates page's `bootc_status_group` and `bootc_updates_group` load asynchron
 ### Native desktop settings module
 
 `cmd/chairlift` calls `deskenv.ConfigureSettingsModules` before `app.New()`
-and before dispatching `--rotate-livery`. The helper searches installed native
+and before dispatching `--rotate-livery` or `--rotate-wallpaper`. The helper searches installed native
 GIO module directories for `libdconfsettings.so`, including the current
 architecture's multiarch directory, and appends the first match to
 `GIO_EXTRA_MODULES` without duplicating entries or overriding
