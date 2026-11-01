@@ -7,22 +7,35 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 	sgtk "github.com/frostyard/snowkit/gtk"
+	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 )
 
 // buildWallpapersGroup discovers the external collection without constructing
-// an unavailable-tool card. Other Livery controls have independent lifetimes.
+// an unavailable-tool card, then the Damask control. The collection needs
+// Homebrew and Damask needs Flatpak; neither hides the other. One background
+// pass discovers both so the rows land in a stable order. Other Livery
+// controls have independent lifetimes.
 func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 	var paths []string
 	if cfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group"); cfg != nil {
 		paths = append(paths, cfg.BundlesPaths...)
 	}
+	homebrewCapable := uh.capabilities.Has(capability.Homebrew)
+	flatpakCapable := uh.capabilities.Has(capability.Flatpak)
 	go func() {
+		if flatpakCapable {
+			defer uh.discoverDamask(page)
+		}
+		if !homebrewCapable {
+			return
+		}
 		bundles, err := homebrew.AvailableBundles(paths)
 		if err != nil {
 			log.Printf("wallpapers: discovery: %v", err)
@@ -37,13 +50,7 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 				continue
 			}
 			sgtk.RunOnMainThread(func() {
-				if uh.wallpapersGroup == nil {
-					uh.wallpapersGroup = adw.NewPreferencesGroup()
-					uh.wallpapersGroup.SetTitle("Wallpapers")
-					uh.wallpapersGroup.SetDescription("Curated wallpaper collections for your desktop.")
-					page.Add(uh.wallpapersGroup)
-				}
-				group := uh.wallpapersGroup
+				group := uh.ensureWallpapersGroup(page)
 				row := adw.NewExpanderRow()
 				row.SetUseMarkup(false)
 				row.SetTitle("Wallpaper Collections")
@@ -127,4 +134,17 @@ func (uh *UserHome) buildWallpapersGroup(page *adw.PreferencesPage) {
 			})
 		}
 	}()
+}
+
+// ensureWallpapersGroup adds the Wallpapers group on first use, on the GTK
+// main thread. It is built only once a row lands in it, so a host with neither
+// the collection nor Damask keeps Livery without an empty group.
+func (uh *UserHome) ensureWallpapersGroup(page *adw.PreferencesPage) *adw.PreferencesGroup {
+	if uh.wallpapersGroup == nil {
+		uh.wallpapersGroup = adw.NewPreferencesGroup()
+		uh.wallpapersGroup.SetTitle(pageview.WallpaperGroupTitle)
+		uh.wallpapersGroup.SetDescription(pageview.WallpaperGroupFragment)
+		page.Add(uh.wallpapersGroup)
+	}
+	return uh.wallpapersGroup
 }

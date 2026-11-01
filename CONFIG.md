@@ -240,7 +240,7 @@ in `$HOME`. Wallpaper packages use Homebrew’s normal installation locations.
 - `livery_foundation_group`: Top Bar Icon; the GNOME top-bar menu mark, optionally advancing at each login (requires the Custom Command Menu GNOME extension; omitted on Plasma)
 - `livery_dock_group`: Files Icon; the Files application icon, set to a CNCF project's own color mark from cncf/artwork and chosen with a searchable picker, optionally advancing at each login. GNOME stores one icon per application, so this changes Files everywhere it is drawn, not only on the dock
 
-- `wallpapers_group`: Wallpapers; discovers `artwork.Brewfile` through the existing Apps `bundles_paths`, independently of whether either Apps group is enabled. Homebrew and a readable manifest are required. Only clicking Install or Update changes packages; this uses Homebrew’s existing install and tap-trust checks. No wallpaper setting or second settings store is created.
+- `wallpapers_group`: Wallpapers; discovers `artwork.Brewfile` through the existing Apps `bundles_paths`, independently of whether either Apps group is enabled. Homebrew and a readable manifest are required for the collection. Only clicking Install or Update changes packages; this uses Homebrew’s existing install and tap-trust checks. The group also holds one Damask (`app.drey.Damask`) row whenever Flatpak is present, independently of Homebrew: **Install** installs it system-wide from Flathub, **Open** starts it, and a failed Flatpak check shows **Try Again** instead of guessing. Damask owns its own feeds and settings. No wallpaper setting or second settings store is created.
 
 ### Help Page (`help_page`)
 
