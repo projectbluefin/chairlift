@@ -289,8 +289,10 @@ func TestProfileWriteWithoutAUserConfigDir(t *testing.T) {
 	if err := profile.Write("/opt/linux-mcp-server"); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	if _, err := os.Stat(profile.DesktopConfigHome()); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("desktop config home exists (%v); nothing should have been linked", err)
+	for _, name := range sharedDesktopSettings {
+		if _, err := os.Lstat(filepath.Join(profile.DesktopConfigHome(), name)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s exists (%v); nothing should have been linked", name, err)
+		}
 	}
 }
 

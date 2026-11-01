@@ -1,6 +1,7 @@
 package troubleshoot
 
 import (
+	"encoding/json"
 	"errors"
 	"net/url"
 	"os"
@@ -322,7 +323,7 @@ func TestProfileWriteStaysInsideTheProfile(t *testing.T) {
 		}
 		return nil
 	})
-	want := []string{profile.HintsPath(), profile.ConfigPath()}
+	want := []string{profile.HintsPath(), profile.ConfigPath(), profile.DesktopSettingsPath()}
 	slices.Sort(written)
 	slices.Sort(want)
 	if !reflect.DeepEqual(written, want) {
@@ -330,6 +331,82 @@ func TestProfileWriteStaysInsideTheProfile(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(profile.HintsPath()); string(got) != Hints() {
 		t.Error("hints file does not hold the session instructions")
+	}
+}
+
+// GNOME Wayland asks the user to approve Electron global shortcuts at launch.
+// Missing or persisted Goose defaults are disabled; other choices are kept.
+func TestProfileWriteDisablesOnlyUnchosenGooseGlobalShortcuts(t *testing.T) {
+	cases := map[string]struct {
+		existing    string
+		focus       *string
+		quick       *string
+		legacy      *string
+		inWindowKey string
+	}{
+		"new profile": {},
+		"other settings": {
+			existing:    `{"theme":"dark","keyboardShortcuts":{"settings":"Ctrl+Shift+S"}}`,
+			inWindowKey: "Ctrl+Shift+S",
+		},
+		"chosen focus shortcut": {
+			existing: `{"keyboardShortcuts":{"focusWindow":"Ctrl+Alt+F"}}`,
+			focus:    new("Ctrl+Alt+F"),
+		},
+		"persisted defaults": {
+			existing:    `{"theme":"dark","keyboardShortcuts":{"focusWindow":"CommandOrControl+Alt+G","quickLauncher":"CommandOrControl+Alt+Shift+G","settings":"Ctrl+Shift+S"}}`,
+			inWindowKey: "Ctrl+Shift+S",
+		},
+		"legacy choice": {
+			existing: `{"globalShortcut":"Ctrl+Alt+L"}`,
+			legacy:   new("Ctrl+Alt+L"),
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			withUserConfig(t, t.TempDir())
+			profile := ProfileAt(t.TempDir())
+			if tc.existing != "" {
+				if err := os.MkdirAll(filepath.Dir(profile.DesktopSettingsPath()), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(profile.DesktopSettingsPath(), []byte(tc.existing), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := profile.Write("/opt/linux-mcp-server"); err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			data, err := os.ReadFile(profile.DesktopSettingsPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var settings struct {
+				Theme             string             `json:"theme"`
+				GlobalShortcut    *string            `json:"globalShortcut"`
+				KeyboardShortcuts map[string]*string `json:"keyboardShortcuts"`
+			}
+			if err := json.Unmarshal(data, &settings); err != nil {
+				t.Fatalf("settings are not JSON: %v\n%s", err, data)
+			}
+			if tc.legacy != nil {
+				if settings.GlobalShortcut == nil || *settings.GlobalShortcut != *tc.legacy || settings.KeyboardShortcuts != nil {
+					t.Errorf("settings = %s, want the legacy choice untouched", data)
+				}
+				return
+			}
+			for key, want := range map[string]*string{"focusWindow": tc.focus, "quickLauncher": tc.quick} {
+				got, ok := settings.KeyboardShortcuts[key]
+				if !ok || !reflect.DeepEqual(got, want) {
+					t.Errorf("%s = %v, present %v; want %v", key, got, ok, want)
+				}
+			}
+			if tc.inWindowKey != "" {
+				if got := settings.KeyboardShortcuts["settings"]; settings.Theme != "dark" || got == nil || *got != tc.inWindowKey {
+					t.Errorf("settings = %s, want other settings preserved", data)
+				}
+			}
+		})
 	}
 }
 

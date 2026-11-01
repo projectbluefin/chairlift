@@ -1071,7 +1071,10 @@ An agent must not break these:
   `https://mcp.projectbluefin.io/mcp` limited to `search_knowledge`; every
   other extension already in the profile file is carried over disabled, and
   Goose 1.53's platform extensions are written disabled; `hints.md` becomes
-  the profile's `.goosehints`. It then runs `llmman launch goose-desktop
+  the profile's `.goosehints`. Missing or Goose-default `focusWindow` and
+  `quickLauncher` entries in its desktop `Goose/settings.json` are set to null;
+  different choices and other settings are preserved, so GNOME does not ask
+  to approve Goose's default global shortcuts at launch. It then runs `llmman launch goose-desktop
   --model bluefin-active` (`troubleshoot.Command`) with those two variables
   and `homebrew.WithBrewPath`; llmman hands Goose its provider through the
   environment, so no provider, model, or key is written by anyone. Readiness

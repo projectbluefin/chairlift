@@ -1043,8 +1043,12 @@ dedicated profile under `$XDG_DATA_HOME/chairlift/troubleshooting`;
 `Profile.Write` rewrites its `config.yaml` (`RenderConfig`: `linux-tools`
 with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the
 `bluefin-knowledge` search enabled, every other extension disabled) and
-`.goosehints` atomically before every launch, and links the user's
+`.goosehints` atomically before every launch, sets missing or Goose-default
+`focusWindow` and `quickLauncher` entries in Goose Desktop's `settings.json`
+to null while preserving different choices and other settings, and links the user's
 `mimeapps.list` and `dconf` into the desktop app's own `XDG_CONFIG_HOME`.
+Without that, GNOME Wayland's GlobalShortcuts portal opens a keyboard-shortcut
+approval dialog for Goose's default global shortcuts when Goose starts.
 
 [`agentmode.ObserveLive`](../../internal/agentmode/readiness.go) evaluates,
 in order: supported architecture, `linux-mcp-server` and `goose-desktop`
