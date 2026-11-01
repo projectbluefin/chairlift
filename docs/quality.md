@@ -27,7 +27,11 @@ The repository's `Tests` workflow runs on pushes to `main`, on pull requests
 targeting `main`, and on every merge group the merge queue builds. Its jobs
 provide these independent signals:
 
-- **Lint** — `golangci-lint` over the Go source.
+- **Lint** — `golangci-lint` over the Go source, and
+  [zizmor](https://docs.zizmor.sh/) over the workflows, composite actions and
+  Dependabot configuration at medium severity and medium confidence
+  (projectbluefin/actions#674). Accepted findings are listed, each with its
+  reason, in `.github/zizmor.yml`.
 - **Unit Tests** — headless tests under `internal/...`, with atomic coverage.
 - **Race Detection** — the same internal test scope under the race detector.
 - **E2E** — `make e2e` under a headless GTK runtime, with the walkthrough
