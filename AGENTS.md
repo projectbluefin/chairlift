@@ -1543,6 +1543,21 @@ An agent must not break these:
   button whose label is the confirmed state (Install, Open, Try Again). A failed
   probe is unknown, not absent; an install is confirmed by Flatpak's inventory,
   not by the command returning; dry-run neither installs nor launches.
+  The Wallpaper Channel selector offers only pictures listed in an installed
+  `gnome-background-properties` catalog whose file is on disk; nothing is
+  fabricated. It is GNOME-only: off GNOME nothing is read or written, and a
+  failed check is unknown with **Try Again**, never "unsupported" (with no
+  collection installed there is nothing to offer, so nothing is shown). It
+  is built inside the group, so it shares the group's Homebrew-or-Flatpak
+  floor; it adds no capability of its own. A catalog that cannot be read is
+  reported in the subtitle rather than passing for a complete list. Only an
+  explicit pick writes `org.gnome.desktop.background` `picture-uri` and
+  `picture-uri-dark` (and `picture-options` when it is `none`); success is a
+  readback of both keys, every read that can fail runs before the first
+  write, and each pick ends by re-reading the desktop so a failure never
+  leaves a stale badge. Opening or refreshing the page only reads.
+  Thumbnails decode at tile size off the main thread (a 4K picture decoded
+  whole is ~33 MB); the combo, grid and their signals are connected once.
 
 ## Documentation
 

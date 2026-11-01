@@ -781,3 +781,12 @@ func DamaskOpen(dryRun bool) string {
 	}
 	return "Opening Damask…"
 }
+
+// WallpaperApply describes a confirmed desktop background change. A preview
+// writes nothing and must not read as an applied background.
+func WallpaperApply(dryRun bool, name string) string {
+	if dryRun {
+		return fmt.Sprintf("[DRY-RUN] Preview: the wallpaper would change to %s — no changes made", name)
+	}
+	return fmt.Sprintf("Wallpaper set to %s.", name)
+}

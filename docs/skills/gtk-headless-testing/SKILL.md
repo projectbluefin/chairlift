@@ -392,6 +392,19 @@ Keep discovery fixtures in the scenario directory and assert that page opening
 runs only bundle checks, while preview actions preserve the observed subtitle.
 For Wallpapers, use the `@livery` scenarios in `features/livery.feature`; this
 retains the existing shard assignment without adding a separate route or tag.
+Wallpaper channel scenarios need no new stub variable (the capped
+`chairlift_e2e` surface stays four): pick the desktop with
+`@env.XDG_CURRENT_DESKTOP=GNOME` (or `KDE` to prove nothing is read), and let
+`@stub.livery-wallpaper-channels` write the catalog and pictures into the
+scenario's own `XDG_DATA_HOME`, the way the casks do. The real Dakota
+`XDG_DATA_DIRS` still contributes its own catalogs, and channels are keyed by
+collection directory, so the fixture uses a directory no image ships
+(`chairlift-e2e`) to keep its picture count exact. The harness sets no desktop, so the app sees
+an unknown one; a scenario asserting the Wallpapers group is *absent* pins
+that explicitly (`@env.XDG_CURRENT_DESKTOP=X-Generic`), because the selector
+can build the group on GNOME. Use `KDE` only to exercise Plasma: it switches
+other Livery sections to their Plasma paths. Tiles are GtkFlowBox children with no AT-SPI action:
+Tab into the gallery, arrow to the tile, press Return.
 
 ## Asynchronous collection metadata
 

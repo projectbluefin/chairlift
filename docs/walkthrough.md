@@ -460,4 +460,10 @@ keeps the observed status. Other Livery controls remain available when the
 collection is absent. Wallpaper packages are managed here rather than in Apps.
 The **Damask** row has one button: **Install** adds it from Flathub, **Open**
 starts it, and **Try Again** re-checks when Flatpak could not answer. Damask
-chooses its own wallpaper feeds; ChairLift never changes them.
+chooses its own wallpaper feeds; ChairLift never changes them. On GNOME,
+**Wallpaper Channel** lists the wallpaper collections already installed, such
+as Bluefin or Bazzite, and shows the chosen collection as thumbnails with the
+current picture marked. Picking a thumbnail makes it the desktop background
+for both light and dark styles; opening the page changes nothing. Another
+desktop shows no selector, and if the desktop could not be checked the row
+says so and offers **Try Again**.

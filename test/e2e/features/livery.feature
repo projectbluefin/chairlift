@@ -240,7 +240,7 @@ Feature: Livery
     And the "Install" button in the "Wallpaper Collections" row is insensitive
     And Homebrew was never asked to "bundle install"
 
-  @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=brew
+  @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=brew @env.XDG_CURRENT_DESKTOP=X-Generic
   Scenario: A missing wallpaper manifest leaves the other Livery controls available
     Given ChairLift is running
     When I open the "Livery" page
@@ -256,7 +256,7 @@ Feature: Livery
     And the "Damask" row in the Livery "Wallpapers" section says "Install a wallpaper manager for online feeds."
     And I do not see "Wallpaper Collections"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=brew
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=brew @env.XDG_CURRENT_DESKTOP=X-Generic
   Scenario: A host without Flatpak offers no Damask and never asks Flatpak
     Given ChairLift is running
     When I open the "Livery" page
@@ -296,3 +296,37 @@ Feature: Livery
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And the "Install" button in the "Wallpaper Collections" row is sensitive
     And Homebrew was never asked to "bundle install"
+
+  @stub.livery-tools @stub.livery-wallpaper-channels @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: Picking an installed wallpaper previews the desktop background and opening the page writes nothing
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Wallpaper Channel" row in the Livery "Wallpapers" section says "2 wallpapers"
+    And the "Bluefin 01 - January" mark in the Livery "Wallpapers" gallery is selected
+    And the "Bluefin 02 - February" mark in the Livery "Wallpapers" gallery is not selected
+    And no Livery command changed any setting
+    When I pick the "Bluefin 02 - February" tile in the Livery "Wallpapers" gallery
+    Then a toast says "[DRY-RUN] Preview: the wallpaper would change to Bluefin 02 - February — no changes made"
+    And the application log contains "[DRY-RUN] would set org.gnome.desktop.background picture-uri=file://"
+    And the "Bluefin 01 - January" mark in the Livery "Wallpapers" gallery is selected
+    And no Livery command changed any setting
+
+  @stub.livery-tools @stub.livery-wallpaper-channels @env.XDG_CURRENT_DESKTOP=KDE
+  Scenario: Another desktop is never offered a GNOME wallpaper write
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the Livery page never ran "gsettings get org.gnome.desktop.background"
+    And I do not see "Wallpaper Channel"
+
+  @stub.livery-tools @stub.livery-wallpaper-channels @stub.livery-background-broken @env.XDG_CURRENT_DESKTOP=GNOME
+  Scenario: A failed desktop check offers a retry instead of hiding the wallpapers
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Wallpaper Channels" row in the Livery "Wallpapers" section says "Couldn't check which wallpapers this desktop can use."
+    And I do not see "Bluefin 01 - January"
+    When I press the "Try Again" button in the Livery "Wallpapers" section
+    Then the "Wallpaper Channels" row in the Livery "Wallpapers" section says "Couldn't check which wallpapers this desktop can use."
+    And no Livery command changed any setting

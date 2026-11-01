@@ -256,7 +256,7 @@ authorization rule.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only. With Flatpak, one Damask wallpaper manager row: Install when absent, Open when installed, Try Again when the check failed |
+| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only. With Flatpak, one Damask wallpaper manager row: Install when absent, Open when installed, Try Again when the check failed. On GNOME, a Wallpaper Channel selector shows the installed collections as thumbnails; a pick sets the desktop background |
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
 | App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
 | Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
@@ -388,3 +388,21 @@ reasons are available in Help. Check failures display Indeterminate and remain
 retryable. Failed installs and dry-run previews preserve the last observation;
 a confirmed live success refreshes collection states and constructed Homebrew
 inventories. The pure `internal/livery` backend does not import Homebrew.
+
+The Wallpaper Channel selector lists only pictures already on disk. It reads
+every `gnome-background-properties/*.xml` catalog GNOME Settings reads, user
+data directory first, and groups entries by the collection directory under
+`backgrounds/` (Bluefin, Bluefin Extra, Bazzite and Framework first). It applies
+GNOME Settings' own catalog rules: deleted and `(none)` entries are skipped,
+relative names resolve against the catalog, and a missing file is not offered.
+A day/night slideshow is previewed by its first still. It is offered only when
+the session is GNOME and `org.gnome.desktop.background` is installed; Plasma
+and unknown desktops run no background read at all. A failed read is shown as
+**Try Again**, not as unsupported. A pick sets `picture-uri`, then
+`picture-uri-dark` from the catalog's dark picture or the same one, as GNOME
+Settings does, and confirms both by reading them back; the badge moves only
+then; every read that can fail happens before the first write, and each pick
+ends by reading the desktop again. A catalog that cannot be read is named in
+the subtitle ("Some collections couldn't be read."). The selector shares the
+Wallpapers group's Homebrew-or-Flatpak floor. Dry-run logs the write and
+changes nothing.

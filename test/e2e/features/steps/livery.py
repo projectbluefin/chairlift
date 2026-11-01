@@ -379,6 +379,34 @@ def step_gallery_tile_state(context, name, section, state):
     assert ok, f"the {name!r} mark in the {section!r} gallery is not {state}"
 
 
+@step('I pick the "{name}" tile in the Livery "{section}" gallery')
+def step_pick_gallery_tile(context, name, section, presses=120):
+    """Reach a gallery tile by keyboard and press Return.
+
+    A GtkFlowBox child publishes no AT-SPI action either, so focus travels as
+    a keyboard user moves it: Tab into the gallery, arrow keys to the tile,
+    then Return, which GtkFlowBox turns into child-activated.
+    """
+    for _ in range(presses):
+        tiles = [
+            n for n in atspi.descendants(_section(context, section), only_showing=True)
+            if atspi.role(n) in GALLERY_TILE_ROLES
+        ]
+        names = [_texts(t) for t in tiles]
+        target = next((i for i, texts in enumerate(names) if name in texts), None)
+        if target is None:
+            raise AssertionError(f"no {name!r} tile in the {section!r} gallery; tiles are {names}")
+        current = next((i for i, t in enumerate(tiles) if atspi.focused(t) or _has_focus(t)), None)
+        if current == target:
+            atspi.press("Return")
+            return
+        if current is None:
+            atspi.press_and_settle(context.app, "Tab")
+        else:
+            atspi.press_and_settle(context.app, "Right" if current < target else "Left")
+    raise AssertionError(f"keyboard focus never reached the {name!r} tile in {presses} key presses")
+
+
 # ---------------------------------------------------------------- toasts
 
 
@@ -480,6 +508,14 @@ def step_no_mutating_calls(context):
 def step_ran(context, command):
     ok = atspi.poll(lambda: command in _calls(context))
     assert ok, f"{command!r} never ran; recorded calls: {_calls(context)}"
+
+
+@then('the Livery page never ran "{command}"')
+def step_never_ran(context, command):
+    # Give a late worker the chance to misfire before judging.
+    atspi.poll(lambda: False, timeout=2)
+    ran = [c for c in _calls(context) if c.startswith(command)]
+    assert not ran, f"{command!r} ran: {ran}"
 
 
 @then("no icon was written under the home directory")

@@ -982,7 +982,15 @@ func gsettingsGet(ctx context.Context, schema, key string) (string, error) {
 		}
 		return "", fmt.Errorf("livery: reading %s %s: %w: %s", schema, key, err, strings.TrimSpace(out))
 	}
-	return unquote(strings.TrimSpace(out)), nil
+	return unquote(valueLine(out)), nil
+}
+
+// valueLine is the value `gsettings get` printed. runCommand combines stdout
+// and stderr, and GLib may print a warning before the value on a successful
+// read; the value is always the last line.
+func valueLine(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 func gsettingsSet(ctx context.Context, schema, key, value string) error {
