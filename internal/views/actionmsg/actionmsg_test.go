@@ -653,3 +653,22 @@ func TestBundleInstallPreviewDoesNotClaimSuccess(t *testing.T) {
 		t.Fatal("live install described as preview")
 	}
 }
+
+// TestDamaskPreviewsDoNotClaimSuccess keeps a dry-run install or open from
+// reading as an installed or running manager, and a live open from claiming a
+// wallpaper change Damask owns.
+func TestDamaskPreviewsDoNotClaimSuccess(t *testing.T) {
+	for name, preview := range map[string]string{"install": DamaskInstall(true), "open": DamaskOpen(true)} {
+		if !strings.Contains(preview, "[DRY-RUN]") || !strings.Contains(preview, "no changes made") || !strings.Contains(preview, "Damask would") {
+			t.Errorf("%s preview %q must say what would happen and that nothing changed", name, preview)
+		}
+	}
+	for name, live := range map[string]string{"install": DamaskInstall(false), "open": DamaskOpen(false)} {
+		if strings.Contains(live, "DRY-RUN") || !strings.Contains(live, "Damask") {
+			t.Errorf("%s live toast %q", name, live)
+		}
+		if strings.Contains(strings.ToLower(live), "wallpaper") {
+			t.Errorf("%s live toast %q claims a wallpaper result Damask owns", name, live)
+		}
+	}
+}

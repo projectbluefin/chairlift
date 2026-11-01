@@ -89,6 +89,16 @@ type UserHome struct {
 	wallpaperRefresh    func()
 	wallpapersGroup     *adw.PreferencesGroup
 
+	// The single stateful Damask control in the Wallpapers group; nil unless
+	// Flatpak can install or open Damask. wallpaperDamaskState is the last
+	// confirmed state, which names the button's next action, and the gate
+	// admits one install, open or re-check at a time.
+	wallpaperDamaskRow     *adw.ActionRow
+	wallpaperDamaskButton  *gtk.Button
+	wallpaperDamaskSpinner *gtk.Spinner
+	wallpaperDamaskState   pageview.DamaskState
+	wallpaperDamaskGate    actionstate.Gate
+
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.
 	formulaButtons buttonRoute

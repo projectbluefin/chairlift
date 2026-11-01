@@ -240,19 +240,51 @@ Feature: Livery
     And the "Install" button in the "Wallpaper Collections" row is insensitive
     And Homebrew was never asked to "bundle install"
 
-  @config.apps-bundles @stub.apps-brew
+  @config.apps-bundles @stub.apps-brew @env.CHAIRLIFT_CAPABILITIES=brew
   Scenario: A missing wallpaper manifest leaves the other Livery controls available
     Given ChairLift is running
     When I open the "Livery" page
     Then the Livery "Files Icon" section is shown
     And the Livery "Wallpapers" section is not shown
 
-  @config.apps-bundles @env.CHAIRLIFT_CAPABILITIES=flatpak
-  Scenario: A host without Homebrew keeps Livery without a wallpaper package card
+  @config.apps-bundles @stub.apps-flatpak @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=flatpak
+  Scenario: A host without Homebrew still offers Damask but no wallpaper package card
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "Files Icon" section is shown
+    And the Livery "Wallpapers" section is shown
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a wallpaper manager for online feeds."
+    And I do not see "Wallpaper Collections"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @env.CHAIRLIFT_CAPABILITIES=brew
+  Scenario: A host without Flatpak offers no Damask and never asks Flatpak
     Given ChairLift is running
     When I open the "Livery" page
     Then the Livery "Files Icon" section is shown
     And the Livery "Wallpapers" section is not shown
+    And Flatpak was never asked to "list"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.livery-tools
+  Scenario: Installing Damask previews under dry run without running Flatpak
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a wallpaper manager for online feeds."
+    When I press the "Install" button in the Livery "Wallpapers" section
+    Then a toast says "[DRY-RUN] Preview: Damask would be installed — no changes made"
+    And the "Damask" row in the Livery "Wallpapers" section says "Install a wallpaper manager for online feeds."
+    And Flatpak was never asked to "install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak-damask @stub.livery-tools
+  Scenario: Opening an installed Damask previews under dry run without launching it
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the "Damask" row in the Livery "Wallpapers" section says "Manage wallpaper feeds from Bing, Wallhaven, NASA and more."
+    When I press the "Open" button in the Livery "Wallpapers" section
+    Then a toast says "[DRY-RUN] Preview: Damask would open — no changes made"
+    And Flatpak was never asked to "run"
+    And Flatpak was never asked to "install"
 
   @config.livery-wallpapers-only @stub.apps-brew @stub.apps-collections
   Scenario: Wallpaper actions work when Apps groups are unconstructed

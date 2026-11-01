@@ -444,9 +444,13 @@ drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.
 
 Within Livery, **Wallpapers** appears when Homebrew and the configured external
-wallpaper collection are available. Expand **Wallpaper Collections** to inspect
+wallpaper collection are available, or when Flatpak can install or open the
+Damask wallpaper manager. Expand **Wallpaper Collections** to inspect
 its actual packages. Its subtitle reports Installed, Update Available,
 Not Installed or Indeterminate; choose **Install** or **Update** explicitly.
 Opening the page never installs anything. A preview restores the action and
 keeps the observed status. Other Livery controls remain available when the
 collection is absent. Wallpaper packages are managed here rather than in Apps.
+The **Damask** row has one button: **Install** adds it from Flathub, **Open**
+starts it, and **Try Again** re-checks when Flatpak could not answer. Damask
+chooses its own wallpaper feeds; ChairLift never changes them.

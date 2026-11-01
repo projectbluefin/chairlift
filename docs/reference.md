@@ -255,7 +255,7 @@ authorization rule.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only |
+| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only. With Flatpak, one Damask wallpaper manager row: Install when absent, Open when installed, Try Again when the check failed |
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
 | App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
 | Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
@@ -379,7 +379,10 @@ The Livery Wallpapers group owns `artwork.Brewfile`; Apps omits that collection
 and retains its other collection owners, including standalone slideshow tools.
 The configured Apps bundle directories supply discovery even when Apps inventory
 or collections are disabled. Missing Homebrew or a missing/unreadable manifest
-omits the package group without affecting profile or icon controls. Capability
+omits the collection row without affecting profile or icon controls. The Damask
+row needs only Flatpak, so it can build the group on a host without Homebrew;
+its one button installs Damask system-wide from Flathub or opens it with
+`flatpak run`, and an install counts only once Flatpak lists the app. Capability
 reasons are available in Help. Check failures display Indeterminate and remain
 retryable. Failed installs and dry-run previews preserve the last observation;
 a confirmed live success refreshes collection states and constructed Homebrew

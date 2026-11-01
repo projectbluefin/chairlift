@@ -1534,6 +1534,10 @@ An agent must not break these:
   owners. Opening/refreshing never installs; explicit actions share the bundle
   install gate, invalidate old status generations, and refresh inventories only
   on live success. The pure `internal/livery` backend stays Homebrew-free.
+  The group's Damask row is gated on Flatpak alone, never on Homebrew: one
+  button whose label is the confirmed state (Install, Open, Try Again). A failed
+  probe is unknown, not absent; an install is confirmed by Flatpak's inventory,
+  not by the command returning; dry-run neither installs nor launches.
 
 ## Documentation
 
