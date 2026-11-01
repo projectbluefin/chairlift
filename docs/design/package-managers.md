@@ -822,7 +822,7 @@ Enable runs in this order, after the Developer Mode prerequisite above:
      left alone.
   6. Under a lock, `Install` smoke-runs `runc --version` and
      `dockerd --version`. It writes `manifest.json`, renames the set to
-     `/usr/local/libexec/docker/<set-id>`, swaps the `current` link
+     `/var/lib/chairlift/docker/<set-id>`, swaps the `current` link
      atomically, and prunes older sets (best-effort once the swap is done).
      Before the swap it writes a root-owned `.restart-pending` marker; while
      it exists, a rerun over the same set still reports a change, and the
@@ -840,9 +840,11 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   are moby's upstream units, with `ExecStart` and `PATH` pointing at
   `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
   existing file without that marker is never overwritten. Next it runs
-  `systemctl daemon-reload`. When SELinux is enforcing and `restorecon`
-  exists, it runs `restorecon -RF /usr/local/libexec/docker`, so
-  container-selinux's runtime label applies. When the runtime changed and the
+  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  equivalence rule `semanage fcontext -a -e /usr/libexec/docker
+  /var/lib/chairlift/docker` if missing and runs `restorecon -RF
+  /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
+  an enforcing host without both tools is refused before any download. When the runtime changed and the
   daemon on `/run/docker.sock` reports no containers running, it runs
   `systemctl try-restart docker.service`, which does nothing to a stopped
   service. If containers are running, or the query fails, it prints

@@ -40,12 +40,13 @@ work itself, without caller-supplied values:
    GHCR blob address of its indexed SHA-256.
 3. It downloads each blob anonymously and rejects a body whose SHA-256 differs.
 4. It extracts only the mapped regular files into a root-owned staging
-   directory under `/usr/local/libexec/docker`. Traversal, absolute paths, and
+   directory under `/var/lib/chairlift/docker` (`/usr` is read-only on bootc
+   and `/usr/local` is a symlink into `/var` that may not exist). Traversal, absolute paths, and
    devices are refused. Dynamic ELF files get the system loader as `PT_INTERP`
    and `$ORIGIN/../lib` as their search path. Static binaries are unchanged.
 5. It smoke-runs `runc --version` and `dockerd --version`, writes a
    world-readable manifest of the source bottles, then atomically repoints
-   `/usr/local/libexec/docker/current`. Older sets are pruned.
+   `/var/lib/chairlift/docker/current`. Older sets are pruned.
 6. It writes `docker.service` and `docker.socket` into `/etc/systemd/system`.
    Each begins with a `# Managed by chairlift-helper` marker. An existing unit
    without the marker is never overwritten. An image-provided

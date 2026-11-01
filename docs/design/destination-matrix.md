@@ -122,7 +122,7 @@ Provider-specific safety remains with each live owner:
   `docker-enable` (a possible second authentication) and only after it
   succeeds retires a rootless user daemon. Image units (Bluefin DX) win; otherwise the helper
   installs the daemon from Homebrew bottles it verifies against the signed
-  formula index into root-owned `/usr/local/libexec/docker`, writes
+  formula index into root-owned `/var/lib/chairlift/docker`, writes
   marker-bearing units, and creates the `docker` group when missing; root
   never executes the user's Homebrew prefix (ADR-0024). The user-scope CLI
   formulae follow. Its expander labels the daemon formulae **Homebrew,

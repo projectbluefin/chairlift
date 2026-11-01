@@ -2,7 +2,7 @@
 
 The fixture image ships no Docker. The real fixed helper downloads Homebrew's
 signed formula index and the docker-engine bottle set itself, verifies them,
-and installs a root-owned runtime under /usr/local/libexec/docker, so this
+and installs a root-owned runtime under /var/lib/chairlift/docker, so this
 gate proves the production install path rather than a baked package. The
 enclosing rootless Podman namespace owns both native managers, HOME, the
 system Docker socket, and all daemon data; no host bus/socket is used.
@@ -46,7 +46,7 @@ SOCKET = Path("/var/run/docker.sock")
 VOLUME = "chairlift-system-integration"
 
 # internal/dockerbrew's fixed layout and daemon-side formula set.
-RUNTIME_ROOT = Path("/usr/local/libexec/docker")
+RUNTIME_ROOT = Path("/var/lib/chairlift/docker")
 CURRENT = RUNTIME_ROOT / "current"
 FORMULAE = ["docker-engine", "containerd", "runc", "tini", "libpathrs", "libseccomp"]
 BINARIES = {"dockerd", "docker-proxy", "containerd", "containerd-shim-runc-v2", "runc", "docker-init"}

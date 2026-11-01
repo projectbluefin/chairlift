@@ -188,7 +188,7 @@ Docker is rootful system Docker with Bluefin DX parity. On an image that ships
 `/usr/lib/systemd/system/docker.service`, the fixed `docker-enable` helper
 enables that Docker. Otherwise the helper installs the daemon from Homebrew
 bottles it verifies against Homebrew's signed formula index into root-owned
-`/usr/local/libexec/docker`, writes marker-bearing units to
+`/var/lib/chairlift/docker`, writes marker-bearing units to
 `/etc/systemd/system`, and creates the `docker` group when missing; root never
 executes the user's Homebrew prefix
 ([ADR-0024](docs/adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).

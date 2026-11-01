@@ -647,7 +647,7 @@ units it wrote earlier and enables the image's `docker.service` and
 `internal/dockerbrew` verifies Homebrew's JWS-signed formula index against
 the compiled-in `homebrew-1` key, downloads the fixed daemon formula set's
 bottles from GHCR by the SHA-256s that index names, extracts only mapped
-files into root-owned `/usr/local/libexec/docker`, patches dynamic ELF
+files into root-owned `/var/lib/chairlift/docker`, patches dynamic ELF
 interpreters and search paths to the system loader and `$ORIGIN/../lib`,
 smoke-runs `runc` and `dockerd`, and swaps the `current` link atomically. The
 helper then writes marker-bearing `docker.service`/`docker.socket` units to

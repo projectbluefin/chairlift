@@ -892,7 +892,7 @@ An agent must not break these:
   (no traversal, absolute names, devices, or followed symlinks); dynamic ELF
   files get the system loader as interpreter and `$ORIGIN/../lib` as their
   search path. `dockerbrew.Install` smoke-runs `runc` and `dockerd`, writes a
-  world-readable manifest, swaps `/usr/local/libexec/docker/current`
+  world-readable manifest, swaps `/var/lib/chairlift/docker/current`
   atomically under a lock, and prunes older sets; it refuses an install root
   that is a foreign symlink or not root-owned. The helper writes
   `docker.service` and `docker.socket` to `/etc/systemd/system` with the
@@ -901,14 +901,16 @@ An agent must not break these:
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
   before. Otherwise it creates `docker` with `groupadd -f -r` when neither
-  `/etc/group` nor the image's `/usr/lib/group` defines it, runs
-  `restorecon -RF /usr/local/libexec/docker` only when SELinux is enforcing
-  and `restorecon` exists (container-selinux labels that path for
-  container runtimes), adds the `PKEXEC_UID` account, enables `docker.socket`,
+  `/etc/group` nor the image's `/usr/lib/group` defines it. When SELinux is
+  enforcing it refuses a host without both `semanage` and `restorecon`, adds
+  the equivalence rule `semanage fcontext -a -e /usr/libexec/docker
+  /var/lib/chairlift/docker` when missing (container-selinux labels only
+  `/usr/libexec/docker` as a container runtime), and runs `restorecon -RF
+  /var/lib/chairlift/docker`. It then adds the `PKEXEC_UID` account, enables `docker.socket`,
   starts `docker.service`, and `try-restart`s it when the runtime changed.
   Both commands refuse an unmanaged unit (`dockerbrew.CheckUnits`) before
   downloading anything. `Install` writes a root-owned
-  `/usr/local/libexec/docker/.restart-pending` marker before swapping
+  `/var/lib/chairlift/docker/.restart-pending` marker before swapping
   `current` and reports the unchanged set as changed while it remains; the
   helper clears it (`dockerbrew.ClearRestartPending`) only after
   `try-restart` succeeds, so an interrupted run still restarts next time. A

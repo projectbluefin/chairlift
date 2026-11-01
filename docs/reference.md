@@ -176,7 +176,7 @@ and compose. On images that ship Docker's units
 daemon from Homebrew itself: it verifies Homebrew's signed formula index
 against a key built into ChairLift, downloads the `docker-engine`,
 `containerd`, `runc`, `tini`, `libpathrs`, and `libseccomp` bottles, checks
-each SHA-256, and installs them root-owned under `/usr/local/libexec/docker`.
+each SHA-256, and installs them root-owned under `/var/lib/chairlift/docker`.
 Root never runs anything from your Homebrew prefix
 ([ADR-0024](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)). The
 helper writes `docker.service` and `docker.socket` to `/etc/systemd/system`

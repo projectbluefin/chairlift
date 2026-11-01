@@ -116,7 +116,7 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0024-rootful-docker-from-verified-homebrew-bottles.md](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)
   — the fixed `docker-enable` helper installs the system Docker daemon from
   Homebrew bottles it verifies itself against the signed formula index, into
-  root-owned `/usr/local/libexec/docker`; root never executes the user's
+  root-owned `/var/lib/chairlift/docker`; root never executes the user's
   Homebrew prefix
 
 ### Design
