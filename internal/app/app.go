@@ -47,6 +47,10 @@ const optionDXMode = "dx-mode"
 // the primary instance.
 const optionAskBluefin = "ask-bluefin"
 
+// optionPromptFile is the long name of the --prompt-file option, which hands
+// --ask-bluefin a starting prompt to prefill in Goose.
+const optionPromptFile = "prompt-file"
+
 var (
 	gTypeApplication gobject.Type
 	appRegistry      *gobj.InstanceRegistry
@@ -168,11 +172,27 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 	agentMode := commandLineRequestsAgentMode(cl)
 	askBluefin := commandLineRequestsAskBluefin(cl)
 	dxMode := commandLineRequestsDXMode(cl)
+	promptPath := commandLinePromptFile(cl)
 	running := a.window != nil
+
+	if promptPath != "" && !askBluefin {
+		log.Printf("app: --%s ignored without --%s", optionPromptFile, optionAskBluefin)
+	}
 
 	if askBluefin {
 		a.Hold()
 		go func() {
+			// The prompt is read here, off the main thread, and kept only in
+			// memory; its text is never logged.
+			promptUnreadable := false
+			if promptPath != "" {
+				if prompt, err := agentmode.ReadPromptFile(promptPath); err != nil {
+					log.Printf("app: ask bluefin prompt file not used: %v", err)
+					promptUnreadable = true
+				} else {
+					agentmode.HoldPrompt(prompt)
+				}
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			_, facts, _ := agentmode.ObserveLive(ctx)
 			cancel()
@@ -187,11 +207,25 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 					log.Printf("app: goose desktop exited with error: %v", asyncErr)
 				})
 				if launchErr == nil {
-					sgtk.RunOnMainThread(a.Release)
-					return
+					if !promptUnreadable {
+						sgtk.RunOnMainThread(a.Release)
+						return
+					}
+					// Goose opened with an empty chat; open Agents with
+					// a toast saying why the question is missing.
+					decision.Reason = ""
+				} else {
+					log.Printf("app: launch goose desktop failed: %v", launchErr)
+					decision.Reason = "Couldn't open Goose. Try again."
 				}
-				log.Printf("app: launch goose desktop failed: %v", launchErr)
-				decision.Reason = "Couldn't open Goose. Try again."
+			}
+			// Unready or failed, a held prompt waits for the next Goose
+			// launch from the Agents page; say so, so it isn't lost.
+			if agentmode.PendingPrompt() != "" && decision.State != agentmode.StateUnsupported {
+				decision.Reason = agentmode.HeldPromptReason(decision.Reason)
+			}
+			if promptUnreadable {
+				decision.Reason = agentmode.UnreadablePromptReason(decision.Reason)
 			}
 			sgtk.RunOnMainThread(func() {
 				defer a.Release()
@@ -291,6 +325,28 @@ func commandLineRequestsAskBluefin(cl *gio.ApplicationCommandLine) bool {
 	return opts.Contains(optionAskBluefin)
 }
 
+// commandLinePromptFile returns the --prompt-file path of the invocation, made
+// absolute against the invoking process's working directory: a remote
+// invocation's relative path names a file where it ran, not where the
+// primary instance did.
+func commandLinePromptFile(cl *gio.ApplicationCommandLine) string {
+	if cl == nil {
+		return ""
+	}
+	opts := cl.GetOptionsDict()
+	if opts == nil || !opts.Contains(optionPromptFile) {
+		return ""
+	}
+	stringType := glib.NewVariantType("s")
+	defer stringType.Free()
+	value := opts.LookupValue(optionPromptFile, stringType)
+	if value == nil {
+		return ""
+	}
+	defer value.Unref()
+	return agentmode.ResolvePromptPath(value.GetString(nil), cl.GetCwd())
+}
+
 // onActivate is called when the application is activated
 func (a *Application) onActivate() {
 	activateStart := time.Now()
@@ -386,6 +442,14 @@ func (a *Application) registerOptions() {
 		glib.GOptionArgNoneValue,
 		"Launch Ask Bluefin (Goose) or open Agent Mode.",
 		"",
+	)
+	a.AddMainOption(
+		optionPromptFile,
+		0,
+		glib.GOptionFlagNoneValue,
+		glib.GOptionArgStringValue,
+		"With --ask-bluefin, prefill Goose with the prompt in PATH.",
+		"PATH",
 	)
 	a.AddMainOption(
 		optionDXMode,

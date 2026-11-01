@@ -139,7 +139,7 @@ func TestDefaultProfileWithoutAHome(t *testing.T) {
 
 func TestReopenCommandStartsTheDesktopAppInTheProfile(t *testing.T) {
 	profile := ProfileAt("/data")
-	cmd, err := ReopenCommand(State{DesktopPath: "/opt/goose-desktop"}, profile)
+	cmd, err := ReopenCommand(State{DesktopPath: "/opt/goose-desktop"}, profile, "")
 	if err != nil {
 		t.Fatalf("ReopenCommand: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestReopenCommandStartsTheDesktopAppInTheProfile(t *testing.T) {
 }
 
 func TestReopenCommandRefusesAMissingDesktopApp(t *testing.T) {
-	if cmd, err := ReopenCommand(State{LLMManPath: "/bin/llmman"}, ProfileAt("/data")); err == nil {
+	if cmd, err := ReopenCommand(State{LLMManPath: "/bin/llmman"}, ProfileAt("/data"), ""); err == nil {
 		t.Errorf("ReopenCommand = %v, nil; want an error with no desktop app", cmd.Args)
 	}
 }
