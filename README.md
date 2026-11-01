@@ -104,7 +104,7 @@ never asks for a reboot.
   time you sign in. Any section also accepts an SVG of your own
 - **Wallpapers**: install or update the curated wallpaper collection
   (`artwork.Brewfile`) with Homebrew, shown when Homebrew and the collection
-  are available
+  are available, and install or open the Damask wallpaper manager with Flatpak
 
 ### 🔧 Updates & Maintenance
 

@@ -43,6 +43,28 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
+			file: "livery_damask.go",
+			required: []string{
+				"pageview.DamaskOffer(",
+				"pageview.DamaskRow(",
+				"pageview.DamaskActionName(",
+				"pageview.DamaskFailure(",
+				"actionmsg.DamaskInstall(",
+				"actionmsg.DamaskOpen(",
+				"dryrun.Enabled()",
+				"uh.wallpaperDamaskGate.TryStart()",
+				"sgtk.RunOnMainThread(",
+			},
+			retired: []string{
+				// One stateful control: labels come from DamaskActionName,
+				// never a second hard-coded button.
+				`gtk.NewButtonWithLabel("Install")`,
+				`gtk.NewButtonWithLabel("Open")`,
+				"flatpak.Install",
+				"pkexec",
+			},
+		},
+		{
 			file: "applications_page.go",
 			required: []string{
 				"bundleview.Describe(",

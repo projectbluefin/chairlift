@@ -49,6 +49,7 @@ func TestApplicationHelp(t *testing.T) {
 		"--dry-run",
 		"--first-run",
 		"--setup",
+		"--prompt-file",
 		"Don't make any changes to the system.",
 	} {
 		if !bytes.Contains(output, []byte(want)) {

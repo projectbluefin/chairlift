@@ -60,6 +60,10 @@ const (
 // The process is started without a context so the long-lived GUI is not tied
 // to a caller's timeout or cancellation. reportFailure, when non-nil, gets a
 // non-zero exit after Launch returned; it runs on the wait goroutine.
+//
+// A prompt held with HoldPrompt goes to Goose as a new-session link, which
+// opens a chat with the prompt prefilled but not sent: in the fresh session,
+// or, through the single-instance hand-off, in the one already running.
 func Launch(ctx context.Context, facts ReadinessFacts, reportFailure func(error)) (LaunchResult, error) {
 	if err := ctx.Err(); err != nil {
 		return LaunchStarted, err
@@ -72,16 +76,26 @@ func Launch(ctx context.Context, facts ReadinessFacts, reportFailure func(error)
 		return LaunchStarted, err
 	}
 
+	// A prompt held by --ask-bluefin opens with whichever launch comes
+	// first, and is let go only once that launch went through, so a failed
+	// start or an unfinished setup keeps it for the next try.
+	prompt := PendingPrompt()
+
 	if profile.Running() {
-		cmd, err := troubleshoot.ReopenCommand(facts.Tools, profile)
+		cmd, err := troubleshoot.ReopenCommand(facts.Tools, profile, prompt)
 		if err != nil {
 			return LaunchHandedOff, err
 		}
 		if dryrun.Enabled() {
-			log.Printf("[DRY-RUN] would execute: %s", cmd.String())
+			log.Printf("[DRY-RUN] would execute: %s", commandForLog(cmd.Args))
+			releasePrompt(prompt)
 			return LaunchHandedOff, nil
 		}
-		return LaunchHandedOff, runCmd(cmd, exitReporter(reportFailure))
+		if err := runCmd(cmd, exitReporter(reportFailure)); err != nil {
+			return LaunchHandedOff, err
+		}
+		releasePrompt(prompt)
+		return LaunchHandedOff, nil
 	}
 
 	if err := profile.Write(facts.Tools.ServerPath); err != nil {
@@ -90,13 +104,14 @@ func Launch(ctx context.Context, facts ReadinessFacts, reportFailure func(error)
 	// The alias, not the reference it resolves to: llmman resolves it when
 	// the session launches, so a session always starts on whatever the
 	// Agents page last selected.
-	cmd, err := troubleshoot.Command(facts.Tools, profile, aistack.ActiveModelAlias)
+	cmd, err := troubleshoot.Command(facts.Tools, profile, aistack.ActiveModelAlias, prompt)
 	if err != nil {
 		return LaunchStarted, err
 	}
 	if dryrun.Enabled() {
 		log.Printf("[DRY-RUN] would launch Goose Desktop with model %s via llmman", facts.ActiveModel)
-		log.Printf("[DRY-RUN] would execute: %s", cmd.String())
+		log.Printf("[DRY-RUN] would execute: %s", commandForLog(cmd.Args))
+		releasePrompt(prompt)
 		return LaunchStarted, nil
 	}
 	exit := &startupExit{waiting: true, exited: make(chan error, 1), report: exitReporter(reportFailure)}
@@ -104,7 +119,11 @@ func Launch(ctx context.Context, facts ReadinessFacts, reportFailure func(error)
 		return LaunchStarted, err
 	}
 	defer exit.stopWaiting()
-	return awaitSession(ctx, profile, exit.exited)
+	result, err := awaitSession(ctx, profile, exit.exited)
+	if err == nil {
+		releasePrompt(prompt)
+	}
+	return result, err
 }
 
 // awaitSession waits for a fresh session to take the profile's lock. A clean

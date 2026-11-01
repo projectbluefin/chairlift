@@ -1204,7 +1204,11 @@ An agent must not break these:
   are met — the launch, which writes the profile, runs off the GTK main
   thread — or presents Control Center on the Agents page naming the missing
   prerequisite, with identical behavior for
-  cold and running instances.
+  cold and running instances. `--prompt-file PATH` hands it a bounded
+  (4 KiB, regular UTF-8 file) starting prompt that stays in memory, is never
+  logged, and reaches Goose only as a prefilled `goose://new-session?prompt=`
+  link on the next `agentmode.Launch`, never as profile, tool, or extension
+  configuration.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
   `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`), at build and again each time the group is shown (one `ConnectMap` handler, generation-guarded and passive while a session holds the gate), checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive; a requirement fixed outside ChairLift is picked up the next time Agents is shown. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Run`, reporting failures asynchronously; when the session ends or fails to start, the button returns through a fresh preflight rather than a blind re-enable. Previews under `--dry-run` log only and launch nothing.
 - **Printer applications are rootless, loopback-only quadlets pinned after
@@ -1539,6 +1543,10 @@ An agent must not break these:
   owners. Opening/refreshing never installs; explicit actions share the bundle
   install gate, invalidate old status generations, and refresh inventories only
   on live success. The pure `internal/livery` backend stays Homebrew-free.
+  The group's Damask row is gated on Flatpak alone, never on Homebrew: one
+  button whose label is the confirmed state (Install, Open, Try Again). A failed
+  probe is unknown, not absent; an install is confirmed by Flatpak's inventory,
+  not by the command returning; dry-run neither installs nor launches.
 
 ## Documentation
 

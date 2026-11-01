@@ -763,3 +763,21 @@ func BundleInstall(dryRun bool) string {
 	}
 	return "Selected collections installed successfully."
 }
+
+// DamaskInstall describes a confirmed Damask install. A preview installs
+// nothing and must not read as an installed manager.
+func DamaskInstall(dryRun bool) string {
+	if dryRun {
+		return "[DRY-RUN] Preview: Damask would be installed — no changes made"
+	}
+	return "Damask installed."
+}
+
+// DamaskOpen describes opening the installed Damask. ChairLift only starts the
+// app; it never claims a wallpaper was applied, because Damask owns that.
+func DamaskOpen(dryRun bool) string {
+	if dryRun {
+		return "[DRY-RUN] Preview: Damask would open — no changes made"
+	}
+	return "Opening Damask…"
+}

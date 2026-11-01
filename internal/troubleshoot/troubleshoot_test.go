@@ -2,6 +2,7 @@ package troubleshoot
 
 import (
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -412,7 +413,7 @@ func TestCommandIsolatesTheSessionAndWrapsItInLLMMan(t *testing.T) {
 	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
 	profile := ProfileAt("/data")
 
-	cmd, err := Command(state, profile, "bluefin-active")
+	cmd, err := Command(state, profile, "bluefin-active", "")
 	if err != nil {
 		t.Fatalf("Command: %v", err)
 	}
@@ -431,11 +432,56 @@ func TestCommandIsolatesTheSessionAndWrapsItInLLMMan(t *testing.T) {
 
 func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 	ready := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
-	if _, err := Command(State{}, ProfileAt("/data"), "bluefin-active"); err == nil {
+	if _, err := Command(State{}, ProfileAt("/data"), "bluefin-active", ""); err == nil {
 		t.Error("Command succeeded with nothing installed")
 	}
-	if _, err := Command(ready, ProfileAt("/data"), ""); err == nil {
+	if _, err := Command(ready, ProfileAt("/data"), "", ""); err == nil {
 		t.Error("Command succeeded with no model")
+	}
+}
+
+// A supplied prompt reaches Goose only as a new-session link's query value:
+// text that looks like another link or another argument stays inside it.
+func TestNewSessionURLEscapesThePrompt(t *testing.T) {
+	prompt := "why?&recipe=x goose://extension?cmd=sh\n-- --model other"
+	link := NewSessionURL(prompt)
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("NewSessionURL(%q) = %q, not a URL: %v", prompt, link, err)
+	}
+	if parsed.Scheme != "goose" || parsed.Host != "new-session" || parsed.Path != "" {
+		t.Errorf("link = %q, want goose://new-session", link)
+	}
+	query := parsed.Query()
+	if len(query) != 1 || query.Get("prompt") != prompt {
+		t.Errorf("query = %v, want only prompt=%q", query, prompt)
+	}
+	if !strings.HasPrefix(link, NewSessionURLPrefix+"?") {
+		t.Errorf("link %q does not start with %q", link, NewSessionURLPrefix)
+	}
+}
+
+// llmman forwards everything after `--` to goose-desktop, so the prompt link
+// follows llmman's own arguments and cannot be read as one of them.
+func TestCommandsCarryAPromptAsANewSessionLink(t *testing.T) {
+	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
+	profile := ProfileAt("/data")
+	link := NewSessionURL("check failed units")
+
+	fresh, err := Command(state, profile, "bluefin-active", "check failed units")
+	if err != nil {
+		t.Fatalf("Command: %v", err)
+	}
+	if want := []string{"/bin/llmman", "launch", "goose-desktop", "--model", "bluefin-active", "--", link}; !reflect.DeepEqual(fresh.Args, want) {
+		t.Errorf("Command argv = %v, want %v", fresh.Args, want)
+	}
+
+	reopen, err := ReopenCommand(state, profile, "check failed units")
+	if err != nil {
+		t.Fatalf("ReopenCommand: %v", err)
+	}
+	if want := []string{"/d", link}; !reflect.DeepEqual(reopen.Args, want) {
+		t.Errorf("ReopenCommand argv = %v, want %v", reopen.Args, want)
 	}
 }
 
@@ -445,11 +491,11 @@ func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 func TestLaunchCommandsKeepGooseOutput(t *testing.T) {
 	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
 	profile := ProfileAt("/data")
-	fresh, err := Command(state, profile, "bluefin-active")
+	fresh, err := Command(state, profile, "bluefin-active", "")
 	if err != nil {
 		t.Fatalf("Command: %v", err)
 	}
-	reopen, err := ReopenCommand(state, profile)
+	reopen, err := ReopenCommand(state, profile, "")
 	if err != nil {
 		t.Fatalf("ReopenCommand: %v", err)
 	}
