@@ -17,6 +17,7 @@ const (
 	applicationsKey            = "applications-enabled"
 	developerToolsKey          = "developer-tools-enabled"
 	systemComponentsKey        = "system-components-enabled"
+	printerDriversKey          = "printer-drivers-enabled"
 	maintenanceAfterUpdatesKey = "maintenance-after-updates"
 )
 
@@ -63,6 +64,7 @@ func (s *Store) Values() userprefs.Values {
 			Applications:            true,
 			DeveloperTools:          true,
 			SystemComponents:        true,
+			PrinterDrivers:          true,
 			MaintenanceAfterUpdates: false,
 		}
 	}
@@ -71,6 +73,7 @@ func (s *Store) Values() userprefs.Values {
 		Applications:            s.settings.GetBoolean(applicationsKey),
 		DeveloperTools:          s.settings.GetBoolean(developerToolsKey),
 		SystemComponents:        s.settings.GetBoolean(systemComponentsKey),
+		PrinterDrivers:          s.settings.GetBoolean(printerDriversKey),
 		MaintenanceAfterUpdates: s.settings.GetBoolean(maintenanceAfterUpdatesKey),
 	}
 }
@@ -83,7 +86,7 @@ func (s *Store) BindBoolean(key string, object *gobject.Object) {
 	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue)
 }
 
-// OnSourceChanged calls fn on the GTK main thread whenever one of the four
+// OnSourceChanged calls fn on the GTK main thread whenever one of the
 // update-source keys changes, from this process (the Preferences dialog's
 // bound switches) or another (gsettings, dconf-editor). Call it once per
 // Store, at build time: each call claims a puregotk callback slot. It does
@@ -94,7 +97,7 @@ func (s *Store) OnSourceChanged(fn func()) {
 	}
 	s.changed = func(_ gio.Settings, key string) {
 		switch key {
-		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey:
+		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey, printerDriversKey:
 			fn()
 		}
 	}

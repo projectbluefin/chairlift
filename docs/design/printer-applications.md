@@ -72,10 +72,24 @@ containers. Existing units are not automatically migrated: turn the family
 off and back on to install a verified pin. The Features page row of a family
 whose installed unit still carries `AutoUpdate=registry`
 (`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
-that off-and-on, so an unchecked older install is not silent. `Refresh` is a verified package
-API, not a scheduled job or an Updates-page action. Automatic verified refresh
-is tracked by issue #652; installed pins otherwise remain
-fixed until disable/re-enable or an explicit API refresh. Diagnostic image
+that off-and-on, so an unchecked older install is not silent.
+
+Installed pins move forward through the Updates page, not a timer. The
+**Printer Drivers** source (`updateproviders.NewPrinterApps`, ID
+`printer-drivers`) is available where `podman` is (the same floor as the
+Printers group, `features_page`/`printers_group`) and follows the
+`printer-drivers-enabled` preference. Its check reads `Image=` from each
+enabled default app's quadlet (`InstalledImage`) and verifies the family's
+configured reference (`VerifiedImage`, the same cosign check `Enable` runs,
+writing nothing); a family whose verified digest differs from the installed
+image is offered, showing the first twelve hex digits of each digest. A unit
+still on the moving tag differs from every pin, so it is offered too, and
+applying it is the same migration as turning the family off and on. Applying
+calls `Refresh` once per selected app, serialised per app by the provider; a
+verification failure in check or apply is reported against that family by
+name, never skipped, and the next family is still refreshed. There is no
+background schedule: pins advance when the person checks for and applies
+updates. Diagnostic image
 presence probes read `Image=` from the installed quadlet, not the family's
 moving tag; a cached verified digest need not have a local `:stable` tag.
 

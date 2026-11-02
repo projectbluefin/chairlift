@@ -845,8 +845,8 @@ surface in three layers that must stay separate:
   capability floor, available, and enabled in the user's preferences;
   `Coordinator.UpdateAll` applies pending items serially in the provider order
   `Window.buildUI` constructs — applications (Flatpak), developer tools
-  (Homebrew), system components (updex), then the operating system (bootc
-  staging). Every published `Snapshot` is immutable and generation-guarded, so
+  (Homebrew), system components (updex), printer drivers (verified
+  printer-application refresh), then the operating system (bootc staging). Every published `Snapshot` is immutable and generation-guarded, so
   a stale worker cannot overwrite a newer state. A failed source does not
   abort the run; `ActionRetryFailed` re-applies only sources that still carry
   an apply error. Post-update maintenance (`updateproviders.NewMaintenance`,
@@ -856,7 +856,7 @@ surface in three layers that must stay separate:
   "Disabled by administrator" (`updateproviders.CleanupConfigured`).
 - `internal/updateproviders` holds the production `updateflow.Provider`
   values, which wrap `internal/flatpak`, `internal/homebrew`, `internal/updex`,
-  and `internal/bootc`; the coordinator executes nothing itself. Flatpak
+  `internal/printerapp`, and `internal/bootc`; the coordinator executes nothing itself. Flatpak
   reconciliation verifies that all applied refs for each executed scope have
   cleared, ignoring newly appeared updates.
 - `internal/views/updatepresent` maps one snapshot to the shell's status
@@ -1193,8 +1193,10 @@ service; a reload/start failure rolls a fresh install back (stop, remove,
 reload). `Refresh` verifies before rewriting and restarting an existing unit.
 Verification failure changes neither disk nor service state. ADR-0023 records
 this change from ADR-0020: old units require disable/re-enable to migrate,
-and their row's subtitle asks for it (`InstalledBeforeVerification`);
-there is no scheduled verified refresh or Updates-page integration yet. The toggle handler (`onPrinterAppToggled`) is admitted by a
+and their row's subtitle asks for it (`InstalledBeforeVerification`).
+Newer verified images reach installed units through the Updates page's
+Printer Drivers source (`updateproviders.NewPrinterApps`), which calls
+`Refresh`; there is no scheduled refresh. The toggle handler (`onPrinterAppToggled`) is admitted by a
 per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
 under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
 a dry run and a failure both restore the switch and the row's last state, a

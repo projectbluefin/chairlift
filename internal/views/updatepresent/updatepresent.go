@@ -172,6 +172,8 @@ func SourceIcon(id updateflow.SourceID) string {
 		return "application-x-addon-symbolic"
 	case updateflow.OperatingSystem:
 		return "drive-harddisk-system-symbolic"
+	case updateflow.PrinterDrivers:
+		return "printer-symbolic"
 	default:
 		return "software-update-available-symbolic"
 	}
@@ -452,6 +454,8 @@ func sourceTitle(id updateflow.SourceID) string {
 		return gotext.Get("System Components")
 	case updateflow.OperatingSystem:
 		return gotext.Get("Operating System")
+	case updateflow.PrinterDrivers:
+		return gotext.Get("Printer Drivers")
 	default:
 		return gotext.Get("Updates")
 	}

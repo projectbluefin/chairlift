@@ -446,6 +446,7 @@ func TestSourceIconMapsProviderKinds(t *testing.T) {
 		{updateflow.DeveloperTools, "package-x-generic-symbolic"},
 		{updateflow.SystemComponents, "application-x-addon-symbolic"},
 		{updateflow.OperatingSystem, "drive-harddisk-system-symbolic"},
+		{updateflow.PrinterDrivers, "printer-symbolic"},
 		{"unknown", "software-update-available-symbolic"},
 	}
 	for _, tt := range tests {
@@ -795,7 +796,7 @@ func TestRestartFailedMessageHasNoRawError(t *testing.T) {
 // Applications and System components once shared one icon.
 func TestSourceIconsAreDistinct(t *testing.T) {
 	seen := map[string]updateflow.SourceID{}
-	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem} {
+	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem, updateflow.PrinterDrivers} {
 		icon := SourceIcon(id)
 		if other, ok := seen[icon]; ok {
 			t.Errorf("%s and %s share the icon %s", other, id, icon)
