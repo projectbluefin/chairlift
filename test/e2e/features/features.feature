@@ -640,6 +640,17 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And no printer quadlet was written
     And the action journal is empty
 
+  @stub.printers-running @stub.help-xdg-open @stub.features-gaming-none
+  Scenario: A running printer family offers its Manage button and opens its web page
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Features page shows a "Printers" group
+    And the switch in the "Ghostscript Printers" row is on
+    And the "Manage" button in the "Ghostscript Printers" row is sensitive
+    When I click the "Manage" button in the "Ghostscript Printers" row
+    Then xdg-open was asked to open "http://localhost:18010/"
+    And the action journal is empty
+
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,bootc-stage @stub.features-gaming-none
   Scenario: Without Podman the Printers group is explained on Help, not shown
     Given ChairLift is running

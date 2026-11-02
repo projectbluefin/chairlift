@@ -14,6 +14,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 // printerRow is one driver family's switch row on the Features page. Rows
@@ -29,6 +30,7 @@ type printerRow struct {
 	title  string
 	row    *adw.ActionRow
 	toggle *guardedSwitch
+	admin  *gtk.Button
 	gate   actionstate.Gate
 	// state is the last state the row rendered; a failed action and a
 	// dry-run preview both restore it.
@@ -80,7 +82,17 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 		pr.toggle = newGuardedSwitch(state.On(), func(on bool) {
 			uh.onPrinterAppToggled(pr, on)
 		})
+		// The row's own web page, as a button: the subtitle names the loopback
+		// address, and nobody should have to retype it (#671). Built beside
+		// the switch at page-build time, never in a refresh path, and it opens
+		// only the app's own published port (printerapp.WebAdminURL).
+		pr.admin = gtk.NewButtonWithLabel(pageview.PrinterAdminButtonLabel())
+		pr.admin.SetValign(gtk.AlignCenterValue)
+		describeFor(pr.admin, pr.title)
+		adminClicked := func(_ gtk.Button) { uh.openURL(pr.app.WebAdminURL()) }
+		pr.admin.ConnectClicked(&adminClicked)
 		uh.showPrinterAppState(pr, state)
+		pr.row.AddSuffix(&pr.admin.Widget)
 		pr.row.AddSuffix(&pr.toggle.widget.Widget)
 		pr.row.SetActivatableWidget(&pr.toggle.widget.Widget)
 		group.Add(&pr.row.Widget)
@@ -108,6 +120,14 @@ func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) 
 		subtitle = pageview.PrinterAppUnverifiedSubtitle(subtitle)
 	}
 	pr.row.SetSubtitle(subtitle)
+
+	// The web page exists once the family is installed, and answers once its
+	// service is observed running: the button appears with the family and
+	// stays insensitive through a start or a failure rather than opening a
+	// page that would refuse the connection.
+	pr.admin.SetVisible(state.On())
+	pr.admin.SetSensitive(state == printerapp.StateReady)
+	pr.admin.SetTooltipText(pageview.PrinterAdminButtonTooltip(state))
 }
 
 // probePrinterApp asks systemd and diagnostics whether an installed unit's

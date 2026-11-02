@@ -60,6 +60,24 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	}
 }
 
+// PrinterAdminButtonLabel is the row action that hands the family's own web
+// page to the desktop's browser, so nobody has to retype the loopback address
+// the subtitle names (#671). Short because the row it sits in already names
+// the family, which the screen reader reads as the button's description.
+func PrinterAdminButtonLabel() string {
+	return "Manage"
+}
+
+// PrinterAdminButtonTooltip says what pressing the button does, and for a
+// family that is installed but not answering yet, why it is not available
+// yet: the page only exists while the application is running.
+func PrinterAdminButtonTooltip(s printerapp.State) string {
+	if s == printerapp.StateReady {
+		return "Open this printer's web page"
+	}
+	return "This printer's web page is available once it is running."
+}
+
 // PrinterAppUnverifiedSubtitle adds, to an installed family's subtitle, that
 // it was installed before driver signatures were checked and how to switch
 // to a checked driver. The row keeps its state first so "Running" or a
