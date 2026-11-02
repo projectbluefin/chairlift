@@ -252,7 +252,7 @@ func TestPrinterAppsApplySerialisesRefreshesOfOneApp(t *testing.T) {
 	}
 }
 
-func TestImageVersion(t *testing.T) {
+func TestPrinterAppImageVersion(t *testing.T) {
 	for image, want := range map[string]string{
 		"ghcr.io/projectbluefin/hplip-printer-app@" + printerDigestA: strings.Repeat("a", 12),
 		"ghcr.io/projectbluefin/hplip-printer-app:stable":            "stable",

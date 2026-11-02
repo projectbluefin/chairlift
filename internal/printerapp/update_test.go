@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestInstalledImageReadsTheUnitsImage(t *testing.T) {
+func TestPrinterAppInstalledImageReadsTheUnitsImage(t *testing.T) {
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 	installed := app
@@ -23,7 +23,7 @@ func TestInstalledImageReadsTheUnitsImage(t *testing.T) {
 	}
 }
 
-func TestInstalledImageFailsWithoutUnitOrImage(t *testing.T) {
+func TestPrinterAppInstalledImageFailsWithoutUnitOrImage(t *testing.T) {
 	dir, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 	if _, err := InstalledImage(app); !errors.Is(err, os.ErrNotExist) {

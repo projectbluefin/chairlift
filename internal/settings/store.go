@@ -25,6 +25,10 @@ const (
 // GTK object properties.
 type Store struct {
 	settings *gio.Settings
+	// keys holds the keys the installed schema defines. An installed schema
+	// older than this binary lacks newer keys, and GSettings aborts the
+	// process on any read or bind of an unknown key.
+	keys map[string]bool
 	// changed is the one GSettings::changed callback a Store connects; it
 	// lives in the struct so puregotk's callback table holds one slot for
 	// the Store's lifetime.
@@ -52,35 +56,65 @@ func New() *Store {
 	if !SchemaAvailable() {
 		return &Store{settings: nil}
 	}
-	return &Store{settings: gio.NewSettings(SchemaID)}
+	source := gio.SettingsSchemaSourceGetDefault()
+	schema := source.Lookup(SchemaID, true)
+	keys := make(map[string]bool, len(allKeys))
+	for _, key := range allKeys {
+		keys[key] = schema.HasKey(key)
+	}
+	schema.Unref()
+	return &Store{settings: gio.NewSettings(SchemaID), keys: keys}
+}
+
+var allKeys = []string{
+	operatingSystemKey,
+	applicationsKey,
+	developerToolsKey,
+	systemComponentsKey,
+	printerDriversKey,
+	maintenanceAfterUpdatesKey,
+}
+
+// Missing reports whether the schema is installed but predates key, so the
+// key can be neither read nor bound.
+func (s *Store) Missing(key string) bool {
+	return s != nil && s.settings != nil && !s.keys[key]
+}
+
+func (s *Store) boolean(key string, fallback bool) bool {
+	if s.Missing(key) {
+		return fallback
+	}
+	return s.settings.GetBoolean(key)
 }
 
 // Values returns the current user preference values, defaulting to enabled
-// when the schema is not installed.
+// when the schema, or a key in it, is not installed.
 func (s *Store) Values() userprefs.Values {
+	defaults := userprefs.Values{
+		OperatingSystem:         true,
+		Applications:            true,
+		DeveloperTools:          true,
+		SystemComponents:        true,
+		PrinterDrivers:          true,
+		MaintenanceAfterUpdates: false,
+	}
 	if s == nil || s.settings == nil {
-		return userprefs.Values{
-			OperatingSystem:         true,
-			Applications:            true,
-			DeveloperTools:          true,
-			SystemComponents:        true,
-			PrinterDrivers:          true,
-			MaintenanceAfterUpdates: false,
-		}
+		return defaults
 	}
 	return userprefs.Values{
-		OperatingSystem:         s.settings.GetBoolean(operatingSystemKey),
-		Applications:            s.settings.GetBoolean(applicationsKey),
-		DeveloperTools:          s.settings.GetBoolean(developerToolsKey),
-		SystemComponents:        s.settings.GetBoolean(systemComponentsKey),
-		PrinterDrivers:          s.settings.GetBoolean(printerDriversKey),
-		MaintenanceAfterUpdates: s.settings.GetBoolean(maintenanceAfterUpdatesKey),
+		OperatingSystem:         s.boolean(operatingSystemKey, defaults.OperatingSystem),
+		Applications:            s.boolean(applicationsKey, defaults.Applications),
+		DeveloperTools:          s.boolean(developerToolsKey, defaults.DeveloperTools),
+		SystemComponents:        s.boolean(systemComponentsKey, defaults.SystemComponents),
+		PrinterDrivers:          s.boolean(printerDriversKey, defaults.PrinterDrivers),
+		MaintenanceAfterUpdates: s.boolean(maintenanceAfterUpdatesKey, defaults.MaintenanceAfterUpdates),
 	}
 }
 
 // BindBoolean binds a boolean GSettings key to an object's active property if available.
 func (s *Store) BindBoolean(key string, object *gobject.Object) {
-	if s == nil || s.settings == nil {
+	if s == nil || s.settings == nil || s.Missing(key) {
 		return
 	}
 	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue)

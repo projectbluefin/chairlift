@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
@@ -136,7 +137,7 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 		seen[item.ID] = true
 		app, ok := apps[item.ID]
 		if !ok {
-			errs = append(errs, fmt.Errorf("printer driver %q is not managed by ChairLift", item.ID))
+			errs = append(errs, fmt.Errorf("printer driver %q is not managed by %s", item.ID, branding.AppName))
 			continue
 		}
 		if err := ctx.Err(); err != nil {
