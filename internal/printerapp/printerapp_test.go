@@ -3,6 +3,7 @@ package printerapp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -476,5 +477,20 @@ func TestDefaultUnitDirReturnsPathUnderUserConfig(t *testing.T) {
 	want := filepath.Join(configDir, "containers", "systemd")
 	if got != want {
 		t.Errorf("defaultUnitDir() = %q, want %q", got, want)
+	}
+}
+
+func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
+	for _, f := range Families() {
+		app := Select(f)
+		want := fmt.Sprintf("http://localhost:%d/", app.Port())
+		if got := app.WebAdminURL(); got != want {
+			t.Errorf("app %s WebAdminURL = %q, want %q", f.ID, got, want)
+		}
+		unit := RenderUnit(app)
+		wantPublish := fmt.Sprintf("PublishPort=127.0.0.1:%d:%d", app.Port(), app.Port())
+		if !strings.Contains(unit, wantPublish) {
+			t.Errorf("app %s rendered unit missing %q", f.ID, wantPublish)
+		}
 	}
 }
