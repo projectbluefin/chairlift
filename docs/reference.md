@@ -201,7 +201,10 @@ Docker runs but your account is not in the `docker` group at all, the switch
 reads off and says so; turning it on grants access. Both
 system units must be read before their active state is trusted; a later socket
 failure retains known active state so a supported stop stays available.
-Masked units or missing helper actions need an image or administrator fix.
+Masked units or missing helper actions need an image or administrator fix;
+when the image's helper predates the Homebrew-bottle install (`docker-update`
+absent without image units), the switch stays insensitive and asks you to
+update the computer first.
 Turning Docker off uses fixed `docker-disable` to stop both system units for
 all accounts, retaining the runtime, container data, group membership, and
 Developer Mode. **Update all**'s Developer tools source updates a

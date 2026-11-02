@@ -202,6 +202,9 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{
 				"pageview.WSLEngineDocumentationURL(",
 				"pageview.WSLEngineDocumentationTooltip(",
+				"pageview.DockerCanEnable(",
+				"pageview.DockerHelperNeedsUpdate(",
+				"pageview.DockerHelperOutdated",
 			},
 		},
 		{

@@ -226,6 +226,41 @@ func TestDockerSwitchOnFollowsThisAccountsAccess(t *testing.T) {
 	}
 }
 
+// The GUI (Homebrew) and the helper (OS image) ship separately. A helper that
+// authorizes docker-enable but not docker-update predates the bottle install
+// and fails after authentication on an image without Docker units ("usermod:
+// group 'docker' does not exist" on Dakota 20261031 with a v26.10.4 helper).
+func TestDockerEnableRequiresABottleCapableHelperWithoutImageUnits(t *testing.T) {
+	missing := devtools.DockerState{Available: true}
+	installed := devtools.DockerState{Available: true, Installed: true}
+	masked := devtools.DockerState{Unavailable: "Repair the image units."}
+	for _, test := range []struct {
+		name               string
+		state              devtools.DockerState
+		enable, update     bool
+		canEnable, outdate bool
+	}{
+		{"no units, old helper", missing, true, false, false, true},
+		{"no units, current helper", missing, true, true, true, false},
+		{"units present, old helper", installed, true, false, true, false},
+		{"units present, current helper", installed, true, true, true, false},
+		{"no enable action", missing, false, true, false, false},
+		{"masked units", masked, true, true, false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := DockerCanEnable(test.state, test.enable, test.update); got != test.canEnable {
+				t.Errorf("DockerCanEnable = %v, want %v", got, test.canEnable)
+			}
+			if got := DockerHelperNeedsUpdate(test.state, test.enable, test.update); got != test.outdate {
+				t.Errorf("DockerHelperNeedsUpdate = %v, want %v", got, test.outdate)
+			}
+		})
+	}
+	if !strings.Contains(DockerHelperOutdated, "Update this computer") {
+		t.Fatalf("outdated-helper subtitle %q does not say how to fix it", DockerHelperOutdated)
+	}
+}
+
 func TestDockerDisclosureLabelsNameHomebrewScope(t *testing.T) {
 	if DockerRuntimeContents == DockerCLIContents || !strings.Contains(DockerRuntimeContents, "whole computer") || !strings.HasPrefix(DockerCLIContents, "Homebrew") {
 		t.Fatalf("disclosure labels = %q / %q", DockerRuntimeContents, DockerCLIContents)

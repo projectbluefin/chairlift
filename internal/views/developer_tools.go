@@ -285,12 +285,16 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 					if observed {
 						item.active = pageview.DockerSwitchOn(docker)
 					}
-					item.canEnable = docker.Available && status.Supports(ubluehelper.CommandDockerEnable)
+					enableCmd := status.Supports(ubluehelper.CommandDockerEnable)
+					updateCmd := status.Supports(ubluehelper.CommandDockerUpdate)
+					item.canEnable = pageview.DockerCanEnable(docker, enableCmd, updateCmd)
 					item.canDisable = status.Supports(ubluehelper.CommandDockerDisable)
 					item.allowed = observed && pageview.DockerControlAllowed(item.active, item.canEnable, item.canDisable)
 					item.toggle.set(item.active)
 					item.row.SetSubtitle(pageview.DockerSubtitle(docker, dockerErr))
-					if observed && !item.allowed && docker.Unavailable == "" && !docker.NeedsLogin {
+					if observed && !item.active && pageview.DockerHelperNeedsUpdate(docker, enableCmd, updateCmd) {
+						item.row.SetSubtitle(pageview.DockerHelperOutdated)
+					} else if observed && !item.allowed && docker.Unavailable == "" && !docker.NeedsLogin {
 						item.row.SetSubtitle("Docker controls aren't available on this computer.")
 					}
 				}

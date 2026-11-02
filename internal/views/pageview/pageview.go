@@ -405,6 +405,26 @@ func DockerControlAllowed(on, canEnable, canDisable bool) bool {
 	return (!on && canEnable) || (on && canDisable)
 }
 
+// DockerHelperOutdated is the Docker row's subtitle when the image's
+// privileged helper predates the Homebrew-bottle install (v26.11.1).
+const DockerHelperOutdated = "Turning on Docker needs a newer system version. Update this computer, restart, then try again."
+
+// DockerCanEnable reports whether the installed helper can turn Docker on
+// here. The GUI ships through Homebrew and the helper through the OS image,
+// so they can disagree. Every released helper authorizes docker-enable, but
+// only one that also authorizes docker-update (v26.11.1+) can create the
+// docker group and install the runtime when the image ships no Docker units;
+// an older one fails after authentication with "group 'docker' does not exist".
+func DockerCanEnable(state devtools.DockerState, enable, update bool) bool {
+	return state.Available && enable && (state.Installed || update)
+}
+
+// DockerHelperNeedsUpdate reports that only the image's helper version stands
+// between this host and enabling Docker, so the row says to update.
+func DockerHelperNeedsUpdate(state devtools.DockerState, enable, update bool) bool {
+	return state.Available && enable && !DockerCanEnable(state, enable, update)
+}
+
 // DockerSwitchOn reports whether the Docker switch reads on: the daemon runs
 // and this account is not shut out of it. A running daemon whose socket does
 // not answer (or whose paired unit is missing) stays on, so it can be stopped.
