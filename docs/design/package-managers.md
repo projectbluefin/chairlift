@@ -871,8 +871,10 @@ Docker work, and a later refusal never revokes access already granted.
 `DockerStatus` reads `LoadState` and `ActiveState` for both system units without
 escalation, then pings `/var/run/docker.sock`; only HTTP 200 `OK` is Ready.
 `DOCKER_HOST` and `XDG_RUNTIME_DIR` do not redirect that probe. `not-found`
-units mean Docker is not installed yet but can be (`Available`, not
-`Installed`). Masked or erroring units stay unavailable with an
+units mean Docker is not installed yet (`Available`, not `Installed`), and
+without image units enabling also requires `docker-update` (`pageview.DockerCanEnable`),
+so an older image helper stays insensitive (`pageview.DockerHelperOutdated`)
+rather than failing after authentication. Masked or erroring units stay unavailable with an
 image/administrator explanation, but a known running unit remains stoppable
 with a supported disable action. A failed unit read or parse returns zero
 state and the original error. Once both reads succeeded, a failed socket probe
