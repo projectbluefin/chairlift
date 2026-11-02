@@ -43,6 +43,17 @@ jobs:
         with:
           go-version: "1.26.9"
 
+      # Workflow safety gate at the org-agreed threshold (projectbluefin/actions#674).
+      # advanced-security: false fails the job on findings instead of uploading
+      # SARIF, which would need security-events: write. Documented exceptions
+      # live in .github/zizmor.yml.
+      - name: zizmor (workflow safety)
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          advanced-security: false
+          min-severity: medium
+          min-confidence: medium
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:

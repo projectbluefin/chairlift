@@ -382,16 +382,17 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
 	}
 
-	setupGoDisablesCache := false
-	for _, step := range goreleaserJob.Steps {
-		if strings.HasPrefix(step.Uses, "actions/setup-go@") {
-			if step.With.Cache != nil && !*step.With.Cache {
-				setupGoDisablesCache = true
+	// A tag push publishes signed binaries: no job in release.yml may restore
+	// a Go cache another workflow could have written (#644).
+	for name, job := range config.Jobs {
+		for _, step := range job.Steps {
+			if !strings.HasPrefix(step.Uses, "actions/setup-go@") {
+				continue
+			}
+			if step.With.Cache == nil || *step.With.Cache {
+				t.Errorf("release.yml job %q must set cache: false on actions/setup-go to isolate release builds from test caches", name)
 			}
 		}
-	}
-	if !setupGoDisablesCache {
-		t.Errorf("goreleaser job must set cache: false on actions/setup-go to isolate release builds from test caches")
 	}
 }
 
