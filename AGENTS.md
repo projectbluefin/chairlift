@@ -958,7 +958,14 @@ An agent must not break these:
   discloses the daemon formulae as **Homebrew, installed for the whole
   computer** and the CLI formulae as Homebrew formulae. Updates reach the
   daemon through the Developer tools source and the fixed `docker-update`
-  action (see the unified update run above).
+  action (see the unified update run above). **The GUI and helper ship
+  separately** (cask vs. image), and every released helper authorizes
+  `docker-enable`; only one that also authorizes `docker-update` (v26.11.1+)
+  can create the group and install bottles. Without image units the switch
+  therefore enables only when both actions are authorized
+  (`pageview.DockerCanEnable`); otherwise it stays insensitive with
+  `pageview.DockerHelperOutdated` instead of failing after authentication
+  with `usermod: group 'docker' does not exist`.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
