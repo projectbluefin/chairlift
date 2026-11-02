@@ -155,6 +155,18 @@ func Families() []Family {
 	return out
 }
 
+// FamilyByID returns the family with the given ID, or false if none matches.
+// It lets an update row that stores only a family ID resolve back to the app
+// it refers to.
+func FamilyByID(id string) (Family, bool) {
+	for _, family := range families {
+		if family.ID == id {
+			return family, true
+		}
+	}
+	return Family{}, false
+}
+
 // Select returns the default app for a family, named after the family. Callers
 // that manage a specific physical printer pass their own app name.
 func Select(f Family) App {
@@ -344,6 +356,39 @@ func IsEnabled(app App) bool {
 	return err == nil
 }
 
+// InstalledImage reads the Image= reference a printer unit currently runs, or
+// an error if the quadlet is missing or unreadable. ChairLift writes the
+// verified repository@sha256:digest here on Enable and Refresh; a unit still
+// carrying the moving :stable tag was installed before verification and is
+// reported as an update by the update provider.
+func InstalledImage(app App) (string, error) {
+	path, err := UnitPath(app)
+	if err != nil {
+		return "", err
+	}
+	return imageFromUnit(path)
+}
+
+// imageFromUnit returns the first Image= value under the [Container] section of
+// a quadlet file, trimmed of surrounding whitespace.
+func imageFromUnit(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	section := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			section = line
+		}
+		if section == "[Container]" && strings.HasPrefix(line, "Image=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Image=")), nil
+		}
+	}
+	return "", fmt.Errorf("printerapp: %s has no Image= reference", filepath.Base(path))
+}
+
 // Enable verifies the image signature before writing or starting a unit.
 // The runtime pulls only the verified digest, even if the tag moves afterwards.
 func Enable(ctx context.Context, app App) error {
@@ -358,6 +403,15 @@ func Refresh(ctx context.Context, app App) error {
 		return fmt.Errorf("printerapp: %s is not enabled", app.UnitName())
 	}
 	return installVerified(ctx, app, "restart")
+}
+
+// VerifiedImage resolves the family's current :stable reference through cosign
+// and returns the repository@sha256:digest a verified unit should run. It is
+// the update provider's source of truth for "what this family should run now";
+// a failed verification returns ErrSignatureUnverified so the provider surfaces
+// it instead of silently offering a refresh against an unchecked pull.
+func VerifiedImage(ctx context.Context, family Family) (string, error) {
+	return verifiedImage(ctx, family)
 }
 
 func installVerified(ctx context.Context, app App, action string) error {

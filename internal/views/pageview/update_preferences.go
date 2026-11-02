@@ -17,6 +17,7 @@ var UpdateSourcePreferences = []UpdateSourcePreference{
 	{ID: updateflow.Applications, Key: "applications-enabled", Title: "Applications"},
 	{ID: updateflow.DeveloperTools, Key: "developer-tools-enabled", Title: "Developer Tools"},
 	{ID: updateflow.SystemComponents, Key: "system-components-enabled", Title: "System Components"},
+	{ID: updateflow.Printers, Key: "printers-enabled", Title: "Printers"},
 }
 
 // UpdateSourcePreferenceSubtitle distinguishes pending, configured, and

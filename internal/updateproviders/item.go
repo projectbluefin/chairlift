@@ -7,6 +7,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/printerapp"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
 
@@ -55,6 +56,21 @@ func UpdateItem(ctx context.Context, source updateflow.SourceID, item updateflow
 				return updateflow.ApplyResult{}, nil
 			}
 		}
+	case updateflow.Printers:
+		app, ok := printerApp(item)
+		if !ok {
+			return updateflow.ApplyResult{}, fmt.Errorf("printer update %q has no family", item.ID)
+		}
+		// Refresh re-verifies the family reference and restarts the unit at its
+		// verified digest; a failed verification leaves the unit untouched and
+		// returns the error, so the individual update never skips silently.
+		if err := printerapp.Refresh(ctx, app); err != nil {
+			return updateflow.ApplyResult{}, err
+		}
+		if dryrun.Enabled() {
+			return updateflow.ApplyResult{Preview: true}, nil
+		}
+		return updateflow.ApplyResult{Changed: true}, nil
 	default:
 		return updateflow.ApplyResult{}, fmt.Errorf("source %q does not offer individual updates", source)
 	}

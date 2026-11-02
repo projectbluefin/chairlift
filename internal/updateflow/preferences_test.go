@@ -48,14 +48,14 @@ func TestSnapshotStaleForPreferenceChanges(t *testing.T) {
 // is stale once any one source's preference flips. A source preferenceEnabled
 // forgot would never trigger the re-check.
 func TestCheckedSnapshotIsStaleOnlyAfterAPreferenceFlips(t *testing.T) {
-	ids := []SourceID{Applications, DeveloperTools, SystemComponents, OperatingSystem}
+	ids := []SourceID{Applications, DeveloperTools, SystemComponents, OperatingSystem, Printers}
 	providers := make([]*testProvider, 0, len(ids))
 	policy := make(map[SourceID]Policy, len(ids))
 	for _, id := range ids {
 		providers = append(providers, &testProvider{id: id, available: true})
 		policy[id] = Policy{Configured: true, Supported: true}
 	}
-	preferences := userprefs.Values{OperatingSystem: true, Applications: true, DeveloperTools: true, SystemComponents: true}
+	preferences := userprefs.Values{OperatingSystem: true, Applications: true, DeveloperTools: true, SystemComponents: true, Printers: true}
 	got := New(providerInterfaces(providers), nil).Check(context.Background(), preferences, policy, nil)
 	if got.StaleFor(preferences) {
 		t.Fatalf("snapshot checked with %+v is stale for it", preferences)
@@ -66,6 +66,7 @@ func TestCheckedSnapshotIsStaleOnlyAfterAPreferenceFlips(t *testing.T) {
 		DeveloperTools:   func(v *userprefs.Values) { v.DeveloperTools = false },
 		SystemComponents: func(v *userprefs.Values) { v.SystemComponents = false },
 		OperatingSystem:  func(v *userprefs.Values) { v.OperatingSystem = false },
+		Printers:         func(v *userprefs.Values) { v.Printers = false },
 	}
 	for _, id := range ids {
 		changed := preferences

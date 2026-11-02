@@ -16,6 +16,7 @@ const (
 	DeveloperTools   SourceID = "developer-tools"
 	SystemComponents SourceID = "system-components"
 	OperatingSystem  SourceID = "operating-system"
+	Printers         SourceID = "printers"
 )
 
 // Phase is the aggregate state of the update flow.
@@ -298,6 +299,8 @@ func preferenceEnabled(values userprefs.Values, id SourceID) bool {
 		return values.SystemComponents
 	case OperatingSystem:
 		return values.OperatingSystem
+	case Printers:
+		return values.Printers
 	default:
 		return false
 	}

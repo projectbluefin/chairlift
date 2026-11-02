@@ -21,6 +21,11 @@
       <summary>System component updates</summary>
       <description>Include available system component updates in Update All.</description>
     </key>
+    <key name="printers-enabled" type="b">
+      <default>true</default>
+      <summary>Printer updates</summary>
+      <description>Include available verified printer driver updates in Update All.</description>
+    </key>
     <key name="maintenance-after-updates" type="b">
       <default>false</default>
       <summary>Maintain after updates</summary>

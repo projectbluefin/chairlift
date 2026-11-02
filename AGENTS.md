@@ -1238,7 +1238,14 @@ An agent must not break these:
   Existing units are not automatically migrated; disabling and re-enabling
   installs a verified pin. A row whose installed unit still carries
   `AutoUpdate=registry` (`printerapp.InstalledBeforeVerification`) appends a
-  subtitle telling the person to turn it off and on again. Scheduled verified refresh remains unimplemented.
+  subtitle telling the person to turn it off and on again. Verified automatic
+  refresh is offered through the Updates page printer-app provider
+  (`internal/updateproviders`): the `Printers` source offers one item per
+  enabled family whose verified `:stable` digest no longer matches the digest
+  its quadlet's `Image=` runs, and its `Apply` re-verifies and restarts each
+  family once, serialised. A cosign verification failure surfaces as a source
+  error rather than a silent skip, and the same `Refresh` call serves the
+  individual update from a single row.
   ADR-0020 is the network boundary: PAPPL's web administration is
   unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
   must never use `Network=host` or a non-loopback `PublishPort`. IPP and the

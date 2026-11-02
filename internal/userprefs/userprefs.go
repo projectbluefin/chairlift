@@ -13,5 +13,6 @@ type Values struct {
 	Applications            bool
 	DeveloperTools          bool
 	SystemComponents        bool
+	Printers                bool
 	MaintenanceAfterUpdates bool
 }

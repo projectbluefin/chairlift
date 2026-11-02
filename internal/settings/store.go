@@ -17,6 +17,7 @@ const (
 	applicationsKey            = "applications-enabled"
 	developerToolsKey          = "developer-tools-enabled"
 	systemComponentsKey        = "system-components-enabled"
+	printersKey                = "printers-enabled"
 	maintenanceAfterUpdatesKey = "maintenance-after-updates"
 )
 
@@ -63,6 +64,7 @@ func (s *Store) Values() userprefs.Values {
 			Applications:            true,
 			DeveloperTools:          true,
 			SystemComponents:        true,
+			Printers:                true,
 			MaintenanceAfterUpdates: false,
 		}
 	}
@@ -71,6 +73,7 @@ func (s *Store) Values() userprefs.Values {
 		Applications:            s.settings.GetBoolean(applicationsKey),
 		DeveloperTools:          s.settings.GetBoolean(developerToolsKey),
 		SystemComponents:        s.settings.GetBoolean(systemComponentsKey),
+		Printers:                s.settings.GetBoolean(printersKey),
 		MaintenanceAfterUpdates: s.settings.GetBoolean(maintenanceAfterUpdatesKey),
 	}
 }
@@ -94,7 +97,7 @@ func (s *Store) OnSourceChanged(fn func()) {
 	}
 	s.changed = func(_ gio.Settings, key string) {
 		switch key {
-		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey:
+		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey, printersKey:
 			fn()
 		}
 	}

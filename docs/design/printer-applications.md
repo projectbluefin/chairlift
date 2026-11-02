@@ -72,10 +72,13 @@ containers. Existing units are not automatically migrated: turn the family
 off and back on to install a verified pin. The Features page row of a family
 whose installed unit still carries `AutoUpdate=registry`
 (`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
-that off-and-on, so an unchecked older install is not silent. `Refresh` is a verified package
-API, not a scheduled job or an Updates-page action. Automatic verified refresh
-is tracked by issue #652; installed pins otherwise remain
-fixed until disable/re-enable or an explicit API refresh. Diagnostic image
+that off-and-on, so an unchecked older install is not silent. The Updates page
+now calls `Refresh` through the printer-app update provider: the `Printers`
+source offers one item per enabled family whose verified `:stable` digest no
+longer matches the digest its quadlet's `Image=` runs, and its `Apply`
+re-verifies and restarts each family once, serialised. A cosign verification
+failure surfaces as a source error rather than a silent skip, and the same
+`Refresh` call serves the individual update from a single row. Diagnostic image
 presence probes read `Image=` from the installed quadlet, not the family's
 moving tag; a cached verified digest need not have a local `:stable` tag.
 

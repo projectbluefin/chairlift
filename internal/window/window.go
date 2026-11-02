@@ -200,6 +200,7 @@ func (w *Window) buildUI() {
 				updateflow.Applications:     sourcePolicy("updates_page", "flatpak_updates_group"),
 				updateflow.DeveloperTools:   sourcePolicy("updates_page", "brew_updates_group"),
 				updateflow.SystemComponents: sourcePolicy("features_page", "features_group"),
+				updateflow.Printers:         sourcePolicy("features_page", "printers_group"),
 			}
 		},
 		w,
