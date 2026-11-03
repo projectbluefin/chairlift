@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
@@ -21,8 +22,6 @@ type PrinterAppDeps struct {
 	Available func() bool
 	// Apps lists the printer applications ChairLift manages.
 	Apps func() []printerapp.App
-	// Enabled reports whether an app's quadlet is installed.
-	Enabled func(printerapp.App) bool
 	// Installed reads the image reference an installed unit runs.
 	Installed func(printerapp.App) (string, error)
 	// Verified verifies the family's signed reference and returns the
@@ -50,7 +49,6 @@ func NewPrinterApps() updateflow.Provider {
 			}
 			return apps
 		},
-		Enabled:   printerapp.IsEnabled,
 		Installed: printerapp.InstalledImage,
 		Verified:  printerapp.VerifiedImage,
 		Refresh:   printerapp.Refresh,
@@ -70,11 +68,11 @@ func (p *printerAppProvider) Available() bool {
 	return p.deps.Available != nil && p.deps.Available()
 }
 
-// Check offers every enabled app whose verified :stable digest differs from
-// the image its unit runs. A family that cannot be checked — its signature
-// does not verify, or its unit cannot be read — never hides the others: Check
-// returns any available items and names every unchecked family in Warnings.
-// It logs the underlying errors; only cancellation is returned as an error.
+// Check offers every installed app whose verified :stable digest differs
+// from the image its unit runs. A family that cannot be checked — its
+// signature does not verify, or its unit cannot be read — never hides the
+// others: Check returns available items and names every unchecked family in
+// Warnings. It logs underlying errors; only cancellation is returned as an error.
 func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult, error) {
 	var items []updateflow.Item
 	var warnings []string
@@ -83,10 +81,10 @@ func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult,
 		if err := ctx.Err(); err != nil {
 			return updateflow.CheckResult{}, err
 		}
-		if !p.deps.Enabled(app) {
+		installed, err := p.deps.Installed(app)
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		installed, err := p.deps.Installed(app)
 		if err != nil {
 			warnings = append(warnings, printerAppName(app))
 			errs = append(errs, fmt.Errorf("%s: read installed driver: %w", printerAppName(app), err))

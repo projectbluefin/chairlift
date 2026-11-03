@@ -363,6 +363,20 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Couldn't update Ghostscript. Details are in the log.",
 		},
 		{
+			name: "apply failure keeps earlier check warning visible",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+				ApplyErr:      errors.New("refresh failed"),
+				ApplyWarnings: []string{"HPLIP"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update HPLIP. Details are in the log. · couldn't check Ghostscript",
+		},
+		{
 			name: "updates offered beside an unchecked family",
 			state: updateflow.SourceState{
 				ID:            updateflow.PrinterDrivers,

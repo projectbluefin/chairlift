@@ -105,10 +105,14 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
+		subtitle := gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
 		if len(state.ApplyWarnings) > 0 {
-			return title, gotext.Get("Couldn't update %s. %s", strings.Join(state.ApplyWarnings, ", "), FailureHint(state.ApplyErr))
+			subtitle = gotext.Get("Couldn't update %s. %s", strings.Join(state.ApplyWarnings, ", "), FailureHint(state.ApplyErr))
 		}
-		return title, gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
+		if len(state.CheckWarnings) > 0 {
+			subtitle = gotext.Get("%s · couldn't check %s", subtitle, strings.Join(state.CheckWarnings, ", "))
+		}
+		return title, subtitle
 	case state.CheckErr != nil:
 		return title, gotext.Get("Couldn't check for updates. %s", FailureHint(state.CheckErr))
 	case state.RestartRequired:

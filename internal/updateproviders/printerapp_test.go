@@ -3,6 +3,7 @@ package updateproviders
 import (
 	"context"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -30,8 +31,8 @@ func pinned(app printerapp.App, digest string) string {
 	return strings.TrimSuffix(app.Family.Image, ":stable") + "@" + digest
 }
 
-// fakePrinterApps holds the installed image per enabled app and the verified
-// image per family, and records each Refresh.
+// fakePrinterApps holds the installed image per app and the verified image
+// per family, and records each Refresh.
 type fakePrinterApps struct {
 	mu        sync.Mutex
 	installed map[string]string
@@ -46,12 +47,12 @@ func (f *fakePrinterApps) deps() PrinterAppDeps {
 	return PrinterAppDeps{
 		Available: func() bool { return true },
 		Apps:      printerFamilies,
-		Enabled: func(app printerapp.App) bool {
-			_, ok := f.installed[app.UnitName()]
-			return ok
-		},
 		Installed: func(app printerapp.App) (string, error) {
-			return f.installed[app.UnitName()], nil
+			image, ok := f.installed[app.UnitName()]
+			if !ok {
+				return "", os.ErrNotExist
+			}
+			return image, nil
 		},
 		Verified: func(_ context.Context, app printerapp.App) (string, error) {
 			if err := f.verifyErr[app.Family.ID]; err != nil {
@@ -302,5 +303,34 @@ func TestPrinterAppsRetryOnlyRefreshesFailedFamilies(t *testing.T) {
 	}
 	if retried.TotalUpdates != 0 || retried.Sources[0].ApplyErr != nil {
 		t.Fatalf("retry snapshot = %#v, want no pending updates or apply error", retried)
+	}
+}
+
+func TestPrinterAppsCheckReportsUnitReadFailuresButSkipsMissingUnits(t *testing.T) {
+	apps := printerFamilies()
+	provider := newPrinterApps(PrinterAppDeps{
+		Available: func() bool { return true },
+		Apps:      func() []printerapp.App { return apps },
+		Installed: func(app printerapp.App) (string, error) {
+			if app.Family.ID == "ghostscript" {
+				return "", os.ErrPermission
+			}
+			return "", os.ErrNotExist
+		},
+		Verified: func(context.Context, printerapp.App) (string, error) {
+			t.Fatal("Verified ran after the installed unit could not be read")
+			return "", nil
+		},
+	})
+
+	got, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v, want the unreadable unit reported as a warning", err)
+	}
+	if len(got.Warnings) != 1 || got.Warnings[0] != "Ghostscript" {
+		t.Fatalf("Check() warnings = %#v, want only unreadable Ghostscript", got.Warnings)
+	}
+	if len(got.Items) != 0 {
+		t.Fatalf("Check() items = %#v, want none", got.Items)
 	}
 }
