@@ -104,16 +104,14 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 	// Index discovered bundles by name so super-bundles can resolve their members.
 	bundlesByName := make(map[string]homebrew.Bundle, len(rawBundles))
 	for _, b := range rawBundles {
-		if !bundleview.WallpaperCollection(b.Name) {
-			bundlesByName[b.Name] = b
-		}
+		bundlesByName[b.Name] = b
 	}
 
 	// Filter out retired bundles and members folded into a discovered parent;
 	// keep curated and custom user collections.
 	var bundles []homebrew.Bundle
 	for _, b := range rawBundles {
-		if !bundleview.WallpaperCollection(b.Name) && bundleview.Visible(b.Name, bundlesByName) {
+		if bundleview.Visible(b.Name, bundlesByName) {
 			bundles = append(bundles, b)
 		}
 	}
@@ -156,7 +154,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		}
 
 		memberPaths := []string{bundle.Path}
-		// Include items from sibling member bundles (e.g. wallpaper-slideshow for artwork)
+		// Include items from sibling member bundles
 		for _, member := range bundleview.MemberBundles(bundle.Name, bundlesByName) {
 			memberPaths = append(memberPaths, member.Path)
 			if mItems, mErr := homebrew.BundleContents(member.Path); mErr == nil {
@@ -300,9 +298,6 @@ func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, tot
 // thread and is safe when either Apps group is disabled, because both
 // readers guard their own widgets.
 func (uh *UserHome) homebrewInventoryChanged() {
-	if uh.wallpaperRefresh != nil {
-		uh.wallpaperRefresh()
-	}
 	go uh.loadHomebrewPackages()
 	uh.refreshBundleStatuses()
 }
@@ -596,9 +591,6 @@ func (uh *UserHome) runHomebrewUninstall(
 		// installed; re-observe so its row offers Install again.
 		sgtk.RunOnMainThread(func() {
 			uh.refreshBundleStatuses()
-			if uh.wallpaperRefresh != nil {
-				uh.wallpaperRefresh()
-			}
 		})
 	}
 }

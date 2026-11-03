@@ -116,13 +116,14 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 }
 
 // Dakota collections are curated, a curated super-bundle member, or explicitly
-// retired. Livery owns artwork; wallpaper-slideshow keeps a standalone Apps row
+// retired; wallpaper-slideshow keeps a standalone Apps row
 // until its own slideshow controls exist.
 func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
 		"ai-tools", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
+		"artwork",
 	} {
 		_, inCatalog := catalog[id]
 		_, inRetired := retired[id]
@@ -166,18 +167,6 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 	}
 	if !DefaultSelected("custom-admin-pack") {
 		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
-	}
-}
-
-func TestWallpaperCollectionsLeaveTheAppsCatalog(t *testing.T) {
-	if !WallpaperCollection("artwork") {
-		t.Fatal("WallpaperCollection(artwork) = false, want Livery to own it")
-	}
-	if _, ok := catalog["artwork"]; ok {
-		t.Error("artwork is in the Apps catalog, want it owned by Livery only")
-	}
-	if !Visible("wallpaper-slideshow", nil) {
-		t.Error("Visible(wallpaper-slideshow) = false, want a standalone Apps row")
 	}
 }
 

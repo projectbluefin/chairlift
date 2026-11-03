@@ -451,24 +451,3 @@ commit with `make screenshots` and commits any changed PNGs to its branch;
 the push re-runs CI. It runs on request rather than per push for the same
 drift reason, and handles branches in this repository only. `make ci` checks
 that every page and configurable group has a screenshot and an entry here.
-
-Within Livery, **Wallpapers** appears when Homebrew and the configured external
-wallpaper collection are available, or when Flatpak can install or open the
-Damask wallpaper manager. Expand **Wallpaper Collections** to inspect
-its actual packages. Its subtitle reports Installed, Update Available,
-Not Installed or Indeterminate; choose **Install** or **Update** explicitly.
-Opening the page never installs anything. A preview restores the action and
-keeps the observed status. Other Livery controls remain available when the
-collection is absent. Wallpaper packages are managed here rather than in Apps.
-The **Damask** row has one button: **Install** adds it from Flathub, **Open**
-starts it, and **Try Again** re-checks when Flatpak could not answer. Damask
-chooses its own wallpaper feeds; ChairLift never changes them. On GNOME,
-**Wallpaper Channel** lists the wallpaper collections already installed, such
-as Bluefin or Bazzite, and shows the chosen collection as thumbnails with the
-current picture marked. Picking a thumbnail makes it the desktop background
-for both light and dark styles; opening the page changes nothing. Another
-desktop shows no selector, and if the desktop could not be checked the row
-says so and offers **Try Again**. **Rotate Wallpapers** is off until you turn
-it on; it then changes the background once a day to the next picture in the
-collection on screen, and its row shows when the next change is due or why it
-is not running. Turning it off stops it.

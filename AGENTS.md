@@ -1272,9 +1272,8 @@ An agent must not break these:
   claim it.
 - **Livery remains one primary with independent task groups.** Profile
   Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
-  existing `livery_page` config keys and one built control set. Never add a
-  wallpaper entry until `wallpapers_group` has a working builder (#200); do not
-  clone the icon controls behind a second overview or a new sidebar route.
+  existing `livery_page` config keys and one built control set. Do not clone
+  the icon controls behind a second overview or a new sidebar route.
 
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** GNOME's app-grid button (`view-app-grid-symbolic`), panel
@@ -1557,44 +1556,6 @@ An agent must not break these:
   walkthrough check is referential, not pixel-based, so a title-bar change means
   regenerating `docs/screenshots/` deliberately, from the E2E job's
   `walkthrough-screenshots` artifact with the capture byproducts stripped.
-
-- **Wallpaper collections belong to Livery.** `livery_page.wallpapers_group`
-  discovers the external `artwork.Brewfile` through Apps bundle paths, without
-  depending on Apps widgets. Apps excludes artwork but retains other collection
-  owners. Opening/refreshing never installs; explicit actions share the bundle
-  install gate, invalidate old status generations, and refresh inventories only
-  on live success. The pure `internal/livery` backend stays Homebrew-free.
-  The group's Damask row is gated on Flatpak alone, never on Homebrew: one
-  button whose label is the confirmed state (Install, Open, Try Again). A failed
-  probe is unknown, not absent; an install is confirmed by Flatpak's inventory,
-  not by the command returning; dry-run neither installs nor launches.
-  The Wallpaper Channel selector offers only pictures listed in an installed
-  `gnome-background-properties` catalog whose file is on disk; nothing is
-  fabricated. It is GNOME-only: off GNOME nothing is read or written, and a
-  failed check is unknown with **Try Again**, never "unsupported" (with no
-  collection installed there is nothing to offer, so nothing is shown). It
-  is built inside the group but needs neither Homebrew nor Flatpak; it adds
-  no capability of its own. A catalog that cannot be read is
-  reported in the subtitle rather than passing for a complete list. Only an
-  explicit pick writes `org.gnome.desktop.background` `picture-uri` and
-  `picture-uri-dark` (and `picture-options` when it is `none`); success is a
-  readback of both keys, every read that can fail runs before the first
-  write, and each pick ends by re-reading the desktop so a failure never
-  leaves a stale badge. Opening or refreshing the page only reads.
-  Thumbnails decode at tile size off the main thread (a 4K picture decoded
-  whole is ~33 MB); the combo, grid and their signals are connected once.
-  **Rotate Wallpapers** is opt-in and never written on load: only a user's
-  toggle (the restore is suppressed) writes the `chairlift-wallpaper-rotate`
-  service and daily timer to `~/.config/systemd/user` and `enable --now`s the
-  timer, for the collection on screen. The service runs
-  `chairlift --rotate-wallpaper <collection>`, which short-circuits before
-  `app.New()` like `--rotate-livery` and applies the next picture through
-  `livery.ApplyBackground`. The unit files are rotation's only state — no
-  GSettings key — and the row reports the user manager's observed schedule,
-  a stopped timer, a failed last pass, or a failed check, never an assumed
-  one. Enable and disable are idempotent and restore the previous units on
-  failure; the collection ID is validated against a closed character set
-  before it reaches a unit file; everything is `dryrun.Enabled()`-gated.
 
 ## Documentation
 

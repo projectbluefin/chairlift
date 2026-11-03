@@ -37,7 +37,7 @@ The repository root includes `config.dev.yml` so source checkouts load
 unprivileged development defaults before the package default `config.yml`.
 
 Appearance preferences share the desktop's native dconf store. Before GUI
-startup or headless `--rotate-livery` or `--rotate-wallpaper`, ChairLift discovers the installed native
+startup or headless `--rotate-livery`, ChairLift discovers the installed native
 GIO dconf module and appends its directory to `GIO_EXTRA_MODULES`, preserving
 existing module entries and any explicit `GSETTINGS_BACKEND`. This avoids
 Homebrew GLib using a separate keyfile store from the desktop or rotation units.
@@ -311,7 +311,6 @@ authorization rule.
 
 | Group | Key | Description |
 |-------|-----|-------------|
-| Wallpapers | `wallpapers_group` | Curated wallpaper collections discovered from the external `artwork.Brewfile`; actual contents and Installed, Update Available, Not Installed or Indeterminate status; explicit Install/Update only. With Flatpak, one Damask wallpaper manager row: Install when absent, Open when installed, Try Again when the check failed. On GNOME, a Wallpaper Channel selector shows the installed collections as thumbnails; a pick sets the desktop background, and an opt-in Rotate Wallpapers switch changes it daily through the chosen collection |
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
 | App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
 | Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
@@ -430,56 +429,3 @@ maintenance_page:
 
 All other groups remain enabled by default since they are not listed (except
 `maintenance_cleanup_group` and `reset_group`, which default to disabled).
-
-The Livery Wallpapers group owns `artwork.Brewfile`; Apps omits that collection
-and retains its other collection owners, including standalone slideshow tools.
-The configured Apps bundle directories supply discovery even when Apps inventory
-or collections are disabled. Missing Homebrew or a missing/unreadable manifest
-omits the collection row without affecting profile or icon controls. The Damask
-row needs only Flatpak, so it can build the group on a host without Homebrew;
-its one button installs Damask system-wide from Flathub or opens it with
-`flatpak run`, and an install counts only once Flatpak lists the app. Capability
-reasons are available in Help. Check failures display Indeterminate and remain
-retryable. Failed installs and dry-run previews preserve the last observation;
-a confirmed live success refreshes collection states and constructed Homebrew
-inventories. The pure `internal/livery` backend does not import Homebrew.
-
-The Wallpaper Channel selector lists only pictures already on disk. It reads
-every `gnome-background-properties/*.xml` catalog GNOME Settings reads, user
-data directory first, and groups entries by the collection directory under
-`backgrounds/` (Bluefin, Bluefin Extra, Bazzite and Framework first). It applies
-GNOME Settings' own catalog rules: deleted and `(none)` entries are skipped,
-relative names resolve against the catalog, and a missing file is not offered.
-A day/night slideshow is previewed by its first still. It is offered only when
-the session is GNOME and `org.gnome.desktop.background` is installed; Plasma
-and unknown desktops run no background read at all. A failed read is shown as
-**Try Again**, not as unsupported. A pick sets `picture-uri`, then
-`picture-uri-dark` from the catalog's dark picture or the same one, as GNOME
-Settings does, and confirms both by reading them back; the badge moves only
-then; every read that can fail happens before the first write, and each pick
-ends by reading the desktop again. A catalog that cannot be read is named in
-the subtitle ("Some collections couldn't be read."). The selector needs
-neither Homebrew nor Flatpak; it appears on GNOME whenever a collection is
-installed. Dry-run logs the write and changes nothing.
-
-**Rotate Wallpapers** is off until the user turns it on. Turning it on writes
-two systemd *user* units to `~/.config/systemd/user` — a oneshot
-`chairlift-wallpaper-rotate.service` whose `ExecStart` is
-`chairlift --rotate-wallpaper <collection>` for the collection on screen, and a
-`chairlift-wallpaper-rotate.timer` (`OnCalendar=daily`, `Persistent=true`) —
-then runs `systemctl --user daemon-reload` and `enable --now` on the timer.
-Turning it off runs `disable --now` and removes both units. Both directions are
-idempotent, and a failure puts back the units that were there, so the switch
-shows what is really scheduled and stays retryable. The collection name must
-be a plain directory name (letters, digits, `.`, `_`, `-`). The units are the
-whole state: no preference key records rotation. The row reads the timer's
-`UnitFileState`, `ActiveState` and `NextElapseUSecRealtime` and the service's
-`Result` from the user manager, so it reports the next change, a timer that is
-installed but not running, a failed last change, or a failed check — never a
-schedule it did not observe. Each pass short-circuits before GTK, picks the
-picture after the current one in that collection (wrapping, or the first when
-the current picture is elsewhere), and applies it through the same
-`picture-uri`/`picture-uri-dark` write and readback as a pick. Off GNOME it
-writes nothing and exits 0; a collection that is no longer installed or a
-failed read exits non-zero so the row reports it. There is no privileged
-service and no `pkexec`. Dry-run writes no unit and runs no `systemctl`.
