@@ -187,6 +187,26 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				ActionStyle: "suggested-action"},
 		},
 		{
+			name: "partial failure omits a source with only check warnings",
+			state: updateflow.Snapshot{
+				Phase:  updateflow.PhasePartialFailure,
+				Action: updateflow.ActionRetryFailed,
+				FailedSources: []updateflow.SourceID{
+					updateflow.DeveloperTools,
+					updateflow.PrinterDrivers,
+				},
+				Sources: []updateflow.SourceState{
+					{ID: updateflow.DeveloperTools, ApplyErr: errors.New("permission denied")},
+					{ID: updateflow.PrinterDrivers, Completed: true, CheckWarnings: []string{"Ghostscript"}},
+				},
+			},
+			want: Presentation{Status: "Couldn't install some updates",
+				Detail:      "Not updated: Developer Tools",
+				ActionLabel: "Retry Failed",
+				ShowAction:  true,
+				ActionStyle: "suggested-action"},
+		},
+		{
 			name: "maintenance failure",
 			state: updateflow.Snapshot{
 				Phase:  updateflow.PhasePartialFailure,

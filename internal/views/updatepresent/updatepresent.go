@@ -435,14 +435,30 @@ func partialFailurePresentation(state updateflow.Snapshot) Presentation {
 			Detail: gotext.Get("Old files are still on this computer. %s", FailureHint(state.MaintenanceErr))}
 	}
 	presentation := Presentation{Status: gotext.Get("Couldn't install some updates")}
-	if len(state.FailedSources) > 0 {
-		failed := make([]string, 0, len(state.FailedSources))
-		for _, id := range state.FailedSources {
-			failed = append(failed, sourceTitle(id))
+	failed := make([]string, 0, len(state.FailedSources))
+	for _, id := range state.FailedSources {
+		if checkWarningOnly(state.Sources, id) {
+			continue
 		}
+		failed = append(failed, sourceTitle(id))
+	}
+	if len(failed) > 0 {
 		presentation.Detail = gotext.Get("Not updated: %s", strings.Join(failed, ", "))
 	}
 	return presentation
+}
+
+// checkWarningOnly reports whether a failed source failed only by leaving
+// part of its check uncovered. Its found updates may have installed, and
+// Retry Failed does not rerun it, so it is not "Not updated"; its row names
+// what the check missed.
+func checkWarningOnly(sources []updateflow.SourceState, id updateflow.SourceID) bool {
+	for _, source := range sources {
+		if source.ID == id {
+			return source.CheckErr == nil && source.ApplyErr == nil && len(source.CheckWarnings) > 0
+		}
+	}
+	return false
 }
 
 func addAction(presentation *Presentation, action updateflow.Action, checkLabel string) {
