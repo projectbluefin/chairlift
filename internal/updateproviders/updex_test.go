@@ -96,7 +96,7 @@ func TestSystemComponentsApplyUsesUpdateOnlyAndReportsPreview(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("Update calls = %d, want 1", calls)
 	}
-	if result != (updateflow.ApplyResult{Preview: true}) {
+	if !reflect.DeepEqual(result, updateflow.ApplyResult{Preview: true}) {
 		t.Fatalf("Apply() result = %#v, want preview only", result)
 	}
 }

@@ -218,6 +218,13 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				// Readiness comes from the state model, never from the unit
 				// file alone (#331, #361).
 				"printerapp.Resolve(",
+				// The row's web page is a button now (#671), and its address
+				// comes from the engine's one owner, never from text the view
+				// assembles itself.
+				"pageview.PrinterAdminButtonLabel()",
+				"pageview.PrinterAdminButtonTooltip(",
+				"pr.app.WebAdminURL(",
+				"uh.openURL(",
 			},
 			retired: []string{
 				`"Printers"`,

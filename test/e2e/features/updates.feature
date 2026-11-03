@@ -2,9 +2,9 @@
 Feature: Updates
   The Updates destination leads with the wordmark, one primary action, and one
   status line under it, with visible updates grouped by system consequences
-  and apps/tools. Flatpak and Homebrew
-  are faked (fixtures/stubs_updates.py) so every source reports a known state.
-  Most scenarios omit bootc-stage to keep the Operating System source unavailable.
+  and apps/tools. Flatpak, Homebrew, and printer-driver checks are faked
+  (fixtures/stubs_updates.py) so source rows report known states. Most
+  scenarios omit bootc-stage to keep the Operating System source unavailable.
   Staged-deployment scenarios enable it explicitly; the isolated container supplies
   an inert stage-helper marker and all mutations remain behind --dry-run.
 
@@ -22,6 +22,14 @@ Feature: Updates
     And the "System Components" row says "Not available on this computer"
     And the "Operating System" row says "Not available on this computer"
     And the Updates sidebar badge shows "1"
+
+  @stub.updates-printer-partial-check @stub.updates-flatpak-current @stub.updates-brew-current
+  Scenario: A failed printer signature check does not hide verified driver updates
+    Given ChairLift is running
+    Then the Updates status reads "1 update available"
+    And the "Printer Drivers" row says "1 update available · couldn't check Ghostscript"
+    And the "HPLIP" row says "aaaaaaaaaaaa → bbbbbbbbbbbb"
+    And the "Update All" button is sensitive
 
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: With nothing pending the shell offers a fresh check

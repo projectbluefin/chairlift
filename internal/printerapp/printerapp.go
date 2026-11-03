@@ -111,6 +111,17 @@ func (a App) Port() int {
 	return portBase + int(h.Sum32()%portRange)
 }
 
+// WebAdminURL is where the running application's own web page answers: the
+// page a person adds printers on and manages them from. It is the app's
+// published port on localhost, so it exists on this computer only — the unit
+// publishes that port on 127.0.0.1 (ADR-0020), and PAPPL's web administration
+// is unauthenticated, so there is deliberately no other address for it.
+// It is the one owner of this address: the row's subtitle names the same page
+// (pageview.PrinterAppSubtitle) and a gate holds the two together.
+func (a App) WebAdminURL() string {
+	return fmt.Sprintf("http://localhost:%d/", a.Port())
+}
+
 // Volume is the per-app state volume, using the systemd home escape `%h`
 // that quadlet expands. It mounts to the container's state directory
 // /var/lib/<family>-printer-app.

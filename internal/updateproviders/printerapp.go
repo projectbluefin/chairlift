@@ -72,12 +72,12 @@ func (p *printerAppProvider) Available() bool {
 
 // Check offers every enabled app whose verified :stable digest differs from
 // the image its unit runs. A family that cannot be checked — its signature
-// does not verify, or its unit cannot be read — never hides the others: when
-// any update can be offered, Check returns those items and logs each failure
-// by family name. Only when nothing can be offered does it return the joined
-// failures, so an unverifiable driver never reads as up to date.
+// does not verify, or its unit cannot be read — never hides the others: Check
+// returns any available items and names every unchecked family in Warnings.
+// It logs the underlying errors; only cancellation is returned as an error.
 func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult, error) {
 	var items []updateflow.Item
+	var warnings []string
 	var errs []error
 	for _, app := range p.deps.Apps() {
 		if err := ctx.Err(); err != nil {
@@ -88,11 +88,13 @@ func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult,
 		}
 		installed, err := p.deps.Installed(app)
 		if err != nil {
+			warnings = append(warnings, printerAppName(app))
 			errs = append(errs, fmt.Errorf("%s: read installed driver: %w", printerAppName(app), err))
 			continue
 		}
 		verified, err := p.deps.Verified(ctx, app)
 		if err != nil {
+			warnings = append(warnings, printerAppName(app))
 			errs = append(errs, fmt.Errorf("%s: %w", printerAppName(app), err))
 			continue
 		}
@@ -106,14 +108,12 @@ func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult,
 			AvailableVersion: imageVersion(verified),
 		})
 	}
-	err := errors.Join(errs...)
-	if err != nil && len(items) > 0 {
+	if len(errs) > 0 {
 		for _, failure := range errs {
 			log.Printf("updates: checking %s: %v", updateflow.PrinterDrivers, failure)
 		}
-		err = nil
 	}
-	return updateflow.CheckResult{Items: items}, err
+	return updateflow.CheckResult{Items: items, Warnings: warnings}, nil
 }
 
 // Apply refreshes each selected app in turn. One app's failure — including a
@@ -126,6 +126,8 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 	}
 
 	var errs []error
+	var pending []updateflow.Item
+	var warnings []string
 	ran := 0
 	seen := make(map[string]bool, len(items))
 	for i, item := range items {
@@ -136,10 +138,33 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 		app, ok := apps[item.ID]
 		if !ok {
 			errs = append(errs, fmt.Errorf("printer driver %q is not managed by %s", item.ID, branding.AppName))
+			pending = append(pending, item)
+			name := item.Name
+			if name == "" {
+				name = item.ID
+			}
+			warnings = append(warnings, name)
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			return updateflow.ApplyResult{}, err
+			errs = append(errs, err)
+			pending = append(pending, item)
+			warnings = append(warnings, printerAppName(app))
+			for _, rest := range items[i+1:] {
+				if seen[rest.ID] {
+					continue
+				}
+				seen[rest.ID] = true
+				pending = append(pending, rest)
+				if next, ok := apps[rest.ID]; ok {
+					warnings = append(warnings, printerAppName(next))
+				} else if rest.Name != "" {
+					warnings = append(warnings, rest.Name)
+				} else {
+					warnings = append(warnings, rest.ID)
+				}
+			}
+			return updateflow.ApplyResult{PendingItems: pending, Warnings: warnings}, errors.Join(errs...)
 		}
 		if progress != nil {
 			progress(updateflow.Progress{
@@ -150,19 +175,20 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 		}
 		if err := p.deps.Refresh(ctx, app); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", printerAppName(app), err))
+			pending = append(pending, item)
+			warnings = append(warnings, printerAppName(app))
 			continue
 		}
 		ran++
 	}
 	if err := errors.Join(errs...); err != nil {
-		return updateflow.ApplyResult{}, err
+		return updateflow.ApplyResult{PendingItems: pending, Warnings: warnings}, err
 	}
 	if ran > 0 && p.deps.DryRun != nil && p.deps.DryRun() {
 		return updateflow.ApplyResult{Preview: true}, nil
 	}
 	return updateflow.ApplyResult{Changed: ran > 0}, nil
 }
-
 func printerAppName(app printerapp.App) string {
 	if app.Name == app.Family.ID {
 		return app.Family.DisplayName

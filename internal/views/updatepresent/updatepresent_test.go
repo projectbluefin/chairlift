@@ -350,6 +350,44 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Couldn't update. Details are in the log.",
 		},
 		{
+			name: "named apply warning",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				ApplyErr:      errors.New("signature rejected"),
+				ApplyWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update Ghostscript. Details are in the log.",
+		},
+		{
+			name: "updates offered beside an unchecked family",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				Items:         []updateflow.Item{{Name: "HPLIP"}},
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "1 update available · couldn't check Ghostscript",
+		},
+		{
+			name: "unchecked family with no available updates",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't check Ghostscript. Details are in the log.",
+		},
+		{
 			name: "apply error that timed out",
 			state: updateflow.SourceState{
 				ID:         updateflow.Applications,

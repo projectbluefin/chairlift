@@ -143,3 +143,35 @@ func TestPrinterAppUnverifiedSubtitleKeepsStateAndSaysWhatToDo(t *testing.T) {
 		}
 	}
 }
+
+// The Manage button hands the browser exactly the page the row's subtitle
+// names: a person reads one and presses the other, so the two must not drift
+// to different addresses (#671).
+func TestPrinterAdminButtonAgreesWithTheReadySubtitle(t *testing.T) {
+	for _, f := range printerapp.Families() {
+		app := printerapp.Select(f)
+		subtitle := PrinterAppSubtitle(printerapp.StateReady, app.Port())
+		if url := app.WebAdminURL(); !strings.Contains(subtitle, url) {
+			t.Errorf("%s ready subtitle %q does not name the button's %q", f.ID, subtitle, url)
+		}
+	}
+}
+
+// The button says what it does while it works, and why it is not available
+// yet while the application is starting: an insensitive control with the
+// ready wording would read as broken.
+func TestPrinterAdminButtonTooltipFollowsTheState(t *testing.T) {
+	ready := PrinterAdminButtonTooltip(printerapp.StateReady)
+	if !strings.Contains(ready, "web page") {
+		t.Errorf("ready tooltip = %q", ready)
+	}
+	for _, s := range []printerapp.State{printerapp.StateStarting, printerapp.StateFailed, printerapp.StateOff, printerapp.StateUnavailable} {
+		text := PrinterAdminButtonTooltip(s)
+		if text == ready || !strings.Contains(text, "running") {
+			t.Errorf("state %d tooltip = %q; it must say the page needs a running application", s, text)
+		}
+	}
+	if label := PrinterAdminButtonLabel(); label == "" {
+		t.Error("AdminButtonLabel is empty; the button would be announced with no name")
+	}
+}

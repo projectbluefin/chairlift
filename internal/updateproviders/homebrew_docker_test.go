@@ -193,7 +193,7 @@ func TestDockerRuntimeIndividualUpdateConfirmsTheNewBottles(t *testing.T) {
 			d := newDockerDeps()
 			test.change(d)
 			result, err := updateDockerRuntime(context.Background(), d.deps())
-			if (err != nil) != test.err || result != test.want {
+			if (err != nil) != test.err || !reflect.DeepEqual(result, test.want) {
 				t.Fatalf("updateDockerRuntime() = %#v, %v; want %#v", result, err, test.want)
 			}
 		})

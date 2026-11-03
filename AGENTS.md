@@ -352,11 +352,16 @@ An agent must not break these:
 - **The unified update run composes; it does not add a privileged route.**
   `internal/updateflow` is the pure coordinator for the one-action update run:
   it owns the phases, the primary action, and the per-source state for the
-  four sources (`applications`, `developer-tools`, `system-components`,
-  `operating-system`), and it executes nothing itself — every provider is an
-  `updateflow.Provider` whose production value in `internal/updateproviders`
-  wraps the existing `internal/flatpak`, `internal/homebrew`,
-  `internal/updex`, and `internal/bootc` entry points. The Developer tools
+  five sources (`applications`, `developer-tools`, `system-components`,
+  `printer-drivers`, `operating-system`), and it executes nothing itself —
+  every provider is an `updateflow.Provider` whose production value in
+  `internal/updateproviders` wraps the existing `internal/flatpak`,
+  `internal/homebrew`, `internal/updex`, `internal/printerapp`, and
+  `internal/bootc` entry points. A partially successful check reports the
+  parts it could not cover as `CheckResult.Warnings`, which the row shows
+  beside the updates it did find. A partial apply retains only pending items
+  in `ApplyResult.PendingItems` and names failures in `ApplyResult.Warnings`,
+  so Retry Failed does not rerun successful mutations. The Developer tools
   provider also refreshes a Homebrew-bottle Docker runtime: when
   `dockerbrew.ReadManifest` finds one and the installed helper supports
   `docker-update`, `Check` compares Homebrew's unsigned per-formula API

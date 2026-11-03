@@ -162,6 +162,57 @@ func TestCoordinatorFailedCheckRetainsLastKnownItemsAndRestart(t *testing.T) {
 	}
 }
 
+func TestCoordinatorKeepsPrinterUpdatesAlongsideCheckWarnings(t *testing.T) {
+	provider := &testProvider{
+		id:        PrinterDrivers,
+		available: true,
+		check: func(context.Context) (CheckResult, error) {
+			return CheckResult{
+				Items:    []Item{{ID: "hplip", Name: "HPLIP"}},
+				Warnings: []string{"Ghostscript"},
+			}, nil
+		},
+	}
+	prefs := allPreferences()
+	prefs.PrinterDrivers = true
+	policy := enabledConfiguration()
+	policy[PrinterDrivers] = Policy{Configured: true, Supported: true}
+
+	got := New([]Provider{provider}, nil).Check(context.Background(), prefs, policy, nil)
+	if got.Phase != PhaseReady || got.Action != ActionUpdateAll || got.TotalUpdates != 1 {
+		t.Fatalf("partial check snapshot = %#v, want an actionable update", got)
+	}
+	source := got.Sources[0]
+	if len(source.Items) != 1 || source.Items[0].Name != "HPLIP" {
+		t.Fatalf("items = %#v, want HPLIP retained", source.Items)
+	}
+	if len(source.CheckWarnings) != 1 || source.CheckWarnings[0] != "Ghostscript" {
+		t.Fatalf("check warnings = %#v, want Ghostscript", source.CheckWarnings)
+	}
+}
+
+func TestCoordinatorDoesNotReportUpToDateWhenEveryPrinterCheckWarns(t *testing.T) {
+	provider := &testProvider{
+		id:        PrinterDrivers,
+		available: true,
+		check: func(context.Context) (CheckResult, error) {
+			return CheckResult{Warnings: []string{"Ghostscript"}}, nil
+		},
+	}
+	prefs := allPreferences()
+	prefs.PrinterDrivers = true
+	policy := enabledConfiguration()
+	policy[PrinterDrivers] = Policy{Configured: true, Supported: true}
+
+	got := New([]Provider{provider}, nil).Check(context.Background(), prefs, policy, nil)
+	if got.Phase != PhaseCheckFailed || got.Action != ActionCheck {
+		t.Fatalf("partial check snapshot = %#v, want retryable check failure", got)
+	}
+	if !sameIDs(got.FailedSources, []SourceID{PrinterDrivers}) {
+		t.Fatalf("failed sources = %#v, want printer drivers", got.FailedSources)
+	}
+}
+
 func TestCoordinatorSerializesGenerationStartWithPublication(t *testing.T) {
 	provider := &testProvider{
 		id:        Applications,

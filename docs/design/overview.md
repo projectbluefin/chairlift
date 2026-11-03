@@ -890,9 +890,9 @@ surface in three layers that must stay separate:
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
 `Config.IsGroupEnabled` and `Supported` from `capability.Set.Supports` (see
-"Host capability floor" above). The four sources are keyed to
+"Host capability floor" above). The five sources are keyed to
 `bootc_updates_group`, `flatpak_updates_group`, and `brew_updates_group` on
-`updates_page`, and `features_group` on `features_page`.
+`updates_page`, and `features_group` and `printers_group` on `features_page`.
 
 The shell reads the user's preferences through the window's one
 `settings.Store`, which the Preferences dialog's switches are bound to as

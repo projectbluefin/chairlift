@@ -268,7 +268,8 @@ as an all-or-nothing success.
 on their own. Each runs as a small container in your own account and only
 this computer can use it: other computers on your network can't print to it
 or reach its settings page. When one is running, its row names the local web
-page where you add and manage printers. Turning a driver on checks that its
+page where you add and manage printers, with a **Manage** button that opens
+it in your default browser. Turning a driver on checks that its
 image was signed by its publisher and keeps that exact version. Turn it off
 and back on to get a newer checked version; automatic driver updates are not
 yet available. Older installations need the same off/on step to gain this

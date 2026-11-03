@@ -10,6 +10,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
+	"github.com/projectbluefin/chairlift/internal/userprefs"
 )
 
 var (
@@ -128,7 +129,7 @@ func TestPrinterAppsCheckOffersALegacyTaggedUnit(t *testing.T) {
 }
 
 // One unverifiable family must not hide another family's update: the
-// coordinator keeps no items from a Check that returns an error.
+// provider returns a warning for it while preserving the verified item.
 func TestPrinterAppsCheckOffersVerifiedUpdatesDespiteAnUnverifiableFamily(t *testing.T) {
 	apps := printerFamilies()
 	ghostscript, hplip := apps[0], apps[1]
@@ -148,10 +149,13 @@ func TestPrinterAppsCheckOffersVerifiedUpdatesDespiteAnUnverifiableFamily(t *tes
 	if len(got.Items) != 1 || got.Items[0].ID != hplip.UnitName() {
 		t.Fatalf("Check() items = %#v, want the verified HPLIP update still offered", got.Items)
 	}
+	if len(got.Warnings) != 1 || got.Warnings[0] != "Ghostscript" {
+		t.Fatalf("Check() warnings = %#v, want the unchecked Ghostscript family named", got.Warnings)
+	}
 }
 
-// With nothing to offer, an unverifiable family fails the check by name
-// rather than letting the source read as up to date.
+// With nothing to offer, an unverifiable family still produces a named
+// warning so the row cannot read as up to date.
 func TestPrinterAppsCheckReportsAnUnverifiableFamilyByName(t *testing.T) {
 	apps := printerFamilies()
 	ghostscript, hplip := apps[0], apps[1]
@@ -165,8 +169,11 @@ func TestPrinterAppsCheckReportsAnUnverifiableFamilyByName(t *testing.T) {
 	}
 
 	got, err := newPrinterApps(fake.deps()).Check(context.Background())
-	if !errors.Is(err, printerapp.ErrSignatureUnverified) || !strings.Contains(err.Error(), "Ghostscript") {
-		t.Fatalf("Check() error = %v, want the Ghostscript verification failure", err)
+	if err != nil {
+		t.Fatalf("Check() error = %v, want the failed family reported as a warning", err)
+	}
+	if len(got.Warnings) != 1 || got.Warnings[0] != "Ghostscript" {
+		t.Fatalf("Check() warnings = %#v, want Ghostscript", got.Warnings)
 	}
 	if len(got.Items) != 0 {
 		t.Fatalf("Check() items = %#v, want none", got.Items)
@@ -212,6 +219,12 @@ func TestPrinterAppsApplyReportsAVerificationFailurePerItem(t *testing.T) {
 	if result.Changed {
 		t.Fatal("Apply() claimed a change despite a failed refresh")
 	}
+	if len(result.PendingItems) != 1 || result.PendingItems[0].ID != apps[0].UnitName() {
+		t.Fatalf("Apply() pending items = %#v, want only Ghostscript", result.PendingItems)
+	}
+	if len(result.Warnings) != 1 || result.Warnings[0] != "Ghostscript" {
+		t.Fatalf("Apply() warnings = %#v, want Ghostscript", result.Warnings)
+	}
 	if want := []string{apps[0].UnitName(), apps[1].UnitName()}; !reflect.DeepEqual(fake.refreshed, want) {
 		t.Fatalf("refreshed = %v, want %v: one failure must not stop the others", fake.refreshed, want)
 	}
@@ -244,5 +257,50 @@ func TestPrinterAppImageVersion(t *testing.T) {
 		if got := imageVersion(image); got != want {
 			t.Errorf("imageVersion(%q) = %q, want %q", image, got, want)
 		}
+	}
+}
+
+func TestPrinterAppsRetryOnlyRefreshesFailedFamilies(t *testing.T) {
+	apps := printerFamilies()
+	ghostscript, hplip := apps[0], apps[1]
+	fake := &fakePrinterApps{
+		installed: map[string]string{
+			ghostscript.UnitName(): pinned(ghostscript, printerDigestA),
+			hplip.UnitName():       pinned(hplip, printerDigestA),
+		},
+		verified: map[string]string{
+			"ghostscript": pinned(ghostscript, printerDigestB),
+			"hplip":       pinned(hplip, printerDigestB),
+		},
+		refreshEr: map[string]error{"ghostscript": printerapp.ErrSignatureUnverified},
+	}
+	provider := newPrinterApps(fake.deps())
+	coordinator := updateflow.New([]updateflow.Provider{provider}, nil)
+	preferences := userprefs.Values{PrinterDrivers: true}
+	policy := map[updateflow.SourceID]updateflow.Policy{
+		updateflow.PrinterDrivers: {Configured: true, Supported: true},
+	}
+	checked := coordinator.Check(context.Background(), preferences, policy, nil)
+	if len(checked.Sources) != 1 || len(checked.Sources[0].Items) != 2 {
+		t.Fatalf("checked snapshot = %#v, want both printer updates", checked)
+	}
+
+	failed := coordinator.UpdateAll(context.Background(), checked, preferences, nil)
+	source := failed.Sources[0]
+	if len(source.Items) != 1 || source.Items[0].ID != ghostscript.UnitName() {
+		t.Fatalf("failed source items = %#v, want only Ghostscript pending", source.Items)
+	}
+	if len(source.ApplyWarnings) != 1 || source.ApplyWarnings[0] != "Ghostscript" {
+		t.Fatalf("failed source warnings = %#v, want Ghostscript", source.ApplyWarnings)
+	}
+
+	fake.refreshEr = nil
+	retried := coordinator.UpdateAll(context.Background(), failed, preferences, nil)
+	want := []string{ghostscript.UnitName(), hplip.UnitName(), ghostscript.UnitName()}
+	if !reflect.DeepEqual(fake.refreshed, want) {
+		t.Fatalf("Refresh calls = %v, want first attempt of both and retry of Ghostscript only", fake.refreshed)
+	}
+	if retried.TotalUpdates != 0 || retried.Sources[0].ApplyErr != nil {
+		t.Fatalf("retry snapshot = %#v, want no pending updates or apply error", retried)
 	}
 }

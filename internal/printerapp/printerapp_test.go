@@ -3,6 +3,7 @@ package printerapp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -528,5 +529,20 @@ func TestDisableWaitsForAnInFlightRefreshOfTheSameApp(t *testing.T) {
 	want := []string{"daemon-reload", "restart " + app.ServiceName(), "stop " + app.ServiceName(), "daemon-reload"}
 	if !reflect.DeepEqual(*calls, want) {
 		t.Fatalf("calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
+	for _, f := range Families() {
+		app := Select(f)
+		want := fmt.Sprintf("http://localhost:%d/", app.Port())
+		if got := app.WebAdminURL(); got != want {
+			t.Errorf("app %s WebAdminURL = %q, want %q", f.ID, got, want)
+		}
+		unit := RenderUnit(app)
+		wantPublish := fmt.Sprintf("PublishPort=127.0.0.1:%d:%d", app.Port(), app.Port())
+		if !strings.Contains(unit, wantPublish) {
+			t.Errorf("app %s rendered unit missing %q", f.ID, wantPublish)
+		}
 	}
 }

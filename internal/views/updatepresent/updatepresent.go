@@ -105,6 +105,9 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
+		if len(state.ApplyWarnings) > 0 {
+			return title, gotext.Get("Couldn't update %s. %s", strings.Join(state.ApplyWarnings, ", "), FailureHint(state.ApplyErr))
+		}
 		return title, gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
 	case state.CheckErr != nil:
 		return title, gotext.Get("Couldn't check for updates. %s", FailureHint(state.CheckErr))
@@ -114,7 +117,15 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 		if item, ok := soleOSItem(state); ok {
 			return title, soleItemSubtitle(item)
 		}
-		return title, gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
+		subtitle = gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
+		if len(state.CheckWarnings) > 0 {
+			// A partial check must not read as a complete one: name what it
+			// could not cover beside the updates it did find.
+			subtitle = gotext.Get("%s · couldn't check %s", subtitle, strings.Join(state.CheckWarnings, ", "))
+		}
+		return title, subtitle
+	case len(state.CheckWarnings) > 0:
+		return title, gotext.Get("Couldn't check %s. %s", strings.Join(state.CheckWarnings, ", "), logHint())
 	case state.Completed:
 		return title, gotext.Get("Updated")
 	default:
@@ -313,13 +324,16 @@ func checkErrorDetail(state updateflow.Snapshot) string {
 	var failed []string
 	hint := ""
 	for _, source := range state.Sources {
-		if source.CheckErr == nil {
+		if source.CheckErr == nil && len(source.CheckWarnings) == 0 {
 			continue
 		}
 		failed = append(failed, sourceTitle(source.ID))
 		// One hint covers the line only when every failure earns it;
 		// otherwise the rows carry their own and the line points at the log.
-		sourceHint := FailureHint(source.CheckErr)
+		sourceHint := logHint()
+		if source.CheckErr != nil {
+			sourceHint = FailureHint(source.CheckErr)
+		}
 		if hint == "" {
 			hint = sourceHint
 		} else if hint != sourceHint {

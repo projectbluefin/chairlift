@@ -88,17 +88,17 @@ applying it is the same migration as turning the family off and on. Applying
 calls `Refresh` once per selected app. `Enable`, `Refresh` and `Disable` take
 one per-app lock inside `internal/printerapp`, so an update cannot rewrite and
 restart a unit the Printers page switch removed during verification. A family
-whose check fails never hides another's update: when any update can be
-offered, check returns those and logs each failure by family name; only when
-nothing can be offered does the check fail, so an unverifiable driver never
-reads as up to date. An apply failure is reported against that family by name
-and the next family is still refreshed. There is no
-background schedule: pins advance when the person checks for and applies
-updates. Diagnostic image
-presence probes read `Image=` from the installed quadlet, not the family's
-moving tag; a cached verified digest need not have a local `:stable` tag.
-
-`Select(family)` returns the default `App{Family: family, Name: family.ID}`.
+whose check fails never hides another's update: the provider returns available
+updates and names every unchecked family in `CheckResult.Warnings`; the row
+shows those warnings beside available work, or as a retryable check failure
+when no update could be confirmed. An apply failure leaves only the failed
+apps in `ApplyResult.PendingItems`, names them in `ApplyResult.Warnings`, and
+continues with the next family. The coordinator's retry therefore refreshes
+only failed families rather than restarting those already updated. There is
+no background schedule: pins advance when the person checks for and applies
+updates. Diagnostic image presence probes read `Image=` from the installed
+quadlet, not the family's moving tag; a cached verified digest need not have a
+local `:stable` tag.
 Its quadlet filename is the unit/container identity below plus `.container`;
 its service name is that identity plus `.service`.
 
