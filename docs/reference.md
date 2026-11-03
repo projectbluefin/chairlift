@@ -83,6 +83,58 @@ checked separately after the page is built.
 | Release Channel | `channel_group` | Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | System Version | `bootc_status_group` | Compact booted/staged version readout, with image reference and build identifiers behind a details row; shown only when `bootc.IsBootcBootedCached()` reports a booted deployment |
 
+#### Recovering a failed Developer tools update
+
+If Developer tools fails with a Homebrew error such as
+`Error: /home/linuxbrew/.linuxbrew/Cellar/chezmoi/2.74.0 is not a directory`,
+Homebrew could not find the installed package directory it expected. In
+[the reported chezmoi failure (#676)](https://github.com/projectbluefin/chairlift/issues/676),
+the reporter recovered by running cleanup. This is a reported workaround;
+the missing directory's cause was not established.
+
+Wait for the current update to finish before attempting recovery. To clean
+only Homebrew, open a terminal as your normal user and preview what it will
+remove:
+
+```sh
+brew cleanup --dry-run
+```
+
+If the proposed removals are acceptable, run:
+
+```sh
+brew cleanup
+```
+
+Cleanup removes old package versions and stale downloads. See
+[Homebrew's cleanup reference](https://docs.brew.sh/Manpage#cleanup-options-formulacask-).
+Alternatively, **Maintenance → Free Up Space** runs Homebrew cleanup too,
+when enabled; it also removes unused Flatpak runtimes and extensions. Wait
+for cleanup to finish successfully, then return to **Updates** and choose
+**Retry Failed**. If you already left the failed run, check for updates and
+start a new run.
+
+The **Run maintenance after updates** preference runs cleanup after updates;
+it does not perform this recovery before an upgrade. The separate scheduled
+updater, `uupd`, owns its own Brew Upgrade stage. Changing that stage's order
+requires a change to that updater, rather than a Control Center release.
+
+If cleanup or the retry still fails, keep the exact error and collect:
+
+```sh
+brew config
+brew doctor --debug --verbose
+brew list --versions chezmoi
+journalctl -b -u uupd.service --no-pager -n 200
+```
+
+Replace `chezmoi` with the affected package's name. The journal command is
+useful when the scheduled updater failed. Include failed diagnostic output
+in the report too, after removing personal information. Do not manually
+delete package directories to silence the error. If the system journal also
+reports `fs-verity` corruption, report it separately: successful package
+cleanup does not establish that the corruption is repaired.
+
 ### Apps Page (`applications_page`)
 
 Its sidebar title is "Apps"; `applications_page` is the configuration key.
