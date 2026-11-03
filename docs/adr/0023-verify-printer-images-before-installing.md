@@ -35,12 +35,15 @@ rootless account, state volume and loopback-only network boundary unchanged.
   A later tag change cannot alter their pinned image on restart.
 - Missing cosign, network failures and rejected signatures prevent installation
   rather than silently falling back to an unchecked pull.
-- This implementation is the first part of recommendation A. `Refresh` is a
-  package API; scheduled verified refresh and Updates-page integration are
-  not implemented. Users can disable/re-enable to receive a newer verified
-  image. Existing units are not automatically migrated and still need that
-  action; the Features page row of such a unit (one still carrying
-  `AutoUpdate=registry`) says so and asks the person to turn it off and on; issue #582 remains open for migration and automatic verified updates.
+- This implementation is the first part of recommendation A. Verified
+  updates are offered on the Updates page as the **Printer Drivers** source
+  (issue #652): a family whose verified `:stable` digest differs from its
+  installed `Image=` is listed, and applying it calls `Refresh`. There is no
+  background schedule. Existing units are not migrated on their own; the
+  Features page row of such a unit (one still carrying
+  `AutoUpdate=registry`) says so and asks the person to turn it off and on,
+  and the Updates page offers the same migration because the unit's tag
+  differs from every verified pin.
 - Verification failure during refresh preserves the existing unit and running
   service. Later reload/restart failure is reported but does not restore an
   old unit or image. Disabling leaves printer state intact.

@@ -93,15 +93,19 @@ func (c *Coordinator) Check(
 				source.Enabled = false
 				source.Items = nil
 				source.CheckErr = nil
+				source.CheckWarnings = nil
 			case err != nil:
 				// The UI shows plain words for a failure; the raw error is
 				// kept here, in the log, where it was produced.
 				log.Printf("updates: checking %s: %v", source.ID, err)
 				source.CheckErr = err
+				source.CheckWarnings = nil
 			default:
 				source.Items = append([]Item(nil), result.Items...)
 				source.CheckErr = nil
+				source.CheckWarnings = append([]string(nil), result.Warnings...)
 				source.ApplyErr = nil
+				source.ApplyWarnings = nil
 				source.RestartRequired = result.RestartRequired
 			}
 			state.Sources = cloneSources(sources)
@@ -278,12 +282,19 @@ func (c *Coordinator) UpdateAll(
 			source.Updating = false
 			if err != nil {
 				log.Printf("updates: updating %s: %v", id, err)
+				if result.PendingItems != nil {
+					source.Items = append([]Item(nil), result.PendingItems...)
+					source.ApplyWarnings = append([]string(nil), result.Warnings...)
+				} else {
+					source.ApplyWarnings = nil
+				}
 				source.ApplyErr = err
 				source.Completed = false
 				removeSourceID(&state.CompletedSources, id)
 				hadFailure = true
 			} else {
 				source.ApplyErr = nil
+				source.ApplyWarnings = nil
 				switch {
 				case result.Preview:
 					source.Completed = false

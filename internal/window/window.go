@@ -176,6 +176,7 @@ func (w *Window) buildUI() {
 		updateproviders.NewFlatpak(),
 		updateproviders.NewHomebrew(),
 		updateproviders.NewSystemComponents(),
+		updateproviders.NewPrinterApps(),
 		updateproviders.NewOperatingSystem(),
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
@@ -200,6 +201,7 @@ func (w *Window) buildUI() {
 				updateflow.Applications:     sourcePolicy("updates_page", "flatpak_updates_group"),
 				updateflow.DeveloperTools:   sourcePolicy("updates_page", "brew_updates_group"),
 				updateflow.SystemComponents: sourcePolicy("features_page", "features_group"),
+				updateflow.PrinterDrivers:   sourcePolicy("features_page", "printers_group"),
 			}
 		},
 		w,

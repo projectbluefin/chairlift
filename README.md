@@ -70,9 +70,9 @@ so they cost nothing on any other host.
 ### 🔄 Unified Updates
 
 The Updates page leads with the system's status — "Up to date · checked at …", or
-how many updates are waiting — above an **Update Sources** list of the four
-things that can be updated: Applications, Developer Tools, System Components,
-and Operating System. One primary action covers all of them: **Check Again**
+how many updates are waiting — above an **Update Sources** list of the five
+things that can be updated: Applications, Developer Tools, Printer Drivers,
+System Components, and Operating System. One primary action covers all of them: **Check Again**
 when nothing is pending, **Update All** when something is, and **Retry Failed**
 when a source did not finish. Once an OS image is staged, the **Operating
 System** row carries its own **Restart Now** suffix instead.

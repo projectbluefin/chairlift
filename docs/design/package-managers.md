@@ -41,7 +41,7 @@ inventories or executable paths. Every widget update returns through
 
 ## Unified updates
 
-The four `updateflow.SourceID` values map to these production adapters and
+The five `updateflow.SourceID` values map to these production adapters and
 configuration namespaces in [`internal/window/window.go`](../../internal/window/window.go):
 
 | Source | Constructor | Policy group | Apply operation |
@@ -49,19 +49,22 @@ configuration namespaces in [`internal/window/window.go`](../../internal/window/
 | `applications` | `NewFlatpak` | `updates_page.flatpak_updates_group` | Update the user/system scopes represented by pending items |
 | `developer-tools` | `NewHomebrew` | `updates_page.brew_updates_group` | `homebrew.Update(ctx)` followed by `homebrew.Upgrade(ctx, "")`, then `ublue.UpdateDocker(ctx)` when the `docker-runtime` item is pending |
 | `system-components` | `NewSystemComponents` | `features_page.features_group` | `updex.UpdateFeatures(ctx)` |
+| `printer-drivers` | `NewPrinterApps` | `features_page.printers_group` | `printerapp.Refresh(ctx, app)` once per selected app |
 | `operating-system` | `NewOperatingSystem` | `updates_page.bootc_updates_group` | `bootc.StageUpdate(ctx, events)` |
 
 `Provider` supplies `ID()`, `Available()`,
 `Check(context.Context) (CheckResult, error)` and
 `Apply(context.Context, []Item, func(Progress)) (ApplyResult, error)`.
 `Item.ID` is execution identity, separate from `Name`; `Scope` preserves the
-Flatpak installation or bootc transport. `CheckResult` carries pending items
-and restart state. `ApplyResult` carries `Changed`, `Preview` and
-`RestartRequired` independently.
+Flatpak installation or bootc transport. `CheckResult` carries pending items,
+restart state, and warnings naming parts a partial check could not cover.
+`ApplyResult` carries `Changed`, `Preview` and `RestartRequired`; after a
+partial error, `PendingItems` and `Warnings` let the coordinator retry only
+the failed items and show their names.
 
 [`Coordinator`](../../internal/updateflow/coordinator.go) checks enabled
 sources concurrently and applies pending sources serially in provider order:
-Flatpak, Homebrew, updex, bootc. `Policy.Configured` is administrator policy;
+Flatpak, Homebrew, updex, printer drivers, bootc. `Policy.Configured` is administrator policy;
 `Policy.Supported` is the capability floor. Provider availability and user
 preferences remain separate from both. Unavailable, administrator-disabled,
 user-disabled, check failure and apply failure must not collapse into one

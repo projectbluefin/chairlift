@@ -47,6 +47,14 @@ func (w *Window) buildPreferences() *adw.PreferencesDialog {
 			sourcesGroup.Add(&row.Widget)
 			continue
 		}
+		// An installed schema older than this build lacks the key: show
+		// the default (every source on) without a switch that cannot save.
+		if store.Missing(preference.Key) {
+			row.SetActive(true)
+			row.SetSensitive(false)
+			sourcesGroup.Add(&row.Widget)
+			continue
+		}
 		// Bind first: the default GSettings binding sets sensitivity from
 		// the key's writability (dconf lockdown), which overwrote an
 		// earlier "unavailable" decision. Narrow what the bind left.

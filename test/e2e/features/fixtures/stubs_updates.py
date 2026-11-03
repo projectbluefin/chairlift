@@ -215,6 +215,35 @@ def brew_current(context):
     _install_brew(context, NOTHING_OUTDATED)
 
 
+@stub("updates-printer-partial-check")
+def printer_partial_check(context):
+    """HPLIP has a verified update while Ghostscript verification fails."""
+    unit_dir = os.path.join(context.home, ".config", "containers", "systemd")
+    os.makedirs(unit_dir, exist_ok=True)
+    for family in ("ghostscript", "hplip"):
+        path = os.path.join(unit_dir, f"chairlift-printer-{family}.container")
+        image = f"ghcr.io/projectbluefin/{family}-printer-app@sha256:{'a' * 64}"
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(f"[Container]\nImage={image}\n")
+
+    state = state_dir(context)
+    payload = json.dumps([{"critical": {"image": {"docker-manifest-digest": "sha256:" + "b" * 64}}}])
+    fake_executable(context, "podman", "exit 0\n")
+    fake_executable(
+        context,
+        "cosign",
+        f"""
+state='{state}'
+printf '%s\\n' "$*" >> "$state/cosign.calls"
+case "$*" in
+  *ghostscript-printer-app:stable*) echo "signature rejected" >&2; exit 1 ;;
+  *hplip-printer-app:stable*) printf '%s\\n' '{payload}'; exit 0 ;;
+esac
+exit 1
+""",
+    )
+
+
 @stub("updates-brew-trust-check-fails")
 def brew_trust_check_fails(context):
     write_state(context, "brew-tap-info.fail", "Error: Broken pipe\n")

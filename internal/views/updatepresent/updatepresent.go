@@ -105,7 +105,14 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 	case state.Updating:
 		return title, gotext.Get("Installing updates…")
 	case state.ApplyErr != nil:
-		return title, gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
+		subtitle := gotext.Get("Couldn't update. %s", FailureHint(state.ApplyErr))
+		if len(state.ApplyWarnings) > 0 {
+			subtitle = gotext.Get("Couldn't update %s. %s", strings.Join(state.ApplyWarnings, ", "), FailureHint(state.ApplyErr))
+		}
+		if len(state.CheckWarnings) > 0 {
+			subtitle = gotext.Get("%s · couldn't check %s", subtitle, strings.Join(state.CheckWarnings, ", "))
+		}
+		return title, subtitle
 	case state.CheckErr != nil:
 		return title, gotext.Get("Couldn't check for updates. %s", FailureHint(state.CheckErr))
 	case state.RestartRequired:
@@ -114,7 +121,15 @@ func Source(state updateflow.SourceState) (title, subtitle string) {
 		if item, ok := soleOSItem(state); ok {
 			return title, soleItemSubtitle(item)
 		}
-		return title, gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
+		subtitle = gotext.GetN("%d update available", "%d updates available", len(state.Items), len(state.Items))
+		if len(state.CheckWarnings) > 0 {
+			// A partial check must not read as a complete one: name what it
+			// could not cover beside the updates it did find.
+			subtitle = gotext.Get("%s · couldn't check %s", subtitle, strings.Join(state.CheckWarnings, ", "))
+		}
+		return title, subtitle
+	case len(state.CheckWarnings) > 0:
+		return title, gotext.Get("Couldn't check %s. %s", strings.Join(state.CheckWarnings, ", "), logHint())
 	case state.Completed:
 		return title, gotext.Get("Updated")
 	default:
@@ -172,6 +187,8 @@ func SourceIcon(id updateflow.SourceID) string {
 		return "application-x-addon-symbolic"
 	case updateflow.OperatingSystem:
 		return "drive-harddisk-system-symbolic"
+	case updateflow.PrinterDrivers:
+		return "printer-symbolic"
 	default:
 		return "software-update-available-symbolic"
 	}
@@ -311,13 +328,16 @@ func checkErrorDetail(state updateflow.Snapshot) string {
 	var failed []string
 	hint := ""
 	for _, source := range state.Sources {
-		if source.CheckErr == nil {
+		if source.CheckErr == nil && len(source.CheckWarnings) == 0 {
 			continue
 		}
 		failed = append(failed, sourceTitle(source.ID))
 		// One hint covers the line only when every failure earns it;
 		// otherwise the rows carry their own and the line points at the log.
-		sourceHint := FailureHint(source.CheckErr)
+		sourceHint := logHint()
+		if source.CheckErr != nil {
+			sourceHint = FailureHint(source.CheckErr)
+		}
 		if hint == "" {
 			hint = sourceHint
 		} else if hint != sourceHint {
@@ -415,14 +435,30 @@ func partialFailurePresentation(state updateflow.Snapshot) Presentation {
 			Detail: gotext.Get("Old files are still on this computer. %s", FailureHint(state.MaintenanceErr))}
 	}
 	presentation := Presentation{Status: gotext.Get("Couldn't install some updates")}
-	if len(state.FailedSources) > 0 {
-		failed := make([]string, 0, len(state.FailedSources))
-		for _, id := range state.FailedSources {
-			failed = append(failed, sourceTitle(id))
+	failed := make([]string, 0, len(state.FailedSources))
+	for _, id := range state.FailedSources {
+		if checkWarningOnly(state.Sources, id) {
+			continue
 		}
+		failed = append(failed, sourceTitle(id))
+	}
+	if len(failed) > 0 {
 		presentation.Detail = gotext.Get("Not updated: %s", strings.Join(failed, ", "))
 	}
 	return presentation
+}
+
+// checkWarningOnly reports whether a failed source failed only by leaving
+// part of its check uncovered. Its found updates may have installed, and
+// Retry Failed does not rerun it, so it is not "Not updated"; its row names
+// what the check missed.
+func checkWarningOnly(sources []updateflow.SourceState, id updateflow.SourceID) bool {
+	for _, source := range sources {
+		if source.ID == id {
+			return source.CheckErr == nil && source.ApplyErr == nil && len(source.CheckWarnings) > 0
+		}
+	}
+	return false
 }
 
 func addAction(presentation *Presentation, action updateflow.Action, checkLabel string) {
@@ -452,6 +488,8 @@ func sourceTitle(id updateflow.SourceID) string {
 		return gotext.Get("System Components")
 	case updateflow.OperatingSystem:
 		return gotext.Get("Operating System")
+	case updateflow.PrinterDrivers:
+		return gotext.Get("Printer Drivers")
 	default:
 		return gotext.Get("Updates")
 	}

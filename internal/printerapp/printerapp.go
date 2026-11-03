@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -355,16 +356,37 @@ func IsEnabled(app App) bool {
 	return err == nil
 }
 
+// appLocks serialises Enable, Refresh and Disable per app, keyed by unit
+// name, so a Disable during Refresh's signature check cannot be undone by
+// Refresh then writing and restarting the unit.
+var appLocks sync.Map
+
+// lockWaitHook, when set by a test, runs just before an operation waits for
+// its app's lock.
+var lockWaitHook func(App)
+
+func lockApp(app App) func() {
+	if lockWaitHook != nil {
+		lockWaitHook(app)
+	}
+	value, _ := appLocks.LoadOrStore(app.UnitName(), &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
 // Enable verifies the image signature before writing or starting a unit.
 // The runtime pulls only the verified digest, even if the tag moves afterwards.
 func Enable(ctx context.Context, app App) error {
+	defer lockApp(app)()
 	return installVerified(ctx, app, "start")
 }
 
 // Refresh verifies the current family reference and restarts an installed app
 // with that digest. A failed verification leaves its unit and service untouched.
-// Callers must serialize lifecycle operations for the same app.
+// It is serialised with Enable and Disable of the same app.
 func Refresh(ctx context.Context, app App) error {
+	defer lockApp(app)()
 	if !IsEnabled(app) {
 		return fmt.Errorf("printerapp: %s is not enabled", app.UnitName())
 	}
@@ -429,6 +451,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 // are large, they are expensive to re-fetch or reconfigure, and removing them
 // is a disk-space decision the user did not make by turning a switch off.
 func Disable(ctx context.Context, app App) error {
+	defer lockApp(app)()
 	path, err := UnitPath(app)
 	if err != nil {
 		return err

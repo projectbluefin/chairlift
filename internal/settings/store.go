@@ -17,6 +17,7 @@ const (
 	applicationsKey            = "applications-enabled"
 	developerToolsKey          = "developer-tools-enabled"
 	systemComponentsKey        = "system-components-enabled"
+	printerDriversKey          = "printer-drivers-enabled"
 	maintenanceAfterUpdatesKey = "maintenance-after-updates"
 )
 
@@ -24,6 +25,10 @@ const (
 // GTK object properties.
 type Store struct {
 	settings *gio.Settings
+	// keys holds the keys the installed schema defines. An installed schema
+	// older than this binary lacks newer keys, and GSettings aborts the
+	// process on any read or bind of an unknown key.
+	keys map[string]bool
 	// changed is the one GSettings::changed callback a Store connects; it
 	// lives in the struct so puregotk's callback table holds one slot for
 	// the Store's lifetime.
@@ -51,11 +56,39 @@ func New() *Store {
 	if !SchemaAvailable() {
 		return &Store{settings: nil}
 	}
-	return &Store{settings: gio.NewSettings(SchemaID)}
+	source := gio.SettingsSchemaSourceGetDefault()
+	schema := source.Lookup(SchemaID, true)
+	defaults := keyDefaults()
+	keys := make(map[string]bool, len(defaults))
+	for key := range defaults {
+		keys[key] = schema.HasKey(key)
+	}
+	schema.Unref()
+	return &Store{settings: gio.NewSettings(SchemaID), keys: keys}
+}
+
+// keyDefaults maps every key Values reads to its no-schema default, taken
+// from the fallback literal in Values so the two cannot drift.
+func keyDefaults() map[string]bool {
+	defaults := (*Store)(nil).Values()
+	return map[string]bool{
+		operatingSystemKey:         defaults.OperatingSystem,
+		applicationsKey:            defaults.Applications,
+		developerToolsKey:          defaults.DeveloperTools,
+		systemComponentsKey:        defaults.SystemComponents,
+		printerDriversKey:          defaults.PrinterDrivers,
+		maintenanceAfterUpdatesKey: defaults.MaintenanceAfterUpdates,
+	}
+}
+
+// Missing reports whether the schema is installed but predates key, so the
+// key can be neither read nor bound.
+func (s *Store) Missing(key string) bool {
+	return s != nil && s.settings != nil && !s.keys[key]
 }
 
 // Values returns the current user preference values, defaulting to enabled
-// when the schema is not installed.
+// when the schema, or a key in it, is not installed.
 func (s *Store) Values() userprefs.Values {
 	if s == nil || s.settings == nil {
 		return userprefs.Values{
@@ -63,27 +96,43 @@ func (s *Store) Values() userprefs.Values {
 			Applications:            true,
 			DeveloperTools:          true,
 			SystemComponents:        true,
+			PrinterDrivers:          true,
 			MaintenanceAfterUpdates: false,
 		}
 	}
+	settings := keyReader{store: s}
 	return userprefs.Values{
-		OperatingSystem:         s.settings.GetBoolean(operatingSystemKey),
-		Applications:            s.settings.GetBoolean(applicationsKey),
-		DeveloperTools:          s.settings.GetBoolean(developerToolsKey),
-		SystemComponents:        s.settings.GetBoolean(systemComponentsKey),
-		MaintenanceAfterUpdates: s.settings.GetBoolean(maintenanceAfterUpdatesKey),
+		OperatingSystem:         settings.GetBoolean(operatingSystemKey),
+		Applications:            settings.GetBoolean(applicationsKey),
+		DeveloperTools:          settings.GetBoolean(developerToolsKey),
+		SystemComponents:        settings.GetBoolean(systemComponentsKey),
+		PrinterDrivers:          settings.GetBoolean(printerDriversKey),
+		MaintenanceAfterUpdates: settings.GetBoolean(maintenanceAfterUpdatesKey),
 	}
+}
+
+// keyReader reads boolean keys, answering a key the installed schema lacks
+// with the no-schema default from Values instead of aborting.
+type keyReader struct {
+	store *Store
+}
+
+func (r keyReader) GetBoolean(key string) bool {
+	if r.store.Missing(key) {
+		return keyDefaults()[key]
+	}
+	return r.store.settings.GetBoolean(key)
 }
 
 // BindBoolean binds a boolean GSettings key to an object's active property if available.
 func (s *Store) BindBoolean(key string, object *gobject.Object) {
-	if s == nil || s.settings == nil {
+	if s == nil || s.settings == nil || s.Missing(key) {
 		return
 	}
 	s.settings.Bind(key, object, "active", gio.GSettingsBindDefaultValue)
 }
 
-// OnSourceChanged calls fn on the GTK main thread whenever one of the four
+// OnSourceChanged calls fn on the GTK main thread whenever one of the
 // update-source keys changes, from this process (the Preferences dialog's
 // bound switches) or another (gsettings, dconf-editor). Call it once per
 // Store, at build time: each call claims a puregotk callback slot. It does
@@ -94,7 +143,7 @@ func (s *Store) OnSourceChanged(fn func()) {
 	}
 	s.changed = func(_ gio.Settings, key string) {
 		switch key {
-		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey:
+		case operatingSystemKey, applicationsKey, developerToolsKey, systemComponentsKey, printerDriversKey:
 			fn()
 		}
 	}

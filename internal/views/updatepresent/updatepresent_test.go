@@ -187,6 +187,26 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 				ActionStyle: "suggested-action"},
 		},
 		{
+			name: "partial failure omits a source with only check warnings",
+			state: updateflow.Snapshot{
+				Phase:  updateflow.PhasePartialFailure,
+				Action: updateflow.ActionRetryFailed,
+				FailedSources: []updateflow.SourceID{
+					updateflow.DeveloperTools,
+					updateflow.PrinterDrivers,
+				},
+				Sources: []updateflow.SourceState{
+					{ID: updateflow.DeveloperTools, ApplyErr: errors.New("permission denied")},
+					{ID: updateflow.PrinterDrivers, Completed: true, CheckWarnings: []string{"Ghostscript"}},
+				},
+			},
+			want: Presentation{Status: "Couldn't install some updates",
+				Detail:      "Not updated: Developer Tools",
+				ActionLabel: "Retry Failed",
+				ShowAction:  true,
+				ActionStyle: "suggested-action"},
+		},
+		{
 			name: "maintenance failure",
 			state: updateflow.Snapshot{
 				Phase:  updateflow.PhasePartialFailure,
@@ -350,6 +370,58 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Couldn't update. Details are in the log.",
 		},
 		{
+			name: "named apply warning",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				ApplyErr:      errors.New("signature rejected"),
+				ApplyWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update Ghostscript. Details are in the log.",
+		},
+		{
+			name: "apply failure keeps earlier check warning visible",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+				ApplyErr:      errors.New("refresh failed"),
+				ApplyWarnings: []string{"HPLIP"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update HPLIP. Details are in the log. · couldn't check Ghostscript",
+		},
+		{
+			name: "updates offered beside an unchecked family",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				Items:         []updateflow.Item{{Name: "HPLIP"}},
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "1 update available · couldn't check Ghostscript",
+		},
+		{
+			name: "unchecked family with no available updates",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't check Ghostscript. Details are in the log.",
+		},
+		{
 			name: "apply error that timed out",
 			state: updateflow.SourceState{
 				ID:         updateflow.Applications,
@@ -446,6 +518,7 @@ func TestSourceIconMapsProviderKinds(t *testing.T) {
 		{updateflow.DeveloperTools, "package-x-generic-symbolic"},
 		{updateflow.SystemComponents, "application-x-addon-symbolic"},
 		{updateflow.OperatingSystem, "drive-harddisk-system-symbolic"},
+		{updateflow.PrinterDrivers, "printer-symbolic"},
 		{"unknown", "software-update-available-symbolic"},
 	}
 	for _, tt := range tests {
@@ -795,7 +868,7 @@ func TestRestartFailedMessageHasNoRawError(t *testing.T) {
 // Applications and System components once shared one icon.
 func TestSourceIconsAreDistinct(t *testing.T) {
 	seen := map[string]updateflow.SourceID{}
-	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem} {
+	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem, updateflow.PrinterDrivers} {
 		icon := SourceIcon(id)
 		if other, ok := seen[icon]; ok {
 			t.Errorf("%s and %s share the icon %s", other, id, icon)
