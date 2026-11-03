@@ -81,34 +81,54 @@ func (s *Store) Missing(key string) bool {
 	return s != nil && s.settings != nil && !s.keys[key]
 }
 
-func (s *Store) boolean(key string, fallback bool) bool {
-	if s.Missing(key) {
-		return fallback
-	}
-	return s.settings.GetBoolean(key)
-}
-
 // Values returns the current user preference values, defaulting to enabled
 // when the schema, or a key in it, is not installed.
 func (s *Store) Values() userprefs.Values {
-	defaults := userprefs.Values{
-		OperatingSystem:         true,
-		Applications:            true,
-		DeveloperTools:          true,
-		SystemComponents:        true,
-		PrinterDrivers:          true,
-		MaintenanceAfterUpdates: false,
-	}
 	if s == nil || s.settings == nil {
-		return defaults
+		return userprefs.Values{
+			OperatingSystem:         true,
+			Applications:            true,
+			DeveloperTools:          true,
+			SystemComponents:        true,
+			PrinterDrivers:          true,
+			MaintenanceAfterUpdates: false,
+		}
 	}
+	settings := keyReader{store: s}
 	return userprefs.Values{
-		OperatingSystem:         s.boolean(operatingSystemKey, defaults.OperatingSystem),
-		Applications:            s.boolean(applicationsKey, defaults.Applications),
-		DeveloperTools:          s.boolean(developerToolsKey, defaults.DeveloperTools),
-		SystemComponents:        s.boolean(systemComponentsKey, defaults.SystemComponents),
-		PrinterDrivers:          s.boolean(printerDriversKey, defaults.PrinterDrivers),
-		MaintenanceAfterUpdates: s.boolean(maintenanceAfterUpdatesKey, defaults.MaintenanceAfterUpdates),
+		OperatingSystem:         settings.GetBoolean(operatingSystemKey),
+		Applications:            settings.GetBoolean(applicationsKey),
+		DeveloperTools:          settings.GetBoolean(developerToolsKey),
+		SystemComponents:        settings.GetBoolean(systemComponentsKey),
+		PrinterDrivers:          settings.GetBoolean(printerDriversKey),
+		MaintenanceAfterUpdates: settings.GetBoolean(maintenanceAfterUpdatesKey),
+	}
+}
+
+// keyReader reads boolean keys, answering a key the installed schema lacks
+// with the no-schema default from Values instead of aborting.
+type keyReader struct {
+	store *Store
+}
+
+func (r keyReader) GetBoolean(key string) bool {
+	if !r.store.Missing(key) {
+		return r.store.settings.GetBoolean(key)
+	}
+	defaults := (*Store)(nil).Values()
+	switch key {
+	case operatingSystemKey:
+		return defaults.OperatingSystem
+	case applicationsKey:
+		return defaults.Applications
+	case developerToolsKey:
+		return defaults.DeveloperTools
+	case systemComponentsKey:
+		return defaults.SystemComponents
+	case printerDriversKey:
+		return defaults.PrinterDrivers
+	default:
+		return defaults.MaintenanceAfterUpdates
 	}
 }
 
