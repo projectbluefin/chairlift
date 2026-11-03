@@ -37,7 +37,8 @@ under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
 Updates** groups System Components and Operating System; **Apps and Tools**
-groups Applications and Developer Tools. Each row shows its own state, so you
+groups Applications, Developer Tools and, on computers that can run printer
+drivers, Printer Drivers. Each row shows its own state, so you
 can see which source is holding you up without opening anything. A source
 your administrator turned off says **Disabled by administrator**; one this
 computer has no software for says **Not available on this computer** instead.

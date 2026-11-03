@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
@@ -128,7 +127,9 @@ func TestPrinterAppsCheckOffersALegacyTaggedUnit(t *testing.T) {
 	}
 }
 
-func TestPrinterAppsCheckReportsAnUnverifiableFamilyByName(t *testing.T) {
+// One unverifiable family must not hide another family's update: the
+// coordinator keeps no items from a Check that returns an error.
+func TestPrinterAppsCheckOffersVerifiedUpdatesDespiteAnUnverifiableFamily(t *testing.T) {
 	apps := printerFamilies()
 	ghostscript, hplip := apps[0], apps[1]
 	fake := &fakePrinterApps{
@@ -141,11 +142,34 @@ func TestPrinterAppsCheckReportsAnUnverifiableFamilyByName(t *testing.T) {
 	}
 
 	got, err := newPrinterApps(fake.deps()).Check(context.Background())
-	if !errors.Is(err, printerapp.ErrSignatureUnverified) || !strings.Contains(err.Error(), "Ghostscript") {
-		t.Fatalf("Check() error = %v, want the Ghostscript verification failure", err)
+	if err != nil {
+		t.Fatalf("Check() error = %v, want the verified HPLIP update offered without a source failure", err)
 	}
 	if len(got.Items) != 1 || got.Items[0].ID != hplip.UnitName() {
 		t.Fatalf("Check() items = %#v, want the verified HPLIP update still offered", got.Items)
+	}
+}
+
+// With nothing to offer, an unverifiable family fails the check by name
+// rather than letting the source read as up to date.
+func TestPrinterAppsCheckReportsAnUnverifiableFamilyByName(t *testing.T) {
+	apps := printerFamilies()
+	ghostscript, hplip := apps[0], apps[1]
+	fake := &fakePrinterApps{
+		installed: map[string]string{
+			ghostscript.UnitName(): pinned(ghostscript, printerDigestA),
+			hplip.UnitName():       pinned(hplip, printerDigestA),
+		},
+		verified:  map[string]string{"hplip": pinned(hplip, printerDigestA)},
+		verifyErr: map[string]error{"ghostscript": printerapp.ErrSignatureUnverified},
+	}
+
+	got, err := newPrinterApps(fake.deps()).Check(context.Background())
+	if !errors.Is(err, printerapp.ErrSignatureUnverified) || !strings.Contains(err.Error(), "Ghostscript") {
+		t.Fatalf("Check() error = %v, want the Ghostscript verification failure", err)
+	}
+	if len(got.Items) != 0 {
+		t.Fatalf("Check() items = %#v, want none", got.Items)
 	}
 }
 
@@ -208,47 +232,6 @@ func TestPrinterAppsApplyIsAPreviewInDryRun(t *testing.T) {
 	result, err := newPrinterApps(fake.deps()).Apply(context.Background(), []updateflow.Item{{ID: printerFamilies()[0].UnitName()}}, nil)
 	if err != nil || !result.Preview || result.Changed {
 		t.Fatalf("Apply() = %#v, %v; want a preview", result, err)
-	}
-}
-
-func TestPrinterAppsApplySerialisesRefreshesOfOneApp(t *testing.T) {
-	app := printerFamilies()[0]
-	var mu sync.Mutex
-	calls, active, peak := 0, 0, 0
-	deps := (&fakePrinterApps{}).deps()
-	deps.Refresh = func(context.Context, printerapp.App) error {
-		mu.Lock()
-		calls++
-		active++
-		peak = max(peak, active)
-		mu.Unlock()
-		time.Sleep(5 * time.Millisecond)
-		mu.Lock()
-		active--
-		mu.Unlock()
-		return nil
-	}
-	provider := newPrinterApps(deps)
-	unlock := lockPrinterApp(app)
-	var wg sync.WaitGroup
-	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, _ = provider.Apply(context.Background(), []updateflow.Item{{ID: app.UnitName()}}, nil)
-		}()
-	}
-	time.Sleep(20 * time.Millisecond)
-	mu.Lock()
-	whileLocked := calls
-	mu.Unlock()
-	unlock()
-	wg.Wait()
-	if whileLocked != 0 {
-		t.Fatalf("%d refreshes ran while another operation held the app", whileLocked)
-	}
-	if calls != 4 || peak != 1 {
-		t.Fatalf("calls = %d, peak concurrency = %d; want 4 serialised refreshes", calls, peak)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -476,5 +477,56 @@ func TestDefaultUnitDirReturnsPathUnderUserConfig(t *testing.T) {
 	want := filepath.Join(configDir, "containers", "systemd")
 	if got != want {
 		t.Errorf("defaultUnitDir() = %q, want %q", got, want)
+	}
+}
+
+// A Disable that arrives while Refresh is verifying must wait for Refresh to
+// finish, so Refresh cannot rewrite and restart a unit Disable just removed.
+func TestDisableWaitsForAnInFlightRefreshOfTheSameApp(t *testing.T) {
+	dir, calls := stubUnitDir(t)
+	app := Select(Families()[0])
+	if err := os.WriteFile(filepath.Join(dir, app.UnitName()), []byte("Image="+app.Family.Image+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	verifying := make(chan struct{})
+	release := make(chan struct{})
+	verify := runCosign
+	runCosign = func(ctx context.Context, args ...string) ([]byte, error) {
+		close(verifying)
+		<-release
+		return verify(ctx, args...)
+	}
+	waiting := make(chan struct{}, 2)
+	lockWaitHook = func(App) { waiting <- struct{}{} }
+	t.Cleanup(func() { lockWaitHook = nil })
+
+	refreshed := make(chan error, 1)
+	go func() { refreshed <- Refresh(context.Background(), app) }()
+	<-waiting
+	<-verifying
+
+	disabled := make(chan error, 1)
+	go func() { disabled <- Disable(context.Background(), app) }()
+	<-waiting
+	select {
+	case err := <-disabled:
+		t.Fatalf("Disable returned %v while Refresh held the app", err)
+	default:
+	}
+	close(release)
+
+	if err := <-refreshed; err != nil {
+		t.Fatalf("Refresh = %v", err)
+	}
+	if err := <-disabled; err != nil {
+		t.Fatalf("Disable = %v", err)
+	}
+	if IsEnabled(app) {
+		t.Fatal("unit survived a Disable issued during Refresh")
+	}
+	want := []string{"daemon-reload", "restart " + app.ServiceName(), "stop " + app.ServiceName(), "daemon-reload"}
+	if !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
 	}
 }

@@ -85,9 +85,14 @@ writing nothing); a family whose verified digest differs from the installed
 image is offered, showing the first twelve hex digits of each digest. A unit
 still on the moving tag differs from every pin, so it is offered too, and
 applying it is the same migration as turning the family off and on. Applying
-calls `Refresh` once per selected app, serialised per app by the provider; a
-verification failure in check or apply is reported against that family by
-name, never skipped, and the next family is still refreshed. There is no
+calls `Refresh` once per selected app. `Enable`, `Refresh` and `Disable` take
+one per-app lock inside `internal/printerapp`, so an update cannot rewrite and
+restart a unit the Printers page switch removed during verification. A family
+whose check fails never hides another's update: when any update can be
+offered, check returns those and logs each failure by family name; only when
+nothing can be offered does the check fail, so an unverifiable driver never
+reads as up to date. An apply failure is reported against that family by name
+and the next family is still refreshed. There is no
 background schedule: pins advance when the person checks for and applies
 updates. Diagnostic image
 presence probes read `Image=` from the installed quadlet, not the family's

@@ -1196,7 +1196,9 @@ this change from ADR-0020: old units require disable/re-enable to migrate,
 and their row's subtitle asks for it (`InstalledBeforeVerification`).
 Newer verified images reach installed units through the Updates page's
 Printer Drivers source (`updateproviders.NewPrinterApps`), which calls
-`Refresh`; there is no scheduled refresh. The toggle handler (`onPrinterAppToggled`) is admitted by a
+`Refresh`; there is no scheduled refresh. `Enable`, `Refresh` and `Disable`
+share one per-app lock inside `internal/printerapp`, so a toggle and an update
+of the same family never interleave. The toggle handler (`onPrinterAppToggled`) is admitted by a
 per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
 under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
 a dry run and a failure both restore the switch and the row's last state, a

@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
-	"sync"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -35,17 +35,6 @@ type PrinterAppDeps struct {
 
 type printerAppProvider struct {
 	deps PrinterAppDeps
-}
-
-// printerAppLocks serialises lifecycle operations per app, as
-// printerapp.Refresh requires, keyed by the app's unit name.
-var printerAppLocks sync.Map
-
-func lockPrinterApp(app printerapp.App) func() {
-	value, _ := printerAppLocks.LoadOrStore(app.UnitName(), &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
 }
 
 // NewPrinterApps constructs the production printer application update
@@ -82,9 +71,11 @@ func (p *printerAppProvider) Available() bool {
 }
 
 // Check offers every enabled app whose verified :stable digest differs from
-// the image its unit runs. A family whose signature cannot be verified is
-// reported as an error naming it rather than dropped, so an unverifiable
-// driver never reads as up to date.
+// the image its unit runs. A family that cannot be checked — its signature
+// does not verify, or its unit cannot be read — never hides the others: when
+// any update can be offered, Check returns those items and logs each failure
+// by family name. Only when nothing can be offered does it return the joined
+// failures, so an unverifiable driver never reads as up to date.
 func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult, error) {
 	var items []updateflow.Item
 	var errs []error
@@ -115,7 +106,14 @@ func (p *printerAppProvider) Check(ctx context.Context) (updateflow.CheckResult,
 			AvailableVersion: imageVersion(verified),
 		})
 	}
-	return updateflow.CheckResult{Items: items}, errors.Join(errs...)
+	err := errors.Join(errs...)
+	if err != nil && len(items) > 0 {
+		for _, failure := range errs {
+			log.Printf("updates: checking %s: %v", updateflow.PrinterDrivers, failure)
+		}
+		err = nil
+	}
+	return updateflow.CheckResult{Items: items}, err
 }
 
 // Apply refreshes each selected app in turn. One app's failure — including a
@@ -150,10 +148,7 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 				Fraction: float64(i) / float64(len(items)),
 			})
 		}
-		unlock := lockPrinterApp(app)
-		err := p.deps.Refresh(ctx, app)
-		unlock()
-		if err != nil {
+		if err := p.deps.Refresh(ctx, app); err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", printerAppName(app), err))
 			continue
 		}

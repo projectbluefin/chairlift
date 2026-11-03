@@ -58,21 +58,27 @@ func New() *Store {
 	}
 	source := gio.SettingsSchemaSourceGetDefault()
 	schema := source.Lookup(SchemaID, true)
-	keys := make(map[string]bool, len(allKeys))
-	for _, key := range allKeys {
+	defaults := keyDefaults()
+	keys := make(map[string]bool, len(defaults))
+	for key := range defaults {
 		keys[key] = schema.HasKey(key)
 	}
 	schema.Unref()
 	return &Store{settings: gio.NewSettings(SchemaID), keys: keys}
 }
 
-var allKeys = []string{
-	operatingSystemKey,
-	applicationsKey,
-	developerToolsKey,
-	systemComponentsKey,
-	printerDriversKey,
-	maintenanceAfterUpdatesKey,
+// keyDefaults maps every key Values reads to its no-schema default, taken
+// from the fallback literal in Values so the two cannot drift.
+func keyDefaults() map[string]bool {
+	defaults := (*Store)(nil).Values()
+	return map[string]bool{
+		operatingSystemKey:         defaults.OperatingSystem,
+		applicationsKey:            defaults.Applications,
+		developerToolsKey:          defaults.DeveloperTools,
+		systemComponentsKey:        defaults.SystemComponents,
+		printerDriversKey:          defaults.PrinterDrivers,
+		maintenanceAfterUpdatesKey: defaults.MaintenanceAfterUpdates,
+	}
 }
 
 // Missing reports whether the schema is installed but predates key, so the
@@ -112,24 +118,10 @@ type keyReader struct {
 }
 
 func (r keyReader) GetBoolean(key string) bool {
-	if !r.store.Missing(key) {
-		return r.store.settings.GetBoolean(key)
+	if r.store.Missing(key) {
+		return keyDefaults()[key]
 	}
-	defaults := (*Store)(nil).Values()
-	switch key {
-	case operatingSystemKey:
-		return defaults.OperatingSystem
-	case applicationsKey:
-		return defaults.Applications
-	case developerToolsKey:
-		return defaults.DeveloperTools
-	case systemComponentsKey:
-		return defaults.SystemComponents
-	case printerDriversKey:
-		return defaults.PrinterDrivers
-	default:
-		return defaults.MaintenanceAfterUpdates
-	}
+	return r.store.settings.GetBoolean(key)
 }
 
 // BindBoolean binds a boolean GSettings key to an object's active property if available.
