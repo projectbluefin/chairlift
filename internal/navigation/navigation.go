@@ -187,7 +187,6 @@ var routes = []Item{
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
-			"wallpapers_group",
 		),
 	},
 	{

@@ -14,10 +14,6 @@ files in the scenario directory, so the stubs below compose in any order:
     livery-user-panel-icon     the user-layer value dconf reports for the
                                extension's icon key (otherwise none: the key
                                resolves to the distro default)
-    livery-background-current  the picture-uri GNOME's background schema
-                               reports (otherwise the real gsettings answers)
-    livery-background-broken   every read of GNOME's background schema fails,
-                               the way a hung or broken dconf does
 
 The real gsettings still answers ChairLift's own schema (GSETTINGS_BACKEND is
 memory, so nothing persists), and the real systemctl/dconf answer everything
@@ -26,8 +22,6 @@ the Livery page does not own, so other pages behave as they would unstubbed.
 
 import os
 import shutil
-import struct
-import zlib
 
 from stubs import fake_executable, stub
 
@@ -35,9 +29,6 @@ CALLS = "livery-calls.log"
 SEED = "livery-seed.sed"
 EXTENSION_MISSING = "livery-extension-missing"
 USER_PANEL_ICON = "livery-user-panel-icon"
-BACKGROUND_CURRENT = "livery-background-current"
-BACKGROUND_BROKEN = "livery-background-broken"
-BACKGROUND_SCHEMA = "org.gnome.desktop.background"
 
 EXTENSION_SCHEMA = "org.gnome.shell.extensions.custom-command-list"
 EXTENSION_PATH = "/org/gnome/shell/extensions/custom-command-list"
@@ -83,16 +74,6 @@ if [ "$2" = "{EXTENSION_SCHEMA}" ]; then
         "get menuoptions-setting") echo "{DISTRO_PANEL_MODE}"; exit 0 ;;
     esac
     exit 0
-fi
-if [ "$2" = "{BACKGROUND_SCHEMA}" ]; then
-    if [ -e "{scenario}/{BACKGROUND_BROKEN}" ]; then
-        echo "error: the settings backend is unreachable" >&2
-        exit 1
-    fi
-    if [ "$1 $3" = "get picture-uri" ] && [ -s "{scenario}/{BACKGROUND_CURRENT}" ]; then
-        cat "{scenario}/{BACKGROUND_CURRENT}"
-        exit 0
-    fi
 fi
 [ -n "$REAL" ] || {{ echo "gsettings is not installed" >&2; exit 1; }}
 if [ "$1 $2" = "list-recursively {LIVERY_SCHEMA}" ]; then
@@ -215,67 +196,3 @@ def livery_offline(context):
         context.launch_env[key] = "http://127.0.0.1:9"
     for key in ("NO_PROXY", "no_proxy"):
         context.launch_env.pop(key, None)
-
-
-def _png():
-    """A valid 1x1 PNG, so GdkPixbuf has a real picture to scale."""
-
-    def chunk(kind, data):
-        body = kind + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
-
-    header = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", header)
-        + chunk(b"IDAT", zlib.compress(b"\x00\x33\x66\x99"))
-        + chunk(b"IEND", b"")
-    )
-
-
-# The shape a ublue-os wallpaper cask installs under $XDG_DATA_HOME on GNOME
-# (see ublue-os/homebrew-tap's bluefin-wallpapers): pictures in
-# backgrounds/<collection> and one gnome-background-properties entry per
-# picture, with "~" already replaced. The collection directory is the
-# fixture's own, so the image's real catalogs in XDG_DATA_DIRS never merge
-# into it and its picture count stays exact.
-COLLECTION = "chairlift-e2e"
-WALLPAPERS = (
-    ("01-bluefin.png", "Bluefin 01 - January"),
-    ("02-bluefin.png", "Bluefin 02 - February"),
-)
-
-
-def _install_wallpaper_channel(context):
-    data_home = context.launch_env["XDG_DATA_HOME"]
-    pictures = os.path.join(data_home, "backgrounds", COLLECTION)
-    catalog = os.path.join(data_home, "gnome-background-properties")
-    os.makedirs(pictures, exist_ok=True)
-    os.makedirs(catalog, exist_ok=True)
-    for file_name, name in WALLPAPERS:
-        picture = os.path.join(pictures, file_name)
-        with open(picture, "wb") as handle:
-            handle.write(_png())
-        with open(os.path.join(catalog, file_name.replace(".png", ".xml")), "w", encoding="utf-8") as handle:
-            handle.write(
-                '<?xml version="1.0"?>\n<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">\n'
-                f'<wallpapers><wallpaper deleted="false"><name>{name}</name>'
-                f"<filename>{picture}</filename><options>zoom</options></wallpaper></wallpapers>\n"
-            )
-    return os.path.join(pictures, WALLPAPERS[0][0])
-
-
-@stub("livery-wallpaper-channels")
-def livery_wallpaper_channels(context):
-    """A wallpaper collection is installed and its January picture is current."""
-    _install(context)
-    current = _install_wallpaper_channel(context)
-    with open(os.path.join(context.scenario_dir, BACKGROUND_CURRENT), "w", encoding="utf-8") as handle:
-        handle.write(f"'file://{current}'\n")
-
-
-@stub("livery-background-broken")
-def livery_background_broken(context):
-    """GNOME's background settings cannot be read on this host."""
-    _install(context)
-    open(os.path.join(context.scenario_dir, BACKGROUND_BROKEN), "w").close()

@@ -298,8 +298,7 @@ whose title and subtitle are the curated name and description
 list. Collections are selected with checkboxes (curated sets default checked,
 while Full Desktop Suite defaults unchecked). An "Install" header action installs
 all checked, uninstalled collections in one step. Bluefin CLI additionally enables
-shell bling and prompt integration. The `artwork` wallpaper collection is
-not an Apps row; Livery's Wallpapers group owns it.
+shell bling and prompt integration.
 
 Each row's installed state is observed: `refreshBundleStatuses`
 (`internal/views/bundle_install.go`) runs `BundleCheck` for every collection

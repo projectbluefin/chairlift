@@ -206,7 +206,7 @@ The Updates page's `bootc_status_group` and `bootc_updates_group` load asynchron
 ### Native desktop settings module
 
 `cmd/chairlift` calls `deskenv.ConfigureSettingsModules` before `app.New()`
-and before dispatching `--rotate-livery` or `--rotate-wallpaper`. The helper searches installed native
+and before dispatching `--rotate-livery`. The helper searches installed native
 GIO module directories for `libdconfsettings.so`, including the current
 architecture's multiarch directory, and appends the first match to
 `GIO_EXTRA_MODULES` without duplicating entries or overriding
@@ -1692,20 +1692,3 @@ Back and Next mutate no settings. **Finish** saves completed
 and version and returns to Control Center; a save failure reports an
 error toast. Intentional dismissal records a skip without
 demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.
-
-Livery's optional `wallpapers_group` composes the external artwork collection
-with `internal/homebrew` at the view layer. Discovery reads the existing Apps
-bundle paths even if Apps widgets are unconstructed. Its rows and callbacks
-are constructed once; status requests use generation guards, and installation
-invalidates earlier observations through the shared bundle install gate.
-Only a successful live install refreshes inventories. The headless Livery
-backend and rotation retain no Homebrew dependency.
-The group's Wallpaper Channel selector is `internal/livery/wallpaper.go` plus
-`internal/views/livery_wallpaper_channels.go`. The backend reads GNOME's
-`gnome-background-properties` catalogs with GNOME Settings' rules and writes
-only GNOME's own background keys through the existing `gsettings` seam,
-confirming by readback; it adds no ChairLift setting. The view builds its
-combo, grid and handlers once, swaps the model and tiles on refresh (chained
-into the group's `wallpaperRefresh`, so a collection installed from the same
-group appears), decodes thumbnails at tile size off the main thread, and
-guards observations and thumbnails with generations.

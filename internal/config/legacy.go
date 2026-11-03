@@ -93,6 +93,15 @@ func legacyGroupFieldTypes(page, group string) map[string]reflect.Type {
 	return nil
 }
 
+// legacyLiveryGroups names the livery_page entries retired when the
+// Wallpapers feature was withdrawn from the product. 26.10-era host files
+// and image-shipped /usr/share/chairlift/config.yml still carry the group;
+// accepting the name without activating any behavior keeps those hosts
+// runnable instead of failing closed with a configuration error.
+var legacyLiveryGroups = []string{
+	"wallpapers_group",
+}
+
 // legacyGroupNames returns the legacy group names accepted alongside the
 // canonical schema for the given page. Returns nil when no page-specific
 // compatibility names exist for the page, which is the common case.
@@ -106,18 +115,20 @@ func legacyGroupNames(page string) []string {
 		return legacyFeaturesGroups
 	case "applications_page":
 		return legacyApplicationsGroups
+	case "livery_page":
+		return legacyLiveryGroups
 	default:
 		return nil
 	}
 }
 
 // stripLegacyGroups removes retired maintenance_page, updates_page,
-// features_page, and applications_page groups from the AST prior to decoding so they never reach
+// features_page, applications_page, and livery_page groups from the AST prior to decoding so they never reach
 // runtime Config. Validation has already accepted them as known, so the
 // strip cannot hide a shape or value error; an undeclared field under a
 // retired group name still fails closed before this runs.
 func stripLegacyGroups(top *yaml.Node) {
-	for _, page := range []string{"maintenance_page", "updates_page", "features_page", "applications_page"} {
+	for _, page := range []string{"maintenance_page", "updates_page", "features_page", "applications_page", "livery_page"} {
 		stripLegacyGroupFromPage(top, page, legacyGroupNames(page))
 	}
 }

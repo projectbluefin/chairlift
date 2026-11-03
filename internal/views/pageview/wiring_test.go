@@ -43,57 +43,6 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			},
 		},
 		{
-			file: "livery_damask.go",
-			required: []string{
-				"pageview.DamaskOffer(",
-				"pageview.DamaskRow(",
-				"pageview.DamaskActionName(",
-				"pageview.DamaskFailure(",
-				"actionmsg.DamaskInstall(",
-				"actionmsg.DamaskOpen(",
-				"dryrun.Enabled()",
-				"uh.wallpaperDamaskGate.TryStart()",
-				"sgtk.RunOnMainThread(",
-			},
-			retired: []string{
-				// One stateful control: labels come from DamaskActionName,
-				// never a second hard-coded button.
-				`gtk.NewButtonWithLabel("Install")`,
-				`gtk.NewButtonWithLabel("Open")`,
-				"flatpak.Install",
-				"pkexec",
-			},
-		},
-		{
-			file: "livery_wallpaper_channels.go",
-			required: []string{
-				"pageview.WallpaperChannelsOffer(",
-				"pageview.WallpaperChannelsRow(",
-				"pageview.WallpaperChannelSubtitle(",
-				"pageview.WallpaperApplyFailure",
-				"pageview.WallpaperSelectedLabel",
-				"actionmsg.WallpaperApply(",
-				"livery.ProbeNativeBackground(",
-				"livery.WallpaperChannels(",
-				"livery.ApplyBackground(",
-				"livery.SelectedWallpaper(",
-				"dryrun.Enabled()",
-				"wc.gate.TryStart()",
-				"sgtk.RunOnMainThread(",
-				// Thumbnails are decoded at tile size, off the main thread:
-				// a channel of 4K pictures decoded whole is hundreds of MB.
-				"gdkpixbuf.NewPixbufFromFileAtScale(",
-				// Arrow keys must not look like a pick (as the foundation grid).
-				"SetSelectionMode(gtk.SelectionNoneValue)",
-			},
-			retired: []string{
-				"gdk.NewTextureFromFilename(",
-				`"gsettings"`,
-				"pkexec",
-				"/usr/share/backgrounds",
-			},
-		},
-		{
 			file: "applications_page.go",
 			required: []string{
 				"bundleview.Describe(",

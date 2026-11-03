@@ -126,6 +126,7 @@ var retired = map[string]struct{}{
 	"system-dx-flatpaks":  {},
 	"system-flatpaks":     {},
 	"video-wallpaper":     {},
+	"artwork":             {}, // withdrawn with the Wallpapers feature
 	"dakota-dev-flatpaks": {}, // installed automatically with devmode
 }
 

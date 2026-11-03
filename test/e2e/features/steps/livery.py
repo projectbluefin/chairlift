@@ -18,7 +18,6 @@ import chairlift_atspi as atspi
 LIVERY_SCHEMA = "io.projectbluefin.chairlift.livery"
 EXTENSION_SCHEMA = "org.gnome.shell.extensions.custom-command-list"
 ROTATION_UNIT = "chairlift-livery-rotate.service"
-WALLPAPER_ROTATION_UNITS = ("chairlift-wallpaper-rotate.service", "chairlift-wallpaper-rotate.timer")
 CALLS = "livery-calls.log"
 
 # Command lines that change state. Reads (gsettings get/list-recursively,
@@ -529,13 +528,6 @@ def step_no_icons(context):
 def step_no_unit(context):
     path = os.path.join(context.launch_env["XDG_CONFIG_HOME"], "systemd", "user", ROTATION_UNIT)
     assert not os.path.exists(path), f"{path} was written"
-
-
-@then("no wallpaper rotation timer was written under the home directory")
-def step_no_wallpaper_units(context):
-    unit_dir = os.path.join(context.launch_env["XDG_CONFIG_HOME"], "systemd", "user")
-    written = [u for u in WALLPAPER_ROTATION_UNITS if os.path.exists(os.path.join(unit_dir, u))]
-    assert not written, f"wallpaper rotation units were written: {written}"
 
 
 @then("no profile picture was staged under the home directory")

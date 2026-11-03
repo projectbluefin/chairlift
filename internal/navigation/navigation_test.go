@@ -195,7 +195,6 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
-			"wallpapers_group",
 		),
 		"maintenance": refsOn("maintenance_page",
 			"maintenance_cleanup_group",

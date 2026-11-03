@@ -9,7 +9,7 @@ import (
 )
 
 // LiveryPageDescription introduces the tasks the current page can actually
-// perform. Wallpapers join only when the separately owned group is built.
+// perform.
 const LiveryPageDescription = "Choose a profile picture and customize the icons on your desktop."
 
 // Each section names the surface it changes rather than the old Livery

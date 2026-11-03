@@ -86,23 +86,6 @@ type UserHome struct {
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate
-	wallpaperRefresh    func()
-	wallpapersGroup     *adw.PreferencesGroup
-
-	// The single stateful Damask control in the Wallpapers group; nil unless
-	// Flatpak can install or open Damask. wallpaperDamaskState is the last
-	// confirmed state, which names the button's next action, and the gate
-	// admits one install, open or re-check at a time.
-	wallpaperDamaskRow     *adw.ActionRow
-	wallpaperDamaskButton  *gtk.Button
-	wallpaperDamaskSpinner *gtk.Spinner
-	wallpaperDamaskState   pageview.DamaskState
-	wallpaperDamaskGate    actionstate.Gate
-
-	// The channel selector in the Wallpapers group: installed collections as
-	// thumbnails, applied to GNOME's background on an explicit pick. Nil until
-	// its first observation lands; see livery_wallpaper_channels.go.
-	wallpaperChannels *wallpaperChannels
 
 	// One shared callback per rebuilt list; see buttonRoute. Each is cleared
 	// alongside its row tracker, so reloads allocate no new trampolines.

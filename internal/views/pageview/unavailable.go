@@ -11,7 +11,6 @@ import (
 // TestEveryCapabilityGatedGroupHasATitle holds the table total over
 // capability.Prerequisites.
 var featureTitles = map[[2]string]string{
-	{"livery_page", "wallpapers_group"}:         "Wallpapers",
 	{"updates_page", "bootc_updates_group"}:     "System Updates",
 	{"updates_page", "flatpak_updates_group"}:   "App Updates",
 	{"updates_page", "brew_updates_group"}:      "Developer Tool Updates",

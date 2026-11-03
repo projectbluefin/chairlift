@@ -42,7 +42,7 @@ APP_COLLECTIONS = {
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
-    # Artwork belongs to Livery; standalone slideshow tools remain in Apps.
+    # Artwork is retired from the UI; standalone slideshow tools remain in Apps.
     "artwork.Brewfile": (
         'cask "bluefin-wallpapers"\n'
     ),
@@ -131,11 +131,6 @@ def apps_brew_team_tools_installed(context):
     _brew(context, installed_collections=("team-tools.Brewfile",))
 
 
-@stub("apps-brew-wallpapers-installed")
-def apps_brew_wallpapers_installed(context):
-    """Homebrew on which both the artwork and wallpaper-slideshow Brewfiles are installed."""
-    _brew(context, installed_collections=("artwork.Brewfile", "wallpaper-slideshow.Brewfile"))
-
 
 @stub("apps-brew-unreadable")
 def apps_brew_unreadable(context):
@@ -148,11 +143,6 @@ def apps_flatpak(context):
     """Flatpak with one app installed for the user and one for everyone."""
     _flatpak(context, FLATPAK_SYSTEM)
 
-
-@stub("apps-flatpak-damask")
-def apps_flatpak_damask(context):
-    """apps-flatpak, plus the Damask wallpaper manager installed system-wide."""
-    _flatpak(context, FLATPAK_SYSTEM + (("Damask", "app.drey.Damask", "1.1.0"),))
 
 
 def _flatpak(context, system_rows):
