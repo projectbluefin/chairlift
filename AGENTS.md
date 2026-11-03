@@ -752,6 +752,12 @@ An agent must not break these:
   changing rows or counts. A live package success removes its row, decrements
   the count/badge, and refreshes; a failed refresh preserves that last known
   row/count state instead of replacing it with an invented zero.
+- **A reported Homebrew recovery is not a universal upgrade prerequisite.**
+  For missing package-directory errors, the user-facing recovery and diagnostic
+  steps live in [the reference](docs/reference.md#recovering-a-failed-developer-tools-update).
+  Routine maintenance runs after updates. ChairLift's Homebrew provider and
+  the separate `uupd` Brew Upgrade stage have different owners; verify the
+  failing path before proposing an automatic cleanup or repair.
 - **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
   groups are `brew_bundles_group` and `brew_group`: app collections come first
   as checkbox rows with a unified Install action (curated collections default

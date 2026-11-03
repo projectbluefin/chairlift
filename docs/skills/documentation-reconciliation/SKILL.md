@@ -1,8 +1,8 @@
 ---
 name: documentation-reconciliation
 description: Use when reconciling current documentation, retiring plans, checking links, or citing an ADR.
-version: 2.2.0
-last_updated: 2026-10-07
+version: 2.2.1
+last_updated: 2026-11-03
 tags:
   - documentation
   - consistency
@@ -53,6 +53,15 @@ the source-backed claim checklist; load subsystem design docs only as needed.
    workflow page rather than restating it.
    Do not infer a generated catalog, frontmatter migration, universal Hive
    scheduling guarantee or direct-push exception from sidecar conventions.
+
+## Documenting a reported recovery
+
+When an issue reports that a manual package-manager command fixed an update,
+trace both the interactive provider and any scheduled updater before changing
+command order. Document the observed workaround, its side effects, and how to
+retry and gather diagnostics. A successful recovery alone does not establish
+the root cause or justify running that recovery before every update. Link the
+user-facing procedure rather than duplicating its commands in agent guidance.
 
 ## Verification
 
