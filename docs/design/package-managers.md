@@ -131,6 +131,12 @@ output; idle, determinate progress and disposal remove the timer. Its visible
 toast overlay announces each phase's one status line, which sits under the
 primary action.
 `Presentation.ShowStatus` hides an empty header.
+`updatepresent.ShowSourceRow` decides which sources get a row: one that
+configuration disables for the whole machine, or that this host cannot back,
+gets none, and a source group left empty is hidden with them (#675). The
+remaining rows are exactly the sources the page checked, so its single status
+line needs no qualifier. Preferences still lists every source with its lock
+reason, so nothing the application does not update becomes undiscoverable.
 `buildUpdatesPage` appends the rest of the Updates page to the shell's own
 preferences page (`UpdateShell.PreferencesPage`), beneath the source rows;
 automatic updates, system version, unverified sources and

@@ -174,6 +174,21 @@ func soleItemSubtitle(item updateflow.Item) string {
 	}
 }
 
+// ShowSourceRow reports whether a source earns a row on the Updates page. A
+// source the administrator's configuration turns off for the whole machine, or
+// one this host cannot back, is not something this application manages here, so
+// it gets no row: a row whose only content is "you cannot use this" reports a
+// state the reader can neither change nor act on, and wording it as an
+// administrator's choice names an actor who may not exist — the shipped
+// Bluefin configuration disables system components in the image itself
+// (chairlift#675). A source the user merely turned off keeps its row, because
+// Preferences is where it can be turned back on. Preferences still lists every
+// source, so what the application does not update stays discoverable where a
+// reader would go looking to configure it.
+func ShowSourceRow(state updateflow.SourceState) bool {
+	return state.Configured && state.Available
+}
+
 // SourceIcon returns the symbolic icon for a source row. Each source has its
 // own, and Applications and System components match the sidebar's Apps and
 // Features, the pages that manage what they update.

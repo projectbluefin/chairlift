@@ -707,9 +707,37 @@ func (s *UpdateShell) renderProgress(snapshot updateflow.Snapshot) {
 	}
 }
 
+// systemSource reports whether a source belongs to the "System Updates" group
+// rather than "Apps and Tools".
+func systemSource(id updateflow.SourceID) bool {
+	return id == updateflow.OperatingSystem || id == updateflow.SystemComponents
+}
+
 func (s *UpdateShell) renderSources(states []updateflow.SourceState) {
-	rebuild := len(states) != len(s.sourceRows)
+	// A source configuration disables, or that this host cannot back, gets no
+	// row at all (#675): its only possible subtitle would describe a state the
+	// reader can neither change nor act on. The remaining sources are the ones
+	// the page actually checked, so its status line no longer has to qualify
+	// itself. Preferences still lists every source, locked switch included.
+	shown := make([]updateflow.SourceState, 0, len(states))
+	systems, apps := false, false
 	for _, state := range states {
+		if !updatepresent.ShowSourceRow(state) {
+			continue
+		}
+		shown = append(shown, state)
+		if systemSource(state.ID) {
+			systems = true
+		} else {
+			apps = true
+		}
+	}
+	// An emptied group would render as a titled, described box with no rows.
+	s.systemGroup.SetVisible(systems)
+	s.appsGroup.SetVisible(apps)
+
+	rebuild := len(shown) != len(s.sourceRows)
+	for _, state := range shown {
 		row := s.sourceRows[state.ID]
 		if row == nil || !slices.Equal(row.items, state.Items) ||
 			row.enabled != (state.Configured && state.Available && state.Enabled) {
@@ -718,7 +746,7 @@ func (s *UpdateShell) renderSources(states []updateflow.SourceState) {
 		}
 	}
 	if !rebuild {
-		for _, state := range states {
+		for _, state := range shown {
 			s.sourceRows[state.ID].render(state, !s.Busy() && !updatepresent.ShowProgress(s.snapshot.Phase), s.restartInFlight.Load())
 		}
 		return
@@ -728,9 +756,9 @@ func (s *UpdateShell) renderSources(states []updateflow.SourceState) {
 	}
 	s.updateButtons.clear()
 	clear(s.sourceRows)
-	for _, state := range states {
+	for _, state := range shown {
 		group := s.appsGroup
-		if state.ID == updateflow.OperatingSystem || state.ID == updateflow.SystemComponents {
+		if systemSource(state.ID) {
 			group = s.systemGroup
 		}
 		s.sourceRows[state.ID] = newSourceRow(state, group, s)

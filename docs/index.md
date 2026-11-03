@@ -66,8 +66,9 @@ Runtime visibility depends on the group:
 - the Homebrew untrusted-taps group stays hidden unless actionable taps exist;
 - Agents is hidden where Homebrew is absent, because Agent Mode installs
   llmman through it;
-- Apps requires Homebrew; Updates groups for Homebrew and Flatpak are omitted
-  by the capability floor when their backing tool is absent; a tool that is
+- Apps requires Homebrew; an Updates source whose backing tool is absent is
+  omitted from the page by the capability floor, as is one configuration
+  excludes for the whole machine; a tool that is
   present but fails reports the failure in its row;
 - Features hides its optional-features group when Updex lists none, and keeps
   it with an error description when the listing fails;

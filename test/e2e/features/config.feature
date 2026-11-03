@@ -103,9 +103,10 @@ Feature: Fail-closed configuration and configuration-driven visibility
     And the "Clean Up" button is not shown
 
   @config.config-one-group-off
-  Scenario: Disabling one update source is reported as the administrator's choice
+  Scenario: Disabling one update source hides its row without blaming anyone
     Given ChairLift is running
-    Then the "Applications" row says "Disabled by administrator"
+    Then the Updates page shows no "Applications" row
+    And I do not see "Disabled by administrator"
     And the "Developer Tools" source row does not say "Disabled by administrator"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
@@ -120,10 +121,11 @@ Feature: Fail-closed configuration and configuration-driven visibility
     And the "Powerwash" row says "Needs Flatpak or Distrobox"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
-  Scenario: An update source the host cannot back is not blamed on the administrator
+  Scenario: An update source the host cannot back is not listed at all
     Given ChairLift is running
-    Then the "Applications" row says "Not available on this computer"
-    And the "Developer Tools" row says "Not available on this computer"
+    Then the Updates page shows no "Applications" row
+    And the Updates page shows no "Developer Tools" row
+    And I do not see "Not available on this computer"
 
   @config.config-no-agents-maintenance @env.CHAIRLIFT_CAPABILITIES=image-descriptor,podman,bootc-stage
   Scenario: Help explains missing tools, never groups the administrator disabled
