@@ -169,8 +169,10 @@ func TestSnapshotCloneDeepCopiesMutableState(t *testing.T) {
 	original := Snapshot{
 		Generation: 7,
 		Sources: []SourceState{{
-			ID:    Applications,
-			Items: []Item{{Name: "one"}},
+			ID:            Applications,
+			Items:         []Item{{Name: "one"}},
+			CheckWarnings: []string{"Ghostscript"},
+			ApplyWarnings: []string{"HPLIP"},
 		}},
 		CompletedSources: []SourceID{Applications},
 		FailedSources:    []SourceID{DeveloperTools},
@@ -179,12 +181,19 @@ func TestSnapshotCloneDeepCopiesMutableState(t *testing.T) {
 
 	clone := original.clone()
 	clone.Sources[0].Items[0].Name = "changed"
+	clone.Sources[0].CheckWarnings[0] = "changed check warning"
+	clone.Sources[0].ApplyWarnings[0] = "changed apply warning"
 	clone.Sources = append(clone.Sources, SourceState{ID: OperatingSystem})
 	clone.CompletedSources[0] = OperatingSystem
 	clone.FailedSources[0] = OperatingSystem
-
 	if original.Sources[0].Items[0].Name != "one" {
 		t.Fatal("clone shares item storage")
+	}
+	if original.Sources[0].CheckWarnings[0] != "Ghostscript" {
+		t.Fatal("clone shares check-warning storage")
+	}
+	if original.Sources[0].ApplyWarnings[0] != "HPLIP" {
+		t.Fatal("clone shares apply-warning storage")
 	}
 	if len(original.Sources) != 1 {
 		t.Fatal("clone shares source storage")

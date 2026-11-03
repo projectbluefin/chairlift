@@ -156,6 +156,12 @@ func cloneSourceStates(sources []updateflow.SourceState) []updateflow.SourceStat
 		if source.Items != nil {
 			cloned[index].Items = append([]updateflow.Item(nil), source.Items...)
 		}
+		if source.CheckWarnings != nil {
+			cloned[index].CheckWarnings = append([]string(nil), source.CheckWarnings...)
+		}
+		if source.ApplyWarnings != nil {
+			cloned[index].ApplyWarnings = append([]string(nil), source.ApplyWarnings...)
+		}
 	}
 	return cloned
 }
