@@ -244,8 +244,6 @@ exit 1
     )
 
 
-
-
 @stub("updates-brew-trust-check-fails")
 def brew_trust_check_fails(context):
     write_state(context, "brew-tap-info.fail", "Error: Broken pipe\n")

@@ -99,6 +99,8 @@ no background schedule: pins advance when the person checks for and applies
 updates. Diagnostic image presence probes read `Image=` from the installed
 quadlet, not the family's moving tag; a cached verified digest need not have a
 local `:stable` tag.
+
+`Select(family)` returns the default `App{Family: family, Name: family.ID}`.
 Its quadlet filename is the unit/container identity below plus `.container`;
 its service name is that identity plus `.service`.
 

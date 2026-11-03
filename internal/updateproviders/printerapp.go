@@ -187,6 +187,7 @@ func (p *printerAppProvider) Apply(ctx context.Context, items []updateflow.Item,
 	}
 	return updateflow.ApplyResult{Changed: ran > 0}, nil
 }
+
 func printerAppName(app printerapp.App) string {
 	if app.Name == app.Family.ID {
 		return app.Family.DisplayName
