@@ -312,6 +312,33 @@ func TestDryRunContextDoneClosesWithoutEvents(t *testing.T) {
 	}
 }
 
+// The completion send is only reached after the preview is received, and the
+// test stops reading before canceling, so ctx.Done is its only ready case.
+func TestDryRunCancellationAfterPreviewClosesWithoutCompletion(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := make(chan ProgressEvent)
+	done := make(chan error, 1)
+	go func() { done <- DryRun(ctx, ch, "/fixed/stage") }()
+
+	preview := <-ch
+	if preview != (ProgressEvent{Type: EventMessage, Message: "[DRY-RUN] would run /fixed/stage"}) {
+		t.Fatalf("preview = %+v", preview)
+	}
+	cancel()
+
+	err := waitErr(t, done)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("errors.Is(context.Canceled) = false; err = %v", err)
+	}
+	if err == nil || err.Error() != "Update staging was canceled" {
+		t.Errorf("error = %v, want %q", err, "Update staging was canceled")
+	}
+	if events := collectEvents(ch); len(events) != 0 {
+		t.Errorf("events = %+v, want none", events)
+	}
+}
+
 func TestDryRunEmitsPreviewCompletesAndCloses(t *testing.T) {
 	ch := make(chan ProgressEvent)
 	done := make(chan error, 1)
