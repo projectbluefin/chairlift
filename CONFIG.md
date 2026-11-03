@@ -322,7 +322,12 @@ Do not install defaults over administrator-owned `/etc/chairlift/config.yml`.
 
 ## Notes
 
-- Groups with `enabled: false` will be completely hidden from the UI
+- A group with `enabled: false` is not built on the page that owns it, so its
+  controls never appear. An update source is likewise given no row on the
+  Updates page when configuration excludes it or this host's capability floor
+  cannot back it (chairlift#675); the Preferences dialog still lists every
+  source, with an excluded one's switch off and its subtitle naming which of
+  the two facts excludes it
 - A configuration file is applied as an overlay on top of the built-in
   defaults, field by field, not as a full replacement:
   - An omitted `enabled` key inherits that group's documented default

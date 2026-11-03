@@ -507,10 +507,15 @@ keeps the two facts apart: `buildUI`'s `sourcePolicy` hands
 `updateflow.Coordinator.Check` a `map[SourceID]updateflow.Policy` whose
 `Configured` is `Config.IsGroupEnabled` and whose `Supported` is
 `Set.Supports`. A source is checked only when both hold and its provider is
-available, exactly as the composed predicate would allow, but a source the host
-cannot back is reported unavailable ("Not available on this computer") rather
-than "Disabled by administrator", which `updatepresent` reserves for
-`Configured` false. The views' own "not installed" placeholder branches that
+available, exactly as the composed predicate would allow, and a source either
+fact leaves out is not listed on the Updates page at all
+(`updatepresent.ShowSourceRow`): a row whose only content would be "you cannot
+use this" reports a state the reader can neither change nor act on, and calling
+it an administrator's choice names an actor who may not exist — the shipped
+Bluefin configuration disables `features_page.features_group` in the image
+itself (#675). Preferences still lists every source, locked switch included, so
+what is not updated stays discoverable where a reader would go to configure it.
+The views' own "not installed" placeholder branches that
 the floor made unreachable were removed in #206.
 
 ### Package manager wrapper pattern
@@ -869,14 +874,17 @@ surface in three layers that must stay separate:
   or timed-out connection), "It took too long." for an exhausted deadline,
   and otherwise "Details are in the log." — a local Flatpak, Homebrew, or
   bootc failure is not told to check a connection it never used. The shell's
-  single-row update and tool-refresh failures use the same hint. A source
-  whose policy has `Configured` false reads "Disabled by administrator"; one
-  that is configured but not `Available` — the provider's own `Available`
-  probe says no, or `Policy.Supported` is false because the capability floor
-  cannot back it — reads "Not available on this computer". Both strings
-  come from `updatepresent.SourceLockReason`, which the Preferences dialog's
-  update-source rows (`pageview.UpdateSourcePreferenceSubtitle`) use too, so
-  the two surfaces never word one source differently. Such a locked source's
+  single-row update and tool-refresh failures use the same hint.
+  `updatepresent.ShowSourceRow` decides which sources get a row at all: one
+  that configuration disables for the whole machine (`Configured` false), or
+  one this host cannot back — the provider's own `Available` probe says no, or
+  `Policy.Supported` is false because the capability floor cannot back it —
+  gets none, and a group left without rows is hidden with them (#675).
+  `updatepresent.SourceLockReason` still supplies the two lock sentences
+  ("Disabled by administrator" for `Configured` false, "Not available on this
+  computer" otherwise), which the Preferences dialog's update-source rows
+  (`pageview.UpdateSourcePreferenceSubtitle`) use too, so the two surfaces
+  never word one source differently. Such a locked source's
   Preferences switch is shown off and insensitive and is not bound to its
   GSettings key (`pageview.UpdateSourcePreferenceLocked`): bound, it showed
   the stored preference — on — beside "Disabled by administrator". `ItemRows`

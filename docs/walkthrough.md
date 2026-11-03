@@ -39,13 +39,15 @@ updating**. If something went wrong, a second line says what. **System
 Updates** groups System Components and Operating System; **Apps and Tools**
 groups Applications, Developer Tools and, on computers that can run printer
 drivers, Printer Drivers. Each row shows its own state, so you
-can see which source is holding you up without opening anything. A source
-your administrator turned off says **Disabled by administrator**; one this
-computer has no software for says **Not available on this computer** instead.
+can see which source is holding you up without opening anything. Only the
+sources this computer can manage are listed at all, so a source it does not
+update is absent rather than explained at length, and a group whose sources all
+drop out goes with them.
 **Preferences** (Ctrl+,) has a switch per source: a source you turn off there
 says **Disabled in preferences** as soon as you change it, and a source you
-cannot turn on shows its switch off, greyed out, with the same words as its row
-here.
+cannot turn on shows its switch off, greyed out, with **Disabled by
+administrator** or **Not available on this computer** saying which fact
+excludes it.
 
 One button covers all of them. It reads **Check Again** when nothing is
 pending, **Update All** when something is, and **Retry Failed** if a source

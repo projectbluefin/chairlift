@@ -392,9 +392,16 @@ An agent must not break these:
   The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
-  their conjunction is `effectiveEnabled`, but a source the host cannot back
-  must read "Not available on this computer", never "Disabled by
-  administrator". Do not collapse them back into one boolean map. The rest
+  their conjunction is `effectiveEnabled`, and a source either fact leaves out
+  gets no row on the Updates page at all (`updatepresent.ShowSourceRow`,
+  chairlift#675). A row whose only content would be "you cannot use this"
+  reports a state the reader can neither change nor act on, and wording it as
+  an administrator's choice names an actor who may not exist — Bluefin's own
+  `/usr/share/chairlift/config.yml` ships `features_page.features_group`
+  disabled. A source the user merely turned off keeps its row, because
+  Preferences is where it can be turned back on, and Preferences still lists
+  every source with its lock reason. Do not collapse the two facts back into
+  one boolean map. The rest
   of the Updates page — automatic updates, system version, dedicated staging
   and Compare, unverified sources, and Advanced channel/driver controls — is
   built by `buildUpdatesPage` as groups of the shell's own preferences page

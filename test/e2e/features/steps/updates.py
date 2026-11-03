@@ -112,6 +112,25 @@ def step_progress_visibility(context, visibility):
     ), f"Updates progress bar is not {visibility}"
 
 
+@then('the Updates page shows no "{title}" row')
+def step_row_absent(context, title):
+    """A source nobody on this machine can use gets no row (#675).
+
+    Configuration that disables a source for the whole machine, and a host that
+    cannot back one, both leave the page: a row whose only content is "you
+    cannot use this" reports a state the reader can neither change nor act on.
+    """
+
+    def gone():
+        return not atspi.find_all(
+            content(context),
+            lambda n: atspi.role(n) in atspi.ROW_ROLES
+            and any(atspi.name(c) == title for c in atspi.descendants(n, only_showing=True)),
+        )
+
+    assert atspi.poll(gone), f"the Updates page still shows a {title!r} row"
+
+
 # ---------------------------------------------------------------- sidebar badge
 
 

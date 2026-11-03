@@ -509,6 +509,32 @@ func TestSnapshotShowsLastCheckedTimeWhenCurrent(t *testing.T) {
 	}
 }
 
+// A source nobody on this machine can use gets no row: its subtitle could only
+// report a state the reader cannot change or act on (#675). A source the user
+// turned off keeps its row, because Preferences can turn it back on.
+func TestShowSourceRowOnlyForUsableSources(t *testing.T) {
+	tests := []struct {
+		name  string
+		state updateflow.SourceState
+		want  bool
+	}{
+		{"configured and available", updateflow.SourceState{Configured: true, Available: true}, true},
+		{"turned off in preferences", updateflow.SourceState{Configured: true, Available: true, Enabled: false}, true},
+		{"disabled in the shipped configuration", updateflow.SourceState{Configured: false, Available: true}, false},
+		{"this host cannot back it", updateflow.SourceState{Configured: true, Available: false}, false},
+		{"neither", updateflow.SourceState{Configured: false, Available: false}, false},
+		{"checking, still usable", updateflow.SourceState{Configured: true, Available: true, Checking: true}, true},
+		{"failed check, still usable", updateflow.SourceState{Configured: true, Available: true, CheckErr: errors.New("boom")}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ShowSourceRow(tc.state); got != tc.want {
+				t.Errorf("ShowSourceRow(%+v) = %v, want %v", tc.state, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSourceIconMapsProviderKinds(t *testing.T) {
 	tests := []struct {
 		id   updateflow.SourceID
