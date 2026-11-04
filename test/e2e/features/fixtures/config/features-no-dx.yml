@@ -1,5 +1,5 @@
 # Developer Mode is disabled, while app collections remain enabled.
-# Relocated collections (Enhanced Terminal Bling and Monospace Fonts) must fall back to Apps.
+# Relocated collection (Monospace Fonts) must fall back to Apps.
 applications_page:
   brew_group:
     enabled: true

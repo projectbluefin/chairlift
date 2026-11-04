@@ -75,13 +75,6 @@ type catalogEntry struct {
 }
 
 var catalog = map[string]catalogEntry{
-	"cli": {
-		title:    "Enhanced Terminal Bling",
-		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
-		curated:  true,
-		order:    2,
-		defaults: true,
-	},
 	"fonts": {
 		title:    "Fonts",
 		summary:  "A broad selection of everyday, design, office, and accessibility fonts.",
@@ -117,6 +110,7 @@ var catalog = map[string]catalogEntry{
 // removed from the UI. They are filtered out so they do not fall back to
 // raw humanized names ("Cncf", "Nsl", etc.).
 var retired = map[string]struct{}{
+	"cli":                 {}, // managed by the Bash-only Bluefin CLI feature
 	"cncf":                {},
 	"k8s-tools":           {},
 	"swift":               {},
@@ -134,7 +128,7 @@ var retired = map[string]struct{}{
 // DeveloperCollection reports whether a collection belongs under Developer Mode.
 // These remain explicit, independently selected installs, not promotion tasks.
 func DeveloperCollection(id string) bool {
-	return id == "cli" || id == "fonts-dev"
+	return id == "fonts-dev"
 }
 
 // Visible reports whether an on-disk collection should be offered on Apps.

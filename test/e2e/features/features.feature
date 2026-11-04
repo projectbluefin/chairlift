@@ -7,6 +7,25 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Docker or WSL first enables Developer Mode when needed. Dry runs restore
   every control and preserve observed installed state.
 
+  @stub.bluefin-cli-missing-tools @env.SHELL=/bin/bash
+  Scenario: Missing tools do not hide an installed Bash hook or block its removal
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Bluefin CLI" row is on
+    When I toggle the switch in the "Bluefin CLI" row
+    Then the application log contains "[DRY-RUN] Would disable Bluefin CLI for Bash"
+    And the switch in the "Bluefin CLI" row is on
+
+  @stub.apps-brew @env.SHELL=/bin/bash
+  Scenario: Bluefin CLI is one Bash-only switch whose preview preserves installed state
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Bluefin CLI" row is off
+    When I toggle the switch in the "Bluefin CLI" row
+    Then the application log contains "[DRY-RUN] Would enable Bluefin CLI for Bash"
+    And the switch in the "Bluefin CLI" row is off
+    And the home directory has no ".bashrc"
+
   @stub.features-gaming-none @stub.features-developer
   Scenario: Docker discloses its system and command-line Homebrew formulae without enabling anything
     Given ChairLift is running
@@ -106,15 +125,10 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And I do not see "Monospace Fonts"
     When I record the Features switches and mutation evidence
     And I expand the "Developer Mode" list under "Developer"
-    Then the "Enhanced Terminal Bling" collection is checked
+    Then I do not see "Enhanced Terminal Bling"
     And the "Monospace Fonts" collection is checked
     And the "Install" button in the "Developer Collections" row is sensitive
     And the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
-    When I expand the "Enhanced Terminal Bling" list under "Developer"
-    Then the "Enhanced Terminal Bling" list under "Developer" shows exactly
-      | title |
-      | just  |
-    And the "just" row says "Command-line tool · Save and run project commands"
     When I expand the "Monospace Fonts" list under "Developer"
     Then the "Monospace Fonts" list under "Developer" shows exactly
       | title               |
@@ -127,31 +141,28 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And every visible action control has an accessible name and an action
 
   @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
-  Scenario Outline: An explicit developer collection install selects only <collection> without changing Developer Mode
+  Scenario: An explicit developer font install leaves Apps collections and Developer Mode unchanged
     Given ChairLift is running
     When I open the "Features" page
     And I record the Features switches and mutation evidence
     And I expand the "Developer Mode" list under "Developer"
-    And I toggle the "<other>" collection checkbox
-    Then the "<collection>" collection is checked
-    And the "<other>" collection is unchecked
+    Then the "Monospace Fonts" collection is checked
     When I click the "Install" button in the "Developer Collections" row
     Then a toast on the Features page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
     And Homebrew collection previews are exactly
-      | file   |
-      | <file> |
+      | file               |
+      | fonts-dev.Brewfile |
     And the "Install" button in the "Developer Collections" row is sensitive
-    And the "<collection>" collection is checked
-    And the "<other>" collection is unchecked
+    And the "Monospace Fonts" collection is checked
     And the Developer Mode switch returns to its restored state
     And the action journal is empty
     And the Features page shows no "Setup activity" group
     And Homebrew was never asked to "bundle install"
     When I click the "Install" button in the "Developer Collections" row
     Then Homebrew collection previews are exactly
-      | file   |
-      | <file> |
-      | <file> |
+      | file               |
+      | fonts-dev.Brewfile |
+      | fonts-dev.Brewfile |
     And the "Install" button in the "Developer Collections" row is sensitive
     And the Developer Mode switch returns to its restored state
     And the action journal is empty
@@ -161,19 +172,13 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the "Fonts" collection is checked
     And the "Install" button in the "Install Selected Collections" row is sensitive
 
-    Examples:
-      | collection              | other                   | file               |
-      | Enhanced Terminal Bling | Monospace Fonts         | cli.Brewfile       |
-      | Monospace Fonts         | Enhanced Terminal Bling | fonts-dev.Brewfile |
-
   @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew-developer-installed @stub.apps-collections
   Scenario: Installed developer collections preserve their observed state in a no-selection install
     Given ChairLift is running
     When I open the "Features" page
     And I expand the "Developer Mode" list under "Developer"
-    Then the "Enhanced Terminal Bling" row says "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 1 app or tool. (Installed)"
+    Then I do not see "Enhanced Terminal Bling"
     And the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools. (Installed)"
-    And the "Enhanced Terminal Bling" collection checkbox refuses input
     And the "Monospace Fonts" collection checkbox refuses input
     When I click the "Install" button in the "Developer Collections" row
     Then a toast on the Features page says "No collections selected to install."

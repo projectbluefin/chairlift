@@ -711,6 +711,7 @@ func (w *Window) PresentFirstRun() {
 	}
 	w.firstRunIndex = -1
 	w.firstRunActive = true
+	w.views.BeginBluefinCLISetup()
 	w.sidebarList.SetSensitive(false)
 	// The collapsed split view's native Back goes to the sidebar, not the
 	// previous setup step. Disable that route while the wizard owns navigation.
@@ -774,6 +775,23 @@ func (w *Window) bindFirstRunFooter() {
 			w.finishFirstRun(true)
 			return
 		}
+		if w.firstRunIndex >= 0 && w.firstRunIndex < len(w.firstRunSteps) && w.firstRunSteps[w.firstRunIndex] == "features" {
+			index := w.firstRunIndex
+			w.firstRunNext.SetSensitive(false)
+			w.firstRunBack.SetSensitive(false)
+			w.views.ApplyBluefinCLISetup(func(ok bool) {
+				if !w.firstRunActive || w.firstRunIndex != index {
+					return
+				}
+				w.firstRunNext.SetSensitive(true)
+				w.firstRunBack.SetSensitive(true)
+				if ok {
+					w.firstRunIndex++
+					w.showFirstRunStep()
+				}
+			})
+			return
+		}
 		w.firstRunIndex++
 		w.showFirstRunStep()
 	}
@@ -813,6 +831,7 @@ func (w *Window) showFirstRunStep() {
 		w.firstRunContent.SetVisibleChildName("pages")
 	}
 	w.firstRunBack.SetSensitive(w.firstRunIndex >= 0)
+	w.firstRunNext.SetSensitive(true)
 	if w.firstRunIndex == len(w.firstRunSteps) {
 		w.firstRunNext.SetLabel("Finish")
 	} else {
@@ -824,6 +843,7 @@ func (w *Window) finishFirstRun(completed bool) {
 	if !w.firstRunActive {
 		return
 	}
+	w.views.EndBluefinCLISetup()
 	if completed {
 		w.firstRunActive = false
 		w.firstRunFooter.SetRevealBottomBars(false)

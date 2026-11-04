@@ -100,7 +100,7 @@ this inventory, independently of the original YAML namespace names.
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
 | Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no wallpaper setup, Flatpak inventory, external catalog launcher or package search |
 | Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
-| Features | `features_page.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Gaming first, setup activity checklist, expandable Developer/WSL/Docker package disclosures, independent Enhanced Terminal Bling/Monospace Fonts installation under Developer Mode, distribution features and Printers |
+| Features | `features_page.go`, `bluefin_cli.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Gaming first, setup activity checklist, Chairlift-owned Bluefin CLI switch, expandable Developer/WSL/Docker package disclosures, independent Monospace Fonts installation under Developer Mode, distribution features and Printers |
 | Livery | `livery_page.go`, `wallpapers.go` | Profile Picture, Wallpapers (More Dinosaurs) setup, then initially collapsed App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
 | Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
@@ -109,10 +109,12 @@ Gaming Mode leads Features. The **Setup activity** checklist below it builds its
 bounded stage rows once. A reusable timer pulses while work runs, independent
 of command output. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
 use native expanders like Apps collections: the header discloses
-package rows, while an independent suffix switch starts work. Enhanced Terminal Bling and
-Monospace Fonts are independently installable collections inside Developer
-Mode, absent from Apps and not automatic developer-enable follow-ons. Homebrew bundles
-are opaque operations, so package lists are static disclosures, not invented
+package rows, while an independent suffix switch starts work. Bluefin CLI is a
+separate Bash-only switch backed by `internal/bluefincli`, not a Homebrew collection.
+Monospace Fonts is an independently installable collection inside Developer Mode,
+absent from Apps while Developer Mode is available, and not an automatic
+developer-enable follow-on. Homebrew bundles are opaque operations, so package
+lists are static disclosures, not invented
 per-package progress. Docker's rows name Homebrew formulae: the daemon set as
 **Homebrew, installed for the whole computer** (the root helper fetches those
 bottles itself) and the CLI set as user-scope Homebrew formulae. `internal/devsetup` owns

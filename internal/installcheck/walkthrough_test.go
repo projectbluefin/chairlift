@@ -195,6 +195,7 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"maintenance_freespace_group": "Free Up Space",
 		"reset_group":                 "Powerwash",
 		// features_page
+		"bluefin_cli_group":          "**Bluefin CLI**",
 		"features_group":             "feature manager",
 		"desktop_integrations_group": "Desktop Integrations",
 		"dx_group":                   "Developer tools",

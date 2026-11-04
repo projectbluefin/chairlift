@@ -8,7 +8,6 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
-	"github.com/projectbluefin/chairlift/internal/shellenv"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
@@ -154,13 +153,6 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 			if itemFailed {
 				failedNames = append(failedNames, collection.Title)
 				continue
-			}
-
-			// If the terminal collection was selected, enable shell bling and prompt
-			if b.Name == "cli" {
-				if err := shellenv.EnableBling(); err != nil {
-					log.Printf("Error enabling shell bling: %v", err)
-				}
 			}
 		}
 

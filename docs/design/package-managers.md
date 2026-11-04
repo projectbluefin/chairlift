@@ -304,17 +304,18 @@ whose title and subtitle are the curated name and description
 `bundleview.Describe` produces, and whose expanded child rows are the package
 list. Collections are selected with checkboxes (curated sets default checked,
 while Full Desktop Suite defaults unchecked). An "Install" header action installs
-all checked, uninstalled Apps collections in one step. Enhanced Terminal Bling (`cli`) and
-Monospace Fonts (`fonts-dev`) are offered only inside the initially collapsed
-Developer Mode expander on Features, using an independent selection and explicit
-Install action backed by the same collection installer and action gate. Their
-visibility still requires `applications_page.brew_bundles_group` and Homebrew;
-installing them does not grant developer access, and enabling Developer Mode
-does not install them. Enhanced Terminal Bling additionally enables shell bling and prompt
-integration.
-Both relocated collections default to selected in ordinary and explicit wizard
-sessions. The wizard uses the same controls and preserves manual deselection
-across Next/Back navigation; it adds no automatic installation path.
+all checked, uninstalled Apps collections in one step. Monospace Fonts
+(`fonts-dev`) is offered only inside the initially collapsed Developer Mode
+expander on Features, using an independent selection and explicit Install action
+backed by the same collection installer and action gate. Its visibility still
+requires `applications_page.brew_bundles_group` and Homebrew; installing it does
+not grant developer access, and enabling Developer Mode does not install it.
+Monospace Fonts defaults to selected in ordinary and explicit wizard sessions.
+The wizard uses the same controls and preserves manual deselection across
+Next/Back navigation; it adds no automatic installation path for this collection.
+Bluefin CLI is not a discoverable `cli` collection: its Bash-only lifecycle belongs
+to `internal/bluefincli` and one Features switch. Setup defaults that choice to
+selected unless explicitly disabled and applies it on Next from Features.
 
 Each row's installed state is observed: `refreshBundleStatuses`
 (`internal/views/bundle_install.go`) runs `BundleCheck` for every collection
@@ -819,7 +820,7 @@ Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
 expanders matching Apps collections. Header activation expands the package
 disclosure; a separate suffix switch runs the action, with no
 `SetActivatableWidget` binding to that switch. Developer Mode also contains
-independent Enhanced Terminal Bling and Monospace Fonts collection controls. WSL disclosure shares
+independent Monospace Fonts collection controls. WSL disclosure shares
 `devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
 the daemon formulae as **Homebrew, installed for the whole computer** and the
 CLI formulae as user-scope Homebrew formulae, not download progress.

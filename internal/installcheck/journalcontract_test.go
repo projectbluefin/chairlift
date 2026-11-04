@@ -88,6 +88,8 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                      // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},         // systemctl (query)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlResumeOutput"},   // systemctl (query, post-check for #558 helper skew)
+	{File: "internal/bluefincli/bluefincli.go", Func: "brewPrefix"},              // brew --prefix (read-only, unprivileged)
+	{File: "internal/bluefincli/bluefincli.go", Func: "seedTldrCache"},           // tldr --list/--update (invoking user's page cache, no privilege)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                     // bootc status (read-only)
 	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                   // bootc upgrade --check (read-only)
 	{File: "internal/contribute/contribute.go", Func: "Command"},                 // xdg-terminal-exec

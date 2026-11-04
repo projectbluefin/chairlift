@@ -128,6 +128,24 @@ exit 0
     fake_executable(context, "brew", script)
 
 
+@stub("bluefin-cli-missing-tools")
+def bluefin_cli_missing_tools(context):
+    """An existing Bash integration remains removable with missing formulae."""
+    _brew(context)
+    directory = os.path.join(context.launch_env["XDG_DATA_HOME"], "chairlift", "bluefin-cli")
+    os.makedirs(directory, exist_ok=True)
+    for name in ("bluefin-cli.bash", "homebrew.bash", "bash-preexec-rearm.bash", "cli.Brewfile"):
+        with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+            handle.write("# Previously installed payload\n")
+    quoted = "'" + os.path.join(directory, "bluefin-cli.bash").replace("'", "'\\''") + "'"
+    with open(os.path.join(context.home, ".bashrc"), "w", encoding="utf-8") as handle:
+        handle.write(
+            "### bluefin-cli source start\n"
+            f"test -f {quoted} && source {quoted}\n"
+            "### bluefin-cli source end\n"
+        )
+
+
 def _rows(rows):
     return "".join(f"{name}\t{app_id}\t{version}\n" for name, app_id, version in rows)
 
