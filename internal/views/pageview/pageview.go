@@ -173,12 +173,11 @@ func BootcStageFailureSubtitle(hadOutput bool) string {
 	return "The update couldn't be downloaded"
 }
 
-// UpdateBusyToast answers a Download, early-updates, or graphics-driver
-// request the update shell refused because a check, an update run, or a
-// restart already owns the system. Each of them replaces or stages the
-// operating system, so running one beside an update run's own staging would
-// race two privileged deployments; a refused click must still say why
-// nothing happened.
+// UpdateBusyToast answers a Download, early-updates, graphics-driver,
+// Roll Back, Factory Reset, or Powerwash Restart Now request refused because
+// a check, an update run, or a restart already owns the system. Deployment
+// changes must not race an update run's staging; a refused click must still
+// say why nothing happened.
 const UpdateBusyToast = "Wait for the current update check or installation to finish"
 
 // PrivilegedFailureToast returns the toast for a privileged action that

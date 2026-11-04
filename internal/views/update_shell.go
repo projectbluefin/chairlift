@@ -235,9 +235,9 @@ func (s *UpdateShell) StartUpdate() {
 	}()
 }
 
-// beginMutation is the common admission point for unified, individual and
-// dedicated staging actions, and for the channel and driver switches that
-// replace the operating system. Every caller runs on GTK's main thread.
+// beginMutation admits update operations and system changes that must not
+// overlap them, including channel and driver switches, Gaming Mode, and
+// Powerwash deployment changes. Every caller runs on GTK's main thread.
 func (s *UpdateShell) beginMutation() bool {
 	if s == nil {
 		return false
