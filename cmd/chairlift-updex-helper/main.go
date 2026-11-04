@@ -8,13 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/frostyard/updex/updex"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
-
-const defaultTimeout = 5 * time.Minute
 
 func main() {
 	invocation, err := updexhelper.ParseInvocation(os.Args[1:])
@@ -22,7 +19,7 @@ func main() {
 		fatal(err.Error())
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), updexhelper.Timeout(invocation.Command))
 	defer cancel()
 
 	client := updex.NewClient(updex.ClientConfig{})

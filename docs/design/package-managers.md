@@ -597,7 +597,8 @@ construction owner.
 | `CheckFeatures(ctx)` | Return `([]FeatureCheck, []string, error)`, retaining component warnings even on failure |
 | `EnableFeature(ctx, name)` / `DisableFeature(ctx, name)` | Fixed helper with `enable-feature <name>` / `disable-feature <name>` |
 | `UpdateFeatures(ctx)` | Fixed helper with `update` |
-| `DefaultContext()` | Five-minute context for callers |
+| `DefaultContext()` | Five-minute context for unprivileged reads |
+| `MutationContext(command)` | `updexhelper.Timeout(command)` plus `AuthenticationAllowance` (five minutes), because the GUI's clock runs while the PolicyKit prompt is open; the helper bounds `update` at 30 minutes (it downloads sysext images) and the configuration-only commands at five |
 
 These context-taking reads/writes do not secretly replace caller cancellation
 with a new background context. Writes bind `helperexec.Run` to
