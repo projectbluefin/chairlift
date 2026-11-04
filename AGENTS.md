@@ -37,6 +37,12 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `build/ci-linux-<arch>/`, then rebuilds natively, so a cross-arch-only
   compile failure cannot pass locally and break CI. Run it before pushing;
   the mill's deep gate calls this exact target.
+- Every GitHub-hosted job that pulls Dakota first runs
+  `projectbluefin/actions/bootc-build/setup-runner@v1` with
+  `storage-backend: remove-software` and `update-podman: "false"`.
+  Run it before `actions/setup-go`: cleanup removes `/opt/hostedtoolcache`,
+  including installed Go toolchains. Keep rootless Podman storage unchanged;
+  the image-build action's default rootful BTRFS mount is not needed here.
 - `make e2e` — builds both executables and runs `./test/e2e` (except the
   behave suite, below) **inside `ghcr.io/projectbluefin/dakota:testing`**
   through `test/e2e/dakota.sh`: the application's real `--help` surface, the
