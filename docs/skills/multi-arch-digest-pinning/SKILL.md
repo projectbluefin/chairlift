@@ -1,8 +1,8 @@
 ---
 name: multi-arch-digest-pinning
 description: Use when pinning or rolling a container image reference to a content digest.
-version: 1.2.0
-last_updated: 2026-10-04
+version: 1.3.0
+last_updated: 2026-10-21
 tags:
   - supply-chain
   - containers
@@ -14,11 +14,22 @@ metadata:
 
 **When it applies:** Replacing a floating tag with an `@sha256:` reference, or
 rolling an existing digest, anywhere a container image is named. ChairLift's
-`internal/printerapp` deliberately runs moving `:stable` tags with Podman
-auto-update (ADR-0020), so this applies there only to a site pinning a family
-through `ApplyOverrides`; any pin must also verify the exact keyless workflow
-identity, provenance and signed SBOM. Agent Mode delegates engine fetching to
-llmman and has no ChairLift-owned container pin.
+`internal/printerapp` now verifies a family's `:stable` reference with cosign
+and installs the digest from its verified payload (ADR-0023); never re-resolve
+the tag after that check. Its signer must remain the family's own publishing
+workflow, including for mirror overrides. Runtime verification does not check
+SBOM or provenance attestations; do not claim those checks from a signature
+alone. Agent Mode delegates engine fetching to llmman and has no
+ChairLift-owned container pin.
+
+**Runtime verification regression:** reject failed verification, absent JSON
+payloads, invalid or conflicting digests, and a mismatched explicit pin before
+writing a unit or calling systemctl. Assert the exact issuer and anchored
+per-family workflow identity in runner tests. A shape test containing
+`@sha256:` alone proves none of these trust properties. After installation, diagnostics
+must probe the persisted `Image=` reference, not the original moving tag:
+pulling a digest does not guarantee that the tag exists in local storage.
+Regression fixtures should reject the tag probe while accepting the pin.
 
 **What to do:** Resolve the *index* (manifest list) digest when the tag publishes
 one, never an architecture's child entry. A bare

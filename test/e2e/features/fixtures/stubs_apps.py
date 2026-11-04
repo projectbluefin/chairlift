@@ -42,19 +42,27 @@ FLATPAK_INSTALLED = (("app.drey.Damask", "flathub"),)
 APP_COLLECTIONS = {
     # A collection Bluefin ships: its title and summary come from
     # internal/views/bundleview's curated table, never from the file.
+    "cli.Brewfile": (
+        '# Bluefin terminal environment\n'
+        'brew "just"\n'
+    ),
+    "fonts.Brewfile": (
+        'cask "font-noto-sans"\n'
+    ),
     "fonts-dev.Brewfile": (
         "# Developer Fonts\n"
         'brew "font-fira-code"\n'
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
-    # Extra Wallpapers super-bundle: artwork plus its retired
-    # wallpaper-slideshow sibling, merged into one row by bundleview.Members.
+    # Artwork is retired; the discovered slideshow identifier uses managed setup.
     "artwork.Brewfile": (
         'cask "bluefin-wallpapers"\n'
     ),
     "wallpaper-slideshow.Brewfile": (
-        'brew "wallpaper-slideshow"\n'
+        '# Legacy image payload: ChairLift must not execute it.\n'
+        'flatpak "app.drey.Damask"\n'
+        'cask "ublue-os/tap/bluefin-wallpapers-extra"\n'
     ),
     # Full Desktop Suite (defaults unchecked)
     "full-desktop.Brewfile": (
@@ -74,6 +82,11 @@ APP_COLLECTIONS = {
         'tap "anomalyco/tap"\n'
         'brew "anomalyco/tap/opencode-v2"\n'
         'brew "gh"\n'
+    ),
+    "marketplace-tools.Brewfile": (
+        'brew "gh"\n'
+        'mas "Xcode", id: 497799835\n'
+        'vscode "ms-vscode-remote.remote-containers"\n'
     ),
 }
 
@@ -128,8 +141,12 @@ def _brew(
 case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
 --prefix) echo "{context.scenario_dir}/brew-prefix"; exit 0 ;;
+--caskroom) echo "{context.scenario_dir}/brew-prefix/Caskroom/bluefin-wallpapers-extra"; exit 0 ;;
 info)
     {info_fail}case "$*" in
+    'info --json=v2 --formula just') echo '{{"formulae":[{{"name":"just","desc":"Save and run project commands"}}]}}' ;;
+    'info --json=v2 --cask ublue-os/tap/bluefin-wallpapers-extra'|'info --json=v2 --cask bluefin-wallpapers-extra')
+        echo '{{"formulae":[],"casks":[{{"token":"bluefin-wallpapers-extra","full_token":"ublue-os/tap/bluefin-wallpapers-extra","desc":"Extra Bluefin backgrounds","version":"fixture","installed":"fixture"}}]}}' ;;
     *--formula*) cat <<'EOF'
 {formulae}
 EOF
@@ -156,6 +173,7 @@ trust)
         exit 0
     fi
     exit 0 ;;
+tap) echo 'ublue-os/tap'; exit 0 ;;
 bundle)
     if [ "$2" = check ]; then
         {satisfied}echo "brew bundle can't satisfy your Brewfile's dependencies." >&2
@@ -166,6 +184,24 @@ esac
 exit 0
 """
     fake_executable(context, "brew", script)
+
+
+@stub("bluefin-cli-missing-tools")
+def bluefin_cli_missing_tools(context):
+    """An existing Bash integration remains removable with missing formulae."""
+    _brew(context)
+    directory = os.path.join(context.launch_env["XDG_DATA_HOME"], "chairlift", "bluefin-cli")
+    os.makedirs(directory, exist_ok=True)
+    for name in ("bluefin-cli.bash", "homebrew.bash", "bash-preexec-rearm.bash", "cli.Brewfile"):
+        with open(os.path.join(directory, name), "w", encoding="utf-8") as handle:
+            handle.write("# Previously installed payload\n")
+    quoted = "'" + os.path.join(directory, "bluefin-cli.bash").replace("'", "'\\''") + "'"
+    with open(os.path.join(context.home, ".bashrc"), "w", encoding="utf-8") as handle:
+        handle.write(
+            "### bluefin-cli source start\n"
+            f"test -f {quoted} && source {quoted}\n"
+            "### bluefin-cli source end\n"
+        )
 
 
 def _rows(rows):
@@ -193,34 +229,17 @@ def apps_brew_team_tools_installed(context):
     )
 
 
-@stub("apps-brew-wallpapers-installed")
-def apps_brew_wallpapers_installed(context):
-    """Homebrew on which both Extra Wallpapers member Brewfiles are installed."""
+@stub("apps-brew-developer-installed")
+def apps_brew_developer_installed(context):
+    """The relocated collection's entries are all installed."""
     _brew(
         context,
         extra_formulae=[
-            {"name": "wallpaper-slideshow", "full_name": "wallpaper-slideshow", "tap": "homebrew/core", "installed": [{"version": "1.0.0", "installed_on_request": True}], "pinned": False},
+            {"name": "font-fira-code", "full_name": "font-fira-code", "tap": "homebrew/core", "installed": [{"version": "1", "installed_on_request": True}]},
         ],
         extra_casks=[
-            {"token": "bluefin-wallpapers", "full_token": "bluefin-wallpapers", "tap": "homebrew/core", "installed": "1.0.0"},
-        ],
-    )
-
-
-@stub("apps-brew-wallpapers-partly-installed")
-def apps_brew_wallpapers_partly_installed(context):
-    """Homebrew holding artwork but not its wallpaper-slideshow sibling.
-
-    Team tools is installed too, so its later "(Installed)" subtitle proves
-    the Extra Wallpapers check already ran.
-    """
-    _brew(
-        context,
-        extra_casks=[
-            {"token": "bluefin-wallpapers", "full_token": "bluefin-wallpapers", "tap": "homebrew/core", "installed": "1.0.0"},
-        ],
-        extra_formulae=[
-            {"name": "just", "full_name": "just", "tap": "homebrew/core", "installed": [{"version": "1.36.0", "installed_on_request": True}], "pinned": False},
+            {"token": name, "full_token": name, "tap": "homebrew/core", "installed": "1"}
+            for name in ("font-jetbrains-mono", "font-hack")
         ],
     )
 
@@ -240,11 +259,27 @@ def apps_brew_tap_trusted(context):
 @stub("apps-flatpak")
 def apps_flatpak(context):
     """Flatpak with one app installed for the user and one for everyone."""
+    _flatpak(context, FLATPAK_SYSTEM)
+
+
+
+def _flatpak(context, system_rows, manual_folders=(), active_source="wallhaven"):
     script = _record(context, "flatpak") + f"""
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
+search)
+    case "$3" in
+    org.gnome.Calculator) printf 'org.gnome.Calculator\tPerform arithmetic calculations\n' ;;
+    io.github.tunix.valhalla) printf 'io.github.tunix.valhalla\tValhalla wallpaper slideshow\n' ;;
+    *) echo "No matches found" ;;
+    esac
+    exit 0 ;;
 list)
     case "$*" in
+    *--columns=application)
+        cat <<'EOF'
+{''.join(app_id + chr(10) for _, app_id, _, _, _ in system_rows)}EOF
+        ;;
     *--runtime*) exit 0 ;;
     *--columns=application,origin*) cat <<'EOF'
 {_origin_rows(FLATPAK_INSTALLED)}EOF
@@ -253,10 +288,21 @@ list)
 {_rows(FLATPAK_USER)}EOF
     ;;
     *--system*) cat <<'EOF'
-{_rows(FLATPAK_SYSTEM)}EOF
+{_rows(system_rows)}EOF
     ;;
     esac
     exit 0 ;;
+run)
+    case "$*" in
+    *' get io.github.tunix.valhalla manual-folders') echo '{json.dumps(list(manual_folders))}'; exit 0 ;;
+    *' get io.github.tunix.valhalla active-source') echo "'{active_source}'"; exit 0 ;;
+    *' --command=test io.github.tunix.valhalla -r '*)
+        for path in "$@"; do :; done
+        test -r "$path"
+        exit $? ;;
+    esac
+    echo "unexpected sandbox command: $*" >&2
+    exit 64 ;;
 esac
 exit 0
 """
@@ -265,7 +311,7 @@ exit 0
 
 @stub("apps-collections")
 def apps_collections(context):
-    """Two app collections in <scenario>/bundles, the apps-bundles fixture's path."""
+    """Image-style collections, including a legacy Damask slideshow Brewfile."""
     directory = os.path.join(context.scenario_dir, "bundles")
     os.makedirs(directory, exist_ok=True)
     for filename, body in APP_COLLECTIONS.items():

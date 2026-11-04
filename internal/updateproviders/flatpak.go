@@ -54,7 +54,7 @@ func (p *flatpakProvider) Check(ctx context.Context) (updateflow.CheckResult, er
 	return updateflow.CheckResult{Items: items}, joinErrors(userErr, systemErr)
 }
 
-func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, _ func(updateflow.Progress)) (updateflow.ApplyResult, error) {
+func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, progress func(updateflow.Progress)) (updateflow.ApplyResult, error) {
 	scopes := scopesFromItems(items)
 	ran := false
 
@@ -66,6 +66,16 @@ func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, _ 
 		if !scopes[scope] {
 			continue
 		}
+		if progress != nil {
+			label := "user applications"
+			if !user {
+				label = "system applications"
+			}
+			progress(updateflow.Progress{
+				Source:  updateflow.Applications,
+				Message: "Updating " + label + "…",
+			})
+		}
 		if err := ctx.Err(); err != nil {
 			return updateflow.ApplyResult{}, err
 		}
@@ -74,7 +84,6 @@ func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, _ 
 		}
 		ran = true
 	}
-
 	if ran && p.isDryRun() {
 		return updateflow.ApplyResult{Preview: true}, nil
 	}

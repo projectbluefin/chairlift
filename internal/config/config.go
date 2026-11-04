@@ -382,6 +382,7 @@ func defaultConfig() *Config {
 			"reset_group": GroupConfig{Enabled: false},
 		},
 		FeaturesPage: PageConfig{
+			"bluefin_cli_group":          GroupConfig{Enabled: true},
 			"features_group":             GroupConfig{Enabled: true},
 			"desktop_integrations_group": GroupConfig{Enabled: true},
 			// Capabilities you turn on. Both hide themselves when
@@ -399,6 +400,9 @@ func defaultConfig() *Config {
 			// floored on Podman by internal/capability. Enabled because the
 			// group does nothing until a switch is turned on.
 			"printers_group": GroupConfig{Enabled: true},
+			// Compass, TunaOS's launcher, installed system-wide from the
+			// FlatPark remote the image ships; floored on Flatpak.
+			"compass_group": GroupConfig{Enabled: true},
 		},
 		// The panel mark and the Files application mark. Both write only
 		// into the user's own icon theme and dconf, so neither needs a
@@ -406,6 +410,7 @@ func defaultConfig() *Config {
 		// anything until a selection is made.
 		LiveryPage: PageConfig{
 			"account_group":           GroupConfig{Enabled: true},
+			"wallpapers_group":        GroupConfig{Enabled: true},
 			"livery_app_grid_group":   GroupConfig{Enabled: true},
 			"livery_foundation_group": GroupConfig{Enabled: true},
 			"livery_dock_group":       GroupConfig{Enabled: true},
@@ -443,11 +448,42 @@ func (c *Config) IsGroupEnabled(pageName, groupName string) bool {
 		return true
 	}
 
-	group, ok := page[groupName]
-	if !ok {
-		return true // Default to enabled if not specified
+	if group, ok := page[groupName]; ok {
+		return group.Enabled
 	}
-	return group.Enabled
+	// Loading merges every file onto defaultConfig(), so a group absent from
+	// this Config is one the schema retired. Read it off the defaults when
+	// they still declare it, and never default a retired group to enabled:
+	// that would keep driving behavior after removal.
+	if defPage, ok := defaultConfig().pageConfig(pageName); ok {
+		if defGroup, ok := defPage[groupName]; ok {
+			return defGroup.Enabled
+		}
+	}
+	return false
+}
+
+// pageConfig returns the named page's groups, mirroring the page switch used
+// by IsGroupEnabled and GetGroupConfig.
+func (c *Config) pageConfig(pageName string) (PageConfig, bool) {
+	switch pageName {
+	case "agents_page":
+		return c.AgentsPage, true
+	case "updates_page":
+		return c.UpdatesPage, true
+	case "applications_page":
+		return c.ApplicationsPage, true
+	case "maintenance_page":
+		return c.MaintenancePage, true
+	case "features_page":
+		return c.FeaturesPage, true
+	case "livery_page":
+		return c.LiveryPage, true
+	case "help_page":
+		return c.HelpPage, true
+	default:
+		return nil, false
+	}
 }
 
 // GetGroupConfig returns the configuration for a specific group

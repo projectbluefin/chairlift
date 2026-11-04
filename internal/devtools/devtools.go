@@ -1,6 +1,7 @@
-// Package devtools implements the user-scope parts of Bluefin's documented
-// developer workstation: WSL Mode (nsl or Lima) and Docker CLI tools.
-// Only fixed ublue helper commands grant host access or control Docker.
+// Package devtools implements Bluefin's developer workstation controls:
+// user-scope WSL Mode (nsl or Lima) and rootful system Docker installed from
+// verified Homebrew bottles. Fixed ublue helper commands grant host access
+// and install and manage system Docker.
 package devtools
 
 import (
@@ -15,11 +16,15 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/outputtail"
@@ -131,6 +136,7 @@ func command(ctx context.Context, mutate bool, program string, args ...string) (
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Env = homebrew.WithBrewPath(os.Environ(), homebrew.ExecutablePath())
 	cmd.WaitDelay = 5 * time.Second
 	var capture interface {
 		io.Writer
@@ -343,6 +349,38 @@ func KVMAvailable() (exists, accessible bool) {
 	return true, true
 }
 
+// NSLKVMGroupMember checks the invoking account's groups in the account
+// database, as nsl's prerequisite check does; nsl starts its VM through the kvm
+// group, so a grant counts without a new login. /dev/kvm may be writable
+// without kvm group membership.
+func NSLKVMGroupMember() (bool, error) {
+	group, err := exec.Command("getent", "group", "kvm").Output()
+	if err != nil {
+		return false, fmt.Errorf("look up kvm group: %w", err)
+	}
+	fields := strings.Split(strings.TrimSpace(string(group)), ":")
+	if len(fields) != 4 || fields[0] != "kvm" || fields[2] == "" {
+		return false, errors.New("invalid kvm group entry")
+	}
+	account, err := user.Current()
+	if err != nil {
+		return false, fmt.Errorf("look up current user: %w", err)
+	}
+	ids, err := exec.Command("id", "-G", "--", account.Username).Output()
+	if err != nil {
+		return false, fmt.Errorf("read account groups: %w", err)
+	}
+	for _, id := range strings.Fields(string(ids)) {
+		if id == fields[2] {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+var nslKVMAvailable = KVMAvailable
+var nslEnableKVMAccess = ublue.EnableKVMAccess
+
 // SetWSL enables or disables WSL Mode for the specified backend.
 func SetWSL(ctx context.Context, backend string, enabled bool, progress func(string)) error {
 	if backend == BackendLima {
@@ -369,26 +407,46 @@ func setNSL(ctx context.Context, enabled bool, progress func(string)) error {
 		if !NSLHostSupported() {
 			return errors.New("nsl requires a Linux x86_64 host")
 		}
-		exists, accessible := KVMAvailable()
+		exists, accessible := nslKVMAvailable()
 		if !exists {
 			return errors.New("hardware virtualization is unavailable: /dev/kvm is missing; enable it in firmware")
 		}
-		if !accessible {
-			stage("Asking for virtual machine access…")
-			if err := ublue.EnableKVMAccess(ctx); err != nil {
+		member := false
+		if accessible {
+			var err error
+			member, err = NSLKVMGroupMember()
+			if err != nil {
 				return err
 			}
-			return ErrNewLogin
+		}
+		if !accessible || !member {
+			stage("Asking for virtual machine access…")
+			if err := nslEnableKVMAccess(ctx); err != nil {
+				return err
+			}
+			// Only device access waits for a new login; nsl reads kvm
+			// membership from the account database.
+			if !accessible {
+				return ErrNewLogin
+			}
+			member, err := NSLKVMGroupMember()
+			if err != nil {
+				return err
+			}
+			if !member {
+				return errors.New("virtual machine access was not granted to this account")
+			}
 		}
 		if !NSLInstalled() {
+			name, cask := WSLPackage(BackendNSL)
 			stage("Installing…")
 			if err := homebrew.Tap("frostyard/tap"); err != nil {
 				return err
 			}
-			if err := homebrew.TrustPackages(homebrew.UntrustedTap{Name: "frostyard/tap", Casks: []string{"frostyard/tap/nsl"}}); err != nil {
+			if err := homebrew.TrustPackages(homebrew.UntrustedTap{Name: "frostyard/tap", Casks: []string{name}}); err != nil {
 				return err
 			}
-			if err := homebrew.Install("frostyard/tap/nsl", true); err != nil {
+			if err := homebrew.Install(name, cask); err != nil {
 				return err
 			}
 		}
@@ -482,7 +540,8 @@ func setLima(ctx context.Context, enabled bool, progress func(string)) error {
 			return ErrNewLogin
 		}
 		stage("Installing…")
-		if err := homebrew.Install("lima", false); err != nil {
+		name, cask := WSLPackage(BackendLima)
+		if err := homebrew.Install(name, cask); err != nil {
 			return err
 		}
 		if err := wireSSH(); err != nil {
@@ -556,45 +615,146 @@ func wireSSH() error {
 	return os.Chmod(dir, 0o700)
 }
 
+// DockerState is the observed system Docker state. ChairLift installs the
+// daemon from verified Homebrew bottles through the fixed helper, so missing
+// units are installable; masked or broken units are not.
 type DockerState struct {
+	// Available means the helper can enable Docker here: both units are
+	// loaded, or one is missing and docker-enable installs them.
 	Available bool
-	Active    bool
-	Ready     bool
+	// Installed means both docker.service and docker.socket are loaded.
+	Installed bool
+	// Active includes either unit running or transitioning, including socket activation.
+	Active bool
+	Ready  bool
+	// NeedsLogin means this account is a configured docker group member whose
+	// current session predates the grant, so only a new login gives access.
+	NeedsLogin bool
+	// NoAccess means the daemon runs but this account is not a configured
+	// member; enabling Docker grants that membership.
+	NoAccess bool
+	// Unavailable explains masked or broken system units.
+	Unavailable string
 }
 
-// DockerStatus reads the system daemon independently of the optional CLI.
-// Ready requires an accessible local socket that answers Docker's ping.
+// ErrDockerNewLogin means this session cannot access the enabled Docker socket.
+var ErrDockerNewLogin = errors.New("docker access requires logging out and back in")
+
+// DockerCLIError reports that system Docker was enabled but its user-scope
+// Homebrew command-line tools could not be installed or linked.
+type DockerCLIError struct{ Err error }
+
+func (e *DockerCLIError) Error() string { return "install Docker command-line tools: " + e.Err.Error() }
+
+func (e *DockerCLIError) Unwrap() error { return e.Err }
+
+const dockerSocket = "/var/run/docker.sock"
+
+// DockerStatus reads both system units without escalation, then checks the
+// fixed system socket. DOCKER_HOST and the user's runtime directory are ignored.
+// Unit read or parse failures return a zero state. Once both units are read,
+// Active and Available remain observed state even if the socket ping fails.
 func DockerStatus(ctx context.Context) (DockerState, error) {
-	return dockerStatus(ctx, "/var/run/docker.sock")
+	return dockerStatus(ctx, dockerSocket)
+}
+
+func dockerUnits(ctx context.Context) (DockerState, error) {
+	var state DockerState
+	loaded, unusable := 0, false
+	for _, unit := range []string{"docker.service", "docker.socket"} {
+		output, err := command(ctx, false, "systemctl", "show", unit, "--property=LoadState,ActiveState")
+		if err != nil {
+			if ctx.Err() != nil {
+				return state, fmt.Errorf("reading %s: %w: %w", unit, ctx.Err(), err)
+			}
+			return state, err
+		}
+		var load, active string
+		for line := range strings.SplitSeq(output, "\n") {
+			key, value, _ := strings.Cut(line, "=")
+			switch key {
+			case "LoadState":
+				if load != "" || value == "" {
+					return state, fmt.Errorf("%s reported an invalid LoadState", unit)
+				}
+				load = value
+			case "ActiveState":
+				if active != "" || value == "" {
+					return state, fmt.Errorf("%s reported an invalid ActiveState", unit)
+				}
+				active = value
+			}
+		}
+		switch load {
+		case "loaded":
+			loaded++
+		case "not-found":
+		case "masked", "error", "bad-setting", "merged", "stub":
+			unusable = true
+		default:
+			return state, fmt.Errorf("%s did not report a valid LoadState", unit)
+		}
+		switch active {
+		case "inactive", "failed":
+		case "active", "reloading", "activating", "deactivating", "maintenance", "refreshing":
+			state.Active = true
+		default:
+			return state, fmt.Errorf("%s did not report a valid ActiveState", unit)
+		}
+	}
+	state.Installed = loaded == 2
+	if unusable {
+		state.Unavailable = "Docker's system units are unavailable. Ask your administrator to repair or unmask them."
+	} else {
+		state.Available = true
+	}
+	return state, nil
+}
+
+// dockerGroupMembership reports whether the account database lists this
+// account in the docker group, and whether this session already carries it.
+// The pure-Go os/user reads /etc/group, which is where the helper adds the
+// group and membership. A missing group is not an error: nobody is a member.
+var dockerGroupMembership = func() (configured, session bool, err error) {
+	group, err := user.LookupGroup("docker")
+	if err != nil {
+		var unknown user.UnknownGroupError
+		if errors.As(err, &unknown) {
+			return false, false, nil
+		}
+		return false, false, fmt.Errorf("look up docker group: %w", err)
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return false, false, fmt.Errorf("invalid docker group id %q", group.Gid)
+	}
+	account, err := user.Current()
+	if err != nil {
+		return false, false, fmt.Errorf("look up current user: %w", err)
+	}
+	ids, err := account.GroupIds()
+	if err != nil {
+		return false, false, fmt.Errorf("read account groups: %w", err)
+	}
+	groups, err := os.Getgroups()
+	if err != nil {
+		return false, false, fmt.Errorf("read session groups: %w", err)
+	}
+	return slices.Contains(ids, group.Gid), slices.Contains(groups, gid), nil
 }
 
 func dockerStatus(ctx context.Context, socket string) (DockerState, error) {
 	ctx, cancel := context.WithTimeout(ctx, statusTimeout)
 	defer cancel()
-	output, err := command(ctx, false, "systemctl", "show", "docker.service", "--property=LoadState,ActiveState")
+	state, err := dockerUnits(ctx)
 	if err != nil {
 		return DockerState{}, err
-	}
-	state := DockerState{}
-	loadSeen, activeSeen := false, false
-	for line := range strings.SplitSeq(output, "\n") {
-		loadSeen = loadSeen || strings.HasPrefix(line, "LoadState=")
-		activeSeen = activeSeen || strings.HasPrefix(line, "ActiveState=")
-		if line == "LoadState=loaded" {
-			state.Available = true
-		}
-		if line == "ActiveState=active" {
-			state.Active = true
-		}
-	}
-	if !loadSeen || !activeSeen {
-		return DockerState{}, errors.New("docker daemon state was not reported by systemd")
 	}
 	if !state.Active {
 		return state, nil
 	}
 	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+		return dockerDial(ctx, "unix", socket)
 	}}
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
@@ -604,38 +764,251 @@ func dockerStatus(ctx context.Context, socket string) (DockerState, error) {
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return state, nil
+		if errors.Is(err, os.ErrPermission) {
+			// Only a configured member missing from this session's groups
+			// is helped by logging in again; anyone else needs the grant.
+			configured, session, groupErr := dockerGroupMembership()
+			if groupErr != nil {
+				log.Printf("devtools: docker group check failed: %v", groupErr)
+			}
+			if groupErr == nil && configured && !session {
+				state.NeedsLogin = true
+				return state, fmt.Errorf("%w: %w", ErrDockerNewLogin, err)
+			}
+			state.NoAccess = true
+		}
+		return state, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 16))
-	state.Ready = err == nil && response.StatusCode == http.StatusOK && strings.TrimSpace(string(body)) == "OK"
+	body, err := io.ReadAll(io.LimitReader(response.Body, 17))
+	if err != nil {
+		return state, err
+	}
+	if len(body) > 16 || response.StatusCode != http.StatusOK || strings.TrimSpace(string(body)) != "OK" {
+		return state, fmt.Errorf("system Docker socket ping returned HTTP %d with body %q", response.StatusCode, body)
+	}
+	state.Ready = true
 	return state, nil
 }
 
+var dockerDial = (&net.Dialer{Timeout: 5 * time.Second}).DialContext
+
+// SetDocker installs or enables rootful system Docker from verified Homebrew
+// bottles through the fixed helper, after retiring a rootless setup an earlier
+// release created, and then installs the user-scope Homebrew CLI. Disabling
+// retains the installation, data, and the account's Docker group access.
 func SetDocker(ctx context.Context, enabled bool, progress func(string)) error {
+	return setDocker(ctx, enabled, progress, ublue.SetDocker)
+}
+
+func setDocker(ctx context.Context, enabled bool, progress func(string), apply func(context.Context, bool) error) error {
+	readCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+	state, err := dockerUnits(readCtx)
+	cancel()
+	if err != nil {
+		return err
+	}
+	if !state.Available && (enabled || !state.Active) {
+		return &PrerequisiteError{Message: state.Unavailable, Err: errors.New(state.Unavailable)}
+	}
+	if !enabled && !state.Installed && !state.Active {
+		return nil // Nothing is installed, so nothing runs to stop.
+	}
+	report := func(stage string) {
+		if progress != nil {
+			progress(stage)
+		}
+	}
 	if enabled {
-		state, err := DockerStatus(ctx)
-		if err != nil {
+		if state.Installed {
+			report("Starting system Docker…")
+		} else {
+			report("Installing Docker for this computer…")
+		}
+	} else {
+		report("Stopping system Docker…")
+	}
+	if err := apply(ctx, enabled); err != nil {
+		return err
+	}
+	if enabled {
+		// Only once system Docker is on: a dismissed prompt or failed install
+		// must leave a working v26.10.10 rootless daemon untouched. The two
+		// daemons use different sockets, so the brief overlap is harmless.
+		if err := retireRootlessDocker(ctx); err != nil {
 			return err
 		}
-		if !state.Available {
-			return errors.New("the base image does not provide Docker's daemon; installing its CLI cannot enable containers")
+	}
+	var cliErr error
+	if enabled {
+		if err := installDockerCLI(ctx, report); err != nil {
+			cliErr = &DockerCLIError{Err: err}
 		}
-		if progress != nil {
-			progress("Installing Docker tools…")
+	}
+	if dryrun.Enabled() {
+		return cliErr
+	}
+	if enabled {
+		state, err = DockerStatus(ctx)
+		if err != nil {
+			return errors.Join(err, cliErr)
 		}
-		for _, pkg := range []string{"docker", "docker-compose", "lazydocker", "dive"} {
-			if err := homebrew.Install(pkg, false); err != nil {
+		if !state.Ready {
+			return errors.Join(errors.New("system Docker socket did not respond after enabling Docker"), cliErr)
+		}
+		return cliErr
+	}
+	readCtx, cancel = context.WithTimeout(ctx, statusTimeout)
+	defer cancel()
+	state, err = dockerUnits(readCtx)
+	if err != nil {
+		return err
+	}
+	if state.Active {
+		return errors.New("system Docker service or socket is still running after disabling Docker")
+	}
+	return nil
+}
+
+// dockerExecutable and dockerBrewExecutable are seams over the Docker CLI and
+// Homebrew resolution, so tests never reach a host installation.
+var (
+	dockerExecutable     = func() string { return executable("docker") }
+	dockerBrewExecutable = homebrew.ExecutablePath
+	dockerInstallFormula = func(name string) error { return homebrew.Install(name, false) }
+)
+
+// retireRootlessDocker stops the per-user rootless daemon that ChairLift
+// v26.10.10 set up with dockerd-rootless-setuptool.sh, and moves the CLI off
+// its "rootless" context, so the system daemon is the one the user reaches.
+// Unit files the user wrote for anything else are left alone.
+func retireRootlessDocker(ctx context.Context) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	unit, err := os.ReadFile(filepath.Join(home, ".config", "systemd", "user", "docker.service"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("read rootless Docker unit: %w", err)
+	}
+	if err == nil && rootlessDockerUnit(string(unit)) {
+		if _, err := command(ctx, true, "systemctl", "--user", "disable", "--now", "docker.service"); err != nil {
+			return fmt.Errorf("stop rootless Docker: %w", err)
+		}
+	}
+	docker := dockerExecutable()
+	if docker == "" {
+		return nil
+	}
+	current, err := command(ctx, false, docker, "context", "show")
+	if err != nil {
+		return fmt.Errorf("read Docker context: %w", err)
+	}
+	if strings.TrimSpace(current) != "rootless" {
+		return nil
+	}
+	if _, err := command(ctx, true, docker, "context", "use", "default"); err != nil {
+		return fmt.Errorf("switch Docker context to default: %w", err)
+	}
+	return nil
+}
+
+// rootlessDockerUnit recognizes the unit dockerd-rootless-setuptool.sh
+// writes: its ExecStart runs dockerd-rootless.sh.
+func rootlessDockerUnit(unit string) bool {
+	for line := range strings.SplitSeq(unit, "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && strings.TrimSpace(key) == "ExecStart" && strings.Contains(value, "dockerd-rootless.sh") {
+			return true
+		}
+	}
+	return false
+}
+
+// installDockerCLI installs the user-scope Homebrew Docker CLI formulae and
+// links their plugins where the CLI looks for them. Hosts without Homebrew
+// get the daemon only.
+func installDockerCLI(ctx context.Context, report func(string)) error {
+	brew := dockerBrewExecutable()
+	if brew == "" {
+		return nil
+	}
+	for _, name := range dockerbrew.CLIFormulae() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		report("Installing " + name + "…")
+		if err := dockerInstallFormula(name); err != nil {
+			return fmt.Errorf("install %s: %w", name, err)
+		}
+	}
+	return linkDockerCLIPlugins(filepath.Dir(filepath.Dir(brew)))
+}
+
+// dockerCLIPlugins are the plugins the docker CLI loads from
+// ~/.docker/cli-plugins; Homebrew keeps them in <prefix>/lib/docker/cli-plugins.
+var dockerCLIPlugins = [...]string{"docker-buildx", "docker-compose"}
+
+// linkDockerCLIPlugins links each plugin into ~/.docker/cli-plugins when the
+// entry is absent or is a symlink into the Homebrew prefix. A regular file or
+// a symlink elsewhere is the user's and is never replaced.
+func linkDockerCLIPlugins(prefix string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(home, ".docker", "cli-plugins")
+	for _, name := range dockerCLIPlugins {
+		target := filepath.Join(prefix, "lib", "docker", "cli-plugins", name)
+		link := filepath.Join(dir, name)
+		replace := false
+		if info, err := os.Lstat(link); err == nil {
+			if info.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
+			existing, err := os.Readlink(link)
+			if err != nil {
 				return err
 			}
+			if !filepath.IsAbs(existing) {
+				existing = filepath.Join(dir, existing)
+			}
+			if filepath.Clean(existing) == target || !withinDir(prefix, existing) {
+				continue
+			}
+			replace = true
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if dryrun.Enabled() {
+			log.Printf("[DRY-RUN] would link %s -> %s", link, target)
+			continue
+		}
+		if _, err := os.Stat(target); err != nil {
+			return fmt.Errorf("homebrew did not provide %s: %w", name, err)
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+		if !replace {
+			if err := os.Symlink(target, link); err != nil && !errors.Is(err, os.ErrExist) {
+				return err
+			}
+			continue
+		}
+		temporary := filepath.Join(dir, "."+name+".link-tmp")
+		_ = os.Remove(temporary)
+		if err := os.Symlink(target, temporary); err != nil {
+			return err
+		}
+		if err := os.Rename(temporary, link); err != nil {
+			return errors.Join(err, os.Remove(temporary))
 		}
 	}
-	if progress != nil {
-		if enabled {
-			progress("Starting Docker…")
-		} else {
-			progress("Stopping Docker…")
-		}
-	}
-	return ublue.SetDocker(ctx, enabled)
+	return nil
+}
+
+func withinDir(dir, path string) bool {
+	rel, err := filepath.Rel(dir, filepath.Clean(path))
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

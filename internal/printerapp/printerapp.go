@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -45,8 +46,8 @@ const (
 
 // Family identifies one Printer Application family. Each runs its
 // projectbluefin *-printer-app image from GHCR at the moving `:stable` tag,
-// which the image's own release workflow advances; the unit carries
-// AutoUpdate=registry so podman-auto-update.timer pulls each new release.
+// which the image's own release workflow advances. Enable verifies the
+// signature and writes an immutable digest, never an auto-updating tag.
 type Family struct {
 	// ID is the lowercase identifier used in unit names and volume paths.
 	ID string
@@ -108,6 +109,17 @@ func (a App) Port() int {
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(a.Family.ID + "\x00" + a.Name))
 	return portBase + int(h.Sum32()%portRange)
+}
+
+// WebAdminURL is where the running application's own web page answers: the
+// page a person adds printers on and manages them from. It is the app's
+// published port on localhost, so it exists on this computer only — the unit
+// publishes that port on 127.0.0.1 (ADR-0020), and PAPPL's web administration
+// is unauthenticated, so there is deliberately no other address for it.
+// It is the one owner of this address: the row's subtitle names the same page
+// (pageview.PrinterAppSubtitle) and a gate holds the two together.
+func (a App) WebAdminURL() string {
+	return fmt.Sprintf("http://localhost:%d/", a.Port())
 }
 
 // Volume is the per-app state volume, using the systemd home escape `%h`
@@ -215,8 +227,8 @@ func ApplyOverrides(images map[string]string) error {
 // (ADR-0020): PAPPL's web administration is unauthenticated, so it must never
 // be reachable from the LAN. The trade-off is that only this computer can
 // print to it and its DNS-SD advertisement stays inside the container.
-// AutoUpdate=registry lets podman-auto-update.timer move the unit to each new
-// `:stable` release. The state volume is bind-mounted read-write so the
+// The caller supplies a signature-verified digest. No registry auto-update
+// label is emitted. The state volume is bind-mounted read-write so the
 // printer's cached driver state persists across enable/disable.
 func RenderUnit(app App) string {
 	var b strings.Builder
@@ -227,7 +239,6 @@ func RenderUnit(app App) string {
 	b.WriteString("[Container]\n")
 	fmt.Fprintf(&b, "ContainerName=%s\n", app.ContainerName())
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
-	b.WriteString("AutoUpdate=registry\n")
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
@@ -345,24 +356,59 @@ func IsEnabled(app App) bool {
 	return err == nil
 }
 
-// autoUpdateTimer is Podman's user timer that pulls a newer image for every
-// unit labelled AutoUpdate=registry and restarts it.
-const autoUpdateTimer = "podman-auto-update.timer"
+// appLocks serialises Enable, Refresh and Disable per app, keyed by unit
+// name, so a Disable during Refresh's signature check cannot be undone by
+// Refresh then writing and restarting the unit.
+var appLocks sync.Map
 
-// Enable writes the quadlet for the printer application, starts it, and
-// enables Podman's auto-update timer. Enabling only writes the unit and starts
-// the service: the image pull happens inside the container runtime afterwards,
-// so the switch must not wait on it.
+// lockWaitHook, when set by a test, runs just before an operation waits for
+// its app's lock.
+var lockWaitHook func(App)
+
+func lockApp(app App) func() {
+	if lockWaitHook != nil {
+		lockWaitHook(app)
+	}
+	value, _ := appLocks.LoadOrStore(app.UnitName(), &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+// Enable verifies the image signature before writing or starting a unit.
+// The runtime pulls only the verified digest, even if the tag moves afterwards.
 func Enable(ctx context.Context, app App) error {
+	defer lockApp(app)()
+	return installVerified(ctx, app, "start")
+}
+
+// Refresh verifies the current family reference and restarts an installed app
+// with that digest. A failed verification leaves its unit and service untouched.
+// It is serialised with Enable and Disable of the same app.
+func Refresh(ctx context.Context, app App) error {
+	defer lockApp(app)()
+	if !IsEnabled(app) {
+		return fmt.Errorf("printerapp: %s is not enabled", app.UnitName())
+	}
+	return installVerified(ctx, app, "restart")
+}
+
+func installVerified(ctx context.Context, app App, action string) error {
 	path, err := UnitPath(app)
 	if err != nil {
 		return err
 	}
 
 	if dryrun.Enabled() {
-		log.Printf("[DRY-RUN] would write %s for %s, start %s, and enable --now %s", path, app.Family.Image, app.ServiceName(), autoUpdateTimer)
+		log.Printf("[DRY-RUN] would verify %s, write its digest to %s, and %s %s", app.Family.Image, path, action, app.ServiceName())
 		return nil
 	}
+
+	image, err := verifiedImage(ctx, app.Family)
+	if err != nil {
+		return err
+	}
+	app.Family.Image = image
 
 	volDir, err := app.HostVolumeDir()
 	if err != nil {
@@ -393,11 +439,7 @@ func Enable(ctx context.Context, app App) error {
 		rollback()
 		return err
 	}
-	if err := runSystemctl(ctx, "start", app.ServiceName()); err != nil {
-		rollback()
-		return err
-	}
-	if err := runSystemctl(ctx, "enable", "--now", autoUpdateTimer); err != nil {
+	if err := runSystemctl(ctx, action, app.ServiceName()); err != nil {
 		rollback()
 		return err
 	}
@@ -409,6 +451,7 @@ func Enable(ctx context.Context, app App) error {
 // are large, they are expensive to re-fetch or reconfigure, and removing them
 // is a disk-space decision the user did not make by turning a switch off.
 func Disable(ctx context.Context, app App) error {
+	defer lockApp(app)()
 	path, err := UnitPath(app)
 	if err != nil {
 		return err

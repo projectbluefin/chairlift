@@ -102,7 +102,8 @@ are listed in [org-adrs.md](org-adrs.md).
 - [adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
   — printer applications publish on 127.0.0.1 only (no LAN printing or
   DNS-SD), run their image's moving `:stable` tag, and update through
-  `podman-auto-update.timer`
+  `podman-auto-update.timer`; the moving-tag and auto-update parts are
+  superseded by ADR-0023
 - [adr/0021-active-model-selection-from-downloaded-models.md](adr/0021-active-model-selection-from-downloaded-models.md)
   — Active Model selects among downloaded models in llmman via a live combo row,
   mapping `aliases.bluefin-active` in-app while retaining Manage Models for downloads
@@ -110,6 +111,13 @@ are listed in [org-adrs.md](org-adrs.md).
   — static widget trees are Blueprint compiled in Dakota and committed as the
   GtkBuilder XML the pure-Go binary embeds; Go binds them by struct tag and
   connects signals; blueprints stay within the libadwaita 1.6 floor
+- [adr/0023-verify-printer-images-before-installing.md](adr/0023-verify-printer-images-before-installing.md)
+  — Verify printer image signatures and install immutable digests instead of unchecked auto-updating tags.
+- [adr/0024-rootful-docker-from-verified-homebrew-bottles.md](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)
+  — the fixed `docker-enable` helper installs the system Docker daemon from
+  Homebrew bottles it verifies itself against the signed formula index, into
+  root-owned `/var/lib/chairlift/docker`; root never executes the user's
+  Homebrew prefix
 
 ### Design
 

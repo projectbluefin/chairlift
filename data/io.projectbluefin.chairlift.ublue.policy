@@ -104,6 +104,18 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">driver-switch</annotate>
   </action>
 
+  <action id="io.projectbluefin.chairlift.ublue.gaming-switch">
+    <description>Switch the system gaming mode image</description>
+    <message>Authentication is required to switch the system gaming mode image</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/chairlift-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">gaming-switch</annotate>
+  </action>
+
   <action id="io.projectbluefin.chairlift.ublue.factory-reset">
     <description>Factory reset the system</description>
     <message>Authentication is required to factory reset the system</message>
@@ -153,8 +165,8 @@
   </action>
 
   <action id="io.projectbluefin.chairlift.ublue.docker-enable">
-    <description>Enable the Docker daemon and account access</description>
-    <message>Authentication is required to enable the Docker daemon and account access</message>
+    <description>Install Docker from verified Homebrew packages and enable it</description>
+    <message>Authentication is required to install Docker from verified Homebrew packages and enable it</message>
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
@@ -174,6 +186,18 @@
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/chairlift-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">docker-disable</annotate>
+  </action>
+
+  <action id="io.projectbluefin.chairlift.ublue.docker-update">
+    <description>Update Docker from verified Homebrew packages</description>
+    <message>Authentication is required to update Docker from verified Homebrew packages</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/chairlift-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">docker-update</annotate>
   </action>
 
 </policyconfig>

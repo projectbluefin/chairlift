@@ -8,7 +8,7 @@ active present the current step without resetting progress.
 
 ## Sequence and visibility
 
-`internal/firstrun.Pages` selects Features, Apps, Agents, then Livery from the
+`internal/firstrun.Pages` selects Livery, Features, Apps, then Agents from the
 window's existing visible primary inventory. Configuration and the shared host
 capability floor therefore remove unavailable pages. Missing pages are omitted,
 not advertised and redirected to Help. An empty sequence leaves the ordinary
@@ -32,13 +32,18 @@ controls, or add a settings actor. A bottom bar built once offers Dismiss Setup,
 Back and Next, with **Finish** on the conclusion. Back is
 insensitive on Welcome and returns there from the first selection page.
 Selection navigation passes through `Window.navigateToPage`; bookends use the
-setup stack. Other routes cannot leave the current step. The sidebar is
-insensitive and its native Back route is disabled; dismissal restores both
-while keeping the current page. Each selection step opens at the top of its page.
+setup stack. Details belonging to the current step, including Developer Mode
+under Features, remain accessible with their own Back control; unrelated routes
+and shortcuts cannot leave the step. The sidebar is insensitive and its native
+Back route is disabled; dismissal restores both while keeping the current page.
+Each selection step opens at the top of its page.
 
-Moving Back or Next changes only navigation. It never installs software,
-changes configuration, or writes disposition. Next from Livery opens the
-conclusion. Its final action saves completion and returns to Control Center;
+Moving Back changes only navigation. Next from Features explicitly applies the
+Bash-only Bluefin CLI choice, selected by default unless previously disabled.
+An opt-out survives navigation; failure stays on Features for retry, and a
+successful choice is not applied twice. Other Next actions only navigate.
+Ordinary activation and showing Welcome perform no installation. Next from
+Agents opens the conclusion. Its final action saves completion and returns to Control Center;
 save errors show a toast. Escape, Dismiss and intentional window close
 dismiss setup without closing the application.
 `Ctrl+Q` quits in one press, setup included.

@@ -69,10 +69,15 @@ so they cost nothing on any other host.
 
 ### 🔄 Unified Updates
 
-The Updates page leads with the system's status — "System is up to date", or
-how many updates are waiting — above an **Update Sources** list of the four
-things that can be updated: Applications, Developer Tools, System Components,
-and Operating System. One primary action covers all of them: **Check Again**
+The Updates page leads with the system's status — "Up to date · checked at …", or
+how many updates are waiting — above an **Update Sources** list naming the five
+kinds of thing it can update: Applications, Developer Tools, Printer Drivers,
+System Components, and Operating System. Only the sources this computer can
+actually manage are listed, so one it cannot use — a backing tool that is not
+here, or a source switched off for the whole machine by the image or by an
+administrator — is absent rather than explained at length; **Preferences**
+still lists every source, with its switch off and the reason. One primary
+action covers all of them: **Check Again**
 when nothing is pending, **Update All** when something is, and **Retry Failed**
 when a source did not finish. Once an OS image is staged, the **Operating
 System** row carries its own **Restart Now** suffix instead.
@@ -277,9 +282,10 @@ chairlift
 2. **Apps**: Manage installed Homebrew packages, search for formulae and
    casks, install app collections, and launch the configured external Flatpak
    manager
-3. **Agents**: Run a language model on this computer
+3. **Agents**: Run a language model on this computer, plus Troubleshooting
+   with Goose
 4. **Features**: Enable, disable, and update configured system features, plus
-   Developer Mode, Gaming Mode, and Enhanced Troubleshooting
+   Developer Mode and Gaming Mode
 5. **Livery**: Choose the icons shown on the app-grid button, the top-bar menu,
    and Files — a personal brand from Simple Icons, a foundation mark, or a CNCF
    project's artwork, optionally advancing at each login
@@ -327,9 +333,9 @@ Suite; a collection already on the system reads Installed and its checkbox
 is locked. Each row is named and described from a curated table rather than
 from the file, because the shipped collections are identified on disk by
 tooling names such as `cli` and `fonts-dev`; some rows also cover a sibling
-Brewfile (Extra Wallpapers includes `wallpaper-slideshow`, Fonts includes
-`dakota-fonts`) and count its items too; a sibling shipped without its
-parent keeps a row of its own. Retired Bluefin collections are not
+Brewfile (Fonts includes `dakota-fonts`) and count its items too; a sibling
+shipped without its parent keeps a row of its own, and `wallpaper-slideshow`
+keeps its own row here. Retired Bluefin collections are not
 offered. A collection that table does not know gets a readable form of its
 identifier, and its leading `#` comment only when that comment reads as a
 human sentence. Every row states how many apps and tools it installs.
@@ -386,8 +392,8 @@ migrated in memory to Updates where applicable; see
 [legacy configuration compatibility](CONFIG.md#legacy-system-page-compatibility).
 Retired v0.12.x `maintenance_page`, `updates_page`, and `features_page` groups
 are also validated, then ignored (`features_page.troubleshooting_group` is
-migrated to Help); see
-[legacy group compatibility](CONFIG.md#legacy-maintenance-updates-and-features-group-compatibility).
+migrated to Agents); see
+[legacy group compatibility](CONFIG.md#legacy-maintenance-updates-features-and-apps-group-compatibility).
 
 ---
 

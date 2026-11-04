@@ -1,0 +1,6 @@
+# The existing collections switch also gates collections relocated to Developer Mode.
+applications_page:
+  brew_bundles_group:
+    enabled: false
+    bundles_paths:
+      - bundles

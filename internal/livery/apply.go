@@ -490,6 +490,12 @@ func panelIconDir() (string, error) {
 // who tried several would accumulate one SVG per mark they had ever picked.
 // The prefix match is what makes "ours" identifiable.
 func removePanelIcons() error {
+	return removePanelIconsExcept("")
+}
+
+// removePanelIconsExcept is removePanelIcons keeping the one file named keep,
+// the mark the extension has just been pointed at.
+func removePanelIconsExcept(keep string) error {
 	dir, err := panelIconDir()
 	if err != nil {
 		return err
@@ -502,7 +508,7 @@ func removePanelIcons() error {
 		return fmt.Errorf("livery: listing panel icons: %w", err)
 	}
 	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), PanelIconPrefix) {
+		if !strings.HasPrefix(entry.Name(), PanelIconPrefix) || entry.Name() == keep {
 			continue
 		}
 		if err := os.Remove(filepath.Join(dir, entry.Name())); err != nil && !os.IsNotExist(err) {
@@ -681,14 +687,6 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 		return nil
 	}
 
-	// Sweep marks from previous selections before installing this one, so a
-	// user who tries several does not accumulate an SVG per mark.
-	if s == Panel {
-		if err := removePanelIcons(); err != nil {
-			return err
-		}
-	}
-
 	if err := writeFileAtomically(dest, data); err != nil {
 		return err
 	}
@@ -704,7 +702,20 @@ func Apply(ctx context.Context, s Surface, src Source) error {
 	if err := gsettingsSet(ctx, extensionSchema, extensionIconKey, PanelIconName(selectionID)); err != nil {
 		return err
 	}
-	return gsettingsSet(ctx, extensionSchema, extensionModeKey, extensionIconMode)
+	if err := gsettingsSet(ctx, extensionSchema, extensionModeKey, extensionIconMode); err != nil {
+		return err
+	}
+	// Sweep marks from previous selections only now that the extension
+	// names this one, so a user who tries several does not accumulate an
+	// SVG per mark. Sweeping first meant any failure above — a refused or
+	// timed-out gsettings call, a full disk — left the extension naming a
+	// deleted file and the top-bar menu blank, which RevertPanel's ordering
+	// exists to prevent. The mark is applied, so a failed sweep leaves only
+	// unreferenced files and is not reported as a failed apply.
+	if err := removePanelIconsExcept(filepath.Base(dest)); err != nil {
+		log.Printf("livery: sweeping earlier panel marks: %v", err)
+	}
+	return nil
 }
 
 func setKickoffIcon(ctx context.Context, groups [][]string, iconName string) error {
@@ -982,7 +993,15 @@ func gsettingsGet(ctx context.Context, schema, key string) (string, error) {
 		}
 		return "", fmt.Errorf("livery: reading %s %s: %w: %s", schema, key, err, strings.TrimSpace(out))
 	}
-	return unquote(strings.TrimSpace(out)), nil
+	return unquote(valueLine(out)), nil
+}
+
+// valueLine is the value `gsettings get` printed. runCommand combines stdout
+// and stderr, and GLib may print a warning before the value on a successful
+// read; the value is always the last line.
+func valueLine(out string) string {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 func gsettingsSet(ctx context.Context, schema, key, value string) error {

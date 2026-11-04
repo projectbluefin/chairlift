@@ -15,15 +15,15 @@ The seven primaries, in canonical order, are **Updates, Apps, Agents, Features,
 Livery, Maintenance, Help**. The `recovery` route, titled **Powerwash**, is the
 only detail, owned by Maintenance;
 it has no sidebar row or accelerator. There is no System, Appearance, Developer
-Tools or Local AI tools route. Wallpaper is not a shipped control.
+Tools or Local AI tools route. Wallpaper setup ships only as Livery's More Dinosaurs group.
 
 | Route | Builder under `internal/views` | Content |
 | --- | --- | --- |
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, the active model dropdown, the Manage Models link to llmman's own page, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
-| `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and loopback-only printer applications |
-| `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
+| `features` | `features_page.go`, `bluefin_cli.go`, `developer_tools.go`, `developer_setup.go`, `shell_extensions.go`, `printers_page.go` | Gaming first, a Chairlift-owned Bluefin CLI switch, Developer options with an independent Monospace Fonts collection inside Developer Mode, distribution features, desktop integrations and loopback-only printer applications |
+| `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go`, `wallpapers.go` | Profile Picture, More Dinosaurs wallpaper setup, and initially collapsed App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free Up Space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
 | `recovery` | `recovery.go`, `reset.go` | Previous-deployment rollback and opt-in reset actions (the published-versions calendar is withdrawn, #522) |
@@ -41,17 +41,19 @@ inventory; derive schema additions from source rather than a frozen count.
 | `updates_page` | `automatic_updates_group` | Updates; `onAutomaticUpdatesToggled`, observed through `internal/autoupdate`, writes via `ublue.SetAutomaticUpdates` |
 | `updates_page` | `bootc_updates_group` | Updates staging/Compare and Powerwash Roll Back; `onBootcStageClicked`, `onChangelogClicked`, `onBootcRollbackClicked` |
 | `updates_page` | `flatpak_updates_group` | Updates applications source; `updateflow.Coordinator` / `UpdateShell` |
-| `updates_page` | `brew_updates_group` | Updates developer-tools source; `updateflow.Coordinator` / `UpdateShell` |
+| `updates_page` | `brew_updates_group` | Updates developer-tools source, including a Homebrew-bottle Docker runtime refreshed through fixed `docker-update`; `updateflow.Coordinator` / `UpdateShell` |
 | `updates_page` | `brew_trust_group` | Updates; `confirmTrustTap` / `trustTap`, unprivileged `homebrew.TrustPackages` |
 | `updates_page` | `channel_group` | Updates Advanced; `onChannelToggled` / `onDriverSwitchClicked`, fixed ublue helper |
 | `updates_page` | `bootc_status_group` | Updates system-version readout; `loadSystemVersion`, read-only bootc state |
 | `applications_page` | `brew_bundles_group` | Apps collections, shown first; `loadBrewBundles`, shared collection install/progress handling |
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
+| `features_page` | `bluefin_cli_group` | Features Bluefin CLI switch; `buildBluefinCLIGroup`, `runBluefinCLI`, `internal/bluefincli` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
-| `features_page` | `dx_group` | Features Developer Mode, WSL/Docker and selected IDE/editor installs; `onDeveloperToggled` / `onDeveloperOption`; fixed helper plus user-scope `internal/devtools` |
+| `features_page` | `dx_group` | Developer Mode detail under Features, hosting Developer Mode, WSL, system Docker, and six native Development Apps rows with source/status/Install actions (ublue-os Homebrew Visual Studio Code, VSCodium, JetBrains Toolbox; system FlatPark Cursor and Antigravity; system Flathub Zed). Sublime Text is deliberately excluded for now by user approval; no personal taps. Shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
+| `features_page` | `compass_group` | Features Compass launcher; `buildCompassGroup`, `runCompassToggle`, `internal/compass` over `internal/flatpak` from the image's FlatPark system remote |
 | `agents_page` | `agents_group` | Agents service, the active model selector and the Manage Models link to llmman's own page; `internal/aistack`, `internal/contribute` |
 | `agents_page` | `troubleshooting_group` | Troubleshooting: Goose Set Up/Launch and Ask Bluefin menu visibility; `onGooseClicked`, `internal/agentmode`, `internal/troubleshoot`, `internal/devmenu`. Also accepted as legacy `help_page.troubleshooting_group` |
 | `livery_page` | `account_group` | Livery profile picture; `avatarPicker`, `internal/avatar.Applier` |
@@ -115,9 +117,30 @@ Provider-specific safety remains with each live owner:
   PolicyKit) and `stage_feeds` (a user-data file) are opt-in
   work; their failures do not reverse or misreport the permission promotion.
   WSL defaults to nsl (Linux amd64), with Lima available explicitly and retained
-  for an existing Lima-only machine. Both need KVM access; Docker requires an
-  actually ready socket. Missing helper actions leave affected options visible
-  but insensitive.
+  for an existing Lima-only machine. Both need KVM access. WSL/Docker enable
+  first promotes Developer Mode through fixed `dx-enable` when needed;
+  canceled/failed authentication blocks the child, later failure keeps access,
+  and child disable never demotes the parent. Docker enable runs fixed
+  `docker-enable` (a possible second authentication) and only after it
+  succeeds retires a rootless user daemon. Image units (Bluefin DX) win; otherwise the helper
+  installs the daemon from Homebrew bottles it verifies against the signed
+  formula index into root-owned `/var/lib/chairlift/docker`, writes
+  marker-bearing units, and creates the `docker` group when missing; root
+  never executes the user's Homebrew prefix (ADR-0024). The user-scope CLI
+  formulae follow. Its expander labels the daemon formulae **Homebrew,
+  installed for the whole computer**, not requested downloads. Readiness
+  requires HTTP 200 `OK` on `/var/run/docker.sock`. New group access needs a
+  new login (`NeedsLogin`), not a Ready result; a non-member is `NoAccess` and
+  reads off. After both unit reads succeed, socket failure retains known
+  active state and stop access. Masked units or missing helper actions need
+  an image/administrator fix. Stop retains the runtime, data, groups, and the
+  parent; Updates' Developer tools source refreshes the runtime through fixed
+  `docker-update`.
+  Optional native VS Code setup preserves existing JSONC/symlinks, seeds only
+  absent settings, checks extension IDs against the upstream version-1 marker,
+  skips without native `code`, and never reverses access on failure. Four package expanders and the bounded
+  Setup activity checklist retain distinct preview/failure/cancellation/login
+  outcomes; failed optional stages retry without repeating a completed grant.
 - Gaming distinguishes applications/runtimes and user/system scope, installs
   system-wide with a single toggle, and removes each component from every
   scope it is in when disabled — leaving a system copy the image ships in
@@ -182,7 +205,8 @@ for each mutation and observation.
 | Setup Assistant, `--first-run`, `--setup`/`-s` | `Window.PresentFirstRun`; existing visible pages in Features → Apps → Agents → Livery order, no separate destination or copied controls |
 | Keyboard Shortcuts | `Window.onShowShortcuts`; advertised and registered inventory from `internal/navigation` |
 | About Control Center | `Window.onShowAbout`; application About dialog, not a machine-information route |
-| `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose (off the GTK thread) without presenting a window, otherwise open Agents with prerequisite, open-session, or start-failure feedback |
+| `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose (off the GTK thread) without presenting a window, otherwise open Agents with prerequisite, open-session, or start-failure feedback; `--prompt-file` prefills Goose's first message on the next launch |
+| `--dx-mode` | `internal/app` command-line handler and `Window.NavigateToDXModePage`; enter the Developer Mode detail, keeping Features selected and Back returning there |
 | Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
 
 The visible primary inventory is fixed for the session and Alt+number compacts

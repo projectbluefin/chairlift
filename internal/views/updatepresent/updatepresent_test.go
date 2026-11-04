@@ -128,6 +128,21 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			want: Presentation{Status: "Applications: installing updates…"},
 		},
 		{
+			name: "updating with determinate progress",
+			state: updateflow.Snapshot{
+				Phase:       updateflow.PhaseUpdating,
+				Current:     updateflow.OperatingSystem,
+				Progress:    "Downloading [14/68]",
+				Fraction:    0.25,
+				Determinate: true,
+			},
+			want: Presentation{
+				Status:              "Operating System: Downloading [14/68]",
+				ProgressFraction:    0.25,
+				ProgressDeterminate: true,
+			},
+		},
+		{
 			// Post-update maintenance: no source is updating, but the run
 			// is still cleaning up, so the panel keeps reporting it.
 			name: "maintenance before its first step",
@@ -167,6 +182,26 @@ func TestSnapshotMapsAggregateStates(t *testing.T) {
 			},
 			want: Presentation{Status: "Couldn't install some updates",
 				Detail:      "Not updated: Developer Tools, Operating System",
+				ActionLabel: "Retry Failed",
+				ShowAction:  true,
+				ActionStyle: "suggested-action"},
+		},
+		{
+			name: "partial failure omits a source with only check warnings",
+			state: updateflow.Snapshot{
+				Phase:  updateflow.PhasePartialFailure,
+				Action: updateflow.ActionRetryFailed,
+				FailedSources: []updateflow.SourceID{
+					updateflow.DeveloperTools,
+					updateflow.PrinterDrivers,
+				},
+				Sources: []updateflow.SourceState{
+					{ID: updateflow.DeveloperTools, ApplyErr: errors.New("permission denied")},
+					{ID: updateflow.PrinterDrivers, Completed: true, CheckWarnings: []string{"Ghostscript"}},
+				},
+			},
+			want: Presentation{Status: "Couldn't install some updates",
+				Detail:      "Not updated: Developer Tools",
 				ActionLabel: "Retry Failed",
 				ShowAction:  true,
 				ActionStyle: "suggested-action"},
@@ -335,6 +370,58 @@ func TestSourceMapsSourceState(t *testing.T) {
 			sub:   "Couldn't update. Details are in the log.",
 		},
 		{
+			name: "named apply warning",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				ApplyErr:      errors.New("signature rejected"),
+				ApplyWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update Ghostscript. Details are in the log.",
+		},
+		{
+			name: "apply failure keeps earlier check warning visible",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+				ApplyErr:      errors.New("refresh failed"),
+				ApplyWarnings: []string{"HPLIP"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't update HPLIP. Details are in the log. · couldn't check Ghostscript",
+		},
+		{
+			name: "updates offered beside an unchecked family",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				Items:         []updateflow.Item{{Name: "HPLIP"}},
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "1 update available · couldn't check Ghostscript",
+		},
+		{
+			name: "unchecked family with no available updates",
+			state: updateflow.SourceState{
+				ID:            updateflow.PrinterDrivers,
+				Configured:    true,
+				Available:     true,
+				Enabled:       true,
+				CheckWarnings: []string{"Ghostscript"},
+			},
+			title: "Printer Drivers",
+			sub:   "Couldn't check Ghostscript. Details are in the log.",
+		},
+		{
 			name: "apply error that timed out",
 			state: updateflow.SourceState{
 				ID:         updateflow.Applications,
@@ -422,6 +509,32 @@ func TestSnapshotShowsLastCheckedTimeWhenCurrent(t *testing.T) {
 	}
 }
 
+// A source nobody on this machine can use gets no row: its subtitle could only
+// report a state the reader cannot change or act on (#675). A source the user
+// turned off keeps its row, because Preferences can turn it back on.
+func TestShowSourceRowOnlyForUsableSources(t *testing.T) {
+	tests := []struct {
+		name  string
+		state updateflow.SourceState
+		want  bool
+	}{
+		{"configured and available", updateflow.SourceState{Configured: true, Available: true}, true},
+		{"turned off in preferences", updateflow.SourceState{Configured: true, Available: true, Enabled: false}, true},
+		{"disabled in the shipped configuration", updateflow.SourceState{Configured: false, Available: true}, false},
+		{"this host cannot back it", updateflow.SourceState{Configured: true, Available: false}, false},
+		{"neither", updateflow.SourceState{Configured: false, Available: false}, false},
+		{"checking, still usable", updateflow.SourceState{Configured: true, Available: true, Checking: true}, true},
+		{"failed check, still usable", updateflow.SourceState{Configured: true, Available: true, CheckErr: errors.New("boom")}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ShowSourceRow(tc.state); got != tc.want {
+				t.Errorf("ShowSourceRow(%+v) = %v, want %v", tc.state, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestSourceIconMapsProviderKinds(t *testing.T) {
 	tests := []struct {
 		id   updateflow.SourceID
@@ -431,6 +544,7 @@ func TestSourceIconMapsProviderKinds(t *testing.T) {
 		{updateflow.DeveloperTools, "package-x-generic-symbolic"},
 		{updateflow.SystemComponents, "application-x-addon-symbolic"},
 		{updateflow.OperatingSystem, "drive-harddisk-system-symbolic"},
+		{updateflow.PrinterDrivers, "printer-symbolic"},
 		{"unknown", "software-update-available-symbolic"},
 	}
 	for _, tt := range tests {
@@ -780,7 +894,7 @@ func TestRestartFailedMessageHasNoRawError(t *testing.T) {
 // Applications and System components once shared one icon.
 func TestSourceIconsAreDistinct(t *testing.T) {
 	seen := map[string]updateflow.SourceID{}
-	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem} {
+	for _, id := range []updateflow.SourceID{updateflow.Applications, updateflow.DeveloperTools, updateflow.SystemComponents, updateflow.OperatingSystem, updateflow.PrinterDrivers} {
 		icon := SourceIcon(id)
 		if other, ok := seen[icon]; ok {
 			t.Errorf("%s and %s share the icon %s", other, id, icon)

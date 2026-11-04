@@ -11,7 +11,7 @@ func TestWSLEngineDocumentationURL(t *testing.T) {
 		{"nsl", NSLDocumentationURL, "NSL documentation"},
 		{"", NSLDocumentationURL, "NSL documentation"},
 		{"other", NSLDocumentationURL, "NSL documentation"},
-		{"lima", LimaDocumentationURL, "Lima documentation"},
+		{"lima", "https://lima-vm.io/docs/", "Lima documentation"},
 	} {
 		if got := WSLEngineDocumentationURL(tc.backend); got != tc.wantURL {
 			t.Errorf("WSLEngineDocumentationURL(%q) = %q, want %q", tc.backend, got, tc.wantURL)

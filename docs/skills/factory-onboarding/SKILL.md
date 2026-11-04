@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
 description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; follow Common's Prow workflow page for intake, labels and commands.
-version: 1.5.0
-last_updated: 2026-10-07
+version: 1.6.0
+last_updated: 2026-11-01
 tags:
   - factory
   - onboarding
@@ -139,6 +139,11 @@ and [`goreleaser check`](https://goreleaser.com/cmd/goreleaser_check/).
   queue candidate passed `Tests Passed` before the release tag was created.
 - The release workflow succeeded and the published release is neither a
   draft nor a prerelease; signed archives and checksums exist for both arches.
+- The release workflow runs the whole AT-SPI suite serially, unlike the
+  sharded pull-request job, so a green `main` does not prove it fits
+  `test/e2e`'s `atspiTimeout`. A `--- FAIL: TestATSPIBehaveSuite` at exactly
+  that budget with no `Failing scenarios:` summary is the cap, not a flake
+  (v26.11.1); raise the cap and the release job's `timeout-minutes` together.
 
 ### Red flags
 

@@ -49,6 +49,7 @@ func TestApplicationHelp(t *testing.T) {
 		"--dry-run",
 		"--first-run",
 		"--setup",
+		"--prompt-file",
 		"Don't make any changes to the system.",
 	} {
 		if !bytes.Contains(output, []byte(want)) {
@@ -261,6 +262,9 @@ func TestInstalledBundleAndHelperBoundary(t *testing.T) {
 		{name: "Docker enable outside pkexec", helper: "chairlift-helper", args: []string{"docker-enable"}, wantStderr: "PKEXEC_UID is not set"},
 		{name: "Docker disable refuses unit", helper: "chairlift-helper", args: []string{"docker-disable", "other.service"}, wantStderr: "usage: chairlift-helper docker-disable"},
 		{name: "Docker disable refuses flag", helper: "chairlift-helper", args: []string{"docker-disable", "--force"}, wantStderr: "usage: chairlift-helper docker-disable"},
+		{name: "Docker update refuses formula", helper: "chairlift-helper", args: []string{"docker-update", "docker-engine"}, wantStderr: "usage: chairlift-helper docker-update"},
+		{name: "Docker update refuses install root", helper: "chairlift-helper", args: []string{"docker-update", "/home/linuxbrew/.linuxbrew"}, wantStderr: "usage: chairlift-helper docker-update"},
+		{name: "Docker update refuses misplaced flag", helper: "chairlift-helper", args: []string{"docker-update", "--dry-run", "--force"}, wantStderr: "usage: chairlift-helper docker-update"},
 		// Restart takes no delay and no target: either would be a value the
 		// caller controls crossing an authenticated boundary.
 		{name: "ublue restart with a delay", helper: "chairlift-helper", args: []string{"restart", "02:00"}, wantStderr: "usage: chairlift-helper restart"},
@@ -352,7 +356,7 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	// dbus-daemon die immediately, closing the Wayland connection and aborting
 	// chairlift via fatal-criticals before it can perform a normal exit and
 	// flush GOCOVERDIR.
-	if !hasExited(done) {
+	if !hasExited(t, done) {
 		if members, err := liveSessionMembers(defaultProcTable, group); err == nil {
 			for _, member := range members {
 				if member.name == "chairlift" {
@@ -365,23 +369,31 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 
 	// Wait briefly for chairlift to complete its graceful exit.
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Logf("ChairLift smoke session exited during graceful shutdown: %v", err)
+		}
 	case <-time.After(shutdownTimeout):
 	}
 
 	// Once chairlift has had a chance to exit normally, terminate any remaining
 	// processes in the private session.
-	if !hasExited(done) {
+	if !hasExited(t, done) {
 		if err := syscall.Kill(-group, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
 			t.Errorf("terminate ChairLift smoke process group: %v", err)
 		}
 		select {
-		case <-done:
+		case err := <-done:
+			if err != nil {
+				t.Logf("ChairLift smoke session exited after termination: %v", err)
+			}
 		case <-time.After(shutdownTimeout):
 			if err := syscall.Kill(-group, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
 				t.Errorf("kill ChairLift smoke process group: %v", err)
 			}
-			<-done
+			if err := <-done; err != nil {
+				t.Logf("ChairLift smoke session exited after forced termination: %v", err)
+			}
 		}
 	}
 
@@ -390,9 +402,13 @@ func stopProcessSession(t *testing.T, cmd *exec.Cmd, done <-chan error) {
 	}
 }
 
-func hasExited(done <-chan error) bool {
+func hasExited(t *testing.T, done <-chan error) bool {
+	t.Helper()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Logf("ChairLift smoke session exited: %v", err)
+		}
 		return true
 	default:
 		return false

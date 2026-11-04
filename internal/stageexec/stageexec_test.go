@@ -1,9 +1,12 @@
 package stageexec
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -177,6 +180,162 @@ func TestRunMissingExecutableRecognizesNameAndPath(t *testing.T) {
 			}
 			assertNoCompletion(t, events)
 		})
+	}
+}
+
+func TestRunMissingExecutableUnwrapsLookupError(t *testing.T) {
+	tests := map[string]struct {
+		executable string
+		want       error
+	}{
+		"bare name": {executable: "chairlift-stage-command-that-does-not-exist", want: exec.ErrNotFound},
+		"path":      {executable: filepath.Join(t.TempDir(), "absent-stage-command"), want: fs.ErrNotExist},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ch, done := startRun(context.Background(), test.executable)
+			collectEvents(ch)
+			err := waitErr(t, done)
+			if !errors.Is(err, test.want) {
+				t.Errorf("errors.Is(%v) = false; err = %v", test.want, err)
+			}
+			if want := test.executable + " not found"; err == nil || err.Error() != want {
+				t.Errorf("error = %v, want %q", err, want)
+			}
+		})
+	}
+}
+
+// A stage script that exists but cannot be executed is a broken install, not
+// a missing one: it must surface as a start failure so the caller does not
+// report the script as absent.
+func TestRunNonExecutableScriptIsStartFailureNotMissing(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "fake-stage")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho should-not-run\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ch, done := startRun(context.Background(), script)
+	events := collectEvents(ch)
+	err := waitErr(t, done)
+
+	var notFound *NotFoundError
+	if errors.As(err, &notFound) {
+		t.Fatalf("non-executable script reported as missing: %v", err)
+	}
+	var runErr *Error
+	if !errors.As(err, &runErr) {
+		t.Fatalf("errors.As(*Error) = false; err = %T %v", err, err)
+	}
+	if !strings.HasPrefix(runErr.Message, "failed to start "+script) {
+		t.Errorf("error = %q, want start failure naming the script", runErr.Message)
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("errors.Is(ErrPermission) = false; err = %v", err)
+	}
+	if len(events) != 0 {
+		t.Errorf("events = %+v, want none", events)
+	}
+}
+
+// Progress lines are capped at the scanner's 1 MiB buffer. An oversized line
+// must fail the run, stop the still-running script, and never report
+// completion.
+func TestRunOversizedOutputLineFailsWithoutCompletion(t *testing.T) {
+	script := writeScript(t, `echo started
+head -c 1100000 /dev/zero | tr '\000' a
+echo
+exec sleep 30
+`)
+	ch, done := startRun(context.Background(), script)
+	events := collectEvents(ch)
+	err := waitErr(t, done)
+
+	var runErr *Error
+	if !errors.As(err, &runErr) {
+		t.Fatalf("errors.As(*Error) = false; err = %T %v", err, err)
+	}
+	if !strings.HasPrefix(runErr.Message, "failed to read staging output") {
+		t.Errorf("error = %q, want output read failure", runErr.Message)
+	}
+	if !errors.Is(err, bufio.ErrTooLong) {
+		t.Errorf("errors.Is(bufio.ErrTooLong) = false; err = %v", err)
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("read failure matches context sentinel: %v", err)
+	}
+	if len(events) != 1 || events[0] != (ProgressEvent{Type: EventMessage, Message: "started"}) {
+		t.Errorf("events = %+v, want only the line before the oversized one", events)
+	}
+}
+
+// DryRun is not read until it returns, so the only ready case in its send is
+// the done context: the outcome is deterministic.
+func TestDryRunContextDoneClosesWithoutEvents(t *testing.T) {
+	tests := map[string]struct {
+		context func() context.Context
+		want    error
+		message string
+	}{
+		"canceled": {
+			context: func() context.Context {
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return ctx
+			},
+			want:    context.Canceled,
+			message: "Update staging was canceled",
+		},
+		"deadline": {
+			context: func() context.Context {
+				ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+				t.Cleanup(cancel)
+				return ctx
+			},
+			want:    context.DeadlineExceeded,
+			message: "Update staging timed out",
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ch := make(chan ProgressEvent)
+			err := DryRun(test.context(), ch, "/fixed/stage")
+			if !errors.Is(err, test.want) {
+				t.Errorf("errors.Is(%v) = false; err = %v", test.want, err)
+			}
+			if err == nil || err.Error() != test.message {
+				t.Errorf("error = %v, want %q", err, test.message)
+			}
+			if events := collectEvents(ch); len(events) != 0 {
+				t.Errorf("events = %+v, want none", events)
+			}
+		})
+	}
+}
+
+// The completion send is only reached after the preview is received, and the
+// test stops reading before canceling, so ctx.Done is its only ready case.
+func TestDryRunCancellationAfterPreviewClosesWithoutCompletion(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch := make(chan ProgressEvent)
+	done := make(chan error, 1)
+	go func() { done <- DryRun(ctx, ch, "/fixed/stage") }()
+
+	preview := <-ch
+	if preview != (ProgressEvent{Type: EventMessage, Message: "[DRY-RUN] would run /fixed/stage"}) {
+		t.Fatalf("preview = %+v", preview)
+	}
+	cancel()
+
+	err := waitErr(t, done)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("errors.Is(context.Canceled) = false; err = %v", err)
+	}
+	if err == nil || err.Error() != "Update staging was canceled" {
+		t.Errorf("error = %v, want %q", err, "Update staging was canceled")
+	}
+	if events := collectEvents(ch); len(events) != 0 {
+		t.Errorf("events = %+v, want none", events)
 	}
 }
 

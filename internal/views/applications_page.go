@@ -1,6 +1,7 @@
 package views
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -16,6 +17,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
@@ -37,13 +39,6 @@ func (uh *UserHome) buildApplicationsPage() {
 		group.SetDescription("Looking for app collections…")
 		page.Add(group)
 		uh.brewBundlesGroup = group
-
-		var bundlePaths []string
-		groupCfg := uh.config.GetGroupConfig("applications_page", "brew_bundles_group")
-		if groupCfg != nil {
-			bundlePaths = append(bundlePaths, groupCfg.BundlesPaths...)
-		}
-		go uh.loadBrewBundles(bundlePaths)
 	}
 	// Homebrew group
 	if uh.groupEnabled("applications_page", "brew_group") {
@@ -105,11 +100,10 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		bundlesByName[b.Name] = b
 	}
 
-	// Filter out retired bundles and members folded into a discovered parent;
-	// keep curated and custom user collections.
+	// Each collection has one consumer: Apps or the Developer Mode disclosure.
 	var bundles []homebrew.Bundle
 	for _, b := range rawBundles {
-		if bundleview.Visible(b.Name, bundlesByName) {
+		if bundleview.Visible(b.Name, bundlesByName) || bundleview.DeveloperCollection(b.Name) {
 			bundles = append(bundles, b)
 		}
 	}
@@ -124,8 +118,6 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		return bundles[i].Name < bundles[j].Name
 	})
 
-	presentation := bundleview.Present(len(bundles), warning)
-
 	// Parse every Brewfile off the main thread before marshalling: the
 	// discovery path already runs off-thread, BundleContents is a buffered
 	// file scan, and the contract documented on the function above
@@ -135,8 +127,9 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 		memberPaths []string
 		items       []homebrew.BundleItem
 		total       int
+		complete    bool
 	}
-	parsedBundles := make([]parsed, 0, len(bundles))
+	var appBundles, developerBundles []parsed
 	for _, bundle := range bundles {
 		items, itemsErr := homebrew.BundleContents(bundle.Path)
 		if itemsErr != nil {
@@ -151,70 +144,82 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			total = len(items)
 		}
 
+		complete := itemsErr == nil && len(items) == total && len(items) < homebrew.AvailableItems
 		memberPaths := []string{bundle.Path}
-		// Include items from sibling member bundles (e.g. wallpaper-slideshow for artwork)
+		// Include items from sibling member bundles
 		for _, member := range bundleview.MemberBundles(bundle.Name, bundlesByName) {
 			memberPaths = append(memberPaths, member.Path)
 			if mItems, mErr := homebrew.BundleContents(member.Path); mErr == nil {
 				items = append(items, mItems...)
 				total += member.ItemCount
+				complete = complete && len(mItems) == member.ItemCount && len(mItems) < homebrew.AvailableItems
+			} else {
+				complete = false
 			}
 		}
 
-		parsedBundles = append(parsedBundles, parsed{
-			bundle:      bundle,
-			memberPaths: memberPaths,
-			items:       items,
-			total:       total,
-		})
+		entry := parsed{bundle: bundle, memberPaths: memberPaths, items: items, total: total, complete: complete}
+		if bundleview.DeveloperCollection(bundle.Name) {
+			developerBundles = append(developerBundles, entry)
+		} else {
+			appBundles = append(appBundles, entry)
+		}
 	}
 
 	sgtk.RunOnMainThread(func() {
-		if uh.brewBundlesGroup == nil {
-			return
+		addSelection := func(add func(*gtk.Widget), title string, bundles []parsed) {
+			header := adw.NewActionRow()
+			header.SetTitle(title)
+			header.SetSubtitle("Installs every checked app and tool in one step.")
+			selection := &bundleSelection{button: gtk.NewButtonWithLabel("Install"), progress: newInstallProgress()}
+			selection.button.SetValign(gtk.AlignCenterValue)
+			selection.button.AddCssClass("suggested-action")
+			header.AddSuffix(&selection.progress.Widget)
+			header.AddSuffix(&selection.button.Widget)
+			uh.bundleButtons.connect(selection.button, func(gtk.Button) {
+				uh.runSelectedBundlesInstall(selection)
+			})
+			add(&header.Widget)
+			for _, p := range bundles {
+				item := newBundleItemRow(p.bundle, p.memberPaths, p.total)
+				item.wholeFileSafe = p.complete
+				uh.buildBundleRow(item, p.items)
+				add(&item.row.Widget)
+				selection.items = append(selection.items, item)
+				uh.bundleItems = append(uh.bundleItems, item)
+			}
+			uh.bundleSelections = append(uh.bundleSelections, selection)
 		}
-		uh.brewBundlesGroup.SetDescription(presentation.Description)
-
-		if len(parsedBundles) == 0 {
-			row := adw.NewActionRow()
-			row.SetUseMarkup(false)
-			row.SetTitle(presentation.PlaceholderTitle)
-			row.SetSubtitle(presentation.PlaceholderSubtitle)
-			uh.brewBundlesGroup.Add(&row.Widget)
-			return
+		if uh.developerRow == nil && len(developerBundles) > 0 {
+			merged := make([]parsed, 0, len(appBundles)+len(developerBundles))
+			merged = append(merged, appBundles...)
+			merged = append(merged, developerBundles...)
+			sort.SliceStable(merged, func(i, j int) bool {
+				orderI := bundleview.Order(merged[i].bundle.Name)
+				orderJ := bundleview.Order(merged[j].bundle.Name)
+				if orderI != orderJ {
+					return orderI < orderJ
+				}
+				return merged[i].bundle.Name < merged[j].bundle.Name
+			})
+			appBundles = merged
+			developerBundles = nil
 		}
-
-		// Add group-level Install button header row
-		headerRow := adw.NewActionRow()
-		headerRow.SetTitle("Install Selected")
-		headerRow.SetSubtitle("Installs every checked app and tool in one step.")
-		headerInstallBtn := gtk.NewButtonWithLabel("Install")
-		headerInstallBtn.SetValign(gtk.AlignCenterValue)
-		headerInstallBtn.AddCssClass("suggested-action")
-		uh.bundleInstallButton = headerInstallBtn
-
-		spinner := newActivitySpinner()
-		uh.bundleInstallSpinner = spinner
-		headerRow.AddSuffix(&spinner.Widget)
-
-		progress := newInstallProgress("Installing collections…")
-		uh.bundleInstallBar = progress
-		headerRow.AddSuffix(&progress.Widget)
-		headerRow.AddSuffix(&headerInstallBtn.Widget)
-
-		uh.bundleButtons.connect(headerInstallBtn, func(gtk.Button) {
-			uh.runSelectedBundlesInstall()
-		})
-		uh.brewBundlesGroup.Add(&headerRow.Widget)
-
-		uh.bundleItems = nil
-		uh.bundleChecks.clear()
-		uh.bundleSelectAlls.clear()
-		for _, p := range parsedBundles {
-			item := newBundleItemRow(p.bundle, p.memberPaths, p.total)
-			uh.buildBundleRow(item, p.items)
-			uh.brewBundlesGroup.Add(&item.row.Widget)
-			uh.bundleItems = append(uh.bundleItems, item)
+		if uh.brewBundlesGroup != nil {
+			presentation := bundleview.Present(len(appBundles), warning)
+			uh.brewBundlesGroup.SetDescription(presentation.Description)
+			if len(appBundles) == 0 {
+				row := adw.NewActionRow()
+				row.SetUseMarkup(false)
+				row.SetTitle(presentation.PlaceholderTitle)
+				row.SetSubtitle(presentation.PlaceholderSubtitle)
+				uh.brewBundlesGroup.Add(&row.Widget)
+			} else {
+				addSelection(uh.brewBundlesGroup.Add, "Install Selected", appBundles)
+			}
+		}
+		if uh.developerRow != nil && len(developerBundles) > 0 {
+			addSelection(uh.developerRow.AddRow, "Developer Collections", developerBundles)
 		}
 		uh.refreshBundleStatuses()
 	})
@@ -318,12 +323,59 @@ func (uh *UserHome) addBundleEntryRows(item *bundleItemRow, items []homebrew.Bun
 
 		item.row.AddRow(&row.Widget)
 	}
+	bindBundleDescriptions(item.row, items, func(described []homebrew.BundleItem) {
+		for i, describedItem := range described {
+			entry := item.entries[i]
+			entry.item.Description = describedItem.Description
+			entry.descriptionLoaded = true
+			entry.renderSubtitle()
+		}
+	})
 	if presentation.OverflowNotice != "" {
 		overflow := adw.NewActionRow()
 		overflow.SetUseMarkup(false)
 		overflow.SetTitle(presentation.OverflowNotice)
 		overflow.SetTitleLines(1)
 		item.row.AddRow(&overflow.Widget)
+	}
+}
+
+// addContentsRows retains non-selectable package disclosures for Bluefin CLI
+// and the developer setup stages; collection entry checkboxes are separate.
+func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, total int) {
+	presentation := bundleview.PresentContents(items, total)
+	if !presentation.HasRows() {
+		placeholder := adw.NewActionRow()
+		placeholder.SetTitle(presentation.EmptyTitle)
+		placeholder.SetSubtitle(presentation.EmptySubtitle)
+		expander.AddRow(&placeholder.Widget)
+		return
+	}
+	rows := make([]*adw.ActionRow, 0, len(presentation.Rows))
+	for _, item := range presentation.Rows {
+		row := adw.NewActionRow()
+		row.SetUseMarkup(false)
+		row.SetTitle(item.Name)
+		row.SetSubtitle(bundleview.ContentsKindLabel(item.Item.Kind))
+		SetAccessibleLabel(row, item.AccessibleName)
+		expander.AddRow(&row.Widget)
+		rows = append(rows, row)
+	}
+	bindBundleDescriptions(expander, items, func(described []homebrew.BundleItem) {
+		for i, item := range described {
+			label := bundleview.ContentsKindLabel(item.Kind)
+			if description := bundleview.EntryDescription(item); description != "" {
+				label += " · " + description
+			}
+			rows[i].SetSubtitle(label)
+		}
+	})
+	if presentation.OverflowNotice != "" {
+		overflow := adw.NewActionRow()
+		overflow.SetUseMarkup(false)
+		overflow.SetTitle(presentation.OverflowNotice)
+		overflow.SetTitleLines(1)
+		expander.AddRow(&overflow.Widget)
 	}
 }
 
@@ -335,6 +387,8 @@ func (uh *UserHome) addBundleEntryRows(item *bundleItemRow, items []homebrew.Bun
 func (uh *UserHome) homebrewInventoryChanged() {
 	go uh.loadHomebrewPackages()
 	uh.refreshBundleStatuses()
+	uh.refreshBluefinCLI()
+	uh.refreshDeveloperApps()
 }
 
 // loadHomebrewPackages loads installed Homebrew packages asynchronously
@@ -624,7 +678,10 @@ func (uh *UserHome) runHomebrewUninstall(
 	if err == nil && decision.Refresh {
 		// A collection holding the removed package is no longer fully
 		// installed; re-observe so its row offers Install again.
-		sgtk.RunOnMainThread(uh.refreshBundleStatuses)
+		sgtk.RunOnMainThread(func() {
+			uh.refreshBundleStatuses()
+			uh.refreshBluefinCLI()
+		})
 	}
 }
 
@@ -693,4 +750,33 @@ func setHomebrewControlsSensitive(controls []*gtk.Button, sensitive bool) {
 	for _, button := range controls {
 		button.SetSensitive(sensitive)
 	}
+}
+
+// Each expander owns one lookup and its rows. Destruction cancels the worker;
+// callbacks never publish into a replacement page or a destroyed widget.
+func bindBundleDescriptions(expander *adw.ExpanderRow, items []homebrew.BundleItem, render func([]homebrew.BundleItem)) {
+	started, disposed := false, false
+	ctx, cancel := context.WithCancel(context.Background())
+	destroyed := func(_ gtk.Widget) { disposed = true; cancel() }
+	expander.ConnectDestroy(&destroyed)
+	expanded := func(_ gobject.Object, _ uintptr) {
+		if started || disposed || !expander.GetExpanded() {
+			return
+		}
+		started = true
+		go func() {
+			defer cancel()
+			described, err := homebrew.DescribeBundleItems(ctx, items)
+			if err != nil {
+				log.Printf("Could not load collection descriptions: %v", err)
+			}
+			sgtk.RunOnMainThread(func() {
+				if disposed {
+					return
+				}
+				render(described)
+			})
+		}()
+	}
+	expander.ConnectNotify(&expanded)
 }

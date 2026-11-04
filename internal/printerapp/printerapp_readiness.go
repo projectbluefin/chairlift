@@ -3,6 +3,7 @@ package printerapp
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 )
@@ -61,6 +62,29 @@ func Observe(app App, capable bool) Facts {
 		Capable:     capable,
 		UnitPresent: IsEnabled(app),
 	}
+}
+
+// InstalledBeforeVerification reports whether the installed unit was written
+// before ChairLift verified driver signatures (ADR-0023). Such a unit still
+// carries AutoUpdate=registry, so Podman keeps pulling the family's moving
+// tag without a signature check until the family is turned off and on again.
+// It reads one small file and is safe on the GTK main thread.
+func InstalledBeforeVerification(app App) bool {
+	path, err := UnitPath(app)
+	if err != nil {
+		return false
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok && strings.TrimSpace(key) == "AutoUpdate" && strings.TrimSpace(value) == "registry" {
+			return true
+		}
+	}
+	return false
 }
 
 // ProbeActive asks systemd whether the app's service is running and returns

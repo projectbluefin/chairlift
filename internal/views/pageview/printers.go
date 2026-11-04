@@ -1,8 +1,11 @@
 package pageview
 
 import (
+	"errors"
 	"fmt"
+	"os/exec"
 
+	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
 )
 
@@ -57,6 +60,32 @@ func PrinterAppSubtitle(s printerapp.State, port int) string {
 	}
 }
 
+// PrinterAdminButtonLabel is the row action that hands the family's own web
+// page to the desktop's browser, so nobody has to retype the loopback address
+// the subtitle names (#671). Short because the row it sits in already names
+// the family, which the screen reader reads as the button's description.
+func PrinterAdminButtonLabel() string {
+	return "Manage"
+}
+
+// PrinterAdminButtonTooltip says what pressing the button does, and for a
+// family that is installed but not answering yet, why it is not available
+// yet: the page only exists while the application is running.
+func PrinterAdminButtonTooltip(s printerapp.State) string {
+	if s == printerapp.StateReady {
+		return "Open this printer's web page"
+	}
+	return "This printer's web page is available once it is running."
+}
+
+// PrinterAppUnverifiedSubtitle adds, to an installed family's subtitle, that
+// it was installed before driver signatures were checked and how to switch
+// to a checked driver. The row keeps its state first so "Running" or a
+// failure is still the first thing read.
+func PrinterAppUnverifiedSubtitle(subtitle string) string {
+	return subtitle + " Installed before " + branding.AppName + " checked driver signatures: turn it off and on again to use a checked driver."
+}
+
 // PrinterAppWorkingSubtitle is shown while the switch is acting.
 func PrinterAppWorkingSubtitle(enabling bool) string {
 	if enabling {
@@ -70,7 +99,13 @@ func PrinterAppWorkingSubtitle(enabling bool) string {
 // The error itself is logged: it names commands and unit files. A failed
 // disable keeps the unit, because the service could not be proven stopped,
 // so that toast says the driver is still running.
-func PrinterAppFailureToast(enabling bool, rowTitle string) string {
+func PrinterAppFailureToast(enabling bool, rowTitle string, failure ...error) string {
+	if enabling && len(failure) > 0 && errors.Is(failure[0], printerapp.ErrSignatureUnverified) {
+		if errors.Is(failure[0], exec.ErrNotFound) {
+			return "Couldn't turn on " + rowTitle + ". Install cosign and make it available on PATH."
+		}
+		return "Couldn't turn on " + rowTitle + ". The printer driver's signature could not be verified."
+	}
 	if enabling {
 		return "Couldn't turn on " + rowTitle + ". Try again."
 	}

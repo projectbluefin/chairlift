@@ -109,6 +109,38 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   asserts the `main: application exited` marker after its `SIGTERM`, so a
   regression fails `make e2e`. Keep the harnesses sending `SIGTERM` first and
   `SIGKILL` only on timeout.
+- **The live system-Docker gate uses private native managers.**
+  `make e2e-docker` selects `TestIntegrationDockerSystem` in
+  `test/e2e/docker_system_test.go` through `test/e2e/dakota.sh` with
+  `CHAIRLIFT_DOCKER_INTEGRATION=1`. It runs the pinned Dakota image
+  unchanged: no Docker binaries, units, or `docker` group (the fixture
+  deletes an `/etc/group` copy and fails if one remains), so the real fixed
+  helper must take the Homebrew branch, fetching Homebrew's signed index and
+  bottles over the network from `formulae.brew.sh` and `ghcr.io`. The
+  fixture also plants a v26.10.10-style rootless user `docker.service` that
+  the GUI must stop and disable. Native system/user managers
+  run inside rootless Podman; `--privileged` applies only to that namespace,
+  with no host Docker socket or user bus mounted. The gate sends EOF to a real
+  prerequisite authentication prompt and reports the actual outcome/exit code:
+  exit 127 with "Not authorized" is journaled as `refused` and shown as Failed,
+  not live cancellation coverage. Canceled requires exit 126 or "Request
+  dismissed". It also covers ordered `dx-enable` then `docker-enable` and the
+  helper-reported `groupadd`/`systemctl`/`usermod` argv, the installed
+  runtime (root-owned, manifest present, ELF interpreters and search paths
+  free of the Homebrew prefix), marker-bearing units under
+  `/etc/systemd/system` whose `ExecStart` is `current/bin/dockerd`,
+  awaiting-login feedback, a new-group session's system-socket readiness and
+  non-rootless daemon, and disabling both units while retaining the runtime,
+  data, account groups, and Developer Mode. A final `docker-update` through
+  real PolicyKit must report `docker runtime changed=false`, run no system
+  command, and leave the stopped daemon stopped. The fixture has no
+  Homebrew, so the user-scope CLI step is not exercised there. Ordinary
+  AT-SPI scenarios remain
+  dry-run; neither those previews nor screenshots prove live Docker readiness.
+  `.github/workflows/docker-system.yml` runs this gate nightly and manually,
+  separately from the merge queue's required `Tests Passed` context. Its runner
+  loads normal kernel netfilter/overlay modules; missing prerequisites fail
+  rather than skip the gate or disable Docker firewalling.
 - **Every destination is driven through AT-SPI, on Dakota.** `make e2e-atspi`
   runs `TestATSPIBehaveSuite` — the behave + dogtail suite in
   `test/e2e/features/`, in projectbluefin/testsuite's shape — through
@@ -122,7 +154,18 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   scenario with its own HOME, runtime directory, config fixture
   (`@config.<name>`), stubs (`@stub.<name>`), an inert `brew`, a closed
   proxy, and an action journal; the page and shortcut inventories come from
-  `internal/navigation`. The release and nightly workflows run
+  `internal/navigation`. `test/e2e/dakota.sh` gives the dry-run suites an
+  empty private tmpfs at `/var/run` (the unbooted image has none), so the
+  fixed Docker socket path is absent unless a stub plants one:
+  `@stub.features-docker-no-access` binds a mode-0 `/var/run/docker.sock`
+  (connect fails with `EACCES`) for the running-but-no-access state, refuses
+  unless `/var/run` is that private writable mount, and removes the socket at
+  scenario cleanup. `@stub.features-docker-missing` (no units) means
+  installable; `@stub.features-docker-rootless` plants a v26.10.10 rootless
+  user unit and a `docker` CLI on the `rootless` context;
+  `@stub.features-vscode-absent` removes native `code` so the VS Code stage
+  reads Skipped. The live Docker-system fixture does not use that tmpfs.
+  The release and nightly workflows run
   `make e2e-atspi` after `make e2e`; the test workflow runs it as a separate
   `atspi` job split into parallel shards — behave tag expressions over the
   feature files' first tags, balanced by measured scenario time — and
@@ -131,7 +174,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   feature's first tag (behave selects by effective tags), so a new feature
   cannot silently stop running on pull requests (add its tag to a shard). Both
   E2E jobs restore the suite venv through `.github/actions/dakota-venv`, keyed
-  on the image's Python and the pinned requirements. `dakota.sh` sets
+  on the image's Python and the pinned requirements. Cached interpreter
+  executability is checked inside Dakota, not on the host: its absolute Python
+  symlink may be absent on an Ubuntu runner. An unusable versioned cache is
+  replaced, never used as a parent directory for a nested `.partial` venv.
+  `dakota.sh` sets
   `CHAIRLIFT_REQUIRE_ATSPI=1` so a missing stack fails rather than skips, and
   failed scenarios upload their accessibility tree and a `screen.png` in
   `atspi-results-<shard>` (`build/atspi/<tags|all>/`). Dakota harnesses
@@ -141,6 +188,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   scenario; a confirmed defect is written as a scenario tagged
   `@known_issue.<N>` rather than left untested. Never run the suite on a live
   session. The `gtk-headless-testing` skill carries the traps.
+  Setup navigation assertions identify the visible bookend and its actions;
+  introductory prose and quotations are not navigation invariants.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
@@ -241,9 +290,17 @@ An agent must not break these:
   actions (`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
   `-uninstall` counterparts); ChairLift must not wrap them in `pkexec`, add a
   helper subcommand or PolicyKit action for them, or add a user Flathub
-  remote. The Apps page's Flatpak install names the remote explicitly
-  (`flatpak install -y --system flathub <ids…>`), which is the same argv
-  `brew bundle` uses for a Brewfile's `flatpak` entries. Do not add arbitrary
+  remote. Apps' per-entry Flatpak install uses `flatpak install -y --system
+  flathub <ids…>` without adding a remote. The Features page's Compass switch (`compass_group`,
+  `internal/compass`) is the same shape: it installs `org.tunaos.compass`
+  with `--system` from the image-shipped FlatPark system remote and never
+  adds a remote itself; without that remote, or off x86_64 (the only
+  architecture FlatPark publishes it for), it can only remove a copy.
+  The one Homebrew-sourced root install, the system Docker daemon,
+  goes through the fixed `docker-enable`/`docker-update` helper commands
+  from bottles the helper fetches and verifies itself; root never executes
+  or loads anything from the user-owned Homebrew prefix (ADR-0024). Do not
+  add arbitrary
   privileged command execution, broaden what pkexec runs, or route new
   mutations around the fixed helper/policy pair.
 - **Neither an image reference nor a username crosses the ublue pkexec
@@ -299,11 +356,24 @@ An agent must not break these:
 - **The unified update run composes; it does not add a privileged route.**
   `internal/updateflow` is the pure coordinator for the one-action update run:
   it owns the phases, the primary action, and the per-source state for the
-  four sources (`applications`, `developer-tools`, `system-components`,
-  `operating-system`), and it executes nothing itself — every provider is an
-  `updateflow.Provider` whose production value in `internal/updateproviders`
-  wraps the existing `internal/flatpak`, `internal/homebrew`,
-  `internal/updex`, and `internal/bootc` entry points. Flatpak post-apply
+  five sources (`applications`, `developer-tools`, `system-components`,
+  `printer-drivers`, `operating-system`), and it executes nothing itself —
+  every provider is an `updateflow.Provider` whose production value in
+  `internal/updateproviders` wraps the existing `internal/flatpak`,
+  `internal/homebrew`, `internal/updex`, `internal/printerapp`, and
+  `internal/bootc` entry points. A partially successful check reports the
+  parts it could not cover as `CheckResult.Warnings`, which the row shows
+  beside the updates it did find. A partial apply retains only pending items
+  in `ApplyResult.PendingItems` and names failures in `ApplyResult.Warnings`,
+  so Retry Failed does not rerun successful mutations. The Developer tools
+  provider also refreshes a Homebrew-bottle Docker runtime: when
+  `dockerbrew.ReadManifest` finds one and the installed helper supports
+  `docker-update`, `Check` compares Homebrew's unsigned per-formula API
+  against the manifest and lists a `docker-runtime` item ("Docker engine")
+  only when it is outdated; `Apply` then calls `ublue.UpdateDocker` after
+  `brew upgrade`. That reuses the fixed `docker-update` helper action, whose
+  root side re-verifies against the signed index, so the run gains no
+  privileged route of its own. Flatpak post-apply
   reconciliation verifies that the specific pending refs applied for each
   executed scope are no longer listed post-apply, so newly appeared updates
   published between check and apply do not mark the run unchanged.
@@ -317,15 +387,25 @@ An agent must not break these:
   state of its own and decides nothing the coordinator or the presenter
   already decided. Keep those three layers separate; do not move a phase
   decision into the widget file or a string into the coordinator.
-  Its indeterminate progress bar pulses from one reusable GLib callback while
-  checking or updating, not from provider snapshot arrivals; idle and disposal
-  remove the timer. A quiet external command must not freeze the indicator.
+  Its progress bar displays a determinate fraction when snapshot.Determinate
+  is true, or pulses from one reusable GLib callback during checking or
+  unquantified operations (a fraction-less progress event returns to pulsing
+  while Fraction preserves its monotonic floor); idle, determinate progress,
+  and disposal remove the timer. A quiet external command must not freeze the
+  indicator.
   The shell hands `Coordinator.Check` each source's `updateflow.Policy` from
   `internal/window`'s `sourcePolicy`, which keeps `Configured`
   (`Config.IsGroupEnabled`) and `Supported` (the capability floor) apart:
-  their conjunction is `effectiveEnabled`, but a source the host cannot back
-  must read "Not available on this computer", never "Disabled by
-  administrator". Do not collapse them back into one boolean map. The rest
+  their conjunction is `effectiveEnabled`, and a source either fact leaves out
+  gets no row on the Updates page at all (`updatepresent.ShowSourceRow`,
+  chairlift#675). A row whose only content would be "you cannot use this"
+  reports a state the reader can neither change nor act on, and wording it as
+  an administrator's choice names an actor who may not exist — Bluefin's own
+  `/usr/share/chairlift/config.yml` ships `features_page.features_group`
+  disabled. A source the user merely turned off keeps its row, because
+  Preferences is where it can be turned back on, and Preferences still lists
+  every source with its lock reason. Do not collapse the two facts back into
+  one boolean map. The rest
   of the Updates page — automatic updates, system version, dedicated staging
   and Compare, unverified sources, and Advanced channel/driver controls — is
   built by `buildUpdatesPage` as groups of the shell's own preferences page
@@ -361,11 +441,11 @@ An agent must not break these:
   not run the script, whose `bootc upgrade` fails there instead of exiting 0),
   so a successful OS source is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-helper` carries fourteen subcommands
+  binary.** `chairlift-helper` carries sixteen subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
-  `docker-disable`), each selected by exactly one PolicyKit
+  `gaming-switch`, `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+  `docker-disable`, `docker-update`), each selected by exactly one PolicyKit
   action. Every one takes a fixed argv or a word validated against a closed
   set: no image reference, no username, no systemd unit, no delay, and no
   rollback or reset target crosses the boundary, because each
@@ -393,6 +473,11 @@ An agent must not break these:
   composefs `bootc switch` refuses a target that is the rollback deployment
   (unpin's usual case); `internal/installcheck`'s
   `TestHelperImageSwitchesGoThroughSwitchImage` holds that wiring.
+  `docker-enable` and `docker-update` take no argument either: the formula
+  set, index URL, install root, and unit paths are `internal/dockerbrew`
+  constants, and both commands get the 30-minute image-switch budget
+  because they download Homebrew's signed index and six bottles (see the
+  Docker invariant below and ADR-0024).
   **The decisions the helper makes after a command runs live in
   `internal/ubluehelper`, not in `main.go`.** `ubluehelper.SwitchImage`
   owns the refusal → `bootc status` → `bootc rollback` fallback and its four
@@ -638,14 +723,15 @@ An agent must not break these:
   never reads onboarding disposition or starts a wizard. `--first-run`,
   `--setup`/`-s`, and the setup menu action share `PresentFirstRun`.
   `internal/firstrun.Pages` filters the existing visible navigation inventory
-  into Features, Apps, Agents, Livery order between matching Welcome and
+  into Livery, Features, Apps, Agents order between matching Welcome and
   conclusion screens. The window hides its sidebar during the flow and builds
   Back/Next/final-action/Dismiss controls once. Selection steps navigate through
   `Window.navigateToPage` and use existing widgets, gates, and operations;
   each selection step then calls `UserHome.ScrollPageToTop`, because a page
   keeps its scroll position and a step entered mid-page hid its own heading;
   bookends use the setup stack, not sidebar routes. Next and Back mutate no
-  configuration. Repeated requests preserve progress; an empty inventory opens
+  saved configuration; Next from Features explicitly applies the Bash-only
+  Bluefin CLI selection. Repeated requests preserve progress; an empty inventory opens
   no flow. **Finish** records completion and version, then returns to Control
   Center; a save failure reports a toast. Dismiss records skip without
   demoting completed; a crash records nothing. Dry-run previews writes.
@@ -668,9 +754,10 @@ An agent must not break these:
   bare `"brew"` at an exec site, and no private copy of the fallback path.
   Resolving brew is not enough for its children: a cask preflight runs tools
   beside brew by bare name (`rpm2cpio | cpio` for `goose-linux`), and a
-  direct launch gives them no Homebrew on `$PATH`. `runBrewCommandAt` and
-  the Goose launch's `llmman launch` therefore run with
-  `homebrew.WithBrewPath`, which puts brew's directory first on `PATH`.
+  direct launch gives them no Homebrew on `$PATH`. Homebrew commands,
+  developer-tool commands, and the Goose launch use `homebrew.WithBrewPath`,
+  which supplies the resolved prefix's `bin` and `sbin` without duplicating
+  existing entries.
 - **Homebrew update actions preserve known state.** Per-package upgrades and
   the top-level metadata update use `internal/views/actionstate` gates before
   spawning work. Failures and dry-run previews restore their controls without
@@ -697,6 +784,8 @@ An agent must not break these:
   suffix `GtkCheckButton`, empty by default: an install is opt-in, entry by
   entry. An entry whose package is already installed is checked and
   insensitive, and its row says where it is installed from.
+  A refresh that observes an installed entry become absent clears its
+  auto-checked state; a deliberate selection of a never-installed entry survives.
 - **An entry names its source, not its kind.** The subtitle is "from
   Homebrew", "from Brew Tap", "from Flathub", "from the App Store" or "from
   the VS Code Marketplace", and an installed entry reads "Installed from
@@ -706,19 +795,43 @@ An agent must not break these:
   the inventory knew none. The vocabulary is closed: `bundleview` owns it,
   and an observation with no word for it falls back rather than inventing a
   label.
+  Expanding loads package descriptions once off-thread, with a bounded read
+  and cancellation on row destruction. Descriptions append to the observed
+  source label; unavailable metadata never erases it.
 - **One Install action, two strategies.** The group header row is
   **Install Selected**, and it installs exactly the checked entries. A
-  collection whose every entry is checked installs as a whole through
-  `brew bundle install`, which is what keeps the collection's own tap
-  directives and `trusted: true` flags in force. A partially selected
-  collection installs its checked entries one by one, batched per package
-  manager (`brew install`, `brew install --cask`, `flatpak install -y
-  --system flathub`), because `brew bundle` can only install a whole file.
+  collection whose every entry was read, is supported, and is checked installs through
+  `brew bundle install`, preserving its tap directives and `trusted: true`
+  flags. Otherwise checked entries install batched per manager (`brew install`,
+  `brew install --cask`, `flatpak install -y --system flathub`). Unsupported
+  App Store/VS Code directives remain unselectable and force the per-manager
+  strategy, so an unchecked directive never installs implicitly.
+  Truncated or partially unreadable collections also use only displayed selections.
   The per-item path re-derives trust: it clones a missing tap, then trusts
   the package on its own — unless the collection's own Brewfile marks the
   tap `trusted: true`, which `brew bundle` honours by trusting the whole
   tap. A toast must say what the trust store gained; trusting a source is
   a change to what this computer will load and is never silent.
+- **A reported Homebrew recovery is not a universal upgrade prerequisite.**
+  For missing package-directory errors, the user-facing recovery and diagnostic
+  steps live in [the reference](docs/reference.md#recovering-a-failed-developer-tools-update).
+  Routine maintenance runs after updates. ChairLift's Homebrew provider and
+  the separate `uupd` Brew Upgrade stage have different owners; verify the
+  failing path before proposing an automatic cleanup or repair.
+- **Developer Mode's six-entry IDE catalog uses only verified sources.**
+  Homebrew provides Visual Studio Code, VSCodium, and JetBrains Toolbox from
+  `ublue-os` taps only, never `castrojo` or other personal taps. Cursor and
+  Antigravity use system Flatpaks from FlatPark; Zed uses a system Flatpak from
+  Flathub. Sublime Text is deliberately excluded for now by user approval,
+  not a blocked catalog requirement. Never invent package tokens. Native rows show
+  source/status and Install actions without opening Bazaar or requiring Developer
+  Mode enabled. GNOME Builder, Kate, and individual JetBrains IDE rows are excluded.
+  Monospace Fonts (`fonts-dev`) lives under Developer Mode, using an independent
+  selection and Install action under the shared collection gate. If Developer
+  Mode is disabled, that collection falls back to Apps. Its entries are opt-in
+  in ordinary and setup sessions; Next/Back preserve their selections and never
+  install the collection. Configuration and the Homebrew floor apply to both
+  locations. Bluefin CLI is a separate Features switch, not a `cli` collection.
 - **Apps is refresh-safe.** Installed-package refreshes use
   `actionstate.RefreshGate` generations; stale workers must not replace newer rows.
   The collection entry states come from their own read — the installed
@@ -736,14 +849,13 @@ An agent must not break these:
   and `Exporting…`, and restores the Export action after every outcome.
   A destructive `run*` entry point added to `internal/views` belongs in
   `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
-- **Shell bling integration is unprivileged, idempotent, and non-interactive.**
-  `internal/shellenv` enables the Bluefin terminal experience (Starship prompt,
-  zoxide, bash-preexec, shell completions) when Bluefin CLI is installed.
-  It targets the active shell config file (`~/.bashrc`, `~/.zshrc`, or
-  `~/.config/fish/config.fish`) and writes the exact `### <script> source start/end`
-  markers used by `ublue-bling`. If already present, it is an idempotent no-op.
-  It never invokes interactive prompts, never runs `pkexec`, and writes nothing
-  under `--dry-run`.
+- **Bluefin CLI is Chairlift-owned and Bash-only.** `internal/bluefincli`
+  embeds the curated Homebrew manifest, Bash payload, and optional preexec rearm
+  helper. One Features switch configures `~/.bashrc`; disable removes only exact
+  managed/recognized legacy Bash blocks and retains tools and personal settings.
+  Files live under `$XDG_DATA_HOME/chairlift/bluefin-cli`. Fish/Zsh are unsupported
+  and untouched. Setup defaults to selected unless explicitly disabled; Next
+  from Features applies the choice. Dry-run writes no persistent files.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -774,12 +886,28 @@ An agent must not break these:
   driver switches, which replace the OS — share its admission.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
+- **Features discloses packages separately from actions.** Gaming Mode leads
+  the Features page. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
+  are expanders with source-backed package rows and independent suffix switches;
+  header activation expands rather than toggles. Developer Mode also contains
+  the independently installable Monospace Fonts collection.
+  The **Setup activity** checklist owns bounded
+  stage rows and a reusable pulsing timer. It reports real operation stages and
+  outcomes, not percentages or per-package completion invented from an opaque
+  bundle command. Failure, canceled authentication, and preview are not success;
+  controls remain retryable and preview preserves observed switches.
+  Awaiting a new login is a distinct verification status, not Ready or a failed
+  action to retry. Optional setup failure exposes Retry without replaying an
+  already completed privileged Docker enable.
 - **Developer options remain discoverable without privileged support.** WSL
   Mode defaults to nsl (an Ubuntu machine inside systemd-vmspawn and
   QEMU/KVM) with Lima (Ubuntu LTS VM) as an alternative backend, both with an
   explicit `/dev/kvm` permission floor; the fixed `kvm-enable` action grants
-  access to the invoking account, effective after a new login. nsl's managed
-  machine is `ubuntu`, or the `debian` machine an older ChairLift created
+  access to the invoking account, effective for `/dev/kvm` after a new login.
+  nsl also requires the account to belong to the `kvm` group (account
+  database, as nsl checks) even when the device is writable; that grant needs
+  no new login. nsl's managed machine is `ubuntu`, or the `debian`
+  machine an older ChairLift created
   (`devtools.ParseNSLList`); WSL Mode reports, starts, and probes that one,
   creates `ubuntu` only when neither exists (never a second machine), and turns
   off with `nsl stop <machine>` on that machine only, which keeps data
@@ -787,16 +915,34 @@ An agent must not break these:
   choice is not stored: `wsl_backend` sets the default, and the first read
   follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
-  the start prerequisites are unmet. Docker uses the
-  fixed enable/disable actions for its system daemon and requires actual socket
-  readiness for this session, not installed CLI tools alone. Missing installed
-  helper actions leave the affected switches insensitive with an explanation
-  rather than hiding the options. A confirmed Developer Mode enable installs
-  the Dev Container CLI (`devcontainer`) through Homebrew when available;
-  its own gate refuses overlapping installs, previews use Homebrew's dry-run
-  boundary without refreshing inventories, and failures never reverse developer
-  access. IDEs and editors are not offered in the Developer group (Bazaar or
-  the Apps page). Gaming Mode is a single toggle that manages the gaming
+  the start prerequisites are unmet. System Docker follows its own invariant
+  below. Turning Docker or WSL
+  on first enables Developer Mode if it is off, through the existing fixed
+  `dx-enable` helper under the shared `developerGate`, in the same worker.
+  Helper failure or canceled authentication aborts child setup; only confirmed
+  live helper success updates the parent switch. A later child failure retains
+  granted developer access, and turning a child off never demotes it. Direct
+  and implicit promotions share the same post-enable work and config opt-ins,
+  once per promotion. Docker's own helper may ask for authentication after
+  `dx-enable`; WSL may additionally need the fixed KVM permission grant. Missing
+  helper actions leave affected controls insensitive rather than hidden, but a
+  known active Docker unit remains stoppable when the paired unit is unavailable
+  and the disable action is supported. Native VS Code setup is a separate optional
+  user-scoped outcome of Docker enable, not an editor installer. It seeds only
+  absent `~/.config/Code/User/settings.json`; existing files, JSONC, and symlinks
+  are untouched. It installs Bluefin DX's three extensions and records
+  `.version.user.vscode = "1"` in `${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_versioning.json}`
+  only after successful setup; an existing marker is checked against installed
+  extension IDs rather than trusted alone. Missing native `code` skips the
+  step (`devsetup.ErrSkipped`) without an error toast; an editor failure
+  remains retryable and never reverses access. Preview writes no settings or
+  marker and launches no editor
+  CLI. Editor selection/installation uses Development Apps in Developer Mode:
+  ublue-os Homebrew for VS Code, VSCodium, and JetBrains Toolbox; system FlatPark
+  for Cursor and Antigravity; system Flathub for Zed. Game Mode is
+  a privileged switch to the `-gaming` system image variant (Steam, Gamescope,
+  and an Open Gaming Collective kernel) guarded by a confirmation warning that
+  a reboot is required. Gaming Mode below it manages the optional gaming
   tools stack (ProtonPlus, Protontricks, GOverlay, MangoHud), installs
   missing ones system-wide with `flatpak install --system`, and keeps partial
   failures visible. Its inventory reads both scopes, so a copy an earlier
@@ -809,6 +955,97 @@ An agent must not break these:
   and reported as such, so undoing gaming mode never removes a distro default
   for every account; an unreadable declaration fails the removal closed. A
   component with a removable copy left is a failure, not a removal.
+  Components a previous release installed that this build no longer manages
+  (the Steam, ProtonUp-Qt, and Flatseal entries dropped when the stack moved
+  to ProtonPlus) are cleaned up the same way — a user copy removed, a system
+  copy kept only when the image ships it — and are reported in the status so
+  an upgrade never leaves them behind invisibly.
+- **System Docker comes from verified Homebrew bottles; root never executes
+  the Homebrew prefix.** Enable Docker gives Bluefin DX parity — a rootful
+  daemon behind `docker.socket`, `docker` group membership, engine,
+  containerd, runc and `docker-init`, plus the CLI with buildx and compose —
+  from Homebrew packages (ADR-0024). `/home/linuxbrew/.linuxbrew` belongs to
+  the user, so the fixed `docker-enable` helper never executes, loads, or
+  copies anything from it. `internal/dockerbrew` fetches
+  `https://formulae.brew.sh/api/formula.jws.json`, verifies its PS512 JWS
+  with the `homebrew-1` public key compiled into the package, and selects the
+  fixed daemon set `dockerbrew.Formulae` (`docker-engine`, `containerd`,
+  `runc`, `tini`, `libpathrs`, `libseccomp`), whose dependency closure must
+  equal that set plus system-provided `nftables`. Each bottle is downloaded
+  anonymously from the GHCR blob URL the signed index names, and a body whose
+  SHA-256 differs is discarded. Extraction takes only mapped regular files
+  (no traversal, absolute names, devices, or followed symlinks); dynamic ELF
+  files get the system loader as interpreter and `$ORIGIN/../lib` as their
+  search path. `dockerbrew.Install` smoke-runs `runc` and `dockerd`, writes a
+  world-readable manifest, swaps `/var/lib/chairlift/docker/current`
+  atomically under a lock, and prunes older sets; it refuses an install root
+  that is a foreign symlink or not root-owned. The helper writes
+  `docker.service` and `docker.socket` to `/etc/systemd/system` with the
+  first line `# Managed by chairlift-helper`, never overwrites a unit without
+  that marker, and removes only marked units. **Image units win:** when
+  `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
+  removes its own marked units and enables the image's Docker exactly as
+  before. Otherwise it creates `docker` with `groupadd -f -r` when neither
+  `/etc/group` nor the image's `/usr/lib/group` defines it. When SELinux is
+  enforcing it refuses a host without both `semanage` and `restorecon`, adds
+  the equivalence rule `semanage fcontext -a -e /usr/libexec/docker
+  /var/lib/chairlift/docker` when missing (container-selinux labels only
+  `/usr/libexec/docker` as a container runtime), and runs `restorecon -RF
+  /var/lib/chairlift/docker`. It then adds the `PKEXEC_UID` account, enables `docker.socket`,
+  starts `docker.service`, and `try-restart`s it when the runtime changed.
+  Both commands refuse an unmanaged unit (`dockerbrew.CheckUnits`) before
+  downloading anything. `Install` writes a root-owned
+  `/var/lib/chairlift/docker/.restart-pending` marker before swapping
+  `current` and reports the unchanged set as changed while it remains; the
+  helper clears it (`dockerbrew.ClearRestartPending`) only after
+  `try-restart` succeeds, so an interrupted run still restarts next time. A
+  changed runtime restarts the daemon only when its socket reports no running
+  containers; otherwise (or when that query fails) the restart waits for the
+  next enable/update or a reboot, and the marker carries it. A
+  dangling `current` reads as not installed, bottles are capped at 1 GiB, and
+  the unprivileged update check bounds its Homebrew API read at 30 seconds.
+  `docker-update` prints `no Homebrew Docker runtime to update` and exits 0
+  on image-unit hosts or before an install; otherwise it repeats the verified
+  install, rewrites the managed units, and on a changed runtime relabels it
+  under the same SELinux condition before restarting. Both
+  commands' `--dry-run` fetches and writes nothing. `docker-disable` stops
+  both units and keeps the runtime, container data, and group membership.
+  The CLI half (`dockerbrew.CLIFormulae`: `docker`, `docker-buildx`,
+  `docker-compose`) stays user-scope Homebrew: `devtools.SetDocker` installs
+  it after the helper succeeds, so a CLI failure is reported without leaving
+  the daemon off, and links `~/.docker/cli-plugins/docker-buildx` and
+  `docker-compose` only when absent or already pointing into Homebrew, never
+  over a user's file. Only after the helper succeeds does enable retire
+  v26.10.10's rootless Docker, so a dismissed prompt or failed install leaves
+  it working: a user `docker.service` whose `ExecStart` runs
+  `dockerd-rootless.sh` is disabled with `systemctl --user disable --now`, and
+  a `rootless` CLI context is switched back to `default`; dry-run only logs.
+  `devtools.DockerStatus` reads both units' `LoadState`/`ActiveState` without
+  escalation and then pings `/var/run/docker.sock`; only HTTP 200 `OK` is
+  Ready, and `DOCKER_HOST`/`XDG_RUNTIME_DIR` never redirect it. `not-found`
+  units are installable (`Available` without `Installed`); masked or
+  unreadable units stay unavailable with an image/administrator
+  explanation. Socket permission denial is `NeedsLogin`/`ErrDockerNewLogin`
+  only when the account database already lists the account in `docker` and
+  this session's groups lack it; otherwise it is `NoAccess`: the daemon runs
+  but this account cannot use it, the switch reads off, and turning it on runs
+  `docker-enable` to grant access. The switch reads on whenever the daemon is
+  `Active` and not `NoAccess` (`pageview.DockerSwitchOn`), so a running daemon
+  whose socket does not answer or whose paired unit is missing stays on and
+  stoppable. Failed unit reads return no invented state; once both reads
+  succeeded, a failed socket probe keeps observed `Active` so a supported stop
+  stays available, and a dry-run disable ignores the probe. The expander
+  discloses the daemon formulae as **Homebrew, installed for the whole
+  computer** and the CLI formulae as Homebrew formulae. Updates reach the
+  daemon through the Developer tools source and the fixed `docker-update`
+  action (see the unified update run above). **The GUI and helper ship
+  separately** (cask vs. image), and every released helper authorizes
+  `docker-enable`; only one that also authorizes `docker-update` (v26.11.1+)
+  can create the group and install bottles. Without image units the switch
+  therefore enables only when both actions are authorized
+  (`pageview.DockerCanEnable`); otherwise it stays insensitive with
+  `pageview.DockerHelperOutdated` instead of failing after authentication
+  with `usermod: group 'docker' does not exist`.
 - **Config-driven visibility is real.** Any group can be disabled in config
   (`config.IsGroupEnabled(page, group)`), so its widgets may never be
   constructed. Code that runs after an async action must not assume a widget
@@ -876,35 +1113,28 @@ An agent must not break these:
   `UpdateShell.notifyUpdateComplete`), because it is the one action long enough a user may
   have stepped away. A toggle or switch completes in view and already has a
   toast; do not add a second notification for the same instant event.
-- **Developer-mode feed and app onboarding is opt-in, follows the enable, and
-  never reverses it.** `dx_group`'s `install_pulp`, `stage_feeds`, and
-  `install_dev_apps` all default to `false`, and together with automatic Dev
-  Container CLI (`devcontainer`) installation (`startDeveloperDevcontainerSetup`)
-  they are the only additional work the Developer Mode switch does beyond the
-  privileged group promotion.
-  `install_dev_apps` installs the `dakota-dev-flatpaks` collection
-  (`startDeveloperAppsSetup`) and additionally requires
-  `applications_page.brew_bundles_group` to pass `groupEnabled` (its config
-  and Homebrew capability floor), so a host without Homebrew never attempts it.
-  `startDeveloperFeedSetup` and `startDeveloperAppsSetup`
-  (`internal/views/features_page.go`) run from the same success branch
-  `openDeveloperOnboarding` uses, behind confirmed live promotions only:
-  `actionmsg.DeveloperFeedSetupPlan(dryRun, enabled, succeeded, …)` and
-  `actionmsg.DeveloperAppsSetupPlan(dryRun, enabled, succeeded, …)`: a
-  `--dry-run` preview, a disable, a page restore, and a failed helper call all
-  produce an empty plan and start no worker. Pulp is a system-scope Flatpak
-  from the system Flathub remote (already present in either scope means no
-  install), authorized by Flatpak's own PolicyKit as above, and the catalog is
-  one file under `~/.local/share/chairlift` — so no `pkexec` route is
-  involved, Pulp's sandboxed store is never written
-  to, and the feedback never claims a subscription was imported. The two
-  optional outcomes are reported separately from the permission change, which
-  has already succeeded: a failed install is a failed install, it rolls nothing
-  back, and it must not read as a failed enable. Disabling Developer Mode is a
-  clean no-op — it removes neither Pulp nor the staged file nor anything the
-  user imported. The worker reads its plan from config on the main thread
-  before it starts, is admitted one at a time by `developerFeedGate`, and
-  reaches the toast only through `sgtk.RunOnMainThread` behind a nil guard.
+- **Developer-mode onboarding is opt-in, follows promotion, and never reverses
+  it.** `internal/devsetup.Run` sequences the shared direct/implicit enable run
+  under `developerGate`; widget wiring stays in `internal/views`. A confirmed
+  live promotion opens one developer documentation page and installs the Dev
+  Container CLI (`devcontainer`) when Homebrew is available. `dx_group`'s
+  `install_pulp`, `stage_feeds`, and `install_dev_apps` default to `false`.
+  The last installs `dakota-dev-flatpaks` only when
+  `applications_page.brew_bundles_group` passes `groupEnabled`, including its
+  Homebrew floor. Capture config/capabilities as `devsetup.PostOptions` on the
+  GTK main thread; `devsetup.PostStages` selects the work before the worker
+  starts. Restore, failed promotion, disable, and preview start none of these
+  live follow-ons. Retries retain completed optional stages and retry
+  failed work without repeating the promotion or successful optional installs.
+  Pulp is a system-scope Flatpak from system Flathub (an existing copy in
+  either scope needs no install), authorized by Flatpak's own PolicyKit, not
+  `pkexec`. Feed staging writes one catalog under `~/.local/share/chairlift`,
+  never Pulp's sandboxed store; report it as staged, not imported. Its disclosure
+  resolves `developerfeeds.OPMLPath` for manual import without writing on load.
+  Optional outcomes are separate from already-granted developer access; failures
+  roll nothing back. Disabling Developer Mode removes neither Pulp, the
+  staged file, developer apps, nor anything the user imported. Marshal feedback
+  through `sgtk.RunOnMainThread` with nil guards.
 - **Troubleshooting runs Goose in ChairLift's own profile, never the user's.**
   The Agents page's **Troubleshooting** group (`agents_page`
   `troubleshooting_group`, floored on Homebrew; `internal/views/troubleshoot.go`)
@@ -928,7 +1158,10 @@ An agent must not break these:
   `https://mcp.projectbluefin.io/mcp` limited to `search_knowledge`; every
   other extension already in the profile file is carried over disabled, and
   Goose 1.53's platform extensions are written disabled; `hints.md` becomes
-  the profile's `.goosehints`. It then runs `llmman launch goose-desktop
+  the profile's `.goosehints`. Missing or Goose-default `focusWindow` and
+  `quickLauncher` entries in its desktop `Goose/settings.json` are set to null;
+  different choices and other settings are preserved, so GNOME does not ask
+  to approve Goose's default global shortcuts at launch. It then runs `llmman launch goose-desktop
   --model bluefin-active` (`troubleshoot.Command`) with those two variables
   and `homebrew.WithBrewPath`; llmman hands Goose its provider through the
   environment, so no provider, model, or key is written by anyone. Readiness
@@ -1061,18 +1294,31 @@ An agent must not break these:
   are met — the launch, which writes the profile, runs off the GTK main
   thread — or presents Control Center on the Agents page naming the missing
   prerequisite, with identical behavior for
-  cold and running instances.
+  cold and running instances. `--prompt-file PATH` hands it a bounded
+  (4 KiB, regular UTF-8 file) starting prompt that stays in memory, is never
+  logged, and reaches Goose only as a prefilled `goose://new-session?prompt=`
+  link on the next `agentmode.Launch`, never as profile, tool, or extension
+  configuration.
 - **Contribute to Bluefin launches the contributor appliance in a terminal through `ujust`.**
   `agents_page` offers a "Contribute to Bluefin" action row that runs read-only preflight off the GTK thread (`internal/contribute.Preflight`), at build and again each time the group is shown (one `ConnectMap` handler, generation-guarded and passive while a session holds the gate), checking `xdg-terminal-exec`, `ujust` on PATH, `ujust --summary` containing the `contribute` recipe, `podman` on PATH, and the Hive registration file at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`. When preflight fails, an actionable subtitle explains the missing requirement (for missing registration, a **Registration Guide** button opens `https://github.com/projectbluefin/contribute#configuration`; the URL is never spelled out as unclickable subtitle text) and leaves the button insensitive; a requirement fixed outside ChairLift is picked up the next time Agents is shown. Ready actions launch `xdg-terminal-exec ujust contribute` via `launcher.Run`, reporting failures asynchronously; when the session ends or fails to start, the button returns through a fresh preflight rather than a blind re-enable. Previews under `--dry-run` log only and launch nothing.
-- **Printer applications are rootless, loopback-only quadlets on a moving
-  `:stable` tag, and never a false enabled indicator.**
+- **Printer applications are rootless, loopback-only quadlets pinned after
+  signature verification, and never a false enabled indicator.**
   `internal/printerapp` writes one `.container` quadlet per driver family
   under `~/.config/containers/systemd` and drives it with `systemctl --user`
   in the invoking account; nothing here is privileged, and no `pkexec` route,
-  helper subcommand, or PolicyKit action may be added for it. Each family runs
-  `ghcr.io/projectbluefin/<id>-printer-app:stable` with `AutoUpdate=registry`,
-  and `Enable` runs `systemctl --user enable --now podman-auto-update.timer`
-  after a successful start, rolling a fresh install back if either fails.
+  helper subcommand, or PolicyKit action may be added for it. `Enable` and
+  `Refresh` verify each family's `:stable` reference with cosign against that
+  family's GitHub Actions publishing identity and issuer before writing a
+  unit. Only the digest from the verified payload reaches `Image=`; no
+  `AutoUpdate=registry` or Podman timer enable is emitted (ADR-0023).
+  Missing cosign, rejected signatures and malformed payloads fail closed.
+  Failure to find cosign gets an install/PATH hint, not a retry-only toast.
+  Diagnostics probe the installed quadlet's `Image=`, never the moving family
+  tag after a verified pin was installed.
+  Existing units are not automatically migrated; disabling and re-enabling
+  installs a verified pin. A row whose installed unit still carries
+  `AutoUpdate=registry` (`printerapp.InstalledBeforeVerification`) appends a
+  subtitle telling the person to turn it off and on again. Scheduled verified refresh remains unimplemented.
   ADR-0020 is the network boundary: PAPPL's web administration is
   unauthenticated, so the unit publishes only `127.0.0.1:<port>:<port>` and
   must never use `Network=host` or a non-loopback `PublishPort`. IPP and the
@@ -1094,10 +1340,41 @@ An agent must not break these:
   device, USB passthrough — is unverified and unwired; say so rather than
   claim it.
 - **Livery remains one primary with independent task groups.** Profile
-  Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
-  existing `livery_page` config keys and one built control set. Never add a
-  wallpaper entry until `wallpapers_group` has a working builder (#200); do not
-  clone the icon controls behind a second overview or a new sidebar route.
+  Picture, Wallpapers, App Launcher Icon, supported Top Bar Icon, and Files Icon
+  keep their existing `livery_page` config keys and one built control set.
+  The three icon sections start collapsed and expand independently to reveal
+  their existing controls; expanding never changes an icon or saved preference.
+  Wallpapers (`wallpapers_group`, Homebrew floor) is directly below Profile
+  Picture and before the icon groups. Its More Dinosaurs checkbox defaults
+  checked, but only its explicit Install button starts setup. Readiness is
+  re-observed off-thread when Livery is shown, never repaired on load.
+  `internal/valhalla.Install` installs `io.github.tunix.valhalla` system-wide
+  from the existing `flatpark` remote plus the user-scope
+  `ublue-os/tap/bluefin-wallpapers-extra` Homebrew cask. It never adds a remote
+  or installs Damask. `wallpaper-slideshow` and `artwork` are hidden in Apps;
+  image Brewfiles do not control this payload. Extra SVG/JXL/AVIF artwork is
+  converted to PNG under `$XDG_DATA_HOME/chairlift/wallpaper-slideshow/png`
+  (with the usual home fallback), granted read-only sandbox access, and added
+  to Valhalla's `manual-folders` with `active-source` set to `manual`.
+  Native SVG/JXL support is tracked in
+  [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
+  `valhalla.Installed` requires the complete usable setup, not Flatpak presence
+  alone; partial setup stays selectable and failures show their cause.
+  Readiness treats an absent wallpaper tap as not set up without querying its
+  unavailable cask; a failed tap inventory remains an error. KDE's AVIF cask
+  payload converts through `avifdec` from Homebrew `libavif` when needed.
+  Install and status use bounded worker contexts, a refresh-generation guard
+  and a retryable action gate. Wallpaper installation reuses the bounded
+  `setupActivity` checklist and pulsing `installProgress` timer used by Features;
+  its fixed provider-reported phases are app installation, extra wallpapers,
+  image preparation, configuration, and verification. Working, complete,
+  failed, canceled, and preview states stay distinct; do not infer percentages
+  from opaque commands or replace the checklist with a lone spinner. Keep
+  package-source registry names out of the user-facing wallpaper descriptions.
+  Dry-run installs, converts, configures, and writes nothing and preserves
+  observed readiness. Setup does not launch Valhalla or directly apply a
+  desktop wallpaper. Do not clone the icon controls behind a second overview
+  or a new sidebar route.
 
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** GNOME's app-grid button (`view-app-grid-symbolic`), panel
@@ -1158,7 +1435,15 @@ An agent must not break these:
   went with the catalog change. The panel catalog's *default* depends on the
   booted image: `DefaultFoundationID` returns the Open Gaming Collective's
   mark when `imageinfo.Info.IsGaming()` is true, because that is whose work
-  the gaming images ship. It is applied in `resolveID` at load, so switching
+  the gaming images ship. The schema stores an empty `panel-foundation`
+  default so `resolveID` can choose by image; a concrete schema default would mask that fallback.
+  This chooses the mark in the picker. On a gaming image,
+  `livery.EnsureGamingPanelDefault` (started from `cmd/chairlift` at launch)
+  also turns the panel on once: only while `panel-foundation` is empty and
+  `panel-enabled` is false, gated on `PanelAvailable`, and it writes
+  `panel-foundation` last so a later opt-out stays an opt-out. Off gaming
+  images `panel-enabled` remains opt-in.
+  It is applied in `resolveID` at load, so switching
   images adopts the new default without overwriting a selection the user made
   — `TestADeliberateSelectionSurvivesOnAGamingImage` holds that distinction.
   Whether this branding should be an org-wide convention rather than one
@@ -1173,7 +1458,9 @@ An agent must not break these:
   reported two change events for three writes when one repeated a value.
   Writing a different name per selection makes the value genuinely change;
   `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
-  sweeps the marks earlier selections left behind. The `chairlift-livery-`
+  sweeps the marks earlier selections left behind — only after both
+  extension keys name the new mark, so a failed switch keeps the previous
+  mark drawn. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon
   without persisting a flag to say so.
@@ -1298,7 +1585,12 @@ An agent must not break these:
   `livery.ReconcileRotationUnit`, which rewrites an existing rotation unit
   only when its `ExecStart` names a versioned Caskroom binary; it never
   creates a unit, touches a setting, or repoints any other path, and it is
-  dry-run gated like every install. `internal/livery.Fetch` is
+  dry-run gated like every install. The one app-start settings write is
+  `livery.EnsureGamingPanelDefault`, run from `cmd/chairlift` before the
+  window exists, not from the page: it applies the gaming panel default only
+  when `panel-foundation` is empty, and writing `panel-foundation` is its
+  one-shot guard. It is not a violation of this rule; do not move it into the
+  page's load path. `internal/livery.Fetch` is
   the page's single network round trip, following `internal/sbom`'s shape so
   the package's tests point it at a loopback `httptest` server and no gated
   test makes an outbound request; slugs are validated against a closed

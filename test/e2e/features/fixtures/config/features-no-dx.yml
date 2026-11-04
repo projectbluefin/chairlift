@@ -1,5 +1,12 @@
-# Features scenarios: the administrator turned the Developer group off while
-# leaving Gaming at its default. Loaded from an untrusted path; no sudo.
+# Developer Mode is disabled, while app collections remain enabled.
+# Relocated collection (Monospace Fonts) must fall back to Apps.
+applications_page:
+  brew_group:
+    enabled: true
+  brew_bundles_group:
+    enabled: true
+    bundles_paths:
+      - bundles
 features_page:
   dx_group:
     enabled: false

@@ -169,7 +169,7 @@ func TestOperatingSystemApplyForwardsProgressAndRefreshesStatus(t *testing.T) {
 	if statusCalls != 1 {
 		t.Fatalf("BootcStatus calls = %d, want one post-stage refresh", statusCalls)
 	}
-	if result != (updateflow.ApplyResult{Changed: true, RestartRequired: true}) {
+	if !reflect.DeepEqual(result, updateflow.ApplyResult{Changed: true, RestartRequired: true}) {
 		t.Fatalf("Apply() result = %#v, want changed + restart required", result)
 	}
 	wantProgress := []updateflow.Progress{{
@@ -202,7 +202,7 @@ func TestOperatingSystemApplyBootcDryRunReportsPreview(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
-	if result != (updateflow.ApplyResult{Preview: true}) {
+	if !reflect.DeepEqual(result, updateflow.ApplyResult{Preview: true}) {
 		t.Fatalf("Apply() result = %#v, want preview without change", result)
 	}
 	if statusCalls != 0 {

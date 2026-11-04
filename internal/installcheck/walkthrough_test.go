@@ -195,13 +195,16 @@ func TestWalkthroughCoversEveryConfigurableGroup(t *testing.T) {
 		"maintenance_freespace_group": "Free Up Space",
 		"reset_group":                 "Powerwash",
 		// features_page
+		"bluefin_cli_group":          "**Bluefin CLI**",
 		"features_group":             "feature manager",
 		"desktop_integrations_group": "Desktop Integrations",
 		"dx_group":                   "Developer tools",
 		"gaming_group":               "**Gaming**",
 		"printers_group":             "**Printers**",
+		"compass_group":              "**Compass**",
 		// livery_page
 		"account_group":           "Profile Picture",
+		"wallpapers_group":        "**Wallpapers**",
 		"livery_app_grid_group":   "**App Launcher Icon**",
 		"livery_foundation_group": "**Top Bar Icon**",
 		"livery_dock_group":       "**Files Icon**",

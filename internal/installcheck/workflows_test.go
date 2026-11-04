@@ -189,6 +189,104 @@ func TestCIWalkthroughLoadsItsCompiledSchema(t *testing.T) {
 	}
 }
 
+// The live fixture is intentionally separate from the required merge-queue
+// checks. Its schedule must execute the real gate, not another dry-run suite.
+func TestLiveDockerWorkflowRunsTheRealGate(t *testing.T) {
+	path := filepath.Join(".github", "workflows", "docker-system.yml")
+	var workflow struct {
+		On          map[string]yaml.Node `yaml:"on"`
+		Permissions *map[string]string   `yaml:"permissions"`
+		Jobs        map[string]struct {
+			RunsOn          string            `yaml:"runs-on"`
+			If              string            `yaml:"if"`
+			TimeoutMinutes  int               `yaml:"timeout-minutes"`
+			ContinueOnError bool              `yaml:"continue-on-error"`
+			Permissions     map[string]string `yaml:"permissions"`
+			Steps           []struct {
+				Run             string `yaml:"run"`
+				Uses            string `yaml:"uses"`
+				If              string `yaml:"if"`
+				ContinueOnError bool   `yaml:"continue-on-error"`
+				With            struct {
+					Path string `yaml:"path"`
+				} `yaml:"with"`
+			} `yaml:"steps"`
+		} `yaml:"jobs"`
+	}
+	if err := yaml.Unmarshal([]byte(readRepoFile(t, path)), &workflow); err != nil {
+		t.Fatalf("parse %s: %v", path, err)
+	}
+	if workflow.Permissions == nil || len(*workflow.Permissions) != 0 {
+		t.Errorf("live Docker workflow must default to explicit empty permissions")
+	}
+	if _, ok := workflow.On["workflow_dispatch"]; !ok {
+		t.Error("live Docker workflow has no manual trigger")
+	}
+	schedule, ok := workflow.On["schedule"]
+	if !ok || schedule.Kind != yaml.SequenceNode || len(schedule.Content) == 0 {
+		t.Error("live Docker workflow has no scheduled runs")
+	}
+	if len(workflow.On) != 2 {
+		t.Errorf("live Docker triggers = %v, want only schedule and workflow_dispatch", workflow.On)
+	}
+	job, ok := workflow.Jobs["docker-system"]
+	if !ok || len(workflow.Jobs) != 1 {
+		t.Fatal("live Docker workflow must define its one docker-system job")
+	}
+	if job.RunsOn != "ubuntu-24.04" {
+		t.Errorf("live Docker runner = %q, want the explicit Ubuntu kernel/module environment", job.RunsOn)
+	}
+	if job.TimeoutMinutes <= 0 || job.If != "" || job.ContinueOnError {
+		t.Error("live Docker job must run unconditionally with a finite timeout and propagate failure")
+	}
+	if len(job.Permissions) != 1 || job.Permissions["contents"] != "read" {
+		t.Errorf("live Docker permissions = %v, want contents: read only", job.Permissions)
+	}
+
+	liveGate, venv, evidence := false, false, false
+	for _, step := range job.Steps {
+		if step.ContinueOnError {
+			t.Error("live Docker steps must propagate failure")
+		}
+		if strings.TrimSpace(step.Run) == "make e2e-docker" {
+			liveGate = true
+			if step.If != "" {
+				t.Error("the live Docker command must not be conditional")
+			}
+		}
+		if step.Uses == "./.github/actions/dakota-venv" && step.If == "" {
+			venv = true
+		}
+		if !strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+			continue
+		}
+		evidence = true
+		if strings.ReplaceAll(step.If, " ", "") != "always()" {
+			t.Error("live Docker evidence must upload even after failure")
+		}
+		patterns := strings.Fields(step.With.Path)
+		if len(patterns) == 0 {
+			t.Error("live Docker evidence upload has no paths")
+		}
+		for _, pattern := range patterns {
+			ext := filepath.Ext(pattern)
+			allowed := ext == ".log" || ext == ".json" || ext == ".jsonl" || ext == ".txt" || ext == ".png"
+			if filepath.Dir(pattern) != "build/docker-system" || filepath.Base(pattern) != "*"+ext || !allowed {
+				t.Errorf("unsafe live Docker artifact pattern %q: upload only flat evidence, never HOME/runtime or daemon data", pattern)
+			}
+		}
+	}
+	if !liveGate {
+		t.Error("live Docker workflow must execute make e2e-docker without suppressing its exit status")
+	}
+	if !venv {
+		t.Error("live Docker workflow must reuse the Dakota suite environment")
+	}
+	if !evidence {
+		t.Error("live Docker workflow must upload its evidence")
+	}
+}
+
 func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	path := filepath.Join(".github", "workflows", "release.yml")
 	workflow := readRepoFile(t, path)
@@ -284,16 +382,17 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
 	}
 
-	setupGoDisablesCache := false
-	for _, step := range goreleaserJob.Steps {
-		if strings.HasPrefix(step.Uses, "actions/setup-go@") {
-			if step.With.Cache != nil && !*step.With.Cache {
-				setupGoDisablesCache = true
+	// A tag push publishes signed binaries: no job in release.yml may restore
+	// a Go cache another workflow could have written (#644).
+	for name, job := range config.Jobs {
+		for _, step := range job.Steps {
+			if !strings.HasPrefix(step.Uses, "actions/setup-go@") {
+				continue
+			}
+			if step.With.Cache == nil || *step.With.Cache {
+				t.Errorf("release.yml job %q must set cache: false on actions/setup-go to isolate release builds from test caches", name)
 			}
 		}
-	}
-	if !setupGoDisablesCache {
-		t.Errorf("goreleaser job must set cache: false on actions/setup-go to isolate release builds from test caches")
 	}
 }
 
@@ -439,5 +538,48 @@ func TestMergeQueueGateWaitsForEveryTestJob(t *testing.T) {
 	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
 	if !strings.Contains(quality, mergeQueueGateContext) {
 		t.Errorf("docs/quality.md does not name the required %q check", mergeQueueGateContext)
+	}
+}
+
+// TestAppTokensAreScoped keeps every GitHub App installation token minted in
+// a workflow limited to named permissions, so a compromised job never
+// inherits the app's full installation permission set.
+func TestAppTokensAreScoped(t *testing.T) {
+	entries, err := os.ReadDir(filepath.Join(RepoRoot(), ".github", "workflows"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || (!strings.HasSuffix(entry.Name(), ".yml") && !strings.HasSuffix(entry.Name(), ".yaml")) {
+			continue
+		}
+		path := filepath.Join(".github", "workflows", entry.Name())
+		var workflow struct {
+			Jobs map[string]struct {
+				Steps []struct {
+					Uses string                 `yaml:"uses"`
+					With map[string]interface{} `yaml:"with"`
+				} `yaml:"steps"`
+			} `yaml:"jobs"`
+		}
+		if err := yaml.Unmarshal([]byte(readRepoFile(t, path)), &workflow); err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		for job, spec := range workflow.Jobs {
+			for _, step := range spec.Steps {
+				if !strings.HasPrefix(step.Uses, "actions/create-github-app-token@") {
+					continue
+				}
+				scoped := false
+				for key := range step.With {
+					if strings.HasPrefix(key, "permission-") {
+						scoped = true
+					}
+				}
+				if !scoped {
+					t.Errorf("%s job %s mints an app token without any permission-* input", path, job)
+				}
+			}
+		}
 	}
 }

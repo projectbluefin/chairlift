@@ -1,7 +1,9 @@
 # Printer Applications
 
 Living design document. The network boundary and update model are recorded in
-[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md);
+[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
+and its signature-checking successor
+[ADR-0023](../adr/0023-verify-printer-images-before-installing.md);
 [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md) explains why
 this user-scoped integration stays outside the privileged helpers.
 
@@ -20,7 +22,11 @@ Gutenprint**. There is no PostScript entry or per-device setup UI.
 on `$PATH`; configuration may hide the group but cannot supply a missing tool.
 Neither building the group nor observing state installs or starts a unit.
 
-Turning a family on writes its unit and starts it; there is no enable gate.
+Turning a family on verifies its image with cosign before writing its unit
+and starting it. A missing verifier or failed signature check rejects enable.
+The error toast distinguishes an unavailable cosign executable (install it and
+make it available on PATH) from a rejected signature, rather than suggesting
+that retrying alone will fix either.
 An already-present unit stays controllable so the user can turn it off. Its
 presence means configured, not ready. The readiness model below distinguishes
 starting, running, and failed service observations.
@@ -51,10 +57,48 @@ establish those outcomes.
 The source of truth is the `families` table in
 [`printerapp.go`](../../internal/printerapp/printerapp.go). Each family runs
 `ghcr.io/projectbluefin/<family>-printer-app:stable`, a tag the image
-repository's release workflow moves to each release. Every unit carries
-`AutoUpdate=registry`, and `Enable` turns on the user's
-`podman-auto-update.timer`, which pulls a newer `:stable` and restarts the
-unit. A driver fix therefore reaches users without a ChairLift release.
+repository's release workflow moves to each release. `Enable` runs
+`cosign verify --output=json` with the GitHub Actions OIDC issuer and an
+anchored identity expression naming only that family's
+`.github/workflows/registry-actions.yml` on a branch. Cosign's default claim
+checking binds the payload to the requested image. The unit uses the SHA-256
+digest from that verified payload; ChairLift never resolves the tag again.
+This closes the verify-then-pull tag race and retains a multi-architecture
+index when the tag names one.
+
+Newly installed units have no `AutoUpdate=registry`, and ChairLift no longer
+enables Podman's timer. It does not disable a shared timer used by other
+containers. Existing units are not automatically migrated: turn the family
+off and back on to install a verified pin. The Features page row of a family
+whose installed unit still carries `AutoUpdate=registry`
+(`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
+that off-and-on, so an unchecked older install is not silent.
+
+Installed pins move forward through the Updates page, not a timer. The
+**Printer Drivers** source (`updateproviders.NewPrinterApps`, ID
+`printer-drivers`) is available where `podman` is (the same floor as the
+Printers group, `features_page`/`printers_group`) and follows the
+`printer-drivers-enabled` preference. Its check reads `Image=` from each
+enabled default app's quadlet (`InstalledImage`) and verifies the family's
+configured reference (`VerifiedImage`, the same cosign check `Enable` runs,
+writing nothing); a family whose verified digest differs from the installed
+image is offered, showing the first twelve hex digits of each digest. A unit
+still on the moving tag differs from every pin, so it is offered too, and
+applying it is the same migration as turning the family off and on. Applying
+calls `Refresh` once per selected app. `Enable`, `Refresh` and `Disable` take
+one per-app lock inside `internal/printerapp`, so an update cannot rewrite and
+restart a unit the Printers page switch removed during verification. A family
+whose check fails never hides another's update: the provider returns available
+updates and names every unchecked family in `CheckResult.Warnings`; the row
+shows those warnings beside available work, or as a retryable check failure
+when no update could be confirmed. An apply failure leaves only the failed
+apps in `ApplyResult.PendingItems`, names them in `ApplyResult.Warnings`, and
+continues with the next family. The coordinator's retry therefore refreshes
+only failed families rather than restarting those already updated. There is
+no background schedule: pins advance when the person checks for and applies
+updates. Diagnostic image presence probes read `Image=` from the installed
+quadlet, not the family's moving tag; a cached verified digest need not have a
+local `:stable` tag.
 
 `Select(family)` returns the default `App{Family: family, Name: family.ID}`.
 Its quadlet filename is the unit/container identity below plus `.container`;
@@ -82,9 +126,10 @@ particular printer works after restart.
 `ApplyOverrides(images)` is a package API that replaces a known family's
 image with a non-empty reference, by tag or pinned `repo@sha256:…`, so a site
 can mirror or pin an image. It is not wired to a configuration key or
-application startup in the current tree, and it performs no signature
-verification; do not document a configurable printer mirror as a shipped UI
-feature.
+application startup in the current tree. The setter itself performs no
+verification, but `Enable`/`Refresh` require the original family's publishing
+identity even for mirrors and explicit pins; there is no unsigned override.
+Do not document a configurable printer mirror as a shipped UI feature.
 
 HPLIP's proprietary plugin consent remains an interactive image-side web
 flow at `/plugin`, not a ChairLift lifecycle action. No headless consent flag
@@ -93,11 +138,14 @@ verification failures does not grant consent or install a plugin.
 
 ## Lifecycle and failure semantics
 
-`Enable(ctx, app)` atomically writes the quadlet, creates the state directory,
-runs `daemon-reload`, starts the generated service, and runs
-`systemctl --user enable --now podman-auto-update.timer`. A failure at any
-step rolls back a unit created by that call (stop, remove, reload) but
-preserves a pre-existing unit.
+`Enable(ctx, app)` verifies first, atomically writes the pinned quadlet,
+creates the state directory, runs `daemon-reload` and starts the generated
+service. `Refresh(ctx, app)` requires an installed unit and follows the same
+verified path with `restart` instead of `start`. Missing, invalid, conflicting
+or rejected verification output returns `ErrSignatureUnverified` without any
+write or systemctl call. A later systemctl failure rolls back a unit created
+by that call (stop, remove, reload), but does not remove a pre-existing unit.
+It does not restore the previous unit contents after a reload/restart failure.
 
 `Disable(ctx, app)` stops the service, removes only its quadlet, then reloads
 the user manager. If stop fails, it queries `is-active`; only `inactive`,
@@ -106,8 +154,8 @@ unreadable result returns an error and preserves the unit. Pulled images and
 `~/printer-workspaces` remain untouched. There is no implemented printer
 rollback operation or previous-pin store.
 
-Dry-run enable and disable log the intended writes and systemctl commands
-and change nothing. Systemctl calls have a five-minute package
+Dry-run enable, refresh and disable log the intended work without verification,
+writes or systemctl commands. Cosign and systemctl calls have a five-minute package
 budget; the view bounds a whole mutation to ten minutes.
 
 ## Observed readiness and GTK wiring

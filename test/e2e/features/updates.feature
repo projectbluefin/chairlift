@@ -2,9 +2,13 @@
 Feature: Updates
   The Updates destination leads with the wordmark, one primary action, and one
   status line under it, with visible updates grouped by system consequences
-  and apps/tools. Flatpak and Homebrew
-  are faked (fixtures/stubs_updates.py) so every source reports a known state.
-  Most scenarios omit bootc-stage to keep the Operating System source unavailable.
+  and apps/tools. Flatpak, Homebrew, and printer-driver checks are faked
+  (fixtures/stubs_updates.py) so source rows report known states. A source
+  configuration disables for the whole machine, or that this host cannot back,
+  is not listed at all (#675): the page then shows only the sources it actually
+  checked, so its one status line needs no qualifier. Most
+  scenarios omit bootc-stage, which leaves the Operating System source
+  unbacked and therefore unlisted.
   Staged-deployment scenarios enable it explicitly; the isolated container supplies
   an inert stage-helper marker and all mutations remain behind --dry-run.
 
@@ -19,9 +23,17 @@ Feature: Updates
     And the "Firefox" row says "Available: 131.0"
     And the update for "Firefox" is listed once with an accessible action
     And the "Developer Tools" row says "Up to date"
-    And the "System Components" row says "Not available on this computer"
-    And the "Operating System" row says "Not available on this computer"
+    And the Updates page shows no "System Components" row
+    And the Updates page shows no "Operating System" row
     And the Updates sidebar badge shows "1"
+
+  @stub.updates-printer-partial-check @stub.updates-flatpak-current @stub.updates-brew-current
+  Scenario: A failed printer signature check does not hide verified driver updates
+    Given ChairLift is running
+    Then the Updates status reads "1 update available"
+    And the "Printer Drivers" row says "1 update available · couldn't check Ghostscript"
+    And the "HPLIP" row says "aaaaaaaaaaaa → bbbbbbbbbbbb"
+    And the "Update All" button is sensitive
 
   @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: With nothing pending the shell offers a fresh check
@@ -160,20 +172,22 @@ Feature: Updates
     And the action journal is empty
 
   @config.updates-no-flatpak @stub.updates-flatpak-one-update @stub.updates-brew-current
-  Scenario: An administrator-disabled source is never checked
+  Scenario: A configuration-disabled source is never checked and never listed
     Given ChairLift is running
     Then the Updates status starts with "Up to date"
-    And the "Applications" row says "Disabled by administrator"
+    And the Updates page shows no "Applications" row
+    And I do not see "Disabled by administrator"
     And the "Developer Tools" row says "Up to date"
     And the Updates sidebar row shows no badge
     And the flatpak tool was never asked to "remote-ls"
 
-  # W3-05: Preferences showed this source's switch ON beside "Disabled by your
-  # administrator", in different words from the Updates page's row.
+  # W3-05: the Updates page's row and the Preferences switch must agree about a
+  # source no preference can enable. The page now omits it (#675); Preferences,
+  # where a reader goes to configure sources, still names the lock.
   @config.updates-no-flatpak @stub.updates-flatpak-one-update @stub.updates-brew-current
-  Scenario: Preferences shows an administrator-disabled source switched off, in the Updates page's words
+  Scenario: Preferences still explains a source the Updates page omits
     Given ChairLift is running
-    Then the "Applications" row says "Disabled by administrator"
+    Then the Updates page shows no "Applications" row
     When I press "<Control>comma"
     Then the Preferences "Applications" row says "Disabled by administrator"
     And the Preferences "Applications" switch is off and refuses input

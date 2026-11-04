@@ -2,6 +2,7 @@ package printerapp
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -216,8 +217,28 @@ func ProbeDiagnostics(ctx context.Context, app App, capable bool) State {
 
 	journalOut, _ := runCommand(ctx, "journalctl", "--user", "-u", app.ServiceName(), "-n", "50", "--no-pager")
 
-	_, imageErr := runCommand(ctx, "podman", "image", "exists", app.Family.Image)
-	imageExists := imageErr == nil
+	// Enable pins only the installed unit, not the family's moving tag.
+	// Probe what this unit actually runs, including legacy tag-based units.
+	imageExists := false
+	if path, err := UnitPath(app); err == nil {
+		if data, err := os.ReadFile(path); err == nil {
+			section := ""
+			for _, line := range strings.Split(string(data), "\n") {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "[") {
+					section = line
+				}
+				if section == "[Container]" && strings.HasPrefix(line, "Image=") {
+					image := strings.TrimSpace(strings.TrimPrefix(line, "Image="))
+					if image != "" && !strings.HasPrefix(image, "-") {
+						_, imageErr := runCommand(ctx, "podman", "image", "exists", image)
+						imageExists = imageErr == nil
+					}
+					break
+				}
+			}
+		}
+	}
 
 	return Diagnose(DiagnosticInput{
 		Capable:        facts.Capable,

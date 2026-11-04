@@ -25,9 +25,11 @@ package troubleshoot
 
 import (
 	_ "embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -221,12 +223,16 @@ func Setup(state State, progress func(string)) (State, error) {
 	if !state.Supported {
 		return state, ErrUnsupported
 	}
+	var neededSteps []Step
 	for _, step := range Steps() {
-		if !step.Needed(state) {
-			continue
+		if step.Needed(state) {
+			neededSteps = append(neededSteps, step)
 		}
+	}
+
+	for idx, step := range neededSteps {
 		if progress != nil {
-			progress(step.Name)
+			progress(fmt.Sprintf("%s (%d of %d)", step.Name, idx+1, len(neededSteps)))
 		}
 		if err := step.Run(); err != nil {
 			return Detect(), fmt.Errorf("%s: %w", strings.ToLower(step.Name), err)
@@ -324,6 +330,11 @@ func (p Profile) Running() bool {
 // ConfigPath is the profile's Goose configuration file.
 func (p Profile) ConfigPath() string {
 	return filepath.Join(p.GooseRoot(), "config", "config.yaml")
+}
+
+// DesktopSettingsPath is Goose Desktop's Electron settings file.
+func (p Profile) DesktopSettingsPath() string {
+	return filepath.Join(p.DesktopConfigHome(), "Goose", "settings.json")
 }
 
 // HintsPath is the profile's global hints file, which Goose adds to every
@@ -460,10 +471,67 @@ func (p Profile) Write(serverPath string) error {
 	if err := writeFile(p.HintsPath(), []byte(Hints())); err != nil {
 		return err
 	}
+	if err := p.disableGlobalShortcuts(); err != nil {
+		return err
+	}
 	if user, err := userConfigDir(); err == nil {
 		return p.linkDesktopSettings(user)
 	}
 	return nil
+}
+
+// gooseGlobalShortcutDefaults are Goose Desktop's default global
+// accelerators. Goose writes its merged defaults back to settings.json when any
+// setting changes, so a stored default is not evidence of a user's choice.
+var gooseGlobalShortcutDefaults = map[string]string{
+	"focusWindow":   "CommandOrControl+Alt+G",
+	"quickLauncher": "CommandOrControl+Alt+Shift+G",
+}
+
+// disableGlobalShortcuts turns off Goose's default system-wide shortcuts. On
+// GNOME Wayland, Electron registers them through the GlobalShortcuts portal,
+// which opens a keyboard-shortcut approval dialog at launch. Missing entries
+// and Goose's persisted defaults are disabled; a different accelerator chosen
+// in Goose's Settings, a legacy globalShortcut choice, and every other setting
+// are preserved.
+func (p Profile) disableGlobalShortcuts() error {
+	settings := map[string]json.RawMessage{}
+	data, err := os.ReadFile(p.DesktopSettingsPath())
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	if err == nil && json.Unmarshal(data, &settings) != nil {
+		settings = map[string]json.RawMessage{}
+	}
+	if settings["keyboardShortcuts"] == nil && settings["globalShortcut"] != nil {
+		return nil
+	}
+	shortcuts := map[string]json.RawMessage{}
+	if raw := settings["keyboardShortcuts"]; raw != nil && json.Unmarshal(raw, &shortcuts) != nil {
+		shortcuts = map[string]json.RawMessage{}
+	}
+	changed := false
+	for name, fallback := range gooseGlobalShortcutDefaults {
+		var value string
+		raw, ok := shortcuts[name]
+		if !ok || (json.Unmarshal(raw, &value) == nil && value == fallback) {
+			shortcuts[name] = json.RawMessage("null")
+			changed = true
+		}
+	}
+	if !changed {
+		return nil
+	}
+	raw, err := json.Marshal(shortcuts)
+	if err != nil {
+		return err
+	}
+	settings["keyboardShortcuts"] = raw
+	data, err = json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFile(p.DesktopSettingsPath(), append(data, '\n'))
 }
 
 // userConfigDir is an injection seam for the user's own XDG_CONFIG_HOME.
@@ -521,17 +589,35 @@ func writeAtomic(dest string, data []byte) error {
 	return os.Rename(tmp.Name(), dest)
 }
 
+// NewSessionURLPrefix starts the deep link Goose's desktop app opens as a new
+// chat. With a prompt query parameter Goose prefills that chat's input
+// without sending it, and the link names no recipe, extension, or setting,
+// so it cannot change the profile's tools or configuration.
+const NewSessionURLPrefix = "goose://new-session"
+
+// NewSessionURL is the deep link that opens a new Goose chat prefilled with
+// prompt. The prompt is query-escaped, so no text in it can change which
+// link Goose sees.
+func NewSessionURL(prompt string) string {
+	return NewSessionURLPrefix + "?" + url.Values{"prompt": {prompt}}.Encode()
+}
+
 // Command returns the launch: llmman starts Goose's desktop app pointed at
 // model, inside the profile. The environment is the caller's plus the two
-// profile roots.
-func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
+// profile roots. A non-empty prompt is forwarded to Goose, after llmman's
+// own arguments, as a new-session link that prefills the first message.
+func Command(state State, profile Profile, model, prompt string) (*exec.Cmd, error) {
 	if !state.Ready() {
 		return nil, errors.New("goose and its tools are not set up")
 	}
 	if model == "" {
 		return nil, errors.New("no Agent Mode model is selected")
 	}
-	cmd := exec.Command(state.LLMManPath, "launch", "goose-desktop", "--model", model)
+	args := []string{"launch", "goose-desktop", "--model", model}
+	if prompt != "" {
+		args = append(args, "--", NewSessionURL(prompt))
+	}
+	cmd := exec.Command(state.LLMManPath, args...)
 	sessionIO(cmd, profile)
 	return cmd, nil
 }
@@ -542,12 +628,17 @@ func Command(state State, profile Profile, model string) (*exec.Cmd, error) {
 // it; the new process then exits. Raising the window is left to the
 // compositor: no activation token is passed, and GNOME may show a "Goose is
 // ready" notification instead. llmman is not involved: it refuses a launch
-// while the lock is held.
-func ReopenCommand(state State, profile Profile) (*exec.Cmd, error) {
+// while the lock is held. A non-empty prompt travels as a new-session link,
+// which the running session opens as a new chat with the prompt prefilled.
+func ReopenCommand(state State, profile Profile, prompt string) (*exec.Cmd, error) {
 	if state.DesktopPath == "" {
 		return nil, errors.New("goose desktop is not installed")
 	}
-	cmd := exec.Command(state.DesktopPath)
+	var args []string
+	if prompt != "" {
+		args = append(args, NewSessionURL(prompt))
+	}
+	cmd := exec.Command(state.DesktopPath, args...)
 	sessionIO(cmd, profile)
 	return cmd, nil
 }

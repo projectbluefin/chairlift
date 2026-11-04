@@ -1,6 +1,6 @@
 # 0020 — Printer applications run loopback-only on a moving stable tag
 
-- **Status:** Accepted
+- **Status:** Moving-image and auto-update decisions superseded by [ADR-0023](0023-verify-printer-images-before-installing.md); loopback boundary remains accepted.
 - **Date:** 2026-10-09
 - **Supersedes:** [ADR-0016](0016-printer-app-admin-denied-until-authenticated.md)
 
@@ -29,6 +29,12 @@ repository never reached users on its own.
    successful start, rolling a fresh install back if that fails.
 
 ## Consequences
+
+The historical auto-update design below did **not** verify image signatures
+on the receiving computer. [ADR-0023](0023-verify-printer-images-before-installing.md)
+records the approved replacement: verification before installing a digest pin,
+with unchecked auto-update removed from newly written units. Existing units
+still require migration; see the successor's consequences.
 
 - IPP and the web administration are reachable only from this computer
   (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`). LAN clients

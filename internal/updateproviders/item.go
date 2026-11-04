@@ -34,6 +34,9 @@ func UpdateItem(ctx context.Context, source updateflow.SourceID, item updateflow
 			}
 		}
 	case updateflow.DeveloperTools:
+		if item.ID == DockerRuntimeItemID {
+			return updateDockerRuntime(ctx, productionHomebrewDeps())
+		}
 		if item.Name == "" {
 			return updateflow.ApplyResult{}, fmt.Errorf("tool update has no package name")
 		}

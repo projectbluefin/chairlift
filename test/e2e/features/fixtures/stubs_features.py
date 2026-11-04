@@ -14,6 +14,7 @@ Updates pages that share the fake see an empty, healthy host.
 import grp
 import json
 import os
+import shutil
 
 from stubs import fake_executable, stub
 
@@ -69,8 +70,12 @@ def _listing(components):
     )
 
 
-def _fake_flatpak(context, user=(), system=(), list_fails=False):
-    """A flatpak whose four gaming listings return the given components."""
+def _fake_flatpak(context, user=(), system=(), list_fails=False, remotes=("flathub", "flatpark")):
+    """A flatpak whose four gaming listings return the given components.
+
+    `remotes` is the system remote list: Bluefin-family images ship
+    Flathub and FlatPark, which Compass installs from."""
+    remote_rows = "".join(f"{name}\\t\\n" for name in remotes)
     listings = {}
     for scope, components in (("user", user), ("system", system)):
         for kind in ("app", "runtime"):
@@ -104,6 +109,7 @@ def _fake_flatpak(context, user=(), system=(), list_fails=False):
         + f"""
 case "$1" in
   --version) echo "Flatpak 1.16.0" ;;
+  remotes) printf "{remote_rows}" ;;
   list) {list_branch}
     ;;
   info|remote-info) echo "org.freedesktop.Platform/x86_64/{STEAM_PLATFORM_BRANCH}" ;;
@@ -129,6 +135,22 @@ def gaming_installed(context):
 def gaming_unlistable(context):
     """A flatpak that cannot list any installation."""
     _fake_flatpak(context, list_fails=True)
+
+
+# internal/compass's application, as `flatpak list` reports it.
+COMPASS = ("Compass", "org.tunaos.compass", "app")
+
+
+@stub("features-compass-installed")
+def compass_installed(context):
+    """Compass installed system-wide, where ChairLift puts it."""
+    _fake_flatpak(context, system=(COMPASS,))
+
+
+@stub("features-compass-no-remote")
+def compass_no_remote(context):
+    """A host whose system installation has Flathub but no FlatPark."""
+    _fake_flatpak(context, remotes=("flathub",))
 
 
 def _tuple(label, command, icon, visible):
@@ -219,7 +241,7 @@ def no_descriptor(context):
 
 @stub("features-developer")
 def developer_options(context):
-    """The debian nsl machine an older ChairLift created (running), a running Ubuntu guest, and Docker CLI with no system daemon."""
+    """Running WSL guests and installed, inactive system Docker units."""
     fake_executable(context, "nsl", _recorder(context) + """
 case "$1" in
   list) printf '%s\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*' ;;
@@ -235,20 +257,227 @@ case "$1" in
 esac
 exit 0
 """)
-    fake_executable(context, "systemctl", _recorder(context) + """
-case "$1" in
-  show) printf '%s\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
-esac
-exit 0
-""")
+    docker_inactive(context)
     fake_executable(context, "brew", _recorder(context) + """
 case "$1" in
   --version) echo 'Homebrew 5.0.0' ;;
-  info) echo '{"formulae":[{"name":"docker","installed":[{"version":"29.0"}]}],"casks":[]}' ;;
+  info) echo '{"formulae":[],"casks":[]}' ;;
 esac
 exit 0
 """)
+    fake_executable(context, "code", _recorder(context) + "exit 97\n")
+    context.launch_env["SETUP_CHECKER_FILE"] = os.path.join(context.home, ".local", "share", "ublue", "setup_versioning.json")
 
+
+@stub("features-developer-packages")
+def developer_packages(context):
+    """A local optional collection, parsed through the real Brewfile reader."""
+    directory = os.path.join(context.scenario_dir, "bundles")
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "dakota-dev-flatpaks.Brewfile")
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(
+            '# Developer applications\n'
+            'brew "just"\n'
+            'cask "visual-studio-code"\n'
+            'flatpak "io.podman_desktop.PodmanDesktop"\n'
+        )
+
+def docker_inactive(context):
+    """Both installed system units are readable and stopped."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1" in
+  show) printf '%s\\n' 'LoadState=loaded' 'ActiveState=inactive' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+def docker_held_failure(context):
+    """Read both SetDocker prerequisites, then hold/fail its Verify read."""
+    release = os.path.join(context.scenario_dir, "release-docker-status")
+    reads = os.path.join(context.scenario_dir, "docker-prerequisite-reads")
+    fake_executable(context, "systemctl", _recorder(context) + f"""
+case "$1" in
+  show)
+    count=0
+    [ ! -f "{reads}" ] || count=$(cat "{reads}")
+    count=$((count + 1))
+    printf '%s\\n' "$count" > "{reads}"
+    if [ "$count" -le 2 ]; then
+      printf '%s\\n' 'LoadState=loaded' 'ActiveState=inactive'
+      exit 0
+    fi
+    while [ ! -f "{release}" ]; do sleep 0.1; done
+    echo 'Failed to connect to system scope bus: No medium found' >&2
+    exit 1
+    ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-docker-active")
+def docker_active(context):
+    """Both system units run, but the fixed system socket does not respond."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1" in
+  show) printf '%s\\n' 'LoadState=loaded' 'ActiveState=active' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-docker-no-manager")
+def docker_no_manager(context):
+    """A failed, unprivileged read of the system manager."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+echo 'Failed to connect to system scope bus: No medium found' >&2
+exit 1
+""")
+
+
+@stub("features-docker-missing")
+def docker_missing(context):
+    """Docker is not installed yet: neither system unit exists, so it is installable."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1" in
+  show) printf '%s\\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+# internal/devtools' fixed system socket. dakota.sh gives every AT-SPI run an
+# empty private tmpfs at /var/run, so only a stub can make this path exist.
+DOCKER_SOCKET = "/var/run/docker.sock"
+
+
+@stub("features-docker-no-access")
+def docker_no_access(context):
+    """Docker runs, but this account is not in its group, so the socket refuses it.
+
+    A real socket inode with no permission bits makes connect(2) fail with
+    EACCES exactly as root:docker 0660 does for a non-member. The Dakota
+    container defines no docker group, so the account cannot be a configured
+    member: that is "no access", not "log in again".
+    """
+    import socket
+
+    directory = os.path.dirname(DOCKER_SOCKET)
+    # Never plant a socket on a real host: only the harness's private,
+    # writable /var/run mount (never the /run symlink) qualifies.
+    if os.path.islink(directory) or not os.path.ismount(directory) or not os.access(directory, os.W_OK):
+        raise RuntimeError(f"{directory} is not the harness's private tmpfs; run the suite through test/e2e/dakota.sh")
+    if os.path.lexists(DOCKER_SOCKET):
+        raise RuntimeError(f"{DOCKER_SOCKET} already exists; refusing to replace it")
+    try:
+        grp.getgrnam("docker")
+    except KeyError:
+        pass
+    else:
+        raise RuntimeError("this stub needs a host without a docker group")
+    docker_active(context)
+    with socket.socket(socket.AF_UNIX) as listener:
+        listener.bind(DOCKER_SOCKET)
+    context.add_cleanup(os.unlink, DOCKER_SOCKET)
+    os.chmod(DOCKER_SOCKET, 0)
+
+
+# What ChairLift v26.10.10's dockerd-rootless-setuptool.sh left in HOME.
+ROOTLESS_UNIT = """[Unit]
+Description=Docker Application Container Engine (Rootless)
+
+[Service]
+ExecStart=/home/user/bin/dockerd-rootless.sh
+Type=simple
+
+[Install]
+WantedBy=default.target
+"""
+
+
+@stub("features-docker-rootless")
+def docker_rootless(context):
+    """A rootless user daemon and a docker CLI on its "rootless" context."""
+    path = os.path.join(context.home, ".config", "systemd", "user", "docker.service")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(ROOTLESS_UNIT)
+    context.rootless_unit = path
+    fake_executable(context, "docker", _recorder(context) + """
+case "$*" in
+  'context show') echo rootless ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-vscode-absent")
+def vscode_absent(context):
+    """Native VS Code is not installed; apply after features-developer."""
+    fake = os.path.join(context.stub_bin, "code")
+    if os.path.lexists(fake):
+        os.unlink(fake)
+    path = context.launch_env.get("PATH", "")
+    if shutil.which("code", path=path) or os.path.lexists("/home/linuxbrew/.linuxbrew/bin/code"):
+        raise RuntimeError("this stub needs a host without native VS Code")
+
+
+@stub("features-docker-masked")
+def docker_masked(context):
+    """A loaded service cannot make an inactive masked socket usable."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1 $2" in
+  'show docker.service') printf '%s\\n' 'LoadState=loaded' 'ActiveState=inactive' ;;
+  'show docker.socket') printf '%s\\n' 'LoadState=masked' 'ActiveState=inactive' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-docker-active-missing-socket")
+def docker_active_missing_socket(context):
+    """A running service remains stoppable when its paired unit is missing."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1 $2" in
+  'show docker.service') printf '%s\\n' 'LoadState=loaded' 'ActiveState=active' ;;
+  'show docker.socket') printf '%s\\n' 'LoadState=not-found' 'ActiveState=inactive' ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-docker-second-read-fails")
+def docker_second_read_fails(context):
+    """One active unit is not an observed state when its paired read fails."""
+    fake_executable(context, "systemctl", _recorder(context) + """
+case "$1 $2" in
+  'show docker.service') printf '%s\\n' 'LoadState=loaded' 'ActiveState=active' ;;
+  'show docker.socket') echo 'Failed to read docker.socket' >&2; exit 1 ;;
+  *) exit 1 ;;
+esac
+""")
+
+
+@stub("features-vscode-settings")
+def vscode_settings(context):
+    """An existing native VS Code JSONC configuration must remain untouched."""
+    context.vscode_original = b'// Keep my preferences\n{\n  "editor.fontSize": 17,\n}\n'
+    path = os.path.join(context.home, ".config", "Code", "User", "settings.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as handle:
+        handle.write(context.vscode_original)
+
+
+@stub("features-vscode-bad-marker")
+def vscode_bad_marker(context):
+    """A malformed record must not become a false Docker-success toast."""
+    path = os.path.join(context.home, ".local", "share", "ublue", "setup_versioning.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write("not JSON")
+    context.launch_env["SETUP_CHECKER_FILE"] = path
 
 def _shell_extensions(context, enabled, missing=False):
     installed = "" if missing else "tailscale-gnome-qs@tailscale-qs.github.io\nsyncthing-toggle@projectbluefin.io"

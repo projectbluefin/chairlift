@@ -3,6 +3,7 @@ package updateproviders
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -581,5 +582,49 @@ func TestFlatpakApplyReconciliation(t *testing.T) {
 				t.Fatalf("Apply() Changed = %v, want %v", result.Changed, test.wantChanged)
 			}
 		})
+	}
+}
+
+func TestFlatpakApplyReportsEachScopeBeforeUpdatingIt(t *testing.T) {
+	applied := false
+	var events []string
+	provider := newFlatpak(FlatpakDeps{
+		Installed: func() bool { return true },
+		ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
+			if applied {
+				return nil, nil
+			}
+			if user {
+				return []flatpak.UpdateInfo{{Name: "User App", Installation: "user"}}, nil
+			}
+			return []flatpak.UpdateInfo{{Name: "System App", Installation: "system"}}, nil
+		},
+		Update: func(_ context.Context, _ string, user bool) error {
+			events = append(events, fmt.Sprintf("update:user=%t", user))
+			applied = true
+			return nil
+		},
+	})
+
+	checked, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if _, err := provider.Apply(context.Background(), checked.Items, func(p updateflow.Progress) {
+		if p.Source != updateflow.Applications {
+			t.Errorf("progress source = %v, want %v", p.Source, updateflow.Applications)
+		}
+		events = append(events, p.Message)
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	want := []string{
+		"Updating user applications…",
+		"update:user=true",
+		"Updating system applications…",
+		"update:user=false",
+	}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("Apply() events = %q, want %q", events, want)
 	}
 }

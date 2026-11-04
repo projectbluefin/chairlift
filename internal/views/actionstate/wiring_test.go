@@ -8,48 +8,6 @@ import (
 	"testing"
 )
 
-func TestFeaturesPageDeveloperModeUsesGate(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
-
-	viewsPath := filepath.Join(repoRoot, "internal", "views", "views.go")
-	viewsSource, err := os.ReadFile(viewsPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", viewsPath, err)
-	}
-	viewsText := string(viewsSource)
-	if !strings.Contains(viewsText, "developerGate") || !strings.Contains(viewsText, "actionstate.Gate") {
-		t.Errorf("views.go UserHome does not contain developerGate actionstate.Gate field")
-	}
-
-	featuresPath := filepath.Join(repoRoot, "internal", "views", "features_page.go")
-	featuresSource, err := os.ReadFile(featuresPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", featuresPath, err)
-	}
-	featuresText := string(featuresSource)
-
-	for _, required := range []string{
-		`uh.developerGate.TryStart()`,
-		`uh.developerGate.Reset()`,
-		// The recursion guard used to be a bare `toggle.SetState(` beside
-		// every `SetActive`, which only held while every call site
-		// remembered to pair them. guardedSwitch owns that pairing —
-		// newGuardedSwitch sets both, and set() re-enters behind an
-		// `applying` flag the handler checks — so the property is now
-		// asserted where it is enforced rather than at each call site.
-		`toggle.set(`,
-		`newGuardedSwitch(`,
-	} {
-		if !strings.Contains(featuresText, required) {
-			t.Errorf("features_page wiring does not contain %q", required)
-		}
-	}
-}
-
 // A button that is made sensitive again after a run must release its gate;
 // Complete permanently rejects every future click, including retries after
 // a failed or dry-run action. Views cannot be imported by headless tests.
@@ -65,14 +23,9 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 		// Free up space is offered again after every run (#488).
 		"maintenance_page.go": {"freeUpSpaceGate"},
 		// Set Up and Launch share one gate, and both are offered again.
-		"troubleshoot.go": {"gooseGate", "askBluefinGate"},
-		"agents_page.go":  {"agentModeGate"},
-		// The developer switch and the optional feed setup behind it are
-		// both repeatable: the switch is used again after every toggle, and
-		// the setup gate has to reopen when its worker finishes or a second
-		// enable could never install anything. Update Features is offered
-		// again after every run (#488).
-		"features_page.go": {"developerGate", "developerFeedGate", "gamingGate", "updateFeaturesGate"},
+		"troubleshoot.go":  {"gooseGate", "askBluefinGate"},
+		"agents_page.go":   {"agentModeGate"},
+		"features_page.go": {"gamingGate", "gameModeGate", "updateFeaturesGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {
@@ -83,6 +36,50 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 			if !strings.Contains(text, "uh."+gate+".TryStart()") || !strings.Contains(text, "uh."+gate+".Reset()") || strings.Contains(text, "uh."+gate+".Complete()") {
 				t.Errorf("%s: repeatable %s must start and reset, never complete", file, gate)
 			}
+		}
+	}
+}
+
+// Optional-feature toggles and the feature Update button each run a
+// privileged updex helper call; they share one gate so no two overlap, and
+// a refused toggle reverts to the position it held while both report why.
+func TestFeatureTogglesShareTheUpdexGate(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "features_page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "func (uh *UserHome) onFeatureToggled(", 2)
+	if len(parts) != 2 {
+		t.Fatal("feature toggle handler not found")
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	for _, required := range []string{
+		"if !uh.updateFeaturesGate.TryStart() {",
+		"sgtk.RunOnMainThread(func() { toggle.set(!enabled) })",
+		"pageview.FeatureChangeBusyToast",
+		"toggle.widget.SetSensitive(false)",
+		"defer uh.updateFeaturesGate.Reset()",
+		"toggle.widget.SetSensitive(true)",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("onFeatureToggled must be admitted by updateFeaturesGate and restore the switch: missing %q", required)
+		}
+	}
+	updateParts := strings.SplitN(string(data), "func (uh *UserHome) onUpdateFeaturesClicked(", 2)
+	if len(updateParts) != 2 {
+		t.Fatal("feature update handler not found")
+	}
+	updateBody, _, _ := strings.Cut(updateParts[1], "\nfunc ")
+	for _, required := range []string{
+		"if !uh.updateFeaturesGate.TryStart() {",
+		"uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)",
+	} {
+		if !strings.Contains(updateBody, required) {
+			t.Errorf("onUpdateFeaturesClicked must be admitted by updateFeaturesGate and report busy: missing %q", required)
 		}
 	}
 }
@@ -349,10 +346,8 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 		{"troubleshoot.go", "func (uh *UserHome) setUpGoose()", 1},
 		{"agents_page.go", "func (uh *UserHome) onAgentModeToggled(", 1},
 		// The failure branch (partial install) and the live success.
-		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall()", 1},
-		{"features_page.go", "func (uh *UserHome) startDeveloperAppsSetup(", 1},
-		{"developer_tools.go", "func (uh *UserHome) onDeveloperOption(", 1},
-		{"features_page.go", "func (uh *UserHome) startDeveloperDevcontainerSetup(", 1},
+		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection)", 1},
+		{"bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(", 2},
 	} {
 		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
 			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)
@@ -366,35 +361,30 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 	if strings.Index(agent, refresh) > strings.Index(agent, "if err != nil {\n\t\t\t\tlog.Printf(\"views: agent mode toggle") {
 		t.Error("Agent Mode refreshes the inventory only after success; a failed enable may already have installed llmman")
 	}
-	devcontainer := body("features_page.go", "func (uh *UserHome) startDeveloperDevcontainerSetup(")
-	for _, guard := range []string{
-		"!uh.capabilities[capability.Homebrew] || !enabled || !succeeded",
-		"!uh.developerDevcontainerGate.TryStart()",
-		"defer uh.developerDevcontainerGate.Reset()",
-		"if uh.toastAdder != nil {",
-	} {
-		if !strings.Contains(devcontainer, guard) {
-			t.Errorf("Dev Container setup is missing %q", guard)
-		}
+	cli := body("bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(")
+	if !strings.Contains(cli, "if !dryrun.Enabled() && on && err != nil {\n\t\t\t\tuh.homebrewInventoryChanged()") {
+		t.Error("Bluefin CLI must refresh the inventory on a failed enable because a partial install places packages")
 	}
-	install := strings.Index(devcontainer, `homebrew.Install("devcontainer", false)`)
-	worker := strings.Index(devcontainer, "go func() {")
-	mainThread := strings.Index(devcontainer, "sgtk.RunOnMainThread(func() {")
-	if worker < 0 || install < worker || mainThread < install {
-		t.Error("Dev Container install must run in a worker before GTK completion")
+}
+
+func TestBluefinCLIRemovalPermittedWhenLoginShellIsNotBash(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
-	if strings.Contains(devcontainer[:max(0, install)], "dryrun.Enabled()") {
-		t.Error("Dev Container preview bypasses Homebrew's existing dry-run boundary")
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "bluefin_cli.go"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(devcontainer, "if !dryrun.Enabled() {\n\t\t\t\t"+refresh) {
-		t.Error("Dev Container preview refreshes inventories despite changing nothing")
+	text := string(data)
+	fn, _, _ := strings.Cut(text[strings.Index(text, "func (uh *UserHome) showBluefinCLIState()"):], "\nfunc ")
+	branch, _, ok := strings.Cut(fn[strings.Index(fn, "if !bluefincli.Supported()"):], "cli.toggle.set(false)")
+	if !ok {
+		t.Fatal("showBluefinCLIState missing !bluefincli.Supported() branch")
 	}
-	if strings.Contains(devcontainer, "toggle.set(") || strings.Contains(devcontainer, "ublue.SetDeveloperMode(") {
-		t.Error("Dev Container install outcome must not reverse developer access")
-	}
-	toggle := body("features_page.go", "func (uh *UserHome) onDeveloperToggled(")
-	if !strings.Contains(toggle, "uh.startDeveloperDevcontainerSetup(enabled, succeeded)") ||
-		strings.Index(toggle, "uh.startDeveloperDevcontainerSetup(") < strings.Index(toggle, "if err != nil {") {
-		t.Error("Dev Container setup must follow successful developer promotion")
+	if !strings.Contains(branch, "cli.state.Configured || cli.state.Legacy") ||
+		!strings.Contains(branch, "cli.toggle.set(true)") ||
+		!strings.Contains(branch, "cli.toggle.widget.SetSensitive(!cli.gate.Running())") {
+		t.Error("showBluefinCLIState must keep switch on and sensitive when configured or legacy integration exists under non-Bash shell")
 	}
 }

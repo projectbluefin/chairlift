@@ -14,7 +14,11 @@ import os
 from behave import step, then
 
 import chairlift_atspi as atspi
-from stubs_features import CALLS_LOG, GAMING_COMPONENTS, STEAM_PLATFORM_BRANCH, account_is_developer
+from stubs_features import (
+    CALLS_LOG, GAMING_COMPONENTS, ROOTLESS_UNIT, STEAM_PLATFORM_BRANCH, account_is_developer,
+    docker_held_failure, docker_inactive, docker_no_manager,
+)
+from apps import expander_header, expander_rows, focus_by_tab
 from stubs_printers import quadlet_dir
 
 UBLUE_HELPER = "/usr/bin/chairlift-helper"
@@ -62,7 +66,62 @@ def _calls(context):
         return []
 
 
+@step("I capture the Developer Mode detail evidence")
+def step_capture_developer_detail(context):
+    from wayland_remote import screenshot
+
+    name = "developer-activity.png" if _groups(context, "Setup activity") else "developer-detail.png"
+    screenshot(os.path.join(context.scenario_dir, name))
+
+
+@then("Development Apps offers exactly these native IDE rows")
+def step_development_apps(context):
+    want = [entry["name"] for entry in context.table]
+    assert atspi.poll(lambda: _groups(context, "Development Apps")), \
+        "no Development Apps group in Developer Mode"
+    group = _groups(context, "Development Apps")[0]
+    rows = atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES)
+    got = [atspi.label_text(row) for row in rows]
+    assert got == want, f"Development Apps rows {got}, want {want}"
+    for entry in context.table:
+        title, source = entry["name"], entry["source"]
+        row = atspi.row_containing(group, title)
+        texts = atspi.all_text_under(row)
+        assert any(source in text for text in texts), \
+            f"{title!r} does not disclose {source}: {texts}"
+        if source == "Flatpak":
+            assert any("system" in text.lower() for text in texts), \
+                f"{title!r} does not disclose system scope: {texts}"
+            assert any(entry["remote"].lower() in text.lower() for text in texts), \
+                f"{title!r} does not disclose {entry['remote']}: {texts}"
+        names = {f"{action} {title}" for action in
+                 ("Checking", "Install", "Installed", "Unavailable", "Retry", "Installing")}
+        button = atspi.find(row, lambda node: any(atspi.is_button(node, name) for name in names),
+                            f"the native package action for {title}")
+        assert atspi.actions(button), f"{title!r} Install button exposes no native action"
+        label = atspi.poll(lambda: next((text for text in atspi.all_text_under(button)
+                                       if text in {"Install", "Installed", "Unavailable", "Retry"}), None))
+        assert label, f"{title!r} never settled from Checking…"
+        assert atspi.sensitive(button) == (label in {"Install", "Retry"}), \
+            f"{title!r} {label!r} button has incorrect sensitivity"
+
+
+def _developer_detail_visible(context):
+    return bool(atspi.find_all(_content(context), lambda node: atspi.is_button(node, "Back to Features")))
+
+
+def _feature_surface(context, developer):
+    from common import step_open_developer_detail, step_open_page
+
+    if _developer_detail_visible(context) == developer:
+        return
+    step_open_page(context, "Features")
+    if developer:
+        step_open_developer_detail(context)
+
+
 def _switch(context, row):
+    _feature_surface(context, row in ("Developer Mode", "WSL Mode", "Enable Docker"))
     target = atspi.row_containing(_content(context), row)
     return atspi.find(target, lambda n: atspi.role(n) == "switch", f"a switch in the {row!r} row")
 
@@ -78,6 +137,21 @@ def _developer_action(context):
     return "dx-disable" if _developer_initial(context) else "dx-enable"
 
 
+def _assert_parent_preview(context, count, child_action):
+    actions = [child_action]
+    if child_action == "docker-enable" and not _developer_initial(context):
+        actions.insert(0, "dx-enable")
+    entries = _journal(context)
+    expected = actions * count
+    assert [entry.get("action") for entry in entries] == expected, \
+        f"expected ordered helper previews {expected}, got {entries}"
+    for entry in entries:
+        action = entry["action"]
+        assert entry.get("suppressed") == "dry-run", f"helper was not a preview: {entry}"
+        assert entry.get("would_run") == ["pkexec", UBLUE_HELPER, action, "--dry-run"], entry
+        assert not entry.get("args") and not entry.get("outcome"), entry
+
+
 def _wait_for_text(context, predicate, what):
     found = atspi.poll(lambda: next((t for t in _texts(context) if predicate(t)), None))
     assert found, f"{what} never appeared"
@@ -88,6 +162,263 @@ def _never(predicate, what, window=NEGATIVE_WINDOW):
     """Watch for window seconds and fail the moment predicate holds."""
     hit = atspi.poll(predicate, timeout=window)
     assert not hit, f"unexpectedly observed {what}: {hit!r}"
+
+
+# ---------------------------------------------------------------- package disclosures
+
+
+FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Gaming Mode", "Compass")
+
+# internal/dockerbrew's daemon set (root-owned, for the whole computer) and its
+# user-scope CLI formulae, with the provenance each disclosure row states.
+DOCKER_DAEMON_FORMULAE = ("docker-engine", "containerd", "runc", "tini", "libpathrs", "libseccomp")
+DOCKER_CLI_FORMULAE = ("docker", "docker-buildx", "docker-compose")
+DOCKER_PROVENANCE = {
+    **{name: "Homebrew, installed for the whole computer" for name in DOCKER_DAEMON_FORMULAE},
+    **{name: "Homebrew formula" for name in DOCKER_CLI_FORMULAE},
+}
+
+
+def _mutation_calls(context):
+    mutations = []
+    for call in _calls(context):
+        if not call:
+            continue
+        tool, args = call[0], call[1:]
+        if tool == "systemctl" and args[:1] == ["--user"]:
+            args = args[1:]
+        if not args:
+            continue
+        if args[0] in {
+            "install", "uninstall", "upgrade", "tap", "trust", "write", "reset",
+            "create", "start", "stop", "shutdown", "remove", "autostart", "enable", "disable",
+        } or (tool == "brew" and args[:2] in (["bundle", "install"], ["bundle", "dump"])):
+            mutations.append(call)
+    return mutations
+
+
+def _disclosure_header(context, title):
+    _feature_surface(context, title != "Gaming Mode")
+    group = "Gaming" if title == "Gaming Mode" else "Developer"
+    return expander_header(context, title, group)
+
+
+def _disclosure_rows(context, title):
+    non_packages = {"Virtual Machine Engine", "Developer access", "developer-feeds.opml", "Dakota dev flatpaks"}
+    return [name for name in expander_rows(_disclosure_header(context, title)) if name not in non_packages]
+
+
+def _feature_switch_snapshot(context):
+    developer = _developer_detail_visible(context)
+    try:
+        return {title: bool(atspi.checked(_switch(context, title))) for title in FEATURE_SWITCH_ROWS}
+    finally:
+        _feature_surface(context, developer)
+
+
+@step("I record the Features switches and mutation evidence")
+def step_record_feature_state(context):
+    developer = _developer_detail_visible(context)
+    step_developer_restored(context)
+    for title in FEATURE_SWITCH_ROWS:
+        assert atspi.poll(lambda: atspi.sensitive(_switch(context, title))), \
+            f"{title!r} never became ready before disclosure inspection"
+    context.features_switch_snapshot = _feature_switch_snapshot(context)
+    _feature_surface(context, developer)
+    context.features_journal_snapshot = _journal(context)
+    context.features_calls_snapshot = _mutation_calls(context)
+    context.features_log_snapshot = len(_log(context))
+
+
+@then("each Features switch is named and separately keyboard reachable")
+def step_feature_switch_accessibility(context):
+    developer = _developer_detail_visible(context)
+    for title in FEATURE_SWITCH_ROWS:
+        switch = _switch(context, title)
+        assert atspi.name(switch) == title, f"{title!r} switch has accessible name {atspi.name(switch)!r}"
+        assert atspi.checked(switch) is not None, f"{title!r} switch publishes no state"
+        assert atspi.actions(switch), f"{title!r} switch exposes no native action"
+        focus_by_tab(context, switch, f"the separate {title!r} switch")
+    _feature_surface(context, developer)
+
+
+@step('I expand the "{title}" package disclosure with the keyboard')
+def step_expand_packages(context, title):
+    header = _disclosure_header(context, title)
+    focus_by_tab(context, header, f"the {title!r} disclosure header")
+    atspi.press("Return")
+    assert atspi.poll(lambda: _disclosure_rows(context, title)), \
+        f"{title!r} did not reveal its packages"
+
+
+@then('the "{title}" package disclosure shows exactly')
+def step_packages_exact(context, title):
+    want = [row["package"] for row in context.table]
+    assert atspi.poll(lambda: _disclosure_rows(context, title) == want), \
+        f"{title!r} packages are {_disclosure_rows(context, title)}, want {want}"
+
+
+@then("the developer feed disclosure shows its manual-import file location")
+def step_feed_catalog_location(context):
+    row = atspi.row_containing(_content(context), os.path.basename(OPML_PATH))
+    expected = os.path.join(context.home, OPML_PATH)
+    assert any(expected in text for text in atspi.all_text_under(row)), f"catalog location {expected!r} is not disclosed"
+
+
+@then('the "{title}" package disclosure is informational')
+def step_packages_informational(context, title):
+    header = _disclosure_header(context, title)
+    outer = header.parent.parent.parent
+    for package in _disclosure_rows(context, title):
+        row = atspi.row_containing(outer, package)
+        controls = atspi.find_all(
+            row, lambda node: atspi.role(node) in (*atspi.TOGGLE_ROLES, *atspi.BUTTON_ROLES)
+        )
+        assert not controls, f"package {package!r} offers individual mutation controls: {atspi.describe(controls)}"
+        if title == "Enable Docker":
+            want = DOCKER_PROVENANCE[package]
+            assert want in atspi.all_text_under(row), f"{package!r} is not labelled {want!r}"
+
+
+@then("expanding disclosures changes no Features switch and requests no mutation")
+def step_disclosures_passive(context):
+    def changed():
+        current = _feature_switch_snapshot(context)
+        if current != context.features_switch_snapshot:
+            return current
+        if _journal(context) != context.features_journal_snapshot:
+            return _journal(context)
+        if _mutation_calls(context) != context.features_calls_snapshot:
+            return _mutation_calls(context)
+        appended = _log(context)[context.features_log_snapshot:]
+        return appended if "[DRY-RUN]" in appended else None
+
+    _never(changed, "a mutation from package expansion")
+
+
+@step('I choose the "{engine}" WSL engine')
+def step_choose_wsl_engine(context, engine):
+    choices = {"Built-in": "Home", "Lima": "End"}
+    row = atspi.row_containing(_content(context), "Virtual Machine Engine")
+    focus_by_tab(context, row, "the Virtual Machine Engine row")
+    atspi.press("space")
+    atspi.press(choices[engine])
+    atspi.press("Return")
+
+
+# ---------------------------------------------------------------- setup activity
+
+
+@then("Gaming is the first Features preference group")
+def step_gaming_first(context):
+    gaming = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                        and atspi.name(node) == "Gaming", "the Gaming group")
+    groups = [atspi.name(node) for node in atspi.children(gaming.parent)
+              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
+    assert groups and groups[0] == "Gaming", f"Features group order is {groups}"
+
+
+@then("Setup activity follows Gaming on Features")
+def step_setup_after_gaming(context):
+    activity = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                          and atspi.name(node) == "Setup activity", "the Setup activity group")
+    groups = [atspi.name(node) for node in atspi.children(activity.parent)
+              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
+    assert groups[:2] == ["Gaming", "Setup activity"], f"Features group order is {groups}"
+
+
+@then("Setup activity is the first Developer preference group")
+def step_setup_first_developer(context):
+    activity = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                          and atspi.name(node) == "Setup activity", "the Setup activity group")
+    groups = [atspi.name(node) for node in atspi.children(activity.parent)
+              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
+    assert groups and groups[0] == "Setup activity", f"Developer group order is {groups}"
+
+
+@then("Setup activity shows these stage statuses")
+def step_setup_statuses(context):
+    wanted = [(row["stage"], row["status"]) for row in context.table]
+
+    def statuses_match():
+        group = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                           and atspi.name(node) == "Setup activity", "Setup activity", timeout=1)
+        for stage, status in wanted:
+            row = atspi.row_containing(group, stage, timeout=1)
+            if status not in atspi.all_text_under(row):
+                return False
+        return True
+
+    assert atspi.poll(statuses_match), f"Setup activity did not show {wanted}"
+
+
+@then("Setup activity has no running progress or fabricated percentage")
+def step_setup_settled(context):
+    def settled():
+        group = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                           and atspi.name(node) == "Setup activity", "Setup activity", timeout=1)
+        return not atspi.find_all(group, lambda node: atspi.role(node) == "progress bar")
+
+    assert atspi.poll(settled), "Setup activity kept its running progress after the preview"
+    group = _groups(context, "Setup activity")[0]
+    assert not any("%" in text for text in atspi.all_text_under(group)), "Setup activity invented a percentage"
+
+
+@then("Setup activity shows running progress without a percentage")
+def step_setup_running(context):
+    group = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                       and atspi.name(node) == "Setup activity", "Setup activity")
+    atspi.find(group, lambda node: atspi.role(node) == "progress bar", "running setup progress")
+    assert not any("%" in text for text in atspi.all_text_under(group)), "Setup activity invented a percentage"
+
+
+@then("the Developer access activity matches this account's required promotion")
+def step_implicit_access_activity(context):
+    group = _groups(context, "Setup activity")[0]
+    access = atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES
+                            and atspi.name(node) == "Developer access")
+    if _developer_initial(context):
+        assert not access, "an already enabled account was offered Developer access again"
+    else:
+        row = atspi.row_containing(group, "Developer access")
+        assert "Preview" in atspi.all_text_under(row), "implicit access was not marked as a preview"
+
+
+@then("Setup activity has no Developer access stage")
+def step_no_access_stage(context):
+    group = _groups(context, "Setup activity")[0]
+    assert not atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES
+                             and atspi.name(node) == "Developer access"), \
+        "stopping a child tool requested a Developer Mode change"
+
+
+@then("the direct Developer activity matches the previewed action")
+def step_direct_developer_activity(context):
+    want = ["Developer access"]
+    if not _developer_initial(context):
+        want.append("Dev Container CLI")
+    group = _groups(context, "Setup activity")[0]
+    rows = atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES
+                         and atspi.name(node) and atspi.name(node) != "Setup progress")
+    assert [atspi.name(row) for row in rows] == want, atspi.describe(rows)
+    for row in rows:
+        assert "Preview" in atspi.all_text_under(row), f"{atspi.name(row)!r} was not marked Preview"
+
+
+@then("the Docker activity contains only this run's stages")
+def step_docker_stage_inventory(context):
+    want = ["Tools and service", "Verify readiness", "VS Code setup"]
+    if not _developer_initial(context):
+        want = ["Developer access", *want, "Dev Container CLI"]
+
+    def titles():
+        group = _groups(context, "Setup activity")[0]
+        return [atspi.name(node) for node in atspi.descendants(group, only_showing=True)
+                if atspi.role(node) in atspi.ROW_ROLES and atspi.name(node)
+                and atspi.name(node) != "Setup progress"]
+
+    assert atspi.poll(lambda: titles() == want), f"Setup activity rows are {titles()}, want {want}"
+
 
 
 # ---------------------------------------------------------------- Developer Mode
@@ -192,6 +523,151 @@ def step_feeds_never(context):
     _never(started, "developer feed onboarding")
 
 
+# ---------------------------------------------------------------- System Docker
+
+
+@step("Docker's system manager becomes unavailable during an engine refresh")
+def step_docker_manager_disappears(context):
+    docker_no_manager(context)
+    step_expand_packages(context, "WSL Mode")
+    step_choose_wsl_engine(context, "Lima")
+
+
+@then("system Docker {operation:w} is previewed {count:d} time")
+@then("system Docker {operation:w} is previewed {count:d} times")
+def step_docker_preview(context, operation, count):
+    action = {"enable": "docker-enable", "disable": "docker-disable"}[operation]
+    assert atspi.poll(lambda: len([entry for entry in _journal(context)
+                                  if entry.get("action") == action]) == count), \
+        f"expected {count} {action} previews: {_journal(context)}"
+    _assert_parent_preview(context, count, action)
+    output = _log(context)
+    for retired in ("dockerd-rootless-setuptool.sh", "brew install rootlesskit",
+                    "brew install slirp4netns", "brew install lazydocker", "brew install dive",
+                    "brew install docker-engine", "brew install containerd", "brew install runc"):
+        assert retired not in output, f"system Docker used a retired or user-scope daemon path: {retired}"
+
+
+@then("the Docker command-line tools are previewed from Homebrew {count:d} time")
+@then("the Docker command-line tools are previewed from Homebrew {count:d} times")
+def step_docker_cli_preview(context, count):
+    def lines(suffix):
+        return sum(line.endswith(suffix) for line in _log(context).splitlines())
+
+    for name in DOCKER_CLI_FORMULAE:
+        marker = f"[DRY-RUN] Would execute: brew install {name}"
+        assert atspi.poll(lambda: lines(marker) == count), \
+            f"expected {count} previews of {marker!r}, saw {lines(marker)}"
+    # The fake brew sits in the scenario's bin directory, so its prefix is that
+    # directory's parent, and plugins link from <prefix>/lib/docker/cli-plugins.
+    prefix = os.path.dirname(context.stub_bin)
+    plugins = os.path.join(context.home, ".docker", "cli-plugins")
+    for name in ("docker-buildx", "docker-compose"):
+        marker = (f"[DRY-RUN] would link {os.path.join(plugins, name)} -> "
+                  f"{os.path.join(prefix, 'lib', 'docker', 'cli-plugins', name)}")
+        assert atspi.poll(lambda: lines(marker) == count), \
+            f"expected {count} previews of {marker!r}, saw {lines(marker)}"
+    assert not [call for call in _calls(context) if call[:2] == ["brew", "install"]], "a preview executed brew install"
+    assert not os.path.lexists(plugins), "a preview created Docker CLI plugin links"
+
+
+@then("the Docker command-line tools are never previewed")
+def step_docker_cli_never(context):
+    _never(lambda: next((line for line in _log(context).splitlines()
+                         if "brew install docker" in line or "would link" in line), None),
+           "a Docker CLI install preview")
+
+
+@then("retiring the earlier rootless Docker is previewed without touching it")
+def step_rootless_retirement_preview(context):
+    wanted = (
+        "[DRY-RUN] would execute: systemctl [--user disable --now docker.service]",
+        f"[DRY-RUN] would execute: {os.path.join(context.stub_bin, 'docker')} [context use default]",
+    )
+    for line in wanted:
+        assert atspi.poll(lambda: line in _log(context)), f"chairlift.log never contained {line!r}"
+    docker_calls = [call[1:] for call in _calls(context) if call[0] == "docker"]
+    assert docker_calls and all(call == ["context", "show"] for call in docker_calls), \
+        f"the docker CLI was asked for more than its current context: {docker_calls}"
+    with open(context.rootless_unit, encoding="utf-8") as handle:
+        assert handle.read() == ROOTLESS_UNIT, "a preview changed the rootless unit file"
+    assert not [call for call in _calls(context) if call[:2] == ["systemctl", "--user"]], \
+        "a preview ran a user-manager command"
+
+
+@step("Docker's system-unit check is held before failing")
+def step_hold_docker_check(context):
+    docker_held_failure(context)
+    context.docker_calls_before_hold = len(_calls(context))
+
+
+@step("I release Docker's failed system-unit check")
+def step_release_docker_check(context):
+    calls = [call for call in _calls(context)[context.docker_calls_before_hold:]
+             if call[:2] == ["systemctl", "show"]]
+    expected = [["systemctl", "show", unit, "--property=LoadState,ActiveState"]
+                for unit in ("docker.service", "docker.socket", "docker.service")]
+    assert calls == expected, f"held read was not Verify after both prerequisites: {calls}"
+    with open(os.path.join(context.scenario_dir, "release-docker-status"), "w", encoding="utf-8"):
+        pass
+
+
+@step("Docker's system-unit check is available again")
+def step_restore_docker_check(context):
+    docker_inactive(context)
+
+
+@then("VS Code setup is previewed without editing user settings")
+def step_vscode_preview(context):
+    code = os.path.join(context.stub_bin, "code")
+    extensions = ("ms-vscode-remote.remote-containers", "ms-vscode-remote.remote-ssh", "ms-azuretools.vscode-containers")
+    for extension in extensions:
+        line = f"[DRY-RUN] would execute: {code} [--install-extension {extension}]"
+        assert atspi.poll(lambda: line in _log(context)), f"missing editor preview: {line}"
+    assert not [call for call in _calls(context) if call[0] == "code"], "preview executed the native editor CLI"
+    settings = os.path.join(context.home, ".config", "Code", "User", "settings.json")
+    if hasattr(context, "vscode_original"):
+        with open(settings, "rb") as handle:
+            assert handle.read() == context.vscode_original, "preview modified existing JSONC"
+    else:
+        assert not os.path.lexists(settings), "preview created native editor settings"
+    assert not os.path.lexists(context.launch_env["SETUP_CHECKER_FILE"]), "preview recorded successful editor setup"
+
+
+@then("VS Code setup is skipped without reporting an editor failure")
+def step_vscode_skipped(context):
+    def feedback():
+        return next((text for text in _texts(context)
+                     if "VS Code setup needs attention" in text or "VS Code setup couldn't finish" in text), None)
+    _never(feedback, "an editor failure for a computer without VS Code")
+    settings = os.path.join(context.home, ".config", "Code", "User", "settings.json")
+    assert not os.path.lexists(settings), "a skipped editor setup created settings"
+    assert not os.path.lexists(context.launch_env["SETUP_CHECKER_FILE"]), "a skipped editor setup recorded a version"
+
+
+@then("the editor preview failure reports that no Docker changes were made")
+def step_vscode_preview_failure(context):
+    feedback = _wait_for_text(context, lambda text: text.startswith("[DRY-RUN] VS Code setup needs attention;")
+                              and "no Docker changes made" in text, "truthful editor preview failure")
+    assert len(feedback) < 180, "editor preview feedback is not a short message"
+    for diagnostic in ("read VS Code setup version:", "invalid character", "not JSON", "setup_versioning.json"):
+        assert not any(diagnostic in text for text in _texts(context)), "raw editor diagnostic leaked into the UI"
+    assert not any("Docker access is enabled" in text for text in _texts(context)), "preview claimed Docker access changed"
+    assert not [call for call in _calls(context) if call[0] == "code"], "failed preview executed native code"
+    settings = os.path.join(context.home, ".config", "Code", "User", "settings.json")
+    assert not os.path.lexists(settings), "failed preview created editor settings"
+    with open(context.launch_env["SETUP_CHECKER_FILE"], encoding="utf-8") as handle:
+        assert handle.read() == "not JSON", "failed preview rewrote setup state"
+
+
+@then("Developer onboarding is previewed once per implicit promotion")
+def step_implicit_devcontainer_preview(context):
+    expected = 0 if _developer_initial(context) else 2
+    marker = "[DRY-RUN] Would execute: brew install devcontainer"
+    assert sum(line.endswith(marker) for line in _log(context).splitlines()) == expected, \
+        "implicit promotion repeated or skipped its Dev Container CLI follow-through"
+
+
 # ---------------------------------------------------------------- fakes
 
 
@@ -199,6 +675,12 @@ def step_feeds_never(context):
 def step_fake_never(context, tool, subcommand):
     calls = [c for c in _calls(context) if len(c) > 1 and c[0] == tool and c[1] == subcommand]
     assert not calls, f"{tool} received {subcommand!r}: {calls}"
+
+
+@then("the Features CLI fixtures received no mutation commands")
+def step_feature_tools_passive(context):
+    mutations = _mutation_calls(context)
+    assert not mutations, f"a preview executed mutation commands: {mutations}"
 
 
 # ---------------------------------------------------------------- Gaming

@@ -9,7 +9,7 @@ import (
 
 func TestPagesPreservesWizardOrderAndFiltersUnavailable(t *testing.T) {
 	all := navigation.VisibleItems(func(string, string) bool { return true })
-	want := []string{"features", "applications", "agents", "livery"}
+	want := []string{"livery", "features", "applications", "agents"}
 	if got := Pages(all); !reflect.DeepEqual(got, want) {
 		t.Fatalf("Pages = %v, want %v", got, want)
 	}
@@ -19,7 +19,7 @@ func TestPagesPreservesWizardOrderAndFiltersUnavailable(t *testing.T) {
 			subset = append(subset, item)
 		}
 	}
-	if got := Pages(subset); !reflect.DeepEqual(got, []string{"applications", "livery"}) {
+	if got := Pages(subset); !reflect.DeepEqual(got, []string{"livery", "applications"}) {
 		t.Fatalf("filtered Pages = %v", got)
 	}
 	if got := Pages(navigation.VisibleItems(nil)); len(got) != 0 {

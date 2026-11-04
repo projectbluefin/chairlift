@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.1
-last_updated: 2026-10-04
+version: 2.1.4
+last_updated: 2026-11-03
 tags:
   - testing
   - gtk
@@ -102,6 +102,17 @@ tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
 `@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
 only one destination needs goes in `steps/<destination>.py`.
 
+Keep state-word assertions in one behave step handler. A pattern such as
+`entry checkbox is {state:w}` already matches `insensitive`; a second literal
+step for that word prevents every feature from loading with `AmbiguousStep`.
+The shared handler must assert checked, unchecked, and sensitivity states,
+not drop the less common assertion to make step discovery pass.
+Likewise, reuse `common.py`'s generic button click/state steps for Select All
+instead of registering narrower button patterns that overlap them. Behave's
+[parse matcher](https://github.com/behave/behave/blob/main/docs/tutorial.rst)
+extracts named parameters from one definition; specialize the handler's state
+dispatch, not the step registry. Context7 source: `/behave/behave`.
+
 Intentional malformed-input fixtures must stay malformed. Exclude their exact
 paths from syntax-lint hooks, not the entire fixture directory or hook.
 
@@ -129,6 +140,14 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 
 **Traps, each learned the hard way:**
 
+- **A cached Dakota venv is not a host executable.** Its `bin/python` can
+  symlink to an absolute interpreter path that exists only inside the pinned
+  image. A host `test -x` then rejects a working cache on Ubuntu, and a plain
+  `mv partial existing-directory` nests another venv instead of publishing it.
+  `dakota.sh` checks executability inside Dakota with the cache mounted
+  read-only, and replaces an unusable cache with a non-nesting rename after
+  the new environment is complete. The ordinary and live Docker E2E runs
+  deliberately reuse that same cache in one job.
 - **The host cannot run the suite.** `/usr/share/chairlift/config.yml` on a
   Bluefin host outranks every `config.dev.yml` fixture; `before_all` refuses
   to start rather than test the wrong file, and `environment.py` also checks
@@ -193,6 +212,16 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   preference-group order, locate a known group and compare its shared parent's
   grouping children; do not slice off a guessed number of wrappers. See the
   Apps ordering scenario in `steps/apps.py`.
+  Compact sections without a visible group heading may publish an unnamed
+  grouping around their named expander header. The shared `apps.group` lookup
+  resolves either form and returns the nearest owning group; ordering checks
+  must likewise use the header for unnamed sections rather than omitting them.
+- **Collapsed defaults need a passive assertion.** Interaction helpers may
+  expand a section before finding its controls, but the assertion that a section
+  starts collapsed must not use that helper. Exercise saved enabled switches as
+  well as empty preferences: restoring an enabled setting must not expose the
+  whole section. Livery's compact-section scenario checks each header before
+  expanding it and verifies that expansion writes no settings or icon files.
 - **A tool-call assertion needs isolated readers.** Gaming's capability floor
   is `ImageDescriptor`, so it can read Flatpak inventories even when the
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
@@ -375,3 +404,44 @@ gone. Prove unprivileged launch suppression with a recording `gtk-launch` stub
 and an empty calls file: a preview log and the privileged action journal alone
 cannot prove that no desktop app launched. Keep the native quit action disabled
 across save/launch, not only `close-request`, so Ctrl+Q cannot interrupt it.
+
+## Collections hosted outside Apps
+
+Exercise a collection on its owning page with Apps inventory disabled as well
+as enabled. Share the install gate, but never assume the Apps widgets exist.
+Keep discovery fixtures in the scenario directory and assert that page opening
+runs only bundle checks, while preview actions preserve the observed subtitle.
+Use `KDE` only to exercise Plasma: it switches
+other Livery sections to their Plasma paths.
+
+## Asynchronous collection metadata
+
+When a package subtitle changes after expanding a collection, the AT-SPI
+scenario should wait for the final subtitle and assert the metadata command.
+Keep package-name assertions separate: a visible identifier alone does not
+prove that the description lookup completed. Stub description queries separately
+from installed inventory queries so uninstalled collection entries are covered.
+
+## Setup intent and asynchronous work
+
+Keep pending first-run choices separate from installed state. A late status
+probe may update an untouched default, but must never override an explicit
+choice. Bind an apply completion to the selection object of that wizard
+session, not merely its step index: dismissing and reopening setup can otherwise
+let an old callback advance the new session. Refresh installed state when setup
+ends; Apps may have changed packages while setup was open.
+
+For Bluefin CLI, test selection transitions in `internal/firstrun` and file and
+package lifecycle behavior in `internal/bluefincli`. Smoke the embedded Bash
+payload with real Starship, direnv, mise, and zoxide binaries in an isolated HOME
+and XDG directories: evaluate prompt hooks, load an allowed `.envrc`, render a
+prompt, change directories with `z`, and source twice without duplicate hooks.
+Those checks do not prove GTK navigation. If Dakota cannot start because its
+Podman socket is unavailable, report the desktop gate as blocked, not passed.
+
+In a full GDM/GNOME lab VM, disable idle locking and verify
+`org.gnome.ScreenSaver.GetActive` is false before native-input checks. Inspect
+the captured frames: application focus and successful AT-SPI actions can persist
+behind the lock screen and do not prove a visible GUI session. Unlock through
+the guest's privileged control connection; do not assume the test user has
+passwordless sudo.

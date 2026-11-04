@@ -88,12 +88,16 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/avatar/applier.go", Func: "runBusctl"},                      // busctl (unprivileged AccountsService call)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlOutput"},         // systemctl (query)
 	{File: "internal/autoupdate/autoupdate.go", Func: "systemctlResumeOutput"},   // systemctl (query, post-check for #558 helper skew)
+	{File: "internal/bluefincli/bluefincli.go", Func: "brewPrefix"},              // brew --prefix (read-only, unprivileged)
+	{File: "internal/bluefincli/bluefincli.go", Func: "seedTldrCache"},           // tldr --list/--update (invoking user's page cache, no privilege)
 	{File: "internal/bootc/bootc.go", Func: "getStatusFrom"},                     // bootc status (read-only)
 	{File: "internal/bootc/check.go", Func: "checkUpdateFrom"},                   // bootc upgrade --check (read-only)
 	{File: "internal/contribute/contribute.go", Func: "Command"},                 // xdg-terminal-exec
 	{File: "internal/contribute/contribute.go", Func: "RealProber"},              // ujust --summary (query)
 	{File: "internal/devmenu/devmenu.go", Func: "execCommand"},                   // dconf
 	{File: "internal/devtools/devtools.go", Func: "command"},                     // limactl / systemctl read; privilege mutations dispatch through ublue.runHelper
+	{File: "internal/devtools/devtools.go", Func: "NSLKVMGroupMember"},           // getent group kvm / id -G -- <user> (read-only account-group queries)
+	{File: "internal/dockerbrew/install.go", Func: "runSmoke"},                   // staged runc/dockerd --version inside chairlift-helper docker-enable/update (already root; never pkexec)
 	{File: "internal/distrobox/distrobox.go", Func: "RemoveAll"},                 // distrobox
 	{File: "internal/distrobox/distrobox.go", Func: "HasContainers"},             // distrobox list (query)
 	{File: "internal/firstrun/settings.go", Func: "execCommand"},                 // gsettings
@@ -102,10 +106,12 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/homebrew/homebrew.go", Func: "runBrewCommandAt"},            // brew
 	{File: "internal/homebrew/homebrew.go", Func: "IsInstalled"},                 // brew --version
 	{File: "internal/livery/apply.go", Func: "execCommand"},                      // gsettings / dconf / gtk-update-icon-cache / systemctl --user
+	{File: "internal/printerapp/signature.go", Func: "execCosign"},               // cosign verify (unprivileged registry signature check)
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},     // systemctl --user
 	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "ReopenCommand"},       // goose-desktop (handed to the running session)
+	{File: "internal/valhalla/valhalla.go", Func: "execCommand"},                 // flatpak queries/user overrides/sandbox gsettings and Homebrew queries/rsvg-convert/djxl; installs reuse existing wrappers
 	{File: "internal/views/help_page.go", Func: "UserHome.openURL"},              // xdg-open
 }
 

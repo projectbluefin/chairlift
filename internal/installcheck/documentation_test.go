@@ -78,8 +78,8 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 
 	t.Run("privileged integration inventory is complete", func(t *testing.T) {
 		ubluePolicy := readRepoFile(t, filepath.Join("data", "io.projectbluefin.chairlift.ublue.policy"))
-		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 14 {
-			t.Fatalf("ublue policy actions = %d, want 14", got)
+		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 16 {
+			t.Fatalf("ublue policy actions = %d, want 16", got)
 		}
 
 		current := strings.Join([]string{
@@ -98,13 +98,14 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 			"/usr/share/chairlift/config.yml",
 			"/usr/share/doc/chairlift/channels.example.yml",
-			"fourteen actions",
+			"sixteen actions",
 			"pin <YYYYMMDD>",
 			"unpin [--dry-run]",
 			"factory-reset",
 			"kvm-enable",
 			"docker-enable",
 			"docker-disable",
+			"docker-update",
 		} {
 			if !strings.Contains(current, required) {
 				t.Errorf("current documentation does not contain %q", required)
@@ -118,6 +119,10 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"declaring the three actions",
 			"builds two binaries",
 			"chairlift-updex-helper` only",
+			"fourteen actions",
+			"fourteen subcommands",
+			"fourteen ublue commands",
+			"fourteen-command",
 		} {
 			if strings.Contains(current, stale) {
 				t.Errorf("current documentation still contains stale privileged-inventory claim %q", stale)
@@ -217,6 +222,7 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"all features default to enabled except\n`maintenance_cleanup_group`, which defaults to disabled",
 			"all groups are enabled except\n`maintenance_cleanup_group`.",
 			"every group except `maintenance_cleanup_group`, which\n    defaults to `false`",
+			"kept current by `podman-auto-update.timer`",
 		} {
 			if strings.Contains(current, stale) {
 				t.Errorf("current documentation still contains stale claim %q", stale)

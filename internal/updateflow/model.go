@@ -16,6 +16,7 @@ const (
 	DeveloperTools   SourceID = "developer-tools"
 	SystemComponents SourceID = "system-components"
 	OperatingSystem  SourceID = "operating-system"
+	PrinterDrivers   SourceID = "printer-drivers"
 )
 
 // Phase is the aggregate state of the update flow.
@@ -53,15 +54,20 @@ type Item struct {
 
 // SourceState is the coordinator-owned state for one provider.
 type SourceState struct {
-	ID              SourceID
-	Configured      bool
-	Available       bool
-	Enabled         bool
-	Checking        bool
-	Updating        bool
-	Items           []Item
-	CheckErr        error
-	ApplyErr        error
+	ID         SourceID
+	Configured bool
+	Available  bool
+	Enabled    bool
+	Checking   bool
+	Updating   bool
+	Items      []Item
+	CheckErr   error
+	// CheckWarnings names the parts a partially successful check could not
+	// cover, so the row can say so while still offering what it did find.
+	CheckWarnings []string
+	ApplyErr      error
+	// ApplyWarnings names the items left pending after a partial apply.
+	ApplyWarnings   []string
 	Completed       bool
 	RestartRequired bool
 }
@@ -84,6 +90,8 @@ type Snapshot struct {
 	Sources          []SourceState
 	Current          SourceID
 	Progress         string
+	Fraction         float64
+	Determinate      bool
 	TotalUpdates     int
 	CompletedSources []SourceID
 	FailedSources    []SourceID
@@ -99,26 +107,32 @@ type Snapshot struct {
 
 // Progress is one provider progress update.
 type Progress struct {
-	Source  SourceID
-	Message string
+	Source   SourceID
+	Message  string
+	Fraction float64
 }
 
-// CheckResult is the normalized result of a provider check.
+// CheckResult is the normalized result of a provider check. Warnings name
+// the parts of the source a check could not cover while still offering the
+// rest; they are shown beside the pending items so a partial check never
+// reads as a complete one.
 type CheckResult struct {
 	Items           []Item
 	RestartRequired bool
+	Warnings        []string
 }
 
 // ApplyResult is the normalized result of a provider mutation. Changed is
 // true only when the mutation is verified to have applied the pending
-// inventory. A provider that ran to a zero exit but left items pending —
-// flatpak update's "Nothing to update." no-op, for example — reports false,
-// and the coordinator keeps those items pending rather than claiming the
-// source completed.
+// inventory. PendingItems and Warnings preserve per-item outcomes when a
+// provider partially succeeds before returning an error; the coordinator
+// retries only those items.
 type ApplyResult struct {
 	Changed         bool
 	Preview         bool
 	RestartRequired bool
+	PendingItems    []Item
+	Warnings        []string
 }
 
 // ErrUnavailable, wrapped in a Check error, reports that the host cannot back
@@ -176,7 +190,7 @@ func derive(s Snapshot) Snapshot {
 		if source.Enabled && source.Configured && source.Available {
 			s.TotalUpdates += len(source.Items)
 		}
-		if source.CheckErr != nil || source.ApplyErr != nil {
+		if source.CheckErr != nil || len(source.CheckWarnings) > 0 || source.ApplyErr != nil {
 			if !containsSourceID(s.FailedSources, source.ID) {
 				s.FailedSources = append(s.FailedSources, source.ID)
 			}
@@ -204,6 +218,9 @@ func derive(s Snapshot) Snapshot {
 		// No page-level action: the Operating system row's "Restart Now"
 		// suffix is the only restart control (#439).
 		s.Action = ActionNone
+	case s.TotalUpdates == 0 && hasCheckWarnings(s.Sources):
+		s.Phase = PhaseCheckFailed
+		s.Action = ActionCheck
 	case !hasConfiguredAvailable(s.Sources):
 		s.Phase = PhaseReady
 		s.Action = ActionNone
@@ -237,6 +254,12 @@ func cloneSources(sources []SourceState) []SourceState {
 		cloned[i] = source
 		if source.Items != nil {
 			cloned[i].Items = append([]Item(nil), source.Items...)
+		}
+		if source.CheckWarnings != nil {
+			cloned[i].CheckWarnings = append([]string(nil), source.CheckWarnings...)
+		}
+		if source.ApplyWarnings != nil {
+			cloned[i].ApplyWarnings = append([]string(nil), source.ApplyWarnings...)
 		}
 	}
 	return cloned
@@ -276,6 +299,15 @@ func hasCheckFailure(sources []SourceState) bool {
 	return false
 }
 
+func hasCheckWarnings(sources []SourceState) bool {
+	for _, source := range sources {
+		if len(source.CheckWarnings) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func hasConfiguredAvailable(sources []SourceState) bool {
 	for _, source := range sources {
 		if source.Configured && source.Available {
@@ -295,6 +327,8 @@ func preferenceEnabled(values userprefs.Values, id SourceID) bool {
 		return values.SystemComponents
 	case OperatingSystem:
 		return values.OperatingSystem
+	case PrinterDrivers:
+		return values.PrinterDrivers
 	default:
 		return false
 	}

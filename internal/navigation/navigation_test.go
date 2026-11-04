@@ -188,10 +188,11 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"brew_bundles_group",
 		),
 		"agents": refsOn("agents_page", "agents_group", "troubleshooting_group"),
-		"features": refsOn("features_page", "features_group",
-			"desktop_integrations_group", "dx_group", "gaming_group", "printers_group"),
+		"features": refsOn("features_page", "bluefin_cli_group", "features_group",
+			"desktop_integrations_group", "dx_group", "gaming_group", "printers_group", "compass_group"),
 		"livery": refsOn("livery_page",
 			"account_group",
+			"wallpapers_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
@@ -238,6 +239,13 @@ func TestDetailMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			refs: []Ref{
 				{Page: "maintenance_page", Group: "reset_group"},
 				{Page: "updates_page", Group: "bootc_updates_group"},
+			},
+		},
+		"developer": {
+			parent: "features",
+			title:  "Developer Mode",
+			refs: []Ref{
+				{Page: "features_page", Group: "dx_group"},
 			},
 		},
 	}
@@ -570,6 +578,36 @@ func TestLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
 	}
 }
 
+func TestDXModeLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
+	// The --dx-mode launch intent reaches the Developer Mode detail directly,
+	// keeping the sidebar selection on Features.
+	route := routeByName(t, DXModeRoute)
+	if !isDetail(route) {
+		t.Fatalf("DXModeRoute %q is not a canonical detail route", DXModeRoute)
+	}
+
+	routes := VisibleRoutes(everythingEnabled)
+	if !containsPage(routes, DXModeRoute) {
+		t.Fatalf("VisibleRoutes with everything enabled did not offer %q", DXModeRoute)
+	}
+
+	transition, ok := Resolve(DXModeRoute, routes, alwaysConstructed)
+	if !ok {
+		t.Fatalf("Resolve(%q) rejected the launch route", DXModeRoute)
+	}
+	if transition.Name != "developer" || !transition.Detail || transition.Back != "features" {
+		t.Fatalf("Resolve(%q) = %#v, want developer detail route with Back to features", DXModeRoute, transition)
+	}
+
+	featuresTransition, ok := Resolve("features", routes, alwaysConstructed)
+	if !ok {
+		t.Fatalf("Resolve(%q) rejected features", "features")
+	}
+	if transition.SelectedIndex != featuresTransition.SelectedIndex {
+		t.Fatalf("Resolve(%q).SelectedIndex = %d, want features row %d", DXModeRoute, transition.SelectedIndex, featuresTransition.SelectedIndex)
+	}
+}
+
 func TestWindowAndAppUseCanonicalNavigation(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -679,6 +717,9 @@ func routeByName(t *testing.T, name string) Item {
 		t.Fatalf("canonical inventory declares no route %q", name)
 	}
 	return route
+}
+func isDetail(item Item) bool {
+	return item.Kind == KindDetail
 }
 
 // ancestorPages returns the configuration pages a route's primary ancestor

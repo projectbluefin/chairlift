@@ -1,4 +1,6 @@
 # Exercise the Features empty state without discoverable desktop integrations.
 features_page:
+  bluefin_cli_group:
+    enabled: false
   desktop_integrations_group:
     enabled: false

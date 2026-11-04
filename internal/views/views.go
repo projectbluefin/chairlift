@@ -53,6 +53,7 @@ type UserHome struct {
 	liveryPage       *adw.ToolbarView
 	helpPage         *adw.ToolbarView
 	recoveryPage     *adw.ToolbarView // Powerwash detail, reached from Maintenance, not a sidebar page
+	developerPage    *adw.ToolbarView // Developer Mode detail, reached from Features, not a sidebar page
 
 	// PreferencesPages inside each ToolbarView - keep references to prevent GC
 	agentsPrefsPage       *adw.PreferencesPage
@@ -63,6 +64,7 @@ type UserHome struct {
 	liveryPrefsPage       *adw.PreferencesPage
 	helpPrefsPage         *adw.PreferencesPage
 	recoveryPrefsPage     *adw.PreferencesPage
+	developerPrefsPage    *adw.PreferencesPage
 	// The preferences page inside each createPage ToolbarView; it owns the
 	// scrolling, so it is what ScrollPageToTop resets.
 	pageContents map[*adw.ToolbarView]*adw.PreferencesPage
@@ -78,18 +80,11 @@ type UserHome struct {
 	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
-	// Bundle collection entries and unified install controls.
-	bundleItems          []*bundleItemRow
-	bundleInstallButton  *gtk.Button
-	bundleInstallSpinner *gtk.Spinner
-	bundleInstallBar     *gtk.ProgressBar
-	bundleInstallGate    actionstate.Gate
-	developerAppsGate    actionstate.Gate
-	// bundleChecks routes every collection entry's checkbox through one
-	// ::toggled callback, and bundleSelectAlls every collection's
-	// "Select All" button through one ::clicked callback. Both lists are
-	// rebuilt with the page, so a fresh closure per row would burn the
-	// puregotk callback table.
+	// Each destination selects its own entries; one gate serializes installs.
+	bundleItems       []*bundleItemRow
+	bundleSelections  []*bundleSelection
+	bundleInstallGate actionstate.Gate
+	// Shared callbacks avoid allocating a trampoline per entry on rebuild.
 	bundleChecks     checkRoute
 	bundleSelectAlls buttonRoute
 	// bundleStatusRefresh lets only the newest installed-state check of the
@@ -115,12 +110,23 @@ type UserHome struct {
 	gamingSpinner            *gtk.Spinner
 	agentModeSpinner         *gtk.Spinner
 
+	// Wallpapers owns one setup action and only the last observed readiness.
+	wallpaperRow       *adw.ExpanderRow
+	wallpaperChoice    *gtk.CheckButton
+	wallpaperButton    *gtk.Button
+	wallpaperSpinner   *gtk.Spinner
+	wallpaperActivity  *setupActivity
+	wallpaperGate      actionstate.Gate
+	wallpaperRefresh   actionstate.RefreshGate
+	wallpaperInstalled bool
+	wallpaperDisposed  bool
+
 	// Livery references. liveryState is the last state the page loaded and
 	// is what every handler compares against, so a programmatic widget
 	// update during restore is recognized as "no change" instead of being
 	// replayed as a user action; liverySuppress closes the same window
 	// explicitly. See applyLiveryState.
-	liveryAppGridGroup     *adw.PreferencesGroup
+	liveryAppGridExpander  *adw.ExpanderRow
 	liveryAppGridSwitch    *gtk.Switch
 	liveryAppGridRow       *adw.ActionRow
 	liveryPickerMode       liveryPickerMode
@@ -220,40 +226,59 @@ type UserHome struct {
 	// Free up space admits one cleanup run at a time.
 	freeUpSpaceGate actionstate.Gate
 
-	// updateFeaturesGate admits one updex feature update at a time (#488).
+	// updateFeaturesGate admits one Features-page updex helper mutation at a time: the
+	// feature update (#488) or a single feature's enable/disable toggle.
 	updateFeaturesGate actionstate.Gate
 
 	// Bluefin-family (channel / developer mode / gaming) references
-	channelGroup       *adw.PreferencesGroup
-	channelRow         *adw.ActionRow
-	channelSwitch      *gtk.Switch
-	developerGroup     *adw.PreferencesGroup
-	developerRow       *adw.ActionRow
-	developerSwitch    *gtk.Switch
-	developerGate      actionstate.Gate
-	developerCanToggle bool
-	// developerFeedGate admits the optional Pulp/feed-staging work that
-	// follows a confirmed enable. It is a second gate rather than a reuse of
-	// developerGate because its lifetime is different: the switch is
-	// released as soon as the helper returns, while a Flatpak install keeps
-	// running off the main thread. Overlapping installs are
-	// refused by this gate, not by holding the switch insensitive.
-	developerFeedGate         actionstate.Gate
-	developerDevcontainerGate actionstate.Gate
-	gamingGroup               *adw.PreferencesGroup
-	gamingRow                 *adw.ActionRow
-	gamingGate                actionstate.Gate
-	gamingDialogs             dialogRoute
-	developerOptions          []*developerOptionRow
-	wslBackend                string
-	wslCombo                  *adw.ComboRow
-	wslDocBtn                 *gtk.Button
-	wslSuppress               bool
-	wslBackendResolved        bool
-	wslBackendNotify          func(gobject.Object, uintptr)
-	driverRow                 *adw.ActionRow
-	driverButton              *gtk.Button
-	driverGate                actionstate.Gate
+	channelGroup           *adw.PreferencesGroup
+	channelRow             *adw.ActionRow
+	channelSwitch          *gtk.Switch
+	developerGroup         *adw.PreferencesGroup
+	developerRow           *adw.ExpanderRow
+	developerSwitch        *gtk.Switch
+	developerGate          actionstate.Gate
+	developerCanToggle     bool
+	developerEnabled       bool
+	developerToggle        *guardedSwitch
+	developerSetupActivity *setupActivity
+	gamingSetupActivity    *setupActivity
+	developerEntryRow      *adw.ActionRow
+	hardwareEnablement     *hardwareEnablementView
+	developerApps          *developerAppsView
+	// All developer work, including optional installs, shares developerGate.
+	gamingGroup        *adw.PreferencesGroup
+	gamingRow          *adw.ExpanderRow
+	gamingGate         actionstate.Gate
+	gamingDialogs      dialogRoute
+	gameModeRow        *adw.ActionRow
+	gameModeSwitch     *gtk.Switch
+	gameModeToggle     *guardedSwitch
+	gameModeGate       actionstate.Gate
+	gameModeDialogs    dialogRoute
+	pendingImage       string
+	stagedImageLoaded  bool
+	channelSwitchable  bool
+	driverSwitchable   bool
+	gameModeSwitchable bool
+	developerOptions   []*developerOptionRow
+	wslBackend         string
+	wslCombo           *adw.ComboRow
+	wslDocBtn          *gtk.Button
+	wslSuppress        bool
+	wslBackendResolved bool
+	wslBackendNotify   func(gobject.Object, uintptr)
+	driverRow          *adw.ActionRow
+	driverButton       *gtk.Button
+	driverGate         actionstate.Gate
+
+	// Bash terminal feature, including its pending wizard choice.
+	bluefinCLI *bluefinCLIRow
+
+	// Compass (features_page compass_group).
+	compassSpinner *gtk.Spinner
+	compassGate    actionstate.Gate
+	compassDialogs dialogRoute
 
 	// Staged-update changelog (SBOM diff), with visible Compare and optional
 	// result details in the system-update secondary group.
@@ -340,7 +365,9 @@ type UserHome struct {
 	openRecoveryDetail  func()
 	closeRecoveryDetail func()
 
-	brewPackagesRefresh actionstate.RefreshGate
+	openDeveloperDetail  func()
+	closeDeveloperDetail func()
+	brewPackagesRefresh  actionstate.RefreshGate
 	// formulaGates and caskGates hold each installed list's row gates, so a
 	// rebuild waits for a running uninstall or pin instead of replacing
 	// the only controls that show it.
@@ -381,6 +408,7 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 	uh.liveryPage, uh.liveryPrefsPage = uh.createPage()
 	uh.helpPage, uh.helpPrefsPage = uh.createPage()
 	uh.recoveryPage, uh.recoveryPrefsPage = uh.createRecoveryPage()
+	uh.developerPage, uh.developerPrefsPage = uh.createDeveloperPage()
 
 	// Build page content
 	uh.buildAgentsPage()
@@ -391,7 +419,11 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 	uh.buildLiveryPage()
 	uh.buildHelpPage()
 	uh.buildRecoveryPage()
-
+	if uh.collectionsAvailable() {
+		go uh.loadBrewBundles(uh.developerBundlePaths())
+	}
+	go uh.loadInitialStagedDeployment()
+	uh.buildDeveloperPage()
 	log.Printf("views: all pages built in %s", time.Since(start))
 	return uh
 }
@@ -431,6 +463,7 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 				sgtk.RunOnMainThread(func() {
 					uh.refreshChangelogAvailability(status)
 					uh.renderSystemVersion(versionGeneration, status)
+					uh.applyStagedImage(status)
 				})
 			}()
 		}
@@ -454,9 +487,29 @@ func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 		return uh.liveryPage
 	case "help":
 		return uh.helpPage
+	case "developer":
+		return uh.developerPage
 	default:
 		return nil
 	}
+}
+
+// DeveloperPage returns the Developer Mode detail ToolbarView so the window can
+// add it to its content stack. Nil-guarded: the page is always built by New.
+func (uh *UserHome) DeveloperPage() *adw.ToolbarView {
+	return uh.developerPage
+}
+
+// SetOpenDeveloperDetail wires the callback the Features page calls to open the
+// Developer Mode detail view.
+func (uh *UserHome) SetOpenDeveloperDetail(fn func()) {
+	uh.openDeveloperDetail = fn
+}
+
+// SetCloseDeveloperDetail wires the callback the Developer Mode back button calls
+// to return to Features.
+func (uh *UserHome) SetCloseDeveloperDetail(fn func()) {
+	uh.closeDeveloperDetail = fn
 }
 
 // ScrollPageToTop returns a page built by createPage to its top. A page keeps

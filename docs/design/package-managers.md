@@ -20,8 +20,13 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/printerapp`](../../internal/printerapp/printerapp.go) | Rootless printer quadlets, administration gate and observed diagnostics | Invoking account |
 | [`internal/agentmode`](../../internal/agentmode/readiness.go) | Goose launch readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch | Invoking account |
 | [`internal/troubleshoot`](../../internal/troubleshoot/troubleshoot.go) | Goose/Linux MCP installation and ChairLift's own Goose profile | Invoking account |
+| [`internal/devtools`](../../internal/devtools/devtools.go) | WSL backends, system Docker status/enable (rootless cleanup, user-scope Docker CLI formulae), native VS Code setup and canonical package provenance | WSL/editor/CLI work is user-scoped; KVM and system Docker use the existing fixed helper |
+| [`internal/dockerbrew`](../../internal/dockerbrew/) | Verified Homebrew-bottle Docker daemon runtime: signed index, bottle download and extraction, ELF patching, manifest, managed units | Pure library; its writes run only inside the fixed `docker-enable`/`docker-update` helper commands |
+| [`internal/devsetup`](../../internal/devsetup/setup.go) | Ordered developer setup and retry outcomes over injected tasks | Adds no privileged route; initial Developer Mode promotion uses the existing ublue helper |
+| [`internal/compass`](../../internal/compass/compass.go) | Compass launcher state and system install/removal from the image's FlatPark remote | Flatpak's own authorization; adds no remote and no pkexec route |
+| [`internal/valhalla`](../../internal/valhalla/valhalla.go) | Livery More Dinosaurs installation, PNG artwork and observed manual-source readiness | User-scope Homebrew/files/settings and system Flatpak under Flatpak's own authorization; adds no remote or pkexec route |
 
-All integrations read the single process-wide `dryrun.Enabled()` flag from
+Mutation wrappers read the single process-wide `dryrun.Enabled()` flag from
 [`internal/dryrun`](../../internal/dryrun/dryrun.go). There are no per-wrapper
 preview flags. A suppressed mutation may return nil, so nil alone must never
 make a view remove a row, change an inventory, or claim installation.
@@ -37,27 +42,30 @@ inventories or executable paths. Every widget update returns through
 
 ## Unified updates
 
-The four `updateflow.SourceID` values map to these production adapters and
+The five `updateflow.SourceID` values map to these production adapters and
 configuration namespaces in [`internal/window/window.go`](../../internal/window/window.go):
 
 | Source | Constructor | Policy group | Apply operation |
 | --- | --- | --- | --- |
 | `applications` | `NewFlatpak` | `updates_page.flatpak_updates_group` | Update the user/system scopes represented by pending items |
-| `developer-tools` | `NewHomebrew` | `updates_page.brew_updates_group` | `homebrew.Update(ctx)` followed by `homebrew.Upgrade(ctx, "")` |
+| `developer-tools` | `NewHomebrew` | `updates_page.brew_updates_group` | `homebrew.Update(ctx)` followed by `homebrew.Upgrade(ctx, "")`, then `ublue.UpdateDocker(ctx)` when the `docker-runtime` item is pending |
 | `system-components` | `NewSystemComponents` | `features_page.features_group` | `updex.UpdateFeatures(ctx)` |
+| `printer-drivers` | `NewPrinterApps` | `features_page.printers_group` | `printerapp.Refresh(ctx, app)` once per selected app |
 | `operating-system` | `NewOperatingSystem` | `updates_page.bootc_updates_group` | `bootc.StageUpdate(ctx, events)` |
 
 `Provider` supplies `ID()`, `Available()`,
 `Check(context.Context) (CheckResult, error)` and
 `Apply(context.Context, []Item, func(Progress)) (ApplyResult, error)`.
 `Item.ID` is execution identity, separate from `Name`; `Scope` preserves the
-Flatpak installation or bootc transport. `CheckResult` carries pending items
-and restart state. `ApplyResult` carries `Changed`, `Preview` and
-`RestartRequired` independently.
+Flatpak installation or bootc transport. `CheckResult` carries pending items,
+restart state, and warnings naming parts a partial check could not cover.
+`ApplyResult` carries `Changed`, `Preview` and `RestartRequired`; after a
+partial error, `PendingItems` and `Warnings` let the coordinator retry only
+the failed items and show their names.
 
 [`Coordinator`](../../internal/updateflow/coordinator.go) checks enabled
 sources concurrently and applies pending sources serially in provider order:
-Flatpak, Homebrew, updex, bootc. `Policy.Configured` is administrator policy;
+Flatpak, Homebrew, updex, printer drivers, bootc. `Policy.Configured` is administrator policy;
 `Policy.Supported` is the capability floor. Provider availability and user
 preferences remain separate from both. Unavailable, administrator-disabled,
 user-disabled, check failure and apply failure must not collapse into one
@@ -88,7 +96,14 @@ Adapter completion is source-specific:
 - Homebrew checks `ListOutdated`. Apply runs metadata refresh **and** package
   upgrade under the caller's cancellation context. Its live success reports
   Changed; the subsequent shared check refreshes inventory. It does not
-  re-list inside the bulk Apply method.
+  re-list inside the bulk Apply method. When `dockerbrew.ReadManifest` finds
+  a Homebrew-bottle Docker runtime and the installed helper supports
+  `docker-update`, Check also compares Homebrew's unsigned per-formula API
+  (`dockerbrew.Client.Latest`) with the manifest and adds a `docker-runtime`
+  item named "Docker engine" only when `dockerbrew.Outdated` reports a
+  difference. Apply then calls `ublue.UpdateDocker` after the brew upgrade;
+  the root helper ignores that hint and re-verifies against the signed index
+  ([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
 - Updex counts each affected feature once if any component has an update.
   Captured warnings fail the unified check as incomplete. Successful live
   helper execution reports Changed; preview reports Preview instead.
@@ -109,11 +124,20 @@ retryable and known inventory intact; verified live individual success starts
 a shared check. Do not add a second count or update-state owner in `UserHome`.
 
 [`UpdateShell`](../../internal/views/update_shell.go) renders snapshots with
-[`updatepresent`](../../internal/views/updatepresent/updatepresent.go). It
-pulses one reusable GLib timer while checking/updating, independent of provider
-output, and removes the timer at idle/disposal. Its visible toast overlay
-announces each phase's one status line, which sits under the primary action.
+[`updatepresent`](../../internal/views/updatepresent/updatepresent.go). Its
+progress bar displays a determinate fraction when `snapshot.Determinate` is
+true (`Presentation.ProgressDeterminate`), or pulses from one reusable GLib
+timer during checking or unquantified operations, independent of provider
+output; idle, determinate progress and disposal remove the timer. Its visible
+toast overlay announces each phase's one status line, which sits under the
+primary action.
 `Presentation.ShowStatus` hides an empty header.
+`updatepresent.ShowSourceRow` decides which sources get a row: one that
+configuration disables for the whole machine, or that this host cannot back,
+gets none, and a source group left empty is hidden with them (#675). The
+remaining rows are exactly the sources the page checked, so its single status
+line needs no qualifier. Preferences still lists every source with its lock
+reason, so nothing the application does not update becomes undiscoverable.
 `buildUpdatesPage` appends the rest of the Updates page to the shell's own
 preferences page (`UpdateShell.PreferencesPage`), beneath the source rows;
 automatic updates, system version, unverified sources and
@@ -150,7 +174,7 @@ came from (`homebrew/core` or `owner/repo`). The parser does not populate
 | --- | --- |
 | `ListInstalledFormulae()` | `brew info --installed --json=v2 --formula` |
 | `ListInstalledCasks()` | `brew info --installed --json=v2 --cask` |
-| `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings |
+| `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings, formula `Pinned`. The Developer tools update source omits pinned formulae, because `brew upgrade` skips them |
 | `Tap(name)` | `brew tap <name>` |
 | `Install(name, isCask)` / `Uninstall(name, isCask)` | `install` / `uninstall`, with `--cask` only for casks |
 | `InstallMany(names, isCask)` | `install [--cask] <name>…`; one transaction per kind |
@@ -237,16 +261,14 @@ back to the static shape when the inventory knew none. The vocabulary is
 closed and lives in
 [`bundleview`](../../internal/views/bundleview/entries.go); an observation
 with no word for it falls back rather than inventing a label. An `App Store`
-or `VS Code Marketplace` entry is never offered for selection: `brew bundle`
-installs those, ChairLift's own per-item commands do not, and a checkbox
-that promised an install that cannot happen would be worse than none.
+or `VS Code Marketplace` entry is never offered for selection. Their presence
+forces per-manager installation of only checked, supported entries, so the
+whole-file path cannot install an unchecked directive implicitly.
 
 The group header row is **Install Selected**, and it installs exactly the
-checked entries. A collection whose every entry is checked installs as a
-whole through `brew bundle install`, which is what keeps the collection's
-own tap directives and `trusted: true` flags in force. A partially selected
-collection installs its checked entries one by one, batched per package
-manager, because `brew bundle` can only install a whole file:
+checked entries. Only a completely read collection whose every entry is supported
+and checked installs through `brew bundle install`, retaining its tap directives
+and `trusted: true` flags. Otherwise checked entries install batched per manager:
 `brew install <formula…>`, `brew install --cask <cask…>` and
 `flatpak install -y --system flathub <ref…>`.
 
@@ -361,9 +383,8 @@ are the curated name and description `bundleview.Describe` produces, whose
 suffix holds the **Select All** button, and whose expanded child rows are
 the collection's entries. Every entry row carries a checkbox, its source
 label, and — when the package is already on the system — an insensitive
-checkbox and the installed wording. Bluefin CLI additionally enables
-shell bling and prompt integration, while Extra Wallpapers bundles the Damask
-flatpak.
+checkbox and the installed wording. Descriptions load on expansion and append
+to that source label rather than replacing it.
 
 Each entry's state is observed: `refreshBundleStatuses`
 (`internal/views/bundle_install.go`) reads the installed Homebrew formulae
@@ -374,11 +395,90 @@ Homebrew uninstall. A package's qualified name (`full_name` for a formula,
 against, so a tap package never answers for a homebrew/core package of the
 same name. The collection's own summary follows from its entries: "(Installed)"
 when every entry is installed, and "X of N installed." when only some are.
+Failed inventory reads preserve that manager's last observed entries, never
+turning a failed read into a removed installation.
+An installed-to-absent refresh clears the auto-checked entry; never-installed
+entries retain deliberate selections. Fully read, checked, supported collections
+use `brew bundle`; mixed collections containing unsupported App Store/VS Code
+directives, truncated reads, and partial read failures use only selected
+per-manager commands, never the whole file.
 
 `BundleContents` deliberately drops tap directives, because a tap installs
 nothing on its own. `BundleTaps` parses them separately: the trust a
 collection's own Brewfile claims for a tap decides whether the per-item path
 may trust that tap wholesale.
+
+Monospace Fonts (`fonts-dev`) is offered under Developer Mode with independent
+entry selection and an explicit Install action sharing the same installer gate.
+It falls back to Apps when Developer Mode is disabled. Both locations retain
+the collection configuration and Homebrew floor. Entries start unchecked; setup
+Next/Back preserves selections without installing them. Bluefin CLI is instead
+owned by `internal/bluefincli` and its separate Features switch.
+
+### Livery Wallpapers setup
+
+Livery's `wallpapers_group` is directly below Profile Picture and before the
+icon groups. The group is floored on Homebrew and offers a default-checked
+More Dinosaurs checkbox and an explicit Install button. Showing the group
+only observes readiness; it never installs, converts or configures anything.
+The `wallpaper-slideshow` and `artwork` Brewfile collections are hidden from Apps,
+so image definitions that still name Damask cannot install or advertise it.
+[`internal/valhalla`](../../internal/valhalla/valhalla.go) owns this group's
+fixed payload and complete setup through `Install(ctx, report)` and `Installed(ctx)`:
+
+- Install `io.github.tunix.valhalla` system-wide from the existing `flatpark`
+  remote, under Flatpak's own authorization. Never add a remote or a privileged
+  ChairLift helper route.
+- Install the user-scope `ublue-os/tap/bluefin-wallpapers-extra` Homebrew cask.
+  The expanded row discloses Valhalla and `bluefin-wallpapers-extra`, regardless
+  of what the old image Brewfile lists.
+  Both metadata and Caskroom lookups use that fully qualified name: a bare
+  cask token is ambiguous on a host with multiple taps publishing it.
+- Convert extra SVG, JPEG XL, and KDE's AVIF artwork to PNG now, rather than expecting
+  Valhalla to read unsupported formats. Converted files live in
+  `$XDG_DATA_HOME/chairlift/wallpaper-slideshow/png`, falling back to
+  `~/.local/share/chairlift/wallpaper-slideshow/png`; cask artwork is not rewritten.
+  SVG conversion uses `rsvg-convert`; JPEG XL uses `djxl`; AVIF uses `avifdec`.
+  Setup reuses installed tools, including Homebrew's resolved prefix, and installs
+  `librsvg`, `jpeg-xl`, or `libavif` only when the corresponding tool is missing.
+  Generated names include the installed cask version, so a pack upgrade makes
+  setup retryable until its PNGs are regenerated. A successful batch removes
+  obsolete generated PNGs, while failed conversion preserves the previous batch
+  and unrelated files in the output directory are left alone.
+  Native SVG/JPEG XL support is requested in
+  [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
+- Grant Valhalla read-only sandbox access to the generated source, add it to
+  `manual-folders` while retaining other folders, and set `active-source` to
+  `manual`. Configuration runs through the installed FlatPark app's schema at
+  `/app/extra/valhalla` (`GSETTINGS_SCHEMA_DIR` inside `flatpak run --system`),
+  not the host's schema registry or the upstream-built Flatpak's schema layout.
+
+The GTK worker calls `Installed` with a 30-second context each time the group is
+shown and `Install` with a 30-minute context only after an explicit click. A
+`RefreshGate` rejects observations overtaken by a newer read or installation;
+the section's action gate resets after every outcome. Complete usable artwork
+and configuration, not Flatpak presence alone, determine installed status.
+An absent `ublue-os/tap` is ordinary not-set-up state, observed with the read-only
+tap inventory before querying the fully qualified cask; an inventory failure is
+not treated as proof the tap is absent.
+A failed setup stays selectable for retry, and its row and error toast include
+the cause. Live completion also refreshes Apps' Homebrew inventory, including
+after partial failure. Dry-run previews setup but executes no install,
+conversion, sandbox override, or settings write and preserves observed readiness.
+Clicking Install with the checkbox unchecked skips setup entirely. Setup does
+not launch Valhalla or directly apply a desktop wallpaper.
+
+Wallpaper setup reuses Features' `setupActivity` checklist and `installProgress`
+pulsing timer, with its own fixed rows directly below the wallpaper controls.
+The provider reports five real phase boundaries: Install Valhalla, Install extra
+wallpapers, Prepare wallpaper images, Configure slideshow, and Verify setup.
+Each row becomes Working before its operation, then Complete only on success;
+failure or cancellation stops the dependent phases, leaving earlier outcomes
+visible. Preview marks the stages Preview without executing them. No percentage
+or per-package completion is inferred from opaque installer output. The busy
+button reads Installing…; completion, failure, and disposal stop the timer.
+Source registry names stay in this technical contract, not the user-facing
+wallpaper descriptions.
 
 ### Tap trust
 
@@ -635,17 +735,18 @@ insensitive. Writes bind `helperexec.Run` to
 `HelperPath=/usr/bin/chairlift-helper`.
 
 [`ubluehelper.SupportedCommands()`](../../internal/ubluehelper/ubluehelper.go)
-is the complete fourteen-command surface:
+is the complete fifteen-command surface:
 `channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
 `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
 `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
-`docker-disable`. Every command has exactly one action in
+`docker-disable`, `docker-update`. Every command has exactly one action in
 [`data/io.projectbluefin.chairlift.ublue.policy`](../../data/io.projectbluefin.chairlift.ublue.policy).
 The helper dispatcher rejects unhandled commands; parser acceptance alone is
 not evidence a command executes.
 
 `ubluehelper.Timeout` is the helper's per-command budget: 30 minutes for the
-image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin` (the same
+image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin`, and for
+the bottle-downloading `docker-enable` and `docker-update` (the same
 as OS staging's `bootc.DefaultTimeout`), 10 minutes for everything else. The
 GUI's `ublue.ImageSwitchContext` and `ublue.DefaultContext` add a five-minute
 `AuthenticationAllowance`, because the caller's clock also runs during the
@@ -683,7 +784,10 @@ invocation records intent before dispatch, independent of dry-run and the
 `would_run` argv but starts no helper and emits no outcome. Live dispatch adds
 a separate outcome record: `succeeded`, `refused`, `failed`, `timed-out` or
 `cancelled`. Exit 126 and exit 127 without `Error accessing` classify as
-authentication refusal; an inaccessible helper at exit 127 is failure.
+authentication refusal; an inaccessible helper at exit 127 is failure. This
+journal category is not the UI cancellation classifier: exit 127 with "Not
+authorized" remains a Failed setup stage. Only exit 126 or "Request dismissed"
+denotes a dismissed PolicyKit prompt and a Canceled stage.
 
 `cmd/chairlift-helper` emits a JSON argv marker before each derived root
 command. The executor strips those markers from human-readable output and
@@ -758,7 +862,7 @@ The coordinator runs optional post-update maintenance only after live completed
 source work with no failed/pending updates and with the user's
 `MaintenanceAfterUpdates` preference enabled. While it runs, `Snapshot.Maintaining`
 keeps the phase `PhaseUpdating` with no action, so the panel shows the cleanup
-step and the progress bar instead of "System is up to date" before cleanup
+step and the progress bar instead of "Up to date · checked at …" before cleanup
 (which may prompt for a password) has finished. Manual cleanup presents every
 step through `cleanupview`; reclaimed bytes require two successful readings
 and the minimum reportable difference. Preview never reports measured savings.
@@ -780,23 +884,67 @@ surface is not permission to make the fixed provider helpers configurable.
 ## Developer workstation and gaming components
 
 [`internal/devtools`](../../internal/devtools/devtools.go) owns WSL backends
-and Docker CLI setup under `features_page.dx_group`. The developer-access switch
-does not install editors or switch to a different OS image (editors and IDEs
-are installed via Bazaar or the Apps page). A confirmed Developer Mode enable
+and the GUI side of system Docker under `features_page.dx_group`, plus optional
+native VS Code setup. [`internal/dockerbrew`](../../internal/dockerbrew/) owns
+the daemon runtime the fixed helper installs.
+[`internal/devsetup`](../../internal/devsetup/setup.go) owns the widget-free
+ordered run and its stage outcomes. `PostStages` selects eligible post-promotion
+work from a `PostOptions` snapshot; the view supplies execution callbacks.
+`onDeveloperToggled` and the WSL/Docker handler share `developerGate`, covering
+promotion, child setup, and configured post-enable work in one worker rather
+than nesting switch handlers.
+When Developer Mode is off, child enable first calls the existing
+`ublue.SetDeveloperMode` fixed `dx-enable` helper. Authentication failure or
+cancellation aborts the child. Only successful live promotion confirms the
+parent; a later child or optional-install failure never revokes it. Child
+disable never demotes the parent, and preview preserves all observed switches.
+Retries retain successful optional stages rather than repeating installs.
+
+The shared post-promotion path opens one developer documentation page and
 installs the Dev Container CLI (`devcontainer`) when Homebrew is available.
-`startDeveloperDevcontainerSetup` runs off the GTK thread behind its own action
-gate, so repeated enables do not overlap installs. Failure reports only the
-install failure and preserves developer access. Preview reaches Homebrew's
-existing dry-run boundary and leaves the Apps inventory unchanged; only live
-success refreshes it.
+Pulp, feed staging, and the developer app collection retain their opt-ins and
+independent outcomes; editor selection/installation uses native Development Apps
+rows in Developer Mode: `ublue-os` Homebrew Visual Studio Code, VSCodium, and
+JetBrains Toolbox (no personal taps), system FlatPark Cursor and Antigravity,
+and system Flathub Zed. Sublime Text is deliberately excluded for now by user
+approval; the current catalog has six entries. Native VS Code configuration is
+a separate optional Docker-enable step.
+No OS image switch is involved. The run captures config on the
+GTK main thread, does external work off-thread, and marshals widget changes
+back through `sgtk.RunOnMainThread`. Failed or previewed work leaves the action
+retryable and never invents a live installation or clears known inventories.
+
+Gaming Mode leads Features. The **Setup activity** checklist below it has
+bounded, reusable stage rows and a pulsing timer independent of provider output. Stage outcomes
+distinguish complete, failed, canceled, preview, and awaiting-new-login work;
+there is no estimated percentage. Awaiting login is not readiness or a generic
+failure and does not offer Retry just to repeat the same permission grant.
+Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
+expanders matching Apps collections. Header activation expands the package
+disclosure; a separate suffix switch runs the action, with no
+`SetActivatableWidget` binding to that switch. Developer Mode also contains
+independent Monospace Fonts collection controls. WSL disclosure shares
+`devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
+the daemon formulae as **Homebrew, installed for the whole computer** and the
+CLI formulae as user-scope Homebrew formulae, not download progress.
+Gaming uses `gaming.Components`. Developer Mode discloses
+its Dev Container CLI and enabled
+follow-ons, subject to the same capability/config gates as execution. An opaque
+Homebrew bundle remains one operation: its static package disclosure is not a
+live per-package completion stream. Signals and rows are built once, not per
+refresh.
 
 `dx_group.wsl_backend` defaults to **nsl**, with **Lima** as an administrator
 option and an in-session backend chooser. The first observation retains an
 existing Lima Ubuntu machine when no ChairLift nsl machine exists; it does not
 persist the chooser selection or silently migrate data. nsl requires Linux amd64;
 Lima supports Linux amd64 and arm64. Both require actual invoking-session
-`/dev/kvm` access; the fixed `kvm-enable` grant requires a new login before
-setup continues. nsl installs the `frostyard/tap/nsl` cask and runs `nsl doctor`.
+`/dev/kvm` access; nsl additionally requires the account's `kvm` group
+membership in the account database (as nsl's own check reads it), even when the
+device is writable. The fixed `kvm-enable` grant requires a new login before
+setup continues only when `/dev/kvm` was not accessible; a membership-only grant
+continues setup at once. nsl installs the
+`frostyard/tap/nsl` cask and runs `nsl doctor`.
 WSL Mode's nsl machine is `ubuntu`, or the `debian` machine an older ChairLift
 created (`devtools.ParseNSLList` prefers `ubuntu`; other machine names are the
 user's and are ignored). It creates an Ubuntu 26.04 machine (`ubuntu`) only when
@@ -811,10 +959,171 @@ enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM
 alone is not shell readiness.
 
-Docker readiness needs an accessible local socket answering `/_ping`, not
-installed tools; fixed helper words own the daemon lifecycle and invoking
-account's access. View mutations share `developerGate` and render post-action
-observations instead of assuming the requested state.
+**System Docker from verified Homebrew bottles.**
+System Docker matches Bluefin DX: a rootful daemon behind `docker.socket`,
+`docker` group membership, and a CLI with buildx and compose. Its packages
+come from Homebrew, but root never executes, loads, or copies anything from the
+user-owned `/home/linuxbrew/.linuxbrew` prefix
+([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
+
+Enable runs in this order, after the Developer Mode prerequisite above:
+
+1. **Daemon (fixed helper).** `devtools.SetDocker` calls `ublue.SetDocker`,
+   that is `pkexec /usr/bin/chairlift-helper docker-enable`. No account,
+   unit, formula, URL, or path crosses the boundary.
+2. **Rootless cleanup (user scope), only after the helper succeeds.**
+   v26.10.10 shipped rootless Docker. A user
+   `~/.config/systemd/user/docker.service` whose `ExecStart` runs
+   `dockerd-rootless.sh` is stopped with `systemctl --user disable --now
+   docker.service`. A `docker context show` of `rootless` is switched back with
+   `docker context use default`. Other user units and contexts are left alone.
+   A dismissed prompt or failed install therefore leaves a working rootless
+   daemon untouched; it uses its own socket, so the brief overlap is harmless.
+3. **CLI (user scope).** With Homebrew available, `homebrew.Install` installs
+   `dockerbrew.CLIFormulae` (`docker`, `docker-buildx`, `docker-compose`).
+   `~/.docker/cli-plugins/docker-buildx` and `docker-compose` are linked to
+   Homebrew's `lib/docker/cli-plugins` only when absent or already pointing
+   into Homebrew; a user's own file is never replaced. This runs after the
+   helper, so a CLI failure is reported while the daemon still works.
+
+`docker-enable` has two branches:
+
+- **Image units.** When `/usr/lib/systemd/system/docker.service` exists, as on
+  Bluefin DX, the image's Docker wins. The helper removes only the units it
+  wrote earlier (`dockerbrew.RemoveManagedUnits`) and reloads systemd if any
+  were removed. It then grants the invoking account `docker` membership and
+  runs `systemctl enable --now docker.socket docker.service`.
+- **Homebrew bottles.** Otherwise `dockerbrew.Install` installs the daemon:
+  1. It fetches `https://formulae.brew.sh/api/formula.jws.json` and verifies
+     its PS512 JWS with the `homebrew-1` key compiled into the package.
+  2. `SelectBottles` takes the fixed `dockerbrew.Formulae` set (`docker-engine`,
+     `containerd`, `runc`, `tini`, `libpathrs`, `libseccomp`) for
+     `x86_64_linux` or `arm64_linux`. The dependency closure must equal that set
+     plus system `nftables`. Each URL must be the GHCR blob of its indexed
+     SHA-256.
+  3. `Client.Bottle` downloads each blob anonymously and rejects a SHA-256
+     mismatch.
+  4. `Extract` writes only mapped regular files: the daemon, proxy,
+     containerd, its shim, `runc`, `tini-static` as `docker-init`, and the two
+     libraries. It refuses traversal, absolute names, and devices, and never
+     follows symlink members.
+  5. `PatchELF` replaces the `@@HOMEBREW_PREFIX@@` interpreter with the system
+     loader and every RPATH/RUNPATH with `$ORIGIN/../lib`. Static binaries are
+     left alone.
+  6. Under a lock, `Install` smoke-runs `runc --version` and
+     `dockerd --version`. It writes `manifest.json`, renames the set to
+     `/var/lib/chairlift/docker/<set-id>`, swaps the `current` link
+     atomically, and prunes older sets (best-effort once the swap is done).
+     Before the swap it writes a root-owned `.restart-pending` marker; while
+     it exists, a rerun over the same set still reports a change, and the
+     helper clears it only after `try-restart` succeeds. A reinstall of the
+     same set moves the old directory aside for pruning, and a `current` whose
+     target is missing reads as not installed. It refuses an install root or
+     `current` that is a foreign symlink or not root-owned. Bottle downloads
+     are capped at 1 GiB.
+
+  The helper then copies an image-only `docker` group into `/etc/group` or
+  creates it with `groupadd -f -r docker`. It writes `docker.service` and
+  `docker.socket` to `/etc/systemd/system` (`dockerbrew.WriteUnits`); both
+  `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
+  downloading, so an unmanaged unit is refused before any fetch. They
+  are moby's upstream units, with `ExecStart` and `PATH` pointing at
+  `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
+  existing file without that marker is never overwritten. Next it runs
+  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  equivalence rule `semanage fcontext -a -e /usr/libexec/docker
+  /var/lib/chairlift/docker` if missing and runs `restorecon -RF
+  /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
+  an enforcing host without both tools is refused before any download. When the runtime changed and the
+  daemon on `/run/docker.sock` reports no containers running, it runs
+  `systemctl try-restart docker.service`, which does nothing to a stopped
+  service. If containers are running, or the query fails, it prints
+  `docker runtime restart deferred: containers are running` instead; the
+  `.restart-pending` marker stays, so the next enable or update retries the
+  restart and a reboot starts the new runtime. Finally it adds the `PKEXEC_UID` account, enables `docker.socket`,
+  and starts `docker.service`. It prints the manifest as
+  `chairlift-helper: docker runtime <json>`.
+
+`docker-update` prints `no Homebrew Docker runtime to update` and exits 0 when
+image units exist or no manifest does. Otherwise it repeats the verified
+install, rewrites the managed units, reloads systemd when either changed, and
+when the bottle set changed relabels the new set under the same SELinux
+condition before restarting an active daemon.
+`docker-disable` runs `systemctl disable --now docker.socket docker.service`
+and keeps the runtime, container data, and group membership. Every command's
+`--dry-run` is offline: it prints the index it would fetch, the formula set,
+the unit paths, and each `groupadd`, `usermod`, `restorecon`, and
+`systemctl` line it would run. Both `dx-enable` and `docker-enable` can ask
+for authentication in the same run. A refused parent prerequisite starts no
+Docker work, and a later refusal never revokes access already granted.
+
+`DockerStatus` reads `LoadState` and `ActiveState` for both system units without
+escalation, then pings `/var/run/docker.sock`; only HTTP 200 `OK` is Ready.
+`DOCKER_HOST` and `XDG_RUNTIME_DIR` do not redirect that probe. `not-found`
+units mean Docker is not installed yet (`Available`, not `Installed`), and
+without image units enabling also requires `docker-update` (`pageview.DockerCanEnable`),
+so an older image helper stays insensitive (`pageview.DockerHelperOutdated`)
+rather than failing after authentication. Masked or erroring units stay unavailable with an
+image/administrator explanation, but a known running unit remains stoppable
+with a supported disable action. A failed unit read or parse returns zero
+state and the original error. Once both reads succeeded, a failed socket probe
+keeps the observed `Active`/`Available`. The view preserves prior known state
+on unreadable observations rather than inventing off. A socket permission
+refusal sets `NeedsLogin` and wraps `ErrDockerNewLogin` only when the account
+database (`user.LookupGroup` and the account's group IDs) lists the account in
+`docker` but the session's `os.Getgroups` lacks it. That access needs a new
+login and is not Ready. Otherwise the refusal sets `NoAccess`: the daemon runs,
+but this account is not a member. The switch reads on whenever the daemon is
+`Active` and not `NoAccess`, so an unresponsive daemon stays on and stoppable. For `NoAccess` it reads off with the subtitle "Docker is running,
+but your account can't use it yet. Turn this on to get access." Turning it on
+runs `docker-enable`. Live disable verifies that both units stopped, so socket
+activation cannot silently restart the daemon. A dry-run disable ignores ping
+errors once the units were read, makes no changes, and preserves switches.
+The same `developerGate` covers the whole run. Widget observations are
+rendered on the GTK main thread.
+
+Docker enable orders system activation, readiness verification, then optional
+native Microsoft VS Code setup and independent post-promotion opt-ins. Awaiting
+login is an explicit verification outcome; optional editor failure is reported
+separately and never reverses Docker/developer access. Retry for a failed optional
+stage observes existing active Docker instead of replaying a privileged enable.
+[`devtools.SetupVSCode`](../../internal/devtools/vscode.go) requires native `code`
+but does not install an editor. It exclusively creates absent
+`~/.config/Code/User/settings.json` with Bluefin DX defaults (custom title bar,
+Cascadia Code font stack, and editor self-updates off). Existing settings,
+including JSONC, symlinks, and files created concurrently, are left intact.
+The extensions are `ms-vscode-remote.remote-containers`,
+`ms-vscode-remote.remote-ssh`, and `ms-azuretools.vscode-containers`.
+
+The upstream marker is `${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_versioning.json}`
+with `.version.user.vscode == "1"`. Upstream can write that marker before hook
+completion, so ChairLift checks installed extension IDs before honoring it and
+installs any missing IDs. It preserves unrelated marker fields and writes version
+1 atomically only after successful setup; partial failures remain retryable.
+Preview writes no settings or marker and starts no editor CLI. Missing native
+`code` returns `devsetup.ErrSkipped`, so the step reads as skipped without an
+error toast. Malformed marker data or an extension failure is an optional
+setup failure, not a false Docker or Developer Mode failure.
+
+`make e2e-docker` selects `TestIntegrationDockerSystem` in
+[`docker_system_test.go`](../../test/e2e/docker_system_test.go). It runs the
+pinned Dakota image unchanged, with no Docker binaries, units, or `docker`
+group, so the real helper takes the Homebrew branch and downloads Homebrew's
+signed index and bottles over the network. The fixture also plants a
+v26.10.10-style rootless user unit. It uses private native managers in
+rootless Podman's namespace and no host socket or bus. Its live assertions send
+EOF to a real prerequisite authentication prompt, preserving the actual journal
+outcome and exit code in the summary. Exit 127 with "Not authorized" proves
+refusal/Failed, not live cancellation; Canceled is asserted only for exit 126
+or "Request dismissed". The gate also covers ordered authentication, the
+helper-reported argv, a root-owned runtime whose manifest names the six
+formulae and whose ELF loader fields never reach the Homebrew prefix,
+marker-bearing units, the retired rootless unit, awaiting login, a real `sg`
+new-group session's HTTP 200 socket readiness from `current/bin/dockerd`, stop
+preserving the runtime/data/groups and Developer Mode, and a no-op
+`docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
+step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
+establish live readiness.
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
 stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing
@@ -925,8 +1234,12 @@ dedicated profile under `$XDG_DATA_HOME/chairlift/troubleshooting`;
 `Profile.Write` rewrites its `config.yaml` (`RenderConfig`: `linux-tools`
 with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the
 `bluefin-knowledge` search enabled, every other extension disabled) and
-`.goosehints` atomically before every launch, and links the user's
+`.goosehints` atomically before every launch, sets missing or Goose-default
+`focusWindow` and `quickLauncher` entries in Goose Desktop's `settings.json`
+to null while preserving different choices and other settings, and links the user's
 `mimeapps.list` and `dconf` into the desktop app's own `XDG_CONFIG_HOME`.
+Without that, GNOME Wayland's GlobalShortcuts portal opens a keyboard-shortcut
+approval dialog for Goose's default global shortcuts when Goose starts.
 
 [`agentmode.ObserveLive`](../../internal/agentmode/readiness.go) evaluates,
 in order: supported architecture, `linux-mcp-server` and `goose-desktop`
@@ -981,7 +1294,7 @@ and dry-run launches nothing.
 
 Printer applications, unlike Agent Mode, are rootless Podman quadlets.
 [`printer-applications.md`](printer-applications.md) is the detailed owner
-for the three shipped families, their auto-updating `:stable` images, the
+for the three shipped families, their signature-verified digest pins, the
 loopback-only network boundary
 ([ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)),
 artifacts and readiness model. `RenderUnit` must never use `Network=host` or
@@ -1112,3 +1425,31 @@ make e2e-atspi
 For documentation reconciliation, compare the linked live owners and follow
 [documentation consistency](../documentation-consistency.md); source and
 configuration win over historical plans or frozen external parity lists.
+
+## Collection package descriptions
+
+Apps renders Brewfile entries immediately. On first expansion of a collection,
+`homebrew.DescribeBundleItems` batches formula and cask metadata through
+`brew info --json=v2`, sharing the read timeout across both commands. It does
+not install packages or grant tap trust, and `brew info` never auto-taps: names
+in untapped taps fail as unavailable rather than cloning the tap. Homebrew may
+fetch metadata; an offline or failed query leaves package names and types
+visible with “Description unavailable”. Because Homebrew emits no JSON when any
+one name in a batch is unresolvable, a failed batch is retried one name at a
+time under the same deadline so the resolvable entries keep their descriptions.
+The row owns cancellation and rejects publication after destruction.
+
+Full identifiers and formula aliases match the returned metadata; formula and
+cask namespaces remain separate. Option-like tokens, URLs and Ruby paths are
+excluded from metadata commands.
+
+Flatpak entries take their summary from `flatpak.DescribeApps`, which runs
+`flatpak search --columns=application,description <id>` once per application
+ID under the same deadline. `flatpak search` reads only the remotes' cached
+AppStream data, so it works offline and never refreshes, installs or adds a
+remote. It matches substrings, so only the row whose application ID equals the
+Brewfile entry is used. Entries that are not plain reverse-DNS application IDs
+are never passed to flatpak. A missing `flatpak`, an uncached remote or a
+failed search shows “Description unavailable” without affecting the Homebrew
+descriptions. App Store and VS Code entries show their package type only until
+their own metadata providers are implemented.

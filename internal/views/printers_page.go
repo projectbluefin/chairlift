@@ -14,6 +14,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
 // printerRow is one driver family's switch row on the Features page. Rows
@@ -29,10 +30,14 @@ type printerRow struct {
 	title  string
 	row    *adw.ActionRow
 	toggle *guardedSwitch
+	admin  *gtk.Button
 	gate   actionstate.Gate
 	// state is the last state the row rendered; a failed action and a
 	// dry-run preview both restore it.
 	state printerapp.State
+	// unverified marks a unit written before signatures were checked; the
+	// subtitle asks the person to turn it off and on again (ADR-0023).
+	unverified bool
 }
 
 // printerActionTimeout bounds one enable or disable end to end. A first
@@ -67,6 +72,7 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 		facts := printerapp.Observe(app, true)
 		state := printerapp.Resolve(facts)
 		pr := &printerRow{app: app, title: pageview.PrinterFamilyRow(family)}
+		pr.unverified = facts.UnitPresent && printerapp.InstalledBeforeVerification(app)
 		pr.row = adw.NewActionRow()
 		pr.row.SetTitle(pr.title)
 		// guardedSwitch, not a bare gtk.Switch: showing the machine's real
@@ -76,7 +82,17 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 		pr.toggle = newGuardedSwitch(state.On(), func(on bool) {
 			uh.onPrinterAppToggled(pr, on)
 		})
+		// The row's own web page, as a button: the subtitle names the loopback
+		// address, and nobody should have to retype it (#671). Built beside
+		// the switch at page-build time, never in a refresh path, and it opens
+		// only the app's own published port (printerapp.WebAdminURL).
+		pr.admin = gtk.NewButtonWithLabel(pageview.PrinterAdminButtonLabel())
+		pr.admin.SetValign(gtk.AlignCenterValue)
+		describeFor(pr.admin, pr.title)
+		adminClicked := func(_ gtk.Button) { uh.openURL(pr.app.WebAdminURL()) }
+		pr.admin.ConnectClicked(&adminClicked)
 		uh.showPrinterAppState(pr, state)
+		pr.row.AddSuffix(&pr.admin.Widget)
 		pr.row.AddSuffix(&pr.toggle.widget.Widget)
 		pr.row.SetActivatableWidget(&pr.toggle.widget.Widget)
 		group.Add(&pr.row.Widget)
@@ -99,7 +115,19 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 // showPrinterAppState renders one state on a row. Main thread only.
 func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) {
 	pr.state = state
-	pr.row.SetSubtitle(pageview.PrinterAppSubtitle(state, pr.app.Port()))
+	subtitle := pageview.PrinterAppSubtitle(state, pr.app.Port())
+	if pr.unverified && state.On() {
+		subtitle = pageview.PrinterAppUnverifiedSubtitle(subtitle)
+	}
+	pr.row.SetSubtitle(subtitle)
+
+	// The web page exists once the family is installed, and answers once its
+	// service is observed running: the button appears with the family and
+	// stays insensitive through a start or a failure rather than opening a
+	// page that would refuse the connection.
+	pr.admin.SetVisible(state.On())
+	pr.admin.SetSensitive(state == printerapp.StateReady)
+	pr.admin.SetTooltipText(pageview.PrinterAdminButtonTooltip(state))
 }
 
 // probePrinterApp asks systemd and diagnostics whether an installed unit's
@@ -147,6 +175,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 			err = printerapp.Disable(ctx, pr.app)
 		}
 		facts := printerapp.Observe(pr.app, true)
+		unverified := facts.UnitPresent && printerapp.InstalledBeforeVerification(pr.app)
 		if err == nil && !dryRun && facts.UnitPresent {
 			active, probeErr := printerapp.WaitSettled(ctx, pr.app, printerSettleWait)
 			if probeErr != nil {
@@ -163,6 +192,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 
 		sgtk.RunOnMainThread(func() {
 			pr.toggle.widget.SetSensitive(true)
+			pr.unverified = unverified
 
 			if err != nil {
 				// The error names commands and unit files; it is logged,
@@ -170,7 +200,7 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 				log.Printf("views: printer application %s toggle to %v failed: %v", pr.app.Family.ID, enabled, err)
 				pr.toggle.set(!enabled)
 				uh.showPrinterAppState(pr, pr.state)
-				uh.toastAdder.ShowErrorToast(pageview.PrinterAppFailureToast(enabled, pr.title))
+				uh.toastAdder.ShowErrorToast(pageview.PrinterAppFailureToast(enabled, pr.title, err))
 				return
 			}
 

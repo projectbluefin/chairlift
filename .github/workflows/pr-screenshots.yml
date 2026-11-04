@@ -149,6 +149,9 @@ jobs:
         with:
           app-id: ${{ secrets.MERGERAPTOR_APP_ID }}
           private-key: ${{ secrets.MERGERAPTOR_PRIVATE_KEY }}
+          # Only what the push and the comment below need; never the app's full set.
+          permission-contents: write
+          permission-pull-requests: write
 
       # The branch, not the captured commit: the push must fast-forward it.
       # Nothing below runs code from the checkout.

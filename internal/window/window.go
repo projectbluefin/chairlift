@@ -176,6 +176,7 @@ func (w *Window) buildUI() {
 		updateproviders.NewFlatpak(),
 		updateproviders.NewHomebrew(),
 		updateproviders.NewSystemComponents(),
+		updateproviders.NewPrinterApps(),
 		updateproviders.NewOperatingSystem(),
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
@@ -200,6 +201,7 @@ func (w *Window) buildUI() {
 				updateflow.Applications:     sourcePolicy("updates_page", "flatpak_updates_group"),
 				updateflow.DeveloperTools:   sourcePolicy("updates_page", "brew_updates_group"),
 				updateflow.SystemComponents: sourcePolicy("features_page", "features_group"),
+				updateflow.PrinterDrivers:   sourcePolicy("features_page", "printers_group"),
 			}
 		},
 		w,
@@ -213,6 +215,8 @@ func (w *Window) buildUI() {
 	// transition named, so neither callback derives a route of its own.
 	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
 	w.views.SetCloseRecoveryDetail(w.navigateBack)
+	w.views.SetOpenDeveloperDetail(w.showDeveloperDetail)
+	w.views.SetCloseDeveloperDetail(w.navigateBack)
 	log.Printf("window: views built in %s", time.Since(start))
 
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
@@ -230,7 +234,7 @@ func (w *Window) buildUI() {
 	w.bindContentArea()
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"Welcome to",
-		"Your system is set up and ready to go. Customize your developer tools, set up troubleshooting, and change other system defaults.",
+		"Your system is set up and ready to go. Continue through the next few pages to customize your developer tools, set up automated troubleshooting, and change other system defaults.",
 		"Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"You Are Ready",
@@ -368,6 +372,10 @@ func (w *Window) bindContentArea() {
 		w.pages["recovery"] = recovery
 		w.contentStack.AddNamed(&recovery.Widget, "recovery")
 	}
+	if developer := w.views.DeveloperPage(); developer != nil {
+		w.pages["developer"] = developer
+		w.contentStack.AddNamed(&developer.Widget, "developer")
+	}
 
 	// The content page takes its title from the first nav item.
 	if len(items) > 0 {
@@ -490,15 +498,21 @@ func (w *Window) setupActions() {
 // selection, and the only one that shows a detail: a detail keeps its
 // ancestor's row selected and records the primary its Back control returns to.
 func (w *Window) navigateToPage(pageName string) {
-	if w.firstRunActive && (w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) || pageName != w.firstRunSteps[w.firstRunIndex]) {
-		return
-	}
 	transition, ok := navigation.Resolve(pageName, w.navRoutes, func(name string) bool {
 		_, exists := w.pages[name]
 		return exists
 	})
 	if !ok {
 		return
+	}
+	if w.firstRunActive {
+		if w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) {
+			return
+		}
+		step := w.firstRunSteps[w.firstRunIndex]
+		if transition.Name != step && (!transition.Detail || transition.Back != step) {
+			return
+		}
 	}
 
 	w.shownRow = transition.SelectedIndex
@@ -517,6 +531,12 @@ func (w *Window) navigateToPage(pageName string) {
 // it and the page was built; otherwise it lands on Maintenance itself.
 func (w *Window) showRecoveryDetail() {
 	w.navigateToPage("recovery")
+}
+
+// showDeveloperDetail opens the Developer Mode detail from Features through the
+// canonical transition.
+func (w *Window) showDeveloperDetail() {
+	w.navigateToPage("developer")
 }
 
 // navigateBack returns from the shown detail to the primary its transition
@@ -709,6 +729,8 @@ func (w *Window) PresentFirstRun() {
 	}
 	w.firstRunIndex = -1
 	w.firstRunActive = true
+	w.views.BeginBluefinCLISetup()
+	w.views.EnableHardware()
 	w.sidebarList.SetSensitive(false)
 	// The collapsed split view's native Back goes to the sidebar, not the
 	// previous setup step. Disable that route while the wizard owns navigation.
@@ -726,6 +748,12 @@ func (w *Window) PresentFirstRun() {
 // launch intent and the sidebar row navigate the same surface.
 func (w *Window) NavigateToAgentsPage() {
 	w.navigateToPage(navigation.AgentModeRoute)
+}
+
+// NavigateToDXModePage opens the Developer Mode detail under Features.
+// Both cold-start and running-instance --dx-mode requests use the same route.
+func (w *Window) NavigateToDXModePage() {
+	w.navigateToPage(navigation.DXModeRoute)
 }
 
 // ShowMissingPrerequisite shows an error toast naming the prerequisite preventing
@@ -762,6 +790,23 @@ func (w *Window) bindFirstRunFooter() {
 		}
 		if w.firstRunIndex == len(w.firstRunSteps) {
 			w.finishFirstRun(true)
+			return
+		}
+		if w.firstRunIndex >= 0 && w.firstRunIndex < len(w.firstRunSteps) && w.firstRunSteps[w.firstRunIndex] == "features" {
+			index := w.firstRunIndex
+			w.firstRunNext.SetSensitive(false)
+			w.firstRunBack.SetSensitive(false)
+			w.views.ApplyBluefinCLISetup(func(ok bool) {
+				if !w.firstRunActive || w.firstRunIndex != index {
+					return
+				}
+				w.firstRunNext.SetSensitive(true)
+				w.firstRunBack.SetSensitive(true)
+				if ok {
+					w.firstRunIndex++
+					w.showFirstRunStep()
+				}
+			})
 			return
 		}
 		w.firstRunIndex++
@@ -803,6 +848,7 @@ func (w *Window) showFirstRunStep() {
 		w.firstRunContent.SetVisibleChildName("pages")
 	}
 	w.firstRunBack.SetSensitive(w.firstRunIndex >= 0)
+	w.firstRunNext.SetSensitive(true)
 	if w.firstRunIndex == len(w.firstRunSteps) {
 		w.firstRunNext.SetLabel("Finish")
 	} else {
@@ -814,6 +860,7 @@ func (w *Window) finishFirstRun(completed bool) {
 	if !w.firstRunActive {
 		return
 	}
+	w.views.EndBluefinCLISetup()
 	if completed {
 		w.firstRunActive = false
 		w.firstRunFooter.SetRevealBottomBars(false)

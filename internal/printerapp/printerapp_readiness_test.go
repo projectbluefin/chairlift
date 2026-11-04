@@ -3,6 +3,8 @@ package printerapp
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -150,5 +152,38 @@ func TestResolveNeverReportsReadyFromUnitPresenceAlone(t *testing.T) {
 				t.Errorf("Resolve(%+v).On() = %v, want %v", tc.facts, got.On(), tc.on)
 			}
 		})
+	}
+}
+
+// A unit written before signatures were checked still carries the registry
+// auto-update label; one written by Enable today never does (#582).
+func TestLegacyUnitRecognisesOnlyAutoUpdatingUnits(t *testing.T) {
+	dir, _ := stubUnitDir(t)
+	app := Select(Families()[0])
+
+	if InstalledBeforeVerification(app) {
+		t.Fatal("absent unit reported as installed before verification")
+	}
+
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("Enable: %v", err)
+	}
+	if InstalledBeforeVerification(app) {
+		t.Fatal("verified unit reported as installed before verification")
+	}
+
+	legacy := strings.Replace(RenderUnit(app), "[Container]\n", "[Container]\nAutoUpdate = registry\n", 1)
+	if err := os.WriteFile(filepath.Join(dir, app.UnitName()), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !InstalledBeforeVerification(app) {
+		t.Fatal("auto-updating unit not recognised as installed before verification")
+	}
+
+	if err := Enable(context.Background(), app); err != nil {
+		t.Fatalf("re-Enable: %v", err)
+	}
+	if InstalledBeforeVerification(app) {
+		t.Fatal("turning the family off and on again did not replace the auto-updating unit")
 	}
 }

@@ -103,10 +103,9 @@ func InstalledSource(source string) string {
 // Selectable reports whether ChairLift can install an entry of this kind on
 // its own.
 //
-// The App Store and VS Code Marketplace entries a Brewfile may carry are
-// installed by `brew bundle`, not by ChairLift's own per-item commands, so
-// they are never offered for selection: a checkbox that promised an
-// install ChairLift cannot perform would be worse than no checkbox.
+// App Store and VS Code Marketplace directives cannot be selected here.
+// A collection containing them uses per-manager installs, never the whole
+// Brewfile, so an unchecked directive cannot be installed implicitly.
 func Selectable(kind homebrew.BundleItemKind) bool {
 	switch kind {
 	case homebrew.BundleItemBrew, homebrew.BundleItemCask, homebrew.BundleItemFlatpak:
@@ -129,6 +128,9 @@ type EntryState struct {
 	Source string
 	// Checked reports whether the entry's checkbox is checked.
 	Checked bool
+	// DescriptionLoaded distinguishes missing metadata from a lookup not yet
+	// requested; metadata loads only after expanding the collection.
+	DescriptionLoaded bool
 }
 
 // EntryPresentation is one entry row's text and state.
@@ -164,6 +166,11 @@ func PresentEntry(state EntryState) EntryPresentation {
 	if state.Installed {
 		label = InstalledSource(source)
 	}
+	if state.DescriptionLoaded {
+		if description := EntryDescription(state.Item); description != "" {
+			label += " · " + description
+		}
+	}
 	return EntryPresentation{
 		Name:           state.Item.Name,
 		Label:          label,
@@ -171,6 +178,12 @@ func PresentEntry(state EntryState) EntryPresentation {
 		Selectable:     Selectable(state.Item.Kind),
 		Installed:      state.Installed,
 	}
+}
+
+// RefreshChecked preserves deliberate selections but releases a checkbox
+// auto-checked by an earlier installed observation when that package goes away.
+func RefreshChecked(checked, wasInstalled, installed bool) bool {
+	return installed || (checked && !wasInstalled)
 }
 
 // EntryAccessibleName names an entry's checkbox for a screen reader. Every
@@ -207,10 +220,15 @@ func SelectAllEnabled(selections []Selection) bool {
 	return false
 }
 
-// AllSelected reports whether every selectable entry of a collection is
-// checked.
+// AllSelected reports whether every entry can be selected and is checked.
+// Unsupported directives must not become implicit whole-Brewfile installs.
 func AllSelected(selections []Selection) bool {
-	return !SelectAllEnabled(selections)
+	for _, selection := range selections {
+		if !selection.Selectable || !selection.Checked {
+			return false
+		}
+	}
+	return len(selections) > 0
 }
 
 // DescribeEntries returns the collection row's subtitle for the number of
@@ -254,11 +272,10 @@ func (p InstallPlan) Empty() bool {
 
 // PlanInstall derives what a collection's selection installs.
 //
-// A collection whose every selectable entry is checked installs as a whole
-// through `brew bundle`, which is what keeps the collection's own tap and
-// trust declarations in force. A partially selected collection installs
-// the checked entries one by one, batched per package manager, because
-// `brew bundle` can only install a whole file.
+// A collection whose every entry is selectable and checked installs as a
+// whole through `brew bundle`, preserving its tap and trust declarations.
+// Otherwise only checked, supported entries install, batched per manager;
+// unsupported App Store/VS Code directives never run implicitly.
 //
 // An entry that is already on the system is never part of the plan: its
 // checkbox is disabled, and installing it again would only repeat work.
@@ -275,10 +292,7 @@ func PlanInstall(entries []EntryState, memberPaths []string) InstallPlan {
 	if len(pending) == 0 {
 		return InstallPlan{}
 	}
-	if AllSelected(selections) {
-		if len(memberPaths) == 0 {
-			return InstallPlan{}
-		}
+	if AllSelected(selections) && len(memberPaths) > 0 {
 		return InstallPlan{
 			BundlePaths: append([]string(nil), memberPaths...),
 			Pending:     len(pending),
@@ -329,7 +343,7 @@ func InstallToast(outcome InstallOutcome) string {
 	if len(outcome.Failed) > 0 {
 		text = fmt.Sprintf("Couldn't install all selected apps (%s). Try again.", strings.Join(outcome.Failed, ", "))
 	} else {
-		text = fmt.Sprintf("Installed %d apps and tools.", outcome.Installed)
+		text = fmt.Sprintf("Installed %d %s.", outcome.Installed, plural(outcome.Installed, "app or tool", "apps and tools"))
 	}
 	if notice := TrustNotice(outcome.TrustedPackages, outcome.TrustedTaps); notice != "" {
 		text += " " + notice
@@ -341,12 +355,19 @@ func InstallToast(outcome InstallOutcome) string {
 func TrustNotice(packages, taps int) string {
 	switch {
 	case packages > 0 && taps > 0:
-		return fmt.Sprintf("Trusted %d packages and %d taps to install them.", packages, taps)
+		return fmt.Sprintf("Trusted %d %s and %d %s to install the selected apps.", packages, plural(packages, "package", "packages"), taps, plural(taps, "tap", "taps"))
 	case packages > 0:
-		return fmt.Sprintf("Trusted %d packages to install them.", packages)
+		return fmt.Sprintf("Trusted %d %s to install %s.", packages, plural(packages, "package", "packages"), plural(packages, "it", "them"))
 	case taps > 0:
-		return fmt.Sprintf("Trusted %d taps to install them.", taps)
+		return fmt.Sprintf("Trusted %d %s to install the selected apps.", taps, plural(taps, "tap", "taps"))
 	default:
 		return ""
 	}
+}
+
+func plural(count int, singular, multiple string) string {
+	if count == 1 {
+		return singular
+	}
+	return multiple
 }

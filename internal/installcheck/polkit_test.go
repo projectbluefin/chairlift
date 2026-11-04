@@ -170,12 +170,14 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		ubluehelper.CommandAutoEnable,
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandGamingSwitch,
 		ubluehelper.CommandFactoryReset,
 		ubluehelper.CommandPin,
 		ubluehelper.CommandUnpin,
 		ubluehelper.CommandKVMEnable,
 		ubluehelper.CommandDockerEnable,
 		ubluehelper.CommandDockerDisable,
+		ubluehelper.CommandDockerUpdate,
 	}
 	if !reflect.DeepEqual(ublueCommands, expectedUblueCommands) {
 		t.Fatalf("ubluehelper.SupportedCommands() = %v, want %v", ublueCommands, expectedUblueCommands)
@@ -239,6 +241,13 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Argv1:       ubluehelper.CommandDriverSwitch,
 		},
 		{
+			ID:          "io.projectbluefin.chairlift.ublue.gaming-switch",
+			Description: "Switch the system gaming mode image",
+			Message:     "Authentication is required to switch the system gaming mode image",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandGamingSwitch,
+		},
+		{
 			ID:          "io.projectbluefin.chairlift.ublue.factory-reset",
 			Description: "Factory reset the system",
 			Message:     "Authentication is required to factory reset the system",
@@ -268,8 +277,8 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		},
 		{
 			ID:          "io.projectbluefin.chairlift.ublue.docker-enable",
-			Description: "Enable the Docker daemon and account access",
-			Message:     "Authentication is required to enable the Docker daemon and account access",
+			Description: "Install Docker from verified Homebrew packages and enable it",
+			Message:     "Authentication is required to install Docker from verified Homebrew packages and enable it",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDockerEnable,
 		},
@@ -279,6 +288,13 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Message:     "Authentication is required to stop and disable the Docker daemon",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDockerDisable,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.docker-update",
+			Description: "Update Docker from verified Homebrew packages",
+			Message:     "Authentication is required to update Docker from verified Homebrew packages",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandDockerUpdate,
 		},
 	})
 

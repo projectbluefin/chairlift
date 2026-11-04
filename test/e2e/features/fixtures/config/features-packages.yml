@@ -1,0 +1,13 @@
+# Disclosures read the same local collection that Developer Mode would install.
+# Optional work remains live-success-only, even when it is visible in a preview.
+applications_page:
+  brew_bundles_group:
+    enabled: true
+    bundles_paths:
+      - bundles
+features_page:
+  dx_group:
+    enabled: true
+    install_pulp: true
+    stage_feeds: true
+    install_dev_apps: true

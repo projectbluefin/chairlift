@@ -87,8 +87,8 @@ func brewExecutable() string {
 	return "brew"
 }
 
-// WithBrewPath returns env with the directory of brew (an absolute
-// executable path) at the front of PATH, unless PATH already lists it.
+// WithBrewPath exposes the resolved Homebrew's bin and sbin to its children.
+// Existing entries are preserved; missing directories precede the inherited PATH.
 //
 // A direct launch — the desktop entry, or `chairlift` from a shell —
 // carries no Homebrew on $PATH, and brew's children inherit that: a cask's
@@ -102,6 +102,7 @@ func WithBrewPath(env []string, brew string) []string {
 		return env
 	}
 	dir := filepath.Dir(brew)
+	sbin := filepath.Join(filepath.Dir(dir), "sbin")
 	out := make([]string, 0, len(env)+1)
 	found := false
 	for _, kv := range env {
@@ -111,18 +112,27 @@ func WithBrewPath(env []string, brew string) []string {
 			continue
 		}
 		found = true
-		if slices.Contains(filepath.SplitList(value), dir) {
-			out = append(out, kv)
-			continue
+		paths := filepath.SplitList(value)
+		prefix := ""
+		if !slices.Contains(paths, dir) {
+			prefix = dir
 		}
-		if value == "" {
-			out = append(out, "PATH="+dir)
+		if !slices.Contains(paths, sbin) {
+			if prefix != "" {
+				prefix += string(filepath.ListSeparator)
+			}
+			prefix += sbin
+		}
+		if prefix == "" {
+			out = append(out, kv)
+		} else if value == "" {
+			out = append(out, "PATH="+prefix)
 		} else {
-			out = append(out, "PATH="+dir+string(filepath.ListSeparator)+value)
+			out = append(out, "PATH="+prefix+string(filepath.ListSeparator)+value)
 		}
 	}
 	if !found {
-		out = append(out, "PATH="+dir)
+		out = append(out, "PATH="+dir+string(filepath.ListSeparator)+sbin)
 	}
 	return out
 }

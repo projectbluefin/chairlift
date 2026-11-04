@@ -272,6 +272,64 @@ func TestPlanInstallSkipsTheKindsItCannotInstall(t *testing.T) {
 	}
 }
 
+func TestPlanInstallWithoutACompleteBrewfileUsesOnlySelectedEntries(t *testing.T) {
+	entries := []EntryState{{Item: homebrew.BundleItem{Name: "gh", Kind: homebrew.BundleItemBrew}, Checked: true}}
+	plan := PlanInstall(entries, nil)
+	if len(plan.BundlePaths) != 0 || len(plan.Formulae) != 1 || plan.Formulae[0] != "gh" {
+		t.Errorf("plan = %+v, want the selected formula without executing an incomplete Brewfile", plan)
+	}
+}
+
+func TestPlanInstallNeverRunsUncheckedUnsupportedDirectives(t *testing.T) {
+	for _, kind := range []homebrew.BundleItemKind{homebrew.BundleItemMas, homebrew.BundleItemVSCode} {
+		t.Run(string(kind), func(t *testing.T) {
+			entries := []EntryState{
+				{Item: homebrew.BundleItem{Name: "gh", Kind: homebrew.BundleItemBrew}, Checked: true},
+				{Item: homebrew.BundleItem{Name: "unsupported", Kind: kind}},
+			}
+			plan := PlanInstall(entries, []string{"/b/mixed.Brewfile"})
+			if len(plan.BundlePaths) != 0 || len(plan.Formulae) != 1 || plan.Formulae[0] != "gh" || plan.Pending != 1 {
+				t.Errorf("plan = %+v, want only the selected formula, never the whole Brewfile", plan)
+			}
+		})
+	}
+}
+
+func TestRefreshCheckedReleasesObservedInstallation(t *testing.T) {
+	for _, tc := range []struct {
+		name                             string
+		checked, wasInstalled, installed bool
+		want                             bool
+	}{
+		{"new entry", false, false, false, false},
+		{"deliberate selection", true, false, false, true},
+		{"new installation", false, false, true, true},
+		{"still installed", true, true, true, true},
+		{"removed installation", true, true, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RefreshChecked(tc.checked, tc.wasInstalled, tc.installed); got != tc.want {
+				t.Errorf("RefreshChecked(%v, %v, %v) = %v, want %v", tc.checked, tc.wasInstalled, tc.installed, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPresentEntryPreservesObservedSourceWithDescriptions(t *testing.T) {
+	state := EntryState{
+		Item:      homebrew.BundleItem{Name: "just", Kind: homebrew.BundleItemBrew, Description: "Save and run project commands"},
+		Installed: true, Source: "team/tools", DescriptionLoaded: true,
+	}
+	if got := PresentEntry(state).Label; got != "Installed from Brew Tap · Save and run project commands" {
+		t.Errorf("label = %q, want observed source and package description", got)
+	}
+	state.Installed = false
+	state.Item.Description = ""
+	if got := PresentEntry(state).Label; got != "from Homebrew · Description unavailable" {
+		t.Errorf("label = %q, want source and unavailable description", got)
+	}
+}
+
 // The toast says what the trust store gained whenever it gained anything:
 // trusting a source changes what this computer will load, so the change is
 // never silent.
@@ -295,8 +353,8 @@ func TestToastStatesTheTrustChange(t *testing.T) {
 	}
 
 	both := InstallToast(InstallOutcome{Installed: 1, TrustedPackages: 1, TrustedTaps: 1})
-	if !strings.Contains(both, "Trusted 1 packages and 1 taps") {
-		t.Errorf("toast = %q, want both trust changes", both)
+	if !strings.Contains(both, "Trusted 1 package and 1 tap") {
+		t.Errorf("toast = %q, want singular trust changes", both)
 	}
 }
 
@@ -307,8 +365,17 @@ func TestToastNamesTheFailedCollections(t *testing.T) {
 	if !strings.Contains(toast, "Agentic Tools") {
 		t.Errorf("toast = %q, want the failed collection", toast)
 	}
-	if !strings.Contains(toast, "Trusted 1 packages") {
+	if !strings.Contains(toast, "Trusted 1 package to install it.") {
 		t.Errorf("toast = %q, want the trust change", toast)
+	}
+}
+
+func TestToastUsesSingularForOneEntry(t *testing.T) {
+	if got := InstallToast(InstallOutcome{Installed: 1}); got != "Installed 1 app or tool." {
+		t.Errorf("toast = %q, want singular entry", got)
+	}
+	if got := TrustNotice(0, 1); got != "Trusted 1 tap to install the selected apps." {
+		t.Errorf("notice = %q, want singular tap", got)
 	}
 }
 

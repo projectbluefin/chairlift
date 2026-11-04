@@ -1,0 +1,70 @@
+name: Live system Docker
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: docker-system-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-system:
+    name: Live system Docker
+    # Keep the running kernel and its signed Ubuntu module packages together;
+    # ubuntu-latest can change distribution independently of this live fixture.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      # The nested daemon keeps its normal firewall rules. Only the hosted
+      # runner's administrator loads modules; Podman itself always stays
+      # rootless, with private system/user managers and no host bus or socket.
+      # Docker itself is not prepared here: the gate's real helper installs it
+      # from Homebrew's signed index and bottles inside the Dakota fixture.
+      - name: Prepare the runner kernel for nested Docker
+        run: |
+          if ! sudo modprobe -a ip_tables iptable_nat br_netfilter overlay; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends \
+              "linux-modules-$(uname -r)" "linux-modules-extra-$(uname -r)"
+            sudo modprobe -a ip_tables iptable_nat br_netfilter overlay
+          fi
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+
+      - name: Prepare the Dakota suite environment
+        uses: ./.github/actions/dakota-venv
+
+      - name: Run the live system-Docker gate on Dakota
+        run: make e2e-docker
+
+      # Upload only flat evidence files, never the staged executable, HOME,
+      # runtime directories, sockets, or daemon data. Authentication transcripts
+      # are redacted by docker_system_integration.py before they reach disk.
+      - name: Upload live system-Docker evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-system-results
+          path: |
+            build/docker-system/*.log
+            build/docker-system/*.json
+            build/docker-system/*.jsonl
+            build/docker-system/*.txt
+            build/docker-system/*.png
+          if-no-files-found: warn
+          retention-days: 7

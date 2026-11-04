@@ -19,8 +19,10 @@ import (
 
 // atspiTimeout bounds the whole behave run. Each scenario launches its own
 // application, so this grows with the suite; the per-step deadlines inside
-// the suite are what catch a hung control.
-const atspiTimeout = 25 * time.Minute
+// the suite are what catch a hung control. The release and nightly workflows
+// run every feature serially in one process: v26.10.11 finished in 1498s and
+// v26.11.1 was killed at the former 25-minute cap, so leave headroom.
+const atspiTimeout = 40 * time.Minute
 
 // requireATSPIEnv makes a missing accessibility stack a failure instead of a
 // skip. The E2E workflow sets it: a skipping gate proves nothing, and before
@@ -183,8 +185,8 @@ func runWithTimeout(cmd *exec.Cmd, timeout time.Duration) error {
 		} else {
 			_ = cmd.Process.Kill()
 		}
-		<-done
-		return fmt.Errorf("%s did not finish within %s", cmd.Path, timeout)
+		waitErr := <-done
+		return fmt.Errorf("%s did not finish within %s (after termination: %v)", cmd.Path, timeout, waitErr)
 	}
 }
 

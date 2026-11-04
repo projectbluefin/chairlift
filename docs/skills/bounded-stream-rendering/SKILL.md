@@ -1,8 +1,8 @@
 ---
 name: bounded-stream-rendering
-description: Use when a view renders a stream of external command output into widgets.
-version: 1.0.0
-last_updated: 2026-09-20
+description: Use when a view renders external command output or installation progress.
+version: 1.1.0
+last_updated: 2026-10-25
 tags:
   - gtk
   - performance
@@ -61,3 +61,14 @@ the *other* side of the channel is allowed to do.
 action row per output line. The fix is the `stageProgressSink` /
 `internal/views/progresslog` pair, and the shape is now an `AGENTS.md`
 invariant so the next streamed-output view inherits it.
+
+## Opaque commands are one operation
+
+When a command exposes no structured package progress, disclose its requested
+package list separately and report only actual operation boundaries. A bundle's
+contents are not evidence that any entry finished; neither elapsed time nor
+output silence supplies a percentage. Reuse `internal/views/install_progress.go`'s
+pulsing timer and a fixed set of stage rows, as
+`internal/views/setup_activity.go` does for Features. Stop the timer on every
+outcome and disposal. Keep failed, canceled, and previewed stages distinct from
+live completion, and retain confirmed earlier changes when later work fails.

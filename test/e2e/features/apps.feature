@@ -100,11 +100,11 @@ Feature: Apps destination
     Given ChairLift is running
     Then the sidebar omits "Apps"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
   Scenario: Every entry of a collection starts unchecked and names its source
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
+    Then the "Fonts" row says "A broad selection of everyday, design, office, and accessibility fonts. Includes 1 app or tool."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
     When I expand the "Monospace Fonts" list under "App Collections"
     Then the "font-fira-code" entry checkbox is unchecked
@@ -126,15 +126,43 @@ Feature: Apps destination
     And the "Select All in Team tools" button is insensitive
     And the "Install" button in the "Install Selected" row is sensitive
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.apps-bundles @stub.apps-brew-team-tools-installed @stub.apps-collections
   Scenario: An installed entry reads where it is installed from and cannot be chosen again
     Given ChairLift is running
     When I open the "Apps" page
     And I expand the "Team tools" list under "App Collections"
     Then the "just" entry checkbox is checked
     And the "just" entry checkbox is insensitive
-    And the "just" row says "Installed from Homebrew"
+    And the collection entry "just" says "Installed from Homebrew"
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
+
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
+  Scenario: Relocated collections fall back to Apps when Developer Mode is disabled
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then I see "Monospace Fonts"
+    When I click the "Select All in Monospace Fonts" button
+    And I click the "Install" button in the "Install Selected" row
+    Then a toast on the Apps page says "[DRY-RUN] Preview: selected apps would be installed — no changes made"
+    And Homebrew collection previews are exactly
+      | file               |
+      | fonts-dev.Brewfile |
+
+  @wallpaper-slideshow @config.apps-bundles @stub.apps-brew @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=brew
+  Scenario: More Dinosaurs is absent from Apps and excluded from its Install action
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then I do not see "More Dinosaurs"
+    And I do not see "Wallpapers"
+    And I do not see "app.drey.Damask"
+    When I click the "Select All in Team tools" button
+    And I click the "Install" button in the "Install Selected" row
+    Then a toast on the Apps page says "[DRY-RUN] Preview: selected apps would be installed — no changes made"
+    And the application log contains "/bundles/team-tools.Brewfile"
+    And the application log does not contain "Would install More Dinosaurs"
+    And the Wallpaper Slideshow Brewfile was never checked or installed
+    And Flatpak was never asked to "install"
+    And Flatpak was never asked to "override"
 
   @config.apps-bundles @stub.apps-brew-team-tools-installed @stub.apps-collections
   Scenario: A collection already on the system reads Installed when the page loads
@@ -142,21 +170,6 @@ Feature: Apps destination
     When I open the "Apps" page
     Then the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
     And the "Install" button in the "Install Selected" row is sensitive
-
-  @config.apps-bundles @stub.apps-brew-wallpapers-installed @stub.apps-collections
-  Scenario: A super-bundle reads Installed only when every member is installed
-    Given ChairLift is running
-    When I open the "Apps" page
-    Then the "Extra Wallpapers" row says "Includes 2 apps and tools. (Installed)"
-
-  @config.apps-bundles @stub.apps-brew-wallpapers-partly-installed @stub.apps-collections
-  Scenario: A super-bundle with a missing member stays offered
-    Given ChairLift is running
-    When I open the "Apps" page
-    Then the "Extra Wallpapers" row says "Includes 2 apps and tools."
-    And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool. (Installed)"
-    And the "Extra Wallpapers" row does not say "(Installed)"
-    And the "Extra Wallpapers" row says "1 of 2 installed."
 
   @config.apps-bundles @stub.apps-brew
   Scenario: A system with no app collections says none are offered
@@ -176,7 +189,7 @@ Feature: Apps destination
     And I click the "Install" button in the "Install Selected" row
     Then the application log contains "/bundles/team-tools.Brewfile"
     And the "Install" button in the "Install Selected" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And the application log does not contain "panic"
 
   @config.apps-bundles @stub.apps-brew
@@ -188,9 +201,9 @@ Feature: Apps destination
     And the application log contains "/home/Brewfile --force"
     And the "Export" button in the "Export Package List" row is sensitive
     And the home directory has no "Brewfile"
-    And Homebrew was never asked to "bundle"
+    And Homebrew was never asked to "bundle dump"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
   Scenario: Every control on the Apps page, including every list row's, is named and operable
     Given ChairLift is running
     When I open the "Apps" page
@@ -210,15 +223,29 @@ Feature: Apps destination
     Then the "Team tools" list shows exactly
       | title |
       | just  |
-    And the "just" row says "from Homebrew"
-    When I expand the "Monospace Fonts" list under "App Collections"
-    Then the "Monospace Fonts" list shows exactly
-      | title            |
-      | font-fira-code   |
-      | font-jetbrains-mono |
-      | font-hack        |
+    And the "just" row says "from Homebrew · Save and run project commands"
+    And Homebrew was asked to "info --json=v2 --formula just"
+    When I expand the "Fonts" list under "App Collections"
+    Then the "Fonts" list shows exactly
+      | title          |
+      | font-noto-sans |
+    And the "font-noto-sans" row says "from Homebrew · Description unavailable"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
+  Scenario: Expanding a collection shows Flatpak app descriptions
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Full Desktop Suite" list under "App Collections"
+    Then the "Full Desktop Suite" list shows exactly
+      | title                |
+      | org.gnome.Calculator |
+      | app.drey.Damask       |
+      | org.gnome.Notes       |
+    And the "org.gnome.Calculator" row says "from Flathub · Perform arithmetic calculations"
+    And Flatpak was asked to "search --columns=application,description org.gnome.Calculator"
+    And Flatpak was never asked to "install"
+
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
   Scenario: A fully selected collection installs through the collection itself
     Given ChairLift is running
     When I open the "Apps" page
@@ -228,10 +255,10 @@ Feature: Apps destination
     And the application log contains "/bundles/fonts-dev.Brewfile"
     And a toast on the Apps page says "[DRY-RUN] Preview: selected apps would be installed — no changes made"
     And the "Install" button in the "Install Selected" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And Homebrew was never asked to "bundle install"
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
   Scenario: A partially selected collection installs the checked entries on their own
     Given ChairLift is running
     When I open the "Apps" page
@@ -266,7 +293,7 @@ Feature: Apps destination
   Scenario: An entry from an untrusted tap is trusted on its own before it installs
     Given ChairLift is running
     When I open the "Apps" page
-    And I expand the "Tap Tools" list under "App Collections"
+    And I expand the "Tap tools" list under "App Collections"
     And I check the "anomalyco/tap/opencode-v2" entry
     And I click the "Install" button in the "Install Selected" row
     Then the application log previews "brew tap anomalyco/tap" exactly once
@@ -278,7 +305,7 @@ Feature: Apps destination
   Scenario: An entry from a tap this computer already trusts needs no new trust
     Given ChairLift is running
     When I open the "Apps" page
-    And I expand the "Tap Tools" list under "App Collections"
+    And I expand the "Tap tools" list under "App Collections"
     And I check the "anomalyco/tap/opencode-v2" entry
     And I click the "Install" button in the "Install Selected" row
     Then the application log previews "brew install anomalyco/tap/opencode-v2" exactly once
@@ -296,7 +323,7 @@ Feature: Apps destination
     And the application log previews no "brew bundle install"
     And the "Install" button in the "Install Selected" row is sensitive
 
-  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
   Scenario: Collections install with the group Install button without expanding
     Given ChairLift is running
     When I open the "Apps" page
@@ -304,5 +331,28 @@ Feature: Apps destination
     And I click the "Install" button in the "Install Selected" row
     Then the application log contains "/bundles/fonts-dev.Brewfile"
     And the "Install" button in the "Install Selected" row is sensitive
-    And I do not see "Installing collections…"
+    And the Apps progress bar is hidden
     And the application log does not contain "panic"
+
+  @config.apps-bundles @stub.apps-brew-unreadable @stub.apps-collections
+  Scenario: Missing package descriptions leave collection contents usable
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Team tools" list under "App Collections"
+    Then the "just" row says "from Homebrew · Description unavailable"
+    And the "Install" button in the "Install Selected" row is sensitive
+    And Homebrew was never asked to "bundle install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: Select All cannot install unselectable marketplace directives
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Marketplace tools" list under "App Collections"
+    Then the "Xcode" entry checkbox is unchecked
+    And the "Xcode" entry checkbox is insensitive
+    And the "ms-vscode-remote.remote-containers" entry checkbox is unchecked
+    And the "ms-vscode-remote.remote-containers" entry checkbox is insensitive
+    When I click the "Select All in Marketplace tools" button
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "brew install gh" exactly once
+    And the application log previews no "brew bundle install"

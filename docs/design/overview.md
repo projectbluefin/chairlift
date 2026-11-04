@@ -40,7 +40,11 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/avatar/    Dinosaur avatar catalog, its bundled WebP illustrations and 256x256 preview PNGs, and the pure-Go WebP-to-PNG avatar transcoder (whole character fitted inside the 512x512 avatar circle, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling; the preview path encodes 256x256 under 512 KiB)
         ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
         ├── internal/developerfeeds/ Pure-Go developer feed OPML catalog (go:embed) and offline validator
+        ├── internal/devtools/  WSL backends, system Docker status/enable (rootless cleanup, Homebrew CLI), native VS Code setup and package provenance
+        ├── internal/dockerbrew/ Pure-Go verified Homebrew-bottle Docker runtime: signed index, bottle download/extract, ELF patching, managed units
+        ├── internal/devsetup/  Widget-free ordered developer setup, promotion outcomes and retry stages
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
+        ├── internal/valhalla/  Livery More Dinosaurs payload, SVG/JXL/AVIF-to-PNG source preparation and observed Valhalla manual-source configuration
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
         ├── internal/pkexec/    Sole owner of the privilege-escalation program name (`pkexec.Command`)
         ├── internal/deskenv/   Desktop-environment detection from session variables
@@ -48,7 +52,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
         ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
         ├── internal/devmenu/   Custom Command Menu tuple updater for developer tools and Ask Bluefin visibility
-        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets on auto-updating `:stable` images, one per driver family, and the pure readiness model behind the Features page's Printers group
+        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets pinned to signature-verified digests, one per driver family, and the pure readiness model behind the Features page's Printers group
         ├── internal/aistack/   Local llmman user service, observed health and canonical model aliases
         ├── internal/agentmode/ Goose Desktop readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch
         ├── internal/contribute/ Read-only contributor preflight and terminal command construction
@@ -94,12 +98,29 @@ this inventory, independently of the original YAML namespace names.
 | Page | File under `internal/views/` | Current purpose |
 | --- | --- | --- |
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
-| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no Flatpak inventory, external catalog launcher or package search |
+| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no wallpaper setup, Flatpak inventory, external catalog launcher or package search |
 | Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
-| Features | `features_page.go` (+ `printers_page.go`) | Distribution features, Developer Mode, Gaming Mode, and Printers |
-| Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
+| Features | `features_page.go`, `bluefin_cli.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Gaming first, setup activity checklist, Chairlift-owned Bluefin CLI switch, expandable Developer/WSL/Docker package disclosures, independent Monospace Fonts installation under Developer Mode, distribution features and Printers |
+| Livery | `livery_page.go`, `wallpapers.go` | Profile Picture, Wallpapers (More Dinosaurs) setup, then initially collapsed App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
 | Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
+
+Gaming Mode leads Features. The **Setup activity** checklist below it builds its
+bounded stage rows once. A reusable timer pulses while work runs, independent
+of command output. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
+use native expanders like Apps collections: the header discloses
+package rows, while an independent suffix switch starts work. Bluefin CLI is a
+separate Bash-only switch backed by `internal/bluefincli`, not a Homebrew collection.
+Monospace Fonts is an independently installable collection inside Developer Mode,
+absent from Apps while Developer Mode is available, and not an automatic
+developer-enable follow-on. Homebrew bundles are opaque operations, so package
+lists are static disclosures, not invented
+per-package progress. Docker's rows name Homebrew formulae: the daemon set as
+**Homebrew, installed for the whole computer** (the root helper fetches those
+bottles itself) and the CLI set as user-scope Homebrew formulae. `internal/devsetup` owns
+developer-run ordering and outcomes; the view owns GTK wiring, and
+`internal/devtools` owns execution and Docker/WSL package provenance shared with
+those disclosures. Gaming names come from `gaming.Components`.
 
 Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
 Maintenance, with rollback and opt-in reset controls; the published-versions
@@ -222,10 +243,26 @@ Per-wrapper mechanics:
 - **bootc**: `StageUpdate` short-circuits before invoking pkexec: it logs the would-be command, emits a synthetic `EventMessage` + `EventComplete` pair on the progress channel, and returns — the stage script is never actually run (see the exception above for the toast/subtitle split).
 - **Homebrew tap trust**: `trustTap` (`internal/views/updates_page.go`) computes `decision := actionmsg.TapTrust(dryrun.Enabled(), tap.Name)` once, after a successful `homebrew.TrustPackages` call, and gates removing the tap's row, hiding the group, and refreshing outdated packages on `decision.MutateUI`.
 - **views (custom maintenance scripts)**: `runMaintenanceAction` (`internal/views/maintenance_page.go`) calls `actionmsg.MaintenanceScript(dryrun.Enabled(), title)` once, before spawning its goroutine, to get a `ScriptDecision{Execute, Toast}`: when `Execute` is false no `exec.Cmd` is ever constructed (no `pkexec`, no direct script exec) — only a `[DRY-RUN] Would execute: ...` log line.
-- **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.set(enabled)`) or reverts to its pre-click state (`toggle.set(!enabled)`); `set` is `guardedSwitch`'s programmatic move, which marks itself so the resulting `::state-set` is not treated as another user action.
+- **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.set(enabled)`) or reverts to its pre-click state (`toggle.set(!enabled)`); `set` is `guardedSwitch`'s programmatic move, which marks itself so the resulting `::state-set` is not treated as another user action. Features page toggles and the feature Update button share `updateFeaturesGate`, so only one of these mutations runs at a time; a toggle refused by the gate reverts and says why, a refused Update button says why, and a toggle's switch is insensitive while its own call runs.
 - **avatar**: `Applier.Dispatch` (`internal/avatar/applier.go`) reads `dryrun.Enabled()` first and returns before constructing a process or opening a file, logging `[DRY-RUN] would set avatar to <id>`. A live dispatch reports which route took effect as an `avatar.Route`: `RouteBusctl` when AccountsService accepted `SetIconFile` over `busctl`, `RouteFaceFile` when that call failed or was unreachable and the icon was written to `~/.face.icon` and `~/.face` instead (picked up at the next session start, not immediately), and no route at all when both failed. A canceled context is reported as an error rather than being treated as an unreachable bus, so an abandoned action never writes into the user's home. The dispatch is deliberately unprivileged — AccountsService authorizes it for the caller's own account — so it takes no `pkexec` route and is classified as an unprivileged `os/exec` site in `internal/installcheck`'s journal contract. Its one caller is the Livery page's Profile Picture section (`account_group`, `internal/views/profile_picture.go`): opening the page only stats `avatar.CurrentPicture`'s candidates (AccountsService's icon, then `~/.face.icon`, then `~/.face`); picking a catalog row reads a precomputed 256x256 preview PNG from the binary and shows it, and only Apply transcodes the bundled illustration at AvatarSize, writes the PNG to `$XDG_CACHE_HOME/chairlift/avatar.png` and dispatches it. Under `--dry-run` Apply writes no file and Dispatch logs the preview. A failed preview or dispatch reveals a banner in the chooser and leaves the account's picture and the page row unchanged; the toast text for each route comes from `pageview.AvatarApplied`, so a face-file write never reads as a live change. The chooser is an `AdwDialog` built once with one row per catalog entry and one `row-activated` handler. **Adding a raptor is three steps, with no codegen step to run afterwards**: commit the illustration at `internal/avatar/assets/<base>.webp` (flat, though upstream nests it under `characters/header/`), add its `id<TAB>common name<TAB>species<TAB>path` row to `internal/avatar/assets/dino-avatars.txt` — the path stored literally, never derived from the id, and its base name unique because that base name is the key into the flat bundle — and write the 256x256 preview to `internal/avatar/assets/preview/<base>.png` by transcoding that illustration with `avatar.TranscodePreviewWebPToPNG` at `avatar.PreviewSize`. The previews are committed data, not build output, so a transcoder or `PreviewSize` change leaves every one of them stale silently: `TestEmbeddedPreviewCoversEveryCatalogEntry` proves each entry has a preview of the right shape, never that it still matches what the current transcoder would emit.
-- **Developer onboarding page**: `openDeveloperOnboarding` (`internal/views/features_page.go`) is reached only from the success branch of `onDeveloperToggled`, and dispatches through `pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded)`. That pure function is the whole admission rule — a confirmed live enable is the only input combination that yields a target, and it yields exactly one (the Bluefin developer documentation, which links onward to training and platform material): opening three tabs from one switch flip stacked three app-choosers on a desktop with no default browser (#494). `--dry-run` opens no browser processes during `make screenshots`, a disable is a no-op, and a failed promotion opens nothing. The URL is asserted headlessly in `internal/views/pageview`; the dispatch itself reuses `UserHome.openURL`, the same asynchronous `xdg-open` path the Help page links use, so a browser that fails to start reports its own failure by toast without touching the group promotion or the switch. A promotion whose helper skipped developer groups the image does not define (`skipped group <name>:` on stderr, parsed by `ubluehelper.SkippedGroups`) still confirms, and `actionmsg.DeveloperMode`'s ordinary, self-expiring toast names each group not granted (#495), kept short enough that `ShowToast`'s single ellipsized line does not cut the names off. It is not a persistent error toast: images that ship neither group (Dakota) skip them on every enable, and a persistent "enabled" banner outlived a later disable.
-- **Optional developer feed setup**: `startDeveloperFeedSetup` (`internal/views/features_page.go`) is called from that same success branch, and its admission rule is `actionmsg.DeveloperFeedSetupPlan(dryrun.Enabled(), enabled, succeeded, installPulp, stageFeeds)`. Only a confirmed live enable with at least one of `dx_group`'s `install_pulp`/`stage_feeds` set produces non-empty work, so a preview installs nothing during `make screenshots`, a disable is a no-op, and a failed promotion starts no worker. The plan is a value read from config on the main thread before the goroutine starts, so the worker touches no widget and no view state; it calls `internal/developerfeeds`'s `Provision` and `StageOPML` (both of which re-check `dryrun.Enabled()` as defense in depth) and marshals a single `actionmsg.DeveloperFeedFeedback` result back through `sgtk.RunOnMainThread` to one toast. `developerFeedGate` refuses a second setup while an install is in flight, and the toast is nil-guarded. The wording and the failure classification come from the same tested decision struct, which is what keeps a failed optional install from reading as a failed permission change and keeps "staged" from reading as "imported".
+- **Developer setup**: Direct Developer Mode and implicit WSL/Docker promotion
+  use the same `developerGate` and `internal/devsetup.Run` sequence. When the
+  parent is off, the fixed `ublue.SetDeveloperMode` call must succeed before
+  child setup. Authentication failure/cancellation starts no child work; a
+  successful live grant updates the parent independently of later failures.
+  Child disable never demotes the parent. A preview neither confirms switches
+  nor treats suppressed operations as completed live stages. Optional
+  post-promotion work is configured on the GTK main thread and shares the run;
+  retry preserves completed optional stages without replaying the grant.
+- **Developer onboarding**: A confirmed live direct or implicit promotion
+  opens one Bluefin developer documentation page, never one tab per resource.
+  Browser dispatch reuses `UserHome.openURL`; failure does not reverse access.
+  Optional Pulp installation, OPML staging, and developer app collection
+  installation keep their config opt-ins and report their own outcomes. Pulp
+  uses system Flathub through Flatpak's authorization; OPML staging writes only
+  ChairLift's catalog, never Pulp's store. Preview, restore, disable, and failed
+  promotion perform none of these live follow-ons. See
+  [developer workstation components](package-managers.md#developer-workstation-and-gaming-components).
 - **Legacy desktop launcher cleanup**: `legacydesktop.Clean` (`internal/legacydesktop/legacydesktop.go`) runs in a background goroutine at startup. Under `--dry-run`, it logs what would be removed without deleting the file.
 ### Configuration-driven UI visibility
 
@@ -475,10 +512,15 @@ keeps the two facts apart: `buildUI`'s `sourcePolicy` hands
 `updateflow.Coordinator.Check` a `map[SourceID]updateflow.Policy` whose
 `Configured` is `Config.IsGroupEnabled` and whose `Supported` is
 `Set.Supports`. A source is checked only when both hold and its provider is
-available, exactly as the composed predicate would allow, but a source the host
-cannot back is reported unavailable ("Not available on this computer") rather
-than "Disabled by administrator", which `updatepresent` reserves for
-`Configured` false. The views' own "not installed" placeholder branches that
+available, exactly as the composed predicate would allow, and a source either
+fact leaves out is not listed on the Updates page at all
+(`updatepresent.ShowSourceRow`): a row whose only content would be "you cannot
+use this" reports a state the reader can neither change nor act on, and calling
+it an administrator's choice names an actor who may not exist — the shipped
+Bluefin configuration disables `features_page.features_group` in the image
+itself (#675). Preferences still lists every source, locked switch included, so
+what is not updated stays discoverable where a reader would go to configure it.
+The views' own "not installed" placeholder branches that
 the floor made unreachable were removed in #206.
 
 ### Package manager wrapper pattern
@@ -590,28 +632,97 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 `data/io.projectbluefin.chairlift.updex.policy`, and
 `data/io.projectbluefin.chairlift.ublue.policy`.
 
-The fourteen ublue commands include fixed `kvm-enable`, `docker-enable`, and
-`docker-disable` actions alongside pin/unpin. The parser accepts no arbitrary
-account, service, image or command argv. Developer options stay visible when
-their installed actions are missing, with the affected switches insensitive.
+The sixteen ublue commands include fixed `gaming-switch`, `kvm-enable`, `docker-enable`,
+`docker-disable`, and `docker-update` actions alongside pin/unpin. The parser accepts no arbitrary
+account, service, image or command argv. Privileged developer options stay
+visible when their installed actions are missing, with affected controls insensitive.
 WSL Mode defaults to nsl on Linux amd64, with Lima as an alternative backend;
 an existing Lima-only machine retains Lima. Both require accessible `/dev/kvm`;
-a new permission grant needs a new login.
+nsl also requires the account's `kvm` group membership. A new grant needs a
+new login only when `/dev/kvm` itself was not accessible.
 `dx-enable`, `kvm-enable` and `docker-enable` first copy a group that only the
 image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
 them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
 `/etc/group` alone and otherwise refuses the group
 (`internal/ubluehelper.EnsureLocalGroup`).
-Docker reports ready only with an accessible live daemon socket. A confirmed
+The GUI first promotes Developer Mode through the fixed `dx-enable` helper
+when Docker or WSL is enabled with developer access off. Refused or canceled
+authentication aborts child setup. Docker then calls `ublue.SetDocker` through
+the fixed `docker-enable` helper and, only once that succeeds, retires
+v26.10.10's rootless user daemon and `rootless` CLI context. On a host whose image ships
+`/usr/lib/systemd/system/docker.service` (Bluefin DX), that helper removes any
+units it wrote earlier and enables the image's `docker.service` and
+`docker.socket`. Elsewhere it installs the daemon itself
+([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)):
+`internal/dockerbrew` verifies Homebrew's JWS-signed formula index against
+the compiled-in `homebrew-1` key, downloads the fixed daemon formula set's
+bottles from GHCR by the SHA-256s that index names, extracts only mapped
+files into root-owned `/var/lib/chairlift/docker`, patches dynamic ELF
+interpreters and search paths to the system loader and `$ORIGIN/../lib`,
+smoke-runs `runc` and `dockerd`, and swaps the `current` link atomically. The
+helper then writes marker-bearing `docker.service`/`docker.socket` units to
+`/etc/systemd/system` (never overwriting an unmarked file), creates the
+`docker` group with `groupadd -f -r` when the account database lacks it,
+relabels the runtime with `restorecon` only under enforcing SELinux, adds the
+invoking account, enables the socket, and starts the service. Root never
+executes or loads anything from the user-owned Homebrew prefix. After the
+helper, the GUI installs the user-scope `docker`, `docker-buildx`, and
+`docker-compose` formulae and links absent CLI plugins. This second action may
+ask for authentication separately. `docker-update` repeats the verified
+install and restarts the daemon only when the bottle set changed; it is a
+no-op on image-unit hosts. The Updates page's Developer tools source offers it
+when Homebrew's unsigned per-formula API is newer than the installed manifest.
+Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent
+of `DOCKER_HOST` and `XDG_RUNTIME_DIR`. Newly granted group access requires a new
+login, not a false Ready result (`NeedsLogin` / `ErrDockerNewLogin`); an account
+not listed in `docker` at all is `NoAccess`, shown off so enable grants access.
+Not-found units are installable, not unavailable. Both unit
+reads must succeed before `Active` is trustworthy; a later socket error preserves
+that observed state so supported stop remains available. Disable uses the fixed
+`docker-disable` helper, stops both units for all accounts, and retains the
+runtime, data, group membership, and Developer Mode. Masked units or missing
+helper actions need an image/administrator fix.
+Native VS Code setup is a separate optional user-scoped outcome: seed absent
+settings without rewriting JSONC or symlinks, install Bluefin DX's three
+extensions, and commit the upstream version-1 marker only after success. Marker
+presence alone is not proof the extensions were installed. Missing native `code`
+skips the step; an editor failure never reverses Docker/developer access and
+remains retryable;
+preview writes no settings or marker and launches no editor CLI. A confirmed
 Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
 Homebrew when available; installation failure does not reverse developer access.
-IDEs and editors are not offered here (Bazaar or the Apps page).
+Development Apps provides native install rows for Visual Studio Code, VSCodium,
+and JetBrains Toolbox through `ublue-os` Homebrew taps only (no personal taps).
+Cursor and Antigravity use system FlatPark Flatpaks; Zed uses system Flathub.
+These six entries are the complete current catalog; Sublime Text is deliberately
+excluded for now by user approval, not a blocked requirement.
+Exact package tokens must be verified, never guessed.
+
+Developer Mode is a detail page under Features, reached by its entry row or
+`--dx-mode`; Back returns to Features. It owns the Developer Mode, WSL, Docker,
+and developer setup activity controls. Gaming setup activity stays on Features.
+The Development Apps group shows the six verified IDEs with their source,
+installed status, and individual Install actions, replacing the generic Bazaar launcher.
+Installation does not require enabling Developer Mode. GNOME Builder, Kate,
+and individual JetBrains IDE rows are excluded.
+
+Features also shows Hardware Enablement on ASUS and Framework machines detected
+through DMI. Ordinary activation only reads Homebrew's installed-cask inventory.
+Explicit initial setup installs missing `ublue-os/tap` casks: `asusctl-linux`
+and `rog-control-center-linux` for ASUS, `framework-tool` and
+`framework-wallpapers` for Framework. Active requires installed versions for
+every profile package; command or inventory failures never imply success.
+Dry-run previews missing packages without claiming they are installed.
+After verified installation, the existing Livery default path can apply the
+embedded ASUS or Framework panel mark. It preserves prior selections and
+opt-outs, requires the supported panel extension, and saves previous settings
+for restoration. The packages themselves do not supply these symbolic icons.
 
 **Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on each
 action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's fourteen actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's sixteen actions annotate
 `/usr/bin/chairlift-helper`. Both helper policies use
 `org.freedesktop.policykit.exec.argv1` to select exactly one action for the
 first helper argument. PolicyKit does not validate the remainder of argv, so
@@ -624,8 +735,8 @@ accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
 `auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
 `driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
 [--dry-run]`, `pin <YYYYMMDD> [--dry-run]`, `unpin [--dry-run]`,
-`kvm-enable [--dry-run]`, `docker-enable [--dry-run]`, and
-`docker-disable [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
+`kvm-enable [--dry-run]`, `docker-enable [--dry-run]`,
+`docker-disable [--dry-run]`, `gaming-switch <enable|disable> [--dry-run]`, and `docker-update [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
 action. The wrapper packages therefore always invoke their fixed `HelperPath`
@@ -724,12 +835,15 @@ reported as a failure, partial outcomes stay visible, and a dry-run keeps the
 confirmed inventory unchanged.
 
 Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
-toggle and are no longer gaming components. ChairLift deliberately leaves
-copies an earlier release installed in place: Disable acts only on the
-current stack, and uninstalling Steam would take the user's library and
-launcher with it. Removing them is left to the user (GNOME Software or
-`flatpak uninstall`). On such hosts the toggle reflects only the current
-components.
+toggle and are no longer gaming components. They are tracked as retired so an
+upgrade does not leave their installs behind invisibly: Derive reports each one
+still installed, and the status notes how many. Disable cleans them up the same
+way as the current stack — a per-user copy is always removed, and a system copy
+is kept only when the OS image declares it ships it (the exception above),
+otherwise removed under Flatpak's PolicyKit. The system copy is kept for the
+same reason a current component's is: it predates gaming mode and removing it
+would take a distro default away from every account. On such hosts the toggle
+reflects only the current components, and the retired ones are called out.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
@@ -766,8 +880,8 @@ surface in three layers that must stay separate:
   capability floor, available, and enabled in the user's preferences;
   `Coordinator.UpdateAll` applies pending items serially in the provider order
   `Window.buildUI` constructs — applications (Flatpak), developer tools
-  (Homebrew), system components (updex), then the operating system (bootc
-  staging). Every published `Snapshot` is immutable and generation-guarded, so
+  (Homebrew), system components (updex), printer drivers (verified
+  printer-application refresh), then the operating system (bootc staging). Every published `Snapshot` is immutable and generation-guarded, so
   a stale worker cannot overwrite a newer state. A failed source does not
   abort the run; `ActionRetryFailed` re-applies only sources that still carry
   an apply error. Post-update maintenance (`updateproviders.NewMaintenance`,
@@ -777,7 +891,7 @@ surface in three layers that must stay separate:
   "Disabled by administrator" (`updateproviders.CleanupConfigured`).
 - `internal/updateproviders` holds the production `updateflow.Provider`
   values, which wrap `internal/flatpak`, `internal/homebrew`, `internal/updex`,
-  and `internal/bootc`; the coordinator executes nothing itself. Flatpak
+  `internal/printerapp`, and `internal/bootc`; the coordinator executes nothing itself. Flatpak
   reconciliation verifies that all applied refs for each executed scope have
   cleared, ignoring newly appeared updates.
 - `internal/views/updatepresent` maps one snapshot to the shell's status
@@ -790,14 +904,17 @@ surface in three layers that must stay separate:
   or timed-out connection), "It took too long." for an exhausted deadline,
   and otherwise "Details are in the log." — a local Flatpak, Homebrew, or
   bootc failure is not told to check a connection it never used. The shell's
-  single-row update and tool-refresh failures use the same hint. A source
-  whose policy has `Configured` false reads "Disabled by administrator"; one
-  that is configured but not `Available` — the provider's own `Available`
-  probe says no, or `Policy.Supported` is false because the capability floor
-  cannot back it — reads "Not available on this computer". Both strings
-  come from `updatepresent.SourceLockReason`, which the Preferences dialog's
-  update-source rows (`pageview.UpdateSourcePreferenceSubtitle`) use too, so
-  the two surfaces never word one source differently. Such a locked source's
+  single-row update and tool-refresh failures use the same hint.
+  `updatepresent.ShowSourceRow` decides which sources get a row at all: one
+  that configuration disables for the whole machine (`Configured` false), or
+  one this host cannot back — the provider's own `Available` probe says no, or
+  `Policy.Supported` is false because the capability floor cannot back it —
+  gets none, and a group left without rows is hidden with them (#675).
+  `updatepresent.SourceLockReason` still supplies the two lock sentences
+  ("Disabled by administrator" for `Configured` false, "Not available on this
+  computer" otherwise), which the Preferences dialog's update-source rows
+  (`pageview.UpdateSourcePreferenceSubtitle`) use too, so the two surfaces
+  never word one source differently. Such a locked source's
   Preferences switch is shown off and insensitive and is not bound to its
   GSettings key (`pageview.UpdateSourcePreferenceLocked`): bound, it showed
   the stored preference — on — beside "Disabled by administrator". `ItemRows`
@@ -811,9 +928,9 @@ surface in three layers that must stay separate:
 The shell learns each source's policy from `Window.buildUI`'s
 `sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
 `Config.IsGroupEnabled` and `Supported` from `capability.Set.Supports` (see
-"Host capability floor" above). The four sources are keyed to
+"Host capability floor" above). The five sources are keyed to
 `bootc_updates_group`, `flatpak_updates_group`, and `brew_updates_group` on
-`updates_page`, and `features_group` on `features_page`.
+`updates_page`, and `features_group` and `printers_group` on `features_page`.
 
 The shell reads the user's preferences through the window's one
 `settings.Store`, which the Preferences dialog's switches are bound to as
@@ -866,8 +983,9 @@ already-current system succeeds without staging anything (on composefs
 `bootc upgrade` fails on a current system) — and the header offers no
 primary button; its one status line reads "Restart to finish updating".
 The header is a plain box built once in `UpdateShell.build`: the wordmark,
-then the primary action (or, while checking or installing, the pulsing
-progress bar in its place), then one status line from
+then the primary action (or, while checking or installing, the progress
+bar in its place — determinate when `snapshot.Determinate` is true,
+otherwise pulsing), then one status line from
 `updatepresent.Presentation.Status`, with a second `Detail` line only for
 the two failure phases. `Presentation.ShowStatus` hides the header box
 whenever a presentation leaves it empty, so it adds no spacing. The shell
@@ -946,7 +1064,10 @@ Goose added — is carried over disabled, and Goose 1.53's platform extensions
 a missing platform extension with its own default and keeps an `enabled`
 value already present. No provider, model, or key is written: llmman hands
 Goose its provider through the environment. `hints.md` becomes the profile's
-`.goosehints`. Knowledge searches go online, so no copy claims a session's
+`.goosehints`. Missing or Goose-default `focusWindow` and `quickLauncher`
+entries in the desktop profile's `Goose/settings.json` are set to null, while
+different choices and other settings are preserved, so GNOME does not open a
+keyboard-shortcut approval dialog for Goose's defaults at launch. Knowledge searches go online, so no copy claims a session's
 questions stay on this computer. The hint explicitly names the `linux-tools`
 tools (`get_system_information`, `get_disk_usage`, `get_cpu_information`,
 …) so a small local model — the recommended Qwen family — reaches for them
@@ -1098,16 +1219,24 @@ readiness model, never from the unit file alone (#331, #361):
   rootless device access, service crash and image failures from generic failure;
   these diagnostics do not claim hardware testing.
 
-Each unit runs `ghcr.io/projectbluefin/<id>-printer-app:stable` with
-`AutoUpdate=registry` and `PublishPort=127.0.0.1:<port>:<port>`, never
+Each newly enabled unit runs a cosign-verified digest resolved from
+`ghcr.io/projectbluefin/<id>-printer-app:stable`, without registry auto-update,
+and with `PublishPort=127.0.0.1:<port>:<port>`, never
 `Network=host`: PAPPL's web administration is unauthenticated and shares the
 IPP listener, so the port is reachable only from this computer. LAN clients
 cannot print to it and its DNS-SD advertisement stays inside the container;
 the group description explains driver availability without claiming network sharing.
-`Enable` writes the unit, reloads systemd, starts the
-service, and runs `systemctl --user enable --now podman-auto-update.timer`;
-a failure at any step rolls a fresh install back (stop, remove the unit,
-reload). The toggle handler (`onPrinterAppToggled`) is admitted by a
+`Enable` verifies before writing the unit, reloads systemd and starts the
+service; a reload/start failure rolls a fresh install back (stop, remove,
+reload). `Refresh` verifies before rewriting and restarting an existing unit.
+Verification failure changes neither disk nor service state. ADR-0023 records
+this change from ADR-0020: old units require disable/re-enable to migrate,
+and their row's subtitle asks for it (`InstalledBeforeVerification`).
+Newer verified images reach installed units through the Updates page's
+Printer Drivers source (`updateproviders.NewPrinterApps`), which calls
+`Refresh`; there is no scheduled refresh. `Enable`, `Refresh` and `Disable`
+share one per-app lock inside `internal/printerapp`, so a toggle and an update
+of the same family never interleave. The toggle handler (`onPrinterAppToggled`) is admitted by a
 per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
 under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
 a dry run and a failure both restore the switch and the row's last state, a
@@ -1581,6 +1710,7 @@ A fresh launch returns only once Goose holds that lock, its process exits, or 15
 `chairlift --ask-bluefin` is the entry point for Bluefin's Custom Command Menu and desktop shortcut. Cold invocations and running-application remote invocations behave identically:
 - When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
 - When any prerequisite is missing, or the launch fails to start or Goose exits non-zero during its startup wait, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
+- `--prompt-file PATH` (Report a Problem's **Troubleshoot with Goose**) supplies a starting prompt. `agentmode.ReadPromptFile` accepts only a regular UTF-8 file of at most `agentmode.MaxPromptBytes` (4 KiB), opened non-blocking, and drops control characters other than newline and tab; a relative path resolves against the invoking process's working directory. The prompt is held in memory only (`agentmode.HoldPrompt`) and never logged — dry-run logs redact it. The next `agentmode.Launch`, from `--ask-bluefin` itself or from the Agents page's Goose row after setup, passes it to Goose as `goose://new-session?prompt=…` (through `llmman launch goose-desktop … --` for a fresh session, or to `goose-desktop` directly so a running session's single-instance hand-off opens it); Goose opens a new chat with the prompt prefilled but not sent. The link names no recipe, extension, or setting, so the prompt cannot change the profile or its tools. It is released once a launch goes through; when Goose is not ready the toast says the question is kept. The prompt is a command-line argument of the Goose process while that session runs, so it must carry no identity data; Report a Problem's prompt has none. Model traffic goes through `chairlift-llmman.service`, whose `LLMMAN_NOHISTORY=1` keeps it out of llmman's history.
 
 The Troubleshooting group also offers a **Show Ask Bluefin in Menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state. The extension renders only slots listed in its `command-order` key, so the switch reads on only when the tuple is visible and its slot is listed; showing the entry also appends a missing slot to `command-order` (resetting instead when the result equals the distro default). Dakota's distro layer moves Ask Bluefin to `command12` while inheriting Bluefin's order of 1..11, which otherwise left a visible tuple the menu never rendered.
 After every flip the switch is re-set from a fresh `devmenu.AskBluefinState` read, decided by `actionmsg.AskBluefinMenu`: a preview says the menu entry was not changed, a write that did not take effect or a failed read-back is an error toast, and a failed read-back restores the previous position rather than leaving the switch half-flipped.
@@ -1589,7 +1719,7 @@ After every flip the switch is re-set from a fresh `devmenu.AskBluefinState` rea
 
 Setup never opens automatically. `--setup`, its `--first-run` alias, and the
 menu action open Welcome, then `internal/firstrun.Pages` selects the existing
-visible Features → Apps → Agents → Livery pages, followed by a conclusion.
+visible Livery → Features → Apps → Agents pages, followed by a conclusion.
 Both bookends share one layout and the embedded theme-aware Bluefin wordmark.
 Welcome has normal introductory text and the website's Zavala quote; the
 conclusion has the website's Edith Wharton quote. Selection steps use their

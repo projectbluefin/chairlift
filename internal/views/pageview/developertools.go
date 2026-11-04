@@ -3,7 +3,7 @@ package pageview
 // Documentation URLs for WSL Mode virtual machine engines.
 const (
 	NSLDocumentationURL  = "https://frostyard.github.io/nsl/"
-	LimaDocumentationURL = "https://lima-vm.io/"
+	LimaDocumentationURL = "https://lima-vm.io/docs/"
 )
 
 // WSLEngineDocumentationURL returns the documentation URL for the given WSL engine backend.

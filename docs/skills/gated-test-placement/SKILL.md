@@ -1,8 +1,8 @@
 ---
 name: gated-test-placement
 description: Use when adding tests or measuring coverage, and deciding what the gate really runs.
-version: 1.1.0
-last_updated: 2026-10-04
+version: 1.2.0
+last_updated: 2026-10-26
 tags:
   - testing
   - ci
@@ -83,3 +83,13 @@ command after trimming: `internal/bootc` 68.2% -> 79.5% against a claimed
 73.0% -> 82.5%; the since-removed A/B-partition package 69.7% -> 83.2% against a
 claimed 73.9% -> 95.8%; `internal/homebrew` 73.2% -> 85.5%, the one claim that
 survived measurement roughly intact.
+
+## GSettings defaults are input to the read path
+
+When testing settings resolution, derive a fresh user's values from the shipped
+schema. `gsettings list-recursively` includes schema defaults; it does not return
+an empty string merely because the user has never chosen a value. A recognized
+schema default can therefore bypass an image-dependent fallback entirely.
+`internal/livery`'s `TestLoadAppliesTheGamingDefaultForTheBootedImage` reads the
+schema defaults and also verifies that an explicit selection survives. Keep
+selection resolution separate from enabling or applying a panel override.

@@ -1,7 +1,9 @@
 package troubleshoot
 
 import (
+	"encoding/json"
 	"errors"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,6 +127,26 @@ func TestSetupInstallsTheExtractorBeforeTheCask(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*calls, want) {
 		t.Errorf("brew calls = %v, want %v", *calls, want)
+	}
+}
+
+// Progress counts only the steps that still have work, so a resumed setup
+// reads "(1 of 2)" rather than skipping numbers.
+func TestSetupReportsStepProgressAgainstTheNeededSteps(t *testing.T) {
+	fakeHost(t, "amd64", "linux-mcp-server")
+	recordBrew(t, "")
+
+	var got []string
+	if _, err := Setup(Detect(), func(msg string) { got = append(got, msg) }); err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+
+	want := []string{
+		"Getting ready (1 of 2)",
+		"Installing the Goose app (2 of 2)",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Setup progress = %q, want %q", got, want)
 	}
 }
 
@@ -301,7 +323,7 @@ func TestProfileWriteStaysInsideTheProfile(t *testing.T) {
 		}
 		return nil
 	})
-	want := []string{profile.HintsPath(), profile.ConfigPath()}
+	want := []string{profile.HintsPath(), profile.ConfigPath(), profile.DesktopSettingsPath()}
 	slices.Sort(written)
 	slices.Sort(want)
 	if !reflect.DeepEqual(written, want) {
@@ -309,6 +331,82 @@ func TestProfileWriteStaysInsideTheProfile(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(profile.HintsPath()); string(got) != Hints() {
 		t.Error("hints file does not hold the session instructions")
+	}
+}
+
+// GNOME Wayland asks the user to approve Electron global shortcuts at launch.
+// Missing or persisted Goose defaults are disabled; other choices are kept.
+func TestProfileWriteDisablesOnlyUnchosenGooseGlobalShortcuts(t *testing.T) {
+	cases := map[string]struct {
+		existing    string
+		focus       *string
+		quick       *string
+		legacy      *string
+		inWindowKey string
+	}{
+		"new profile": {},
+		"other settings": {
+			existing:    `{"theme":"dark","keyboardShortcuts":{"settings":"Ctrl+Shift+S"}}`,
+			inWindowKey: "Ctrl+Shift+S",
+		},
+		"chosen focus shortcut": {
+			existing: `{"keyboardShortcuts":{"focusWindow":"Ctrl+Alt+F"}}`,
+			focus:    new("Ctrl+Alt+F"),
+		},
+		"persisted defaults": {
+			existing:    `{"theme":"dark","keyboardShortcuts":{"focusWindow":"CommandOrControl+Alt+G","quickLauncher":"CommandOrControl+Alt+Shift+G","settings":"Ctrl+Shift+S"}}`,
+			inWindowKey: "Ctrl+Shift+S",
+		},
+		"legacy choice": {
+			existing: `{"globalShortcut":"Ctrl+Alt+L"}`,
+			legacy:   new("Ctrl+Alt+L"),
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			withUserConfig(t, t.TempDir())
+			profile := ProfileAt(t.TempDir())
+			if tc.existing != "" {
+				if err := os.MkdirAll(filepath.Dir(profile.DesktopSettingsPath()), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(profile.DesktopSettingsPath(), []byte(tc.existing), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := profile.Write("/opt/linux-mcp-server"); err != nil {
+				t.Fatalf("Write: %v", err)
+			}
+			data, err := os.ReadFile(profile.DesktopSettingsPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			var settings struct {
+				Theme             string             `json:"theme"`
+				GlobalShortcut    *string            `json:"globalShortcut"`
+				KeyboardShortcuts map[string]*string `json:"keyboardShortcuts"`
+			}
+			if err := json.Unmarshal(data, &settings); err != nil {
+				t.Fatalf("settings are not JSON: %v\n%s", err, data)
+			}
+			if tc.legacy != nil {
+				if settings.GlobalShortcut == nil || *settings.GlobalShortcut != *tc.legacy || settings.KeyboardShortcuts != nil {
+					t.Errorf("settings = %s, want the legacy choice untouched", data)
+				}
+				return
+			}
+			for key, want := range map[string]*string{"focusWindow": tc.focus, "quickLauncher": tc.quick} {
+				got, ok := settings.KeyboardShortcuts[key]
+				if !ok || !reflect.DeepEqual(got, want) {
+					t.Errorf("%s = %v, present %v; want %v", key, got, ok, want)
+				}
+			}
+			if tc.inWindowKey != "" {
+				if got := settings.KeyboardShortcuts["settings"]; settings.Theme != "dark" || got == nil || *got != tc.inWindowKey {
+					t.Errorf("settings = %s, want other settings preserved", data)
+				}
+			}
+		})
 	}
 }
 
@@ -392,7 +490,7 @@ func TestCommandIsolatesTheSessionAndWrapsItInLLMMan(t *testing.T) {
 	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
 	profile := ProfileAt("/data")
 
-	cmd, err := Command(state, profile, "bluefin-active")
+	cmd, err := Command(state, profile, "bluefin-active", "")
 	if err != nil {
 		t.Fatalf("Command: %v", err)
 	}
@@ -411,11 +509,56 @@ func TestCommandIsolatesTheSessionAndWrapsItInLLMMan(t *testing.T) {
 
 func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 	ready := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
-	if _, err := Command(State{}, ProfileAt("/data"), "bluefin-active"); err == nil {
+	if _, err := Command(State{}, ProfileAt("/data"), "bluefin-active", ""); err == nil {
 		t.Error("Command succeeded with nothing installed")
 	}
-	if _, err := Command(ready, ProfileAt("/data"), ""); err == nil {
+	if _, err := Command(ready, ProfileAt("/data"), "", ""); err == nil {
 		t.Error("Command succeeded with no model")
+	}
+}
+
+// A supplied prompt reaches Goose only as a new-session link's query value:
+// text that looks like another link or another argument stays inside it.
+func TestNewSessionURLEscapesThePrompt(t *testing.T) {
+	prompt := "why?&recipe=x goose://extension?cmd=sh\n-- --model other"
+	link := NewSessionURL(prompt)
+	parsed, err := url.Parse(link)
+	if err != nil {
+		t.Fatalf("NewSessionURL(%q) = %q, not a URL: %v", prompt, link, err)
+	}
+	if parsed.Scheme != "goose" || parsed.Host != "new-session" || parsed.Path != "" {
+		t.Errorf("link = %q, want goose://new-session", link)
+	}
+	query := parsed.Query()
+	if len(query) != 1 || query.Get("prompt") != prompt {
+		t.Errorf("query = %v, want only prompt=%q", query, prompt)
+	}
+	if !strings.HasPrefix(link, NewSessionURLPrefix+"?") {
+		t.Errorf("link %q does not start with %q", link, NewSessionURLPrefix)
+	}
+}
+
+// llmman forwards everything after `--` to goose-desktop, so the prompt link
+// follows llmman's own arguments and cannot be read as one of them.
+func TestCommandsCarryAPromptAsANewSessionLink(t *testing.T) {
+	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
+	profile := ProfileAt("/data")
+	link := NewSessionURL("check failed units")
+
+	fresh, err := Command(state, profile, "bluefin-active", "check failed units")
+	if err != nil {
+		t.Fatalf("Command: %v", err)
+	}
+	if want := []string{"/bin/llmman", "launch", "goose-desktop", "--model", "bluefin-active", "--", link}; !reflect.DeepEqual(fresh.Args, want) {
+		t.Errorf("Command argv = %v, want %v", fresh.Args, want)
+	}
+
+	reopen, err := ReopenCommand(state, profile, "check failed units")
+	if err != nil {
+		t.Fatalf("ReopenCommand: %v", err)
+	}
+	if want := []string{"/d", link}; !reflect.DeepEqual(reopen.Args, want) {
+		t.Errorf("ReopenCommand argv = %v, want %v", reopen.Args, want)
 	}
 }
 
@@ -425,11 +568,11 @@ func TestCommandRefusesAnIncompleteSetup(t *testing.T) {
 func TestLaunchCommandsKeepGooseOutput(t *testing.T) {
 	state := State{Supported: true, ServerPath: "/s", DesktopPath: "/d", LLMManPath: "/bin/llmman"}
 	profile := ProfileAt("/data")
-	fresh, err := Command(state, profile, "bluefin-active")
+	fresh, err := Command(state, profile, "bluefin-active", "")
 	if err != nil {
 		t.Fatalf("Command: %v", err)
 	}
-	reopen, err := ReopenCommand(state, profile)
+	reopen, err := ReopenCommand(state, profile, "")
 	if err != nil {
 		t.Fatalf("ReopenCommand: %v", err)
 	}

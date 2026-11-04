@@ -57,20 +57,6 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 		wantSubtitle string
 	}{
 		{
-			name:         "curated collection Bluefin CLI",
-			id:           "cli",
-			itemCount:    16,
-			wantTitle:    "Bluefin CLI",
-			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
-		},
-		{
-			name:         "curated collection Extra Wallpapers",
-			id:           "artwork",
-			itemCount:    4,
-			wantTitle:    "Extra Wallpapers",
-			wantSubtitle: "More dinosaur artwork, and wallpaper tools. Includes 4 apps and tools.",
-		},
-		{
 			name:         "curated collection Fonts",
 			id:           "fonts",
 			itemCount:    21,
@@ -122,13 +108,14 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 	}
 }
 
-// Dakota collections are curated, a curated super-bundle member, or explicitly retired.
+// Dakota collections are curated, a curated super-bundle member, or explicitly
+// retired; wallpaper-slideshow is managed only by Livery.
 func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
-		"ai-tools", "artwork", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
+		"ai-tools", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
-		"wallpaper-slideshow",
+		"wallpaper-slideshow", "artwork",
 	} {
 		_, inCatalog := catalog[id]
 		_, inRetired := retired[id]
@@ -153,22 +140,34 @@ func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 }
 
 func TestCuratedCollectionsAreVisibleAndOrdered(t *testing.T) {
-	curatedIDs := []string{"artwork", "cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
+	curatedIDs := []string{"fonts", "fonts-dev", "ai-tools", "full-desktop"}
 	for _, id := range curatedIDs {
 		if !Curated(id) {
 			t.Errorf("Curated(%q) = false, want true", id)
 		}
-		if !Visible(id, nil) {
-			t.Errorf("Visible(%q) = false, want true", id)
+		if got := Visible(id, nil); got == DeveloperCollection(id) {
+			t.Errorf("collection %q must have exactly one consumer: Apps visible=%v, Developer Mode=%v", id, got, DeveloperCollection(id))
 		}
 	}
 	for i, id := range curatedIDs {
-		if got := Order(id); got != i+1 {
-			t.Errorf("Order(%q) = %d, want %d", id, got, i+1)
+		if got := Order(id); got != i+3 {
+			t.Errorf("Order(%q) = %d, want %d", id, got, i+3)
 		}
 	}
 	if Order("custom-admin-pack") != 100 {
 		t.Errorf("Order(custom-admin-pack) = %d, want 100", Order("custom-admin-pack"))
+	}
+}
+
+func TestDeveloperCollectionsAreRelocatedWithoutChangingTheirSelection(t *testing.T) {
+	for _, id := range []string{"cli", "fonts-dev", "fonts", "dakota-fonts", "ai-tools", "full-desktop", "team-tools", DeveloperAppsCollection, "wallpaper-slideshow"} {
+		want := id == "fonts-dev"
+		if got := DeveloperCollection(id); got != want {
+			t.Errorf("DeveloperCollection(%q) = %v, want %v", id, got, want)
+		}
+		if want && Visible(id, nil) {
+			t.Errorf("relocated collection %q must stay absent from Apps", id)
+		}
 	}
 }
 
@@ -184,6 +183,18 @@ func TestRetiredCollectionsAreNotVisible(t *testing.T) {
 	// Unknown user-added collections remain visible.
 	if !Visible("team-tools", nil) {
 		t.Errorf("Visible(team-tools) = false, want true for custom user collection")
+	}
+}
+
+func TestBluefinCLIIsNotOfferedAsACollection(t *testing.T) {
+	if Visible("cli", map[string]homebrew.Bundle{"cli": {Name: "cli"}}) {
+		t.Fatal("legacy cli.Brewfile must not offer a second Bluefin CLI installer")
+	}
+	if DeveloperCollection("cli") {
+		t.Fatal("legacy cli.Brewfile must not offer a Developer Mode installer")
+	}
+	if !Visible("team-tools", nil) {
+		t.Fatal("retiring Bluefin CLI must preserve administrator collections")
 	}
 }
 
@@ -223,15 +234,15 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 // itself, and resolve only against collections actually discovered.
 func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
 	discovered := map[string]homebrew.Bundle{
-		"artwork":             {Name: "artwork", Path: "/b/artwork.Brewfile", ItemCount: 2},
-		"wallpaper-slideshow": {Name: "wallpaper-slideshow", Path: "/b/wallpaper-slideshow.Brewfile", ItemCount: 1},
-		"fonts":               {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+		"fonts":        {Name: "fonts", Path: "/b/fonts.Brewfile", ItemCount: 5},
+		"dakota-fonts": {Name: "dakota-fonts", Path: "/b/dakota-fonts.Brewfile", ItemCount: 1},
 	}
 
-	got := MemberBundles("artwork", discovered)
-	if len(got) != 1 || got[0].Path != "/b/wallpaper-slideshow.Brewfile" {
-		t.Errorf("MemberBundles(artwork) = %v, want only wallpaper-slideshow", got)
+	got := MemberBundles("fonts", discovered)
+	if len(got) != 1 || got[0].Path != "/b/dakota-fonts.Brewfile" {
+		t.Errorf("MemberBundles(fonts) = %v, want only dakota-fonts", got)
 	}
+	delete(discovered, "dakota-fonts")
 	if got := MemberBundles("fonts", discovered); len(got) != 0 {
 		t.Errorf("MemberBundles(fonts) = %v, want none when dakota-fonts was not discovered", got)
 	}
@@ -340,5 +351,24 @@ func TestPresentContentsReportsOverflowWhenItemsAreCropped(t *testing.T) {
 	}
 	if got.EmptySubtitle != ContentsHiddenSubtitle {
 		t.Errorf("EmptySubtitle = %q, want %q", got.EmptySubtitle, ContentsHiddenSubtitle)
+	}
+}
+
+func TestEntryDescription(t *testing.T) {
+	for _, tc := range []struct {
+		item homebrew.BundleItem
+		want string
+	}{
+		{homebrew.BundleItem{Kind: homebrew.BundleItemBrew, Description: "JSON processor"}, "JSON processor"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemCask}, "Description unavailable"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Description unavailable"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemMas}, ""},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemVSCode}, ""},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak, Description: "Calculator"}, "Calculator"},
+		{homebrew.BundleItem{Description: "  "}, ""},
+	} {
+		if got := EntryDescription(tc.item); got != tc.want {
+			t.Errorf("got %q, want %q", got, tc.want)
+		}
 	}
 }

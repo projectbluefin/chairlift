@@ -23,6 +23,11 @@ const helpRouteName = "help"
 // surface, and a rename can never drift the two apart.
 const AgentModeRoute = "agents"
 
+// DXModeRoute is the canonical route the --dx-mode launch intent opens.
+// internal/app resolves the launch decision through this constant, so the launch
+// intent reaches the Developer Mode detail directly.
+const DXModeRoute = "developer"
+
 // Kind classifies a route by the way a user enters it.
 type Kind string
 
@@ -164,11 +169,13 @@ var routes = []Item{
 		Icon:  "application-x-addon-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("features_page",
+			"bluefin_cli_group",
 			"features_group",
 			"desktop_integrations_group",
 			"dx_group",
 			"gaming_group",
 			"printers_group",
+			"compass_group",
 		),
 	},
 	{
@@ -178,6 +185,7 @@ var routes = []Item{
 		Kind:  KindPrimary,
 		Refs: refsOn("livery_page",
 			"account_group",
+			"wallpapers_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
@@ -223,6 +231,13 @@ var routes = []Item{
 			{Page: "maintenance_page", Group: "reset_group"},
 			{Page: "updates_page", Group: "bootc_updates_group"},
 		},
+	},
+	{
+		Name:   "developer",
+		Title:  "Developer Mode",
+		Kind:   KindDetail,
+		Parent: "features",
+		Refs:   refsOn("features_page", "dx_group"),
 	},
 }
 

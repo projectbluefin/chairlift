@@ -48,7 +48,7 @@
     </key>
 
     <key name="panel-foundation" type="s">
-      <default>'cncf'</default>
+      <default>''</default>
       <summary>Selected foundation for the GNOME panel</summary>
       <description>A foundation id from internal/livery's catalog, or 'custom' to use panel-custom-path. An unset or unknown value resolves to this machine's default, which is the Open Gaming Collective on a gaming image and CNCF elsewhere.</description>
     </key>

@@ -99,6 +99,9 @@ jobs:
         with:
           app-id: ${{ secrets.MERGERAPTOR_APP_ID }}
           private-key: ${{ secrets.MERGERAPTOR_PRIVATE_KEY }}
+          # Only what create-pull-request and `gh pr merge --auto` need.
+          permission-contents: write
+          permission-pull-requests: write
 
       # RELEASE_TAG is drawn from an attacker-influenceable git ref name
       # (head_branch) or a free-text workflow_dispatch input. Action inputs

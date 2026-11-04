@@ -47,6 +47,29 @@ func TestHomebrewCheckMapsOutdatedPackages(t *testing.T) {
 	}
 }
 
+func TestHomebrewCheckOmitsPinnedFormulae(t *testing.T) {
+	provider := newHomebrew(HomebrewDeps{
+		Installed: func() bool { return true },
+		ListOutdated: func() ([]homebrew.Package, error) {
+			return []homebrew.Package{
+				{Name: "ripgrep", Version: "14.1.0"},
+				{Name: "node", Version: "22.1.0", Pinned: true},
+			}, nil
+		},
+	})
+
+	got, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	want := updateflow.CheckResult{Items: []updateflow.Item{
+		{Name: "ripgrep", CurrentVersion: "14.1.0"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Check() = %#v, want %#v: brew upgrade skips a pinned formula, so it is not an applicable update", got, want)
+	}
+}
+
 func TestHomebrewCheckReturnsEmptyOutdatedList(t *testing.T) {
 	provider := newHomebrew(HomebrewDeps{
 		Installed:    func() bool { return true },
@@ -159,5 +182,32 @@ func TestHomebrewApplyDryRunReportsPreviewWithoutCompletedMutation(t *testing.T)
 	}
 	if !result.Preview {
 		t.Fatal("dry-run Apply() does not report preview")
+	}
+}
+
+func TestHomebrewApplyReportsEachPhaseBeforeRunningIt(t *testing.T) {
+	var events []string
+	provider := newHomebrew(HomebrewDeps{
+		Update: func(context.Context) error {
+			events = append(events, "update")
+			return nil
+		},
+		Upgrade: func(context.Context, string) error {
+			events = append(events, "upgrade")
+			return nil
+		},
+	})
+
+	if _, err := provider.Apply(context.Background(), []updateflow.Item{{Name: "jq"}}, func(p updateflow.Progress) {
+		if p.Source != updateflow.DeveloperTools {
+			t.Errorf("progress source = %v, want %v", p.Source, updateflow.DeveloperTools)
+		}
+		events = append(events, p.Message)
+	}); err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	want := []string{"Updating software list…", "update", "Upgrading tools…", "upgrade"}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("Apply() events = %q, want %q", events, want)
 	}
 }

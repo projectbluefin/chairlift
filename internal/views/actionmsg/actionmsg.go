@@ -426,6 +426,30 @@ func ChannelSwitch(dryRun bool, toTesting bool) FeatureToggleDecision {
 	}
 }
 
+// GameModeSwitch decides whether the Game Mode switch should confirm its new
+// state, and what toast to show. Confirm is exactly !dryRun because under dry-run
+// no bootc switch occurred.
+func GameModeSwitch(dryRun bool, enable bool) FeatureToggleDecision {
+	target := "standard mode"
+	if enable {
+		target = "Game Mode"
+	}
+	if dryRun {
+		return FeatureToggleDecision{
+			Confirm: false,
+			Toast:   fmt.Sprintf("[DRY-RUN] Preview: would switch to %s — no changes made", target),
+		}
+	}
+	state := "off"
+	if enable {
+		state = "on"
+	}
+	return FeatureToggleDecision{
+		Confirm: true,
+		Toast:   fmt.Sprintf("Game Mode is %s. Restart to finish.", state),
+	}
+}
+
 // DeveloperMode decides whether the Developer Mode switch should confirm its
 // new state, and what toast to show. The live toasts name the re-login
 // requirement because supplementary group membership only takes effect in a

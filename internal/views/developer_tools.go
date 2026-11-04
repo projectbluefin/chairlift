@@ -11,22 +11,44 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/capability"
+	"github.com/projectbluefin/chairlift/internal/devmenu"
+	"github.com/projectbluefin/chairlift/internal/devsetup"
 	"github.com/projectbluefin/chairlift/internal/devtools"
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
+	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 )
 
 type developerOptionRow struct {
-	kind      string
-	row       *adw.ActionRow
-	toggle    *guardedSwitch
-	spinner   *gtk.Spinner
-	allowed   bool
-	canEnable bool
-	active    bool
+	kind          string
+	row           *adw.ExpanderRow
+	toggle        *guardedSwitch
+	spinner       *gtk.Spinner
+	allowed       bool
+	canEnable     bool
+	canDisable    bool
+	active        bool
+	awaitingLogin bool
+	packageRow    *adw.ActionRow
+}
+
+func (uh *UserHome) updateWSLPackage(item *developerOptionRow) {
+	if item.packageRow == nil {
+		return
+	}
+	name, cask := devtools.WSLPackage(uh.wslBackend)
+	kind := homebrew.BundleItemBrew
+	if cask {
+		kind = homebrew.BundleItemCask
+	}
+	item.packageRow.SetTitle(name)
+	item.packageRow.SetSubtitle(bundleview.ContentsKindLabel(kind))
 }
 
 func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ublue.Status) {
@@ -41,14 +63,26 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		{"wsl", "WSL Mode"},
 		{"docker", "Enable Docker"},
 	} {
-		item := &developerOptionRow{kind: choice.kind, row: adw.NewActionRow(), spinner: newActivitySpinner()}
+		item := &developerOptionRow{kind: choice.kind, row: adw.NewExpanderRow(), spinner: newActivitySpinner()}
+		item.row.SetUseMarkup(false)
 		item.row.SetTitle(choice.title)
 		item.row.SetSubtitle("Checking…")
 		item.row.AddSuffix(&item.spinner.Widget)
 		item.toggle = newGuardedSwitch(false, func(enabled bool) { uh.onDeveloperOption(item, enabled) })
+		SetAccessibleLabel(item.toggle.widget, choice.title)
 		item.toggle.widget.SetSensitive(false)
 		item.row.AddSuffix(&item.toggle.widget.Widget)
-		item.row.SetActivatableWidget(&item.toggle.widget.Widget)
+		if choice.kind == "docker" {
+			for _, name := range dockerbrew.Formulae() {
+				addSetupContents(item.row, name, pageview.DockerRuntimeContents)
+			}
+			for _, name := range dockerbrew.CLIFormulae() {
+				addSetupContents(item.row, name, pageview.DockerCLIContents)
+			}
+		} else {
+			item.packageRow = addSetupContents(item.row, "", "")
+			uh.updateWSLPackage(item)
+		}
 		group.Add(&item.row.Widget)
 		uh.developerOptions = append(uh.developerOptions, item)
 
@@ -88,6 +122,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 					return
 				}
 				uh.wslBackend = target
+				uh.updateWSLPackage(item)
 				if uh.wslDocBtn != nil {
 					tip := pageview.WSLEngineDocumentationTooltip(target)
 					uh.wslDocBtn.SetTooltipText(tip)
@@ -96,7 +131,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 				uh.refreshDeveloperOptions(status)
 			}
 			combo.ConnectNotify(&uh.wslBackendNotify)
-			group.Add(&combo.Widget)
+			item.row.AddRow(&combo.Widget)
 		}
 	}
 	// Initial reads share the action gate too; an older load cannot overwrite
@@ -137,6 +172,15 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		}
 		docker, dockerErr := devtools.DockerStatus(ctx)
 		kvmExists, kvmAccess := devtools.KVMAvailable()
+		var nslGroupErr error
+		if backend == devtools.BackendNSL && kvmExists {
+			member, err := devtools.NSLKVMGroupMember()
+			if err != nil {
+				log.Printf("views: nsl group check failed: %v", err)
+			}
+			nslGroupErr = err
+			kvmAccess = kvmAccess && err == nil && member
+		}
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
 			if resolve {
@@ -162,9 +206,14 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 			}
 			brew := uh.capabilities[capability.Homebrew]
 			for _, item := range uh.developerOptions {
+				uh.updateWSLPackage(item)
+			}
+			for _, item := range uh.developerOptions {
 				switch item.kind {
 				case "wsl":
-					item.active = wsl.Running
+					if wslErr == nil {
+						item.active = wsl.Running
+					}
 					if backend == devtools.BackendLima {
 						item.canEnable = devtools.HostSupported() && brew && kvmExists && (kvmAccess || status.Supports(ubluehelper.CommandKVMEnable))
 						item.allowed = wslErr == nil && (wsl.Running || item.canEnable)
@@ -212,6 +261,11 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 							item.allowed = false
 							item.toggle.set(item.active)
 							item.row.SetSubtitle(actionable)
+						} else if nslGroupErr != nil {
+							item.canEnable = false
+							item.allowed = false
+							item.toggle.set(item.active)
+							item.row.SetSubtitle(devtools.NeedsPrerequisite)
 						} else if !kvmAccess {
 							item.canEnable = status.Supports(ubluehelper.CommandKVMEnable)
 							item.allowed = item.canEnable
@@ -225,14 +279,28 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						}
 					}
 				case "docker":
-					item.active = docker.Active
-					item.canEnable = docker.Available && brew && status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable)
-					item.allowed = dockerErr == nil && status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) && (docker.Active || item.canEnable)
-					item.toggle.set(item.active)
-					item.row.SetSubtitle(dockerSubtitle(docker, dockerErr))
-					if !status.Supports(ubluehelper.CommandDockerEnable, ubluehelper.CommandDockerDisable) {
-						item.row.SetSubtitle("Docker isn't available on this computer.")
+					// A running daemon this account cannot reach still counts as
+					// observed; it reads off so the switch dispatches enable.
+					observed := dockerErr == nil || docker.Active
+					if observed {
+						item.active = pageview.DockerSwitchOn(docker)
 					}
+					enableCmd := status.Supports(ubluehelper.CommandDockerEnable)
+					updateCmd := status.Supports(ubluehelper.CommandDockerUpdate)
+					item.canEnable = pageview.DockerCanEnable(docker, enableCmd, updateCmd)
+					item.canDisable = status.Supports(ubluehelper.CommandDockerDisable)
+					item.allowed = observed && pageview.DockerControlAllowed(item.active, item.canEnable, item.canDisable)
+					item.toggle.set(item.active)
+					item.row.SetSubtitle(pageview.DockerSubtitle(docker, dockerErr))
+					if observed && !item.active && pageview.DockerHelperNeedsUpdate(docker, enableCmd, updateCmd) {
+						item.row.SetSubtitle(pageview.DockerHelperOutdated)
+					} else if observed && !item.allowed && docker.Unavailable == "" && !docker.NeedsLogin {
+						item.row.SetSubtitle("Docker controls aren't available on this computer.")
+					}
+				}
+				if !item.active && !uh.developerEnabled && !uh.developerCanToggle {
+					item.allowed = false
+					item.row.SetSubtitle("Developer Mode must be enabled first, but its administrator action isn't installed.")
 				}
 			}
 			uh.setDeveloperSensitive(true)
@@ -252,6 +320,11 @@ func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
 			item.toggle.widget.SetSensitive(sensitive && item.allowed)
 		}
 	}
+	if uh.developerApps != nil {
+		for _, item := range uh.developerApps.rows {
+			item.button.SetSensitive(sensitive && item.checked && !item.status.Installed && (item.status.Available || item.status.Err != nil))
+		}
+	}
 }
 
 func wslSubtitle(backend string, state devtools.WSLState, err error) string {
@@ -260,13 +333,13 @@ func wslSubtitle(backend string, state devtools.WSLState, err error) string {
 		case err != nil:
 			return "Couldn't check the Ubuntu virtual machine."
 		case state.Ready:
-			return "Ubuntu is ready. In your editor, connect with Remote SSH to lima-ubuntu."
+			return "Ubuntu is ready in Lima. Run limactl shell ubuntu, or connect your editor over SSH to lima-ubuntu."
 		case state.Running:
 			return "Ubuntu is running but not ready yet."
 		case state.Exists:
 			return "Ubuntu is stopped. Your files are kept."
 		default:
-			return "Run Ubuntu in a virtual machine that shares your home folder. Downloads about 600 MB."
+			return "Run Ubuntu LTS in a Lima virtual machine with writable access to your home folder. Downloads about 600 MB. Open a terminal with limactl shell ubuntu."
 		}
 	}
 	switch {
@@ -283,105 +356,228 @@ func wslSubtitle(backend string, state devtools.WSLState, err error) string {
 	}
 }
 
-func dockerSubtitle(state devtools.DockerState, err error) string {
-	switch {
-	case err != nil:
-		return "Couldn't check whether Docker is running."
-	case state.Ready:
-		return "Docker is ready. Anyone using Docker can control this whole computer."
-	case state.Active:
-		return "Docker is running. Log out and back in to use it."
-	case !state.Available:
-		return "Docker isn't available on this system, so containers can't run here."
-	default:
-		return "Asks for your administrator password. Anyone using Docker can control this whole computer."
-	}
+func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
+	uh.runDeveloperOption(item, enabled, false, enabled && !uh.developerEnabled)
 }
 
-func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
-	if !item.allowed || !uh.developerGate.TryStart() {
+func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry, post bool) {
+	allowed := item.allowed
+	if retry {
+		if item.kind == "docker" {
+			allowed = (enabled && item.canEnable) || (!enabled && item.canDisable)
+		} else {
+			// A failed read must not erase the original prerequisites or the
+			// last observed running machine's ability to stop.
+			allowed = (enabled && item.canEnable) || (!enabled && item.active)
+		}
+	}
+	if !allowed || !uh.developerGate.TryStart() {
+		sgtk.RunOnMainThread(func() { item.toggle.set(item.active) })
 		return
 	}
-	before := item.row.GetSubtitle()
+	request := devsetup.ChildRequest(uh.developerEnabled, enabled, dryrun.Enabled())
+	if request.ChangeDeveloper && !uh.developerCanToggle {
+		uh.developerGate.Reset()
+		sgtk.RunOnMainThread(func() { item.toggle.set(item.active) })
+		return
+	}
+	before, title, backend := item.row.GetSubtitle(), item.row.GetTitle(), uh.wslBackend
+	ctx := context.Background() // Providers bound each command, not the full download.
+	var operationErr, stateErr, editorErr error
+	var previous map[devsetup.Stage]bool
+	var observed bool
+	var wsl devtools.WSLState
+	var docker devtools.DockerState
+	awaitingLogin := item.awaitingLogin
+	progress := func(stage string) {
+		uh.developerSetupActivity.detail(stage)
+		sgtk.RunOnMainThread(func() { item.row.SetSubtitle(stage) })
+	}
+	tasks := []devsetup.Task{
+		{Stage: devsetup.Tools, Run: func() error {
+			switch item.kind {
+			case "wsl":
+				if enabled && !request.Preview && awaitingLogin {
+					if _, accessible := devtools.KVMAvailable(); !accessible {
+						operationErr = devtools.ErrNewLogin
+						return devsetup.ErrAwaitingLogin
+					}
+					awaitingLogin = false
+				}
+				operationErr = devtools.SetWSL(ctx, backend, enabled, progress)
+				if errors.Is(operationErr, devtools.ErrNewLogin) {
+					awaitingLogin = true
+					return devsetup.ErrAwaitingLogin
+				}
+			case "docker":
+				if retry && enabled && !request.Preview && previous[devsetup.Tools] {
+					// A completed activation is not repeated to acquire groups in
+					// this process. Observe first; only a daemon this account
+					// cannot use yet needs enable.
+					docker, stateErr = devtools.DockerStatus(ctx)
+					if docker.Ready || docker.NeedsLogin {
+						return nil
+					}
+					if stateErr != nil && !docker.NoAccess {
+						operationErr = stateErr
+						return operationErr
+					}
+				}
+				operationErr = devtools.SetDocker(ctx, enabled, progress)
+				if errors.Is(operationErr, devtools.ErrDockerNewLogin) {
+					// The helper enabled Docker; Verify still awaits login. A
+					// CLI that failed to install is still this stage's failure.
+					var cliErr *devtools.DockerCLIError
+					if errors.As(operationErr, &cliErr) {
+						return cliErr
+					}
+					return nil
+				}
+			}
+			return operationErr
+		}},
+		{Stage: devsetup.Verify, Run: func() error {
+			observed = true
+			var ready bool
+			switch item.kind {
+			case "wsl":
+				wsl, stateErr = devtools.WSLStatus(ctx, backend)
+				if enabled && !request.Preview && errors.Is(operationErr, devtools.ErrNewLogin) {
+					return devsetup.ErrAwaitingLogin
+				}
+				ready = (!enabled && !wsl.Running) || (enabled && wsl.Ready)
+			case "docker":
+				docker, stateErr = devtools.DockerStatus(ctx)
+				if enabled && !request.Preview && (docker.NeedsLogin || errors.Is(stateErr, devtools.ErrDockerNewLogin)) {
+					return devsetup.ErrAwaitingLogin
+				}
+				ready = (!enabled && !docker.Active) || (enabled && docker.Ready)
+				if request.Preview && docker != (devtools.DockerState{}) {
+					// A preview changed nothing; once the units were read, a
+					// socket this session cannot ping says nothing about it.
+					stateErr = nil
+				}
+			}
+			if stateErr != nil {
+				return stateErr
+			}
+			if !request.Preview && !ready {
+				return errors.New("the requested service state is not ready")
+			}
+			return nil
+		}},
+	}
+	if item.kind == "docker" && enabled {
+		tasks = append(tasks, devsetup.Task{Stage: devsetup.VSCode, Optional: true, Run: func() error {
+			if operationErr != nil && !errors.Is(operationErr, devtools.ErrDockerNewLogin) {
+				return devsetup.ErrSkipped
+			}
+			err := devtools.SetupVSCode(ctx, progress)
+			if errors.Is(err, devtools.ErrVSCodeNotInstalled) {
+				return devsetup.ErrSkipped // No editor to set up is not a failure.
+			}
+			editorErr = err
+			return editorErr
+		}})
+	}
+	if post {
+		tasks = append(tasks, uh.developerPostTasks(true, true)...)
+	}
+	if !uh.developerSetupActivity.begin(title, setupStages(request.ChangeDeveloper, tasks), retry, func() {
+		uh.runDeveloperOption(item, enabled, true, post)
+	}) {
+		uh.developerGate.Reset()
+		sgtk.RunOnMainThread(func() { item.toggle.set(item.active) })
+		return
+	}
+	previous = uh.developerSetupActivity.completed
 	uh.setDeveloperSensitive(false)
 	setActivitySpinner(item.spinner, true)
 	item.row.SetSubtitle("Preparing…")
-	title := item.row.GetTitle()
-	backend := uh.wslBackend
 	go func() {
-		// The worker carries no overall deadline on purpose: an nsl or Lima
-		// first start downloads for longer than any read budget, and a
-		// privileged helper call must not be cut mid-flight. Every step
-		// instead carries its own bound — devtools and Homebrew commands
-		// their read/mutation class timeout, and each status probe below
-		// devtools' statusTimeout — so the completion below, which resets
-		// developerGate and restores the controls, is reached without user
-		// action except for an authentication prompt, which the user answers
-		// or dismisses (#487).
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		progress := func(stage string) { sgtk.RunOnMainThread(func() { item.row.SetSubtitle(stage) }) }
-		var err error
-		var wsl devtools.WSLState
-		var docker devtools.DockerState
-		var stateErr error
-		switch item.kind {
-		case "wsl":
-			err = devtools.SetWSL(ctx, backend, enabled, progress)
-			wsl, stateErr = devtools.WSLStatus(ctx, backend)
-		case "docker":
-			err = devtools.SetDocker(ctx, enabled, progress)
-			docker, stateErr = devtools.DockerStatus(ctx)
-		}
-		if err != nil && !errors.Is(err, devtools.ErrNewLogin) {
-			log.Printf("views: %s failed: %v", title, err)
-		}
-		if stateErr != nil {
-			log.Printf("views: developer option state read failed: %v", stateErr)
+		var menuErr error
+		var grantSucceeded bool
+		var skipped []string
+		result := devsetup.Run(ctx, request, func() error {
+			helperCtx, cancel := ublue.DefaultContext()
+			defer cancel()
+			var err error
+			skipped, err = ublue.SetDeveloperMode(helperCtx, true)
+			grantSucceeded = err == nil
+			return err
+		}, tasks, previous, uh.developerSetupReport(true))
+		if grantSucceeded {
+			menuCtx, cancel := ublue.DefaultContext()
+			menuErr = devmenu.Apply(menuCtx, true)
+			cancel()
 		}
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
 			setActivitySpinner(item.spinner, false)
-			if dryrun.Enabled() {
+			uh.developerEnabled = result.Developer
+			if uh.developerEntryRow != nil {
+				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(result.Developer).Subtitle)
+			}
+			if !request.Preview {
+				item.awaitingLogin = awaitingLogin
+			}
+			if uh.developerToggle != nil {
+				uh.developerToggle.set(result.Developer)
+			}
+			if result.Promoted && uh.developerRow != nil {
+				uh.developerRow.SetSubtitle(pageview.DeveloperResultSubtitle(true))
+				uh.openDeveloperOnboarding(true, true)
+				uh.toastAdder.ShowToast(actionmsg.DeveloperMode(false, true, skipped).Toast)
+			}
+			if request.Preview || !observed {
 				item.row.SetSubtitle(before)
-				if item.toggle != nil {
-					item.toggle.set(item.active)
-				}
-				if err == nil {
-					uh.toastAdder.ShowToast("[DRY-RUN] Preview: " + item.row.GetTitle() + " — no changes made")
-				}
 			} else {
 				switch item.kind {
 				case "wsl":
 					if stateErr == nil {
 						item.active = wsl.Running
-						item.allowed = item.active || item.canEnable
 					}
-					item.toggle.set(item.active)
-					item.row.SetSubtitle(wslSubtitle(uh.wslBackend, wsl, stateErr))
+					item.allowed = stateErr == nil && (item.active || item.canEnable)
+					item.row.SetSubtitle(wslSubtitle(backend, wsl, stateErr))
 				case "docker":
-					if stateErr == nil {
-						item.active = docker.Active
-						item.allowed = item.active || item.canEnable
+					if stateErr == nil || docker.Active {
+						item.active = pageview.DockerSwitchOn(docker)
 					}
-					item.toggle.set(item.active)
-					item.row.SetSubtitle(dockerSubtitle(docker, stateErr))
+					item.allowed = (stateErr == nil || docker.Active) && pageview.DockerControlAllowed(item.active, item.canEnable, item.canDisable)
+					item.row.SetSubtitle(pageview.DockerSubtitle(docker, stateErr))
 				}
-				if errors.Is(err, devtools.ErrNewLogin) {
+				if errors.Is(operationErr, devtools.ErrDockerNewLogin) {
+					item.row.SetSubtitle(pageview.DockerSubtitle(docker, operationErr))
+				} else if errors.Is(operationErr, devtools.ErrNewLogin) {
 					item.row.SetSubtitle(pageview.KVMAccessNeedsNewLogin)
-				} else if err != nil && !pkexec.IsAuthDismissed(err) {
-					item.row.SetSubtitle(developerOptionFailure(item, enabled, err))
+				} else if operationErr != nil && !pkexec.IsAuthDismissed(operationErr) {
+					item.row.SetSubtitle(developerOptionFailure(item, enabled, operationErr))
 				}
 			}
-			if errors.Is(err, devtools.ErrNewLogin) {
-				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
-			} else if err != nil {
-				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, developerOptionFailure(item, enabled, err)))
+			item.toggle.set(item.active)
+			uh.developerSetupActivity.finish(result, request.Preview)
+			uh.setDeveloperSensitive(true)
+			if menuErr != nil {
+				log.Printf("views: developer menu update failed: %v", menuErr)
+				uh.toastAdder.ShowErrorToast("Couldn't update the developer entries in the top bar menu.")
 			}
-			if !dryrun.Enabled() && err == nil {
+			if !request.Preview && len(result.Completed) > 0 {
 				uh.homebrewInventoryChanged()
 			}
-			uh.setDeveloperSensitive(true)
+			if (item.kind == "docker" && result.AwaitingLogin) || errors.Is(operationErr, devtools.ErrDockerNewLogin) {
+				uh.toastAdder.ShowToast(pageview.DockerSubtitle(docker, devtools.ErrDockerNewLogin))
+			} else if errors.Is(operationErr, devtools.ErrNewLogin) {
+				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
+			} else if result.Err != nil && editorErr == nil {
+				log.Printf("views: %s setup failed: %v", title, result.Err)
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(result.Err, title+" setup needs attention. Retry the failed steps."))
+			} else if request.Preview && editorErr == nil {
+				uh.toastAdder.ShowToast("[DRY-RUN] Preview: " + title + " — no changes made")
+			}
+			if editorErr != nil {
+				log.Printf("views: VS Code setup failed: %v", editorErr)
+				uh.toastAdder.ShowErrorToast(pageview.DockerEditorFailure(request.Preview))
+			}
 		})
 	}()
 }

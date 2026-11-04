@@ -139,7 +139,7 @@ func TestDefaultProfileWithoutAHome(t *testing.T) {
 
 func TestReopenCommandStartsTheDesktopAppInTheProfile(t *testing.T) {
 	profile := ProfileAt("/data")
-	cmd, err := ReopenCommand(State{DesktopPath: "/opt/goose-desktop"}, profile)
+	cmd, err := ReopenCommand(State{DesktopPath: "/opt/goose-desktop"}, profile, "")
 	if err != nil {
 		t.Fatalf("ReopenCommand: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestReopenCommandStartsTheDesktopAppInTheProfile(t *testing.T) {
 }
 
 func TestReopenCommandRefusesAMissingDesktopApp(t *testing.T) {
-	if cmd, err := ReopenCommand(State{LLMManPath: "/bin/llmman"}, ProfileAt("/data")); err == nil {
+	if cmd, err := ReopenCommand(State{LLMManPath: "/bin/llmman"}, ProfileAt("/data"), ""); err == nil {
 		t.Errorf("ReopenCommand = %v, nil; want an error with no desktop app", cmd.Args)
 	}
 }
@@ -207,7 +207,7 @@ func TestSetupReportsOnlyTheStepsItRuns(t *testing.T) {
 	if _, err := Setup(Detect(), func(name string) { progress = append(progress, name) }); err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
-	if want := []string{"Getting ready", "Installing the Goose app"}; !reflect.DeepEqual(progress, want) {
+	if want := []string{"Getting ready (1 of 2)", "Installing the Goose app (2 of 2)"}; !reflect.DeepEqual(progress, want) {
 		t.Errorf("progress = %v, want %v", progress, want)
 	}
 }
@@ -289,8 +289,10 @@ func TestProfileWriteWithoutAUserConfigDir(t *testing.T) {
 	if err := profile.Write("/opt/linux-mcp-server"); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
-	if _, err := os.Stat(profile.DesktopConfigHome()); !errors.Is(err, os.ErrNotExist) {
-		t.Errorf("desktop config home exists (%v); nothing should have been linked", err)
+	for _, name := range sharedDesktopSettings {
+		if _, err := os.Lstat(filepath.Join(profile.DesktopConfigHome(), name)); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("%s exists (%v); nothing should have been linked", name, err)
+		}
 	}
 }
 

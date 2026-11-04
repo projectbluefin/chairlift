@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"
@@ -106,6 +107,7 @@ func acceptedHelperCommands() []acceptedCommand {
 		switchCases("unpin to stream", ubluehelper.CommandUnpin, "", "pin target:"),
 		switchCases("channel switch to stable", ubluehelper.CommandChannelSwitch, ubluehelper.ChannelStable, "no stable image is defined for the running tag"),
 		switchCases("driver switch to standard", ubluehelper.CommandDriverSwitch, string(imageinfo.DriverStandard), "no standard image is published for"),
+		switchCases("gaming switch to gaming", ubluehelper.CommandGamingSwitch, "enable", "no gaming image is published for", "no matching gaming image is published for"),
 		{
 			name:              "developer mode enable",
 			helper:            ublue,
@@ -133,16 +135,13 @@ func acceptedHelperCommands() []acceptedCommand {
 			args: []string{ubluehelper.CommandKVMEnable, "--dry-run"}, needsInvokingUser: true,
 			wantStdout: []string{"[DRY-RUN] would execute: usermod [-aG kvm "},
 		},
-		{
-			name: "Docker enable", helper: ublue, command: ubluehelper.CommandDockerEnable,
-			args: []string{ubluehelper.CommandDockerEnable, "--dry-run"}, needsInvokingUser: true,
-			wantStdout: []string{"[DRY-RUN] would execute: usermod [-aG docker ", "[DRY-RUN] would execute: systemctl [enable --now docker.socket docker.service]"},
-		},
+		dockerEnableCase(),
 		{
 			name: "Docker disable", helper: ublue, command: ubluehelper.CommandDockerDisable,
 			args:       []string{ubluehelper.CommandDockerDisable, "--dry-run"},
 			wantStdout: []string{"[DRY-RUN] would execute: systemctl [disable --now docker.socket docker.service]"},
 		},
+		dockerUpdateCase(),
 		{
 			name:       "restart",
 			helper:     ublue,
@@ -211,6 +210,56 @@ func acceptedHelperCommands() []acceptedCommand {
 			wantStderr: []string{absentUpdexFeature, "not found"},
 		},
 	}
+}
+
+// dockerEnableCase expects the branch the helper takes on this host: an
+// image that ships docker.service enables it, and any other host installs
+// the runtime from verified Homebrew bottles. Both previews are offline.
+func dockerEnableCase() acceptedCommand {
+	this := acceptedCommand{
+		name: "Docker enable", helper: "chairlift-helper", command: ubluehelper.CommandDockerEnable,
+		args: []string{ubluehelper.CommandDockerEnable, "--dry-run"}, needsInvokingUser: true,
+	}
+	if dockerPathExists(dockerbrew.ImageUnitPath) {
+		this.wantStdout = []string{
+			"[DRY-RUN] would execute: usermod [-aG docker ",
+			"[DRY-RUN] would execute: systemctl [enable --now docker.socket docker.service]",
+		}
+		return this
+	}
+	this.wantStdout = []string{
+		"[DRY-RUN] would fetch and verify " + dockerbrew.IndexURL + "\n",
+		"[DRY-RUN] would install Homebrew formulae " + strings.Join(dockerbrew.Formulae(), " ") + " into " + dockerbrew.Root + "\n",
+		"[DRY-RUN] would write " + dockerbrew.UnitDir + "/docker.service and " + dockerbrew.UnitDir + "/docker.socket\n",
+		"[DRY-RUN] would execute: systemctl [daemon-reload]\n",
+		"[DRY-RUN] would execute: usermod [-aG docker ",
+		"[DRY-RUN] would execute: systemctl [enable --now docker.socket]\n",
+		"[DRY-RUN] would execute: systemctl [start docker.service]\n",
+	}
+	return this
+}
+
+// dockerUpdateCase expects "nothing to update" unless this host carries a
+// Homebrew runtime, in which case the offline preview is required.
+func dockerUpdateCase() acceptedCommand {
+	this := acceptedCommand{
+		name: "Docker update", helper: "chairlift-helper", command: ubluehelper.CommandDockerUpdate,
+		args: []string{ubluehelper.CommandDockerUpdate, "--dry-run"},
+	}
+	if dockerPathExists(dockerbrew.ImageUnitPath) || !dockerPathExists(dockerbrew.ManifestPath) {
+		this.wantStdout = []string{ubluehelper.NoDockerRuntimeLine + "\n"}
+		return this
+	}
+	this.wantStdout = []string{
+		"[DRY-RUN] would fetch and verify " + dockerbrew.IndexURL + "\n",
+		"[DRY-RUN] would execute if the runtime changed: systemctl [try-restart docker.service]\n",
+	}
+	return this
+}
+
+func dockerPathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func TestAcceptedHelperCommandsReachTheirDispatchArm(t *testing.T) {

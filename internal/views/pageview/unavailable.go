@@ -20,9 +20,12 @@ var featureTitles = map[[2]string]string{
 	{"applications_page", "brew_bundles_group"}: "App Collections",
 	{"agents_page", "agents_group"}:             "Agent Mode",
 	{"agents_page", "troubleshooting_group"}:    "Troubleshooting",
+	{"features_page", "bluefin_cli_group"}:      "Bluefin CLI (Bash)",
 	{"features_page", "dx_group"}:               "Developer Mode",
 	{"features_page", "gaming_group"}:           "Gaming Mode",
 	{"features_page", "printers_group"}:         "Printers",
+	{"features_page", "compass_group"}:          "Compass",
+	{"livery_page", "wallpapers_group"}:         LiveryWallpapersTitle,
 	{"maintenance_page", "reset_group"}:         "Powerwash",
 }
 

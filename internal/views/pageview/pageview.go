@@ -2,10 +2,12 @@
 package pageview
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/projectbluefin/chairlift/internal/devtools"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
@@ -221,6 +223,11 @@ func StagingLogSubtitle(shown, total int) string {
 // three-dot copy of the ellipsis made the in-flight guard never match.
 const ChangelogComparingLabel = "Comparing…"
 
+// FeatureChangeBusyToast answers an optional-feature toggle refused because
+// another feature change or the feature update is still running; each is a
+// privileged updex helper call, and two at once would race.
+const FeatureChangeBusyToast = "Wait for the current feature change to finish"
+
 // Feature returns the initial row text for an updex feature.
 func Feature(name, description string) Row {
 	return Row{Title: description, Subtitle: name}
@@ -396,6 +403,133 @@ func DeveloperResultSubtitle(enabled bool) string {
 	return "Log out and back in to finish turning this off."
 }
 
+// DockerControlAllowed follows the requested direction, including after a
+// successful mutation changes which helper action the switch would dispatch.
+// on is DockerSwitchOn's answer, not merely whether a unit runs.
+func DockerControlAllowed(on, canEnable, canDisable bool) bool {
+	return (!on && canEnable) || (on && canDisable)
+}
+
+// DockerHelperOutdated is the Docker row's subtitle when the image's
+// privileged helper predates the Homebrew-bottle install (v26.11.1).
+const DockerHelperOutdated = "Turning on Docker needs a newer system version. Update this computer, restart, then try again."
+
+// DockerCanEnable reports whether the installed helper can turn Docker on
+// here. The GUI ships through Homebrew and the helper through the OS image,
+// so they can disagree. Every released helper authorizes docker-enable, but
+// only one that also authorizes docker-update (v26.11.1+) can create the
+// docker group and install the runtime when the image ships no Docker units;
+// an older one fails after authentication with "group 'docker' does not exist".
+func DockerCanEnable(state devtools.DockerState, enable, update bool) bool {
+	return state.Available && enable && (state.Installed || update)
+}
+
+// DockerHelperNeedsUpdate reports that only the image's helper version stands
+// between this host and enabling Docker, so the row says to update.
+func DockerHelperNeedsUpdate(state devtools.DockerState, enable, update bool) bool {
+	return state.Available && enable && !DockerCanEnable(state, enable, update)
+}
+
+// DockerSwitchOn reports whether the Docker switch reads on: the daemon runs
+// and this account is not shut out of it. A running daemon whose socket does
+// not answer (or whose paired unit is missing) stays on, so it can be stopped.
+// A daemon that runs without access for this account reads off, so turning
+// the switch on dispatches docker-enable, which grants that access.
+func DockerSwitchOn(state devtools.DockerState) bool {
+	return state.Active && !state.NoAccess
+}
+
+// Disclosure subtitles for the Docker row's package list. The daemon set is
+// installed by the privileged helper from verified Homebrew bottles into a
+// root-owned location; the CLI set is ordinary user-scope Homebrew formulae.
+const (
+	DockerRuntimeContents = "Homebrew, installed for the whole computer"
+	DockerCLIContents     = "Homebrew formula"
+)
+
+// DockerSubtitle distinguishes system activation from this session's access.
+func DockerSubtitle(state devtools.DockerState, err error) string {
+	switch {
+	case state.NeedsLogin || errors.Is(err, devtools.ErrDockerNewLogin):
+		return "Log out and back in to use Docker with your new access."
+	case state.Unavailable != "":
+		return state.Unavailable
+	case state.Ready:
+		return "System Docker is ready for this account."
+	case state.NoAccess:
+		return "Docker is running, but your account can't use it yet. Turn this on to get access."
+	case state.Active:
+		return "Docker is running, but its socket is not responding."
+	case err != nil:
+		return "Couldn't check Docker's system service."
+	case !state.Installed:
+		return "Enables Developer Mode first if needed, then installs Docker from verified Homebrew packages for all accounts. Administrator approval is required."
+	default:
+		return "Enables Developer Mode first if needed, then turns on system Docker for all accounts. Administrator approval is required."
+	}
+}
+
+func DockerEditorFailure(preview bool) string {
+	if preview {
+		return "[DRY-RUN] VS Code setup needs attention; no Docker changes made. See the application log for details."
+	}
+	return "Docker access is enabled, but VS Code setup couldn't finish. See the application log for details."
+}
+
+// Compass row text. The check reads both Flatpak installations and the
+// remote list before the switch can be used.
+const (
+	CompassTitle               = "Compass"
+	CompassCheckingSubtitle    = "Checking whether Compass is installed…"
+	CompassUnavailableSubtitle = "Couldn't check whether Compass is installed."
+)
+
+// CompassSubtitle returns the Compass row's subtitle for an observed state.
+// supported reports whether Compass is published for this architecture and
+// remote whether the FlatPark remote Compass installs from exists.
+func CompassSubtitle(installed, supported, remote bool) string {
+	switch {
+	case installed:
+		return "Installed for everyone on this computer. Open Compass from the app grid."
+	case !supported:
+		return "Compass is only available for x86_64 computers."
+	case !remote:
+		return "Compass installs from FlatPark, which isn't set up on this computer."
+	default:
+		return "A fast, keyboard-first launcher for apps, files, and commands. Installs from FlatPark."
+	}
+}
+
+// CompassWorkingSubtitle returns the subtitle while Compass is being
+// installed or removed.
+func CompassWorkingSubtitle(enable bool) string {
+	if enable {
+		return "Installing…"
+	}
+	return "Removing…"
+}
+
+// CompassToast returns the toast after a Compass toggle. failed reports an
+// install or removal error; changed reports whether a command actually ran.
+func CompassToast(dryRun, enable, changed, failed bool) (toast string, isError bool) {
+	verb := "removed"
+	if enable {
+		verb = "installed"
+	}
+	switch {
+	case failed && enable:
+		return "Couldn't install Compass. Try again.", true
+	case failed:
+		return "Couldn't remove Compass. Try again.", true
+	case dryRun:
+		return fmt.Sprintf("[DRY-RUN] Preview: Compass would be %s — no changes made", verb), false
+	case !changed:
+		return "Nothing needed changing.", false
+	default:
+		return fmt.Sprintf("Compass %s.", verb), false
+	}
+}
+
 // GamingCheckingSubtitle is the gaming row's subtitle while ChairLift is still
 // finding out what is installed. The switch cannot be used until that answer
 // arrives, so the row has to say why.
@@ -404,6 +538,35 @@ const GamingCheckingSubtitle = "Checking what is installed…"
 // GamingUnavailableSubtitle is shown when that check fails. The underlying
 // error names commands and application ids, so it is logged rather than shown.
 const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
+
+// GameModeConfirmation returns the exact title and body for the Game Mode switch warning.
+func GameModeConfirmation() (title, body string) {
+	return "Game Mode Requires a Reboot",
+		"This mode includes Steam and Gamescope built in with an Open Gaming Collective kernel."
+}
+
+// GameModeRow returns the Game Mode row presentation.
+func GameModeRow(active, canSwitch bool) Row {
+	row := Row{Title: "Game Mode"}
+	if active {
+		row.Subtitle = "Steam, Gamescope, and Open Gaming Collective kernel are active."
+		return row
+	}
+	if !canSwitch {
+		row.Subtitle = "A matching gaming system image is not available for this computer."
+		return row
+	}
+	row.Subtitle = "Switch to the gaming system image with Steam, Gamescope, and an Open Gaming Collective kernel."
+	return row
+}
+
+// GameModeResultSubtitle returns the subtitle for Game Mode after a switch stages.
+func GameModeResultSubtitle(enabled bool) string {
+	if enabled {
+		return "Restart to switch to Game Mode."
+	}
+	return "Restart to switch to the standard mode."
+}
 
 // GamingRow returns the gaming switch row text. active reports whether
 // the gaming stack is installed. installed and missing report component counts
@@ -428,6 +591,19 @@ func GamingWorkingSubtitle(enabled bool) string {
 		return "Installing…"
 	}
 	return "Removing…"
+}
+
+// GamingWorkingStepSubtitle returns the subtitle describing which gaming app
+// is currently being installed or removed and which step in the task.
+func GamingWorkingStepSubtitle(enabled bool, step, total int, componentName string) string {
+	verb := "Installing"
+	if !enabled {
+		verb = "Removing"
+	}
+	if componentName != "" {
+		return fmt.Sprintf("%s %s (%d of %d)…", verb, componentName, step+1, total)
+	}
+	return fmt.Sprintf("%s (%d of %d)…", verb, step+1, total)
 }
 
 // GamingResultSubtitle returns the subtitle after a gaming toggle completes.

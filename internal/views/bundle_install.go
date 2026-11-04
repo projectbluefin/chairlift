@@ -2,13 +2,13 @@ package views
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
-	"github.com/projectbluefin/chairlift/internal/shellenv"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
@@ -18,29 +18,46 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// bundleItemRow tracks one collection row in the App collections group.
+// bundleItemRow tracks one collection row in Apps or Developer Mode.
 type bundleItemRow struct {
-	bundle      homebrew.Bundle
-	memberPaths []string
-	total       int
-	row         *adw.ExpanderRow
-	title       string
-	selectAll   *gtk.Button
-	entries     []*bundleEntryRow
+	bundle        homebrew.Bundle
+	memberPaths   []string
+	total         int
+	row           *adw.ExpanderRow
+	title         string
+	selectAll     *gtk.Button
+	entries       []*bundleEntryRow
+	wholeFileSafe bool // every entry was read and offered on the page
 }
 
 // bundleEntryRow tracks one entry row inside a collection. The checkbox is
 // the only state a person changes; the installed state is observed.
 type bundleEntryRow struct {
-	item       homebrew.BundleItem
-	row        *adw.ActionRow
-	check      *gtk.CheckButton
-	installed  bool
-	selectable bool
+	item              homebrew.BundleItem
+	row               *adw.ActionRow
+	check             *gtk.CheckButton
+	installed         bool
+	selectable        bool
+	source            string
+	descriptionLoaded bool
 }
 
-// collectionsAvailable reports whether the App collections group is available
-// (brew_bundles_group enabled and its Homebrew capability floor met).
+func (entry *bundleEntryRow) renderSubtitle() {
+	presentation := bundleview.PresentEntry(bundleview.EntryState{
+		Item: entry.item, Installed: entry.installed, Source: entry.source,
+		DescriptionLoaded: entry.descriptionLoaded,
+	})
+	entry.row.SetSubtitle(presentation.Label)
+}
+
+type bundleSelection struct {
+	items    []*bundleItemRow
+	button   *gtk.Button
+	progress *gtk.ProgressBar
+}
+
+// collectionsAvailable retains the collections' configuration and Homebrew
+// capability floor for both Apps and Developer Mode.
 func (uh *UserHome) collectionsAvailable() bool {
 	return uh.groupEnabled("applications_page", "brew_bundles_group")
 }
@@ -63,7 +80,7 @@ func newPackageInventory(packages []homebrew.Package) packageInventory {
 	}
 	for _, pkg := range packages {
 		name := strings.ToLower(pkg.Name)
-		if existing, ok := inventory.byName[name]; !ok || (!existing.FromTap() && pkg.FromTap()) {
+		if existing, ok := inventory.byName[name]; !ok || (existing.FromTap() && !pkg.FromTap()) {
 			// A bare name prefers the homebrew/core package: it is the
 			// one a bare Brewfile entry installs.
 			inventory.byName[name] = pkg
@@ -100,7 +117,7 @@ type bundleInventory struct {
 // shows, so the two paths stay independent: a failure here leaves those
 // lists alone, and a change in one does not have to invalidate the other.
 func readBundleInventory() bundleInventory {
-	inventory := bundleInventory{flatpaks: map[string]string{}}
+	var inventory bundleInventory
 	if formulae, err := homebrew.ListInstalledFormulae(); err != nil {
 		log.Printf("Error listing installed Homebrew formulae for the app collections: %v", err)
 	} else {
@@ -119,30 +136,39 @@ func readBundleInventory() bundleInventory {
 	return inventory
 }
 
-// lookup reports whether a collection entry's package is already on the
-// system, and the source it came from.
-func (i bundleInventory) lookup(item homebrew.BundleItem) (installed bool, source string) {
+// lookup reports installed state and provenance only when that manager's
+// inventory read succeeded. A failed read must not release installed entries.
+func (i bundleInventory) lookup(item homebrew.BundleItem) (installed bool, source string, known bool) {
 	switch item.Kind {
 	case homebrew.BundleItemBrew:
+		if i.formulae.byName == nil {
+			return false, "", false
+		}
 		pkg, ok := i.formulae.lookup(item.Name)
 		if !ok {
-			return false, ""
+			return false, "", true
 		}
-		return true, pkg.Tap
+		return true, pkg.Tap, true
 	case homebrew.BundleItemCask:
+		if i.casks.byName == nil {
+			return false, "", false
+		}
 		pkg, ok := i.casks.lookup(item.Name)
 		if !ok {
-			return false, ""
+			return false, "", true
 		}
-		return true, pkg.Tap
+		return true, pkg.Tap, true
 	case homebrew.BundleItemFlatpak:
+		if i.flatpaks == nil {
+			return false, "", false
+		}
 		origin, ok := i.flatpaks[item.Name]
 		if !ok {
-			return false, ""
+			return false, "", true
 		}
-		return true, origin
+		return true, origin, true
 	default:
-		return false, ""
+		return false, "", true
 	}
 }
 
@@ -176,23 +202,16 @@ func (uh *UserHome) applyBundleEntryStates(inventory bundleInventory) {
 	for _, item := range uh.bundleItems {
 		installedCount := 0
 		for _, entry := range item.entries {
-			installed, source := inventory.lookup(entry.item)
-			entry.installed = installed
-			presentation := bundleview.PresentEntry(bundleview.EntryState{
-				Item:      entry.item,
-				Installed: installed,
-				Source:    source,
-				Checked:   entry.check.GetActive(),
-			})
-			entry.row.SetSubtitle(presentation.Label)
-			// A package that is already on the system cannot be chosen
-			// again: its checkbox is checked and insensitive, and the row
-			// says where it is installed from. A checkbox that is already
-			// active is left alone, so the person's own selection survives
-			// the refresh.
-			entry.check.SetActive(installed || entry.check.GetActive())
-			entry.check.SetSensitive(!installed && entry.selectable)
-			if installed {
+			if installed, source, known := inventory.lookup(entry.item); known {
+				wasInstalled := entry.installed
+				entry.installed = installed
+				entry.source = source
+				entry.renderSubtitle()
+				// Observed installations are not deliberate reinstall selections.
+				entry.check.SetActive(bundleview.RefreshChecked(entry.check.GetActive(), wasInstalled, installed))
+				entry.check.SetSensitive(!installed && entry.selectable)
+			}
+			if entry.installed {
 				installedCount++
 			}
 		}
@@ -250,9 +269,9 @@ type bundleInstallPlan struct {
 
 // planBundleInstalls derives what the checked entries of every collection
 // install. It reads the checkboxes, so it runs on the GTK main thread.
-func (uh *UserHome) planBundleInstalls() []bundleInstallPlan {
+func (uh *UserHome) planBundleInstalls(selection *bundleSelection) []bundleInstallPlan {
 	var plans []bundleInstallPlan
-	for _, item := range uh.bundleItems {
+	for _, item := range selection.items {
 		entries := make([]bundleview.EntryState, 0, len(item.entries))
 		for _, entry := range item.entries {
 			entries = append(entries, bundleview.EntryState{
@@ -261,7 +280,11 @@ func (uh *UserHome) planBundleInstalls() []bundleInstallPlan {
 				Checked:   entry.check.GetActive(),
 			})
 		}
-		plan := bundleview.PlanInstall(entries, item.memberPaths)
+		paths := item.memberPaths
+		if !item.wholeFileSafe || len(entries) != item.total {
+			paths = nil
+		}
+		plan := bundleview.PlanInstall(entries, paths)
 		if plan.Empty() {
 			continue
 		}
@@ -274,20 +297,15 @@ func (uh *UserHome) planBundleInstalls() []bundleInstallPlan {
 	return plans
 }
 
-// runSelectedBundlesInstall installs the checked entries of every
-// collection in one action.
-//
-// A collection whose every entry is checked installs as a whole through
-// `brew bundle`, which is what keeps the collection's own tap and trust
-// declarations in force. A partially selected collection installs the
-// checked entries one by one, batched per package manager, because
-// `brew bundle` can only install a whole file.
-func (uh *UserHome) runSelectedBundlesInstall() {
+// runSelectedBundlesInstall installs only this destination's checked entries.
+// Fully selected collections retain their Brewfile's tap/trust declarations;
+// partial selections use batched commands for only the checked entries.
+func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 	if !uh.bundleInstallGate.TryStart() {
 		return
 	}
 
-	plans := uh.planBundleInstalls()
+	plans := uh.planBundleInstalls(selection)
 	if len(plans) == 0 {
 		uh.bundleInstallGate.Reset()
 		if uh.toastAdder != nil {
@@ -295,15 +313,18 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 		}
 		return
 	}
-
-	uh.setBundleInstallProgress(true)
-
+	uh.setBundleInstallProgress(selection, true, 0, len(plans), plans[0].item.title)
 	go func() {
 		outcome := bundleview.InstallOutcome{}
 		var trustErrCollection string
 
-		for _, plan := range plans {
+		for idx, plan := range plans {
 			title := plan.item.title
+			if idx > 0 {
+				sgtk.RunOnMainThread(func() {
+					uh.setBundleInstallProgress(selection, true, idx, len(plans), title)
+				})
+			}
 			var err error
 			if len(plan.plan.BundlePaths) > 0 {
 				err = installBundleWhole(plan.plan.BundlePaths)
@@ -320,20 +341,11 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 				continue
 			}
 			outcome.Installed += plan.pending
-
-			// Bluefin CLI also brings the terminal experience: the
-			// prompt, the shell integration and the everyday utilities.
-			if plan.item.bundle.Name == "cli" {
-				if err := shellenv.EnableBling(); err != nil {
-					log.Printf("Error enabling shell bling: %v", err)
-				}
-			}
 		}
 
 		sgtk.RunOnMainThread(func() {
 			defer uh.bundleInstallGate.Reset()
-			uh.setBundleInstallProgress(false)
-
+			uh.setBundleInstallProgress(selection, false, len(plans), len(plans), "")
 			if dryrun.Enabled() {
 				if uh.toastAdder != nil {
 					uh.toastAdder.ShowToast(bundleview.PreviewToast)
@@ -453,19 +465,18 @@ func declaredTrustedTaps(paths []string) map[string]bool {
 	return declared
 }
 
-func (uh *UserHome) setBundleInstallProgress(busy bool) {
-	if uh.bundleInstallButton != nil {
-		uh.bundleInstallButton.SetSensitive(!busy)
+func (uh *UserHome) setBundleInstallProgress(selection *bundleSelection, busy bool, current, total int, currentName string) {
+	for _, controls := range uh.bundleSelections {
+		controls.button.SetSensitive(!busy)
 	}
-	if uh.bundleInstallSpinner != nil {
-		uh.bundleInstallSpinner.SetVisible(busy)
-		uh.bundleInstallSpinner.SetSpinning(busy)
-	}
-	if uh.bundleInstallBar != nil {
-		if busy {
-			uh.appInstallProgress.start(uh.bundleInstallBar)
-		} else {
-			uh.appInstallProgress.stop(uh.bundleInstallBar)
+	if busy {
+		text := fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
+		if currentName == "" {
+			text = fmt.Sprintf("Installing (%d of %d)…", current+1, total)
 		}
+		selection.progress.SetText(text)
+		uh.appInstallProgress.start(selection.progress)
+	} else {
+		uh.appInstallProgress.stop(selection.progress)
 	}
 }

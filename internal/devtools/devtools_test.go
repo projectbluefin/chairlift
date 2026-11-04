@@ -3,8 +3,6 @@ package devtools
 import (
 	"context"
 	"errors"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +10,6 @@ import (
 	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/journal"
 )
 
 func fakeLima(t *testing.T, body string) string {
@@ -125,77 +122,6 @@ func TestEmptyLimaListingIgnoresSuccessfulStderrWarnings(t *testing.T) {
 	state, err := WSLStatus(context.Background(), BackendLima)
 	if err != nil || state.Exists || state.Running || state.Ready {
 		t.Fatalf("empty inventory warning must not block first setup: %+v %v", state, err)
-	}
-}
-
-func fakeDockerHost(t *testing.T, load, active string) string {
-	t.Helper()
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "systemctl"), []byte("#!/bin/sh\necho 'LoadState="+load+"'\necho 'ActiveState="+active+"'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "docker"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", dir)
-	return dir
-}
-
-func TestDockerCLIPresenceDoesNotProvideADaemon(t *testing.T) {
-	fakeDockerHost(t, "not-found", "inactive")
-	state, err := DockerStatus(context.Background())
-	if err != nil || state.Available || state.Active || state.Ready {
-		t.Fatalf("CLI-only host claimed a daemon: %+v %v", state, err)
-	}
-	if err := SetDocker(context.Background(), true, nil); err == nil {
-		t.Fatal("CLI-only host enabled Docker")
-	}
-}
-
-func TestDockerReadyRequiresSuccessfulLocalSocketPing(t *testing.T) {
-	fakeDockerHost(t, "loaded", "active")
-	dir, err := os.MkdirTemp("", "docker-ping-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	socket := filepath.Join(dir, "socket")
-	state, err := dockerStatus(context.Background(), socket)
-	if err != nil || !state.Active || state.Ready {
-		t.Fatalf("missing socket reported ready: %+v %v", state, err)
-	}
-	listener, err := net.Listen("unix", socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/_ping" {
-			t.Errorf("unexpected daemon request: %s", r.URL.Path)
-		}
-		_, _ = w.Write([]byte("OK"))
-	})}
-	go func() { _ = server.Serve(listener) }()
-	t.Cleanup(func() { _ = server.Close() })
-	state, err = dockerStatus(context.Background(), socket)
-	if err != nil || !state.Ready {
-		t.Fatalf("reachable daemon not ready: %+v %v", state, err)
-	}
-}
-
-func TestDockerFailedDisableKeepsObservedRunningState(t *testing.T) {
-	dir := fakeDockerHost(t, "loaded", "active")
-	t.Setenv(journal.PathEnv, filepath.Join(dir, "journal.jsonl"))
-	journal.Reset()
-	t.Cleanup(journal.Reset)
-	if err := os.WriteFile(filepath.Join(dir, "pkexec"), []byte("#!/bin/sh\necho 'authentication dismissed' >&2\nexit 126\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := SetDocker(context.Background(), false, nil); err == nil {
-		t.Fatal("failed disable reported success")
-	}
-	state, err := dockerStatus(context.Background(), filepath.Join(dir, "absent-socket"))
-	if err != nil || !state.Active || state.Ready {
-		t.Fatalf("failed disable hid still-running daemon: %+v %v", state, err)
 	}
 }
 

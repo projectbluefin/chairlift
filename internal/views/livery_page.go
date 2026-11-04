@@ -17,8 +17,7 @@ import (
 )
 
 // buildLiveryPage keeps one Livery primary with independent policy groups.
-// Profile Picture is followed by the three icon surfaces; Wallpapers joins
-// only after #200 supplies working controls for its separate group.
+// Profile Picture is followed by Wallpapers, then the three icon surfaces.
 //
 // Every control starts insensitive. Reading current state calls gsettings
 // off the GTK main thread, so refreshLiveryState populates the built page.
@@ -31,6 +30,9 @@ func (uh *UserHome) buildLiveryPage() {
 
 	if uh.groupEnabled("livery_page", "account_group") {
 		uh.buildAccountGroup(page)
+	}
+	if uh.groupEnabled("livery_page", "wallpapers_group") {
+		uh.buildWallpapersGroup(page)
 	}
 	if uh.groupEnabled("livery_page", "livery_app_grid_group") {
 		uh.buildLiveryAppGridGroup(page)
@@ -49,14 +51,17 @@ func (uh *UserHome) buildLiveryPage() {
 // A personal mark does not rotate; it is selected explicitly and stays put.
 func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.LiveryAppGridTitle)
-	group.SetDescription(pageview.LiveryAppGridFragment)
+	expander := adw.NewExpanderRow()
+	expander.SetTitle(pageview.LiveryAppGridTitle)
+	expander.SetSubtitle(pageview.LiveryAppGridFragment)
+	expander.SetExpanded(false)
+	group.Add(&expander.Widget)
 
 	uh.liveryAppGridSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryAppGridRow(), func(state bool) {
 		uh.onLiveryAppGridToggled(state)
 	}, uh.liveryAppGridSpinner)
-	group.Add(&enableRow.Widget)
+	expander.AddRow(&enableRow.Widget)
 
 	// The same chooser the dock uses. Typing a slug blind into a text field
 	// meant knowing simpleicons.org's answer in advance — and its slugs are
@@ -71,13 +76,13 @@ func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 	brandRow.AddSuffix(&gtk.NewImageFromIconName("go-next-symbolic").Widget)
 	brandRow.SetActivatable(true)
 	brandRow.SetSensitive(false)
-	group.Add(&brandRow.Widget)
+	expander.AddRow(&brandRow.Widget)
 
 	openBrands := func(_ adw.ActionRow) { uh.presentLiveryPicker(liveryPickerBrand) }
 	brandRow.ConnectActivated(&openBrands)
 
 	page.Add(group)
-	uh.liveryAppGridGroup = group
+	uh.liveryAppGridExpander = expander
 	uh.liveryAppGridSwitch = enableSwitch
 	uh.liveryAppGridRow = brandRow
 
@@ -87,14 +92,17 @@ func (uh *UserHome) buildLiveryAppGridGroup(page *adw.PreferencesPage) {
 // advancing its foundation mark at login.
 func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.LiveryPanelTitle)
-	group.SetDescription(pageview.LiveryPanelFragment)
+	expander := adw.NewExpanderRow()
+	expander.SetTitle(pageview.LiveryPanelTitle)
+	expander.SetSubtitle(pageview.LiveryPanelFragment)
+	expander.SetExpanded(false)
+	group.Add(&expander.Widget)
 
 	uh.liveryPanelSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryPanelRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Panel, state)
 	}, uh.liveryPanelSpinner)
-	group.Add(&enableRow.Widget)
+	expander.AddRow(&enableRow.Widget)
 
 	markRow := adw.NewActionRow()
 	markRow.SetUseMarkup(false)
@@ -104,18 +112,18 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 	markRow.AddSuffix(&gtk.NewImageFromIconName("go-next-symbolic").Widget)
 	markRow.SetActivatable(true)
 	markRow.SetSensitive(false)
-	group.Add(&markRow.Widget)
+	expander.AddRow(&markRow.Widget)
 
 	openMarks := func(_ adw.ActionRow) { uh.presentLiveryPicker(liveryPickerFoundation) }
 	markRow.ConnectActivated(&openMarks)
 	uh.liveryPanelMarkRow = markRow
-	uh.buildLiveryFoundationGrid(group)
+	uh.buildLiveryFoundationGrid(expander)
 
 	uh.liveryPanelRotateSpinner = newActivitySpinner()
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromStablePath()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Panel, state)
 	}, uh.liveryPanelRotateSpinner)
-	group.Add(&rotateRow.Widget)
+	expander.AddRow(&rotateRow.Widget)
 
 	page.Add(group)
 	uh.liveryPanelGroup = group
@@ -127,14 +135,17 @@ func (uh *UserHome) buildLiveryPanelGroup(page *adw.PreferencesPage) {
 // buildLiveryDockGroup controls the Files application icon across the desktop.
 func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	group := adw.NewPreferencesGroup()
-	group.SetTitle(pageview.LiveryDockTitle)
-	group.SetDescription(pageview.LiveryDockFragment)
+	expander := adw.NewExpanderRow()
+	expander.SetTitle(pageview.LiveryDockTitle)
+	expander.SetSubtitle(pageview.LiveryDockFragment)
+	expander.SetExpanded(false)
+	group.Add(&expander.Widget)
 
 	uh.liveryDockSpinner = newActivitySpinner()
 	enableRow, enableSwitch := newSwitchRow(pageview.LiveryDockRow(), func(state bool) {
 		uh.onLiverySurfaceToggled(livery.Dock, state)
 	}, uh.liveryDockSpinner)
-	group.Add(&enableRow.Widget)
+	expander.AddRow(&enableRow.Widget)
 
 	// One row that opens a picker, not a search box wired into the page.
 	//
@@ -152,7 +163,7 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	projectRow.AddSuffix(&gtk.NewImageFromIconName("go-next-symbolic").Widget)
 	projectRow.SetActivatable(true)
 	projectRow.SetSensitive(false)
-	group.Add(&projectRow.Widget)
+	expander.AddRow(&projectRow.Widget)
 
 	openPicker := func(_ adw.ActionRow) { uh.presentLiveryPicker(liveryPickerProject) }
 	projectRow.ConnectActivated(&openPicker)
@@ -163,7 +174,7 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	rotateRow, rotateSwitch := newSwitchRow(pageview.LiveryRotationRow(livery.RunsFromStablePath()), func(state bool) {
 		uh.onLiveryRotateToggled(livery.Dock, state)
 	}, uh.liveryDockRotateSpinner)
-	group.Add(&rotateRow.Widget)
+	expander.AddRow(&rotateRow.Widget)
 
 	// Where the artwork comes from.
 	artworkRow := adw.NewActionRow()
@@ -174,7 +185,7 @@ func (uh *UserHome) buildLiveryDockGroup(page *adw.PreferencesPage) {
 	artworkRow.SetActivatable(true)
 	artworkActivated := func(_ adw.ActionRow) { uh.openURL(pageview.CNCFArtworkURL) }
 	artworkRow.ConnectActivated(&artworkActivated)
-	group.Add(&artworkRow.Widget)
+	expander.AddRow(&artworkRow.Widget)
 
 	page.Add(group)
 	uh.liveryDockGroup = group
@@ -259,8 +270,8 @@ func (uh *UserHome) refreshLiveryState() {
 // setLiveryAppGridAvailability updates the app-grid section's status without
 // assuming the config-enabled group was constructed.
 func (uh *UserHome) setLiveryAppGridAvailability(available bool) {
-	if uh.liveryAppGridGroup != nil {
-		uh.liveryAppGridGroup.SetDescription(pageview.LiveryAppGridGroupDescription(available))
+	if uh.liveryAppGridExpander != nil {
+		uh.liveryAppGridExpander.SetSubtitle(pageview.LiveryAppGridGroupDescription(available))
 	}
 }
 
@@ -363,7 +374,7 @@ func (uh *UserHome) applyLiveryState(state livery.State, panelAvailable, appGrid
 // would highlight marks that were never applied. The confirmed selection is
 // instead drawn by syncLiveryFoundationGrid as a badge plus the accessible
 // selected state.
-func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
+func (uh *UserHome) buildLiveryFoundationGrid(group *adw.ExpanderRow) {
 	grid := gtk.NewFlowBox()
 	grid.SetSelectionMode(gtk.SelectionNoneValue)
 	grid.SetMinChildrenPerLine(2)
@@ -416,7 +427,7 @@ func (uh *UserHome) buildLiveryFoundationGrid(group *adw.PreferencesGroup) {
 	changed := func(_ gobject.Object, _ uintptr) { uh.refreshLiveryFoundationPreviews() }
 	style.ConnectNotify(&changed)
 	uh.refreshLiveryFoundationPreviews()
-	group.Add(&grid.Widget)
+	group.AddRow(&grid.Widget)
 	uh.syncLiveryFoundationGrid()
 }
 

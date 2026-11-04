@@ -3,9 +3,6 @@ package pageview
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -214,52 +211,5 @@ func TestDeveloperMenuDistroDefaultVsUserOverrideTension(t *testing.T) {
 	}
 	if !store2.resets[key2] {
 		t.Error("Apply(false) did not reset key when distro default already matched visible=false")
-	}
-}
-
-func TestDeveloperMenuFeaturesPageWiring(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
-	featuresPath := filepath.Join(repoRoot, "internal", "views", "features_page.go")
-	featuresSource, err := os.ReadFile(featuresPath)
-	if err != nil {
-		t.Fatalf("read %s: %v", featuresPath, err)
-	}
-	text := string(featuresSource)
-
-	// Check devmenu.Apply is imported and used
-	if !strings.Contains(text, `"github.com/projectbluefin/chairlift/internal/devmenu"`) {
-		t.Error("features_page.go does not import internal/devmenu")
-	}
-
-	// Must be invoked conditionally after ublue.SetDeveloperMode
-	if !strings.Contains(text, `err := ublue.SetDeveloperMode(ctx, enabled)`) {
-		t.Error("features_page.go does not call ublue.SetDeveloperMode")
-	}
-	if !strings.Contains(text, `succeeded := err == nil`) {
-		t.Error("features_page.go does not define succeeded := err == nil")
-	}
-	if !strings.Contains(text, `if succeeded {`) {
-		t.Error("features_page.go does not gate devmenu.Apply on succeeded")
-	}
-	if !strings.Contains(text, `devmenu.Apply(ctx, enabled)`) {
-		t.Error("features_page.go does not call devmenu.Apply")
-	}
-
-	// Must not be called on view construction
-	buildFuncStart := strings.Index(text, "func (uh *UserHome) buildFeaturesPage()")
-	if buildFuncStart == -1 {
-		t.Fatal("buildFeaturesPage not found")
-	}
-	buildFuncEnd := strings.Index(text, "func (uh *UserHome) loadFeatures(")
-	if buildFuncEnd == -1 {
-		t.Fatal("loadFeatures not found")
-	}
-	buildSection := text[buildFuncStart:buildFuncEnd]
-	if strings.Contains(buildSection, "devmenu.Apply") {
-		t.Error("buildFeaturesPage contains devmenu.Apply call; view construction must never write")
 	}
 }

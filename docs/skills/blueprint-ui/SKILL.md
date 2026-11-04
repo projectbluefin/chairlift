@@ -1,8 +1,8 @@
 ---
 name: blueprint-ui
 description: Use when adding or changing a widget tree under internal/ui (Blueprint), binding one from Go with ui.Bind, or auditing the UI against the GNOME HIG.
-version: 1.0.0
-last_updated: 2026-10-15
+version: 1.1.0
+last_updated: 2026-11-04
 tags:
   - gtk
   - blueprint
@@ -58,6 +58,25 @@ ADR-0022 records the decision. The mechanics, and the traps behind them:
 7. **An `AdwDialog` is not a window.** It presents inside its parent when it
    fits, as an AT-SPI `dialog` node, so the behave suite finds it through
    `chairlift_atspi.titled`, not the application's top-level children.
+
+## Moving controls into a detail page
+
+1. Keep the parent and Back route in `internal/navigation`; resolve a transition
+   before applying the setup wizard's current-step guard. A detail belongs to
+   the active step when its resolved `Back` names that step. Raw requested-route
+   equality blocks the detail even when ordinary navigation works.
+2. Exercise ordinary navigation and explicit setup separately: enter the detail,
+   reject unrelated keyboard navigation, return to its parent, then advance the
+   wizard. Include relocated collections and their disabled-detail fallback.
+3. If setup writes preferences owned by an already-built page, reload that
+   page's persisted state before announcing completion. Reload after partial
+   write failures too; stale saved originals can otherwise be recaptured from
+   ChairLift's own newly applied icon. Follow `refreshLiveryState`: read off the
+   main thread and publish through `sgtk.RunOnMainThread`.
+
+GTK's [threading reference](https://github.com/GNOME/gtk/blob/main/docs/reference/gtk/section-threading.md)
+requires widget access on the creating main thread and worker results returned
+through an idle or `GLib.MainContext.invoke` (Context7 source: `/gnome/gtk`).
 
 ## Auditing against the HIG
 

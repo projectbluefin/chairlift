@@ -61,6 +61,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			mutateProber: func(p *Prober) {},
 			wantStatus:   StatusReady,
 			wantReady:    true,
+			wantSub:      "Opens a terminal to help build Bluefin.",
 		},
 		{
 			name: "missing xdg-terminal-exec runner",
@@ -75,6 +76,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRunner,
 			wantReady:  false,
+			wantSub:    "Contribute needs a terminal app this computer doesn't have.",
 		},
 		{
 			name: "missing ujust executable",
@@ -89,6 +91,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingUjust,
 			wantReady:  false,
+			wantSub:    "This computer is missing a part Contribute needs.",
 		},
 		{
 			name: "ujust summary lacks contribute recipe",
@@ -99,6 +102,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRecipe,
 			wantReady:  false,
+			wantSub:    "This version of Bluefin can't run Contribute yet.",
 		},
 		{
 			name: "ujust summary fails with an error",
@@ -109,6 +113,16 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRecipe,
 			wantReady:  false,
+			wantSub:    "This version of Bluefin can't run Contribute yet.",
+		},
+		{
+			name: "no recipe summary probe is treated as a missing recipe",
+			mutateProber: func(p *Prober) {
+				p.RecipeSummary = nil
+			},
+			wantStatus: StatusMissingRecipe,
+			wantReady:  false,
+			wantSub:    "This version of Bluefin can't run Contribute yet.",
 		},
 		{
 			name: "missing podman executable",
@@ -123,6 +137,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingPodman,
 			wantReady:  false,
+			wantSub:    "This computer is missing a part Contribute needs.",
 		},
 		{
 			name: "registration file does not exist",
@@ -133,7 +148,7 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRegistration,
 			wantReady:  false,
-			wantSub:    "Register this machine with Hive first.",
+			wantSub:    "Sign up as a contributor first.",
 			wantHelp:   RegistrationURL,
 		},
 		{
@@ -145,7 +160,24 @@ func TestPreflightOutcomes(t *testing.T) {
 			},
 			wantStatus: StatusMissingRegistration,
 			wantReady:  false,
-			wantSub:    "Register this machine with Hive first.",
+			wantSub:    "Sign up as a contributor first.",
+			wantHelp:   RegistrationURL,
+		},
+		{
+			// Without a home directory there is no default registration
+			// path; the check must fail closed rather than stat "".
+			name: "home directory cannot be resolved",
+			mutateProber: func(p *Prober) {
+				p.HomeDir = func() (string, error) {
+					return "", errors.New("$HOME is not defined")
+				}
+				p.Stat = func(path string) (os.FileInfo, error) {
+					return mockFileInfo{isDir: false}, nil
+				}
+			},
+			wantStatus: StatusMissingRegistration,
+			wantReady:  false,
+			wantSub:    "Sign up as a contributor first.",
 			wantHelp:   RegistrationURL,
 		},
 	}
@@ -161,8 +193,8 @@ func TestPreflightOutcomes(t *testing.T) {
 			if got.Ready != tt.wantReady {
 				t.Errorf("Preflight ready = %v, want %v", got.Ready, tt.wantReady)
 			}
-			if got.Subtitle == "" {
-				t.Error("Preflight subtitle is empty")
+			if got.Subtitle != tt.wantSub {
+				t.Errorf("Preflight subtitle = %q, want %q", got.Subtitle, tt.wantSub)
 			}
 			for _, jargon := range []string{"xdg-terminal-exec", "ujust", "podman", "recipe", "Hive", "/", ".env"} {
 				if strings.Contains(got.Subtitle, jargon) {
@@ -265,4 +297,78 @@ func TestRecipeSummaryParsing(t *testing.T) {
 			t.Errorf("HasRecipe(%q, %q) = %v, want %v", tt.summary, tt.recipe, got, tt.want)
 		}
 	}
+}
+
+func TestDefaultRegistrationPath(t *testing.T) {
+	if got := DefaultRegistrationPath(""); got != "" {
+		t.Errorf("DefaultRegistrationPath(\"\") = %q, want empty", got)
+	}
+	want := filepath.Join("/home/testuser", ".config", "hive", "contributor.env")
+	if got := DefaultRegistrationPath("/home/testuser"); got != want {
+		t.Errorf("DefaultRegistrationPath = %q, want %q", got, want)
+	}
+	if got := RegistrationPath(nil, "/home/testuser"); got != want {
+		t.Errorf("RegistrationPath(nil getenv) = %q, want %q", got, want)
+	}
+}
+
+// A zero Prober falls back to the live system probes; with an empty $PATH
+// the first of them, the terminal lookup, must report the runner missing.
+func TestPreflightZeroProberUsesSystemProbes(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	got := Preflight(context.Background(), Prober{})
+	if got.Status != StatusMissingRunner || got.Ready {
+		t.Errorf("Preflight(Prober{}) = %+v, want StatusMissingRunner and not ready", got)
+	}
+}
+
+// withFakeUjust puts an executable script named "ujust" first on $PATH so
+// RealProber's recipe probe runs a real subprocess.
+func withFakeUjust(t *testing.T, script string) {
+	t.Helper()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, DefaultUjust), []byte(script), 0o755); err != nil {
+		t.Fatalf("writing fake ujust: %v", err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func TestRealProberRecipeSummary(t *testing.T) {
+	t.Run("returns the ujust --summary output", func(t *testing.T) {
+		withFakeUjust(t, "#!/bin/sh\n[ \"$1\" = --summary ] || exit 2\necho 'benchmark contribute update'\n")
+
+		p := RealProber()
+		if p.LookPath == nil || p.Stat == nil || p.RecipeSummary == nil || p.Getenv == nil || p.HomeDir == nil {
+			t.Fatalf("RealProber left a probe unset: %+v", p)
+		}
+		summary, err := p.RecipeSummary(context.Background())
+		if err != nil {
+			t.Fatalf("RecipeSummary error = %v", err)
+		}
+		if !HasRecipe(summary, DefaultRecipe) {
+			t.Errorf("RecipeSummary = %q, want it to list %q", summary, DefaultRecipe)
+		}
+	})
+
+	t.Run("reports a failing ujust as an error with no summary", func(t *testing.T) {
+		withFakeUjust(t, "#!/bin/sh\necho contribute\nexit 1\n")
+
+		summary, err := RealProber().RecipeSummary(context.Background())
+		if err == nil {
+			t.Fatal("RecipeSummary error = nil, want the ujust exit status")
+		}
+		if summary != "" {
+			t.Errorf("RecipeSummary = %q, want empty on failure", summary)
+		}
+	})
+
+	t.Run("reports a missing ujust as an error", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+
+		if _, err := RealProber().RecipeSummary(context.Background()); err == nil {
+			t.Fatal("RecipeSummary error = nil, want ujust not found")
+		}
+	})
 }

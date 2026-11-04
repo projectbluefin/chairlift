@@ -1,5 +1,5 @@
 // Package bundleview owns the pure presentation and action-state decisions
-// used by the Applications page's app-collection group.
+// used by the Apps and Developer Mode collection controls.
 //
 // A collection is discovered on disk under an identifier the person who
 // installed the system never chose and should never read, so every name and
@@ -74,19 +74,6 @@ type catalogEntry struct {
 }
 
 var catalog = map[string]catalogEntry{
-	"artwork": {
-		title:   "Extra Wallpapers",
-		summary: "More dinosaur artwork, and wallpaper tools.",
-		curated: true,
-		order:   1,
-		members: []string{"wallpaper-slideshow"},
-	},
-	"cli": {
-		title:   "Bluefin CLI",
-		summary: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
-		curated: true,
-		order:   2,
-	},
 	"fonts": {
 		title:   "Fonts",
 		summary: "A broad selection of everyday, design, office, and accessibility fonts.",
@@ -118,6 +105,7 @@ var catalog = map[string]catalogEntry{
 // removed from the UI. They are filtered out so they do not fall back to
 // raw humanized names ("Cncf", "Nsl", etc.).
 var retired = map[string]struct{}{
+	"cli":                 {}, // managed by the Bash-only Bluefin CLI feature
 	"cncf":                {},
 	"k8s-tools":           {},
 	"swift":               {},
@@ -127,16 +115,23 @@ var retired = map[string]struct{}{
 	"system-dx-flatpaks":  {},
 	"system-flatpaks":     {},
 	"video-wallpaper":     {},
+	"wallpaper-slideshow": {}, // managed by Livery's Wallpapers group
+	"artwork":             {}, // wallpaper payloads are owned by Livery
 	"dakota-dev-flatpaks": {}, // installed automatically with devmode
 }
 
-// Visible reports whether an on-disk collection should be offered as a row.
-// Retired Bluefin bundles are excluded; user-added collections remain visible.
-// A super-bundle member (e.g. wallpaper-slideshow) is folded into its parent's
-// row when that parent was discovered, and keeps its own row otherwise so it
-// stays installable.
+// DeveloperCollection reports whether a collection belongs under Developer Mode.
+// These remain explicit, independently selected installs, not promotion tasks.
+func DeveloperCollection(id string) bool {
+	return id == "fonts-dev"
+}
+
+// Visible reports whether an on-disk collection should be offered on Apps.
+// Developer Mode owns its relocated collections; retired bundles are excluded.
+// A super-bundle member is folded into its parent's row when discovered, and
+// keeps its own row otherwise so it stays installable.
 func Visible(id string, discovered map[string]homebrew.Bundle) bool {
-	if _, isRetired := retired[id]; isRetired {
+	if _, isRetired := retired[id]; isRetired || DeveloperCollection(id) {
 		return false
 	}
 	for parent, entry := range catalog {
@@ -417,4 +412,37 @@ type ContentsRow struct {
 	CheckAccessibleName string
 	// Selectable reports whether the entry can be chosen for an install.
 	Selectable bool
+}
+
+// ContentsKindLabel names informational package disclosures outside the
+// selectable collection entries, which show source labels instead.
+func ContentsKindLabel(kind homebrew.BundleItemKind) string {
+	switch kind {
+	case homebrew.BundleItemBrew:
+		return "Command-line tool"
+	case homebrew.BundleItemCask:
+		return "App"
+	case homebrew.BundleItemFlatpak:
+		return "Flatpak"
+	case homebrew.BundleItemMas:
+		return "App Store"
+	case homebrew.BundleItemVSCode:
+		return "VS Code extension"
+	default:
+		return ""
+	}
+}
+
+// EntryDescription reports metadata after a lookup. Kinds without a
+// description provider have no unavailable notice.
+func EntryDescription(item homebrew.BundleItem) string {
+	description := strings.TrimSpace(item.Description)
+	if description == "" && hasDescriptionProvider(item.Kind) {
+		return "Description unavailable"
+	}
+	return description
+}
+
+func hasDescriptionProvider(kind homebrew.BundleItemKind) bool {
+	return kind == homebrew.BundleItemBrew || kind == homebrew.BundleItemCask || kind == homebrew.BundleItemFlatpak
 }

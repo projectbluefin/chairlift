@@ -113,6 +113,36 @@ var components = []Component{
 	},
 }
 
+// retiredComponents lists the Flatpaks a previous Gaming Mode installed that
+// this build no longer manages. They are not part of the current stack, so
+// Derive never reports them and Disable never removes them unless they are
+// listed here. A host that upgraded from such a release would otherwise keep
+// those installs behind — invisible in the status and left in place when
+// Gaming Mode is turned off. Keeping the list explicit rather than inferring
+// it from a diff between releases means the cleanup is deliberate and
+// reviewed, and a component that was only ever unrelated to Gaming Mode is
+// never touched.
+var retiredComponents = []Component{
+	{
+		ID:          "com.valvesoftware.Steam",
+		Kind:        flatpak.KindApplication,
+		Name:        "Steam",
+		Description: "Valve's game client, once installed through Gaming Mode",
+	},
+	{
+		ID:          "net.davidotek.pupgui2",
+		Kind:        flatpak.KindApplication,
+		Name:        "ProtonUp-Qt",
+		Description: "Proton-GE and Wine-GE manager, once installed through Gaming Mode",
+	},
+	{
+		ID:          "com.github.tchx84.Flatseal",
+		Kind:        flatpak.KindApplication,
+		Name:        "Flatseal",
+		Description: "Per-app permission editor, once installed through Gaming Mode",
+	},
+}
+
 // kinds returns the ref kinds the stack actually contains, in install
 // order and without duplicates. It is what decides which listings the
 // inventory must be able to answer with.
@@ -167,21 +197,35 @@ type State struct {
 	// value with a non-empty Installed is the partial state — some of the
 	// stack is present but the feature is not usable.
 	MissingCore []string
+	// Retired lists the IDs of components removed from the stack in a
+	// previous release that are still installed on this host. They are not
+	// part of gaming mode now, so they do not affect Enabled, but reporting
+	// them keeps an upgrade from leaving installs behind invisibly, and
+	// Disable() removes them (see Disable).
+	Retired []string
 }
 
 // Summary returns the one-line row subtitle for the state.
 func (s State) Summary() string {
 	total := len(components)
+	message := ""
 	switch {
 	case s.Enabled && len(s.Missing) == 0:
-		return fmt.Sprintf("All %d gaming components installed", total)
+		message = fmt.Sprintf("All %d gaming components installed", total)
 	case s.Enabled:
-		return fmt.Sprintf("%d of %d gaming components installed", len(s.Installed), total)
+		message = fmt.Sprintf("%d of %d gaming components installed", len(s.Installed), total)
 	case len(s.Installed) > 0:
-		return fmt.Sprintf("Partly installed — %s missing", strings.Join(s.MissingCore, ", "))
+		message = fmt.Sprintf("Partly installed — %s missing", strings.Join(s.MissingCore, ", "))
 	default:
-		return fmt.Sprintf("Install ProtonPlus, Protontricks, and %d more", total-2)
+		message = fmt.Sprintf("Install ProtonPlus, Protontricks, and %d more", total-2)
 	}
+	// A host that upgraded from a release with more components keeps those
+	// installs. They do not change the switch above, so they are added on so
+	// an upgrade never hides them behind an otherwise clean message.
+	if len(s.Retired) > 0 {
+		message += fmt.Sprintf(" — %d previously-installed app(s) still present", len(s.Retired))
+	}
+	return message
 }
 
 // Derive computes gaming mode's state from a scope report. It is pure so the
@@ -207,7 +251,39 @@ func Derive(scope Scope) State {
 			state.Enabled = false
 		}
 	}
+
+	// Retired components are matched by ID alone: they are no longer in the
+	// stack and so have no declared ref kind to look them up under. They are
+	// reported in the retired list's order, not the inventory's.
+	for _, component := range retiredComponents {
+		if installedRef(scope, component.ID) {
+			state.Retired = append(state.Retired, component.ID)
+		}
+	}
 	return state
+}
+
+// installedRef reports whether scope has any installed ref with the given ID,
+// across either scope and ref kind.
+func installedRef(scope Scope, id string) bool {
+	for ref := range scope.Installed {
+		if ref.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// retiredSystemInstalled reports whether any component removed from the stack
+// in a previous release is installed system-wide, so Disable knows it may
+// need the image's ship declaration before removing a system copy of one.
+func retiredSystemInstalled(scope Scope) bool {
+	for _, component := range retiredComponents {
+		if scope.System[Ref{Kind: component.Kind, ID: component.ID}] {
+			return true
+		}
+	}
+	return false
 }
 
 // listInstalled is an injection seam for the Flatpak query, so Status's
@@ -284,19 +360,34 @@ func Status() (State, error) {
 	return Derive(scope), nil
 }
 
+// ProgressCallback reports progress for gaming component install or removal.
+type ProgressCallback func(step, total int, componentName string)
+
 // Enable installs every missing component into the system scope.
 // A component already present in either scope is not reinstalled, and a
 // component failure does not abort the remaining entries.
 func Enable() (installed []string, failures []error) {
+	return EnableWithProgress(nil)
+}
+
+// EnableWithProgress installs missing components while reporting progress per component.
+func EnableWithProgress(progress ProgressCallback) (installed []string, failures []error) {
 	state, err := Status()
 	if err != nil {
 		return nil, []error{err}
 	}
 
+	var toInstall []Component
 	for _, component := range components {
+		if slices.Contains(state.Missing, component.ID) {
+			toInstall = append(toInstall, component)
+		}
+	}
+
+	for idx, component := range toInstall {
 		id := component.ID
-		if !slices.Contains(state.Missing, id) {
-			continue
+		if progress != nil {
+			progress(idx, len(toInstall), component.Name)
 		}
 		ref := id
 		if component.BranchOf != "" {
@@ -399,33 +490,106 @@ func uninstallAll(refs []string, user bool) error {
 // that could not be removed. A multi-branch component (BranchOf) is removed
 // from each scope by one qualified ref per branch observed there, because a
 // bare ID matching several installed branches fails at flatpak's prompt.
+//
+// Retired components — Flatpaks a previous Gaming Mode installed that this
+// build no longer manages — are cleaned up the same way: a user copy is
+// always removed, and a system copy is kept only when the image ships it.
+// They are matched by ID, because they are not in the current stack and so
+// have no declared ref kind.
 func Disable() (removed, kept []string, failures []error) {
+	return DisableWithProgress(nil)
+}
+
+// DisableWithProgress removes installed components while reporting progress per component.
+func DisableWithProgress(progress ProgressCallback) (removed, kept []string, failures []error) {
 	scope, err := listInstalled()
 	if err != nil {
 		return nil, nil, []error{err}
 	}
 	state := Derive(scope)
 	var shipped map[string]bool
-	if len(state.SystemInstalled) > 0 {
+	if len(state.SystemInstalled) > 0 || retiredSystemInstalled(scope) {
 		if shipped, err = imageShipped(); err != nil {
 			return nil, nil, []error{fmt.Errorf("reading the Flatpaks the system image ships: %w", err)}
 		}
 	}
 
+	type disableItem struct {
+		component          Component
+		hasUser            bool
+		hasUnshippedSystem bool
+		keep               bool
+	}
+	var toProcess []disableItem
+	var toRemoveCount int
 	for _, component := range components {
 		id := component.ID
 		if !slices.Contains(state.Installed, id) {
 			continue
 		}
-		ref := component.Ref()
+		hasUser := slices.Contains(state.UserInstalled, id)
+		inSystem := slices.Contains(state.SystemInstalled, id)
+		hasUnshippedSystem := inSystem && !shipped[id]
+		keep := inSystem && shipped[id]
+		toProcess = append(toProcess, disableItem{
+			component:          component,
+			hasUser:            hasUser,
+			hasUnshippedSystem: hasUnshippedSystem,
+			keep:               keep,
+		})
+		if hasUser || hasUnshippedSystem {
+			toRemoveCount++
+		}
+	}
+
+	step := 0
+	for _, item := range toProcess {
+		id := item.component.ID
+		ref := item.component.Ref()
 		var errs []error
-		if slices.Contains(state.UserInstalled, id) {
+		if (item.hasUser || item.hasUnshippedSystem) && progress != nil {
+			progress(step, toRemoveCount, item.component.Name)
+			step++
+		}
+		if item.hasUser {
+			if err := uninstallAll(removalRefs(item.component, scope.UserBranches[ref]), true); err != nil {
+				errs = append(errs, fmt.Errorf("user scope: %w", err))
+			}
+		}
+		if item.hasUnshippedSystem {
+			if err := uninstallAll(removalRefs(item.component, scope.SystemBranches[ref]), false); err != nil {
+				errs = append(errs, fmt.Errorf("system scope: %w", err))
+			}
+		}
+		switch {
+		case len(errs) != 0:
+			failures = append(failures, fmt.Errorf("%s: %w", id, errors.Join(errs...)))
+		case item.keep:
+			kept = append(kept, id)
+		default:
+			removed = append(removed, id)
+		}
+	}
+
+	// Retired components are cleaned up the same way. A user copy is always
+	// removed — it needs no authorization, exactly like a current component's
+	// user copy. A system copy is kept only when the image ships it, and
+	// otherwise removed under Flatpak's own PolicyKit. They are matched by ID,
+	// because they are no longer in the stack and so have no declared ref kind.
+	for _, component := range retiredComponents {
+		id := component.ID
+		ref := Ref{Kind: component.Kind, ID: id}
+		if !installedRef(scope, id) {
+			continue
+		}
+		var errs []error
+		if scope.User[ref] {
 			if err := uninstallAll(removalRefs(component, scope.UserBranches[ref]), true); err != nil {
 				errs = append(errs, fmt.Errorf("user scope: %w", err))
 			}
 		}
 		keep := false
-		if slices.Contains(state.SystemInstalled, id) {
+		if scope.System[ref] {
 			if shipped[id] {
 				keep = true
 			} else if err := uninstallAll(removalRefs(component, scope.SystemBranches[ref]), false); err != nil {

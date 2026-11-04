@@ -93,15 +93,19 @@ func (c *Coordinator) Check(
 				source.Enabled = false
 				source.Items = nil
 				source.CheckErr = nil
+				source.CheckWarnings = nil
 			case err != nil:
 				// The UI shows plain words for a failure; the raw error is
 				// kept here, in the log, where it was produced.
 				log.Printf("updates: checking %s: %v", source.ID, err)
 				source.CheckErr = err
+				source.CheckWarnings = nil
 			default:
 				source.Items = append([]Item(nil), result.Items...)
 				source.CheckErr = nil
+				source.CheckWarnings = append([]string(nil), result.Warnings...)
 				source.ApplyErr = nil
+				source.ApplyWarnings = nil
 				source.RestartRequired = result.RestartRequired
 			}
 			state.Sources = cloneSources(sources)
@@ -160,7 +164,8 @@ func (c *Coordinator) UpdateAll(
 	}
 	state.Current = ""
 	state.Progress = ""
-
+	state.Fraction = 0
+	state.Determinate = false
 	if !retry {
 		state.CompletedSources = make([]SourceID, 0)
 	}
@@ -201,6 +206,26 @@ func (c *Coordinator) UpdateAll(
 	var stateMu sync.Mutex
 	hadFailure := false
 	hadPreview := state.Preview
+	totalStages := targetCount
+	if (targetCount > 0 || retryMaintenance) && preferences.MaintenanceAfterUpdates && c.maintenance != nil {
+		totalStages++
+	}
+	stageFraction := func(completed int, within float64) float64 {
+		if totalStages <= 0 {
+			return 0
+		}
+		if within < 0 {
+			within = 0
+		} else if within > 1 {
+			within = 1
+		}
+		f := (float64(completed) + within) / float64(totalStages)
+		if f > 1 {
+			return 1
+		}
+		return f
+	}
+	completedStages := 0
 	for _, provider := range c.providers {
 		id := provider.ID()
 		if !targets[id] {
@@ -216,11 +241,14 @@ func (c *Coordinator) UpdateAll(
 		items := append([]Item(nil), state.Sources[index].Items...)
 		state.Current = id
 		state.Progress = ""
+		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		state.Sources[index].Updating = true
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
 
+		var lastFraction float64
 		progress := func(update Progress) {
 			stateMu.Lock()
 			state.Current = update.Source
@@ -228,12 +256,23 @@ func (c *Coordinator) UpdateAll(
 				state.Current = id
 			}
 			state.Progress = update.Message
+			if update.Fraction > 0 {
+				newF := stageFraction(completedStages, update.Fraction)
+				if newF > lastFraction {
+					lastFraction = newF
+				}
+				state.Determinate = true
+			} else {
+				state.Determinate = false
+			}
+			if lastFraction > state.Fraction {
+				state.Fraction = lastFraction
+			}
 			state.Generation = generation
 			progressState := derive(state)
 			stateMu.Unlock()
 			c.commit(generation, progressState, publish)
 		}
-
 		result, err := provider.Apply(ctx, items, progress)
 
 		stateMu.Lock()
@@ -243,12 +282,19 @@ func (c *Coordinator) UpdateAll(
 			source.Updating = false
 			if err != nil {
 				log.Printf("updates: updating %s: %v", id, err)
+				if result.PendingItems != nil {
+					source.Items = append([]Item(nil), result.PendingItems...)
+					source.ApplyWarnings = append([]string(nil), result.Warnings...)
+				} else {
+					source.ApplyWarnings = nil
+				}
 				source.ApplyErr = err
 				source.Completed = false
 				removeSourceID(&state.CompletedSources, id)
 				hadFailure = true
 			} else {
 				source.ApplyErr = nil
+				source.ApplyWarnings = nil
 				switch {
 				case result.Preview:
 					source.Completed = false
@@ -272,9 +318,12 @@ func (c *Coordinator) UpdateAll(
 				}
 			}
 		}
+		completedStages++
 		state.Preview = state.Preview || result.Preview
 		state.Current = id
 		state.Progress = ""
+		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		if nextID := nextTargetID(c.providers, targets, id); nextID != "" {
 			state.Current = nextID
 			if nextIndex := sourceIndex(state.Sources, nextID); nextIndex >= 0 {
@@ -290,6 +339,8 @@ func (c *Coordinator) UpdateAll(
 	stateMu.Lock()
 	state.Current = ""
 	state.Progress = ""
+	state.Fraction = 0
+	state.Determinate = false
 	state.Generation = generation
 	state = derive(state)
 	stateMu.Unlock()
@@ -301,14 +352,29 @@ func (c *Coordinator) UpdateAll(
 		state.MaintenanceErr = nil
 		state.MaintenanceRan = true
 		state.Maintaining = true
+		state.Fraction = stageFraction(completedStages, 0)
+		state.Determinate = false
 		state = derive(state)
 		stateMu.Unlock()
 		c.commit(generation, state, publish)
 
+		var lastMaintenanceFraction float64
 		maintenanceProgress := func(progress Progress) {
 			stateMu.Lock()
 			state.Current = progress.Source
 			state.Progress = progress.Message
+			if progress.Fraction > 0 {
+				newF := stageFraction(completedStages, progress.Fraction)
+				if newF > lastMaintenanceFraction {
+					lastMaintenanceFraction = newF
+				}
+				state.Determinate = true
+			} else {
+				state.Determinate = false
+			}
+			if lastMaintenanceFraction > state.Fraction {
+				state.Fraction = lastMaintenanceFraction
+			}
 			state.Generation = generation
 			progressState := derive(state)
 			stateMu.Unlock()
@@ -323,6 +389,8 @@ func (c *Coordinator) UpdateAll(
 		state.Maintaining = false
 		state.Current = ""
 		state.Progress = ""
+		state.Fraction = 0
+		state.Determinate = false
 		state.Generation = generation
 		state = derive(state)
 		stateMu.Unlock()
@@ -332,6 +400,8 @@ func (c *Coordinator) UpdateAll(
 	stateMu.Lock()
 	state.Current = ""
 	state.Progress = ""
+	state.Fraction = 0
+	state.Determinate = false
 	state.Generation = generation
 	state = derive(state)
 	stateMu.Unlock()

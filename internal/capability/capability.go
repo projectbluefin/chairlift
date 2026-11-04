@@ -253,14 +253,17 @@ var prerequisites = []Prerequisite{
 	{Page: "agents_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
 	// Features.
+	{Page: "features_page", Group: "bluefin_cli_group", AnyOf: []Capability{Homebrew}},
 	{Page: "features_page", Group: "dx_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "features_page", Group: "features_group"},
 	{Page: "features_page", Group: "desktop_integrations_group"},
 	{Page: "features_page", Group: "gaming_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "features_page", Group: "printers_group", AnyOf: []Capability{Podman}},
+	{Page: "features_page", Group: "compass_group", AnyOf: []Capability{Flatpak}},
 
 	// Livery.
 	{Page: "livery_page", Group: "account_group"},
+	{Page: "livery_page", Group: "wallpapers_group", AnyOf: []Capability{Homebrew}},
 	{Page: "livery_page", Group: "livery_app_grid_group"},
 	{Page: "livery_page", Group: "livery_dock_group"},
 	{Page: "livery_page", Group: "livery_foundation_group"},

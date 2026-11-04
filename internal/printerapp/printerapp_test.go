@@ -3,8 +3,10 @@ package printerapp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -25,7 +27,7 @@ func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
 		}
 		seen[f.ID] = true
 		// Built-in families run their own repository's moving :stable tag;
-		// the unit's AutoUpdate=registry keeps it current.
+		// Enable verifies and pins this reference before installing the unit.
 		if want := "ghcr.io/projectbluefin/" + f.ID + "-printer-app:stable"; f.Image != want {
 			t.Errorf("family %q image = %q, want %q", f.ID, f.Image, want)
 		}
@@ -50,7 +52,6 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 		for _, required := range []string{
 			"[Container]",
 			"Image=" + app.Family.Image,
-			"AutoUpdate=registry",
 			"ContainerName=" + app.ContainerName(),
 			"WantedBy=default.target",
 			"PublishPort=127.0.0.1:" + strconv.Itoa(app.Port()) + ":" + strconv.Itoa(app.Port()),
@@ -151,9 +152,14 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	tmp := t.TempDir()
 	previousDir := unitDir
 	previousHomeDir := userHomeDir
+	previousCosign := runCosign
+	runCosign = func(context.Context, ...string) ([]byte, error) {
+		return []byte(`[{"critical":{"image":{"docker-manifest-digest":"sha256:` + strings.Repeat("a", 64) + `"}}}]`), nil
+	}
 	previousSystemctl := runSystemctl
 	previousSystemctlOutput := runSystemctlOutput
 	t.Cleanup(func() {
+		runCosign = previousCosign
 		unitDir = previousDir
 		userHomeDir = previousHomeDir
 		runSystemctl = previousSystemctl
@@ -176,7 +182,7 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	return tmp, &recorded
 }
 
-func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
+func TestEnableWritesVerifiedDigestAndStartsWithoutAutoUpdate(t *testing.T) {
 	dir, calls := stubUnitDir(t)
 	app := Select(Families()[0])
 
@@ -192,11 +198,11 @@ func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading written unit: %v", err)
 	}
-	if !strings.Contains(string(data), app.Family.Image) {
-		t.Errorf("written unit does not name %q:\n%s", app.Family.Image, data)
+	if !strings.Contains(string(data), "Image=ghcr.io/projectbluefin/ghostscript-printer-app@sha256:"+strings.Repeat("a", 64)) || strings.Contains(string(data), "AutoUpdate=") || strings.Contains(string(data), ":stable") {
+		t.Errorf("written unit is not pinned without auto-update:\n%s", data)
 	}
 
-	want := []string{"daemon-reload", "start " + app.ServiceName(), "enable --now podman-auto-update.timer"}
+	want := []string{"daemon-reload", "start " + app.ServiceName()}
 	if strings.Join(*calls, "|") != strings.Join(want, "|") {
 		t.Errorf("systemctl calls = %v, want %v", *calls, want)
 	}
@@ -206,10 +212,9 @@ func TestEnableWritesTheUnitStartsItAndEnablesAutoUpdate(t *testing.T) {
 	}
 }
 
-// A failed start or a failed auto-update timer enable both roll a fresh
-// install back: the service is stopped, the quadlet removed, systemd reloaded.
+// A failed reload or start rolls a fresh install back.
 func TestEnableRollsBackAFreshUnitOnFailure(t *testing.T) {
-	for _, failing := range []string{"start", "enable"} {
+	for _, failing := range []string{"start", "daemon-reload"} {
 		t.Run(failing, func(t *testing.T) {
 			dir, calls := stubUnitDir(t)
 			runSystemctl = func(_ context.Context, args ...string) error {
@@ -473,5 +478,71 @@ func TestDefaultUnitDirReturnsPathUnderUserConfig(t *testing.T) {
 	want := filepath.Join(configDir, "containers", "systemd")
 	if got != want {
 		t.Errorf("defaultUnitDir() = %q, want %q", got, want)
+	}
+}
+
+// A Disable that arrives while Refresh is verifying must wait for Refresh to
+// finish, so Refresh cannot rewrite and restart a unit Disable just removed.
+func TestDisableWaitsForAnInFlightRefreshOfTheSameApp(t *testing.T) {
+	dir, calls := stubUnitDir(t)
+	app := Select(Families()[0])
+	if err := os.WriteFile(filepath.Join(dir, app.UnitName()), []byte("Image="+app.Family.Image+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	verifying := make(chan struct{})
+	release := make(chan struct{})
+	verify := runCosign
+	runCosign = func(ctx context.Context, args ...string) ([]byte, error) {
+		close(verifying)
+		<-release
+		return verify(ctx, args...)
+	}
+	waiting := make(chan struct{}, 2)
+	lockWaitHook = func(App) { waiting <- struct{}{} }
+	t.Cleanup(func() { lockWaitHook = nil })
+
+	refreshed := make(chan error, 1)
+	go func() { refreshed <- Refresh(context.Background(), app) }()
+	<-waiting
+	<-verifying
+
+	disabled := make(chan error, 1)
+	go func() { disabled <- Disable(context.Background(), app) }()
+	<-waiting
+	select {
+	case err := <-disabled:
+		t.Fatalf("Disable returned %v while Refresh held the app", err)
+	default:
+	}
+	close(release)
+
+	if err := <-refreshed; err != nil {
+		t.Fatalf("Refresh = %v", err)
+	}
+	if err := <-disabled; err != nil {
+		t.Fatalf("Disable = %v", err)
+	}
+	if IsEnabled(app) {
+		t.Fatal("unit survived a Disable issued during Refresh")
+	}
+	want := []string{"daemon-reload", "restart " + app.ServiceName(), "stop " + app.ServiceName(), "daemon-reload"}
+	if !reflect.DeepEqual(*calls, want) {
+		t.Fatalf("calls = %v, want %v", *calls, want)
+	}
+}
+
+func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
+	for _, f := range Families() {
+		app := Select(f)
+		want := fmt.Sprintf("http://localhost:%d/", app.Port())
+		if got := app.WebAdminURL(); got != want {
+			t.Errorf("app %s WebAdminURL = %q, want %q", f.ID, got, want)
+		}
+		unit := RenderUnit(app)
+		wantPublish := fmt.Sprintf("PublishPort=127.0.0.1:%d:%d", app.Port(), app.Port())
+		if !strings.Contains(unit, wantPublish) {
+			t.Errorf("app %s rendered unit missing %q", f.ID, wantPublish)
+		}
 	}
 }

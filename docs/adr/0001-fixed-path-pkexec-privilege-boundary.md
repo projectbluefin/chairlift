@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-12
-- **Amended:** 2026-09-24 — native A/B staging (`internal/sysupdate`) removed (#272); 2026-09-27 — helper renamed to `chairlift-helper` (#388) and subcommand count updated to fourteen
+- **Amended:** 2026-09-24 — native A/B staging (`internal/sysupdate`) removed (#272); 2026-09-27 — helper renamed to `chairlift-helper` (#388) and subcommand count updated to fourteen; 2026-10-26 — `docker-update` added as the fifteenth subcommand ([ADR-0024](0024-rootful-docker-from-verified-homebrew-bottles.md))
 
 ## Context
 
@@ -37,11 +37,11 @@ that is a Go constant, matching the policy's `exec.path` annotation exactly:
 The updex policy (`data/io.projectbluefin.chairlift.updex.policy`) declares one
 action per helper subcommand, each selecting its command through `exec.argv1`
 (`enable-feature`, `disable-feature`, `update`). The ublue policy
-(`data/io.projectbluefin.chairlift.ublue.policy`) does the same for its fourteen
+(`data/io.projectbluefin.chairlift.ublue.policy`) does the same for its fifteen
 subcommands: `channel-switch`, `dx-enable`, `dx-disable`, `restart`,
 `rollback`, `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-`factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`, and
-`docker-disable`. Because PolicyKit does not validate the rest of argv, the
+`factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+`docker-disable`, and `docker-update`. Because PolicyKit does not validate the rest of argv, the
 helpers are a second boundary: `internal/updexhelper.ParseInvocation` and
 `internal/ubluehelper.ParseInvocation` reject extra, misplaced, and unknown
 arguments before any privileged call.

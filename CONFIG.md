@@ -119,7 +119,7 @@ unattended-update switch is `updates_page.automatic_updates_group`.
 - `automatic_updates_group`: The automatic-background-updates switch, and nothing else — whether this system installs updates on its own schedule. Updating now is the update shell's single primary action and has no configuration key. Hidden entirely on a host with no unattended-update timer
 - `bootc_updates_group`: System-wide bootc updates
 - `flatpak_updates_group`: Available Flatpak application updates (user and system)
-- `brew_updates_group`: Homebrew package updates and outdated packages
+- `brew_updates_group`: Homebrew package updates and outdated packages, plus the Docker engine when Enable Docker installed it from Homebrew bottles
 - `brew_trust_group`: Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); only shown when there is something to trust
 - `channel_group`: Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present
 - `bootc_status_group`: Compact system-version readout, with build identifiers behind a details row (when available)
@@ -149,6 +149,11 @@ section above); administrators can remove them when convenient.
     while bundles from readable paths remain available. Repeating the same
     path does not duplicate a row; same-named Brewfiles in different
     directories remain distinct and show their full paths.
+  - Monospace Fonts (`fonts-dev`) uses this same collection configuration and
+    appears under Features → Developer Mode when `features_page.dx_group` is
+    enabled, or falls back to Apps if Developer Mode is disabled. Its independent
+    Install action does not enable Developer Mode. The legacy `cli` collection
+    is excluded; Bluefin CLI uses `features_page.bluefin_cli_group` instead.
 
 ### Maintenance Page (`maintenance_page`)
 
@@ -162,6 +167,7 @@ section above); administrators can remove them when convenient.
 
 ### Features Page (`features_page`)
 
+- `bluefin_cli_group`: Bluefin CLI, a single Bash-only Features switch. Enabled by default where Homebrew is available. Chairlift embeds its package list (including `ugrep`) and Bash payload; it does not require Common's Brewfiles or bling scripts. Turning on installs missing tools and configures `~/.bashrc`; turning off removes only recognized managed Bash blocks and keeps packages. Fish and Zsh are unsupported and untouched. Wizard setup selects it by default unless previously disabled and applies the choice on Next from Features.
 - `desktop_integrations_group`: Tailscale Integration and Sync Folder Integration GNOME extension switches. Enabled by default; missing extensions or an unavailable GNOME session leave the switches insensitive with an explanation. Existing GNOME preferences are read on load and only explicit user actions change them.
 - `features_group`: System features managed by updex (requires `updex` command)
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups, and after a confirmed enable installs the Dev Container CLI (`devcontainer`) through Homebrew when Homebrew is available — a failed install is reported on its own and does not roll back developer access (shown only when `/usr/share/ublue-os/image-info.json` is present)
@@ -170,14 +176,55 @@ section above); administrators can remove them when convenient.
   - `stage_feeds`: After a confirmed enable, write the curated developer feed catalog to `~/.local/share/chairlift/developer-feeds.opml` so the user can import it into their reader. Defaults to `false`. ChairLift writes the file and stops — nothing is imported automatically, and Pulp's own database is never touched. Disabling Developer Mode never removes Pulp, the staged file, or anything already imported from it
   - `install_dev_apps`: After a confirmed enable, install the `dakota-dev-flatpaks` app collection with `brew bundle install`. Defaults to `false`. Skipped when `applications_page.brew_bundles_group` is disabled or Homebrew is unavailable; a failure is reported as its own failure rather than rolling back developer access, and disabling Developer Mode removes nothing
 - `gaming_group`: Gaming Mode; installs the gaming tools stack (ProtonPlus, Protontricks, GOverlay, MangoHud) system-wide from the system Flathub remote (authorized by Flatpak's own PolicyKit) with a single toggle, leaving in place a system copy the OS image declares it ships (Flatpak `preinstall.d` or `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) (shown only when `/usr/share/ublue-os/image-info.json` is present)
-- `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). Each unit runs its family's `ghcr.io/projectbluefin/<id>-printer-app:stable` image and is kept current by `podman-auto-update.timer`, which turning a family on enables. The application is published on `127.0.0.1` only ([ADR-0020](docs/adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)): its unauthenticated settings page and IPP are reachable only from this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`), so other computers on the network cannot print to it and it is not advertised over DNS-SD. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
+- `printers_group`: Printer applications; one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`, with no `pkexec` route (shown only when `podman` is on `$PATH`). Turning a family on verifies its `ghcr.io/projectbluefin/<id>-printer-app:stable` image's signature against the family's publishing workflow and pins the unit to that verified digest, without registry auto-update ([ADR-0023](docs/adr/0023-verify-printer-images-before-installing.md)); the pinned image does not change until the family is turned off and on again. The application is published on `127.0.0.1` only ([ADR-0020](docs/adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)): its unauthenticated settings page and IPP are reachable only from this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`), so other computers on the network cannot print to it and it is not advertised over DNS-SD. The rows evaluate systemd state, journal logs, and container images to diagnose and surface actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator
+- `compass_group`: Compass, TunaOS's keyboard-first launcher; one switch that installs `org.tunaos.compass` system-wide from the image's FlatPark system remote (`flatpak install --system flatpark org.tunaos.compass`, authorized by Flatpak's own PolicyKit) and, after confirmation, removes it from every scope it is installed in while keeping user data. ChairLift never adds the remote: without an enabled `flatpark` system remote, or on a non-x86_64 host (FlatPark publishes Compass for x86_64 only), the switch can only remove an existing copy (shown only when `flatpak` is on `$PATH`)
 
 The Developer group also offers WSL Mode (nsl by default, with Lima as alternative)
-and Docker. nsl requires an x86-64 Linux host; Lima supports amd64 and arm64.
-Both require hardware virtualization and access to `/dev/kvm`. Missing fixed
-helper actions disable only affected switches, not their discoverability.
-KVM permission changes require a new login; Docker needs an accessible daemon
-socket for this session. No user-configurable privileged argv is accepted.
+and system Docker. Turning either on first enables Developer Mode when it is
+off, through the existing fixed `dx-enable` helper under one shared action gate.
+Authentication failure or cancellation aborts child setup; a later child failure
+keeps granted developer access, and turning a child off never demotes it. Direct
+and implicit promotion use the same follow-on opt-ins above. Dry-run preserves
+observed switches; the shared Setup activity checklist distinguishes preview,
+cancellation, failure, and completion, and failed stages remain retryable.
+nsl requires an x86-64 Linux host; Lima supports amd64 and arm64. Both require
+hardware virtualization and access to `/dev/kvm`; its fixed permission grant
+may also ask for authentication and requires a new login. Missing helper
+actions leave affected controls visible but insensitive.
+Docker is rootful system Docker with Bluefin DX parity. On an image that ships
+`/usr/lib/systemd/system/docker.service`, the fixed `docker-enable` helper
+enables that Docker. Otherwise the helper installs the daemon from Homebrew
+bottles it verifies against Homebrew's signed formula index into root-owned
+`/var/lib/chairlift/docker`, writes marker-bearing units to
+`/etc/systemd/system`, and creates the `docker` group when missing; root never
+executes the user's Homebrew prefix
+([ADR-0024](docs/adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
+No configuration key selects the formulae, index, install root, or unit
+paths; they are fixed in the helper. The action needs network access and may
+ask for administrator approval separately from `dx-enable`. When Homebrew is
+available, ChairLift then installs the user-scope `docker`, `docker-buildx`,
+and `docker-compose` formulae. Once system Docker is on, enable also turns off
+a rootless Docker daemon an earlier ChairLift set up. The package disclosure labels the daemon formulae
+**Homebrew, installed for the whole computer**. Masked units or missing helper
+actions need an image/administrator fix.
+Readiness requires `/var/run/docker.sock` to answer HTTP 200 `OK`; installed
+CLI tools or active units alone are insufficient. Newly granted group access
+needs a new login, and awaiting login is not ready. A known active unit remains
+stoppable with a supported disable action even after a socket probe failure.
+Disable stops both system units for all accounts and keeps the runtime, data,
+group membership, and Developer Mode. With `updates_page.brew_updates_group`
+enabled, the Developer tools update source also refreshes a Homebrew-installed
+daemon through the fixed `docker-update` helper.
+Docker enable also attempts native Microsoft VS Code setup as a separate optional
+outcome, without installing the editor. It seeds defaults only when
+`~/.config/Code/User/settings.json` is absent, preserving existing JSONC and
+symlinks, and installs Bluefin DX's Dev Containers, Remote SSH, and Container
+Tools extensions. The upstream version-1 marker is written only after success
+and checked against installed extensions on later runs. Without native `code`
+the step is skipped; an editor setup failure stays visible and retryable
+without undoing access.
+Preview writes no settings or marker and launches no editor CLI. No
+user-configurable privileged argv is accepted.
 The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the backend used in the current window;
 `wsl_backend` configures the initial choice. With the nsl default, an existing
 Lima Ubuntu machine and no ChairLift nsl machine select Lima instead of creating
@@ -187,17 +234,22 @@ older ChairLift created rather than adding a second one.
 
 ### Livery Page (`livery_page`)
 
-Who you are, who you stand with, and what you roll with. Each livery section
+Who you are, who you stand with, and what you roll with. Each icon section
 shadows one icon-theme name inside the user's own theme, and the profile
 picture goes through AccountsService as the invoking user, so nothing here is
-privileged. Apart from the profile picture (staged in `$XDG_CACHE_HOME`, with a
-face-file fallback in `$HOME`), nothing is written outside `$XDG_DATA_HOME` and
-`$XDG_CONFIG_HOME`.
+privileged. Icon settings and assets stay in `$XDG_DATA_HOME` and `$XDG_CONFIG_HOME`.
+Profile pictures are staged in `$XDG_CACHE_HOME`, with a face-file fallback
+in `$HOME`.
 
 - `account_group`: Profile Picture; the account's picture, chosen from Project Bluefin's dinosaur artwork. Nothing is downloaded until a picture is picked, and it is set only on Apply, through AccountsService (`busctl`, unprivileged) with a `~/.face.icon`/`~/.face` fallback that takes effect at the next sign-in
+- `wallpapers_group`: Wallpapers, directly below Profile Picture; default-checked More Dinosaurs setup installs Valhalla and extra Bluefin wallpapers, converts SVG/JXL/AVIF artwork to PNG, and configures its manual folders only on Install. A staged Setup activity checklist shows actual progress and outcomes. Requires Homebrew; no setup runs on page load
 - `livery_app_grid_group`: App Launcher Icon; the Show Applications mark on GNOME or the configured Kickoff applets on KDE Plasma, fetched from simpleicons.org by brand name. Set once — there is no rotation; unavailable on Plasma if no Kickoff applet is configured
 - `livery_foundation_group`: Top Bar Icon; the GNOME top-bar menu mark, optionally advancing at each login (requires the Custom Command Menu GNOME extension; omitted on Plasma)
 - `livery_dock_group`: Files Icon; the Files application icon, set to a CNCF project's own color mark from cncf/artwork and chosen with a searchable picker, optionally advancing at each login. GNOME stores one icon per application, so this changes Files everywhere it is drawn, not only on the dock
+
+The three icon sections start collapsed and expand independently to show their
+controls, without changing settings.
+
 
 ### Help Page (`help_page`)
 
@@ -280,7 +332,12 @@ Do not install defaults over administrator-owned `/etc/chairlift/config.yml`.
 
 ## Notes
 
-- Groups with `enabled: false` will be completely hidden from the UI
+- A group with `enabled: false` is not built on the page that owns it, so its
+  controls never appear. An update source is likewise given no row on the
+  Updates page when configuration excludes it or this host's capability floor
+  cannot back it (chairlift#675); the Preferences dialog still lists every
+  source, with an excluded one's switch off and its subtitle naming which of
+  the two facts excludes it
 - A configuration file is applied as an overlay on top of the built-in
   defaults, field by field, not as a full replacement:
   - An omitted `enabled` key inherits that group's documented default

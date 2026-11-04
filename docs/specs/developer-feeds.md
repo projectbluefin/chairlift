@@ -7,6 +7,30 @@ live Developer Mode enable may stage it for manual import when
 `install_pulp` setting both default to false. The validator and catalog curator
 consume this format contract; staging never imports subscriptions into Pulp.
 
+Direct Developer Mode enable and an implicit promotion requested by WSL or
+system Docker share one `developerGate` and ordered `devsetup.Run`. If the
+parent is off, the fixed `dx-enable` prerequisite must succeed first; canceled
+or failed authentication starts neither child setup nor feed work. A later
+Docker/WSL or optional setup failure never revokes confirmed developer access,
+and turning a child off never demotes the parent or removes feed artifacts.
+Docker activation uses the image's Docker units when present, or a daemon the
+fixed Docker helper installs from verified Homebrew bottles; neither Docker's
+Homebrew package disclosure nor its optional native
+VS Code setup changes these feed opt-ins. See the
+[developer workstation contract](../design/package-managers.md#developer-workstation-and-gaming-components).
+
+The native **Setup activity** checklist reports real stages and separate
+outcomes, not per-package percentages. Pulp, feed staging, and app collection
+outcomes remain independent; retry retains completed optional stages rather
+than repeating a successful promotion or re-staging successful work. Options
+are captured on the GTK main thread before the worker starts. Page load,
+disable, failed promotion, and dry-run previews stage no catalog, install no
+Pulp, and import no subscriptions. Preview preserves observed switches.
+
+The opted-in Developer disclosure includes the resolved catalog path when
+available, so the user can find the file for manual import. Resolving this hint
+never stages the file or changes the reader's subscriptions.
+
 ## Interface
 
 An OPML 2.0 document. Structure, with the attribute constraints the validator
@@ -177,6 +201,8 @@ Historical curation rationale from 2026-09-22 for entries absent from the catalo
 - Context: [design/overview.md](../design/overview.md)
 - Source: [`developerfeeds.go`](../../internal/developerfeeds/developerfeeds.go)
   (offline parser/validator), [`pulp.go`](../../internal/developerfeeds/pulp.go)
-  (system-scope Pulp provisioning and user-data staging), and
-  [`features_page.go`](../../internal/views/features_page.go)
-  (`startDeveloperFeedSetup` opt-in admission and worker).
+  (system-scope Pulp provisioning and user-data staging),
+  [`developer_setup.go`](../../internal/views/developer_setup.go)
+  (GTK-side task callbacks), and
+  [`setup.go`](../../internal/devsetup/setup.go)
+  (`devsetup.PostStages` opt-in admission and `Run` sequencing).

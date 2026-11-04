@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -227,40 +228,108 @@ func TestHostResolutionIsRestored(t *testing.T) {
 	}
 }
 
-func TestWithBrewPathPutsBrewsDirectoryFirstOnce(t *testing.T) {
-	tests := []struct {
-		name string
-		env  []string
-		brew string
-		want []string
-	}{
-		{"prepends", []string{"HOME=/h", "PATH=/usr/bin"}, "/lb/bin/brew", []string{"HOME=/h", "PATH=/lb/bin:/usr/bin"}},
-		{"already listed", []string{"PATH=/usr/bin:/lb/bin"}, "/lb/bin/brew", []string{"PATH=/usr/bin:/lb/bin"}},
-		{"no PATH at all", []string{"HOME=/h"}, "/lb/bin/brew", []string{"HOME=/h", "PATH=/lb/bin"}},
-		{"empty PATH", []string{"PATH="}, "/lb/bin/brew", []string{"PATH=/lb/bin"}},
-		{"bare name changes nothing", []string{"PATH=/usr/bin"}, "brew", []string{"PATH=/usr/bin"}},
+// Docker's daemon resolves runc from Homebrew's sbin; cask preflights also
+// need bin siblings. Exercise actual child lookup, including a direct launch.
+func TestBrewChildrenFindBinAndSbinTools(t *testing.T) {
+	prefix := t.TempDir()
+	bin, sbin := filepath.Join(prefix, "bin"), filepath.Join(prefix, "sbin")
+	for _, dir := range []string{bin, sbin} {
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := WithBrewPath(tt.env, tt.brew); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("WithBrewPath = %v, want %v", got, tt.want)
+	script := filepath.Join(bin, "brew")
+	for path, body := range map[string]string{
+		script:                            "bin-child && sbin-child",
+		filepath.Join(bin, "bin-child"):   "exit 0",
+		filepath.Join(sbin, "sbin-child"): "exit 0",
+	} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, path := range []string{"/usr/bin:/bin", bin + ":/usr/bin", bin + ":" + sbin + ":/usr/bin", ""} {
+		t.Run(path, func(t *testing.T) {
+			t.Setenv("PATH", path)
+			if _, err := runBrewCommandAt(context.Background(), script, "install", "docker-engine"); err != nil {
+				t.Fatalf("Homebrew child could not resolve bin/sbin tools: %v", err)
+			}
+		})
+	}
+	cmd := exec.Command(script)
+	cmd.Env = WithBrewPath([]string{"HOME=" + prefix}, script)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("children could not resolve Homebrew tools without an inherited PATH: %v\n%s", err, output)
+	}
+}
+
+func TestWithBrewPathLeavesUnresolvedExecutablesAlone(t *testing.T) {
+	for _, brew := range []string{"", "brew"} {
+		env := []string{"HOME=/h", "PATH=/usr/bin"}
+		if got := WithBrewPath(env, brew); !reflect.DeepEqual(got, env) {
+			t.Fatalf("relative executable changed environment: %v", got)
+		}
+	}
+}
+
+func TestWithBrewPathIsIdempotentAndDoesNotDuplicateDirectories(t *testing.T) {
+	for name, env := range map[string][]string{
+		"missing PATH": {"HOME=/h"},
+		"empty PATH":   {"PATH="},
+		"bin listed":   {"PATH=/lb/bin:/usr/bin"},
+		"sbin listed":  {"PATH=/lb/sbin:/usr/bin"},
+		"both listed":  {"PATH=/lb/bin:/lb/sbin:/usr/bin"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			first := WithBrewPath(env, "/lb/bin/brew")
+			if next := WithBrewPath(first, "/lb/bin/brew"); !reflect.DeepEqual(first, next) {
+				t.Fatalf("repeated application grew or reordered PATH: %v -> %v", first, next)
+			}
+			var path string
+			for _, entry := range first {
+				if value, ok := strings.CutPrefix(entry, "PATH="); ok {
+					path = value
+				}
+			}
+			for _, directory := range []string{"/lb/bin", "/lb/sbin"} {
+				count := 0
+				for entry := range strings.SplitSeq(path, string(filepath.ListSeparator)) {
+					if entry == directory {
+						count++
+					}
+				}
+				if count != 1 {
+					t.Fatalf("%s appears %d times in %s", directory, count, path)
+				}
 			}
 		})
 	}
 }
 
-// A cask preflight runs tools that live beside brew by bare name. Under a
-// direct launch $PATH has no Homebrew, and that was the goose-linux cask's
-// "cpio: command not found". brew's children must find its siblings anyway.
-func TestBrewChildrenFindToolsBesideBrew(t *testing.T) {
-	script, _ := fakeBrewExecutable(t, "exec sibling-tool")
-	sibling := filepath.Join(filepath.Dir(script), "sibling-tool")
-	if err := os.WriteFile(sibling, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
+func TestHomebrewBinAndSbinTakePrecedenceWhenAdded(t *testing.T) {
+	prefix := t.TempDir()
+	bin, sbin, inherited := filepath.Join(prefix, "bin"), filepath.Join(prefix, "sbin"), filepath.Join(prefix, "inherited")
+	for _, directory := range []string{bin, sbin, inherited} {
+		if err := os.Mkdir(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
 	}
-	t.Setenv("PATH", "/usr/bin:/bin")
-
-	if _, err := runBrewCommandAt(context.Background(), script, "install", "--cask", "x"); err != nil {
-		t.Fatalf("brew's child could not find a tool beside brew: %v", err)
+	brew := filepath.Join(bin, "brew")
+	for path, body := range map[string]string{
+		brew:                                       "ordered-tool && engine-runtime",
+		filepath.Join(bin, "ordered-tool"):         "exit 0",
+		filepath.Join(sbin, "ordered-tool"):        "exit 21",
+		filepath.Join(inherited, "ordered-tool"):   "exit 22",
+		filepath.Join(sbin, "engine-runtime"):      "exit 0",
+		filepath.Join(inherited, "engine-runtime"): "exit 23",
+	} {
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command(brew)
+	cmd.Env = WithBrewPath([]string{"PATH=" + inherited}, brew)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("Homebrew children resolved an inherited or sbin-shadowed executable: %v\n%s", err, output)
 	}
 }

@@ -14,6 +14,10 @@ const (
 	protontrick = "com.github.Matoking.protontricks"
 	goverlay    = "io.github.benjamimgois.goverlay"
 	mangohud    = "org.freedesktop.Platform.VulkanLayer.MangoHud"
+
+	steam      = "com.valvesoftware.Steam"
+	protonUpQt = "net.davidotek.pupgui2"
+	flatseal   = "com.github.tchx84.Flatseal"
 )
 
 func allComponentIDs() []string {
@@ -277,5 +281,115 @@ func TestDeriveSplitsUserAndSystemInstallations(t *testing.T) {
 	}
 	if !reflect.DeepEqual(state.SystemInstalled, []string{protonPlus, mangohud}) {
 		t.Errorf("Derive().SystemInstalled = %v, want the system-scope components", state.SystemInstalled)
+	}
+}
+
+// Retired components — Flatpaks a previous Gaming Mode installed that this
+// build no longer manages — are reported by ID in the retired list's order,
+// from either scope, without switching gaming mode on or off.
+func TestDeriveReportsInstalledRetiredComponents(t *testing.T) {
+	// The full current stack is installed, so gaming mode is on; the retired
+	// copies are added on top, from different scopes.
+	scope := systemScope(allComponentIDs())
+	scope.Installed[refOf(steam)] = true
+	scope.User[refOf(steam)] = true
+	scope.Installed[refOf(flatseal)] = true
+	scope.System[refOf(flatseal)] = true
+
+	state := Derive(scope)
+	if !state.Enabled {
+		t.Error("Derive().Enabled = false, want true — retired components do not switch gaming mode off")
+	}
+	if !reflect.DeepEqual(state.Retired, []string{steam, flatseal}) {
+		t.Errorf("Derive().Retired = %v, want %v in retired-list order from both scopes", state.Retired, []string{steam, flatseal})
+	}
+}
+
+// A host that upgraded from a release with more components keeps those
+// installs. They do not change the switch that picks the summary, so they are
+// added on — an upgrade must not hide them behind an otherwise clean message.
+func TestSummaryMentionsRetiredComponents(t *testing.T) {
+	got := Derive(systemScope(append(allComponentIDs(), steam))).Summary()
+	if !strings.Contains(got, "1 previously-installed app") {
+		t.Errorf("Summary() = %q, want it to mention the still-present retired component", got)
+	}
+}
+
+// Turning Gaming Mode off removes a retired component's user copy just as it
+// removes a current component's, because the user copy needs no authorization.
+func TestDisableRemovesARetiredUserScopeCopy(t *testing.T) {
+	stubScope(t, Scope{
+		Installed: refsOf(steam),
+		User:      refsOf(steam),
+	}, nil)
+	log := fakeFlatpak(t, "exit 0")
+
+	removed, kept, failures := Disable()
+	if len(failures) != 0 {
+		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if !reflect.DeepEqual(removed, []string{steam}) {
+		t.Errorf("Disable() removed = %v, want only the retired user-scope copy", removed)
+	}
+	if len(kept) != 0 {
+		t.Errorf("Disable() kept = %v, want none", kept)
+	}
+	want := []string{"uninstall -y --user " + steam}
+	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
+		t.Errorf("Disable() ran %q, want %q", calls, want)
+	}
+}
+
+// A system copy of a retired component the image ships is left in place,
+// exactly like a current component's: undoing gaming mode never takes a
+// distro default away from every account.
+func TestDisableKeepsAnImageShippedRetiredSystemCopy(t *testing.T) {
+	declareShipped(t, map[int]map[string]string{
+		0: {"flatseal.preinstall": "[Flatpak Preinstall " + flatseal + "]\n"},
+	}, "")
+	stubScope(t, Scope{
+		Installed: refsOf(flatseal),
+		System:    refsOf(flatseal),
+	}, nil)
+	log := fakeFlatpak(t, "exit 0")
+
+	removed, kept, failures := Disable()
+	if len(failures) != 0 {
+		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if !reflect.DeepEqual(kept, []string{flatseal}) {
+		t.Errorf("Disable() kept = %v, want the image-shipped retired system copy", kept)
+	}
+	if removed != nil {
+		t.Errorf("Disable() removed = %v, want none", removed)
+	}
+	if calls := invocations(t, log); len(calls) != 0 {
+		t.Errorf("Disable() ran %q, want nothing", calls)
+	}
+}
+
+// A system copy of a retired component the image does not ship is removed
+// under Flatpak's PolicyKit, and the ship declaration is read even though no
+// current component is installed system-wide.
+func TestDisableRemovesANonShippedRetiredSystemCopy(t *testing.T) {
+	stubScope(t, Scope{
+		Installed: refsOf(steam),
+		System:    refsOf(steam),
+	}, nil)
+	log := fakeFlatpak(t, "exit 0")
+
+	removed, kept, failures := Disable()
+	if len(failures) != 0 {
+		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if !reflect.DeepEqual(removed, []string{steam}) {
+		t.Errorf("Disable() removed = %v, want the non-shipped retired system copy", removed)
+	}
+	if len(kept) != 0 {
+		t.Errorf("Disable() kept = %v, want none", kept)
+	}
+	want := []string{"uninstall -y --system " + steam}
+	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
+		t.Errorf("Disable() ran %q, want %q", calls, want)
 	}
 }

@@ -15,13 +15,17 @@ MAX_TABS = 80
 
 
 def group(context, title, timeout=atspi.DEFAULT_TIMEOUT):
-    """The showing AdwPreferencesGroup titled title."""
-    return atspi.find(
+    """Find a preferences group by its heading or its compact expander header."""
+    node = atspi.find(
         content(context),
-        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == title,
-        f"a group titled {title!r}",
+        lambda n: atspi.name(n) == title and
+        (atspi.role(n) == "grouping" or atspi.role(n) in atspi.ROW_ROLES),
+        f"a group or compact section titled {title!r}",
         timeout,
     )
+    while atspi.role(node) != "grouping":
+        node = node.parent
+    return node
 
 
 # Shared with Features: its IDE catalog remains an expander.
@@ -121,6 +125,15 @@ def step_group_absent(context, title):
     assert gone, f"the Apps page still shows a group titled {title!r}"
 
 
+@then("the Apps progress bar is {visibility:w}")
+def step_apps_progress_visibility(context, visibility):
+    assert visibility in ("shown", "hidden")
+    assert atspi.poll(
+        lambda: bool(atspi.find_all(content(context), lambda n: atspi.role(n) == "progress bar"))
+        == (visibility == "shown")
+    ), f"Apps progress bar is not {visibility}"
+
+
 @then("the Apps groups are ordered exactly")
 def step_group_order(context):
     want = [row["title"] for row in context.table]
@@ -172,15 +185,14 @@ def step_open_row(context, title):
 
 # ---------------------------------------------------------------- collection lists
 
-# An app collection's expander is the same widget across rows, so the row
-# containing its title is the same node every other helper already finds;
-# its child rows are the packages the Brewfile would install. The expander
-# is the only one of its kind inside "App Collections" — Features uses
-# another, but a different title — so the row_containing lookup is exact.
+# Collection and wallpaper expanders share one scoped package-list assertion.
+# Developer Mode nests its collections, so group_title identifies their owner
+# without accidentally matching another destination's list.
 @then('the "{title}" list shows exactly')
-def step_expander_rows_exact(context, title):
+@then('the "{title}" list under "{group_title}" shows exactly')
+def step_expander_rows_exact(context, title, group_title="App Collections"):
     want = [row["title"] for row in context.table]
-    header = expander_header(context, title, "App Collections", timeout=1)
+    header = expander_header(context, title, group_title, timeout=1)
     assert atspi.poll(lambda: expander_rows(header) == want, timeout=2.0), \
         f"the {title!r} list shows {expander_rows(header)}, want {want}"
 
@@ -191,7 +203,16 @@ def step_expander_rows_exact(context, title):
 # checkbox on its right edge. The row is inside the collection's expander,
 # so it only exists once the collection is expanded.
 def _entry_row(context, token):
-    return atspi.row_containing(content(context), token)
+    # Installed packages can appear again in the inventory below collections.
+    # Require the entry's named checkbox, not the last row sharing its title.
+    return atspi.find(
+        content(context),
+        lambda node: atspi.role(node) in atspi.ROW_ROLES and atspi.name(node) == token
+        and any(atspi.name(child) == "Select " + token
+                and atspi.role(child) in atspi.TOGGLE_ROLES
+                for child in atspi.descendants(node, only_showing=True)),
+        "the collection entry for " + token,
+    )
 
 
 def _entry_checkbox(context, token):
@@ -205,19 +226,22 @@ def _entry_checkbox(context, token):
 
 @then('the "{token}" entry checkbox is {state:w}')
 def step_entry_checkbox_state(context, token, state):
+    cb = _entry_checkbox(context, token)
+    if state == "insensitive":
+        assert atspi.poll(lambda: not atspi.sensitive(cb)), \
+            f"the entry checkbox for {token!r} is still sensitive"
+        return
     if state not in ("checked", "unchecked"):
         raise NotImplementedError(f"unknown checkbox state {state!r}")
     want = state == "checked"
-    cb = _entry_checkbox(context, token)
     assert atspi.poll(lambda: bool(atspi.checked(cb)) == want), \
         f"the entry checkbox for {token!r} is not {state}"
 
 
-@then('the "{token}" entry checkbox is insensitive')
-def step_entry_checkbox_insensitive(context, token):
-    cb = _entry_checkbox(context, token)
-    assert atspi.poll(lambda: not atspi.sensitive(cb)), \
-        f"the entry checkbox for {token!r} is still sensitive"
+@then('the collection entry "{token}" says "{text}"')
+def step_entry_source(context, token, text):
+    assert atspi.poll(lambda: text_present(_entry_row(context, token), text)), \
+        f"the collection entry for {token!r} never said {text!r}"
 
 
 @step('I check the "{token}" entry')
@@ -243,26 +267,6 @@ def step_uncheck_entry(context, token):
         f"the entry checkbox for {token!r} did not become unchecked"
 
 
-# ---------------------------------------------------------------- collection actions
-
-# The collection's "Select All" button carries the collection's name, so
-# six of them on one page stay distinguishable.
-def _select_all_button(context, title):
-    return atspi.find_button(content(context), f"Select All in {title}")
-
-
-@step('I click the "Select All in {title}" button')
-def step_click_select_all(context, title):
-    atspi.activate(_select_all_button(context, title))
-
-
-@then('the "Select All in {title}" button is {state:w}')
-def step_select_all_state(context, title, state):
-    if state not in ("sensitive", "insensitive"):
-        raise NotImplementedError(f"unknown button state {state!r}")
-    want = state == "sensitive"
-    assert atspi.poll(lambda: atspi.sensitive(_select_all_button(context, title)) == want), \
-        f'the "Select All in {title}" button never became {state}'
 
 
 @then('the "{row}" row does not say "{text}"')
@@ -274,6 +278,7 @@ def step_row_does_not_say(context, row, text):
 
 
 @then('a toast on the Apps page says "{text}"')
+@then('a toast on the Features page says "{text}"')
 def step_toast(context, text):
     assert atspi.poll(lambda: toast_shown(context, text)), f"no toast ever said {text!r}"
 
@@ -283,8 +288,8 @@ def step_toast(context, text):
 
 @then('Homebrew was never asked to "{command}"')
 def step_brew_never(context, command):
-    # Leading words, so "bundle install" is told apart from the read-only
-    # "bundle check" each collection row runs on load.
+    # Match leading words, so read-only inventory calls cannot stand in for
+    # an install command under --dry-run.
     words = command.split()
     ran = [line for line in calls(context, "brew") if line.split()[: len(words)] == words]
     assert not ran, f"brew ran {command!r} for real: {ran}"
@@ -300,19 +305,43 @@ def step_brew_asked(context, command):
     assert atspi.poll(ran), f"brew was never asked to {command!r}"
 
 
+@then("Homebrew collection previews are exactly")
+def step_brew_collection_previews(context):
+    marker = "[DRY-RUN] Would execute: brew bundle install --file="
+    want = sorted(row["file"] for row in context.table)
+
+    def previews():
+        return sorted(os.path.basename(line.split(marker, 1)[1].split()[0])
+                      for line in read_log(context).splitlines() if marker in line)
+
+    assert atspi.poll(lambda: previews() == want), f"collection previews are {previews()}, want {want}"
+
+
 @then('Flatpak was never asked to "{command}"')
 def step_flatpak_never(context, command):
-    ran = [line for line in calls(context, "flatpak") if line.split(" ", 1)[0] == command]
+    words = command.split()
+    ran = [line for line in calls(context, "flatpak") if line.split()[: len(words)] == words]
     assert not ran, f"flatpak ran {command!r} for real: {ran}"
 
 
 @then('Flatpak was asked to "{command}"')
 def step_flatpak_asked(context, command):
+    words = command.split()
+
     def ran():
-        return [line for line in calls(context, "flatpak") if line.split(" ", 1)[0] == command]
+        return [line for line in calls(context, "flatpak") if line.split()[: len(words)] == words]
 
     assert atspi.poll(ran), f"flatpak was never asked to {command!r}"
 
+
+@then("the Wallpaper Slideshow Brewfile was never checked or installed")
+def step_wallpaper_brewfile_unused(context):
+    ran = [line for line in calls(context, "brew")
+           if "wallpaper-slideshow.Brewfile" in line]
+    assert not ran, f"the legacy wallpaper payload was executed: {ran}"
+    previews = [line for line in read_log(context).splitlines()
+                if "[DRY-RUN] Would execute:" in line and "wallpaper-slideshow.Brewfile" in line]
+    assert not previews, f"the legacy wallpaper payload was previewed: {previews}"
 
 
 @then('the application log previews "{command}" exactly once')
@@ -327,11 +356,11 @@ def step_log_previews_once(context, command):
     assert len(got) == 1, f"chairlift.log previewed {command!r} {len(got)} times: {got}"
 
 
-@then('the application log previews no "{program:w} {command:w}"')
-def step_log_previews_none(context, program, command):
-    marker = f"[DRY-RUN] Would execute: {program} {command}"
+@then('the application log previews no "{command}"')
+def step_log_previews_none(context, command):
+    marker = f"[DRY-RUN] Would execute: {command}"
     got = [line for line in read_log(context).splitlines() if marker in line]
-    assert not got, f"chairlift.log previewed {program} {command}: {got}"
+    assert not got, f"chairlift.log previewed {command}: {got}"
 
 
 @then('the home directory has no "{name}"')
