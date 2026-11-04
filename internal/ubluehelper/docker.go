@@ -61,9 +61,9 @@ type DockerHost struct {
 	EnsureGroup GroupEnsurer
 	// GroupExists reports whether the local group database defines group.
 	GroupExists func(group string) bool
-	// Install verifies, downloads, and activates the runtime, returning its
-	// manifest as JSON and whether the active runtime changed.
-	Install func(ctx context.Context) (manifest []byte, changed bool, err error)
+	// Install verifies and activates only after calling admit under its lock.
+	Install      func(ctx context.Context, admit func(context.Context, string) error) (manifest []byte, changed bool, err error)
+	RuntimeProbe DockerRuntimeProbe
 	// RuntimeInstalled reports whether a runtime manifest exists. A missing
 	// manifest is (false, nil); any other read failure is an error.
 	RuntimeInstalled func() (bool, error)
@@ -211,11 +211,24 @@ func EnableDocker(ctx context.Context, h DockerHost, username string, dryRun boo
 	if err := h.CheckUnits(); err != nil {
 		return fmt.Errorf("writing Docker units: %w", err)
 	}
+	prepared := false
+	if !dryRun {
+		installed, err := h.RuntimeInstalled()
+		if err != nil {
+			return fmt.Errorf("reading Docker runtime: %w", err)
+		}
+		if installed {
+			if err := h.prepareRuntime(steps); err != nil {
+				return err
+			}
+			prepared = true
+		}
+	}
 	changed := true
 	if dryRun {
 		steps.sayInstall(h)
 	} else {
-		manifest, installChanged, err := h.Install(ctx)
+		manifest, installChanged, err := h.install(ctx)
 		if err != nil {
 			return fmt.Errorf("installing Docker runtime: %w", err)
 		}
@@ -236,13 +249,15 @@ func EnableDocker(ctx context.Context, h DockerHost, username string, dryRun boo
 		}
 	}
 
-	if dryRun {
-		steps.say("[DRY-RUN] would write %s/docker.service and %s/docker.socket\n", h.UnitDir, h.UnitDir)
-	} else if _, err := h.WriteUnits(); err != nil {
-		return fmt.Errorf("writing Docker units: %w", err)
-	}
-	if err := steps.exec("systemctl", "daemon-reload"); err != nil {
-		return err
+	if !prepared {
+		if dryRun {
+			steps.say("[DRY-RUN] would write %s/docker.service and %s/docker.socket\n", h.UnitDir, h.UnitDir)
+		} else if _, err := h.WriteUnits(); err != nil {
+			return fmt.Errorf("writing Docker units: %w", err)
+		}
+		if err := steps.exec("systemctl", "daemon-reload"); err != nil {
+			return err
+		}
 	}
 	if err := h.relabel(steps, false); err != nil {
 		return err
@@ -308,20 +323,14 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 		return steps.execIfChanged("systemctl", "try-restart", "docker.service")
 	}
 
-	manifest, changed, err := h.Install(ctx)
+	if err := h.prepareRuntime(steps); err != nil {
+		return err
+	}
+	manifest, changed, err := h.install(ctx)
 	if err != nil {
 		return fmt.Errorf("installing Docker runtime: %w", err)
 	}
 	steps.sayManifest(manifest, changed)
-	unitsChanged, err := h.WriteUnits()
-	if err != nil {
-		return fmt.Errorf("writing Docker units: %w", err)
-	}
-	if changed || unitsChanged {
-		if err := steps.exec("systemctl", "daemon-reload"); err != nil {
-			return err
-		}
-	}
 	if changed {
 		// The new set inherited its parent's label; apply the policy's
 		// before the daemon restarts onto it.
@@ -333,6 +342,30 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 		}
 	}
 	return nil
+}
+
+// prepareRuntime loads the locked-start unit before Install can change an
+// existing runtime. NeedDaemonReload retries a previous failed reload even
+// when the file on disk already matches; a verified no-op runs no command.
+func (h DockerHost) prepareRuntime(steps dockerSteps) error {
+	changed, err := h.WriteUnits()
+	if err != nil {
+		return fmt.Errorf("writing Docker units: %w", err)
+	}
+	state, err := h.RuntimeProbe.Service(steps.ctx)
+	if err != nil {
+		return fmt.Errorf("reading Docker service: %w", err)
+	}
+	if changed || state.NeedDaemonReload != "no" {
+		return steps.exec("systemctl", "daemon-reload")
+	}
+	return nil
+}
+
+func (h DockerHost) install(ctx context.Context) ([]byte, bool, error) {
+	return h.Install(ctx, func(ctx context.Context, active string) error {
+		return CheckDockerRuntime(ctx, h.Root, active, h.RuntimeProbe)
+	})
 }
 
 // restartRuntime restarts the daemon onto a changed runtime and clears the

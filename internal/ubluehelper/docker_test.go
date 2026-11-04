@@ -34,6 +34,9 @@ type fakeDockerHost struct {
 	running        bool  // containers running on the live daemon
 	runningErr     error // container probe failure
 	probes         int   // ContainersRunning calls
+	state          DockerServiceState
+	process        DockerProcess
+	stateErr       error
 }
 
 func (f *fakeDockerHost) host() DockerHost {
@@ -69,8 +72,20 @@ func (f *fakeDockerHost) host() DockerHost {
 			return nil
 		},
 		GroupExists: func(string) bool { return f.localGroup },
-		Install: func(context.Context) ([]byte, bool, error) {
+		RuntimeProbe: DockerRuntimeProbe{
+			Service: func(context.Context) (DockerServiceState, error) {
+				if f.state.LoadState == "" {
+					return DockerServiceState{LoadState: "loaded", ActiveState: "inactive", SubState: "dead", MainPID: "0", NeedDaemonReload: "no"}, f.stateErr
+				}
+				return f.state, f.stateErr
+			},
+			Process: func(string) (DockerProcess, error) { return f.process, nil },
+		},
+		Install: func(ctx context.Context, admit func(context.Context, string) error) ([]byte, bool, error) {
 			f.calls = append(f.calls, "install")
+			if err := admit(ctx, "0123456789abcdef"); err != nil {
+				return nil, false, err
+			}
 			if f.installErr != nil {
 				return nil, false, f.installErr
 			}
@@ -138,6 +153,7 @@ func TestEnableDockerInstallsAndActivatesOnAFreshHost(t *testing.T) {
 	}
 	assertCalls(t, fake.calls, []string{
 		"check units",
+		"read manifest",
 		"install",
 		"ensure docker",
 		"run groupadd -f -r docker",
@@ -249,7 +265,7 @@ func TestEnableDockerStopsAtTheFirstFailure(t *testing.T) {
 		}
 		// A runtime that failed verification must not gain units, a group,
 		// or a running daemon.
-		assertCalls(t, fake.calls, []string{"check units", "install"})
+		assertCalls(t, fake.calls, []string{"check units", "read manifest", "install"})
 	})
 	t.Run("daemon-reload", func(t *testing.T) {
 		fake := &fakeDockerHost{localGroup: true, failRun: "systemctl daemon-reload"}
@@ -257,7 +273,7 @@ func TestEnableDockerStopsAtTheFirstFailure(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "systemctl daemon-reload") {
 			t.Fatalf("error = %v, want the failing command named", err)
 		}
-		assertCalls(t, fake.calls, []string{"check units", "install", "write units", "run systemctl daemon-reload"})
+		assertCalls(t, fake.calls, []string{"check units", "read manifest", "install", "write units", "run systemctl daemon-reload"})
 	})
 	t.Run("socket", func(t *testing.T) {
 		fake := &fakeDockerHost{localGroup: true, failRun: "systemctl enable --now docker.socket"}
@@ -350,11 +366,11 @@ func TestUpdateDockerRestartsOnlyAChangedRuntime(t *testing.T) {
 		wantRuns              []string
 	}{
 		{name: "current", wantRuns: nil},
-		{name: "units repaired", unitsChanged: true, wantRuns: []string{"run systemctl daemon-reload"}},
+		{name: "units repaired", unitsChanged: true, wantRuns: nil},
 		{name: "current under SELinux", selinux: true, wantRuns: nil},
-		{name: "runtime changed", changed: true, wantRuns: []string{"run systemctl daemon-reload", "run systemctl try-restart docker.service", "restart done"}},
+		{name: "runtime changed", changed: true, wantRuns: []string{"run systemctl try-restart docker.service", "restart done"}},
 		{name: "runtime changed under SELinux", changed: true, selinux: true, wantRuns: []string{
-			"run systemctl daemon-reload", "read equivalence", "run semanage fcontext -a -e /usr/libexec/docker /var/lib/chairlift/docker",
+			"read equivalence", "run semanage fcontext -a -e /usr/libexec/docker /var/lib/chairlift/docker",
 			"run restorecon -RF /var/lib/chairlift/docker", "run systemctl try-restart docker.service", "restart done"}},
 	}
 	for _, test := range tests {
@@ -364,7 +380,13 @@ func TestUpdateDockerRestartsOnlyAChangedRuntime(t *testing.T) {
 			if err := UpdateDocker(context.Background(), fake.host(), false, &out); err != nil {
 				t.Fatal(err)
 			}
-			assertCalls(t, fake.calls, append([]string{"read manifest", "check units", "install", "write units"}, test.wantRuns...))
+			want := []string{"read manifest", "check units", "write units"}
+			if test.unitsChanged {
+				want = append(want, "run systemctl daemon-reload")
+			}
+			want = append(want, "install")
+			want = append(want, test.wantRuns...)
+			assertCalls(t, fake.calls, want)
 			if want := "docker runtime changed=" + map[bool]string{false: "false", true: "true"}[test.changed] + "\n"; !strings.Contains(out.String(), want) {
 				t.Fatalf("output = %q, want %q", out.String(), want)
 			}
@@ -406,8 +428,8 @@ func TestDockerDefersTheRestartWhileContainersMayBeRunning(t *testing.T) {
 				if restarted == test.deferred || done == test.deferred || said != test.deferred {
 					t.Fatalf("restarted=%t done=%t deferred line=%t, want deferred=%t; calls %v", restarted, done, said, test.deferred, fake.calls)
 				}
-				if !slices.Contains(fake.calls, "run systemctl daemon-reload") {
-					t.Fatalf("daemon-reload skipped: %v", fake.calls)
+				if slices.Index(fake.calls, "write units") > slices.Index(fake.calls, "install") {
+					t.Fatalf("existing unit was not prepared before installation: %v", fake.calls)
 				}
 			})
 		}
@@ -501,4 +523,40 @@ func TestDockerRestartDoneFollowsOnlyASuccessfulRestart(t *testing.T) {
 	if err := UpdateDocker(context.Background(), fake3.host(), false, io.Discard); err == nil {
 		t.Fatal("unclearable marker reported success")
 	}
+}
+
+func TestDockerLegacyMigrationRefusesWithoutStoppingWorkloads(t *testing.T) {
+	for _, command := range []string{"enable", "update"} {
+		t.Run(command, func(t *testing.T) {
+			fake := &fakeDockerHost{installed: true, unitsChanged: true,
+				state:   DockerServiceState{LoadState: "loaded", ActiveState: "active", SubState: "running", MainPID: "123", InvocationID: strings.Repeat("a", 32), NeedDaemonReload: "no"},
+				process: DockerProcess{Argv: []string{"/var/lib/chairlift/docker/current/bin/dockerd"}},
+			}
+			var err error
+			if command == "enable" {
+				err = EnableDocker(t.Context(), fake.host(), "dev", false, io.Discard)
+			} else {
+				err = UpdateDocker(t.Context(), fake.host(), false, io.Discard)
+			}
+			if !errors.Is(err, ErrDockerRuntimeMigration) {
+				t.Fatalf("legacy daemon was not refused: %v", err)
+			}
+			want := []string{"read manifest", "check units", "write units", "run systemctl daemon-reload", "install"}
+			if command == "enable" {
+				want[0], want[1] = want[1], want[0]
+			}
+			assertCalls(t, fake.calls, want)
+			if fake.probes != 0 {
+				t.Fatal("legacy migration consulted workloads instead of preserving the daemon")
+			}
+		})
+	}
+}
+
+func TestDockerRuntimePreparationRetriesAFailedReload(t *testing.T) {
+	fake := &fakeDockerHost{installed: true, state: DockerServiceState{NeedDaemonReload: "yes", LoadState: "loaded"}, failRun: "systemctl daemon-reload"}
+	if err := UpdateDocker(t.Context(), fake.host(), false, io.Discard); err == nil {
+		t.Fatal("failed reload accepted")
+	}
+	assertCalls(t, fake.calls, []string{"read manifest", "check units", "write units", "run systemctl daemon-reload"})
 }

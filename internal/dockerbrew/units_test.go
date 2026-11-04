@@ -27,7 +27,7 @@ func TestServiceUnitRunsTheEngineUnderRoot(t *testing.T) {
 	// The daemon runs from active, which only a daemon start repoints at
 	// current, so a deferred restart never mixes a running daemon with a
 	// newly swapped set (#696).
-	if got := kv["ExecStartPre"]; len(got) != 1 || got[0] != "/usr/bin/cp -PT --remove-destination /opt/x/current /opt/x/active" {
+	if got := kv["ExecStartPre"]; len(got) != 1 || got[0] != "/usr/bin/flock --exclusive /opt/x/.lock /usr/bin/ln -P -fT /opt/x/current /opt/x/active" {
 		t.Errorf("ExecStartPre = %q", got)
 	}
 	if got := kv["ExecStart"]; len(got) != 1 || got[0] != "/opt/x/active/bin/dockerd -H fd://" {

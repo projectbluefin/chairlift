@@ -226,10 +226,30 @@ def assert_managed_units():
     for name, text in (("docker.service", service), ("docker.socket", socket_unit)):
         assert text.splitlines()[0] == MANAGED_MARKER, f"{name} lacks the managed marker:\n{text}"
         assert "linuxbrew" not in text, f"{name} points root at the user-writable Homebrew prefix:\n{text}"
-    assert f"ExecStartPre=/usr/bin/cp -PT --remove-destination {CURRENT} {ACTIVE}" in service, service
+    assert f"ExecStartPre=/usr/bin/flock --exclusive {RUNTIME_ROOT}/.lock /usr/bin/ln -P -fT {CURRENT} {ACTIVE}" in service, service
     assert f"ExecStart={ACTIVE}/bin/dockerd -H fd://" in service, service
     assert f"Environment=PATH={ACTIVE}/bin:" in service, service
     assert "ListenStream=/run/docker.sock" in socket_unit and "SocketGroup=docker" in socket_unit, socket_unit
+
+
+def retain_runtime_diagnostics(output):
+    lines = []
+    for path in (CURRENT, ACTIVE):
+        try:
+            status = path.lstat()
+            lines.append(f"{path}: mode={oct(status.st_mode)} uid={status.st_uid} gid={status.st_gid} inode={status.st_ino}")
+            lines.append(f"{path}: readlink={os.readlink(path)!r} resolved={str(path.resolve(strict=True))!r}")
+        except OSError as error:
+            lines.append(f"{path}: {error}")
+    if shutil.which("getenforce"):
+        lines.append("SELinux: " + run("getenforce", check=False).stdout.strip())
+    else:
+        lines.append("SELinux: getenforce unavailable; no enforcing execution claim")
+    lines.append(run("systemctl", "cat", "docker.service", "docker.socket", check=False).stdout)
+    lines.append(run("systemctl", "show", "docker.service", "--property=LoadState,ActiveState,SubState,MainPID,InvocationID,NeedDaemonReload,ExecStartPre,ExecStart", check=False).stdout)
+    text = "\n".join(lines)
+    (output / "docker-runtime-diagnostics.txt").write_text(text)
+    print(text, flush=True)
 
 
 def rootless_state():
@@ -617,6 +637,10 @@ def main(binary, output):
                 print(f"failure accessibility/screenshot unavailable: {error}", flush=True)
         raise
     finally:
+        try:
+            retain_runtime_diagnostics(output)
+        except Exception as error:
+            print(f"runtime diagnostics unavailable: {error}", flush=True)
         run("journalctl", "--unit", "docker.service", "--unit", "docker.socket", "--no-pager", check=False)
         if process is not None:
             if subject is not None and subject != process.pid:

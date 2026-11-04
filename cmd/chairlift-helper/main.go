@@ -387,8 +387,9 @@ func dockerHost() ubluehelper.DockerHost {
 			_, err := user.LookupGroup(group)
 			return err == nil
 		},
-		Install: func(ctx context.Context) ([]byte, bool, error) {
-			manifest, changed, err := dockerbrew.Install(ctx, dockerbrew.Client{}, dockerbrew.Root)
+		RuntimeProbe: ubluehelper.DockerRuntimeProbe{Service: dockerServiceState, Process: dockerProcess},
+		Install: func(ctx context.Context, admit func(context.Context, string) error) ([]byte, bool, error) {
+			manifest, changed, err := dockerbrew.Install(ctx, dockerbrew.Client{}, dockerbrew.Root, admit)
 			if err != nil {
 				return nil, false, err
 			}
@@ -420,6 +421,47 @@ func dockerHost() ubluehelper.DockerHost {
 		},
 		ContainersRunning: dockerContainersRunning,
 	}
+}
+
+func dockerServiceState(ctx context.Context) (ubluehelper.DockerServiceState, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "systemctl", "show", "docker.service", "--property=LoadState,ActiveState,SubState,MainPID,InvocationID,NeedDaemonReload").Output()
+	if err != nil {
+		return ubluehelper.DockerServiceState{}, err
+	}
+	values := make(map[string]string, 6)
+	for _, line := range strings.Split(string(out), "\n") {
+		if key, value, ok := strings.Cut(line, "="); ok {
+			values[key] = value
+		}
+	}
+	return ubluehelper.DockerServiceState{
+		LoadState: values["LoadState"], ActiveState: values["ActiveState"], SubState: values["SubState"],
+		MainPID: values["MainPID"], InvocationID: values["InvocationID"], NeedDaemonReload: values["NeedDaemonReload"],
+	}, nil
+}
+
+func dockerProcess(pid string) (ubluehelper.DockerProcess, error) {
+	// pid was validated by the pure admission before it reaches this reader.
+	root := "/proc/" + pid
+	argv, err := os.ReadFile(root + "/cmdline")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	environment, err := os.ReadFile(root + "/environ")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	executable, err := os.Readlink(root + "/exe")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	return ubluehelper.DockerProcess{
+		Argv:        strings.Split(strings.TrimSuffix(string(argv), "\x00"), "\x00"),
+		Environment: strings.Split(strings.TrimSuffix(string(environment), "\x00"), "\x00"),
+		Executable:  executable,
+	}, nil
 }
 
 // dockerContainersRunning asks the daemon on /run/docker.sock for its

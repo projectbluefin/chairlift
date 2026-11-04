@@ -218,6 +218,14 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   navigation and Back-to-Features readiness assertion as the behave suite.
   Searching the overview for the old switch fails before any helper action;
   a dry-run behave pass alone does not cover the separate live driver.
+- **Execute generated startup argv, including its second run.** Pinned
+  Dakota's uutils cp 0.12.0 accepts the first `cp -PT --remove-destination`
+  from current to absent active, then rejects the existing symlink-to-directory
+  destination on restart. Static unit-string assertions cannot catch that.
+  `TestDockerRuntimeActivation` executes the generated locked `ln -P -fT`
+  activation repeatedly and verifies serialization against the install lock.
+  Keep actual link metadata and SELinux enforcement in live failure artifacts;
+  neither a disabled host nor reading policy proves enforcing execution.
 - **A tool-call assertion needs isolated readers.** Gaming's capability floor
   is `ImageDescriptor`, so it can read Flatpak inventories even when the
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the

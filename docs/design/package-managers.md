@@ -935,19 +935,33 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
   downloading, so an unmanaged unit is refused before any fetch. They
   are moby's upstream units, with `ExecStart` and `PATH` pointing at
-  `active/bin` and one added `ExecStartPre=/usr/bin/cp -PT
-  --remove-destination /var/lib/chairlift/docker/current
-  /var/lib/chairlift/docker/active`, which repoints `active` at `current` at
-  every daemon start. `Install` swaps `current` as soon as a new set is
-  verified, but a daemon whose restart is deferred keeps spawning shims,
-  runc, and `docker-proxy` for as long as it runs; resolving them through
-  `active` keeps it on the set it started on, and `prune` keeps the set
-  `active` names. Any start (`try-restart`, a reboot, `Restart=always`)
-  moves the daemon onto the newest set. A daemon started from a unit
-  written before this change still resolves through `current/bin` until its
-  next start. Each begins with `# Managed by chairlift-helper`, and an
-  existing file without that marker is never overwritten. Next it runs
-  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  `active/bin` and one added `ExecStartPre=/usr/bin/flock --exclusive
+  /var/lib/chairlift/docker/.lock /usr/bin/ln -P -fT
+  /var/lib/chairlift/docker/current /var/lib/chairlift/docker/active`.
+  Hard-linking the symlink itself preserves its relative set-id target, not
+  a live alias of `current`. Activation and swap/prune hold the same lock;
+  no caller may hold that lock while waiting for `systemctl start` or
+  `try-restart`. A migrated daemon whose restart is deferred keeps resolving
+  tools through its retained active set. Any later start adopts current.
+  Each unit begins with `# Managed by chairlift-helper`; a file without it
+  is never overwritten. For an existing runtime, unit preparation runs
+  **before** Install. A changed unit or systemd's `NeedDaemonReload` causes
+  `daemon-reload`, including retries after a previous reload failed. A
+  verified unchanged unit needs no system command.
+
+  Install requires a read-only admission callback under its install lock,
+  before all swaps, pending-marker changes, and pruning, including the
+  unchanged-set fast path. `ubluehelper.CheckDockerRuntime` accepts a stable
+  stopped service, or a running service with stable MainPID/InvocationID
+  whose actual `/proc` argv, executable target, and PATH prove it started
+  from the active set. Rewriting the unit or finding an active link alone
+  proves neither. A legacy daemon still using `current/bin`, transitional
+  state, or unreadable evidence refuses runtime mutation and asks the user
+  to turn Docker off and on before retrying; it never stops workloads to
+  migrate automatically. The systemd/proc readers are wired in the fixed
+  helper; decisions stay pure in `internal/ubluehelper`.
+
+  When SELinux is enforcing it defines the
   equivalence rule `semanage fcontext -a -e /usr/libexec/docker
   /var/lib/chairlift/docker` if missing and runs `restorecon -RF
   /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
@@ -962,10 +976,10 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `chairlift-helper: docker runtime <json>`.
 
 `docker-update` prints `no Homebrew Docker runtime to update` and exits 0 when
-image units exist or no manifest does. Otherwise it repeats the verified
-install, rewrites the managed units, reloads systemd when either changed, and
-when the bottle set changed relabels the new set under the same SELinux
-condition before restarting an active daemon.
+image units exist or no manifest does. Otherwise it prepares and, when needed,
+reloads the managed units before the guarded verified install. When the bottle
+set changed it relabels the new set under the same SELinux condition before
+restarting an active daemon.
 `docker-disable` runs `systemctl disable --now docker.socket docker.service`
 and keeps the runtime, container data, and group membership. Every command's
 `--dry-run` is offline: it prints the index it would fetch, the formula set,
@@ -1041,6 +1055,12 @@ preserving the runtime/data/groups and Developer Mode, and a no-op
 `docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
 step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
 establish live readiness.
+`TestDockerRuntimeActivation`, selected by ordinary `make e2e`, executes the
+generated startup argv unprivileged on pinned Dakota, covering repeated starts
+and blocking on the install lock. Live failure artifacts retain the generated
+unit, service properties, link metadata and actual SELinux enforcement state;
+a disabled host does not verify enforcing-host startup.
+
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
 stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing

@@ -23,13 +23,11 @@ import (
 // a new set is verified, but a daemon whose restart was deferred because
 // containers are running keeps spawning shims, runc, and docker-proxy for
 // as long as it runs; resolving them through current would mix the old
-// daemon with the new set's binaries (#696). active is repointed at current
-// only by the ExecStartPre, which runs at every daemon start — a
-// try-restart, a reboot, or Restart=always — so a running daemon always
-// spawns from the set it started on, and every start picks up the newest
-// verified set. cp -P copies the link itself, -T never treats active as a
-// directory to copy into, and --remove-destination replaces the previous
-// link; nothing runs it while dockerd is up.
+// daemon with the new set's binaries (#696). A symlink hard link pins the
+// relative set-id target without following current. flock serializes that
+// publication with Install's swap/prune, including the interval in which ln
+// replaces an existing active link. It runs only at daemon startup; the
+// caller must not hold the install lock while waiting for systemctl start.
 const mobyServiceHead = `[Unit]
 Description=Docker Application Container Engine
 Documentation=https://docs.docker.com
@@ -90,7 +88,7 @@ WantedBy=sockets.target
 func ServiceUnit(root string) string {
 	bin := root + "/" + activeName + "/bin"
 	return ManagedMarker + "\n" + mobyServiceHead +
-		"ExecStartPre=/usr/bin/cp -PT --remove-destination " + root + "/" + currentName + " " + root + "/" + activeName + "\n" +
+		"ExecStartPre=/usr/bin/flock --exclusive " + root + "/" + lockName + " /usr/bin/ln -P -fT " + root + "/" + currentName + " " + root + "/" + activeName + "\n" +
 		"ExecStart=" + bin + "/dockerd -H fd://\n" +
 		"Environment=PATH=" + bin + ":/usr/sbin:/usr/bin:/sbin:/bin\n" +
 		mobyServiceTail

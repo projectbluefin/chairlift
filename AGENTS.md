@@ -950,12 +950,21 @@ An agent must not break these:
   units. The service runs dockerd and resolves containerd, the shim, runc,
   `docker-init`, and `docker-proxy` through
   `/var/lib/chairlift/docker/active/bin`, never `current/bin`; its one added
-  `ExecStartPre=/usr/bin/cp -PT --remove-destination …/current …/active`
-  repoints `active` at `current` at every daemon start. A daemon whose
-  restart was deferred therefore keeps spawning from the set it started on
-  while `current` already names the new one, and any start — `try-restart`,
-  a reboot, or `Restart=always` — moves it onto the newest verified set
-  (#696). **Image units win:** when
+  `ExecStartPre=/usr/bin/flock --exclusive …/.lock /usr/bin/ln -P -fT
+  …/current …/active` hard-links the relative set-id symlink under the same
+  lock as swap/prune. Repeated starts replace the link without following
+  its directory target. Before changing any existing runtime, the helper
+  prepares the managed unit and reloads it when changed or systemd reports
+  `NeedDaemonReload`; Install's mandatory admission runs under the lock even
+  on the unchanged/prune path. A stable stopped service is safe to start
+  through the locked unit. A running service needs stable MainPID and
+  InvocationID plus actual proc argv, executable, and PATH proving it uses
+  the retained active set. A legacy daemon still using `current/bin`, a
+  transitional service, or an unreadable observation refuses all runtime
+  swaps, marker changes and pruning; it asks the user to turn Docker off
+  and on, never stops workloads automatically. An active-based daemon whose
+  restart is deferred keeps its old set until its next start (#696).
+  **Image units win:** when
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
   before. Otherwise it creates `docker` with `groupadd -f -r` when neither

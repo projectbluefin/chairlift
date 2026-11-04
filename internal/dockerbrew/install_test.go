@@ -103,7 +103,7 @@ func TestRuntimeInstallBuildsPatchedSetAndIsIdempotent(t *testing.T) {
 	e := newInstallEnv(t)
 	bottles := e.publish("one")
 
-	m, changed, err := Install(t.Context(), e.client, e.root)
+	m, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed {
 		t.Fatalf("Install = %v, %v; want changed", changed, err)
 	}
@@ -143,7 +143,7 @@ func TestRuntimeInstallBuildsPatchedSetAndIsIdempotent(t *testing.T) {
 	}
 
 	blobsBefore := e.reg.count("/v2/")
-	m2, changed, err := Install(t.Context(), e.client, e.root)
+	m2, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || changed {
 		t.Fatalf("second Install = %v, %v; want unchanged", changed, err)
 	}
@@ -155,7 +155,7 @@ func TestRuntimeInstallBuildsPatchedSetAndIsIdempotent(t *testing.T) {
 func TestRuntimeInstallSwapsToANewSetAndPrunesTheOld(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	first, _, err := Install(t.Context(), e.client, e.root)
+	first, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestRuntimeInstallSwapsToANewSetAndPrunesTheOld(t *testing.T) {
 	}
 
 	e.publish("two")
-	second, changed, err := Install(t.Context(), e.client, e.root)
+	second, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed {
 		t.Fatalf("Install = %v, %v", changed, err)
 	}
@@ -196,7 +196,7 @@ func TestRuntimeInstallSwapsToANewSetAndPrunesTheOld(t *testing.T) {
 func TestRuntimeInstallKeepsTheSetTheRunningDaemonUses(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	first, _, err := Install(t.Context(), e.client, e.root)
+	first, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestRuntimeInstallKeepsTheSetTheRunningDaemonUses(t *testing.T) {
 	}
 
 	e.publish("two")
-	second, changed, err := Install(t.Context(), e.client, e.root)
+	second, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed {
 		t.Fatalf("Install = %v, %v", changed, err)
 	}
@@ -233,7 +233,7 @@ func TestRuntimeInstallKeepsTheSetTheRunningDaemonUses(t *testing.T) {
 	if err := ClearRestartPending(t.Context(), e.root, second.SetID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || changed {
 		t.Fatalf("rerun = %v, %v; want unchanged", changed, err)
 	}
 	want = sortedNames(lockName, second.SetID(), currentName, activeName)
@@ -247,7 +247,7 @@ func TestRuntimeInstallKeepsTheSetTheRunningDaemonUses(t *testing.T) {
 func TestRuntimeInstallIgnoresAForeignActiveLink(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	if _, _, err := Install(t.Context(), e.client, e.root); err != nil {
+	if _, _, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil {
 		t.Fatal(err)
 	}
 	outside := t.TempDir()
@@ -255,7 +255,7 @@ func TestRuntimeInstallIgnoresAForeignActiveLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	e.publish("two")
-	if _, _, err := Install(t.Context(), e.client, e.root); err != nil {
+	if _, _, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(outside); err != nil {
@@ -283,7 +283,7 @@ func TestRuntimeInstallKeepsTheCurrentSetWhenANewOneFails(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			e := newInstallEnv(t)
 			e.publish("one")
-			first, _, err := Install(t.Context(), e.client, e.root)
+			first, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -292,7 +292,7 @@ func TestRuntimeInstallKeepsTheCurrentSetWhenANewOneFails(t *testing.T) {
 			}
 			e.publish("two")
 			breakIt(e)
-			if _, _, err := Install(t.Context(), e.client, e.root); err == nil {
+			if _, _, err := Install(t.Context(), e.client, e.root, allowInstall); err == nil {
 				t.Fatal("Install succeeded")
 			}
 			if e.currentTarget() != first.SetID() {
@@ -377,7 +377,7 @@ func TestRuntimeInstallRefusesAnUntrustworthyRoot(t *testing.T) {
 			e := newInstallEnv(t)
 			e.publish("one")
 			setup(e)
-			if _, _, err := Install(t.Context(), e.client, e.root); err == nil {
+			if _, _, err := Install(t.Context(), e.client, e.root, allowInstall); err == nil {
 				t.Fatal("Install accepted the root")
 			}
 			if n := e.reg.count(""); n != 0 {
@@ -393,7 +393,7 @@ func TestRuntimeInstallCreatesAMissingRootAndParent(t *testing.T) {
 	e.publish("one")
 	old := syscall.Umask(0o077)
 	defer syscall.Umask(old)
-	if _, _, err := Install(t.Context(), e.client, e.root); err != nil {
+	if _, _, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil {
 		t.Fatal(err)
 	}
 	// The parent stays traversable so the unprivileged GUI can read the manifest.
@@ -421,7 +421,7 @@ func TestRuntimeInstallWaitsForTheLock(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
-	if _, _, err := Install(ctx, e.client, e.root); !errors.Is(err, context.DeadlineExceeded) {
+	if _, _, err := Install(ctx, e.client, e.root, allowInstall); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Install under a held lock: err = %v", err)
 	}
 	if e.reg.count("") != 0 {
@@ -482,12 +482,12 @@ func TestRunSmokeRequiresBothBinariesToRun(t *testing.T) {
 func TestRuntimeInstallReportsAnUnfinishedRestart(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, changed, err := Install(t.Context(), e.client, e.root)
+	m, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed {
 		t.Fatalf("Install = %v, %v", changed, err)
 	}
 	// Interrupted: the restart never ran, so the marker is still there.
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || !changed {
 		t.Fatalf("rerun after interrupted restart = %v, %v; want changed", changed, err)
 	}
 	if e.smokes != 1 {
@@ -499,7 +499,7 @@ func TestRuntimeInstallReportsAnUnfinishedRestart(t *testing.T) {
 	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
 		t.Fatalf("clearing an absent marker: %v", err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || changed {
 		t.Fatalf("after restart = %v, %v; want unchanged", changed, err)
 	}
 }
@@ -510,25 +510,25 @@ func TestRuntimeInstallReportsAnUnfinishedRestart(t *testing.T) {
 func TestRuntimeRestartMarkerSurvivesAnOlderRunsClear(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	a, _, err := Install(t.Context(), e.client, e.root)
+	a, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e.publish("two")
-	b, changed, err := Install(t.Context(), e.client, e.root)
+	b, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed || b.SetID() == a.SetID() {
 		t.Fatalf("second Install = %v, %v, %v", b.SetID(), changed, err)
 	}
 	if err := ClearRestartPending(t.Context(), e.root, a.SetID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || !changed {
 		t.Fatalf("after the older run's clear, Install = %v, %v; want B's restart still pending", changed, err)
 	}
 	if err := ClearRestartPending(t.Context(), e.root, b.SetID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || changed {
 		t.Fatalf("after B's own clear, Install = %v, %v; want unchanged", changed, err)
 	}
 }
@@ -538,7 +538,7 @@ func TestRuntimeRestartMarkerSurvivesAnOlderRunsClear(t *testing.T) {
 func TestRuntimeRestartMarkerAcceptsALegacyEmptyMarker(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, _, err := Install(t.Context(), e.client, e.root)
+	m, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestRuntimeRestartMarkerAcceptsALegacyEmptyMarker(t *testing.T) {
 	if err := os.WriteFile(marker, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || !changed {
 		t.Fatalf("legacy marker: Install = %v, %v; want changed", changed, err)
 	}
 	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
@@ -563,20 +563,20 @@ func TestRuntimeRestartMarkerAcceptsALegacyEmptyMarker(t *testing.T) {
 func TestRuntimeRestartMarkerForANonCurrentSetIsRetargeted(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, _, err := Install(t.Context(), e.client, e.root)
+	m, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(e.root, restartName), []byte("0123456789abcdef\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || !changed {
 		t.Fatalf("Install = %v, %v; want changed", changed, err)
 	}
 	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || changed {
 		t.Fatalf("after restart onto current, Install = %v, %v; want unchanged", changed, err)
 	}
 }
@@ -586,7 +586,7 @@ func TestRuntimeRestartMarkerForANonCurrentSetIsRetargeted(t *testing.T) {
 func TestRuntimeRestartMarkerClearWaitsForTheLock(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, _, err := Install(t.Context(), e.client, e.root)
+	m, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -610,14 +610,14 @@ func TestRuntimeRestartMarkerClearWaitsForTheLock(t *testing.T) {
 func TestRuntimeInstallRecoversADanglingCurrent(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, _, err := Install(t.Context(), e.client, e.root)
+	m, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.RemoveAll(filepath.Join(e.root, m.SetID())); err != nil {
 		t.Fatal(err)
 	}
-	m2, changed, err := Install(t.Context(), e.client, e.root)
+	m2, changed, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil || !changed || m2.SetID() != m.SetID() {
 		t.Fatalf("Install over dangling current = %v, %v", changed, err)
 	}
@@ -631,14 +631,14 @@ func TestRuntimeInstallRecoversADanglingCurrent(t *testing.T) {
 func TestRuntimeInstallReplacesADamagedSameSet(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	m, _, err := Install(t.Context(), e.client, e.root)
+	m, _, err := Install(t.Context(), e.client, e.root, allowInstall)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(e.root, m.SetID(), manifestName)); err != nil {
 		t.Fatal(err)
 	}
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	if _, changed, err := Install(t.Context(), e.client, e.root, allowInstall); err != nil || !changed {
 		t.Fatalf("reinstall = %v, %v", changed, err)
 	}
 	if _, err := ReadManifest(e.root); err != nil {
@@ -646,5 +646,63 @@ func TestRuntimeInstallReplacesADamagedSameSet(t *testing.T) {
 	}
 	if got, want := e.entries(), sortedNames(lockName, restartName, m.SetID(), currentName); !slices.Equal(got, want) {
 		t.Errorf("root holds %v, want %v", got, want)
+	}
+}
+
+func allowInstall(context.Context, string) error { return nil }
+
+func TestRuntimeAdmissionPreservesEverySetAndMarker(t *testing.T) {
+	for _, changed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unchanged prune", true: "changed swap"}[changed], func(t *testing.T) {
+			e := newInstallEnv(t)
+			e.publish("one")
+			first, _, err := Install(t.Context(), e.client, e.root, allowInstall)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stale := filepath.Join(e.root, "fedcba9876543210")
+			if err := os.Mkdir(stale, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			before := e.entries()
+			marker, err := os.ReadFile(filepath.Join(e.root, restartName))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if changed {
+				e.publish("two")
+			}
+			refused := errors.New("legacy daemon still uses current")
+			guard := func(ctx context.Context, active string) error {
+				if active != "" {
+					t.Fatalf("legacy fixture unexpectedly has active %q", active)
+				}
+				// The guard must run under the same lock as swap/prune.
+				blocked, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+				defer cancel()
+				if _, err := lockRoot(blocked, e.root); !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("admission ran outside the install lock: %v", err)
+				}
+				return refused
+			}
+			if _, _, err := Install(t.Context(), e.client, e.root, guard); !errors.Is(err, refused) {
+				t.Fatalf("admission refusal = %v", err)
+			}
+			if !slices.Equal(e.entries(), before) || e.currentTarget() != first.SetID() {
+				t.Fatal("refused install swapped or pruned the legacy runtime")
+			}
+			after, err := os.ReadFile(filepath.Join(e.root, restartName))
+			if err != nil || string(after) != string(marker) {
+				t.Fatalf("refusal changed the pending marker: %q, %v", after, err)
+			}
+		})
+	}
+}
+
+func TestRuntimeAdmissionCannotBeOmitted(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	if _, _, err := Install(t.Context(), e.client, e.root, nil); err == nil {
+		t.Fatal("install accepted a missing admission guard")
 	}
 }

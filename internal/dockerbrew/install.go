@@ -54,7 +54,12 @@ var (
 // stale leftovers, when root/current already names the same set and no
 // earlier swap is still awaiting its daemon restart (the restart-pending
 // marker, cleared by ClearRestartPending).
-func Install(ctx context.Context, c Client, root string) (m Manifest, changed bool, err error) {
+// admit runs under the install lock, before any swap, marker update or prune.
+// It must confirm no legacy daemon still resolves tools through current.
+func Install(ctx context.Context, c Client, root string, admit func(context.Context, string) error) (m Manifest, changed bool, err error) {
+	if admit == nil {
+		return Manifest{}, false, errors.New("dockerbrew: runtime admission is required")
+	}
 	if err := ensureRoot(root); err != nil {
 		return Manifest{}, false, err
 	}
@@ -66,6 +71,9 @@ func Install(ctx context.Context, c Client, root string) (m Manifest, changed bo
 
 	cur, err := currentSet(root)
 	if err != nil {
+		return Manifest{}, false, err
+	}
+	if err := admit(ctx, activeSet(root)); err != nil {
 		return Manifest{}, false, err
 	}
 	arch, err := Arch()
