@@ -258,11 +258,6 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   command as a visible prerequisite, explicitly warning that it stops running
   containers. Test the exported provider's real helperexec failure path and
   the rendered row, not only the helper's stderr.
-- **A tool-call assertion needs isolated readers.** Gaming's capability floor
-  is `ImageDescriptor`, so it can read Flatpak inventories even when the
-  `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
-  image descriptor or disable Gaming, rather than treating a legitimate
-  Gaming read as evidence the Apps page still manages Flatpaks.
 - **Never read tags from `scenario.effective_tags`.** It is a set, so
   `@stub.a @stub.b` ran `b` before `a` and a refining stub was overwritten by
   its base. `environment.py`'s `before_scenario` builds the list from

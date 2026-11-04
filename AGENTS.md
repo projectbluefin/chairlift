@@ -236,7 +236,7 @@ rejects it. The accident is easy to make, because plain unit-test names such
 as `TestIsValid`, `TestInitConfig`, or `TestIndexOf` all start with `TestI`;
 name them so the first letter after `Test` is the subject (see the
 GTK-headless and gated-test-placement skills below). When that gate was added
-it found nine such tests across `internal/distrobox`, `internal/gaming`,
+it found nine such tests across `internal/distrobox`, the since-removed `internal/gaming`,
 `internal/version`, `internal/installcheck`, and a since-removed OS update
 provider — among
 them a since-removed goreleaser packaging test this file cited as
@@ -289,6 +289,9 @@ An agent must not break these:
   reject unsupported argv because PolicyKit does not validate arguments after
   action selection. ChairLift ships no passwordless PolicyKit rules; normal
   administrator authentication applies. Homebrew tap trust (`brew trust`) is
+  deliberately per-user and does **not** use pkexec. Neither does the
+  Developer Mode Pulp reader: it is a **system-scope** Flatpak
+  (`flatpak install -y --system`, #503), because Bluefin's policy is
   deliberately per-user and does **not** use pkexec. Neither do gaming mode,
   the Developer Mode Pulp reader, or the Apps page's Flatpak entries: all
   are **system-scope** Flatpaks
@@ -641,7 +644,7 @@ An agent must not break these:
   launch; the E2E dry-run startup now uses `G_DEBUG=fatal-criticals` so the
   actual binary fails instead of only logging it.
 - **Action feedback must remain visible.** Long-running cleanup, Developer,
-  Gaming, Agent Mode, troubleshooting, and Livery switch operations use a
+  Agent Mode, troubleshooting, and Livery switch operations use a
   native spinner built once, stopped on every completion path on the GTK
   thread. New result toasts use high priority so a persistent older error
   cannot hide the current action's error or confirmation; older errors remain
@@ -907,9 +910,9 @@ An agent must not break these:
   both its action gate and admission after every outcome.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
-- **Features discloses packages separately from actions.** Gaming Mode leads
-  the Features page. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
-  are expanders with source-backed package rows and independent suffix switches;
+- **Features discloses packages separately from actions.** Game Mode leads
+  the Features page as an image switch. Developer Mode, WSL Mode, and Enable
+  Docker are expanders with source-backed package rows and independent suffix switches;
   header activation expands rather than toggles. Developer Mode also contains
   the independently installable Monospace Fonts collection.
   The **Setup activity** checklist owns bounded
@@ -965,27 +968,17 @@ An agent must not break these:
   marker and launches no editor
   CLI. Editor selection/installation uses Development Apps in Developer Mode:
   ublue-os Homebrew for VS Code, VSCodium, and JetBrains Toolbox; system FlatPark
-  for Cursor and Antigravity; system Flathub for Zed. Game Mode is
-  a privileged switch to the `-gaming` system image variant (Steam, Gamescope,
-  and an Open Gaming Collective kernel) guarded by a confirmation warning that
-  a reboot is required. Gaming Mode below it manages the optional gaming
-  tools stack (ProtonPlus, Protontricks, GOverlay, MangoHud), installs
-  missing ones system-wide with `flatpak install --system`, and keeps partial
-  failures visible. Its inventory reads both scopes, so a copy an earlier
-  release installed per-user counts as present and is not reinstalled.
-  Turning Gaming Mode off uninstalls each component from exactly the scopes
-  it is observed in — the user copy with `--user`, the system copy with
-  `--system`. A system copy the OS image declares it ships
-  (`/usr/share/flatpak/preinstall.d`, `/etc/flatpak/preinstall.d`, or
-  `/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`) is left in place
-  and reported as such, so undoing gaming mode never removes a distro default
-  for every account; an unreadable declaration fails the removal closed. A
-  component with a removable copy left is a failure, not a removal.
-  Components a previous release installed that this build no longer manages
-  (the Steam, ProtonUp-Qt, and Flatseal entries dropped when the stack moved
-  to ProtonPlus) are cleaned up the same way — a user copy removed, a system
-  copy kept only when the image ships it — and are reported in the status so
-  an upgrade never leaves them behind invisibly.
+  for Cursor and Antigravity; system Flathub for Zed. **Game Mode changes
+  system images only.** Its fixed `gaming-switch` helper selects the matching
+  standard or `-gaming` image and preserves the stream and graphics driver.
+  The existing confirmation warns about Steam, Gamescope, the Open Gaming
+  Collective kernel, and the required reboot. Switching either way must not
+  install, uninstall, inventory, or clean up gaming Flatpaks in either scope.
+  Every app a user or an earlier release installed stays untouched, including
+  Steam, Flatseal, ProtonUp-Qt, ProtonPlus, Protontricks, GOverlay, and MangoHud.
+  There is no separate Gaming Tools switch, package-management backend, or
+  gaming setup checklist. Configuration and installed-helper capability still
+  gate the image switch, which shares update-shell admission.
 - **System Docker comes from verified Homebrew bottles; root never executes
   the Homebrew prefix.** Enable Docker gives Bluefin DX parity — a rootful
   daemon behind `docker.socket`, `docker` group membership, engine,

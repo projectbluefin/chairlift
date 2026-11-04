@@ -107,7 +107,6 @@ type UserHome struct {
 	liveryDockSpinner        *gtk.Spinner
 	liveryDockRotateSpinner  *gtk.Spinner
 	developerSpinner         *gtk.Spinner
-	gamingSpinner            *gtk.Spinner
 	agentModeSpinner         *gtk.Spinner
 
 	// Wallpapers owns one setup action and only the last observed readiness.
@@ -242,35 +241,29 @@ type UserHome struct {
 	developerEnabled       bool
 	developerToggle        *guardedSwitch
 	developerSetupActivity *setupActivity
-	gamingSetupActivity    *setupActivity
 	developerEntryRow      *adw.ActionRow
 	hardwareEnablement     *hardwareEnablementView
 	developerApps          *developerAppsView
-	// All developer work, including optional installs, shares developerGate.
-	gamingGroup        *adw.PreferencesGroup
-	gamingRow          *adw.ExpanderRow
-	gamingGate         actionstate.Gate
-	gamingDialogs      dialogRoute
-	gameModeRow        *adw.ActionRow
-	gameModeSwitch     *gtk.Switch
-	gameModeToggle     *guardedSwitch
-	gameModeGate       actionstate.Gate
-	gameModeDialogs    dialogRoute
-	pendingImage       string
-	stagedImageLoaded  bool
-	channelSwitchable  bool
-	driverSwitchable   bool
-	gameModeSwitchable bool
-	developerOptions   []*developerOptionRow
-	wslBackend         string
-	wslCombo           *adw.ComboRow
-	wslDocBtn          *gtk.Button
-	wslSuppress        bool
-	wslBackendResolved bool
-	wslBackendNotify   func(gobject.Object, uintptr)
-	driverRow          *adw.ActionRow
-	driverButton       *gtk.Button
-	driverGate         actionstate.Gate
+	gameModeRow            *adw.ActionRow
+	gameModeSwitch         *gtk.Switch
+	gameModeToggle         *guardedSwitch
+	gameModeGate           actionstate.Gate
+	gameModeDialogs        dialogRoute
+	pendingImage           string
+	stagedImageLoaded      bool
+	channelSwitchable      bool
+	driverSwitchable       bool
+	gameModeSwitchable     bool
+	developerOptions       []*developerOptionRow
+	wslBackend             string
+	wslCombo               *adw.ComboRow
+	wslDocBtn              *gtk.Button
+	wslSuppress            bool
+	wslBackendResolved     bool
+	wslBackendNotify       func(gobject.Object, uintptr)
+	driverRow              *adw.ActionRow
+	driverButton           *gtk.Button
+	driverGate             actionstate.Gate
 
 	// Bash terminal feature, including its pending wizard choice.
 	bluefinCLI *bluefinCLIRow

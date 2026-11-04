@@ -555,9 +555,9 @@ display name, new version and installation.
 | `UninstallUnused()` | Independently `uninstall --unused -y --user` and `--system`; errors joined |
 | `RemoveAllUser()` | `uninstall --user --all -y`; Powerwash step, not routine cleanup |
 
-The update inventory deliberately lists applications only. A runtime extension
-such as Gaming's MangoHud requires the separate runtime inventory; it must
-not be classified absent from an application-only query.
+The update inventory deliberately lists applications only. Runtime extensions
+require the separate runtime inventory and must not be classified absent from
+an application-only query.
 
 `ListUpdates` queries each enabled remote separately because a remote-less
 `remote-ls --updates` fails the whole installation when any one remote is
@@ -758,25 +758,25 @@ insensitive. Writes bind `helperexec.Run` to
 `HelperPath=/usr/bin/chairlift-helper`.
 
 [`ubluehelper.SupportedCommands()`](../../internal/ubluehelper/ubluehelper.go)
-is the complete fifteen-command surface:
+is the complete sixteen-command surface:
 `channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
 `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-`factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+`gaming-switch`, `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
 `docker-disable`, `docker-update`. Every command has exactly one action in
 [`data/io.projectbluefin.chairlift.ublue.policy`](../../data/io.projectbluefin.chairlift.ublue.policy).
 The helper dispatcher rejects unhandled commands; parser acceptance alone is
 not evidence a command executes.
 
 `ubluehelper.Timeout` is the helper's per-command budget: 30 minutes for the
-image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin`, and for
+image-pulling `channel-switch`, `driver-switch`, `gaming-switch`, `pin`, and `unpin`, and for
 the bottle-downloading `docker-enable` and `docker-update` (the same
 as OS staging's `bootc.DefaultTimeout`), 10 minutes for everything else. The
 GUI's `ublue.ImageSwitchContext` and `ublue.DefaultContext` add a five-minute
 `AuthenticationAllowance`, because the caller's clock also runs during the
 PolicyKit prompt and the helper must be the one to report its outcome.
 
-Only validated channel, driver or day words cross this boundary. The helper
-resolves concrete image references from its own descriptor and the
+Only validated channel, driver, gaming enable/disable, or day words cross this
+boundary. The helper resolves concrete image references from its own descriptor and the
 [`internal/imageinfo`](../../internal/imageinfo/) channel/driver tables,
 loaded from root-owned system paths. It resolves the account from `PKEXEC_UID`.
 No image reference, username, unit name, reset/rollback target or scheduling
@@ -944,12 +944,12 @@ GTK main thread, does external work off-thread, and marshals widget changes
 back through `sgtk.RunOnMainThread`. Failed or previewed work leaves the action
 retryable and never invents a live installation or clears known inventories.
 
-Gaming Mode leads Features. The **Setup activity** checklist below it has
-bounded, reusable stage rows and a pulsing timer independent of provider output. Stage outcomes
+Game Mode leads Features as an image-only switch. Developer Mode detail owns
+the **Setup activity** checklist, with bounded stage rows and a pulsing timer independent of provider output. Stage outcomes
 distinguish complete, failed, canceled, preview, and awaiting-new-login work;
 there is no estimated percentage. Awaiting login is not readiness or a generic
 failure and does not offer Retry just to repeat the same permission grant.
-Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
+Developer Mode, WSL Mode, and Enable Docker use native
 expanders matching Apps collections. Header activation expands the package
 disclosure; a separate suffix switch runs the action, with no
 `SetActivatableWidget` binding to that switch. Developer Mode also contains
@@ -957,8 +957,7 @@ independent Monospace Fonts collection controls. WSL disclosure shares
 `devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
 the daemon formulae as **Homebrew, installed for the whole computer** and the
 CLI formulae as user-scope Homebrew formulae, not download progress.
-Gaming uses `gaming.Components`. Developer Mode discloses
-its Dev Container CLI and enabled
+Developer Mode discloses its Dev Container CLI and enabled
 follow-ons, subject to the same capability/config gates as execution. An opaque
 Homebrew bundle remains one operation: its static package disclosure is not a
 live per-package completion stream. Signals and rows are built once, not per
@@ -1205,23 +1204,14 @@ unit, service properties, link metadata and actual SELinux enforcement state;
 a disabled host does not verify enforcing-host startup.
 
 
-[`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
-stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing
-refs in the **system** scope (`Install(id, false)`, #503): Bluefin-family images
-configure Flathub only as a system remote, and their policy is system-wide
-Flatpaks. The `flatpak` CLI authorizes that through Flatpak's own PolicyKit
-(`org.freedesktop.Flatpak.app-install`/`runtime-install`), not ChairLift's
-`pkexec` boundary. Its inventory queries application/runtime kinds in both
-scopes, so a per-user copy from an earlier release counts as installed and is
-not duplicated. Disable removes each component from exactly the scopes it
-is observed in (`Uninstall(id, true)` for a user copy, `Uninstall(id, false)`
-for a system copy), and a ref with a copy left is a failure. A system copy the
-image declares it ships (Flatpak `preinstall.d` or Bluefin's
-`system-flatpaks.Brewfile`, read by `imageShipped`) is left in place and
-returned as kept rather than removed. Per-item failures preserve partial
-outcomes. The Features view serializes action/refresh with `gamingGate`;
-failed refreshes preserve last known state. Neither gaming nor per-user
-Homebrew trust adds a ChairLift privilege route.
+Game Mode stages a switch between the supported standard and gaming system
+images through `ublue.SetGamingMode` and the fixed `gaming-switch` helper.
+The target preserves the published stream and graphics driver. This operation
+shares update-shell admission and retains the Steam/Gamescope/Open Gaming
+Collective kernel and reboot confirmation. It never installs or removes
+Flatpaks, reads their inventory, or cleans up apps an older release installed.
+The separate Flatpak Gaming Tools control and its backend are retired; all
+existing user and system Flatpak copies remain untouched.
 
 ## Agent Mode (`internal/aistack`)
 

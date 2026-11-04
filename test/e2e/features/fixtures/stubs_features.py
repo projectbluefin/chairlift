@@ -5,10 +5,9 @@ Every fake appends its own name and argv to <scenario>/features-calls.log, so
 a scenario can prove what ChairLift asked a tool for: the reads a page restore
 needs, and never a state-changing subcommand while --dry-run is in force.
 
-The gaming stubs stand in for `flatpak list`, which internal/gaming reads in
-four queries (user/system x app/runtime) to decide the Gaming switch. Every
-other flatpak subcommand answers with nothing and exit 0, so the Apps and
-Updates pages that share the fake see an empty, healthy host.
+The legacy-named gaming-none/unlistable fixtures are shared Flatpak inventory
+fakes for Compass, Development Apps, and update reads. Game Mode switches
+images only and must never mutate any Flatpak through these fakes.
 """
 
 import grp
@@ -20,14 +19,8 @@ from stubs import fake_executable, stub
 
 CALLS_LOG = "features-calls.log"
 
-# internal/gaming's stack, in install order, with the listing kind each
-# component is published as (MangoHud is a runtime extension).
-GAMING_COMPONENTS = (
-    ("ProtonPlus", "com.vysp3r.ProtonPlus", "app"),
-    ("Protontricks", "com.github.Matoking.protontricks", "app"),
-    ("GOverlay", "io.github.benjamimgois.goverlay", "app"),
-    ("MangoHud", "org.freedesktop.Platform.VulkanLayer.MangoHud", "runtime"),
-)
+# The listing fake accepts arbitrary app/runtime entries for explicit Flatpak
+# features; Game Mode deliberately has no package inventory.
 
 # ubluehelper.DevGroups: membership in any one is "developer mode on".
 DEVELOPER_GROUPS = ("docker", "incus-admin", "libvirt", "dialout")
@@ -57,8 +50,7 @@ def _recorder(context):
     return f'printf "%s\\n" "$(basename "$0") $*" >> "{log}"\n'
 
 
-# The runtime branch the stubbed `flatpak info`/`remote-info` report for any
-# app (Steam or Protontricks), which MangoHud is installed in.
+# Runtime branch returned by read-only Flatpak metadata queries.
 STEAM_PLATFORM_BRANCH = "26.08"
 
 
@@ -71,7 +63,7 @@ def _listing(components):
 
 
 def _fake_flatpak(context, user=(), system=(), list_fails=False, remotes=("flathub", "flatpark")):
-    """A flatpak whose four gaming listings return the given components.
+    """A Flatpak whose scoped app/runtime listings return the given entries.
 
     `remotes` is the system remote list: Bluefin-family images ship
     Flathub and FlatPark, which Compass installs from."""
@@ -121,14 +113,8 @@ exit 0
 
 @stub("features-gaming-none")
 def gaming_none(context):
-    """A host with none of the gaming stack installed."""
+    """An empty, healthy Flatpak installation, shared with Compass coverage."""
     _fake_flatpak(context)
-
-
-@stub("features-gaming-installed")
-def gaming_installed(context):
-    """Every gaming component installed system-wide, where ChairLift puts it."""
-    _fake_flatpak(context, system=GAMING_COMPONENTS)
 
 
 @stub("features-gaming-unlistable")
@@ -218,6 +204,16 @@ def _write_descriptor(context, descriptor):
     context.launch_env["CHAIRLIFT_IMAGE_INFO"] = path
 
 
+@stub("features-standard-image")
+def standard_image(context):
+    """A supported stable standard image with a published gaming counterpart."""
+    _write_descriptor(context, {
+        "image-name": "dakota", "image-tag": "stable",
+        "image-ref": "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota",
+        "image-vendor": "projectbluefin", "image-flavor": "main",
+    })
+
+
 @stub("features-gaming-image")
 def gaming_image(context):
     """A dakota-gaming descriptor: the image ships Steam itself."""
@@ -225,12 +221,35 @@ def gaming_image(context):
         context,
         {
             "image-name": "dakota-gaming",
-            "image-tag": "latest",
+            "image-tag": "stable",
             "image-ref": "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming",
             "image-vendor": "projectbluefin",
             "image-flavor": "gaming",
         },
     )
+
+
+@stub("features-gaming-pending")
+def gaming_pending(context):
+    """A standard image with its gaming variant already staged for restart."""
+    from stubs_updates import BOOTC_STATUS, bootc_booted, write_state
+
+    bootc_booted(context)
+    status = json.loads(json.dumps(BOOTC_STATUS))
+    staged = json.loads(json.dumps(status["status"]["booted"]))
+    staged["image"]["image"]["image"] = "ghcr.io/projectbluefin/dakota-gaming:latest"
+    status["status"]["staged"] = staged
+    write_state(context, "bootc-status.json", json.dumps(status))
+
+
+@stub("features-unsupported-image")
+def unsupported_image(context):
+    """A descriptor-bearing image without a supported gaming variant."""
+    _write_descriptor(context, {
+        "image-name": "unsupported", "image-tag": "latest",
+        "image-ref": "ostree-image-signed:docker://example.invalid/unsupported",
+        "image-vendor": "example", "image-flavor": "main",
+    })
 
 
 @stub("features-no-descriptor")

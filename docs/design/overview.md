@@ -105,11 +105,11 @@ this inventory, independently of the original YAML namespace names.
 | Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
-Gaming Mode leads Features. The **Setup activity** checklist below it builds its
-bounded stage rows once. A reusable timer pulses while work runs, independent
-of command output. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
-use native expanders like Apps collections: the header discloses
-package rows, while an independent suffix switch starts work. Bluefin CLI is a
+Game Mode leads Features and stages an image switch without managing Flatpaks.
+The **Setup activity** checklist belongs to Developer Mode detail, with bounded
+stage rows and a reusable timer independent of command output. Developer Mode,
+WSL Mode, and Enable Docker use native expanders like Apps collections: the
+header discloses package rows, while an independent suffix switch starts work. Bluefin CLI is a
 separate Bash-only switch backed by `internal/bluefincli`, not a Homebrew collection.
 Monospace Fonts is an independently installable collection inside Developer Mode,
 absent from Apps while Developer Mode is available, and not an automatic
@@ -120,7 +120,7 @@ per-package progress. Docker's rows name Homebrew formulae: the daemon set as
 bottles itself) and the CLI set as user-scope Homebrew formulae. `internal/devsetup` owns
 developer-run ordering and outcomes; the view owns GTK wiring, and
 `internal/devtools` owns execution and Docker/WSL package provenance shared with
-those disclosures. Gaming names come from `gaming.Components`.
+those disclosures. Game Mode reports the booted or staged image, not app inventory.
 
 Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
 Maintenance, with rollback and opt-in reset controls; the published-versions
@@ -777,73 +777,18 @@ children; it is an audit aid, not independent proof of execution.
 `chairlift-updex-helper` calls the updex library in-process and runs no
 subprocess, so its outcome records carry no `executed` list.
 
-Gaming mode, the third Bluefin-family feature, adds no ChairLift privilege
-route: every component is installed as a **system-scope** Flatpak with
-`flatpak install --system` (#503), from the Flathub remote Bluefin-family
-images configure system-wide — a `--user` install cannot resolve a ref there
-at all (#501). The `flatpak` CLI authorizes system installs and uninstalls
-itself through Flatpak's own PolicyKit actions
-(`org.freedesktop.Flatpak.app-install`, `runtime-install`, and their
-`-uninstall` counterparts), so there is no `pkexec`, helper subcommand, or
-ChairLift PolicyKit action for gaming mode, and none may be added.
+Game Mode changes the operating system image through the existing fixed
+`gaming-switch enable|disable` helper command. The helper derives the
+published counterpart from its own image descriptor and channel/driver tables;
+no caller-supplied image reference crosses the privilege boundary. The view
+uses update-shell admission, preserves the existing Steam/Gamescope/Open Gaming
+Collective kernel warning, and stages the switch for a separate restart.
 
-Its components are not all applications, and `internal/gaming` models the
-difference rather than assuming it away. Each entry in the stack carries a
-`flatpak.Kind` — ProtonPlus, Protontricks, and GOverlay are `KindApplication`,
-and MangoHud (`org.freedesktop.Platform.VulkanLayer.MangoHud`) is
-`KindRuntime`, because it ships as a Vulkan-layer extension of
-`org.freedesktop.Platform` rather than as an app. `flatpak list --app` and
-`flatpak list --runtime` are mutually exclusive filters, so the inventory
-runs one query per (scope, kind) pair — four in total — and keys its result
-on a `gaming.Ref{Kind, ID}` rather than on the ID alone. An application-only
-inventory reported MangoHud missing however it had been installed, which
-made Enable reinstall it on every run and left Disable unable to remove the
-ref ChairLift had put there (issue #75). Failure handling follows the same
-shape one level up: every (scope, kind) query must answer, because an
-unreadable scope could hide a copy and reporting its components missing is
-exactly the loop that bug was.
+This operation does not install, uninstall, inventory, or clean up gaming
+Flatpaks in either scope. User-installed apps and apps an older release installed
+stay untouched. The former optional Gaming Tools toggle and its package
+management backend are removed rather than retained behind a hidden route.
 
-MangoHud is also the one multi-branch component: Flathub publishes the layer
-once per Platform release (21.08 through 26.08 today), so a bare
-`flatpak install -y` or `uninstall -y` of its ID stops at flatpak's
-"Which do you want to use?" prompt and, with no stdin, fails with "No ref
-chosen". Enable installs `ID//BRANCH` with the branch of the runtime of the
-app that loads the layer: an installed Flatpak Steam's runtime when there is
-one (`flatpak info --show-runtime com.valvesoftware.Steam`), otherwise the
-runtime of the app `Component.BranchOf` names, Protontricks (`flatpak info
---show-runtime`, or `flatpak remote-info --system --app --show-runtime
-flathub` when Protontricks is not installed). It fails that one component
-rather than guess when none of these answers. The inventory records each
-ref's installed branches per scope (`flatpak list --columns=…,branch`), and
-Disable removes every installed branch by its qualified ref.
-
-The Features page offers a single clean toggle for Gaming Mode. Enable
-installs only components missing from both scopes, so a copy an earlier
-release installed per-user is not duplicated system-wide. Disable removes
-each installed component from exactly the scopes it is installed in — `--user`
-for a per-user copy, `--system` for a system copy, both when both exist.
-The exception is a system copy the OS image declares it ships — a
-`[Flatpak Preinstall]` group in `/usr/share/flatpak/preinstall.d` or
-`/etc/flatpak/preinstall.d`, or a `flatpak` entry in
-`/usr/share/ublue-os/homebrew/system-flatpaks.Brewfile`. That copy predates
-gaming mode and is left in place: removing it would take a distro default from
-every account, and Flatpak records that uninstall as a permanent opt-out, so
-`flatpak preinstall` would not restore it. Such a component is reported as
-left in place, not removed, and a declaration that cannot be read fails the
-removal before anything runs. A component with a removable copy left is
-reported as a failure, partial outcomes stay visible, and a dry-run keeps the
-confirmed inventory unchanged.
-
-Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
-toggle and are no longer gaming components. They are tracked as retired so an
-upgrade does not leave their installs behind invisibly: Derive reports each one
-still installed, and the status notes how many. Disable cleans them up the same
-way as the current stack — a per-user copy is always removed, and a system copy
-is kept only when the OS image declares it ships it (the exception above),
-otherwise removed under Flatpak's PolicyKit. The system copy is kept for the
-same reason a current component's is: it predates gaming mode and removing it
-would take a distro default away from every account. On such hosts the toggle
-reflects only the current components, and the retired ones are called out.
 
 ### Desktop integration switches (`internal/shellextensions`)
 
@@ -1663,12 +1608,12 @@ is handled by the migration described above, not a current System namespace.
 - Flatpak (optional)
 - `bootc` + `/usr/libexec/bootc-update-stage` (both optional; UI gated on `bootc.IsBootcBootedCached()`, i.e. a booted deployment read from composefs state or `bootc status` — not on any sentinel file)
 - Updex features configured on the system (optional; read via Go library, writes via `chairlift-updex-helper`)
-- `/usr/share/ublue-os/image-info.json` (optional; absence floors out Developer Mode, Gaming Mode and channel/graphics controls)
+- `/usr/share/ublue-os/image-info.json` (optional; absence floors out Developer Mode, Game Mode and channel/graphics controls)
 - Fixed helper binaries and matching installed PolicyKit actions (optional; required for the corresponding privileged mutations)
 - `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
 - Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
 - Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with a system-scope Flathub remote for the Gaming Mode components and optional Pulp installation, both installed system-wide under Flatpak's own PolicyKit
+- Flatpak with a system-scope Flathub remote for optional Pulp installation, authorized by Flatpak's own PolicyKit; Game Mode never manages Flatpaks
 - GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
 
 ### Key external Go dependencies

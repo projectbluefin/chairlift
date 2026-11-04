@@ -1,5 +1,5 @@
 @features
-Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printers, and Compass
+Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers, and Compass
   Optional tools are explicit choices. Package disclosures are informational:
   expanding a row must never toggle it or start setup. Docker is rootful system
   Docker that a fixed administrator-authorized helper installs from verified
@@ -26,6 +26,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Bluefin CLI" row is off
     And the home directory has no ".bashrc"
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @stub.features-gaming-none @stub.features-developer
   Scenario: Docker discloses its system and command-line Homebrew formulae without enabling anything
     Given ChairLift is running
@@ -49,6 +50,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And expanding disclosures changes no Features switch and requests no mutation
     And the Features page shows no "Setup activity" group
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @stub.features-gaming-none @stub.features-developer
   Scenario: Both WSL engines disclose only the packages their selected backend installs
     Given ChairLift is running
@@ -71,6 +73,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
       | frostyard/tap/nsl |
     And expanding disclosures changes no Features switch and requests no mutation
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @config.apps-bundles @stub.features-gaming-none @stub.features-developer
   Scenario: Default Developer Mode discloses the Dev Container CLI but no optional installations
     Given ChairLift is running
@@ -84,6 +87,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the "Developer Mode" package disclosure is informational
     And expanding disclosures changes no Features switch and requests no mutation
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @config.features-packages @stub.features-gaming-none @stub.features-developer @stub.features-developer-packages
   Scenario: Developer Mode discloses Pulp and every configured developer collection entry
     Given ChairLift is running
@@ -104,21 +108,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And expanding disclosures changes no Features switch and requests no mutation
     And the Developer feed onboarding never starts
 
-  @stub.features-gaming-none @stub.features-developer
-  Scenario: Gaming Mode discloses all four components without installing any
-    Given ChairLift is running
-    When I open the "Features" page
-    And I record the Features switches and mutation evidence
-    And I expand the "Gaming Mode" package disclosure with the keyboard
-    Then the "Gaming Mode" package disclosure shows exactly
-      | package     |
-      | ProtonPlus  |
-      | Protontricks |
-      | GOverlay    |
-      | MangoHud    |
-    And the "Gaming Mode" package disclosure is informational
-    And expanding disclosures changes no Features switch and requests no mutation
-
+  @stub.features-standard-image @stub.updates-bootc-booted
   @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
   Scenario: Developer collections are collapsed and only disclose packages when expanded
     Given ChairLift is running
@@ -145,6 +135,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And Homebrew was never asked to "bundle install"
     And every visible action control has an accessible name and an action
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
   Scenario: An explicit developer font install leaves Apps collections and Developer Mode unchanged
     Given ChairLift is running
@@ -223,8 +214,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And I do not see "Monospace Fonts"
     And the action journal is empty
 
-  @stub.features-gaming-installed @stub.features-devmenu
-  Scenario: Showing installed Gaming Mode and Developer Mode runs no mutation
+  @stub.features-gaming-image @stub.features-gaming-none @stub.features-devmenu
+  Scenario: Showing Game Mode and Developer Mode runs no mutation
     Given ChairLift is running
     When I open the "Features" page
     And I open the Developer Mode detail
@@ -232,12 +223,13 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And I do not see "IDEs and terminal editors"
     And the application log does not contain "brew install devcontainer"
     When I click the "Back to Features" button
-    Then the switch in the "Gaming Mode" row is on
+    Then the switch in the "Game Mode" row is on
     And the action journal is empty
     And the fake flatpak was never asked to "install"
     And the fake flatpak was never asked to "uninstall"
     And the fake dconf was never asked to "dump"
 
+  @stub.features-standard-image @stub.updates-bootc-booted
   @developer-detail-smoke @stub.features-gaming-none @stub.features-devmenu
   Scenario: Developer detail offers native IDE installs and keeps its activity separate from Gaming
     Given ChairLift is running
@@ -261,9 +253,13 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     When I capture the Developer Mode detail evidence
     And I click the "Back to Features" button
     Then the Features page shows no "Setup activity" group
-    And the switch in the "Gaming Mode" row accepts input
-    When I toggle the switch in the "Gaming Mode" row
-    Then Setup activity follows Gaming on Features
+    And the switch in the "Game Mode" row accepts input
+    When I toggle the switch in the "Game Mode" row
+    Then a dialog titled "Game Mode Requires a Reboot" is shown
+    And I see "This mode includes Steam and Gamescope built in with an Open Gaming Collective kernel."
+    When I choose "Cancel" in the dialog
+    Then the switch in the "Game Mode" row is off
+    And the Features page shows no "Setup activity" group
     When I open the Developer Mode detail
     Then the direct Developer activity matches the previewed action
 
@@ -649,52 +645,84 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the "Enable Docker" row says "Couldn't check Docker's system service."
     And the action journal is empty
 
-  @stub.features-gaming-none
-  Scenario: Gaming Mode toggle previews system install under dry run
+  @stub.features-standard-image
+  @stub.features-gaming-none @stub.updates-bootc-booted
+  Scenario: Game Mode previews only the fixed image helper and restores its switch for another attempt
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming Mode" row accepts input
-    And the switch in the "Gaming Mode" row is off
-    When I toggle the switch in the "Gaming Mode" row
-    Then the gaming preview installs all components into the system scope
-    And the switch in the "Gaming Mode" row is off
-    And the fake flatpak was never asked to "install"
+    Then the switch in the "Game Mode" row accepts input
+    And the switch in the "Game Mode" row is off
+    And the "Game Mode" row offers no package disclosure
+    When I toggle the switch in the "Game Mode" row
+    Then a dialog titled "Game Mode Requires a Reboot" is shown
+    And I see "This mode includes Steam and Gamescope built in with an Open Gaming Collective kernel."
+    When I choose "Cancel" in the dialog
+    Then the switch in the "Game Mode" row is off
     And the action journal is empty
-    And Setup activity follows Gaming on Features
-    And Setup activity shows these stage statuses
-      | stage             | status  |
-      | Tools and service | Preview |
-      | Verify readiness  | Preview |
-    And Setup activity has no running progress or fabricated percentage
+    And Game Mode requests no Flatpak changes
+    When I toggle the switch in the "Game Mode" row
+    And I choose "Switch to Game Mode" in the dialog
+    Then Game Mode previews only the fixed image helper with "enable" 1 time
+    And the switch in the "Game Mode" row is off
+    And the switch in the "Game Mode" row accepts input
+    And the Features page shows no "Setup activity" group
+    And Game Mode requests no Flatpak changes
+    When I toggle the switch in the "Game Mode" row
+    And I choose "Switch to Game Mode" in the dialog
+    Then Game Mode previews only the fixed image helper with "enable" 2 times
+    And the switch in the "Game Mode" row is off
+    And the switch in the "Game Mode" row accepts input
+    And Game Mode requests no Flatpak changes
 
-  @stub.features-gaming-installed
-  Scenario: Disabling Gaming Mode previews removal under dry run
+  @stub.features-gaming-image @stub.features-gaming-none @stub.updates-bootc-booted
+  Scenario: Leaving Game Mode previews only the image switch and preserves all Flatpaks
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming Mode" row accepts input
-    And the switch in the "Gaming Mode" row is on
-    When I toggle the switch in the "Gaming Mode" row
-    Then a dialog titled "Turn Off Gaming Mode?" is shown
-    When I choose "Remove" in the dialog
-    Then the gaming preview removes all components from the system scope
-    And the switch in the "Gaming Mode" row is on
-    And the fake flatpak was never asked to "uninstall"
-    And the action journal is empty
-    And Setup activity shows these stage statuses
-      | stage             | status  |
-      | Tools and service | Preview |
-      | Verify readiness  | Preview |
-    And Setup activity has no running progress or fabricated percentage
+    Then the switch in the "Game Mode" row accepts input
+    And the switch in the "Game Mode" row is on
+    When I toggle the switch in the "Game Mode" row
+    Then Game Mode previews only the fixed image helper with "disable" 1 time
+    And the switch in the "Game Mode" row is on
+    And the switch in the "Game Mode" row accepts input
+    And the Features page shows no "Setup activity" group
+    And Game Mode requests no Flatpak changes
 
-
-  @stub.features-gaming-unlistable
-  Scenario: Gaming fails closed when installed components cannot be listed
+  @stub.features-gaming-none @stub.features-gaming-pending
+  Scenario: A pending gaming image restart prevents a contradictory switch
     Given ChairLift is running
     When I open the "Features" page
-    Then the "Gaming Mode" row says "Couldn't check which gaming apps are installed."
-    And the switch in the "Gaming Mode" row refuses input
-    And the application log contains "views: gaming status unavailable"
+    Then the switch in the "Game Mode" row is on
+    And the switch in the "Game Mode" row refuses input
     And the action journal is empty
+    And Game Mode requests no Flatpak changes
+
+  @stub.features-standard-image
+  @stub.features-gaming-unlistable @stub.updates-bootc-booted
+  Scenario: An unreadable Flatpak inventory does not block the Game Mode image switch
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Game Mode" row accepts input
+    And the switch in the "Game Mode" row is off
+    And Game Mode requests no Flatpak changes
+
+  @config.features-no-gaming @stub.features-gaming-none
+  Scenario: Disabling gaming_group removes Game Mode without touching Flatpaks
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the Features page shows no "Gaming" group
+    And I do not see "Game Mode"
+    And the action journal is empty
+    And Game Mode requests no Flatpak changes
+
+  @stub.updates-bootc-booted
+  @stub.features-unsupported-image @stub.features-gaming-none
+  Scenario: Unsupported image variants explain why Game Mode cannot switch
+    Given ChairLift is running
+    When I open the "Features" page
+    Then the switch in the "Game Mode" row refuses input
+    And the "Game Mode" row says "A matching gaming system image is not available for this computer."
+    And the action journal is empty
+    And Game Mode requests no Flatpak changes
 
   # ------------------------------------------------------------ Compass
   #
@@ -759,12 +787,13 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the application log does not contain "views: compass group built"
     And the Features page shows no "Compass" group
 
-  @stub.features-gaming-image @stub.features-gaming-installed
-  Scenario: A gaming image presents the Gaming Mode switch
+  @stub.features-gaming-image @stub.features-gaming-none
+  Scenario: A gaming image presents the active Game Mode image switch
     Given ChairLift is running
     When I open the "Features" page
-    Then the switch in the "Gaming Mode" row is on
-    And I see "Gaming Mode"
+    Then the switch in the "Game Mode" row is on
+    And I see "Game Mode"
+
   @config.features-no-desktop @stub.features-no-descriptor @stub.features-gaming-none
   Scenario: Without a Bluefin descriptor Developer and Gaming are not offered
     Given ChairLift is running
@@ -772,7 +801,9 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     Then the Features page shows no "Developer" group
     And the Features page shows no "Gaming" group
     And I do not see "Developer Mode"
-    And I do not see "Gaming Mode"
+    And I do not see "Game Mode"
+    And the action journal is empty
+    And Game Mode requests no Flatpak changes
 
   @env.CHAIRLIFT_CAPABILITIES=flatpak,brew,podman,bootc-stage @stub.features-gaming-none
   Scenario: The image-descriptor capability floors Developer and Gaming
@@ -780,6 +811,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     When I open the "Features" page
     Then the Features page shows no "Developer" group
     And the Features page shows no "Gaming" group
+    And the action journal is empty
+    And Game Mode requests no Flatpak changes
 
   @config.features-no-dx @stub.features-gaming-none
   Scenario: Disabling dx_group removes all developer supporting options and keeps Gaming

@@ -25,7 +25,7 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 		// Set Up and Launch share one gate, and both are offered again.
 		"troubleshoot.go":  {"gooseGate", "askBluefinGate"},
 		"agents_page.go":   {"agentModeGate"},
-		"features_page.go": {"gamingGate", "gameModeGate", "updateFeaturesGate"},
+		"features_page.go": {"gameModeGate", "updateFeaturesGate"},
 	} {
 		data, err := os.ReadFile(filepath.Join(viewsDir, file))
 		if err != nil {

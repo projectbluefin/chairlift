@@ -22,7 +22,7 @@ var featureTitles = map[[2]string]string{
 	{"agents_page", "troubleshooting_group"}:    "Troubleshooting",
 	{"features_page", "bluefin_cli_group"}:      "Bluefin CLI (Bash)",
 	{"features_page", "dx_group"}:               "Developer Mode",
-	{"features_page", "gaming_group"}:           "Gaming Mode",
+	{"features_page", "gaming_group"}:           "Game Mode",
 	{"features_page", "printers_group"}:         "Printers",
 	{"features_page", "compass_group"}:          "Compass",
 	{"livery_page", "wallpapers_group"}:         LiveryWallpapersTitle,

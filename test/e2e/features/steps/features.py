@@ -1,4 +1,4 @@
-"""Features destination steps: Developer Mode, Gaming Mode and Printers.
+"""Features destination steps: Developer Mode, Game Mode and Printers.
 
 The Developer Mode switch shows the invoking account's real developer-group
 membership (internal/ublue reads it from the OS, and no stub can change it),
@@ -15,7 +15,7 @@ from behave import step, then
 
 import chairlift_atspi as atspi
 from stubs_features import (
-    CALLS_LOG, GAMING_COMPONENTS, ROOTLESS_UNIT, STEAM_PLATFORM_BRANCH, account_is_developer,
+    CALLS_LOG, ROOTLESS_UNIT, account_is_developer,
     docker_held_failure, docker_inactive, docker_no_manager,
 )
 from apps import expander_header, expander_rows, focus_by_tab
@@ -167,7 +167,7 @@ def _never(predicate, what, window=NEGATIVE_WINDOW):
 # ---------------------------------------------------------------- package disclosures
 
 
-FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Gaming Mode", "Compass")
+FEATURE_SWITCH_ROWS = ("Developer Mode", "WSL Mode", "Enable Docker", "Game Mode", "Compass")
 
 # internal/dockerbrew's daemon set (root-owned, for the whole computer) and its
 # user-scope CLI formulae, with the provenance each disclosure row states.
@@ -198,9 +198,10 @@ def _mutation_calls(context):
 
 
 def _disclosure_header(context, title):
-    _feature_surface(context, title != "Gaming Mode")
-    group = "Gaming" if title == "Gaming Mode" else "Developer"
-    return expander_header(context, title, group)
+    assert title in {"Developer Mode", "WSL Mode", "Enable Docker", "Dakota dev flatpaks"}, \
+        f"{title!r} is not a package disclosure"
+    _feature_surface(context, True)
+    return expander_header(context, title, "Developer")
 
 
 def _disclosure_rows(context, title):
@@ -316,15 +317,6 @@ def step_gaming_first(context):
     groups = [atspi.name(node) for node in atspi.children(gaming.parent)
               if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
     assert groups and groups[0] == "Gaming", f"Features group order is {groups}"
-
-
-@then("Setup activity follows Gaming on Features")
-def step_setup_after_gaming(context):
-    activity = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
-                          and atspi.name(node) == "Setup activity", "the Setup activity group")
-    groups = [atspi.name(node) for node in atspi.children(activity.parent)
-              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
-    assert groups[:2] == ["Gaming", "Setup activity"], f"Features group order is {groups}"
 
 
 @then("Setup activity is the first Developer preference group")
@@ -686,17 +678,36 @@ def step_feature_tools_passive(context):
 # ---------------------------------------------------------------- Gaming
 
 
-@then('the gaming preview {operation:w} all components {preposition:w} the system scope')
-def step_gaming_preview_all(context, operation, preposition):
-    verb, want_preposition = {"installs": ("install", "into"), "removes": ("uninstall", "from")}[operation]
-    if preposition != want_preposition:
-        raise NotImplementedError(f"{operation} pairs with {want_preposition!r}, not {preposition!r}")
-    for _, app_id, kind in GAMING_COMPONENTS:
-        ref = app_id
-        if kind == "runtime":
-            ref = f"{app_id}//{STEAM_PLATFORM_BRANCH}"
-        expected = f"[DRY-RUN] Would execute: flatpak {verb} -y --system {ref}"
-        assert atspi.poll(lambda: expected in _log(context)), f"{app_id} was not previewed: {expected!r}"
+@then('Game Mode previews only the fixed image helper with "{word}" {count:d} {times}')
+def step_game_mode_preview(context, word, count, times):
+    assert word in {"enable", "disable"}, word
+    assert atspi.poll(lambda: len(_journal(context)) == count), _journal(context)
+    for entry in _journal(context):
+        assert entry.get("action") == "gaming-switch", entry
+        assert entry.get("suppressed") == "dry-run", entry
+        assert entry.get("would_run") == ["pkexec", UBLUE_HELPER, "gaming-switch", word, "--dry-run"], entry
+        assert entry.get("args") == {"args": word}, entry
+        assert not entry.get("outcome"), entry
+
+
+@then("Game Mode requests no Flatpak changes")
+def step_game_mode_no_flatpak(context):
+    def mutations():
+        calls = [call for call in _calls(context)
+                 if call[:2] in (["flatpak", "install"], ["flatpak", "uninstall"])]
+        previews = [line for line in _log(context).splitlines()
+                    if "flatpak install" in line or "flatpak uninstall" in line]
+        return calls or previews
+    _never(mutations, "a Flatpak install or uninstall from Game Mode")
+
+
+@then('the "{title}" row offers no package disclosure')
+def step_no_package_disclosure(context, title):
+    row = atspi.row_containing(_content(context), title)
+    assert not atspi.find_all(row, lambda node: atspi.role(node) in ("toggle button", "expander")), \
+        f"{title!r} exposes a package disclosure"
+    assert not any(name in _texts(context) for name in ("Gaming Tools", "Gaming Mode", "ProtonPlus", "Protontricks", "GOverlay", "MangoHud")), \
+        "obsolete gaming package controls remain visible"
 
 
 @then('the switch in the "{row}" row {verdict:w} input')

@@ -1,0 +1,4 @@
+# Game Mode is independently disabled; other Features groups keep defaults.
+features_page:
+  gaming_group:
+    enabled: false

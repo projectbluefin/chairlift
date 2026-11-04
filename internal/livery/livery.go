@@ -22,7 +22,7 @@
 // Nothing here is privileged. Every write lands under the invoking user's
 // $XDG_DATA_HOME and $XDG_CONFIG_HOME, and the only settings touched are that
 // user's own dconf values — the same unprivileged, per-user posture as
-// gaming mode and the AI stack.
+// the local Agent Mode service.
 package livery
 
 import (

@@ -135,7 +135,7 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.Feature(",
 				"pageview.FeatureGroupDescription(",
 				"pageview.DeveloperRow(",
-				"pageview.GamingRow(",
+				"pageview.GameModeRow(",
 				"pageview.DeveloperOnboardingTargets(",
 			},
 			retired: []string{

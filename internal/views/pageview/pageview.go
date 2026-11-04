@@ -529,15 +529,6 @@ func CompassToast(dryRun, enable, changed, failed bool) (toast string, isError b
 	}
 }
 
-// GamingCheckingSubtitle is the gaming row's subtitle while ChairLift is still
-// finding out what is installed. The switch cannot be used until that answer
-// arrives, so the row has to say why.
-const GamingCheckingSubtitle = "Checking what is installed…"
-
-// GamingUnavailableSubtitle is shown when that check fails. The underlying
-// error names commands and application ids, so it is logged rather than shown.
-const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
-
 // GameModeConfirmation returns the exact title and body for the Game Mode switch warning.
 func GameModeConfirmation() (title, body string) {
 	return "Game Mode Requires a Reboot",
@@ -565,71 +556,6 @@ func GameModeResultSubtitle(enabled bool) string {
 		return "Restart to switch to Game Mode."
 	}
 	return "Restart to switch to the standard mode."
-}
-
-// GamingRow returns the gaming switch row text. active reports whether
-// the gaming stack is installed. installed and missing report component counts
-// so a partially-installed stack displays what is present.
-func GamingRow(active bool, installed, missing int) Row {
-	row := Row{Title: "Gaming Mode"}
-	switch {
-	case active:
-		row.Subtitle = "ProtonPlus, Protontricks, and gaming overlays are installed."
-	case installed > 0 && missing > 0:
-		row.Subtitle = fmt.Sprintf("Partly installed — %d missing. Toggle on to finish installing.", missing)
-	default:
-		row.Subtitle = "Install the tools for running Windows games, with a performance overlay. Downloads can be large."
-	}
-	return row
-}
-
-// GamingWorkingSubtitle returns the subtitle shown while the gaming apps are
-// being installed or removed.
-func GamingWorkingSubtitle(enabled bool) string {
-	if enabled {
-		return "Installing…"
-	}
-	return "Removing…"
-}
-
-// GamingWorkingStepSubtitle returns the subtitle describing which gaming app
-// is currently being installed or removed and which step in the task.
-func GamingWorkingStepSubtitle(enabled bool, step, total int, componentName string) string {
-	verb := "Installing"
-	if !enabled {
-		verb = "Removing"
-	}
-	if componentName != "" {
-		return fmt.Sprintf("%s %s (%d of %d)…", verb, componentName, step+1, total)
-	}
-	return fmt.Sprintf("%s (%d of %d)…", verb, step+1, total)
-}
-
-// GamingResultSubtitle returns the subtitle after a gaming toggle completes.
-// changed is the number of apps installed or removed, and failed the number
-// that could not be.
-func GamingResultSubtitle(enabled bool, changed, failed int) string {
-	if failed > 0 {
-		if enabled {
-			return fmt.Sprintf("Installed %s, but %d couldn't be installed.", gamingApps(changed), failed)
-		}
-		return fmt.Sprintf("Removed %s, but %d couldn't be removed.", gamingApps(changed), failed)
-	}
-	if changed == 0 {
-		return "Nothing needed changing."
-	}
-	if enabled {
-		return fmt.Sprintf("Installed %s.", gamingApps(changed))
-	}
-	return fmt.Sprintf("Removed %s.", gamingApps(changed))
-}
-
-// gamingApps counts apps in words a person reads, rather than "component(s)".
-func gamingApps(count int) string {
-	if count == 1 {
-		return "1 gaming app"
-	}
-	return fmt.Sprintf("%d gaming apps", count)
 }
 
 // BootcRollbackRow returns the previous-version row text. version and

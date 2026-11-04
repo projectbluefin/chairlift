@@ -4,8 +4,8 @@
 // Compass is published on FlatPark, not Flathub. Bluefin-family images ship
 // FlatPark as a system remote (/usr/share/flatpak/remotes.d), so ChairLift
 // installs from that remote and never adds one: a host without it reports
-// Compass as unavailable. Like gaming mode, installation and removal are
-// authorized by Flatpak's own PolicyKit actions; ChairLift adds no pkexec
+// Compass as unavailable. Installation and removal are authorized by
+// Flatpak's own PolicyKit actions; ChairLift adds no pkexec
 // route. Removal keeps the user's Compass data, because `flatpak uninstall`
 // without --delete-data leaves ~/.var/app in place.
 package compass
