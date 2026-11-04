@@ -26,40 +26,6 @@ const (
 	LiveryDockTitle    = "Files Icon"
 )
 
-// LiveryChoice is the combo-row model for a foundation section: the labels in
-// display order and the index of the current selection.
-type LiveryChoice struct {
-	Labels   []string
-	Selected uint
-}
-
-// customLabel is the trailing entry that points at the user's own file.
-const customLabel = "Custom SVG…"
-
-// LiveryChoices builds the combo model for a foundation selection.
-//
-// The custom entry is always last so the shipped catalog's order is never
-// disturbed by it. An id the catalog does not contain selects the default
-// rather than leaving the combo unselected: dconf is writable by anything
-// running as the user, and a stale or hand-edited value should land the page
-// somewhere valid instead of blank.
-func LiveryChoices(selectedID string) LiveryChoice {
-	foundations := livery.Foundations()
-	labels := make([]string, 0, len(foundations)+1)
-	for _, f := range foundations {
-		labels = append(labels, f.Name)
-	}
-	labels = append(labels, customLabel)
-
-	if selectedID == livery.CustomID {
-		return LiveryChoice{Labels: labels, Selected: uint(len(labels) - 1)}
-	}
-	if i := livery.IndexOfID(selectedID); i >= 0 {
-		return LiveryChoice{Labels: labels, Selected: uint(i)}
-	}
-	return LiveryChoice{Labels: labels, Selected: uint(livery.IndexOfID(livery.DefaultID))}
-}
-
 // LiveryCustomResultID is the sentinel row that opens a file chooser.
 //
 // It lives inside each picker rather than as a fourth row in every section:
@@ -201,15 +167,6 @@ func LiveryNoResultsRow(surface livery.Surface, query string) Row {
 			Subtitle: fmt.Sprintf("No project matches %q.", query),
 		}
 	}
-}
-
-// LiveryIDForIndex maps a combo position back to a selection id.
-func LiveryIDForIndex(index uint) string {
-	foundations := livery.Foundations()
-	if int(index) >= len(foundations) {
-		return livery.CustomID
-	}
-	return foundations[index].ID
 }
 
 // LiveryAppGridRow is the app-grid section's switch row text.
