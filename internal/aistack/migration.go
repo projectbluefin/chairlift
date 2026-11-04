@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
@@ -36,14 +38,33 @@ func updateServiceUnit(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	// Disk equality alone says nothing about the running daemon: a crash may
-	// have happened after the file write but before reload/restart. Only an
-	// invocation stamped after a successful restart proves policy adoption.
-	if unit, stamp, ok := strings.Cut(string(previous), serviceInvocationMark); ok && unit == current && !dryrun.Enabled() {
-		invocation, err := serviceInvocation(ctx)
+	// have happened after the file write but before reload/restart. An
+	// invocation stamped after a successful restart proves policy adoption;
+	// so does a service systemd started from this exact file, which is the
+	// usual state after a reboot, when the stamped InvocationID is stale.
+	if unit, stamp, stamped := strings.Cut(string(previous), serviceInvocationMark); unit == current && !dryrun.Enabled() {
+		state, err := observeService(ctx)
 		if err != nil {
 			return false, err
 		}
-		if stamp == invocation+"\n" {
+		if stamped && state.running() && stamp == state.invocation+"\n" {
+			return false, nil
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return false, err
+		}
+		switch state.adopted(info.ModTime()) {
+		case adoptedRunning:
+			// Record the proof so later launches in this boot take the
+			// stamp path. No restart, so loaded models survive.
+			if err := writeAtomic(path, unit+serviceInvocationMark+state.invocation+"\n"); err != nil {
+				return false, err
+			}
+			return false, nil
+		case adoptedStopped:
+			// Nothing runs an older policy, and systemd starts the current
+			// file next time, so there is nothing to migrate.
 			return false, nil
 		}
 	}
@@ -78,6 +99,10 @@ func serviceInvocation(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return validInvocation(id)
+}
+
+func validInvocation(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if len(id) != 32 || strings.Trim(id, "0") == "" {
 		return "", errors.New("the model service has no running invocation")
@@ -88,6 +113,90 @@ func serviceInvocation(ctx context.Context) (string, error) {
 		}
 	}
 	return id, nil
+}
+
+// serviceStateArgs reads the loaded and running unit in one query.
+// --timestamp=unix makes ExecMainStartTimestamp comparable with the unit
+// file's mtime; a systemd too old for it prints another format, which parses
+// as unknown and falls back to the restart path.
+var serviceStateArgs = []string{
+	"show", ServiceName,
+	"--property=ActiveState,NeedDaemonReload,ExecMainStartTimestamp,InvocationID",
+	"--timestamp=unix",
+}
+
+// serviceState is what systemd reports about the model service.
+type serviceState struct {
+	active       string
+	needReload   string
+	mainStart    time.Time
+	invocation   string
+	invocationOK bool
+}
+
+func observeService(ctx context.Context) (serviceState, error) {
+	out, err := systemctl(ctx, serviceStateArgs...)
+	if err != nil {
+		return serviceState{}, err
+	}
+	var state serviceState
+	for line := range strings.SplitSeq(out, "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "ActiveState":
+			state.active = value
+		case "NeedDaemonReload":
+			state.needReload = value
+		case "ExecMainStartTimestamp":
+			if seconds, ok := strings.CutPrefix(value, "@"); ok {
+				if n, err := strconv.ParseInt(seconds, 10, 64); err == nil && n > 0 {
+					state.mainStart = time.Unix(n, 0)
+				}
+			}
+		case "InvocationID":
+			if id, err := validInvocation(value); err == nil {
+				state.invocation, state.invocationOK = id, true
+			}
+		}
+	}
+	return state, nil
+}
+
+func (s serviceState) running() bool {
+	return s.active == "active" && s.invocationOK
+}
+
+type adoption int
+
+const (
+	notAdopted adoption = iota
+	adoptedRunning
+	adoptedStopped
+)
+
+// adopted reports whether the unit file on disk is what systemd runs. The
+// manager must have loaded the file as it is now (NeedDaemonReload=no), and a
+// running main process must have started strictly after the file was last
+// written: a write, a daemon-reload, and a crash before the restart leave an
+// older process under a freshly loaded unit, which this rejects. Timestamps
+// have one-second resolution, so a start in the same second as the write is
+// not trusted. An inactive or failed service runs no older policy at all.
+func (s serviceState) adopted(written time.Time) adoption {
+	if s.needReload != "no" {
+		return notAdopted
+	}
+	switch s.active {
+	case "active":
+		if s.running() && !s.mainStart.IsZero() && s.mainStart.After(written.Truncate(time.Second)) {
+			return adoptedRunning
+		}
+	case "inactive", "failed":
+		return adoptedStopped
+	}
+	return notAdopted
 }
 
 // restartService records policy adoption only after systemd starts the current

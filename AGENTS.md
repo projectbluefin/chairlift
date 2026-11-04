@@ -1237,7 +1237,13 @@ An agent must not break these:
   Startup reconciles only an existing owned unit against `RenderUnit` plus the
   exact live systemd `InvocationID`, committed as a unit comment only after
   successful reload/restart. An already-written file is not proof the daemon
-  adopted it: missing or mismatched invocation stamps retry the migration.
+  adopted it: missing or mismatched invocation stamps retry the migration,
+  unless systemd proves it runs the current file (#694): the manager reports
+  `NeedDaemonReload=no` and the main process started strictly after the
+  file's last write. That is the normal state after a reboot, when the stamp
+  is stale, so ReconcileService re-stamps the live `InvocationID` instead of
+  restarting and dropping loaded models. An inactive or failed service runs no
+  older policy, so a current unit needs no migration there.
   Enable, model selection, and migration share that restart/stamp boundary;
   current verified invocations do not restart, disabled hosts stay disabled,
   and dry-run writes none. Failure preserves the unstamped management unit and

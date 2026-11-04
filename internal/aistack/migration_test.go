@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
@@ -161,6 +162,126 @@ func TestEnablePolicyObservationFailurePreservesRunningServiceManagement(t *test
 			wantPresent := state == "active"
 			if h.exists(t, unitRel) != wantPresent || h.exists(t, envRel) != wantPresent {
 				t.Fatalf("post-start failure lost management of a %s service", state)
+			}
+		})
+	}
+}
+
+// writeUnitAt writes the unit and pins its mtime, so tests can order the
+// service's start against the write.
+func writeUnitAt(t *testing.T, contents string, written time.Time) string {
+	t.Helper()
+	path, _ := UnitPath()
+	if err := writeAtomic(path, contents); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, written, written); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func restarted(h *host) bool {
+	return strings.Contains(strings.Join(h.calls, "\n"), "systemctl --user restart "+ServiceName)
+}
+
+// TestServiceStartedFromTheCurrentUnitIsAdoptedWithoutARestart is the #694
+// regression: after a reboot the stamped InvocationID is stale, but systemd
+// started the daemon from the current file, so it is re-stamped, not
+// restarted (a restart drops loaded models and in-flight requests).
+func TestServiceStartedFromTheCurrentUnitIsAdoptedWithoutARestart(t *testing.T) {
+	for _, stamped := range []bool{true, false} {
+		name := "stale stamp"
+		if !stamped {
+			name = "never stamped"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			contents := current
+			if stamped {
+				contents += serviceInvocationMark + strings.Repeat("b", 32) + "\n"
+			}
+			written := time.Now().Add(-time.Hour)
+			path := writeUnitAt(t, contents, written)
+			booted := strings.Repeat("c", 32)
+			h.setServiceState("active", "no", written.Add(time.Minute), booted)
+
+			if err := ReconcileService(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if restarted(h) {
+				t.Fatal("a daemon already running the current unit was restarted")
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != current+serviceInvocationMark+booted+"\n" {
+				t.Fatalf("adopted invocation was not stamped: %q, %v", got, err)
+			}
+
+			// A later launch in the same boot takes the stamp path.
+			h.calls = nil
+			if err := ReconcileService(context.Background()); err != nil || restarted(h) {
+				t.Fatalf("second launch restarted the daemon or failed: %v", err)
+			}
+		})
+	}
+}
+
+// The start-time proof must not accept a daemon that only might run the
+// current file: crashes between the write and the restart still migrate.
+func TestServiceMigrationStillRestartsWhenAdoptionIsUnproven(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		needReload string
+		startDelta time.Duration
+		active     string
+	}{
+		// Written and reloaded, crashed before the restart: the loaded unit
+		// matches, but the process is older than the file.
+		{"started before the write", "no", -time.Minute, "active"},
+		// Written, crashed before daemon-reload.
+		{"manager not reloaded", "yes", time.Minute, "active"},
+		// Same second as the write: not trusted.
+		{"started in the write's second", "no", 0, "active"},
+		{"activating", "no", time.Minute, "activating"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			written := time.Now().Add(-time.Hour).Truncate(time.Second)
+			writeUnitAt(t, current+serviceInvocationMark+strings.Repeat("b", 32)+"\n", written)
+			h.setServiceState(tc.active, tc.needReload, written.Add(tc.startDelta), strings.Repeat("c", 32))
+			if err := ReconcileService(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if !restarted(h) {
+				t.Fatal("unproven policy adoption skipped the restart")
+			}
+		})
+	}
+}
+
+// A stopped or failed service runs no older policy; reconciling it must not
+// report "needs an update" or stop it just because no invocation exists.
+func TestStoppedCurrentServiceNeedsNoMigration(t *testing.T) {
+	for _, active := range []string{"inactive", "failed"} {
+		t.Run(active, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			contents := current + serviceInvocationMark + strings.Repeat("b", 32) + "\n"
+			path := writeUnitAt(t, contents, time.Now().Add(-time.Hour))
+			h.setServiceState(active, "no", time.Unix(0, 0), "")
+			if err := ReconcileService(context.Background()); err != nil {
+				t.Fatalf("a stopped current service was reported as needing an update: %v", err)
+			}
+			for _, call := range h.calls {
+				if strings.Contains(call, " restart ") || strings.Contains(call, " stop ") || strings.Contains(call, "daemon-reload") {
+					t.Fatalf("reconcile mutated a stopped current service: %q", call)
+				}
+			}
+			got, _ := os.ReadFile(path)
+			if string(got) != contents {
+				t.Fatal("reconcile rewrote a stopped current service")
 			}
 		})
 	}

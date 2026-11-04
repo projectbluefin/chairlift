@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -111,6 +112,10 @@ func newHost(t *testing.T) *host {
 	t.Helper()
 	h := &host{config: t.TempDir(), fail: map[string]error{}, outputs: map[string]string{}}
 	h.outputs["systemctl --user show "+ServiceName+" --property=InvocationID --value"] = strings.Repeat("a", 32)
+	// By default the running process predates any unit a test writes, so
+	// only a matching stamp proves adoption; tests of the start-time proof
+	// override this with setServiceState.
+	h.setServiceState("active", "no", time.Unix(1, 0), strings.Repeat("a", 32))
 	bin := t.TempDir()
 	h.exe = filepath.Join(bin, "llmman")
 	if err := os.WriteFile(h.exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -151,6 +156,14 @@ func newHost(t *testing.T) *host {
 		}
 	})
 	return h
+}
+
+// setServiceState answers the migration's one-query service observation.
+func (h *host) setServiceState(active, needReload string, mainStart time.Time, invocation string) {
+	h.outputs["systemctl --user "+strings.Join(serviceStateArgs, " ")] = "ActiveState=" + active + "\n" +
+		"NeedDaemonReload=" + needReload + "\n" +
+		"ExecMainStartTimestamp=@" + strconv.FormatInt(mainStart.Unix(), 10) + "\n" +
+		"InvocationID=" + invocation + "\n"
 }
 
 func (h *host) exists(t *testing.T, rel string) bool {

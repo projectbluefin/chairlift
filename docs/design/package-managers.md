@@ -1104,7 +1104,15 @@ existing owned service. Matching file bytes alone do not prove that the daemon
 adopted local-only settings: `restartService` reloads, restarts, validates the
 live systemd `InvocationID`, and only then stamps that ID as a unit comment.
 A missing/mismatched stamp retries reconciliation; a verified current
-invocation does not restart, and an absent unit stays disabled. Reconciliation
+invocation does not restart, and an absent unit stays disabled. Systemd's own
+report also verifies one: with the unit body equal to `RenderUnit`,
+`NeedDaemonReload=no`, and an `ExecMainStartTimestamp` (read with
+`--timestamp=unix`) strictly after the file's mtime, the running daemon was
+started from the current file. That is the case after every reboot, and the
+live ID is stamped without a restart. A process older than the write, a
+manager that still needs a reload, or an unparseable timestamp falls back to
+the restart. An inactive or failed service with the current unit needs no
+migration. Reconciliation
 failure preserves the unstamped unit and best-effort stops the old daemon.
 Live startup waits up to ten seconds for health after reconciliation; preview
 performs one bounded probe and writes nothing.
