@@ -36,14 +36,13 @@
 // it (kill fails with EPERM), nor anything it spawned, so it cannot stop the
 // work the way internal/maintenanceexec stops unprivileged scripts. Run then
 // returns only when the helper exits on its own, which the helper's own
-// timeout bounds (ubluehelper.Timeout, updexhelper.Timeout). That wait is
-// deliberate: every caller's action gate and the update shell's admission
-// stay held until Run returns, and returning early would let a second
-// privileged action start beside a root helper that is still mutating the
-// system. Its outcome is then classified from the helper's real exit status
-// (see below), not as cancelled. Callers must therefore not assume a cancel
-// returns promptly after authentication, and copy must not claim a cancel
-// stopped a privileged action.
+// timeout bounds. That wait is deliberate: every caller's action gate and
+// the update shell's admission stay held until Run returns; returning early
+// would let a second privileged action start beside a root helper that is
+// still mutating the system. Its outcome is then classified from the helper's
+// real exit status (see below), not as cancelled. Callers must therefore not
+// assume cancellation returns promptly after authentication, and copy must
+// not claim cancellation stopped a privileged action.
 //
 // WaitDelay bounds only the output pipes: once the helper has exited, a
 // descendant that inherited stdout and stderr cannot hold Run open.
@@ -87,8 +86,8 @@ import (
 //
 // Unlike maintenanceexec, Run cannot kill the whole process group: the helper
 // runs as root and an unprivileged ChairLift cannot signal it. WaitDelay
-// therefore bounds the wait, it does not stop the work — see the package
-// doc's cancellation contract.
+// bounds only pipe draining after the helper exits, not the helper's runtime
+// or privileged work — see the package doc's cancellation contract.
 const WaitDelay = 5 * time.Second
 
 // waitDelay is the delay Run actually applies. It is a seam so tests can
@@ -96,9 +95,9 @@ const WaitDelay = 5 * time.Second
 // each; production never reassigns it.
 var waitDelay = WaitDelay
 
-// canceledMessage deliberately does not claim the privileged work stopped:
-// Run kills only the direct pkexec child, so a root descendant that inherited
-// the work can keep mutating the system after Run returns.
+// canceledMessage conservatively avoids claiming that all work stopped:
+// cancellation reaches only the direct child while it remains killable, not
+// a privileged process group. After authentication Run waits for helper exit.
 const canceledMessage = "command canceled (privileged work already started may still be running)"
 
 // Error represents a privileged helper invocation failure.
