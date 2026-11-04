@@ -371,8 +371,8 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 		dxEnabled, gamingEnabled)
 
 	if gamingEnabled {
-		uh.gamingSetupActivity = uh.buildSetupActivity(page)
 		uh.buildGamingGroup(page, status)
+		uh.gamingSetupActivity = uh.buildSetupActivity(page)
 	}
 
 	// Optional user tools remain discoverable even without installed access

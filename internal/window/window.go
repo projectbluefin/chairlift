@@ -498,15 +498,21 @@ func (w *Window) setupActions() {
 // selection, and the only one that shows a detail: a detail keeps its
 // ancestor's row selected and records the primary its Back control returns to.
 func (w *Window) navigateToPage(pageName string) {
-	if w.firstRunActive && (w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) || pageName != w.firstRunSteps[w.firstRunIndex]) {
-		return
-	}
 	transition, ok := navigation.Resolve(pageName, w.navRoutes, func(name string) bool {
 		_, exists := w.pages[name]
 		return exists
 	})
 	if !ok {
 		return
+	}
+	if w.firstRunActive {
+		if w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) {
+			return
+		}
+		step := w.firstRunSteps[w.firstRunIndex]
+		if transition.Name != step && (!transition.Detail || transition.Back != step) {
+			return
+		}
 	}
 
 	w.shownRow = transition.SelectedIndex

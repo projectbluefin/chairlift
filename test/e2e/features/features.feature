@@ -244,14 +244,14 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And I toggle the switch in the "Developer Mode" row
     Then the Developer Mode change is journalled as a dry run of the fixed helper
     And the Developer Mode switch returns to its restored state
-    And Setup activity is the first Features preference group
+    And Setup activity is the first Developer preference group
     And the direct Developer activity matches the previewed action
     When I capture the Developer Mode detail evidence
     And I click the "Back to Features" button
     Then the Features page shows no "Setup activity" group
     And the switch in the "Gaming Mode" row accepts input
     When I toggle the switch in the "Gaming Mode" row
-    Then Setup activity is the first Features preference group
+    Then Setup activity follows Gaming on Features
     When I open the Developer Mode detail
     Then the direct Developer activity matches the previewed action
 
@@ -266,7 +266,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the Developer Mode preview toast is shown
     And the Developer Mode switch returns to its restored state
     And the Dev Container CLI install is previewed only when enabling
-    And Setup activity follows Gaming on Features
+    And Setup activity is the first Developer preference group
     And the direct Developer activity matches the previewed action
     And Setup activity has no running progress or fabricated percentage
 
@@ -365,7 +365,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row accepts input
     And the Developer Mode switch returns to its restored state
-    And Setup activity follows Gaming on Features
+    And Setup activity is the first Developer preference group
     And Setup activity shows these stage statuses
       | stage             | status  |
       | Tools and service | Preview |
@@ -393,7 +393,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Enable Docker" row accepts input
     When Docker's system-unit check is held before failing
     And I toggle the switch in the "Enable Docker" row
-    Then Setup activity follows Gaming on Features
+    Then Setup activity is the first Developer preference group
     And Setup activity shows these stage statuses
       | stage             | status   |
       | Tools and service | Preview  |

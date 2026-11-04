@@ -32,9 +32,11 @@ controls, or add a settings actor. A bottom bar built once offers Dismiss Setup,
 Back and Next, with **Finish** on the conclusion. Back is
 insensitive on Welcome and returns there from the first selection page.
 Selection navigation passes through `Window.navigateToPage`; bookends use the
-setup stack. Other routes cannot leave the current step. The sidebar is
-insensitive and its native Back route is disabled; dismissal restores both
-while keeping the current page. Each selection step opens at the top of its page.
+setup stack. Details belonging to the current step, including Developer Mode
+under Features, remain accessible with their own Back control; unrelated routes
+and shortcuts cannot leave the step. The sidebar is insensitive and its native
+Back route is disabled; dismissal restores both while keeping the current page.
+Each selection step opens at the top of its page.
 
 Moving Back changes only navigation. Next from Features explicitly applies the
 Bash-only Bluefin CLI choice, selected by default unless previously disabled.

@@ -91,7 +91,7 @@ Feature: Explicit first-run software setup
     When I use the setup "Back" button
     Then the setup wizard shows "Features"
     When I open the Developer Mode detail
-    And the "Monospace Fonts" collection is unchecked
+    Then the "Monospace Fonts" collection is unchecked
     And the application log previews no "brew bundle install"
     And the action journal is empty
 
