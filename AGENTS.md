@@ -37,6 +37,12 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   `build/ci-linux-<arch>/`, then rebuilds natively, so a cross-arch-only
   compile failure cannot pass locally and break CI. Run it before pushing;
   the mill's deep gate calls this exact target.
+- Every GitHub-hosted job that pulls Dakota first runs
+  `projectbluefin/actions/bootc-build/setup-runner@v1` with
+  `storage-backend: remove-software` and `update-podman: "false"`.
+  Run it before `actions/setup-go`: cleanup removes `/opt/hostedtoolcache`,
+  including installed Go toolchains. Keep rootless Podman storage unchanged;
+  the image-build action's default rootful BTRFS mount is not needed here.
 - `make e2e` — builds both executables and runs `./test/e2e` (except the
   behave suite, below) **inside `ghcr.io/projectbluefin/dakota:testing`**
   through `test/e2e/dakota.sh`: the application's real `--help` surface, the
@@ -1423,7 +1429,9 @@ An agent must not break these:
   reported two change events for three writes when one repeated a value.
   Writing a different name per selection makes the value genuinely change;
   `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
-  sweeps the marks earlier selections left behind. The `chairlift-livery-`
+  sweeps the marks earlier selections left behind — only after both
+  extension keys name the new mark, so a failed switch keeps the previous
+  mark drawn. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon
   without persisting a flag to say so.

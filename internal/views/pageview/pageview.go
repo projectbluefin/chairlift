@@ -222,6 +222,11 @@ func StagingLogSubtitle(shown, total int) string {
 // three-dot copy of the ellipsis made the in-flight guard never match.
 const ChangelogComparingLabel = "Comparing…"
 
+// FeatureChangeBusyToast answers an optional-feature toggle refused because
+// another feature change or the feature update is still running; each is a
+// privileged updex helper call, and two at once would race.
+const FeatureChangeBusyToast = "Wait for the current feature change to finish"
+
 // Feature returns the initial row text for an updex feature.
 func Feature(name, description string) Row {
 	return Row{Title: description, Subtitle: name}
