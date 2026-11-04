@@ -199,7 +199,10 @@ func readJournal(t *testing.T, path string) []journal.Entry {
 // open. Without a finite WaitDelay the output-copy goroutines would block
 // forever waiting for EOF and the GUI action would stay stuck. The test
 // spawns such a descendant and asserts Run returns promptly (bounded by
-// WaitDelay) with a canceled classification instead of hanging.
+// WaitDelay) with a canceled classification instead of hanging. The fake
+// pkexec runs unprivileged and is killable, which models the prompt stage;
+// after real authentication the helper runs as root and Run waits for it
+// (see the package's cancellation contract).
 func TestRunCancellationBoundedWhenDescendantRetainsOutputPipe(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
