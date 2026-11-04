@@ -1,9 +1,9 @@
 """Steps for the Livery page (features/livery.feature).
 
-The page is three AdwPreferencesGroups (plus the Profile Picture group) whose
+The page has independent wallpaper and icon groups (plus Profile Picture), whose
 rows repeat titles — both the panel and the dock have a "Rotate at Login"
-row — so these steps scope every lookup to a section, the group GTK publishes
-as a "grouping" named by the section title. Selection rows and chooser
+row — so these steps scope every lookup to its preferences group, located by
+the section heading or compact expander header. Selection rows and chooser
 results are activatable list rows with no AT-SPI action, so they are driven
 the way a keyboard user drives them: focus the row, press Return.
 """
@@ -14,6 +14,7 @@ import re
 from behave import step, then
 
 import chairlift_atspi as atspi
+from apps import calls, expander_header, expander_rows, focus_by_tab, group, step_expand
 
 LIVERY_SCHEMA = "io.projectbluefin.chairlift.livery"
 EXTENSION_SCHEMA = "org.gnome.shell.extensions.custom-command-list"
@@ -53,12 +54,24 @@ def _log(context):
 
 
 def _section(context, title, timeout=atspi.DEFAULT_TIMEOUT):
-    return atspi.find(
-        _content(context),
-        lambda n: atspi.role(n) == "grouping" and atspi.name(n) == title,
-        f"a Livery section titled {title!r}",
-        timeout=timeout,
-    )
+    return group(context, title, timeout)
+
+
+def _section_titles(parent):
+    titles = []
+    icons = ("App Launcher Icon", "Top Bar Icon", "Files Icon")
+    for node in atspi.children(parent):
+        if atspi.role(node) != "grouping":
+            continue
+        title = atspi.name(node)
+        if not title:
+            headers = atspi.find_all(node, lambda child: atspi.role(child) in atspi.ROW_ROLES
+                                     and atspi.name(child) in icons)
+            if headers:
+                title = atspi.name(headers[0])
+        if title:
+            titles.append(title)
+    return titles
 
 
 def _row(root, title, timeout=atspi.DEFAULT_TIMEOUT):
@@ -66,6 +79,7 @@ def _row(root, title, timeout=atspi.DEFAULT_TIMEOUT):
 
 
 def _section_row(context, row, section):
+    _expand_icon_section(context, section)
     return _row(_section(context, section), row)
 
 
@@ -80,11 +94,29 @@ def _switch(context, row, section):
 def livery_section_order(context):
     expected = ["App Launcher Icon", "Top Bar Icon", "Files Icon"]
     def observed():
-        names = [atspi.name(node) for node in atspi.descendants(_app(context), only_showing=True)
-                 if atspi.role(node) == "grouping" and atspi.name(node) in expected]
+        names = [name for name in _section_titles(_section(context, expected[0]).parent)
+                 if name in expected]
         return names if names == expected else None
     if atspi.poll(observed) is None:
         raise AssertionError("Livery sections do not follow App Launcher, Top Bar, Files order")
+
+
+def _expand_icon_section(context, section):
+    if section in ("App Launcher Icon", "Top Bar Icon", "Files Icon"):
+        header = expander_header(context, section, section)
+        if not expander_rows(header):
+            step_expand(context, section, section)
+
+
+@then('the Livery "{section}" icon section is collapsed')
+def step_icon_section_collapsed(context, section):
+    header = expander_header(context, section, section)
+    assert not expander_rows(header), f"the {section!r} icon section is expanded"
+
+
+@step('I expand the Livery "{section}" icon section')
+def step_expand_icon_section(context, section):
+    _expand_icon_section(context, section)
 
 
 
@@ -182,18 +214,12 @@ def step_section_shown(context, section):
 
 @then('the Livery "{section}" section is not shown')
 def step_section_hidden(context, section):
-    # The page is populated asynchronously; the panel section is hidden only
-    # once the extension probe has answered, so wait for the other sections'
-    # controls to become operable first.
-    atspi.poll(
-        lambda: any(
-            atspi.sensitive(n)
-            for n in atspi.find_all(_content(context), lambda n: atspi.role(n) == "switch")
-        )
-    )
+    # The extension probe hides unsupported sections asynchronously. Do not
+    # wait on child switches: compact icon sections intentionally hide them.
     gone = atspi.poll(
         lambda: not atspi.find_all(
-            _content(context), lambda n: atspi.role(n) == "grouping" and atspi.name(n) == section
+            _content(context), lambda n: atspi.name(n) == section and
+            (atspi.role(n) == "grouping" or atspi.role(n) in atspi.ROW_ROLES)
         ),
         timeout=5,
     )
@@ -370,6 +396,7 @@ def step_gallery_tile_state(context, name, section, state):
     if state not in ("selected", "not selected"):
         raise NotImplementedError(f"unknown gallery tile state {state!r}")
     want = state == "selected"
+    _expand_icon_section(context, section)
     tile = atspi.find(
         _section(context, section),
         lambda n: atspi.role(n) in GALLERY_TILE_ROLES and name in _texts(n),
@@ -387,6 +414,7 @@ def step_pick_gallery_tile(context, name, section, presses=120):
     a keyboard user moves it: Tab into the gallery, arrow keys to the tile,
     then Return, which GtkFlowBox turns into child-activated.
     """
+    _expand_icon_section(context, section)
     for _ in range(presses):
         tiles = [
             n for n in atspi.descendants(_section(context, section), only_showing=True)
@@ -575,3 +603,81 @@ def step_button_announced(context, label, section, announced):
     assert atspi.name(button) == announced, (
         f"the button showing {label!r} is announced as {atspi.name(button)!r}, want {announced!r}"
     )
+
+
+@then("the Livery sections are ordered exactly")
+def step_livery_sections_exact(context):
+    want = [row["title"] for row in context.table]
+
+    def observed():
+        root = _section(context, want[0], timeout=1).parent
+        return _section_titles(root)
+
+    assert atspi.poll(lambda: observed() == want), f"Livery sections are {observed()}, want {want}"
+
+
+def _wallpaper_choice(context):
+    return atspi.find(_section_row(context, "More Dinosaurs", "Wallpapers"),
+                      lambda node: atspi.role(node) == "check box",
+                      "the More Dinosaurs setup checkbox")
+
+
+@then("the More Dinosaurs setup is {state:w}")
+def step_wallpaper_state(context, state):
+    if state in ("checked", "unchecked"):
+        observed, want = atspi.checked, state == "checked"
+    elif state in ("sensitive", "insensitive"):
+        observed, want = atspi.sensitive, state == "sensitive"
+    else:
+        raise NotImplementedError(f"unknown wallpaper setup state {state!r}")
+    assert atspi.poll(lambda: bool(observed(_wallpaper_choice(context))) == want), \
+        f"More Dinosaurs setup is not {state}"
+
+
+@step("I toggle the More Dinosaurs setup checkbox")
+def step_toggle_wallpaper_choice(context):
+    choice = _wallpaper_choice(context)
+    before = bool(atspi.checked(choice))
+    focus_by_tab(context, choice, "the More Dinosaurs setup checkbox")
+    atspi.press("space")
+    assert atspi.poll(lambda: bool(atspi.checked(_wallpaper_choice(context))) != before), \
+        "More Dinosaurs setup did not toggle"
+
+
+@then("More Dinosaurs setup left no files or configuration commands")
+def step_wallpaper_setup_unchanged(context):
+    data_home = os.path.join(context.home, ".local", "share")
+    assert not os.path.exists(os.path.join(data_home, "chairlift", "wallpaper-slideshow")), \
+        "preview created the wallpaper conversion output"
+    assert not os.path.exists(os.path.join(context.home, ".var", "app", "io.github.tunix.valhalla")), \
+        "preview created Valhalla's sandbox data"
+    mutations = [line for line in calls(context, "flatpak")
+                 if "gsettings" in line and " set " in line]
+    assert not mutations, f"preview configured Valhalla: {mutations}"
+    for program in ("rsvg-convert", "djxl"):
+        assert not calls(context, program), f"preview ran the {program} converter"
+
+
+@then("the wallpaper activity shows exactly five preview stages")
+def step_wallpaper_activity_preview(context):
+    wanted = ["Install Valhalla", "Install extra wallpapers", "Prepare wallpaper images",
+              "Configure slideshow", "Verify setup"]
+
+    def preview_finished():
+        group = _section(context, "Setup activity", timeout=1)
+        rows = atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES
+                              and atspi.name(node) and atspi.name(node) != "Setup progress")
+        return ([atspi.name(row) for row in rows] == wanted
+                and all("Preview" in atspi.all_text_under(row) for row in rows)
+                and not atspi.find_all(group, lambda node: atspi.role(node) == "progress bar"))
+
+    assert atspi.poll(preview_finished), "Wallpaper activity did not settle with five Preview stages"
+    group = _section(context, "Setup activity")
+    texts = atspi.all_text_under(group)
+    assert not any("%" in text or "Complete" in text or "Installed" in text for text in texts), \
+        f"Wallpaper preview claimed completion or invented progress: {texts}"
+    assert not atspi.find_all(group, lambda node: atspi.is_button(node)
+                              and atspi.name(node) == "Retry"), "successful preview offered a failure retry"
+    groups = _section_titles(group.parent)
+    assert groups.index("Setup activity") == groups.index("Wallpapers") + 1, groups
+    assert groups.index("Setup activity") < groups.index("App Launcher Icon"), groups

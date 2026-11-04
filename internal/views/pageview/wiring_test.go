@@ -256,9 +256,9 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			required: []string{`SetAccessibleLabel(choice, "Select "+collection.Title)`},
 		},
 		{
-			// App collections group uses a single install button and checkboxes.
+			// Each collection consumer shares the scoped installer.
 			file:     "bundle_install.go",
-			required: []string{"func (uh *UserHome) runSelectedBundlesInstall()"},
+			required: []string{"func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection)"},
 			retired:  []string{"bundleview.InstallButtonName("},
 		},
 	}

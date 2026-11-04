@@ -188,6 +188,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   scenario; a confirmed defect is written as a scenario tagged
   `@known_issue.<N>` rather than left untested. Never run the suite on a live
   session. The `gtk-headless-testing` skill carries the traps.
+  Setup navigation assertions identify the visible bookend and its actions;
+  introductory prose and quotations are not navigation invariants.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
@@ -719,7 +721,7 @@ An agent must not break these:
   never reads onboarding disposition or starts a wizard. `--first-run`,
   `--setup`/`-s`, and the setup menu action share `PresentFirstRun`.
   `internal/firstrun.Pages` filters the existing visible navigation inventory
-  into Features, Apps, Agents, Livery order between matching Welcome and
+  into Livery, Features, Apps, Agents order between matching Welcome and
   conclusion screens. The window hides its sidebar during the flow and builds
   Back/Next/final-action/Dismiss controls once. Selection steps navigate through
   `Window.navigateToPage` and use existing widgets, gates, and operations;
@@ -771,8 +773,14 @@ An agent must not break these:
   checked; Full Desktop Suite defaults unchecked), installed casks and
   explicitly requested formulae next, then the Brewfile exporter (also gated
   by `brew_group`). No Flatpak inventory, external catalog launcher, or package
-  search belongs here. Expanding a collection loads formula/cask descriptions
-  and Flatpak AppStream summaries (`flatpak search`, cached data only) once,
+  search belongs here. Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`)
+  live inside the initially collapsed Developer Mode expander on Features,
+  not Apps. Their explicit collection installation remains independent of
+  granting developer access and obeys the existing collection configuration
+  and Homebrew floor. Both relocated collections start checked, including in the
+  explicit setup wizard; wizard navigation preserves deliberate deselection and
+  never installs a collection by itself. Expanding a collection loads formula/cask
+  descriptions and Flatpak AppStream summaries (`flatpak search`, cached data only) once,
   off-thread, with a shared read timeout and cancellation on row destruction.
   Missing metadata keeps the package name/type and reports Description unavailable;
   a failed batch is retried per name so one unresolvable entry does not blank the rest.
@@ -794,7 +802,7 @@ An agent must not break these:
   `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
 - **Shell bling integration is unprivileged, idempotent, and non-interactive.**
   `internal/shellenv` enables the Bluefin terminal experience (Starship prompt,
-  zoxide, bash-preexec, shell completions) when Bluefin CLI is installed.
+  zoxide, bash-preexec, shell completions) when Enhanced Terminal Bling is installed.
   It targets the active shell config file (`~/.bashrc`, `~/.zshrc`, or
   `~/.config/fish/config.fish`) and writes the exact `### <script> source start/end`
   markers used by `ublue-bling`. If already present, it is an idempotent no-op.
@@ -830,10 +838,12 @@ An agent must not break these:
   driver switches, which replace the OS — share its admission.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
-- **Features discloses packages separately from actions.** Developer Mode,
-  WSL Mode, Enable Docker, and Gaming Mode are expanders with informational,
-  source-backed package rows and independent suffix switches; header activation
-  expands rather than toggles. The top **Setup activity** checklist owns bounded
+- **Features discloses packages separately from actions.** Gaming Mode leads
+  the Features page. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
+  are expanders with source-backed package rows and independent suffix switches;
+  header activation expands rather than toggles. Developer Mode also contains
+  the independently installable Enhanced Terminal Bling and Monospace Fonts collections.
+  The **Setup activity** checklist owns bounded
   stage rows and a reusable pulsing timer. It reports real operation stages and
   outcomes, not percentages or per-package completion invented from an opaque
   bundle command. Failure, canceled authentication, and preview are not success;
@@ -1278,9 +1288,41 @@ An agent must not break these:
   device, USB passthrough — is unverified and unwired; say so rather than
   claim it.
 - **Livery remains one primary with independent task groups.** Profile
-  Picture, App Launcher Icon, supported Top Bar Icon, and Files Icon keep their
-  existing `livery_page` config keys and one built control set. Do not clone
-  the icon controls behind a second overview or a new sidebar route.
+  Picture, Wallpapers, App Launcher Icon, supported Top Bar Icon, and Files Icon
+  keep their existing `livery_page` config keys and one built control set.
+  The three icon sections start collapsed and expand independently to reveal
+  their existing controls; expanding never changes an icon or saved preference.
+  Wallpapers (`wallpapers_group`, Homebrew floor) is directly below Profile
+  Picture and before the icon groups. Its More Dinosaurs checkbox defaults
+  checked, but only its explicit Install button starts setup. Readiness is
+  re-observed off-thread when Livery is shown, never repaired on load.
+  `internal/valhalla.Install` installs `io.github.tunix.valhalla` system-wide
+  from the existing `flatpark` remote plus the user-scope
+  `ublue-os/tap/bluefin-wallpapers-extra` Homebrew cask. It never adds a remote
+  or installs Damask. `wallpaper-slideshow` and `artwork` are hidden in Apps;
+  image Brewfiles do not control this payload. Extra SVG/JXL/AVIF artwork is
+  converted to PNG under `$XDG_DATA_HOME/chairlift/wallpaper-slideshow/png`
+  (with the usual home fallback), granted read-only sandbox access, and added
+  to Valhalla's `manual-folders` with `active-source` set to `manual`.
+  Native SVG/JXL support is tracked in
+  [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
+  `valhalla.Installed` requires the complete usable setup, not Flatpak presence
+  alone; partial setup stays selectable and failures show their cause.
+  Readiness treats an absent wallpaper tap as not set up without querying its
+  unavailable cask; a failed tap inventory remains an error. KDE's AVIF cask
+  payload converts through `avifdec` from Homebrew `libavif` when needed.
+  Install and status use bounded worker contexts, a refresh-generation guard
+  and a retryable action gate. Wallpaper installation reuses the bounded
+  `setupActivity` checklist and pulsing `installProgress` timer used by Features;
+  its fixed provider-reported phases are app installation, extra wallpapers,
+  image preparation, configuration, and verification. Working, complete,
+  failed, canceled, and preview states stay distinct; do not infer percentages
+  from opaque commands or replace the checklist with a lone spinner. Keep
+  package-source registry names out of the user-facing wallpaper descriptions.
+  Dry-run installs, converts, configures, and writes nothing and preserves
+  observed readiness. Setup does not launch Valhalla or directly apply a
+  desktop wallpaper. Do not clone the icon controls behind a second overview
+  or a new sidebar route.
 
 - **Livery shadows icon-theme names, and the theme it writes into is not
   always hicolor.** GNOME's app-grid button (`view-app-grid-symbolic`), panel

@@ -102,10 +102,12 @@ Feature: Apps destination
   Scenario: A confirmed app collection install is previewed and its button restored
     Given ChairLift is running
     When I open the "Apps" page
-    Then the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
+    Then the "Fonts" row says "A broad selection of everyday, design, office, and accessibility fonts. Includes 1 app or tool."
     And the "Team tools" row says "Tools our team relies on every day. Includes 1 app or tool."
-    And the "Monospace Fonts" collection is checked
+    And the "Fonts" collection is checked
     And the "Full Desktop Suite" collection is unchecked
+    And I do not see "Enhanced Terminal Bling"
+    And I do not see "Monospace Fonts"
     When I click the "Install" button in the "Install Selected Collections" row
     Then the application log contains "[DRY-RUN] Would execute: brew bundle install --file="
     And a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
@@ -113,6 +115,42 @@ Feature: Apps destination
     And the Apps progress bar is hidden
     And Homebrew was asked to "bundle check"
     And Homebrew was never asked to "bundle install"
+    And Homebrew collection previews are exactly
+      | file                |
+      | fonts.Brewfile      |
+      | team-tools.Brewfile |
+
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
+  Scenario: Relocated collections fall back to Apps when Developer Mode is disabled
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then I see "Enhanced Terminal Bling"
+    And I see "Monospace Fonts"
+    And the "Enhanced Terminal Bling" collection is checked
+    And the "Monospace Fonts" collection is checked
+    When I click the "Install" button in the "Install Selected Collections" row
+    Then a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+    And Homebrew collection previews are exactly
+      | file                |
+      | cli.Brewfile        |
+      | fonts.Brewfile      |
+      | fonts-dev.Brewfile  |
+      | team-tools.Brewfile |
+
+  @wallpaper-slideshow @config.apps-bundles @stub.apps-brew @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=brew
+  Scenario: More Dinosaurs is absent from Apps and excluded from its Install action
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then I do not see "More Dinosaurs"
+    And I do not see "Wallpapers"
+    And I do not see "app.drey.Damask"
+    When I click the "Install" button in the "Install Selected Collections" row
+    Then a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+    And the application log contains "/bundles/team-tools.Brewfile"
+    And the application log does not contain "Would install More Dinosaurs"
+    And the Wallpaper Slideshow Brewfile was never checked or installed
+    And Flatpak was never asked to "install"
+    And Flatpak was never asked to "override"
 
   @config.apps-bundles @stub.apps-brew-team-tools-installed @stub.apps-collections
   Scenario: A collection already on the system reads Installed when the page loads
@@ -175,13 +213,11 @@ Feature: Apps destination
       | just  |
     And the "just" row says "Command-line tool · Save and run project commands"
     And Homebrew was asked to "info --json=v2 --formula just"
-    When I expand the "Monospace Fonts" list under "App Collections"
-    Then the "Monospace Fonts" list shows exactly
-      | title            |
-      | font-fira-code   |
-      | font-jetbrains-mono |
-      | font-hack        |
-    And the "font-fira-code" row says "Command-line tool · Description unavailable"
+    When I expand the "Fonts" list under "App Collections"
+    Then the "Fonts" list shows exactly
+      | title          |
+      | font-noto-sans |
+    And the "font-noto-sans" row says "App · Description unavailable"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-flatpak @stub.apps-collections
   Scenario: Expanding a collection shows Flatpak app descriptions
@@ -200,7 +236,7 @@ Feature: Apps destination
     Given ChairLift is running
     When I open the "Apps" page
     And I click the "Install" button in the "Install Selected Collections" row
-    Then the application log contains "/bundles/fonts-dev.Brewfile"
+    Then the application log contains "/bundles/fonts.Brewfile"
     And the "Install" button in the "Install Selected Collections" row is sensitive
     And the Apps progress bar is hidden
     And the application log does not contain "panic"

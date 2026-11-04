@@ -36,18 +36,27 @@ FLATPAK_SYSTEM = (("Text Editor", "org.gnome.TextEditor", "48.0"),)
 APP_COLLECTIONS = {
     # A collection Bluefin ships: its title and summary come from
     # internal/views/bundleview's curated table, never from the file.
+    "cli.Brewfile": (
+        '# Bluefin terminal environment\n'
+        'brew "just"\n'
+    ),
+    "fonts.Brewfile": (
+        'cask "font-noto-sans"\n'
+    ),
     "fonts-dev.Brewfile": (
         "# Developer Fonts\n"
         'brew "font-fira-code"\n'
         'cask "font-jetbrains-mono"\n'
         'cask "font-hack"\n'
     ),
-    # Artwork is retired from the UI; standalone slideshow tools remain in Apps.
+    # Artwork is retired; the discovered slideshow identifier uses managed setup.
     "artwork.Brewfile": (
         'cask "bluefin-wallpapers"\n'
     ),
     "wallpaper-slideshow.Brewfile": (
-        'brew "wallpaper-slideshow"\n'
+        '# Legacy image payload: ChairLift must not execute it.\n'
+        'flatpak "app.drey.Damask"\n'
+        'cask "ublue-os/tap/bluefin-wallpapers-extra"\n'
     ),
     # Full Desktop Suite (defaults unchecked)
     "full-desktop.Brewfile": (
@@ -88,9 +97,12 @@ def _brew(context, fail=(), installed_collections=()):
 case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
 --prefix) echo "{context.scenario_dir}/brew-prefix"; exit 0 ;;
+--caskroom) echo "{context.scenario_dir}/brew-prefix/Caskroom/bluefin-wallpapers-extra"; exit 0 ;;
 info)
     {info_fail}case "$*" in
     'info --json=v2 --formula just') echo '{{"formulae":[{{"name":"just","desc":"Save and run project commands"}}]}}' ;;
+    'info --json=v2 --cask ublue-os/tap/bluefin-wallpapers-extra'|'info --json=v2 --cask bluefin-wallpapers-extra')
+        echo '{{"formulae":[],"casks":[{{"token":"bluefin-wallpapers-extra","full_token":"ublue-os/tap/bluefin-wallpapers-extra","desc":"Extra Bluefin backgrounds","version":"fixture","installed":"fixture"}}]}}' ;;
     *--formula*) cat <<'EOF'
 {formulae}
 EOF
@@ -103,6 +115,7 @@ EOF
     exit 0 ;;
 outdated) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
 tap-info) echo '[]'; exit 0 ;;
+tap) echo 'ublue-os/tap'; exit 0 ;;
 bundle)
     if [ "$2" = check ]; then
         {satisfied}echo "brew bundle can't satisfy your Brewfile's dependencies." >&2
@@ -131,6 +144,12 @@ def apps_brew_team_tools_installed(context):
     _brew(context, installed_collections=("team-tools.Brewfile",))
 
 
+@stub("apps-brew-developer-installed")
+def apps_brew_developer_installed(context):
+    """Both relocated collections are already satisfied on this host."""
+    _brew(context, installed_collections=("cli.Brewfile", "fonts-dev.Brewfile"))
+
+
 
 @stub("apps-brew-unreadable")
 def apps_brew_unreadable(context):
@@ -145,18 +164,23 @@ def apps_flatpak(context):
 
 
 
-def _flatpak(context, system_rows):
+def _flatpak(context, system_rows, manual_folders=(), active_source="wallhaven"):
     script = _record(context, "flatpak") + f"""
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
 search)
     case "$3" in
     org.gnome.Calculator) printf 'org.gnome.Calculator\tPerform arithmetic calculations\n' ;;
+    io.github.tunix.valhalla) printf 'io.github.tunix.valhalla\tValhalla wallpaper slideshow\n' ;;
     *) echo "No matches found" ;;
     esac
     exit 0 ;;
 list)
     case "$*" in
+    *--columns=application)
+        cat <<'EOF'
+{''.join(app_id + chr(10) for _, app_id, _ in system_rows)}EOF
+        ;;
     *--runtime*) exit 0 ;;
     *--user*) cat <<'EOF'
 {_rows(FLATPAK_USER)}EOF
@@ -166,6 +190,17 @@ list)
     ;;
     esac
     exit 0 ;;
+run)
+    case "$*" in
+    *' get io.github.tunix.valhalla manual-folders') echo '{json.dumps(list(manual_folders))}'; exit 0 ;;
+    *' get io.github.tunix.valhalla active-source') echo "'{active_source}'"; exit 0 ;;
+    *' --command=test io.github.tunix.valhalla -r '*)
+        for path in "$@"; do :; done
+        test -r "$path"
+        exit $? ;;
+    esac
+    echo "unexpected sandbox command: $*" >&2
+    exit 64 ;;
 esac
 exit 0
 """
@@ -174,7 +209,7 @@ exit 0
 
 @stub("apps-collections")
 def apps_collections(context):
-    """Two app collections in <scenario>/bundles, the apps-bundles fixture's path."""
+    """Image-style collections, including a legacy Damask slideshow Brewfile."""
     directory = os.path.join(context.scenario_dir, "bundles")
     os.makedirs(directory, exist_ok=True)
     for filename, body in APP_COLLECTIONS.items():

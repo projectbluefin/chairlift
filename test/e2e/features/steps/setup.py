@@ -19,15 +19,11 @@ def wizard_page(context, title):
         if title == "Welcome":
             return (
                 "Welcome to" in texts
-                and "Zavala" in " ".join(texts)
-                and "Your system is set up and ready to go." in " ".join(texts)
                 and atspi.find_all(root, lambda n: atspi.is_button(n, "Dismiss Setup"))
             )
         if title == "Conclusion":
             return (
                 "You Are Ready" in texts
-                and "Edith Wharton" in " ".join(texts)
-                and "You can return to this app at any time" in " ".join(texts)
                 and atspi.find_all(root, lambda n: atspi.is_button(n, "Finish"))
             )
         return (

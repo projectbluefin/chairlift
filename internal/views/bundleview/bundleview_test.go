@@ -57,10 +57,10 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 		wantSubtitle string
 	}{
 		{
-			name:         "curated collection Bluefin CLI",
+			name:         "curated collection Enhanced Terminal Bling",
 			id:           "cli",
 			itemCount:    16,
-			wantTitle:    "Bluefin CLI",
+			wantTitle:    "Enhanced Terminal Bling",
 			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
 		},
 		{
@@ -116,14 +116,13 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 }
 
 // Dakota collections are curated, a curated super-bundle member, or explicitly
-// retired; wallpaper-slideshow keeps a standalone Apps row
-// until its own slideshow controls exist.
+// retired; wallpaper-slideshow is managed only by Livery.
 func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	for _, id := range []string{
 		"ai-tools", "cli", "cncf", "dakota-dev-flatpaks", "dakota-fonts",
 		"experimental-ide", "fonts", "fonts-dev", "full-desktop", "ide", "k8s-tools",
 		"nsl", "swift", "system-dx-flatpaks", "system-flatpaks", "video-wallpaper",
-		"artwork",
+		"wallpaper-slideshow", "artwork",
 	} {
 		_, inCatalog := catalog[id]
 		_, inRetired := retired[id]
@@ -153,8 +152,8 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 		if !Curated(id) {
 			t.Errorf("Curated(%q) = false, want true", id)
 		}
-		if !Visible(id, nil) {
-			t.Errorf("Visible(%q) = false, want true", id)
+		if got := Visible(id, nil); got == DeveloperCollection(id) {
+			t.Errorf("collection %q must have exactly one consumer: Apps visible=%v, Developer Mode=%v", id, got, DeveloperCollection(id))
 		}
 	}
 	if DefaultSelected("full-desktop") {
@@ -167,6 +166,18 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 	}
 	if !DefaultSelected("custom-admin-pack") {
 		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
+	}
+}
+
+func TestDeveloperCollectionsAreRelocatedWithoutChangingTheirSelection(t *testing.T) {
+	for _, id := range []string{"cli", "fonts-dev", "fonts", "dakota-fonts", "ai-tools", "full-desktop", "team-tools", DeveloperAppsCollection, "wallpaper-slideshow"} {
+		want := id == "cli" || id == "fonts-dev"
+		if got := DeveloperCollection(id); got != want {
+			t.Errorf("DeveloperCollection(%q) = %v, want %v", id, got, want)
+		}
+		if want && (Visible(id, nil) || !DefaultSelected(id)) {
+			t.Errorf("relocated collection %q must stay selected by default and absent from Apps", id)
+		}
 	}
 }
 

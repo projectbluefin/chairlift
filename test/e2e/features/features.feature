@@ -50,7 +50,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
       | frostyard/tap/nsl |
     And expanding disclosures changes no Features switch and requests no mutation
 
-  @stub.features-gaming-none @stub.features-developer
+  @config.apps-bundles @stub.features-gaming-none @stub.features-developer
   Scenario: Default Developer Mode discloses the Dev Container CLI but no optional installations
     Given ChairLift is running
     When I open the "Features" page
@@ -96,6 +96,112 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the "Gaming Mode" package disclosure is informational
     And expanding disclosures changes no Features switch and requests no mutation
 
+  @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
+  Scenario: Developer collections are collapsed and only disclose packages when expanded
+    Given ChairLift is running
+    When I open the "Features" page
+    Then Gaming is the first Features preference group
+    And the Features page shows no "Setup activity" group
+    And I do not see "Enhanced Terminal Bling"
+    And I do not see "Monospace Fonts"
+    When I record the Features switches and mutation evidence
+    And I expand the "Developer Mode" list under "Developer"
+    Then the "Enhanced Terminal Bling" collection is checked
+    And the "Monospace Fonts" collection is checked
+    And the "Install" button in the "Developer Collections" row is sensitive
+    And the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools."
+    When I expand the "Enhanced Terminal Bling" list under "Developer"
+    Then the "Enhanced Terminal Bling" list under "Developer" shows exactly
+      | title |
+      | just  |
+    And the "just" row says "Command-line tool · Save and run project commands"
+    When I expand the "Monospace Fonts" list under "Developer"
+    Then the "Monospace Fonts" list under "Developer" shows exactly
+      | title               |
+      | font-fira-code      |
+      | font-jetbrains-mono |
+      | font-hack           |
+    And the "font-fira-code" row says "Command-line tool · Description unavailable"
+    And expanding disclosures changes no Features switch and requests no mutation
+    And Homebrew was never asked to "bundle install"
+    And every visible action control has an accessible name and an action
+
+  @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
+  Scenario Outline: An explicit developer collection install selects only <collection> without changing Developer Mode
+    Given ChairLift is running
+    When I open the "Features" page
+    And I record the Features switches and mutation evidence
+    And I expand the "Developer Mode" list under "Developer"
+    And I toggle the "<other>" collection checkbox
+    Then the "<collection>" collection is checked
+    And the "<other>" collection is unchecked
+    When I click the "Install" button in the "Developer Collections" row
+    Then a toast on the Features page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+    And Homebrew collection previews are exactly
+      | file   |
+      | <file> |
+    And the "Install" button in the "Developer Collections" row is sensitive
+    And the "<collection>" collection is checked
+    And the "<other>" collection is unchecked
+    And the Developer Mode switch returns to its restored state
+    And the action journal is empty
+    And the Features page shows no "Setup activity" group
+    And Homebrew was never asked to "bundle install"
+    When I click the "Install" button in the "Developer Collections" row
+    Then Homebrew collection previews are exactly
+      | file   |
+      | <file> |
+      | <file> |
+    And the "Install" button in the "Developer Collections" row is sensitive
+    And the Developer Mode switch returns to its restored state
+    And the action journal is empty
+    When I open the "Apps" page
+    Then I do not see "Enhanced Terminal Bling"
+    And I do not see "Monospace Fonts"
+    And the "Fonts" collection is checked
+    And the "Install" button in the "Install Selected Collections" row is sensitive
+
+    Examples:
+      | collection              | other                   | file               |
+      | Enhanced Terminal Bling | Monospace Fonts         | cli.Brewfile       |
+      | Monospace Fonts         | Enhanced Terminal Bling | fonts-dev.Brewfile |
+
+  @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew-developer-installed @stub.apps-collections
+  Scenario: Installed developer collections preserve their observed state in a no-selection install
+    Given ChairLift is running
+    When I open the "Features" page
+    And I expand the "Developer Mode" list under "Developer"
+    Then the "Enhanced Terminal Bling" row says "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 1 app or tool. (Installed)"
+    And the "Monospace Fonts" row says "Fixed-width fonts made for reading code. Includes 3 apps and tools. (Installed)"
+    And the "Enhanced Terminal Bling" collection checkbox refuses input
+    And the "Monospace Fonts" collection checkbox refuses input
+    When I click the "Install" button in the "Developer Collections" row
+    Then a toast on the Features page says "No collections selected to install."
+    And the "Install" button in the "Developer Collections" row is sensitive
+    And the application log previews no "brew bundle install"
+    And Homebrew was never asked to "bundle install"
+    And the action journal is empty
+
+  @developer-collections @config.features-no-collections @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
+  Scenario: Disabling collections also removes the relocated developer controls
+    Given ChairLift is running
+    When I open the "Features" page
+    And I expand the "Developer Mode" list under "Developer"
+    Then I do not see "Developer Collections"
+    And I do not see "Enhanced Terminal Bling"
+    And I do not see "Monospace Fonts"
+    And the action journal is empty
+
+  @developer-collections @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak
+  Scenario: Developer collections retain their Homebrew capability floor
+    Given ChairLift is running
+    When I open the "Features" page
+    And I expand the "Developer Mode" list under "Developer"
+    Then I do not see "Developer Collections"
+    And I do not see "Enhanced Terminal Bling"
+    And I do not see "Monospace Fonts"
+    And the action journal is empty
+
   @stub.features-gaming-installed @stub.features-devmenu
   Scenario: Showing installed Gaming Mode and Developer Mode runs no mutation
     Given ChairLift is running
@@ -119,7 +225,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the Developer Mode preview toast is shown
     And the Developer Mode switch returns to its restored state
     And the Dev Container CLI install is previewed only when enabling
-    And Setup activity is the first Features preference group
+    And Setup activity follows Gaming on Features
     And the direct Developer activity matches the previewed action
     And Setup activity has no running progress or fabricated percentage
 
@@ -212,7 +318,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row accepts input
     And the Developer Mode switch returns to its restored state
-    And Setup activity is the first Features preference group
+    And Setup activity follows Gaming on Features
     And Setup activity shows these stage statuses
       | stage             | status  |
       | Tools and service | Preview |
@@ -239,7 +345,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Enable Docker" row accepts input
     When Docker's system-unit check is held before failing
     And I toggle the switch in the "Enable Docker" row
-    Then Setup activity is the first Features preference group
+    Then Setup activity follows Gaming on Features
     And Setup activity shows these stage statuses
       | stage             | status   |
       | Tools and service | Preview  |
@@ -480,7 +586,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
     And the switch in the "Gaming Mode" row is off
     And the fake flatpak was never asked to "install"
     And the action journal is empty
-    And Setup activity is the first Features preference group
+    And Setup activity follows Gaming on Features
     And Setup activity shows these stage statuses
       | stage             | status  |
       | Tools and service | Preview |

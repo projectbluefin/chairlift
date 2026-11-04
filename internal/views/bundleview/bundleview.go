@@ -1,5 +1,5 @@
 // Package bundleview owns the pure presentation and action-state decisions
-// used by the Applications page's app-collection group.
+// used by the Apps and Developer Mode collection controls.
 //
 // A collection is discovered on disk under an identifier the person who
 // installed the system never chose and should never read, so every name and
@@ -76,7 +76,7 @@ type catalogEntry struct {
 
 var catalog = map[string]catalogEntry{
 	"cli": {
-		title:    "Bluefin CLI",
+		title:    "Enhanced Terminal Bling",
 		summary:  "A modern terminal environment with everyday utilities, Starship prompt, and shell bling.",
 		curated:  true,
 		order:    2,
@@ -126,17 +126,23 @@ var retired = map[string]struct{}{
 	"system-dx-flatpaks":  {},
 	"system-flatpaks":     {},
 	"video-wallpaper":     {},
-	"artwork":             {}, // withdrawn with the Wallpapers feature
+	"wallpaper-slideshow": {}, // managed by Livery's Wallpapers group
+	"artwork":             {}, // wallpaper payloads are owned by Livery
 	"dakota-dev-flatpaks": {}, // installed automatically with devmode
 }
 
-// Visible reports whether an on-disk collection should be offered as a row.
-// Retired Bluefin bundles are excluded; user-added collections remain visible.
-// A super-bundle member (e.g. dakota-fonts) is folded into its parent's
-// row when that parent was discovered, and keeps its own row otherwise so it
-// stays installable.
+// DeveloperCollection reports whether a collection belongs under Developer Mode.
+// These remain explicit, independently selected installs, not promotion tasks.
+func DeveloperCollection(id string) bool {
+	return id == "cli" || id == "fonts-dev"
+}
+
+// Visible reports whether an on-disk collection should be offered on Apps.
+// Developer Mode owns its relocated collections; retired bundles are excluded.
+// A super-bundle member is folded into its parent's row when discovered, and
+// keeps its own row otherwise so it stays installable.
 func Visible(id string, discovered map[string]homebrew.Bundle) bool {
-	if _, isRetired := retired[id]; isRetired {
+	if _, isRetired := retired[id]; isRetired || DeveloperCollection(id) {
 		return false
 	}
 	for parent, entry := range catalog {

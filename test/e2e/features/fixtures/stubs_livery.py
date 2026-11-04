@@ -20,10 +20,13 @@ memory, so nothing persists), and the real systemctl/dconf answer everything
 the Livery page does not own, so other pages behave as they would unstubbed.
 """
 
+import base64
+import hashlib
 import os
 import shutil
 
 from stubs import fake_executable, stub
+from stubs_apps import _brew, _flatpak, _record as _record_program
 
 CALLS = "livery-calls.log"
 SEED = "livery-seed.sed"
@@ -58,6 +61,8 @@ def _install(context):
     open(os.path.join(scenario, CALLS), "a").close()
     open(os.path.join(scenario, SEED), "a").close()
 
+    # Wallpapers only observes this sandbox inventory when Livery is shown.
+    _flatpak(context, ())
     fake_executable(
         context,
         "gsettings",
@@ -196,3 +201,71 @@ def livery_offline(context):
         context.launch_env[key] = "http://127.0.0.1:9"
     for key in ("NO_PROXY", "no_proxy"):
         context.launch_env.pop(key, None)
+
+
+def _wallpaper_source(context):
+    """Real source artwork and a valid converted PNG in private fixture paths."""
+    relative = "bluefin/extra-day.svg"
+    cask = os.path.join(context.scenario_dir, "brew-prefix", "Caskroom",
+                        "bluefin-wallpapers-extra", "fixture")
+    source = os.path.join(cask, relative)
+    os.makedirs(os.path.dirname(source), exist_ok=True)
+    with open(source, "w", encoding="utf-8") as handle:
+        handle.write('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">'
+                     '<rect width="1" height="1" fill="#62a0ea"/></svg>')
+    output = os.path.join(context.home, ".local", "share", "chairlift", "wallpaper-slideshow", "png")
+    os.makedirs(output, exist_ok=True)
+    name = hashlib.sha256(("fixture/" + relative).encode()).hexdigest()[:16] + "-extra-day.png"
+    with open(os.path.join(output, name), "wb") as handle:
+        handle.write(base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII="))
+    return output
+
+
+@stub("livery-wallpaper")
+def livery_wallpaper(context):
+    """Wallpaper setup is missing; every backend command is recorded privately."""
+    _install(context)
+    _brew(context)
+    _flatpak(context, ())
+    for program in ("rsvg-convert", "djxl", "avifdec"):
+        fake_executable(context, program, _record_program(context, program) + "exit 42\n")
+
+
+@stub("livery-wallpaper-unconfigured")
+def livery_wallpaper_unconfigured(context):
+    """App and PNGs exist, but Valhalla still selects its online source."""
+    livery_wallpaper(context)
+    output = _wallpaper_source(context)
+    _flatpak(context, (("Valhalla", "io.github.tunix.valhalla", "1.6.0"),),
+             manual_folders=(output,))
+
+
+@stub("livery-wallpaper-ready")
+def livery_wallpaper_ready(context):
+    """The app, cask artwork, usable PNG, manual settings and access all agree."""
+    livery_wallpaper(context)
+    output = _wallpaper_source(context)
+    _flatpak(context, (("Valhalla", "io.github.tunix.valhalla", "1.6.0"),),
+             manual_folders=(output,), active_source="manual")
+
+
+@stub("livery-wallpaper-unreadable")
+def livery_wallpaper_unreadable(context):
+    """An unreadable app inventory must show its cause and leave setup retryable."""
+    livery_wallpaper(context)
+    fake_executable(context, "flatpak", _record_program(context, "flatpak")
+                    + 'echo "sandbox inventory unreadable" >&2\nexit 1\n')
+
+
+@stub("livery-wallpaper-untapped")
+def livery_wallpaper_untapped(context):
+    """Valhalla exists, but its optional wallpaper tap has never been added."""
+    livery_wallpaper(context)
+    _flatpak(context, (("Valhalla", "io.github.tunix.valhalla", "1.6.0"),))
+    fake_executable(context, "brew", _record_program(context, "brew") + '''
+case "$1" in
+tap) exit 0 ;;
+*) echo "tap is not installed" >&2; exit 1 ;;
+esac
+''')

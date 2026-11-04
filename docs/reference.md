@@ -167,6 +167,12 @@ written here. Retired collections (`cncf`, `swift`, etc.) are filtered out, whil
 administrator-added collections remain visible. Each row also states how many apps
 and tools the definition installs, counting entry lines other than `tap`.
 
+Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`) appear only inside
+**Features → Developer Mode**, initially collapsed, rather than in Apps.
+They retain independent selection and explicit installation using the same
+collection configuration and Homebrew floor; neither requires or enables
+developer access.
+
 A failed bundle install reports the cause rather than the progress that
 preceded it: ChairLift reads both of brew's output streams, because
 `brew bundle` replays a failing entry's own installer output on stdout while
@@ -193,15 +199,17 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. Turning a family on requires cosign to verify `ghcr.io/projectbluefin/<id>-printer-app:stable` against its publishing workflow, then writes only the verified digest, without registry auto-update ([ADR-0023](adr/0023-verify-printer-images-before-installing.md)). Installed families receive newer verified images through the Updates page's **Printer Drivers** source, which lists a family when its verified `:stable` digest differs from the installed one and refreshes it with the same signature check; that source follows this group's visibility and the `printer-drivers-enabled` preference. Older units still carrying registry auto-update can migrate there or by disable/re-enable, and their row's subtitle says so. The port is published on `127.0.0.1` only ([ADR-0020](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)), so IPP and the unauthenticated web administration are reachable only from this computer; there is no LAN printing or DNS-SD advertisement. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 | Compass | `compass_group` | Installs Compass (`org.tunaos.compass`), TunaOS's keyboard-first launcher, system-wide from the image's FlatPark system remote (`flatpak install --system flatpark org.tunaos.compass`), authorized by Flatpak's own PolicyKit rather than by ChairLift. ChairLift never adds the remote; without an enabled `flatpark` system remote, or on a non-x86_64 host (FlatPark publishes Compass for x86_64 only), the switch can only remove an existing copy. Turning off asks for confirmation, then removes Compass from every scope it is installed in and keeps user data. The switch reflects installed state re-read after each action. Hidden where `flatpak` is absent |
 
-**Setup activity** appears at the top of Features for Developer Mode, WSL,
+**Gaming Mode** leads Features. **Setup activity** appears below it for Developer Mode, WSL,
 Docker, and Gaming operations. Its bounded checklist names actual stages,
 pulses during work, and distinguishes completion, failure, cancellation,
 awaiting a new login, and preview without percentage estimates. Awaiting login
 is not ready and is not a failed action to repeat. Each of **Developer Mode**,
 **WSL Mode**, **Enable Docker**, and **Gaming Mode** expands to disclose its
-packages and changes; the independent suffix switch runs the action. Lists
+packages and changes; the independent suffix switch runs the action. Disclosures
 name directly requested software (for Docker, Homebrew formulae), not every
-package-manager dependency, and offer no individual install choices.
+package-manager dependency. Developer Mode additionally offers independently
+installable Enhanced Terminal Bling and Monospace Fonts collections; these are not automatic
+developer-enable follow-ons.
 An opaque bundle command does not produce a
 fabricated per-package completion stream.
 
@@ -312,9 +320,13 @@ authorization rule.
 | Group | Key | Description |
 |-------|-----|-------------|
 | Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
+| Wallpapers | `wallpapers_group` | Explicit More Dinosaurs setup installs Valhalla with extra Bluefin wallpapers and PNG conversion; directly below Profile Picture, gated on Homebrew, with no installation or settings writes on page load |
 | App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
 | Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
 | Files Icon | `livery_dock_group` | The Files icon on GNOME or Dolphin on KDE Plasma, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; on GNOME it changes Files everywhere GNOME draws it |
+
+App Launcher Icon, Top Bar Icon, and Files Icon each start collapsed. Expand
+one to reveal its existing controls; expansion never changes saved settings.
 
 Selections persist in the `io.projectbluefin.chairlift.livery` GSettings
 schema, one of the three ChairLift ships (the others,

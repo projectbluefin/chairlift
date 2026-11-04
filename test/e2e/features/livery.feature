@@ -1,12 +1,141 @@
 @livery
 Feature: Livery
-  The Livery page shows a profile picture and the supported app launcher,
-  top-bar and Files icon controls. Loading it must write nothing; changes in
+  The Livery page shows a profile picture, Wallpapers setup, and the supported
+  app launcher, top-bar and Files icon controls. Loading it must write nothing; changes in
   this suite run under dry-run without saving desktop state.
   Artwork services are unreachable on purpose (the livery-offline stub), so
   assertions do not depend on the network.
   The livery-tools stub replaces every program the page may run with a
   recorder and answers the Custom Command Menu extension as installed.
+
+  @stub.livery-tools @stub.livery-saved-state @stub.livery-offline
+  Scenario: Enabled icon sections start compact and expand independently without changes
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery "App Launcher Icon" icon section is collapsed
+    And the Livery "Top Bar Icon" icon section is collapsed
+    And the Livery "Files Icon" icon section is collapsed
+    When I expand the Livery "App Launcher Icon" icon section
+    Then the "Customize the App Launcher Icon" switch in the Livery "App Launcher Icon" section is on
+    And the Livery "Top Bar Icon" icon section is collapsed
+    And the Livery "Files Icon" icon section is collapsed
+    When I expand the Livery "Top Bar Icon" icon section
+    Then the "Customize the Top Bar Icon" switch in the Livery "Top Bar Icon" section is on
+    And the Livery "Files Icon" icon section is collapsed
+    When I expand the Livery "Files Icon" icon section
+    Then the "Customize the Files Icon" switch in the Livery "Files Icon" section is on
+    And the Livery page announced no dry-run change
+    And no Livery command changed any setting
+    And no icon was written under the home directory
+    And no rotation unit was written under the home directory
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper
+  Scenario: Wallpapers follows Profile Picture and discloses its selected setup
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the Livery page has finished loading
+    And the Livery sections are ordered exactly
+      | title             |
+      | Profile Picture   |
+      | Wallpapers        |
+      | App Launcher Icon |
+      | Top Bar Icon      |
+      | Files Icon        |
+    And the More Dinosaurs setup is checked
+    And the More Dinosaurs setup is sensitive
+    And I do not see "Wallpaper Slideshow"
+    And the Livery "Setup activity" section is not shown
+    When I expand the "More Dinosaurs" list under "Wallpapers"
+    Then the "More Dinosaurs" list under "Wallpapers" shows exactly
+      | title                    |
+      | Valhalla                 |
+      | bluefin-wallpapers-extra |
+    And the "Valhalla" row says "Wallpaper slideshow app"
+    And the "bluefin-wallpapers-extra" row says "Homebrew cask · Extra Bluefin backgrounds"
+    And I do not see "app.drey.Damask"
+    And Flatpak was asked to "list --system --app --columns=application"
+    And More Dinosaurs setup left no files or configuration commands
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper
+  Scenario: More Dinosaurs setup previews installation and restores its controls
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the More Dinosaurs setup is sensitive
+    When I click the "Install" button in the "More Dinosaurs" row
+    Then the application log contains "[DRY-RUN] Would install More Dinosaurs (Valhalla and extra wallpapers), convert artwork to PNG, and configure its manual source"
+    And a toast says "[DRY-RUN] Preview: More Dinosaurs would be installed and configured — no changes made"
+    And the wallpaper activity shows exactly five preview stages
+    And the "Install" button in the "More Dinosaurs" row is sensitive
+    And the More Dinosaurs setup is checked
+    And the More Dinosaurs setup is sensitive
+    And the "More Dinosaurs" row does not say "(Installed)"
+    And Homebrew was never asked to "install"
+    And Homebrew was never asked to "bundle install"
+    And Flatpak was never asked to "install"
+    And Flatpak was never asked to "override"
+    And More Dinosaurs setup left no files or configuration commands
+    When I click the "Install" button in the "More Dinosaurs" row
+    Then the wallpaper activity shows exactly five preview stages
+    And the "Install" button in the "More Dinosaurs" row is sensitive
+    And the More Dinosaurs setup is sensitive
+    And the "More Dinosaurs" row does not say "(Installed)"
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper
+  Scenario: Deselecting More Dinosaurs skips its explicit Install action
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the More Dinosaurs setup is sensitive
+    When I toggle the More Dinosaurs setup checkbox
+    Then the More Dinosaurs setup is unchecked
+    When I click the "Install" button in the "More Dinosaurs" row
+    Then a toast says "No wallpaper setup selected."
+    And the application log does not contain "Would install More Dinosaurs"
+    And the More Dinosaurs setup is unchecked
+    And the "Install" button in the "More Dinosaurs" row is sensitive
+    And the Livery "Setup activity" section is not shown
+    And More Dinosaurs setup left no files or configuration commands
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper-untapped
+  Scenario: A separately installed Valhalla without its wallpaper tap is ordinary incomplete setup
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then Homebrew was asked to "tap"
+    And the "More Dinosaurs" row says "Valhalla slideshow and extra Bluefin wallpapers."
+    And the "More Dinosaurs" row does not say "Couldn't check setup"
+    And the More Dinosaurs setup is checked
+    And the More Dinosaurs setup is sensitive
+    And the "Install" button in the "More Dinosaurs" row is sensitive
+    And More Dinosaurs setup left no files or configuration commands
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper-unconfigured
+  Scenario: An installed Valhalla app without its manual source selected stays retryable
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then Flatpak was asked to "run --system --env=GSETTINGS_SCHEMA_DIR=/app/extra/valhalla --command=gsettings io.github.tunix.valhalla get io.github.tunix.valhalla active-source"
+    And Homebrew was asked to "--caskroom ublue-os/tap/bluefin-wallpapers-extra"
+    And the More Dinosaurs setup is checked
+    And the More Dinosaurs setup is sensitive
+    And the "More Dinosaurs" row does not say "(Installed)"
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper-ready
+  Scenario: More Dinosaurs reads Installed only after its artwork and settings are verified
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "More Dinosaurs" row says "Valhalla slideshow and extra Bluefin wallpapers. (Installed)"
+    And the More Dinosaurs setup is checked
+    And the More Dinosaurs setup is insensitive
+    And the "Installed" button in the "More Dinosaurs" row is insensitive
+    And Flatpak was asked to "run --system --env=GSETTINGS_SCHEMA_DIR=/app/extra/valhalla --command=gsettings io.github.tunix.valhalla get io.github.tunix.valhalla manual-folders"
+    And Flatpak was asked to "run --system --command=test io.github.tunix.valhalla -r"
+    And Flatpak was never asked to "override"
+
+  @wallpaper-slideshow @stub.livery-tools @stub.livery-wallpaper-unreadable
+  Scenario: An unreadable slideshow status shows its cause without preventing setup
+    Given ChairLift is running
+    When I open the "Livery" page
+    Then the "More Dinosaurs" row says "sandbox inventory unreadable"
+    And the More Dinosaurs setup is sensitive
+    And the "Install" button in the "More Dinosaurs" row is sensitive
 
   @stub.livery-tools @stub.livery-saved-state @stub.livery-offline
   Scenario: Restoring a saved configuration on load writes nothing
@@ -208,6 +337,8 @@ Feature: Livery
     Then the Livery page has finished loading
     And the Livery "Profile Picture" section is not shown
     And the Livery "App Launcher Icon" section is not shown
+    And the Livery "Wallpapers" section is not shown
+    And the Livery "Setup activity" section is not shown
     And the Livery "Top Bar Icon" section is shown
     And the Livery "Files Icon" section is shown
     And the Livery page announced no dry-run change

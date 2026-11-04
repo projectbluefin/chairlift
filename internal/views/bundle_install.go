@@ -18,7 +18,7 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// bundleItemRow tracks one collection row in the App collections group.
+// bundleItemRow tracks one collection row in Apps or Developer Mode.
 type bundleItemRow struct {
 	bundle      homebrew.Bundle
 	memberPaths []string
@@ -27,8 +27,14 @@ type bundleItemRow struct {
 	choice      *gtk.CheckButton
 }
 
-// collectionsAvailable reports whether the App collections group is available
-// (brew_bundles_group enabled and its Homebrew capability floor met).
+type bundleSelection struct {
+	items    []*bundleItemRow
+	button   *gtk.Button
+	progress *gtk.ProgressBar
+}
+
+// collectionsAvailable retains the collections' configuration and Homebrew
+// capability floor for both Apps and Developer Mode.
 func (uh *UserHome) collectionsAvailable() bool {
 	return uh.groupEnabled("applications_page", "brew_bundles_group")
 }
@@ -91,14 +97,14 @@ func (uh *UserHome) refreshBundleStatuses() {
 	}()
 }
 
-// runSelectedBundlesInstall installs all checked, uninstalled bundles in one action.
-func (uh *UserHome) runSelectedBundlesInstall() {
+// runSelectedBundlesInstall installs only this destination's checked collections.
+func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 	if !uh.bundleInstallGate.TryStart() {
 		return
 	}
 
 	var toInstall []*bundleItemRow
-	for _, item := range uh.bundleItems {
+	for _, item := range selection.items {
 		if item.choice.GetActive() && item.choice.GetSensitive() {
 			toInstall = append(toInstall, item)
 		}
@@ -112,7 +118,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 		return
 	}
 	firstCollection := bundleview.Describe(toInstall[0].bundle.Name, toInstall[0].bundle.Description, toInstall[0].total)
-	uh.setBundleInstallProgress(true, 0, len(toInstall), firstCollection.Title)
+	uh.setBundleInstallProgress(selection, true, 0, len(toInstall), firstCollection.Title)
 	go func() {
 		var failedNames []string
 		var hadTrustErr bool
@@ -123,7 +129,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 			collection := bundleview.Describe(b.Name, b.Description, item.total)
 			if idx > 0 {
 				sgtk.RunOnMainThread(func() {
-					uh.setBundleInstallProgress(true, idx, len(toInstall), collection.Title)
+					uh.setBundleInstallProgress(selection, true, idx, len(toInstall), collection.Title)
 				})
 			}
 			var itemFailed bool
@@ -150,7 +156,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 				continue
 			}
 
-			// If Bluefin CLI was selected, enable shell bling and prompt
+			// If the terminal collection was selected, enable shell bling and prompt
 			if b.Name == "cli" {
 				if err := shellenv.EnableBling(); err != nil {
 					log.Printf("Error enabling shell bling: %v", err)
@@ -160,7 +166,7 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 
 		sgtk.RunOnMainThread(func() {
 			defer uh.bundleInstallGate.Reset()
-			uh.setBundleInstallProgress(false, len(toInstall), len(toInstall), "")
+			uh.setBundleInstallProgress(selection, false, len(toInstall), len(toInstall), "")
 			if dryrun.Enabled() {
 				if uh.toastAdder != nil {
 					uh.toastAdder.ShowToast("[DRY-RUN] Preview: selected collections would be installed — no changes made")
@@ -183,20 +189,18 @@ func (uh *UserHome) runSelectedBundlesInstall() {
 	}()
 }
 
-func (uh *UserHome) setBundleInstallProgress(busy bool, current, total int, currentName string) {
-	if uh.bundleInstallButton != nil {
-		uh.bundleInstallButton.SetSensitive(!busy)
+func (uh *UserHome) setBundleInstallProgress(selection *bundleSelection, busy bool, current, total int, currentName string) {
+	for _, controls := range uh.bundleSelections {
+		controls.button.SetSensitive(!busy)
 	}
-	if uh.bundleInstallBar != nil {
-		if busy {
-			text := fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
-			if currentName == "" {
-				text = fmt.Sprintf("Installing (%d of %d)…", current+1, total)
-			}
-			uh.bundleInstallBar.SetText(text)
-			uh.appInstallProgress.start(uh.bundleInstallBar)
-		} else {
-			uh.appInstallProgress.stop(uh.bundleInstallBar)
+	if busy {
+		text := fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
+		if currentName == "" {
+			text = fmt.Sprintf("Installing (%d of %d)…", current+1, total)
 		}
+		selection.progress.SetText(text)
+		uh.appInstallProgress.start(selection.progress)
+	} else {
+		uh.appInstallProgress.stop(selection.progress)
 	}
 }

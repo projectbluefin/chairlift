@@ -262,6 +262,7 @@ var prerequisites = []Prerequisite{
 
 	// Livery.
 	{Page: "livery_page", Group: "account_group"},
+	{Page: "livery_page", Group: "wallpapers_group", AnyOf: []Capability{Homebrew}},
 	{Page: "livery_page", Group: "livery_app_grid_group"},
 	{Page: "livery_page", Group: "livery_dock_group"},
 	{Page: "livery_page", Group: "livery_foundation_group"},

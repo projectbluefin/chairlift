@@ -109,15 +109,18 @@ features_page:
   # Agent Mode (llmman, installed with Homebrew and run as a systemd user
   # unit) lives on its own Agents page; see agents_page above.
 
-# Who you are, who you stand with, and what you roll with. Each livery
-# section shadows one icon-theme name in the user's own theme; nothing here
-# is privileged, and apart from the profile picture nothing is written
-# outside $XDG_DATA_HOME/$XDG_CONFIG_HOME.
+# Desktop appearance and wallpaper setup. Icons and converted wallpaper
+# copies are user-owned; Valhalla installs system-wide through Flatpak's own
+# authorization. No wallpaper setup runs until Install is pressed.
 livery_page:
   # The account's profile picture, chosen from Project Bluefin's dinosaur
   # artwork. Nothing is downloaded until a picture is picked, and nothing is
   # set until Apply; it goes through AccountsService, unprivileged.
   account_group:
+    enabled: true
+  # More Dinosaurs installs Valhalla and extra backgrounds, converting
+  # SVG/JXL/AVIF artwork to PNG without changing the original pack.
+  wallpapers_group:
     enabled: true
   # The Show Applications mark, fetched from simpleicons.org by brand name.
   # Set once — there is no rotation, because a personal mark that changed on
