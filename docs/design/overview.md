@@ -1692,7 +1692,7 @@ After every flip the switch is re-set from a fresh `devmenu.AskBluefinState` rea
 
 Setup never opens automatically. `--setup`, its `--first-run` alias, and the
 menu action open Welcome, then `internal/firstrun.Pages` selects the existing
-visible Features → Apps → Agents → Livery pages, followed by a conclusion.
+visible Livery → Features → Apps → Agents pages, followed by a conclusion.
 Both bookends share one layout and the embedded theme-aware Bluefin wordmark.
 Welcome has normal introductory text and the website's Zavala quote; the
 conclusion has the website's Edith Wharton quote. Selection steps use their

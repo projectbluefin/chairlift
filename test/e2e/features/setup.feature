@@ -1,7 +1,7 @@
 @setup
 Feature: Explicit first-run software setup
   Setup is never automatic. The requested wizard opens with a Welcome screen,
-  then walks the existing Features, Apps, Agents, and Livery destinations without duplicating their controls.
+  then walks the existing Livery, Features, Apps, and Agents destinations without duplicating their controls.
 
   Scenario: Ordinary activation does not open setup
     Given ChairLift is running
@@ -24,10 +24,12 @@ Feature: Explicit first-run software setup
     And the setup has only one "Back" button
     And the setup "Back" button is insensitive
     When I use the setup "Next" button
-    Then the setup wizard shows "Features"
+    Then the setup wizard shows "Livery"
     And the setup "Back" button is sensitive
     When I use the setup "Back" button
     Then the setup wizard shows "Welcome"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Livery"
     When I use the setup "Next" button
     Then the setup wizard shows "Features"
     When I use the setup "Next" button
@@ -38,14 +40,11 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Apps"
     When I use the setup "Next" button
     And I use the setup "Next" button
-    Then the setup wizard shows "Livery"
-    And the setup "Next" button is sensitive
-    When I use the setup "Next" button
     Then the setup wizard shows "Conclusion"
     And the setup "Finish" button is sensitive
     And the setup dry run would record no disposition
     When I use the setup "Back" button
-    Then the setup wizard shows "Livery"
+    Then the setup wizard shows "Agents"
     When I use the setup "Next" button
     Then the setup wizard shows "Conclusion"
     When I use the setup "Finish" button
@@ -75,6 +74,8 @@ Feature: Explicit first-run software setup
   Scenario: Wizard defaults select terminal enhancements and monospace fonts without installing them
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Livery"
     When I use the setup "Next" button
     Then the setup wizard shows "Features"
     When I expand the "Developer Mode" list under "Developer"

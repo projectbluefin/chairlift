@@ -150,8 +150,9 @@ section above); administrators can remove them when convenient.
     path does not duplicate a row; same-named Brewfiles in different
     directories remain distinct and show their full paths.
   - Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`) use this same
-    collection configuration but appear under Features → Developer Mode,
-    not Apps. Their independent Install action does not enable Developer Mode.
+    collection configuration and appear under Features → Developer Mode when
+    `features_page.dx_group` is enabled, or fall back to Apps if Developer Mode
+    is disabled. Their independent Install action does not enable Developer Mode.
 
 ### Maintenance Page (`maintenance_page`)
 

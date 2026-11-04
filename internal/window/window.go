@@ -232,7 +232,7 @@ func (w *Window) buildUI() {
 	w.bindContentArea()
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"Welcome to",
-		"Your system is setup and ready to go. Continue through the next few pages to customize your developer tools, setup automated troubleshooting, and change other system defaults",
+		"Your system is set up and ready to go. Continue through the next few pages to customize your developer tools, set up automated troubleshooting, and change other system defaults.",
 		"Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"You Are Ready",

@@ -18,7 +18,7 @@ schedule choosers, no feature grids.
 
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
 the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
-walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
+walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
 Bluefin wordmark, an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
 and the Zavala quote. Unavailable pages are skipped;

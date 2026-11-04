@@ -15,7 +15,7 @@ The seven primaries, in canonical order, are **Updates, Apps, Agents, Features,
 Livery, Maintenance, Help**. The `recovery` route, titled **Powerwash**, is the
 only detail, owned by Maintenance;
 it has no sidebar row or accelerator. There is no System, Appearance, Developer
-Tools or Local AI tools route. Wallpaper is not a shipped control.
+Tools or Local AI tools route. Wallpaper setup ships only as Livery's More Dinosaurs group.
 
 | Route | Builder under `internal/views` | Content |
 | --- | --- | --- |
