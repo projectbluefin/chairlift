@@ -728,7 +728,8 @@ An agent must not break these:
   each selection step then calls `UserHome.ScrollPageToTop`, because a page
   keeps its scroll position and a step entered mid-page hid its own heading;
   bookends use the setup stack, not sidebar routes. Next and Back mutate no
-  configuration. Repeated requests preserve progress; an empty inventory opens
+  saved configuration; Next from Features explicitly applies the Bash-only
+  Bluefin CLI selection. Repeated requests preserve progress; an empty inventory opens
   no flow. **Finish** records completion and version, then returns to Control
   Center; a save failure reports a toast. Dismiss records skip without
   demoting completed; a crash records nothing. Dry-run previews writes.

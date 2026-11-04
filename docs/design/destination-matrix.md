@@ -48,6 +48,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `applications_page` | `brew_bundles_group` | Apps collections, shown first; `loadBrewBundles`, shared collection install/progress handling |
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
+| `features_page` | `bluefin_cli_group` | Features Bluefin CLI switch; `buildBluefinCLIGroup`, `runBluefinCLI`, `internal/bluefincli` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
 | `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
