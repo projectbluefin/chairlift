@@ -669,8 +669,15 @@ wording supplied by `pageview`.
 suppressed invocation journaling, stdout/stderr capture and shared error
 taxonomy; ublue and updex alias its error types. `pkexec.Command` is the sole
 owner of the escalation program name. `Run` bounds pipe draining with
-five-second WaitDelay and kills only its direct child on cancellation. Its
-cancellation message explicitly warns that privileged work may still run.
+five-second WaitDelay and kills only its direct child on cancellation. That
+kill works only while the PolicyKit prompt is open: once authentication
+succeeds pkexec runs the helper as root, an unprivileged kill fails, and `Run`
+returns only when the helper exits, bounded by the helper's own timeout. That
+wait is deliberate, because action gates and update-shell admission stay held
+until `Run` returns, so no second privileged action can start beside a running
+root helper. A post-authentication outcome is therefore the helper's real exit
+status, not `cancelled` or `timed-out`. The cancellation message explicitly
+warns that privileged work may still run.
 The child's own exit status wins when it exited normally, including a
 successful exit whose descendant held output pipes open, or a real nonzero
 exit racing cancellation. Do not misreport a completed privileged mutation

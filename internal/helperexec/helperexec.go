@@ -24,14 +24,29 @@
 //
 // # Cancellation contract
 //
-// Canceling ctx (or letting its deadline pass) kills only the direct pkexec
-// child. The privileged helper and anything it spawned run as root, so an
-// unprivileged ChairLift cannot signal them as a process group the way
-// internal/maintenanceexec does for unprivileged maintenance scripts. Run
-// therefore bounds its wait with WaitDelay instead of stopping the work:
-// it returns promptly, but a root descendant may still be mutating the
-// system afterwards, which is why the cancellation message does not claim
-// the action stopped. Surfaces rendering it must not imply otherwise.
+// What canceling ctx (or letting its deadline pass) does depends on how far
+// pkexec has got.
+//
+// While the PolicyKit prompt is open, pkexec still runs with the caller's
+// real uid, so the kill reaches it, the prompt goes away, nothing privileged
+// has run, and Run returns promptly with the cancelled or timed-out outcome.
+//
+// Once authentication succeeds, pkexec sets every uid to root and execs the
+// helper in its own place. An unprivileged ChairLift can no longer signal
+// it (kill fails with EPERM), nor anything it spawned, so it cannot stop the
+// work the way internal/maintenanceexec stops unprivileged scripts. Run then
+// returns only when the helper exits on its own, which the helper's own
+// timeout bounds (ubluehelper.Timeout, updexhelper.Timeout). That wait is
+// deliberate: every caller's action gate and the update shell's admission
+// stay held until Run returns, and returning early would let a second
+// privileged action start beside a root helper that is still mutating the
+// system. Its outcome is then classified from the helper's real exit status
+// (see below), not as cancelled. Callers must therefore not assume a cancel
+// returns promptly after authentication, and copy must not claim a cancel
+// stopped a privileged action.
+//
+// WaitDelay bounds only the output pipes: once the helper has exited, a
+// descendant that inherited stdout and stderr cannot hold Run open.
 //
 // Because the wait is bounded, cmd.Run can report exec.ErrWaitDelay even
 // though the helper itself finished: a descendant that inherited stdout and
@@ -145,8 +160,11 @@ func Run(ctx context.Context, pkexecPath, helperPath string, args ...string) (st
 	fullArgs := append([]string{helperPath}, args...)
 	journal.Record(action, journalArgs(args), append([]string{pkexecPath}, fullArgs...), journal.SuppressedNone)
 	cmd := exec.CommandContext(ctx, pkexecPath, fullArgs...)
-	// A finite WaitDelay guarantees cancellation returns even when a
-	// privileged descendant of the helper retains the inherited output pipes.
+	// A finite WaitDelay keeps a privileged descendant that retains the
+	// inherited output pipes from holding Run open after the helper exits.
+	// It does not shorten the wait for the helper itself: after
+	// authentication the helper runs as root and cannot be killed from here
+	// (see the cancellation contract above).
 	cmd.WaitDelay = waitDelay
 
 	var stdout, stderr bytes.Buffer
