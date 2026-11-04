@@ -260,8 +260,20 @@ func (uh *UserHome) checkFeatureUpdates(totalFeatures int) {
 	})
 }
 
-// onFeatureToggled handles enabling/disabling a feature
+// onFeatureToggled handles enabling/disabling a feature. updateFeaturesGate
+// admits one updex helper mutation at a time — a toggle or the Update button
+// — so a second click while the first is authenticating or running cannot
+// start an overlapping enable and disable whose completions race to set the
+// switch. The switch is insensitive while its own change runs.
 func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedSwitch) {
+	if !uh.updateFeaturesGate.TryStart() {
+		// Revert after the state-set handler returns, as the other
+		// switches on this page do, rather than re-entering it.
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)
+		return
+	}
+	toggle.widget.SetSensitive(false)
 	go func() {
 		ctx, cancel := updex.DefaultContext()
 		defer cancel()
@@ -274,6 +286,8 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 		}
 
 		sgtk.RunOnMainThread(func() {
+			defer uh.updateFeaturesGate.Reset()
+			toggle.widget.SetSensitive(true)
 			if err != nil {
 				// Revert switch to previous state
 				toggle.set(!enabled)
@@ -298,10 +312,11 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 }
 
 // onUpdateFeaturesClicked handles the Update button click. updateFeaturesGate
-// admits one run at a time and is reset on every completion, because the
-// button is offered again after each run.
+// admits one run at a time, shared with the feature toggles, and is reset on
+// every completion, because the button is offered again after each run.
 func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 	if !uh.updateFeaturesGate.TryStart() {
+		uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)
 		return
 	}
 	button.SetSensitive(false)

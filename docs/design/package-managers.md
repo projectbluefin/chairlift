@@ -171,7 +171,7 @@ resolves per call; the absent case uses the bare name only to retain
 | --- | --- |
 | `ListInstalledFormulae()` | `brew info --installed --json=v2 --formula` |
 | `ListInstalledCasks()` | `brew info --installed --json=v2 --cask` |
-| `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings |
+| `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings, formula `Pinned`. The Developer tools update source omits pinned formulae, because `brew upgrade` skips them |
 | `Tap(name)` | `brew tap <name>` |
 | `Install(name, isCask)` / `Uninstall(name, isCask)` | `install` / `uninstall`, with `--cask` only for casks |
 | `Upgrade(ctx, name)` | `brew upgrade [<name>]`; empty name upgrades all |
