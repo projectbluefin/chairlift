@@ -1,16 +1,15 @@
 package views
 
 import (
-	"fmt"
-	"log"
-
 	"codeberg.org/puregotk/puregotk/v4/adw"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
+	"errors"
 	sgtk "github.com/frostyard/snowkit/gtk"
 	"github.com/projectbluefin/chairlift/internal/bluefincli"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"log"
 )
 
 type bluefinCLIRow struct {
@@ -66,6 +65,12 @@ func (uh *UserHome) showBluefinCLIState() {
 		return
 	}
 	if !bluefincli.Supported() {
+		if cli.setup == nil && (cli.state.Configured || cli.state.Legacy) {
+			cli.toggle.set(true)
+			cli.toggle.widget.SetSensitive(!cli.gate.Running())
+			cli.row.SetSubtitle("Bash integration is enabled, but your login shell is not Bash. Turn off to remove it.")
+			return
+		}
 		cli.toggle.set(false)
 		cli.toggle.widget.SetSensitive(false)
 		cli.row.SetSubtitle("Bash only. Your selected login shell is not supported.")
@@ -206,7 +211,7 @@ func (uh *UserHome) runBluefinCLI(on bool, done func(bool)) {
 		if err == nil && !dryrun.Enabled() && on && !state.Enabled {
 			err = statusErr
 			if err == nil {
-				err = fmt.Errorf("Bash integration did not become ready")
+				err = errors.New("bash integration did not become ready")
 			}
 		}
 		sgtk.RunOnMainThread(func() {
@@ -230,6 +235,9 @@ func (uh *UserHome) runBluefinCLI(on bool, done func(bool)) {
 					message = "Bluefin CLI enabled. Open a new Bash terminal."
 				}
 				uh.toastAdder.ShowToast(message)
+				uh.homebrewInventoryChanged()
+			}
+			if !dryrun.Enabled() && on && err != nil {
 				uh.homebrewInventoryChanged()
 			}
 			if done != nil && cli.setup == setup {

@@ -76,14 +76,14 @@ func paths() (locations, error) {
 		return locations{}, fmt.Errorf("locate Bash home: %w", err)
 	}
 	if !filepath.IsAbs(home) {
-		return locations{}, errors.New("Bash home must be an absolute path")
+		return locations{}, errors.New("bash home must be an absolute path")
 	}
 	data := os.Getenv("XDG_DATA_HOME")
 	if !filepath.IsAbs(data) {
 		data = filepath.Join(home, ".local", "share")
 	}
 	if strings.ContainsAny(home+data, "\r\n") {
-		return locations{}, errors.New("Bluefin CLI configuration paths must not contain newlines")
+		return locations{}, errors.New("bluefin CLI configuration paths must not contain newlines")
 	}
 	return locations{rc: filepath.Join(home, ".bashrc"), dir: filepath.Join(data, "chairlift", "bluefin-cli")}, nil
 }
@@ -127,7 +127,7 @@ func Status() (State, error) {
 			if err != nil {
 				problems = append(problems, err)
 			} else if info == nil || info.Size() == 0 {
-				problems = append(problems, fmt.Errorf("Bluefin CLI payload %s is missing; enable Bluefin CLI again", name))
+				problems = append(problems, fmt.Errorf("bluefin CLI payload %s is missing; enable Bluefin CLI again", name))
 			}
 		}
 	}
@@ -151,7 +151,7 @@ func checkEmbedded() (homebrew.BundleStatus, error) {
 	if err != nil {
 		return homebrew.BundleIndeterminate, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	path := filepath.Join(dir, "cli.Brewfile")
 	if err := os.WriteFile(path, manifest, 0o600); err != nil {
 		return homebrew.BundleIndeterminate, err
@@ -163,7 +163,7 @@ func checkEmbedded() (homebrew.BundleStatus, error) {
 // enable refreshes owned assets, including after an application upgrade.
 func Enable() error {
 	if !Supported() {
-		return errors.New("Bluefin CLI supports Bash only; set your login shell to Bash before enabling")
+		return errors.New("bluefin CLI supports Bash only; set your login shell to Bash before enabling")
 	}
 	p, err := paths()
 	if err != nil {
@@ -219,7 +219,7 @@ func Enable() error {
 			return fmt.Errorf("verify Bluefin CLI packages: %w", err)
 		}
 		if !installed(status) {
-			return errors.New("Bluefin CLI packages are still missing after installation; Bash configuration was not enabled")
+			return errors.New("bluefin CLI packages are still missing after installation; Bash configuration was not enabled")
 		}
 	}
 	if err := seedTldrCache(prefix); err != nil {
@@ -277,7 +277,7 @@ func Disable() error {
 func brewPrefix() (string, error) {
 	brew := homebrew.ExecutablePath()
 	if brew == "" {
-		return "", errors.New("Homebrew is required to enable Bluefin CLI; install Homebrew first")
+		return "", errors.New("homebrew is required to enable Bluefin CLI; install Homebrew first")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -289,7 +289,7 @@ func brewPrefix() (string, error) {
 	}
 	prefix := strings.TrimSpace(string(out))
 	if !filepath.IsAbs(prefix) || strings.ContainsAny(prefix, "\r\n") {
-		return "", errors.New("Homebrew returned an invalid installation prefix")
+		return "", errors.New("homebrew returned an invalid installation prefix")
 	}
 	return prefix, nil
 }
@@ -439,7 +439,7 @@ func readRC(path string) (rcFile, error) {
 		return rc, err
 	}
 	if rc.info == nil {
-		return rc, errors.New("Bash configuration disappeared while inspecting it")
+		return rc, errors.New("bash configuration disappeared while inspecting it")
 	}
 	rc.content, err = os.ReadFile(rc.path)
 	if err != nil {
@@ -472,15 +472,15 @@ func (rc rcFile) replace(content []byte) error {
 	entry, err := os.Lstat(rc.entryPath)
 	if rc.entry == nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			return errors.New("Bash configuration changed while applying Bluefin CLI")
+			return errors.New("bash configuration changed while applying Bluefin CLI")
 		}
 	} else if err != nil || !os.SameFile(entry, rc.entry) {
-		return errors.New("Bash configuration or its symlink changed while applying Bluefin CLI")
+		return errors.New("bash configuration or its symlink changed while applying Bluefin CLI")
 	}
 	if rc.info != nil {
 		current, err := os.ReadFile(rc.path)
 		if err != nil || !bytes.Equal(current, rc.content) {
-			return errors.New("Bash configuration contents changed while applying Bluefin CLI")
+			return errors.New("bash configuration contents changed while applying Bluefin CLI")
 		}
 	}
 	mode := fs.FileMode(0o644)
@@ -506,7 +506,7 @@ func replaceRegular(path string, content []byte, mode fs.FileMode, original fs.F
 	if err != nil {
 		return fmt.Errorf("prepare %s: %w", path, err)
 	}
-	defer os.Remove(file.Name())
+	defer func() { _ = os.Remove(file.Name()) }()
 	if _, err := file.Write(content); err != nil {
 		_ = file.Close()
 		return err
