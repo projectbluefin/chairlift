@@ -7,6 +7,22 @@ import (
 	"github.com/projectbluefin/chairlift/internal/livery"
 )
 
+// TestChoicesRoundTripForEveryFoundation covers the whole catalog plus the
+// custom sentinel, so an entry whose index did not survive the round trip
+// could not pass.
+func TestChoicesRoundTripForEveryFoundation(t *testing.T) {
+	for _, f := range livery.Foundations() {
+		choice := LiveryChoices(f.ID)
+		if got := LiveryIDForIndex(choice.Selected); got != f.ID {
+			t.Errorf("LiveryChoices(%q) selected %d, which maps back to %q", f.ID, choice.Selected, got)
+		}
+	}
+	custom := LiveryChoices(livery.CustomID)
+	if got := LiveryIDForIndex(custom.Selected); got != livery.CustomID {
+		t.Errorf("custom selection mapped back to %q", got)
+	}
+}
+
 // TestFoundationTilesMarkExactlyTheSelection holds the gallery's model to
 // the grid it drives: every foundation, in catalog order (tile i is grid
 // child i), with the confirmed selection — and only it — marked, for every
@@ -47,6 +63,15 @@ func TestChooserEscapeClearsAQueryThenCloses(t *testing.T) {
 		if LiveryChooserEscapeCloses(query) {
 			t.Errorf("Escape with query %q closed the chooser instead of clearing it", query)
 		}
+	}
+}
+
+// TestUnknownSelectionFallsBackToTheDefault asserts a stale dconf value lands
+// the combo somewhere valid rather than leaving it unselected.
+func TestUnknownSelectionFallsBackToTheDefault(t *testing.T) {
+	choice := LiveryChoices("retired-foundation")
+	if got := LiveryIDForIndex(choice.Selected); got != livery.DefaultID {
+		t.Errorf("unknown selection resolved to %q, want %q", got, livery.DefaultID)
 	}
 }
 
