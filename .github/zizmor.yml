@@ -17,6 +17,13 @@
 # the same file still fails the check.
 
 rules:
+  unpinned-uses:
+    config:
+      policies:
+        # AGENTS.md requires managed @v1 for this shared production interface;
+        # internal/installcheck enforces that exact ref. Third parties stay SHA-pinned.
+        projectbluefin/actions/bootc-build/setup-runner: ref-pin
+        "*": hash-pin
   dangerous-triggers:
     ignore:
       # Prow needs a write token for fork pull requests so it can label and
