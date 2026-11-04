@@ -85,7 +85,7 @@ controls after construction. See the [configuration reference](reference.md).
 | Tool | Used For |
 |------|----------|
 | Homebrew | Package management (formulae, casks, bundles) |
-| Flatpak | Updates, Gaming installs, and maintenance/reset operations; no Apps inventory or catalog launcher |
+| Flatpak | Updates, Development Apps, Compass, wallpaper setup, optional Pulp installation, and maintenance/reset operations; no Game Mode mutations, Apps inventory or catalog launcher |
 | bootc + `/usr/libexec/bootc-update-stage` | Staged bootc system updates |
 | Updex | System feature toggles |
 | llmman (installed by Agent Mode through Homebrew) | The Agents page's local model server |

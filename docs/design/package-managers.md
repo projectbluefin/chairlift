@@ -636,25 +636,25 @@ insensitive. Writes bind `helperexec.Run` to
 `HelperPath=/usr/bin/chairlift-helper`.
 
 [`ubluehelper.SupportedCommands()`](../../internal/ubluehelper/ubluehelper.go)
-is the complete fifteen-command surface:
+is the complete sixteen-command surface:
 `channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
 `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-`factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+`gaming-switch`, `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
 `docker-disable`, `docker-update`. Every command has exactly one action in
 [`data/io.projectbluefin.chairlift.ublue.policy`](../../data/io.projectbluefin.chairlift.ublue.policy).
 The helper dispatcher rejects unhandled commands; parser acceptance alone is
 not evidence a command executes.
 
 `ubluehelper.Timeout` is the helper's per-command budget: 30 minutes for the
-image-pulling `channel-switch`, `driver-switch`, `pin`, and `unpin`, and for
+image-pulling `channel-switch`, `driver-switch`, `gaming-switch`, `pin`, and `unpin`, and for
 the bottle-downloading `docker-enable` and `docker-update` (the same
 as OS staging's `bootc.DefaultTimeout`), 10 minutes for everything else. The
 GUI's `ublue.ImageSwitchContext` and `ublue.DefaultContext` add a five-minute
 `AuthenticationAllowance`, because the caller's clock also runs during the
 PolicyKit prompt and the helper must be the one to report its outcome.
 
-Only validated channel, driver or day words cross this boundary. The helper
-resolves concrete image references from its own descriptor and the
+Only validated channel, driver, gaming enable/disable, or day words cross this
+boundary. The helper resolves concrete image references from its own descriptor and the
 [`internal/imageinfo`](../../internal/imageinfo/) channel/driver tables,
 loaded from root-owned system paths. It resolves the account from `PKEXEC_UID`.
 No image reference, username, unit name, reset/rollback target or scheduling
