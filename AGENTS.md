@@ -773,13 +773,14 @@ An agent must not break these:
   checked; Full Desktop Suite defaults unchecked), installed casks and
   explicitly requested formulae next, then the Brewfile exporter (also gated
   by `brew_group`). No Flatpak inventory, external catalog launcher, or package
-  search belongs here. Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`)
-  live inside the initially collapsed Developer Mode expander on Features,
-  not Apps. Their explicit collection installation remains independent of
-  granting developer access and obeys the existing collection configuration
-  and Homebrew floor. Both relocated collections start checked, including in the
-  explicit setup wizard; wizard navigation preserves deliberate deselection and
-  never installs a collection by itself. Expanding a collection loads formula/cask
+  search belongs here. Monospace Fonts (`fonts-dev`) lives inside the initially
+  collapsed Developer Mode expander on Features, not Apps. Its explicit collection
+  installation remains independent of granting developer access and obeys the
+  existing collection configuration and Homebrew floor. It starts checked,
+  including in the explicit setup wizard; wizard navigation preserves deliberate
+  deselection and never installs this collection by itself. Bluefin CLI is a
+  separate Features switch, not a discoverable `cli` collection.
+  Expanding a collection loads formula/cask
   descriptions and Flatpak AppStream summaries (`flatpak search`, cached data only) once,
   off-thread, with a shared read timeout and cancellation on row destruction.
   Missing metadata keeps the package name/type and reports Description unavailable;
@@ -800,14 +801,13 @@ An agent must not break these:
   and `Exporting…`, and restores the Export action after every outcome.
   A destructive `run*` entry point added to `internal/views` belongs in
   `internal/installcheck`'s `TestDestructiveActionsRequireConfirmation` inventory.
-- **Shell bling integration is unprivileged, idempotent, and non-interactive.**
-  `internal/shellenv` enables the Bluefin terminal experience (Starship prompt,
-  zoxide, bash-preexec, shell completions) when Enhanced Terminal Bling is installed.
-  It targets the active shell config file (`~/.bashrc`, `~/.zshrc`, or
-  `~/.config/fish/config.fish`) and writes the exact `### <script> source start/end`
-  markers used by `ublue-bling`. If already present, it is an idempotent no-op.
-  It never invokes interactive prompts, never runs `pkexec`, and writes nothing
-  under `--dry-run`.
+- **Bluefin CLI is Chairlift-owned and Bash-only.** `internal/bluefincli`
+  embeds the curated Homebrew manifest, Bash payload, and optional preexec rearm
+  helper. One Features switch configures `~/.bashrc`; disable removes only exact
+  managed/recognized legacy Bash blocks and retains tools and personal settings.
+  Files live under `$XDG_DATA_HOME/chairlift/bluefin-cli`. Fish/Zsh are unsupported
+  and untouched. Setup defaults to selected unless explicitly disabled; Next
+  from Features applies the choice. Dry-run writes no persistent files.
 - **A visible retryable control must reset its action gate.**
   `actionstate.Gate.Complete` permanently rejects future starts; reserve it for
   controls that become permanently unavailable after live success. Driver
@@ -842,7 +842,7 @@ An agent must not break these:
   the Features page. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
   are expanders with source-backed package rows and independent suffix switches;
   header activation expands rather than toggles. Developer Mode also contains
-  the independently installable Enhanced Terminal Bling and Monospace Fonts collections.
+  the independently installable Monospace Fonts collection.
   The **Setup activity** checklist owns bounded
   stage rows and a reusable pulsing timer. It reports real operation stages and
   outcomes, not percentages or per-package completion invented from an opaque

@@ -410,3 +410,27 @@ scenario should wait for the final subtitle and assert the metadata command.
 Keep package-name assertions separate: a visible identifier alone does not
 prove that the description lookup completed. Stub description queries separately
 from installed inventory queries so uninstalled collection entries are covered.
+
+## Setup intent and asynchronous work
+
+Keep pending first-run choices separate from installed state. A late status
+probe may update an untouched default, but must never override an explicit
+choice. Bind an apply completion to the selection object of that wizard
+session, not merely its step index: dismissing and reopening setup can otherwise
+let an old callback advance the new session. Refresh installed state when setup
+ends; Apps may have changed packages while setup was open.
+
+For Bluefin CLI, test selection transitions in `internal/firstrun` and file and
+package lifecycle behavior in `internal/bluefincli`. Smoke the embedded Bash
+payload with real Starship, direnv, mise, and zoxide binaries in an isolated HOME
+and XDG directories: evaluate prompt hooks, load an allowed `.envrc`, render a
+prompt, change directories with `z`, and source twice without duplicate hooks.
+Those checks do not prove GTK navigation. If Dakota cannot start because its
+Podman socket is unavailable, report the desktop gate as blocked, not passed.
+
+In a full GDM/GNOME lab VM, disable idle locking and verify
+`org.gnome.ScreenSaver.GetActive` is false before native-input checks. Inspect
+the captured frames: application focus and successful AT-SPI actions can persist
+behind the lock screen and do not prove a visible GUI session. Unlock through
+the guest's privileged control connection; do not assume the test user has
+passwordless sudo.

@@ -298,6 +298,7 @@ func addContentsRows(expander *adw.ExpanderRow, items []homebrew.BundleItem, tot
 func (uh *UserHome) homebrewInventoryChanged() {
 	go uh.loadHomebrewPackages()
 	uh.refreshBundleStatuses()
+	uh.refreshBluefinCLI()
 }
 
 // loadHomebrewPackages loads installed Homebrew packages asynchronously
@@ -589,6 +590,7 @@ func (uh *UserHome) runHomebrewUninstall(
 		// installed; re-observe so its row offers Install again.
 		sgtk.RunOnMainThread(func() {
 			uh.refreshBundleStatuses()
+			uh.refreshBluefinCLI()
 		})
 	}
 }

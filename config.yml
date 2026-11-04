@@ -70,6 +70,9 @@ maintenance_page:
     enabled: false
 
 features_page:
+  # Chairlift owns the package set and Bash integration; no image payload needed.
+  bluefin_cli_group:
+    enabled: true
   # User-session GNOME extension switches; unavailable hosts explain why.
   desktop_integrations_group:
     enabled: true

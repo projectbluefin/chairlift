@@ -36,9 +36,12 @@ setup stack. Other routes cannot leave the current step. The sidebar is
 insensitive and its native Back route is disabled; dismissal restores both
 while keeping the current page. Each selection step opens at the top of its page.
 
-Moving Back or Next changes only navigation. It never installs software,
-changes configuration, or writes disposition. Next from Agents opens the
-conclusion. Its final action saves completion and returns to Control Center;
+Moving Back changes only navigation. Next from Features explicitly applies the
+Bash-only Bluefin CLI choice, selected by default unless previously disabled.
+An opt-out survives navigation; failure stays on Features for retry, and a
+successful choice is not applied twice. Other Next actions only navigate.
+Ordinary activation and showing Welcome perform no installation. Next from
+Agents opens the conclusion. Its final action saves completion and returns to Control Center;
 save errors show a toast. Escape, Dismiss and intentional window close
 dismiss setup without closing the application.
 `Ctrl+Q` quits in one press, setup included.

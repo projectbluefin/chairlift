@@ -188,7 +188,7 @@ func TestPageMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 			"brew_bundles_group",
 		),
 		"agents": refsOn("agents_page", "agents_group", "troubleshooting_group"),
-		"features": refsOn("features_page", "features_group",
+		"features": refsOn("features_page", "bluefin_cli_group", "features_group",
 			"desktop_integrations_group", "dx_group", "gaming_group", "printers_group", "compass_group"),
 		"livery": refsOn("livery_page",
 			"account_group",

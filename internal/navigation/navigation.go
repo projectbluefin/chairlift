@@ -169,6 +169,7 @@ var routes = []Item{
 		Icon:  "application-x-addon-symbolic",
 		Kind:  KindPrimary,
 		Refs: refsOn("features_page",
+			"bluefin_cli_group",
 			"features_group",
 			"desktop_integrations_group",
 			"dx_group",
