@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/flatpak"
@@ -43,6 +44,15 @@ func (p *flatpakProvider) Available() bool {
 	return p.deps.Installed != nil && p.deps.Installed()
 }
 
+// Check lists both installations. flatpak.ListUpdates queries each remote
+// separately and returns what the healthy remotes reported together with a
+// *flatpak.RemoteError for every in-use remote it could not read. That is a
+// partial check, not a failed one: the updates it found are offered and the
+// unreadable remotes are named in Warnings, so one unreachable remote no
+// longer hides every other application's update behind "Couldn't check".
+// Any other failure — the remote listing itself, the origin listing that
+// decides whether a broken remote is in use, cancellation — means the scope
+// was not checked, and stays an error.
 func (p *flatpakProvider) Check(ctx context.Context) (updateflow.CheckResult, error) {
 	userUpdates, userErr := p.deps.ListUpdates(ctx, true)
 	systemUpdates, systemErr := p.deps.ListUpdates(ctx, false)
@@ -51,7 +61,60 @@ func (p *flatpakProvider) Check(ctx context.Context) (updateflow.CheckResult, er
 	items = append(items, flatpakItems(userUpdates)...)
 	items = append(items, flatpakItems(systemUpdates)...)
 
-	return updateflow.CheckResult{Items: items}, joinErrors(userErr, systemErr)
+	var warnings []string
+	seen := make(map[string]bool)
+	var errs []error
+	for _, err := range []error{userErr, systemErr} {
+		if err == nil {
+			continue
+		}
+		remotes, partial := remoteFailures(err)
+		if !partial {
+			errs = append(errs, err)
+			continue
+		}
+		for _, remote := range remotes {
+			log.Printf("updates: checking %s: %v", updateflow.Applications, remote)
+			if seen[remote.Remote] {
+				continue
+			}
+			seen[remote.Remote] = true
+			warnings = append(warnings, flatpakRemoteWarning(remote.Remote))
+		}
+	}
+	if len(errs) > 0 {
+		return updateflow.CheckResult{Items: items}, errors.Join(errs...)
+	}
+	return updateflow.CheckResult{Items: items, Warnings: warnings}, nil
+}
+
+// remoteFailures reports whether err consists only of per-remote failures,
+// returning them. A joined error with any other member is not a partial
+// check: something other than a single remote went wrong.
+func remoteFailures(err error) ([]*flatpak.RemoteError, bool) {
+	if remote, ok := err.(*flatpak.RemoteError); ok {
+		return []*flatpak.RemoteError{remote}, true
+	}
+	joined, ok := err.(interface{ Unwrap() []error })
+	if !ok {
+		return nil, false
+	}
+	var remotes []*flatpak.RemoteError
+	for _, member := range joined.Unwrap() {
+		found, partial := remoteFailures(member)
+		if !partial {
+			return nil, false
+		}
+		remotes = append(remotes, found...)
+	}
+	return remotes, len(remotes) > 0
+}
+
+// flatpakRemoteWarning names one remote a partial check could not read. It
+// is the noun phrase updatepresent places after "couldn't check"; the
+// underlying error is logged, never shown.
+func flatpakRemoteWarning(remote string) string {
+	return fmt.Sprintf("the %s remote", remote)
 }
 
 func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, progress func(updateflow.Progress)) (updateflow.ApplyResult, error) {
@@ -197,15 +260,4 @@ func scopesFromItems(items []updateflow.Item) map[string]bool {
 		}
 	}
 	return scopes
-}
-
-func joinErrors(first, second error) error {
-	switch {
-	case first == nil:
-		return second
-	case second == nil:
-		return first
-	default:
-		return errors.Join(first, second)
-	}
 }

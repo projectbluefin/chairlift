@@ -69,18 +69,97 @@ func TestFlatpakIgnoresABrokenUnusedRemoteEndToEnd(t *testing.T) {
 	}
 }
 
-// A broken remote an installed application still comes from fails the check
-// with an error naming that remote, which the coordinator shows while keeping
-// the source's last known inventory.
+// A broken remote an installed application still comes from makes the check
+// partial, not failed (#699): the healthy remote's update is still offered,
+// and the broken remote is named in Warnings so the row says what it could
+// not cover. Before, the error dropped flathub's update and the page read
+// "Couldn't check" for every application.
 func TestFlatpakReportsABrokenRemoteInUse(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
 	writeStub(t, "flatpak", brokenRemoteStub(`flathub\ntest-center\n`))
 
-	_, err := NewFlatpak().Check(context.Background())
-	var remoteErr *flatpak.RemoteError
-	if !errors.As(err, &remoteErr) || remoteErr.Remote != "test-center" || remoteErr.Installation != "user" {
-		t.Fatalf("Check() error = %v, want test-center reported in the user installation", err)
+	got, err := NewFlatpak().Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v, want the in-use broken remote reported as a warning", err)
+	}
+	want := updateflow.CheckResult{
+		Items:    []updateflow.Item{{ID: "org.mozilla.firefox", Name: "Firefox", AvailableVersion: "131.0", Scope: "user"}},
+		Warnings: []string{"the test-center remote"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Check() = %#v, want %#v", got, want)
+	}
+}
+
+func TestFlatpakCheckSeparatesRemoteFailuresFromScopeFailures(t *testing.T) {
+	remote := func(name, installation string) error {
+		return &flatpak.RemoteError{Remote: name, Installation: installation, Err: errors.New("unreachable")}
+	}
+	originsErr := errors.New("origin listing failed")
+	tests := []struct {
+		name         string
+		userErr      error
+		systemErr    error
+		wantWarnings []string
+		wantErr      bool
+	}{
+		{
+			name:         "one remote",
+			userErr:      remote("beta", "user"),
+			wantWarnings: []string{"the beta remote"},
+		},
+		{
+			name:         "joined remotes deduplicated across scopes",
+			userErr:      errors.Join(remote("beta", "user"), remote("gnome-nightly", "user")),
+			systemErr:    remote("beta", "system"),
+			wantWarnings: []string{"the beta remote", "the gnome-nightly remote"},
+		},
+		{
+			// Without the origins no remote failure can be judged unused,
+			// so the scope was not really checked.
+			name:    "remote failure joined with a non-remote failure",
+			userErr: errors.Join(originsErr, remote("beta", "user")),
+			wantErr: true,
+		},
+		{
+			name:      "scope failure beside a remote failure",
+			userErr:   remote("beta", "user"),
+			systemErr: originsErr,
+			wantErr:   true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := newFlatpak(FlatpakDeps{
+				Installed: func() bool { return true },
+				ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
+					if user {
+						return []flatpak.UpdateInfo{{Name: "Firefox", ApplicationID: "org.mozilla.firefox", Installation: "user"}}, test.userErr
+					}
+					return nil, test.systemErr
+				},
+			})
+			got, err := provider.Check(context.Background())
+			if test.wantErr {
+				if err == nil {
+					t.Fatalf("Check() error = nil, want the scope failure reported")
+				}
+				if len(got.Warnings) != 0 {
+					t.Fatalf("Check() warnings = %v with an error; want the error alone", got.Warnings)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Check() error = %v, want a partial check", err)
+			}
+			if len(got.Items) != 1 {
+				t.Fatalf("Check() items = %#v, want the update found beside the failed remote", got.Items)
+			}
+			if !reflect.DeepEqual(got.Warnings, test.wantWarnings) {
+				t.Fatalf("Check() warnings = %#v, want %#v", got.Warnings, test.wantWarnings)
+			}
+		})
 	}
 }
 

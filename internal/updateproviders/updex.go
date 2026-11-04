@@ -3,7 +3,7 @@ package updateproviders
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log"
 	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -53,9 +53,6 @@ func (p *systemComponentsProvider) Check(ctx context.Context) (updateflow.CheckR
 	if err != nil {
 		return updateflow.CheckResult{}, err
 	}
-	if len(warnings) > 0 {
-		return updateflow.CheckResult{}, fmt.Errorf("updex feature check incomplete: %s", strings.Join(warnings, "; "))
-	}
 
 	var items []updateflow.Item
 	seen := make(map[string]bool)
@@ -72,8 +69,21 @@ func (p *systemComponentsProvider) Check(ctx context.Context) (updateflow.CheckR
 			items = append(items, updateflow.Item{Name: feature.Feature})
 		}
 	}
-	return updateflow.CheckResult{Items: items}, nil
+	// updex reports per-component manifest or version failures as warnings
+	// beside the checks it did complete. That is a partial check: keep the
+	// updates it found and say some components were not covered. The
+	// warnings are free-form updex text, so they are logged, not shown.
+	var partial []string
+	if len(warnings) > 0 {
+		log.Printf("updates: checking %s incomplete: %s", updateflow.SystemComponents, strings.Join(warnings, "; "))
+		partial = []string{updexIncompleteWarning}
+	}
+	return updateflow.CheckResult{Items: items, Warnings: partial}, nil
 }
+
+// updexIncompleteWarning is the noun phrase updatepresent places after
+// "couldn't check" when updex could not cover every component.
+const updexIncompleteWarning = "some components"
 
 func (p *systemComponentsProvider) Apply(
 	ctx context.Context,
