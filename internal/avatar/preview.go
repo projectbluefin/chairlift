@@ -11,10 +11,8 @@ import (
 // embeddedPreviewFS holds one precomputed preview PNG per catalog entry, keyed
 // by the artwork's base name (bluefin.webp -> bluefin.png).
 //
-// The PNGs are committed data rather than build output, so there is no codegen
-// step and nothing regenerates them: a catalog, transcode, or PreviewSize
-// change leaves them stale with nothing to notice. docs/design/overview.md
-// carries the procedure for writing one.
+// The PNGs are committed data, not generated build output. Regenerate affected
+// previews when catalog artwork or preview transcoding changes.
 //
 //go:embed assets/preview/*.png
 var embeddedPreviewFS embed.FS

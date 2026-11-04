@@ -1,1 +1,0 @@
-../../skills/dependency-behavior/SKILL.md

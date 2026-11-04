@@ -1,1691 +1,278 @@
 # ChairLift Overview
 
-Living architecture for the shipped application. Start here for ownership and
-safety boundaries; load the linked subsystem documents only for the task at hand.
-Decision history belongs in [ADRs](../adr/), not in current-state appendages.
-
-## Purpose
-
-Control Center is the GTK4/Libadwaita system-management GUI for [Bluefin](https://projectbluefin.io) and other bootc images. ChairLift is its repository/binary code name; user-visible naming belongs to `internal/branding.AppName`. Written in Go using [puregotk](https://codeberg.org/puregotk/puregotk), it loads native libraries at runtime without CGO. Existing providers manage Homebrew and Flatpak, OS staging through the image-owned fixed stage script, updex features and maintenance. Configuration may hide groups; it cannot create host capabilities or broaden privilege boundaries.
+Current architecture and safety boundaries for **Control Center**, the GTK4/
+Libadwaita GUI for Bluefin and other bootc images. ChairLift remains the binary,
+repository and application-ID name; user-facing naming belongs to
+`internal/branding.AppName`. Go builds without CGO; puregotk loads native
+libraries at runtime. Dependency versions belong in [`go.mod`](../../go.mod).
 
 ## Architecture
 
-```
-cmd/chairlift/main.go                 Entry point: version injection, app creation
-cmd/chairlift-updex-helper/main.go    Privileged helper for updex write operations
-cmd/chairlift-helper/main.go    Privileged helper for Bluefin-family system writes
-        │
-internal/app/app.go             GObject-registered Application (adw.Application subtype)
-        │
-internal/window/window.go       Main window: NavigationSplitView, sidebar, content stack
-        │
-internal/views/                 Page builders and event handlers (one file per page)
-        │                       ├── internal/views/actionmsg/     ┐ puregotk-free leaf packages:
-        │                       ├── internal/views/actionstate/   │ toast/decision text, async gates,
-        │                       ├── internal/views/updatepresent/ │ update snapshot presentation,
-        │                       ├── internal/views/bundleview/    │ row bookkeeping, expander status,
-        │                       ├── internal/views/trustmsg/      │ Flatpak and feature update-status
-        │                       ├── internal/views/rowset/        │ text and decisions, bounded
-        │                       ├── internal/views/liverystate/   │ confirmed appearance state,
-        │                       ├── internal/views/featurestatus/ │ unit-tested headlessly
-        │                       ├── internal/views/progresslog/   │
-        │                       ├── internal/views/signalroute/   │ shared-callback routing,
-        │                       └── internal/views/pageview/      ┘
-        │
-        ├── internal/config/    YAML config loading, feature group enablement
-        ├── internal/navigation/ Canonical route inventory (primaries and details), shortcuts, and pure navigation transitions
-        ├── internal/capability/ What this host can back a page or group with, from non-blocking probes
-        ├── internal/launcher/ Pure-Go async launcher start/wait helper for GTK callers
-        ├── internal/legacydesktop/ Asynchronous startup cleanup of obsolete frostyard desktop launchers
-        ├── internal/avatar/    Dinosaur avatar catalog, its bundled WebP illustrations and 256x256 preview PNGs, and the pure-Go WebP-to-PNG avatar transcoder (whole character fitted inside the 512x512 avatar circle, 4 MiB/16.8 Mpx input bound, 1 MiB output ceiling; the preview path encodes 256x256 under 512 KiB)
-        ├── internal/homebrew/  Homebrew CLI wrapper (JSON output parsing)
-        ├── internal/developerfeeds/ Pure-Go developer feed OPML catalog (go:embed) and offline validator
-        ├── internal/devtools/  WSL backends, system Docker status/enable (rootless cleanup, Homebrew CLI), native VS Code setup and package provenance
-        ├── internal/dockerbrew/ Pure-Go verified Homebrew-bottle Docker runtime: signed index, bottle download/extract, ELF patching, managed units
-        ├── internal/devsetup/  Widget-free ordered developer setup, promotion outcomes and retry stages
-        ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
-        ├── internal/valhalla/  Livery More Dinosaurs payload, SVG/JXL/AVIF-to-PNG source preparation and observed Valhalla manual-source configuration
-        ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
-        ├── internal/pkexec/    Sole owner of the privilege-escalation program name (`pkexec.Command`)
-        ├── internal/deskenv/   Desktop-environment detection from session variables
-        ├── internal/stageexec/ Pure-Go shared OS staging stream/event executor
-        ├── internal/updex/     Updex feature manager (Go library reads, helper binary writes)
-        ├── internal/updexhelper/ Puregotk-free argv-parsing/Options-building for cmd/chairlift-updex-helper
-        ├── internal/devmenu/   Custom Command Menu tuple updater for developer tools and Ask Bluefin visibility
-        ├── internal/printerapp/ Rootless, loopback-only printer-application quadlets pinned to signature-verified digests, one per driver family, and the pure readiness model behind the Features page's Printers group
-        ├── internal/aistack/   Local llmman user service, observed health and canonical model aliases
-        ├── internal/agentmode/ Goose Desktop readiness, profile-isolated launch, one-session guard and Ask Bluefin dispatch
-        ├── internal/contribute/ Read-only contributor preflight and terminal command construction
-        ├── internal/livery/    User icon-theme/settings mutations and login rotation
-        ├── internal/firstrun/  Explicit existing-page setup selection and disposition
-        ├── internal/ublue/     Bluefin-family system mutations through the ublue helper
-        ├── internal/ubluehelper/ Puregotk-free argv parsing for cmd/chairlift-helper
-        ├── internal/updateflow/ Pure unified update coordinator and state machine
-        ├── internal/updateproviders/ Provider adapters for the unified update coordinator
-        ├── internal/userprefs/ Pure user update preferences model
-        ├── internal/settings/  GSettings adapter for user update preferences
-        ├── internal/ui/        Blueprint sources (*.blp), their committed blueprint-compiler output (*.ui, embedded), and the ui.Bind struct-tag binder (ADR-0022)
-        └── internal/version/   Build metadata (ldflags injection)
-```
+The GUI's dependency direction is `cmd/chairlift → app → window → views →
+providers`. Pure state and presentation packages sit below GTK wiring, so their
+decisions can be tested without initializing native libraries.
 
-### Dependency flow
+| Boundary | Live owner |
+| --- | --- |
+| Process startup, headless intents and desktop settings backend | [`cmd/chairlift`](../../cmd/chairlift/) |
+| Application lifecycle and command-line dispatch | [`internal/app`](../../internal/app/) |
+| Window, page mounting, navigation and explicit setup | [`internal/window`](../../internal/window/) |
+| Widget construction and event wiring | [`internal/views`](../../internal/views/) |
+| Static widget trees and Go bindings | [`internal/ui`](../../internal/ui/) |
+| Configuration schema/loading and host prerequisites | [`internal/config`](../../internal/config/), [`internal/capability`](../../internal/capability/) |
+| Route identities, visibility and transitions | [`internal/navigation`](../../internal/navigation/navigation.go) |
+| Update state, execution adapters and presentation | [`internal/updateflow`](../../internal/updateflow/), [`internal/updateproviders`](../../internal/updateproviders/), [`internal/views/updatepresent`](../../internal/views/updatepresent/) |
 
-`cmd → app → window → views → {config, launcher, homebrew, flatpak, bootc, updex}`.
-`app` and `window` also depend on the pure `navigation` package.
-
-External shared library: `github.com/frostyard/snowkit` (published module, pinned in go.mod) provides:
-
-- `gobj` — GObject type registration and instance registry
-- `sgtk.RunOnMainThread()` — main-thread dispatch for GTK safety
-
-### Views coordinator (`internal/views/views.go`)
-
-The `views.go` file defines the central `UserHome` struct that holds references to all page widgets, config, and the `ToastAdder` interface. It provides:
-
-- `New(cfg, caps, toastAdder, updates)` — constructor receiving the same capability set as navigation, and the update shell's preferences page, to which `buildUpdatesPage` appends its groups
-- `ToastAdder` — toast, badge, and background-notification callbacks implemented by Window
-
-`internal/views` imports puregotk, so it cannot host headless test binaries. Pure leaf packages own decidable presentation and state: `actionmsg`, `trustmsg`, `actionstate`, `bundleview`, `rowset`, `progresslog`, `featurestatus`, `signalroute`, `liverystate`, `cleanupview`, `updatepresent`, and `pageview`. The update inventory and badge belong to `internal/updateflow`, not a second view-side count store. `pageview` supplies shared presentation for all seven page builders, whose wiring test remains enforced. This layout is decision record
-[ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md).
+Provider execution and service-management details are in
+[package-managers.md](package-managers.md). Operator-facing behavior is in the
+[reference](../reference.md) and [walkthrough](../walkthrough.md). Decision
+rationale belongs in [accepted ADRs](../adr/), not feature histories here.
 
 ### Pages
 
-The current UI defines seven primary pages. Static configuration and the host
-capability floor may omit a functional page whose builder-backed groups are all
-disabled or unavailable; Help is always retained. `internal/navigation` owns
-this inventory, independently of the original YAML namespace names.
+`internal/navigation` owns the sidebar order: **Updates, Apps, Agents, Features,
+Livery, Maintenance, Help**. Configuration and host capabilities can omit a
+functional page; Help remains. Do not copy route/group inventories into another
+table: route references are page-qualified configuration keys, not display names.
 
-| Page | File under `internal/views/` | Current purpose |
-| --- | --- | --- |
-| Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
-| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no wallpaper setup, Flatpak inventory, external catalog launcher or package search |
-| Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
-| Features | `features_page.go`, `bluefin_cli.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Gaming first, setup activity checklist, Chairlift-owned Bluefin CLI switch, expandable Developer/WSL/Docker package disclosures, independent Monospace Fonts installation under Developer Mode, distribution features and Printers |
-| Livery | `livery_page.go`, `wallpapers.go` | Profile Picture, Wallpapers (More Dinosaurs) setup, then initially collapsed App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
-| Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
-| Help | `help_page.go` | Support links, diagnostics and capability explanations |
+The detail routes are **Developer Mode** under Features (`developer`, also
+opened by `--dx-mode`) and **Powerwash** under Maintenance (`recovery`). Details
+keep the parent's sidebar row selected and have no Alt+number shortcut.
+Developer Mode owns WSL, Docker, Development Apps and developer setup activity;
+Game Mode remains on Features; its image switch manages no optional gaming stack.
 
-Game Mode leads Features and stages an image switch without managing Flatpaks.
-The **Setup activity** checklist belongs to Developer Mode detail, with bounded
-stage rows and a reusable timer independent of command output. Developer Mode,
-WSL Mode, and Enable Docker use native expanders like Apps collections: the
-header discloses package rows, while an independent suffix switch starts work. Bluefin CLI is a
-separate Bash-only switch backed by `internal/bluefincli`, not a Homebrew collection.
-Monospace Fonts is an independently installable collection inside Developer Mode,
-absent from Apps while Developer Mode is available, and not an automatic
-developer-enable follow-on. Homebrew bundles are opaque operations, so package
-lists are static disclosures, not invented
-per-package progress. Docker's rows name Homebrew formulae: the daemon set as
-**Homebrew, installed for the whole computer** (the root helper fetches those
-bottles itself) and the CLI set as user-scope Homebrew formulae. `internal/devsetup` owns
-developer-run ordering and outcomes; the view owns GTK wiring, and
-`internal/devtools` owns execution and Docker/WSL package provenance shared with
-those disclosures. Game Mode reports the booted or staged image, not app inventory.
-
-Powerwash is an existing detail (route `recovery`) built by `recovery.go` and reached from
-Maintenance, with rollback and opt-in reset controls; the published-versions
-calendar (pin and return to stream) is withdrawn per #522, because its dated
-tags exist only for the deprecated `latest` stream. The Maintenance entry's subtitle is
-`pageview.RecoveryEntrySubtitle` over what the detail actually built (Roll Back
-once the asynchronous status check reveals it, and the reset rows), so it never promises a reset the shipped
-`reset_group: enabled: false` leaves out; without reset rows the detail's page
-description (`pageview.RecoveryPageDescription`) says whether configuration or
-the host is why. There is no current System primary page;
-machine-wide desktop settings belong to the desktop's own settings application.
-
-### Architecture route map
-
-The configuration-to-navigation one-to-one assumption is retired: a configuration
-page is a stable YAML namespace, not a destination identity. The
-[destination and action ownership matrix](destination-matrix.md) records current
-groups/actions and their live owners. Routes retain original
-`(configuration page, group)` references across primary/detail boundaries.
-`internal/navigation` remains the sole route authority. The former five-section
-proposal was superseded; it is neither a shipped destination nor a new policy key.
+Every mouse, keyboard, Back and deep-link entry goes through
+`Window.navigateToPage` and `navigation.Resolve`. The same visible inventory
+feeds the sidebar and registered/advertised shortcuts. Hidden details fall back
+to their visible parent, then Help; hidden primaries fall back to Help. Unknown
+routes are rejected. Navigation itself executes no provider mutations.
 
 ## Key Patterns
 
-### GObject registration via snowkit
-
-Application and Window are registered as GObject subtypes using `gobj.RegisterType()`. This returns a `gobject.Type` and an `*gobj.InstanceRegistry`. The pattern:
-
-1. `init()` registers the type with `ClassInit` callback
-2. `ClassInit` overrides `Constructed` to create the Go struct and pin it in the registry
-3. Constructor (`New()`) calls `gobject.NewObject()` then retrieves the Go instance from the registry
-
-See `internal/app/app.go` and `internal/window/window.go`.
-
-`gobject.NewObject` forwards variadic arguments to GLib's C constructor.
-Object-valued properties need the native pointer (`app.Application.GoPointer()`),
-not the address of the Go binding wrapper (`&app.Application`), and the property
-list ends with `uintptr(0)`. Passing the wrapper address produced a
-`g_object_new_valist: invalid object type` critical on every window launch;
-the E2E startup runs with `G_DEBUG=fatal-criticals` so it fails rather than
-shipping a warning that normal GTK startup only logs.
-
-### Async operations with main-thread dispatch
-
-All external tool calls run in goroutines. UI updates are marshaled back via `sgtk.RunOnMainThread()`:
-
-```go
-go func() {
-    result, err := homebrew.ListInstalledFormulae()
-    sgtk.RunOnMainThread(func() {
-        // update widgets here
-    })
-}()
-```
-
-Long-running action rows use the shared native spinner helpers in
-`internal/views/widgets.go`. The row builds its spinner once; its existing
-action gate or Livery serializer owns the start/stop lifetime. No progress
-percentage is inferred. `Window.ShowToast` and `ShowErrorToast` preempt older
-toasts with Libadwaita's high priority, retaining those older errors in the
-queue rather than leaving every later result behind an infinite timeout. A
-message carrying pkexec's dismissal text (`pkexec.MessageIsAuthDismissed`) is
-not an error: `ShowErrorToast` shows the brief `pkexec.CancelledMessage`
-("Authentication canceled") instead of pinning raw stderr. Views whose failure
-toast is fixed text never carry that text, so they classify the error itself
-with `pageview.PrivilegedFailureToast` (exit 126 anywhere in the chain).
-
-Connect reusable GTK signals once, outside refresh paths. `buttonRoute` and
-`dialogRoute` in `internal/views/widgets.go` reuse stable callback variables
-with `signalroute` dispatch tables; clear/forget routing alongside removed rows.
-Per-row closures in refreshes exhaust purego's fixed trampoline table, even when
-widgets are destroyed. Switch mutations use guarded `GtkSwitch::state-set`,
-not generic property notifications; programmatic restores must not dispatch a
-second mutation. Render untrusted command/provider text with markup disabled.
-
-### Deferred visibility (async startup)
-
-A group whose backing tool's *presence* is its whole prerequisite (Homebrew, Flatpak, Podman, the image descriptor, the stage scripts) is not deferred at all: `internal/capability` omits it at build time through `UserHome.groupEnabled`, so its loaders never render a "not installed" placeholder. What such a loader can still meet is a tool that is present but fails; that is a real failure and the row says so ("Couldn't load this list.", "Could not check for tool updates") while keeping the last known rows and counts.
-
-Runtime query gates remain asynchronous: optional distribution features hide when no definitions exist; tap trust hides when there is nothing to trust; automatic updates stays hidden until its installed timer is observed. Query failures are not invented empty inventories. Discoverability is surface-specific: desktop integrations and unsupported Developer options deliberately remain visible with insensitive controls and explanations. Static navigation never reindexes after these workers finish.
-
-The *startup* path must not probe update providers on the main thread. The status-first update shell's initial `Coordinator.Check` runs in a worker (`UpdateShell.StartCheck`), and every provider's `Available` probe — some of which are `sync.Once`-cached subprocess checks, such as `flatpak --version` — is evaluated inside that worker, never while building the page. The automatic-updates group on the Updates page is built as a hidden shell (`buildAutomaticUpdatesGroup`) because its two `systemctl` queries can each approach a multi-second timeout on a slow or wedged host; `loadAutomaticUpdatesGroup` runs `autoupdate.Detect` in a worker under a five-second bound and reveals the switch on the GTK main thread only when the unattended-update timer is installed.
-
-### bootc boot gate
-
-The Updates page's `bootc_status_group` and `bootc_updates_group` load asynchronously behind `bootc.IsBootcBootedCached()`, which reads status once and requires a booted deployment. On composefs hosts (`composefs=` on the kernel command line), status comes from world-readable deployment state; elsewhere it uses `bootc status --format json`. No password is requested for these reads. Neither `/run/ostree-booted` nor exit status alone establishes a booted deployment: composefs lacks that sentinel, and bootc can return success with null `booted`. Staging additionally requires the fixed stage script.
-
-### Native desktop settings module
-
-`cmd/chairlift` calls `deskenv.ConfigureSettingsModules` before `app.New()`
-and before dispatching `--rotate-livery`. The helper searches installed native
-GIO module directories for `libdconfsettings.so`, including the current
-architecture's multiarch directory, and appends the first match to
-`GIO_EXTRA_MODULES` without duplicating entries or overriding
-`GSETTINGS_BACKEND`. Both Homebrew-loaded GLib and child settings tools can
-therefore use the desktop's dconf store instead of an independent keyfile
-backend; explicitly memory-backed test sessions retain their isolation.
+- **GTK stays on its main thread.** Run commands, network calls and service
+  queries in workers; marshal widget changes through `sgtk.RunOnMainThread`.
+  Nil-guard cross-group widget access: configuration may have prevented a
+  widget from being constructed.
+- **Static UI is Blueprint.** Edit `.blp` sources and regenerate committed `.ui`
+  files with `make blueprints`; never hand-edit generated XML. Go binds widgets
+  through `ui.Bind` tags and connects signals once at construction. The native
+  library floor and binding traps are in the [Blueprint skill](../skills/blueprint-ui/SKILL.md).
+- **One page owns scrolling.** A destination's `AdwPreferencesPage` scrolls and
+  clamps itself; do not wrap it in another scroller. Updates appends its extra
+  groups to the shell's same preferences page. Banners belong in toolbar bars.
+- **Callbacks are reusable.** Refreshing lists route buttons/dialogs through
+  `buttonRoute`, `dialogRoute` and `signalroute`, not fresh per-row callbacks
+  that exhaust purego's trampoline table. Switch mutations use guarded
+  `GtkSwitch::state-set`, not generic property notifications.
+- **State outlives failed work.** Reuse `actionstate` gates, refresh generations
+  and row bookkeeping. Failures/previews restore retryable controls; stale
+  workers cannot replace newer rows. A completed gate is only for a control
+  that becomes permanently unavailable after live success.
+- **Progress is bounded and honest.** Coalesce streamed output into bounded
+  main-thread callbacks and retained rows (`progresslog`, `stageProgressSink`).
+  Quiet operations keep a reusable pulsing indicator; opaque commands do not
+  imply per-package progress. Render external text without markup.
+- **Decisions stay GTK-free.** Put decidable presentation and transitions in
+  pure packages, not widget handlers. Packages importing puregotk cannot host
+  headless unit-test binaries. See [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md).
 
 ### Dry-run mode
 
-Decision record: [ADR-0009](../adr/0009-dry-run-output-convention-and-single-decision-structs.md)
-(the `[DRY-RUN]` output convention and single decision structs).
-
-`internal/dryrun` (`internal/dryrun/dryrun.go`) is the single process-wide preview-mode authority. `app.New()` calls `dryrun.Set(true)` once at startup when `--dry-run`/`-d` is passed, and every integration — homebrew, flatpak, bootc, updex, avatar, and `internal/views` itself (for configured custom maintenance scripts, which have no wrapper package of their own) — reads `dryrun.Enabled()` rather than keeping a flag of its own.
-
-Preview feedback must never claim a mutation succeeded or alter confirmed rows,
-counts or switches. Pure `actionmsg`/`actionstate` decisions pair admission and
-feedback wherever a successful action also changes UI state. Failures and
-previews restore retryable controls; only a verified live success can complete
-controls that become permanently unavailable. Provider wrappers independently
-suppress external mutations as defense in depth. See
-[package manager action patterns](package-managers.md) for the per-action seams.
-
-**Intentional exception:** system staging completion **toasts** are dry-run-aware (`actionmsg.SystemStage`), but expander **subtitles** deliberately are not. The subtitle is a persistent status readout of live state — what deployment is actually staged/booted right now — not a per-click completion claim, so it stays accurate and unchanged in both dry-run and live mode. Only the toast, which inherently answers "what did this click just do," needed dry-run-specific wording; there is no mutation left to gate once the subtitle is deliberately excluded, which is why `SystemStage` is string-only rather than a decision struct. bootc staging follows that split: its toast comes from `actionmsg.SystemStage`, while its subtitle stays live in both modes.
-
-Per-wrapper mechanics:
-
-- **Homebrew/Flatpak**: state-changing commands are skipped entirely at the wrapper layer (return mock/empty results); ordinary package-action toasts use the plain `actionmsg` string functions (`Install`, `Uninstall`, `Pin`, `Upgrade`, `Update`, `SelfUpdate`, `BundleDump`, `Cleanup`). Installed Homebrew package uninstall/pin actions pair that text with `actionstate` decisions: live success completes the old row controls and refreshes the installed inventory, while failure or dry-run restores the controls. App collections install through one group Install action over the checked entries; a fully selected collection installs through `brew bundle` and a partially selected one through per-item commands, and under dry-run the wrapper skips both and the toast says so. Whether a collection entry reads Installed comes from the observed package inventory, never from the install's own return.
-- **Updex**: `EnableFeature`/`DisableFeature`/`UpdateFeatures` skip their `pkexec` call entirely under dry-run and return empty/nil results; the helper binary itself (`cmd/chairlift-updex-helper`, dispatch logic in `internal/updexhelper`) also honors `--dry-run` for `update`, matching `enable-feature`/`disable-feature`, as defense-in-depth even though it's unreachable from the wrapper today.
-- **bootc**: `StageUpdate` short-circuits before invoking pkexec: it logs the would-be command, emits a synthetic `EventMessage` + `EventComplete` pair on the progress channel, and returns — the stage script is never actually run (see the exception above for the toast/subtitle split).
-- **Homebrew tap trust**: `trustTap` (`internal/views/updates_page.go`) computes `decision := actionmsg.TapTrust(dryrun.Enabled(), tap.Name)` once, after a successful `homebrew.TrustPackages` call, and gates removing the tap's row, hiding the group, and refreshing outdated packages on `decision.MutateUI`.
-- **views (custom maintenance scripts)**: `runMaintenanceAction` (`internal/views/maintenance_page.go`) calls `actionmsg.MaintenanceScript(dryrun.Enabled(), title)` once, before spawning its goroutine, to get a `ScriptDecision{Execute, Toast}`: when `Execute` is false no `exec.Cmd` is ever constructed (no `pkexec`, no direct script exec) — only a `[DRY-RUN] Would execute: ...` log line.
-- **Features page switch confirmation**: `onFeatureToggled` (`internal/views/features_page.go`) computes `decision := actionmsg.FeatureToggle(dryrun.Enabled(), enabled, name)` once, after a successful `updex.EnableFeature`/`DisableFeature` call, and branches solely on `decision.Confirm` to decide whether the switch confirms the flip (`toggle.set(enabled)`) or reverts to its pre-click state (`toggle.set(!enabled)`); `set` is `guardedSwitch`'s programmatic move, which marks itself so the resulting `::state-set` is not treated as another user action. Features page toggles and the feature Update button share `updateFeaturesGate`, so only one of these mutations runs at a time; a toggle refused by the gate reverts and says why, a refused Update button says why, and a toggle's switch is insensitive while its own call runs.
-- **avatar**: `Applier.Dispatch` (`internal/avatar/applier.go`) reads `dryrun.Enabled()` first and returns before constructing a process or opening a file, logging `[DRY-RUN] would set avatar to <id>`. A live dispatch reports which route took effect as an `avatar.Route`: `RouteBusctl` when AccountsService accepted `SetIconFile` over `busctl`, `RouteFaceFile` when that call failed or was unreachable and the icon was written to `~/.face.icon` and `~/.face` instead (picked up at the next session start, not immediately), and no route at all when both failed. A canceled context is reported as an error rather than being treated as an unreachable bus, so an abandoned action never writes into the user's home. The dispatch is deliberately unprivileged — AccountsService authorizes it for the caller's own account — so it takes no `pkexec` route and is classified as an unprivileged `os/exec` site in `internal/installcheck`'s journal contract. Its one caller is the Livery page's Profile Picture section (`account_group`, `internal/views/profile_picture.go`): opening the page only stats `avatar.CurrentPicture`'s candidates (AccountsService's icon, then `~/.face.icon`, then `~/.face`); picking a catalog row reads a precomputed 256x256 preview PNG from the binary and shows it, and only Apply transcodes the bundled illustration at AvatarSize, writes the PNG to `$XDG_CACHE_HOME/chairlift/avatar.png` and dispatches it. Under `--dry-run` Apply writes no file and Dispatch logs the preview. A failed preview or dispatch reveals a banner in the chooser and leaves the account's picture and the page row unchanged; the toast text for each route comes from `pageview.AvatarApplied`, so a face-file write never reads as a live change. The chooser is an `AdwDialog` built once with one row per catalog entry and one `row-activated` handler. **Adding a raptor is three steps, with no codegen step to run afterwards**: commit the illustration at `internal/avatar/assets/<base>.webp` (flat, though upstream nests it under `characters/header/`), add its `id<TAB>common name<TAB>species<TAB>path` row to `internal/avatar/assets/dino-avatars.txt` — the path stored literally, never derived from the id, and its base name unique because that base name is the key into the flat bundle — and write the 256x256 preview to `internal/avatar/assets/preview/<base>.png` by transcoding that illustration with `avatar.TranscodePreviewWebPToPNG` at `avatar.PreviewSize`. The previews are committed data, not build output, so a transcoder or `PreviewSize` change leaves every one of them stale silently: `TestEmbeddedPreviewCoversEveryCatalogEntry` proves each entry has a preview of the right shape, never that it still matches what the current transcoder would emit.
-- **Developer setup**: Direct Developer Mode and implicit WSL/Docker promotion
-  use the same `developerGate` and `internal/devsetup.Run` sequence. When the
-  parent is off, the fixed `ublue.SetDeveloperMode` call must succeed before
-  child setup. Authentication failure/cancellation starts no child work; a
-  successful live grant updates the parent independently of later failures.
-  Child disable never demotes the parent. A preview neither confirms switches
-  nor treats suppressed operations as completed live stages. Optional
-  post-promotion work is configured on the GTK main thread and shares the run;
-  retry preserves completed optional stages without replaying the grant.
-- **Developer onboarding**: A confirmed live direct or implicit promotion
-  opens one Bluefin developer documentation page, never one tab per resource.
-  Browser dispatch reuses `UserHome.openURL`; failure does not reverse access.
-  Optional Pulp installation, OPML staging, and developer app collection
-  installation keep their config opt-ins and report their own outcomes. Pulp
-  uses system Flathub through Flatpak's authorization; OPML staging writes only
-  ChairLift's catalog, never Pulp's store. Preview, restore, disable, and failed
-  promotion perform none of these live follow-ons. See
-  [developer workstation components](package-managers.md#developer-workstation-and-gaming-components).
-- **Legacy desktop launcher cleanup**: `legacydesktop.Clean` (`internal/legacydesktop/legacydesktop.go`) runs in a background goroutine at startup. Under `--dry-run`, it logs what would be removed without deleting the file.
-### Configuration-driven UI visibility
-
-Each preference group on every page checks `config.IsGroupEnabled(pageName, groupName)` before building its widgets. Groups default to enabled if not specified in config. Both `maintenance_cleanup_group` and `reset_group` default to disabled in the default config.
-
-`internal/config/config.go` builds the effective `*Config` by overlaying a
-parsed file onto `defaultConfig()` field by field, not by replacing it
-wholesale — `mergeConfig` walks each page, `mergePage` walks each group within
-a page, and `mergeGroup` walks each field within a group. The overlay is
-driven by `rawConfig`/`rawPageConfig`/`rawGroupConfig`, a pointer-typed mirror
-of `Config`/`PageConfig`/`GroupConfig` used only for YAML decoding: a `nil`
-pointer means the file omitted (or explicitly nulled) that key, so
-`defaultConfig()`'s value survives; a non-nil pointer means the file set that
-key — including to an empty string or empty slice — so it replaces the
-default outright. This is why `maintenance_cleanup_group` stays disabled
-overall (and keeps its default `actions` entry) when a config file mentions
-the group only to flip an unrelated field. When every search candidate is
-absent, `Load()` returns `defaultConfig()`. An authoritative file that cannot
-be read or validated instead returns `disabledConfig()`: the same defaults
-for non-visibility fields, with every canonical group's `Enabled` field
-forced to false.
-
-**Legacy System-page input (`internal/config/legacy.go`).** After effective
-YAML resolution, schema validation recognizes `system_page`'s four historical
-groups without adding that page to `Config` or `SchemaPages`. All legacy fields
-and actions are validated before migration, including retired groups and
-values superseded by current settings. Before decoding, the two surviving
-groups (`bootc_status_group`, `channel_group`) supply omitted/null Updates
-fields; explicit current values take precedence. Information and health groups
-are ignored by runtime decoding. Similarly, the retired `maintenance_page`
-groups (`maintenance_brew_group`, `maintenance_flatpak_group`,
-`maintenance_optimization_group`), `updates_page` groups
-(`update_all_group`, `sysupdate_updates_group`), and `features_page` groups
-(`ai_group` with its retired `ai_images`/`ai_model` fields,
-`troubleshooting_group`) carried by pre-26.09 Bluefin releases (v0.12.x) and
-removed by the 26.09-alpha Control Center reorganisation, plus the
-`applications_page` groups retired when Apps became Homebrew-only
-(`applications_installed_group`, `flatpak_user_group`,
-`flatpak_system_group`, `brew_search_group`, still shipped by
-projectbluefin/common's `config.yml`), are recognized as
-known group names, validated alongside their canonical siblings, and stripped
-prior to runtime decoding so existing host files do not fail closed;
-`troubleshooting_group` first supplies omitted/null `help_page` fields and then
-moves on to `agents_page` with the old Help address. Source files,
-search precedence, and fail-closed handling for invalid inputs remain
-unchanged.
-
-**Strict loading and diagnostics.** The implementation lives in
-`internal/config`; [the configuration reference](../reference.md) describes
-operator-facing fields and defaults. Runtime loading follows one pipeline:
-
-1. Resolve a candidate's path and trusted/untrusted provenance before reading.
-   Only a genuinely missing candidate advances the search; a dangling
-   authoritative symlink fails closed.
-2. Parse exactly one YAML document. Empty input or top-level null is a no-op
-   overlay; malformed YAML and additional documents are errors.
-3. Validate the entire reachable source graph before resolving merges. Cycles,
-   malformed nodes, invalid merge operands and duplicate explicit keys are
-   rejected even in branches that merge precedence would later discard.
-4. Emit a fresh alias-free, merge-free effective tree. Explicit keys beat merged
-   values; earlier merge-sequence operands beat later ones. Source duplicate
-   detection follows yaml.v3's Kind/Value identity, while effective scalar-key
-   identity includes the resolved YAML tag. Alias-resolved explicit collisions
-   are errors, not silently chosen winners. Shared merge inventories are memoized
-   per resolution, so shared source graphs do not require exponential work.
-5. Validate schema names, key shapes and declared types before decoding and
-   overlaying defaults. Names come from the canonical structs and default group
-   maps (`SchemaPages`, `SchemaGroups`, `SchemaGroupFields`,
-   `SchemaActionFields`), not a second validator inventory. At every level,
-   inspect key shape, name membership, then the known name's value. Actions
-   must be mapping entries in a sequence; null entries are not zero actions.
-6. Validate privileged-action provenance again after overlaying defaults.
-   Only the fixed `/etc/chairlift/config.yml` and
-   `/usr/share/chairlift/config.yml` candidates may define `sudo: true`
-   actions. Executable-relative and working-directory fallbacks cannot acquire
-   privileged execution through their contents or inherited enabled actions.
-   Privileged script paths must also be absolute.
-
-The source graph is bounded at 64 consecutive alias hops and 128 source-node
-visits on a root-to-leaf path; expansion is bounded at 100,000 emitted nodes,
-checked before allocation. Bounds and diagnostic attribution operate over
-shared-node inventories rather than expanding every path. Diagnostics name a
-positive source line, including deterministic attribution for synthetic nodes.
-
-`LoadError` distinguishes read, parse/type, and schema failures, preserves
-wrapped causes for `errors.Is`/`errors.As`, and renders a cause only once.
-Any authoritative failure returns `disabledConfig()` with every configurable
-group disabled. The `CONFIGURATION ERROR` log and persistent GTK-thread toast
-name the source and cause and instruct the user to fix it and restart. No
-lower-priority file can override a broken authoritative file.
-
-
-### Desktop environment detection (`internal/deskenv`)
-
-`internal/deskenv` is a pure, standard-library-only leaf package that answers
-which desktop environment the current session is running. It exists because
-some livery marks are GNOME surfaces — the GNOME app-grid icon is written into
-the Adwaita theme and the panel mark into an `org.gnome.shell.extensions`
-schema — so on an unsupported desktop every write can succeed while nothing
-changes. The desktop-specific surface table prevents that silent no-op. It is
-the detection half of the KDE support work in
-[Epic #211](https://github.com/projectbluefin/chairlift/issues/211): the
-livery surface table selects KDE's configured Kickoff applets for the app-grid
-mark (#215) and `org.kde.dolphin` in `hicolor` for Files (#216), while GNOME
-continues to use `view-app-grid-symbolic`, its panel extension and
-`org.gnome.Nautilus`. Kickoff customization is available only when the user's
-Plasma applet file contains a `plugin=org.kde.plasma.kickoff` section; the
-`AppGridAvailable` probe keeps the group insensitive and explains the missing
-target when no matching applet can be found.
-
-Foundation previews embed symbolic artwork. Apache's mark uses the current
-official ASF oak leaf from `https://www.apache.org/images/oakleaf.svg`, with
-unchanged geometry adapted to monochrome `currentColor`. It is ASF trademark
-artwork, not a Simple Icons CC0 asset; the source attribution distinguishes it.
-
-`Classify(env)` is the pure decision and owns all three outcomes. It returns
-`GNOME` when `XDG_CURRENT_DESKTOP` or `DESKTOP_SESSION` names GNOME or one of
-the sessions built on it (`GNOME`, `gnome-xorg`, `GNOME-Classic:GNOME`,
-`ubuntu:GNOME`, `pop:GNOME`, `gnome-flashback-metacity`); `KDE` when either
-names Plasma (`KDE`, `plasma`, `plasmax11`, `kde-plasma`, a
-`/usr/share/xsessions/plasma` session path) or, failing both, when
-`KDE_FULL_SESSION` is the literal `true`; and `Unknown` when no variable
-declares a desktop this package has a row for — a compositor with no ChairLift
-surface (Sway, Hyprland, i3, Xfce, Cinnamon, MATE), a container or TTY where
-all three are unset, or a marker set to a value other than `true`. `Detect()`
-is the thin production entry point that reads those three variables from the
-process environment; it composes no decision of its own. `Desktop.String()`
-names all three constants and answers `Unknown` for any value outside the
-enum.
-
-Two properties are load-bearing rather than incidental. `Unknown` is the
-enum's zero value, so a `Desktop` reached through a struct field or a map miss
-fails closed instead of reading as a supported desktop. And detection is an
-environment-variable read, never a process spawn: a detector that shelled out
-to `plasmashell --version` or `gnome-shell --version` would report which
-desktop is *installed* rather than which one is *running*, and would fail on a
-minimal host. `internal/installcheck`'s `TestDesktopDetectionSpawnsNoProcess`
-rejects an `os/exec` or `syscall` import and an `os.StartProcess` selector in
-the package — including in its test files — so the property survives a later
-rewrite that a PATH-based behavioral test would not catch.
-
-The three variables are ranked, and a value the package does not recognize
-does not end the search: each is an independent declaration, so `X-Cinnamon`
-in the standard variable makes no claim about the two others, and one of them
-may still be the specific answer. Rank matters in the other direction too,
-which is why `XDG_CURRENT_DESKTOP` is read first — on Ubuntu it holds
-`ubuntu:GNOME` while `DESKTOP_SESSION` holds only `ubuntu`, so reading the
-session name first would find nothing and blame the search order for the miss.
-`XDG_SESSION_DESKTOP` is deliberately not consulted: it duplicates the
-standard variable wherever it is set, and every variable added to the decision
-is another value that can disagree with the others and has to be ranked.
-`deskenv_test.go`'s decision table covers Aurora, both Bazzite variants, stock
-GNOME and Plasma on Wayland and Xorg, the distribution-prefixed GNOME
-sessions, and the unrecognized desktops, with every `want` written out rather
-than derived.
-
-### Host capability floor (`internal/capability`)
-
-`internal/capability` is the puregotk-free authority for what this host can
-back: it answers, per page and group, whether the tool or asset that group
-exists to drive is present. It exists because ChairLift's documented
-degradation policy — a group whose backing tool is absent is hidden rather
-than rendered inert — needs one read-only classification instead of the
-mutually inconsistent answers the views layer once derived for itself.
-
-A capability is the presence of a backing tool or asset, never a runtime
-state. Flatpak, Distrobox and Podman resolve through `exec.LookPath`.
-Homebrew uses `homebrew.ResolveExecutable`: PATH first, then the fixed Linuxbrew
-fallback shared by visibility and execution. `BootcStage` and `ImageDescriptor`
-resolve from `os.Stat` against `bootc.StageScriptPath` and
-`imageinfo.DescriptorPath`.
-Every probe is non-blocking by construction, which is the constraint page-level
-resolution inherits: it runs synchronously on the GTK main thread during `buildUI`. That
-is also the line between this package and the gates that stay asynchronous —
-whether this machine is booted from a bootc deployment, whether updex has
-features configured, and what `uupd.timer`'s systemd state is are all queries
-rather than presence checks, so those groups keep their existing async gates,
-build hidden shells, and are revealed once the query answers.
-
-`Detect` resolves the host through the package's `Probe` seam, whose production
-value is `exec.LookPath` and `os.Stat`; `SetProbe` replaces it, which is the
-seam the `chairlift_e2e` walkthrough capability stub (`CHAIRLIFT_CAPABILITIES`)
-uses. `DetectWith` is the pure core `Detect` wraps and what the tests drive
-directly. Nothing here caches: the caller resolves once per session and keeps
-the result, so sidebar accelerators and items cannot shift under the user's
-cursor. That immutability
-is a contract on the caller rather than a package-level cache, which would also
-make a test's probe substitution order-dependent.
-
-`Set.Supports(page, group)` is the `func(page, group string) bool` predicate
-`navigation.VisibleItems` already accepts. It resolves the prerequisites table,
-where a group is satisfied by **any one** of the listed capabilities:
-`bootc_updates_group` needs the stage script, `agents_group` needs Homebrew,
-`reset_group` needs Flatpak or Distrobox because powerwash's two steps
-independently skip when their own tool is absent. A group with no capabilities
-requires nothing of the host and is listed anyway, so that "no host
-prerequisite" is a recorded decision rather than an omission; two of those
-(`bootc_status_group` and `features_group`) are named in the table's own
-comment because they read like omissions. `Compose(configured, set)` composes
-the administrator's `Config.IsGroupEnabled` with a resolved set and pins the
-floor's direction: configuration may subtract from the capability set and never
-add to it, and a nil configuration predicate composes to false everywhere,
-matching `VisibleItems`' treatment of a nil predicate and the repository's
-fail-closed rule.
-
-The table is total over the configuration schema, and both directions are
-enforced. `internal/installcheck`'s `TestCapabilityPrerequisitesMatchConfigSchema`
-holds `capability.Prerequisites()` and the `config.SchemaGroups(page)` pairs to
-set equality, and `TestEveryConfigurableGroupIsClassifiedOnce` names the two
-failure shapes separately — unclassified and duplicated — because they need
-different fixes. The totality gate is what keeps the floor honest, because
-`Supports` reports an *unclassified* pair as supported: that is deliberate, so a
-missing entry cannot silently hide a group at runtime, which means the runtime
-answer alone will not reveal the mistake. Without the gate, a group added to
-`config.yml` and wired into a view would render on hosts whose backing tool is
-absent — the exact degradation policy this package exists to enforce — and no
-other gate would notice.
-
-The Help page's "Why Is Something Missing?" expander is the floor's one
-explanation surface. `pageview.UnavailableFeatures(set, configured)` walks
-`capability.Prerequisites()` with the window's already-resolved set — it never
-re-probes — and lists each group that configuration enables but `Supports`
-rejects, titled for a person and subtitled with the missing capability. A group
-configuration disabled is the administrator's choice and is not listed. Its
-title table is held total over the capability-gated groups by
-`TestEveryCapabilityGatedGroupHasATitle`.
-
-The package's own tests are table-driven and derive their cases from the tables
-they cover, rather than restating them. `TestDetectWithResolvesEveryCapability`
-walks every capability either probe table provides, across each single-tool
-host, the two asset-capability splits, a fully capable host, and a probe that
-cannot answer at all. `TestEveryRequiredCapabilityHasAProbe` rejects a
-prerequisite naming a capability no probe resolves — a typo in the table still
-compiles, because a `Capability` is a string. `TestSupportsAnyOneCapabilityOfItsGroup`
-covers every prerequisites entry: the empty host, each of a multi-capability
-group's capabilities in isolation, and a host holding only unrelated
-capabilities. Running this file is itself the purity check ADR-0007 describes:
-a puregotk import anywhere in the dependency graph would panic at package init,
-before any test function ran.
-
-Every entry path consumes the resolved set `Window.buildUI` detects once. The
-sidebar (`navigation.VisibleItems`) and the first-run assistant take
-`Window.effectiveEnabled`, which is `Compose(Config.IsGroupEnabled, set)`, and
-`views.New` receives the same set so each view builder's `groupEnabled` composes
-the identical predicate (#205). The update coordinator is the one consumer that
-keeps the two facts apart: `buildUI`'s `sourcePolicy` hands
-`updateflow.Coordinator.Check` a `map[SourceID]updateflow.Policy` whose
-`Configured` is `Config.IsGroupEnabled` and whose `Supported` is
-`Set.Supports`. A source is checked only when both hold and its provider is
-available, exactly as the composed predicate would allow, and a source either
-fact leaves out is not listed on the Updates page at all
-(`updatepresent.ShowSourceRow`): a row whose only content would be "you cannot
-use this" reports a state the reader can neither change nor act on, and calling
-it an administrator's choice names an actor who may not exist — the shipped
-Bluefin configuration disables `features_page.features_group` in the image
-itself (#675). Preferences still lists every source, locked switch included, so
-what is not updated stays discoverable where a reader would go to configure it.
-The views' own "not installed" placeholder branches that
-the floor made unreachable were removed in #206.
-
-### Package manager wrapper pattern
-
-Each wrapper in `internal/` follows a consistent shape:
-
-- Reads `dryrun.Enabled()` from the single process-wide `internal/dryrun` package (see "Dry-run mode" above) rather than keeping a package-level flag
-- `IsInstalled()` to check tool availability, plus `IsInstalledCached()` (`sync.Once`) for use from views during async startup
-- Homebrew, Flatpak, and Updex implement both `IsInstalled()` and `IsInstalledCached()`
-- List/Install/Uninstall/Update functions
-- Context-based timeouts. Homebrew and Flatpak both use a two-class model selected per invocation by an unexported `commandTimeout(args)` helper: 30s for read-only commands, 30m for state-changing ones (the keys of each package's `stateChangingCommands` map). updex reads and configuration-only helper commands use five minutes; helper updates use 30 minutes. GUI mutation contexts add five minutes for authentication. The longer helper budget requires the OS image to ship the updated helper; the GUI allowance works with an older installed helper. bootc uses 30 minutes.
-- Custom error types where needed
-
-### Shared OS staging progress (`internal/stageexec`)
-
-`bootc.StageUpdate` retains its provider API and fixed command —
-`pkexec /usr/libexec/bootc-update-stage` — but delegates execution to the
-pure-Go `internal/stageexec` leaf package:
-
-1. The caller creates the provider's `ProgressEvent` channel; the provider
-   type is an alias of `stageexec.ProgressEvent`.
-2. Each non-empty output line becomes an `EventMessage`; the channel is closed after either an `EventComplete` (success) or the function returning an error
-3. Event types: `EventMessage` and `EventComplete` — deliberately simpler than
-   a step/percent model because the stage script's own output is unstructured
-   log lines, not a structured progress protocol. Failures return as errors;
-   they are not duplicated into the event stream.
-4. `stageexec.Run` owns merged stdout/stderr, non-zero exits with the last output
-   line, deadline/cancellation classification, missing bare-name or absolute-path
-   executables, direct-child kill/reap, the single success completion, and
-   channel closure. `stageexec.DryRun` owns the synthetic preview/completion and
-   closure without constructing an `exec.Cmd`.
-5. The bootc view goroutine reads that event contract and
-   dispatches UI updates to the main thread via `sgtk.RunOnMainThread`.
-
-**Caller-visible outcomes.** The provider adapter preserves `bootc.Error`
-and `NotFoundError` while carrying the shared executor's
-message and cause. Both context-taking bootc functions classify failures with
-`errors.Is` against the context sentinels, and `bootc.Error` has an `Err error`
-field plus `Unwrap() error` so callers can tell them apart:
-
-- `StageUpdate` — deadline: provider `*Error` "Update staging timed out" unwrapping to `context.DeadlineExceeded`; cancellation: provider `*Error` "Update staging was canceled" unwrapping to `context.Canceled`; non-zero exit: provider `*Error` "update staging failed (exit N): <last output line>" matching neither sentinel; missing `pkexec`: provider `*NotFoundError`.
-- `GetStatus` — composefs status is read from world-readable deployment files; otherwise the CLI adapter preserves deadline/cancellation sentinels, non-zero exit diagnostics and missing-tool errors. `getStatusFrom` is the CLI test seam, not a bypass of composefs detection in the public entry point.
-
-The deadline and cancellation messages differ in both functions, and neither ever surfaces as `signal: killed`.
-
-**OS staging direct-kills; homebrew and flatpak kill the process group.** On
-cancellation `stageexec.Run` kills only the direct child (`cmd.Process.Kill()`)
-and sets no `Setpgid`, because both staging adapters run under `pkexec` and the
-privileged child cannot be signaled as an unprivileged process group. The
-unprivileged Homebrew and Flatpak runners instead kill their whole process
-groups so download helpers are not orphaned. Making either privileged staging
-path group-killable is a privilege-model change.
-
-**`helperexec` bounds the wait; it does not stop the work.**
-`internal/helperexec.Run` has the same privilege constraint and sets a finite
-`WaitDelay` (5s, matching `internal/maintenanceexec`) so cancellation returns
-even when a privileged descendant of the helper inherited stdout/stderr and
-still holds those pipes open. Only the direct `pkexec` child is killed, so
-that descendant may keep mutating the system after `Run` returns; the
-cancellation message therefore reads "command canceled (privileged work
-already started may still be running)" rather than implying the action
-stopped, and surfaces rendering it must not imply otherwise. Coordinating
-deadlines with root descendants (issue #82's broader ask) would require a
-privilege-model change.
-
-Because `WaitDelay` applies to every run, `cmd.Run` can report
-`exec.ErrWaitDelay` for a helper that already finished. `Run` classifies from
-the helper's own exit status in that case — success stays success (with
-possibly truncated captured output) instead of inviting a retry of work that
-already happened, and a non-zero exit keeps its "command failed (exit N)"
-message. For the same reason a cancel or deadline racing a genuine helper
-failure does not mask it: the context classification applies only when the
-helper was killed rather than exiting on its own. `helperexec.Error` carries
-an `Err error` with `Unwrap`, so "command timed out" and the cancellation
-message match `context.DeadlineExceeded` / `context.Canceled` under
-`errors.Is`, the convention `stageexec` already follows.
-
-**Why a stage script instead of `bootc upgrade`:** upstream `bootc upgrade`'s registry-transport pull currently fails on snow's composefs images. The snow-shipped `/usr/libexec/bootc-update-stage` script works around this: `podman pull` fetches the image into containers-storage (podman's pull path works where bootc's does not), then `bootc switch --transport containers-storage` stages the already-pulled image as the next boot deployment. This keeps the actual upgrade logic in one place (the stage script) rather than duplicating pull/switch orchestration in ChairLift; ChairLift only invokes the script via pkexec and streams its output. The script is idempotent — it exits 0 without staging anything when the deployment is already current.
-
-### bootc progress UI (updates page)
-
-`onBootcStageClicked` admits staging through `UpdateShell.beginMutation`, disables its button and starts a native spinner. `stageProgressSink` coalesces streamed messages into bounded main-thread callbacks and caps permanent log rows at `progresslog.DefaultLimit`; the subtitle discloses omitted lines. Streamed text renders with markup disabled. Completion waits for channel closure and the staging worker, then re-reads bootc status rather than interpreting command output. `finishMutation` releases admission and restores controls; a successfully verified live stage starts a fresh coordinator check. A successful status read refreshes Compare references, while a failed read preserves known state and reports that the outcome could not be verified. A successful stage command alone never proves a restart is required: the stage script is idempotent.
-
-### Update badge tracking
-
-`internal/updateflow.Coordinator` owns the source inventory and aggregate badge.
-The shell renders its immutable snapshot; manual update actions share its mutation
-admission and request fresh observations after live success. Failed observations
-preserve confirmed inventory instead of inventing a zero count. No separate
-`UserHome` badge counter or Flatpak update-status owner exists.
+[`internal/dryrun`](../../internal/dryrun/) is the process-wide preview authority.
+Providers suppress mutations independently of UI feedback. A nil return from a
+suppressed operation is not installation, changed state or a completed live
+stage: preserve confirmed inventories, switches and preferences. Read-only
+observations remain real. The output/decision contract is
+[ADR-0009](../adr/0009-dry-run-output-convention-and-single-decision-structs.md).
 
 ### Privileged operations
 
-Decision records: [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md)
-(the fixed-path pkexec boundary and helper argv re-validation) and
-[ADR-0002](../adr/0002-usr-prefix-is-the-only-supported-install-prefix.md)
-(`PREFIX=/usr`). ADR-0006's two-package split is superseded: ChairLift ships
-only the release archive described under "Privileged integration delivery"
-below.
+Root operations use PolicyKit with these fixed executable boundaries:
 
-bootc staging, updex, and Bluefin-family system operations
-require root for state-changing operations. They invoke commands through
-`pkexec` (PolicyKit). bootc runs `pkexec /usr/libexec/bootc-update-stage`
-directly (polkit action id `io.projectbluefin.chairlift.bootc.stage`), updex delegates to the fixed
-absolute path `internal/updex.HelperPath` (`/usr/bin/chairlift-updex-helper`),
-and Bluefin-family writes delegate to `internal/ublue.HelperPath`
-(`/usr/bin/chairlift-helper`). Policy files are installed for all three
-fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
-`data/io.projectbluefin.chairlift.updex.policy`, and
-`data/io.projectbluefin.chairlift.ublue.policy`.
-
-The sixteen ublue commands include fixed `gaming-switch`, `kvm-enable`, `docker-enable`,
-`docker-disable`, and `docker-update` actions alongside pin/unpin. The parser accepts no arbitrary
-account, service, image or command argv. Privileged developer options stay
-visible when their installed actions are missing, with affected controls insensitive.
-WSL Mode defaults to nsl on Linux amd64, with Lima as an alternative backend;
-an existing Lima-only machine retains Lima. Both require accessible `/dev/kvm`;
-nsl also requires the account's `kvm` group membership. A new grant needs a
-new login only when `/dev/kvm` itself was not accessible.
-`dx-enable`, `kvm-enable` and `docker-enable` first copy a group that only the
-image's `/usr/lib/group` defines (nss-altfiles, as rpm-ostree composes ship
-them) into `/etc/group`, GID unchanged, because `usermod -aG` edits
-`/etc/group` alone and otherwise refuses the group
-(`internal/ubluehelper.EnsureLocalGroup`).
-The GUI first promotes Developer Mode through the fixed `dx-enable` helper
-when Docker or WSL is enabled with developer access off. Refused or canceled
-authentication aborts child setup. Docker then calls `ublue.SetDocker` through
-the fixed `docker-enable` helper and, only once that succeeds, retires
-v26.10.10's rootless user daemon and `rootless` CLI context. On a host whose image ships
-`/usr/lib/systemd/system/docker.service` (Bluefin DX), that helper removes any
-units it wrote earlier and enables the image's `docker.service` and
-`docker.socket`. Elsewhere it installs the daemon itself
-([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)):
-`internal/dockerbrew` verifies Homebrew's JWS-signed formula index against
-the compiled-in `homebrew-1` key, downloads the fixed daemon formula set's
-bottles from GHCR by the SHA-256s that index names, extracts only mapped
-files into root-owned `/var/lib/chairlift/docker`, patches dynamic ELF
-interpreters and search paths to the system loader and `$ORIGIN/../lib`,
-smoke-runs `runc` and `dockerd`, and swaps the `current` link atomically. The
-helper then writes marker-bearing `docker.service`/`docker.socket` units to
-`/etc/systemd/system` (never overwriting an unmarked file), creates the
-`docker` group with `groupadd -f -r` when the account database lacks it,
-relabels the runtime with `restorecon` only under enforcing SELinux, adds the
-invoking account, enables the socket, and starts the service. Root never
-executes or loads anything from the user-owned Homebrew prefix. After the
-helper, the GUI installs the user-scope `docker`, `docker-buildx`, and
-`docker-compose` formulae and links absent CLI plugins. This second action may
-ask for authentication separately. `docker-update` repeats the verified
-install and restarts the daemon only when the bottle set changed; it is a
-no-op on image-unit hosts. The Updates page's Developer tools source offers it
-when Homebrew's unsigned per-formula API is newer than the installed manifest.
-Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent
-of `DOCKER_HOST` and `XDG_RUNTIME_DIR`. Newly granted group access requires a new
-login, not a false Ready result (`NeedsLogin` / `ErrDockerNewLogin`); an account
-not listed in `docker` at all is `NoAccess`, shown off so enable grants access.
-Not-found units are installable, not unavailable. Both unit
-reads must succeed before `Active` is trustworthy; a later socket error preserves
-that observed state so supported stop remains available. Disable uses the fixed
-`docker-disable` helper, stops both units for all accounts, and retains the
-runtime, data, group membership, and Developer Mode. Masked units or missing
-helper actions need an image/administrator fix.
-Native VS Code setup is a separate optional user-scoped outcome: seed absent
-settings without rewriting JSONC or symlinks, install Bluefin DX's three
-extensions, and commit the upstream version-1 marker only after success. Marker
-presence alone is not proof the extensions were installed. Missing native `code`
-skips the step; an editor failure never reverses Docker/developer access and
-remains retryable;
-preview writes no settings or marker and launches no editor CLI. A confirmed
-Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
-Homebrew when available; installation failure does not reverse developer access.
-Development Apps provides native install rows for Visual Studio Code, VSCodium,
-and JetBrains Toolbox through `ublue-os` Homebrew taps only (no personal taps).
-Cursor and Antigravity use system FlatPark Flatpaks; Zed uses system Flathub.
-These six entries are the complete current catalog; Sublime Text is deliberately
-excluded for now by user approval, not a blocked requirement.
-Exact package tokens must be verified, never guessed.
-
-Developer Mode is a detail page under Features, reached by its entry row or
-`--dx-mode`; Back returns to Features. It owns the Developer Mode, WSL, Docker,
-and developer setup activity controls. Gaming setup activity stays on Features.
-The Development Apps group shows the six verified IDEs with their source,
-installed status, and individual Install actions, replacing the generic Bazaar launcher.
-Installation does not require enabling Developer Mode. GNOME Builder, Kate,
-and individual JetBrains IDE rows are excluded.
-
-Features also shows Hardware Enablement on ASUS and Framework machines detected
-through DMI. Ordinary activation only reads Homebrew's installed-cask inventory.
-Explicit initial setup installs missing `ublue-os/tap` casks: `asusctl-linux`
-and `rog-control-center-linux` for ASUS, `framework-tool` and
-`framework-wallpapers` for Framework. Active requires installed versions for
-every profile package; command or inventory failures never imply success.
-Dry-run previews missing packages without claiming they are installed.
-After verified installation, the existing Livery default path can apply the
-embedded ASUS or Framework panel mark. It preserves prior selections and
-opt-outs, requires the supported panel extension, and saves previous settings
-for restoration. The packages themselves do not supply these symbolic icons.
-
-**Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
-resolves the program it's asked to run to an absolute path and compares it
-textually against the `org.freedesktop.policykit.exec.path` annotation on each
-action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's sixteen actions annotate
-`/usr/bin/chairlift-helper`. Both helper policies use
-`org.freedesktop.policykit.exec.argv1` to select exactly one action for the
-first helper argument. PolicyKit does not validate the remainder of argv, so
-the privileged helpers are a second boundary: `internal/updexhelper.ParseInvocation`
-accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
-[--dry-run]`, and `update [--dry-run]`, while
-`internal/ubluehelper.ParseInvocation` accepts only `channel-switch
-<stable|testing> [--dry-run]`, `dx-enable [--dry-run]`, `dx-disable
-[--dry-run]`, `restart [--dry-run]`, `rollback [--dry-run]`,
-`auto-updates-enable [--dry-run]`, `auto-updates-disable [--dry-run]`,
-`driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
-[--dry-run]`, `pin <YYYYMMDD> [--dry-run]`, `unpin [--dry-run]`,
-`kvm-enable [--dry-run]`, `docker-enable [--dry-run]`,
-`docker-disable [--dry-run]`, `gaming-switch <enable|disable> [--dry-run]`, and `docker-update [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
-absolute path depending on the invoking process's `$PATH`, which makes the
-path comparison miss and falls `pkexec` back to the generic, more restrictive
-action. The wrapper packages therefore always invoke their fixed `HelperPath`
-constants, never a bare name.
-
-Two inputs deliberately never cross the pkexec boundary as arguments:
-
-- **The target image reference.** Only a validated channel, driver, or day word is passed. The helper
-  resolves the concrete reference itself, from the read-only image descriptor
-  at `internal/imageinfo.DescriptorPath` and the channel table below. An
-  authenticated caller therefore cannot direct `bootc switch` at an arbitrary
-  registry. When `bootc switch` fails and the derived target is the image of
-  the rollback deployment — switching back to the channel or driver the host
-  just left, which composefs refuses as a duplicate fs-verity digest —
-  `channel-switch` and `driver-switch` run the fixed `bootc rollback` argv
-  instead, so the request still lands on that image at the next boot.
-- **The username.** The helper resolves it from the `PKEXEC_UID` that pkexec
-  sets on the invoking session (`internal/ubluehelper.TargetUID`, which
-  rejects an absent, non-numeric, or root value), so an authenticated caller
-  cannot add an unrelated account to the privileged developer groups.
-
-**Privileged action journal (`internal/journal`):** Every privileged dispatch
-point through `helperexec.Run` unconditionally journals before execution
-(`journal.Record`), recording the action name, input arguments, and would-run
-argv, marked as `suppressed: "dry-run"` in preview mode or `suppressed: "no"`
-for live attempts. After a live command returns, `helperexec.Run` records the
-execution outcome (`journal.RecordOutcome`) with `outcome` in `succeeded`,
-`refused` (PolicyKit authentication dismissed or denied with pkexec exit status
-126, or 127 when not an unexecutable helper execution error), `failed` (other
-non-zero exit with exit code, including a missing or unexecutable helper),
-`timed-out`, or `cancelled`. Before executing a derived privileged command
-(such as a concrete `bootc switch` target), `cmd/chairlift-helper` prints a
-machine-readable line (`chairlift-helper: exec <argv json>`); `helperexec.Run`
-parses this line from output, strips it from caller-visible stdout/stderr, and
-includes the concrete argv list as `executed` (`[][]string`) in the journal
-outcome record. The marker is self-reported and can also be emitted by helper
-children; it is an audit aid, not independent proof of execution.
-`chairlift-updex-helper` calls the updex library in-process and runs no
-subprocess, so its outcome records carry no `executed` list.
-
-Game Mode changes the operating system image through the existing fixed
-`gaming-switch enable|disable` helper command. The helper derives the
-published counterpart from its own image descriptor and channel/driver tables;
-no caller-supplied image reference crosses the privilege boundary. The view
-uses update-shell admission, preserves the existing Steam/Gamescope/Open Gaming
-Collective kernel warning, and stages the switch for a separate restart.
-
-This operation does not install, uninstall, inventory, or clean up gaming
-Flatpaks in either scope. User-installed apps and apps an older release installed
-stay untouched. The former optional Gaming Tools toggle and its package
-management backend are removed rather than retained behind a hidden route.
-
-
-### Desktop integration switches (`internal/shellextensions`)
-
-`features_page.desktop_integrations_group` owns the Tailscale Integration and
-Sync Folder Integration rows. The pure-Go provider reads `gnome-extensions
-list` and `list --enabled`, preserving GNOME's choices, and permits only
-`enable`/`disable` with the two fixed UUIDs from Dakota's Tailscale QS build and
-Bluefin Bling's Sync Folder metadata. No service or privileged helper is called.
-The view uses guarded switches, disables input during reads and writes, and
-re-reads after mutations to detect rejected changes. Failed verification leaves
-the switch insensitive; missing tools, sessions and extensions are explained.
-Default presentation is Tailscale on and Sync Folder off, but existing GNOME
-state always wins. OS-image extension defaults remain owned by the image.
-Sync Folder is off by default because it is early (#449), not locked: its
-copy says "Experimental" and its switch enables the extension like any other,
-so no description may call a switchable integration "not ready".
-
-### Custom Command Menu developer visibility (`internal/devmenu`)
-
-`internal/devmenu` manages the Custom Command Menu GNOME Shell extension (`org.gnome.shell.extensions.custom-command-list`) visibility for developer tools (Terminal and Containers):
-
-- **Tuple scanning:** Entries are stored across `command1` through `command99` as `(sssb)` GVariant tuples representing `(label, command, icon, visible)`. `devmenu.Apply` scans entries by label matching `Terminal` or `Containers` rather than hardcoding fixed command indices, since Bluefin ships Terminal at `command8` with Containers absent, while Dakota ships Terminal at `command8` and Containers at `command9`. The scan is one `dconf dump /org/gnome/shell/extensions/custom-command-list/` rather than a read per key: dconf resolves through the whole profile, so the dump already carries distro defaults as well as user overrides, and a toggle spawns a handful of processes instead of ~300. The only remaining per-key call is `dconf read -d` for a matched entry, needed to tell an override from a reset.
-- **Field preservation:** Non-visibility tuple fields (`command`, `icon`) and unrelated commands are preserved intact.
-- **Distro vs. user layer:** Shipped distro defaults come from `/etc/dconf/db/distro.d/`. Toggling visibility distinguishes enforcing policy from resetting to defaults: when the desired state matches the distro default (e.g. `visible=true` on developer enable), `devmenu.Apply` resets the user key (`dconf reset`) so future distro defaults continue to shine through. When turning Developer Mode off and the distro default has `visible=true`, it explicitly writes `visible=false` to the user layer because a reset would reveal the visible default.
-- **Supported environments and preview:** A missing extension or non-GNOME environment (e.g. Plasma) is a supported no-op (`devmenu.Apply` returns `nil`), whereas operational read/write failures return an error and are not hidden as success. Under preview (`dryrun.Enabled()`), mutations are skipped and logged as `[DRY-RUN] would set Custom Command Menu <key> visible=<bool>` (or `[DRY-RUN] would reset Custom Command Menu <key> to default` for resets). The call site composes no tuple or visibility text of its own.
-
-### Unified update run (`internal/updateflow`)
-
-The Updates destination is `internal/views.UpdateShell`, a status-first
-surface in three layers that must stay separate:
-
-- `internal/updateflow` is the pure coordinator. `Coordinator.Check` checks,
-  concurrently, every source that is configured, supported by the host
-  capability floor, available, and enabled in the user's preferences;
-  `Coordinator.UpdateAll` applies pending items serially in the provider order
-  `Window.buildUI` constructs — applications (Flatpak), developer tools
-  (Homebrew), system components (updex), printer drivers (verified
-  printer-application refresh), then the operating system (bootc staging). Every published `Snapshot` is immutable and generation-guarded, so
-  a stale worker cannot overwrite a newer state. A failed source does not
-  abort the run; `ActionRetryFailed` re-applies only sources that still carry
-  an apply error. Post-update maintenance (`updateproviders.NewMaintenance`,
-  gated by `maintenance_freespace_group`) runs only after a clean live run and
-  only when the user's `MaintenanceAfterUpdates` preference is set. When that
-  group is disabled, Preferences shows the preference off, insensitive, and
-  "Disabled by administrator" (`updateproviders.CleanupConfigured`).
-- `internal/updateproviders` holds the production `updateflow.Provider`
-  values, which wrap `internal/flatpak`, `internal/homebrew`, `internal/updex`,
-  `internal/printerapp`, and `internal/bootc`; the coordinator executes nothing itself. Flatpak
-  reconciliation verifies that all applied refs for each executed scope have
-  cleared, ignoring newly appeared updates.
-- `internal/views/updatepresent` maps one snapshot to the shell's status
-  line, failure detail line, and action label, and each source's row
-  subtitle. Failures are said in plain words; the raw error is logged by the
-  coordinator where it is recorded, never shown. The sentence after a failure
-  comes from `updatepresent.FailureHint` and names a cause only when the
-  error shows one: "Check your internet connection." for a Go network error
-  or a tool message naming a failed connection (an unresolved host, a refused
-  or timed-out connection), "It took too long." for an exhausted deadline,
-  and otherwise "Details are in the log." — a local Flatpak, Homebrew, or
-  bootc failure is not told to check a connection it never used. The shell's
-  single-row update and tool-refresh failures use the same hint.
-  `updatepresent.ShowSourceRow` decides which sources get a row at all: one
-  that configuration disables for the whole machine (`Configured` false), or
-  one this host cannot back — the provider's own `Available` probe says no, or
-  `Policy.Supported` is false because the capability floor cannot back it —
-  gets none, and a group left without rows is hidden with them (#675).
-  `updatepresent.SourceLockReason` still supplies the two lock sentences
-  ("Disabled by administrator" for `Configured` false, "Not available on this
-  computer" otherwise), which the Preferences dialog's update-source rows
-  (`pageview.UpdateSourcePreferenceSubtitle`) use too, so the two surfaces
-  never word one source differently. Such a locked source's
-  Preferences switch is shown off and insensitive and is not bound to its
-  GSettings key (`pageview.UpdateSourcePreferenceLocked`): bound, it showed
-  the stored preference — on — beside "Disabled by administrator". `ItemRows`
-  decides which pending items get a child row: the Operating System source's
-  one pending item is its deployment, so that source shows
-  "Update available: <booted> → <new>" on its own row and gets no child row
-  repeating its name. The fold is keyed on the source ID, never an item's
-  name; every other source keeps one row per item, because Applications and
-  Developer Tools carry each item's only Update button on that row.
-
-The shell learns each source's policy from `Window.buildUI`'s
-`sourcePolicy`, a `map[SourceID]updateflow.Policy` with `Configured` from
-`Config.IsGroupEnabled` and `Supported` from `capability.Set.Supports` (see
-"Host capability floor" above). The five sources are keyed to
-`bootc_updates_group`, `flatpak_updates_group`, and `brew_updates_group` on
-`updates_page`, and `features_group` and `printers_group` on `features_page`.
-
-The shell reads the user's preferences through the window's one
-`settings.Store`, which the Preferences dialog's switches are bound to as
-well. `Store.OnSourceChanged`, connected once in `buildUI`, calls
-`UpdateShell.PreferencesChanged` whenever an update-source key changes, and
-the shell starts a check when `updatepresent.RecheckForPreferences` says the
-snapshot on screen no longer matches (`Snapshot.StaleFor`) or a check started
-from older preferences is still in flight. The shell never flips a row
-itself: enablement stays the coordinator's, and a source the user just turned
-on has to be checked anyway. A mutation in flight refuses the check, so
-`finishMutation` asks again once the run ends. Every check also ends with
-`UpdateShell.checkFinished`, which starts another when
-`updatepresent.RecheckAfterCheck` finds the finished snapshot stale for the
-current preferences, so a change made while a check ran is never left until
-a manual Refresh; a snapshot still in `PhaseChecking` belongs to a newer
-check and is left alone.
-
-Everything else the Updates page owns is built by `buildUpdatesPage` into
-`UserHome.updatesPrefsPage`, which is the shell's own preferences page
-(`UpdateShell.PreferencesPage`, handed to `views.New` by the window): one
-`AdwPreferencesPage` with one scroller, whose first groups are the shell's
-hero and source groups. The groups that follow, in order, are Automatic Updates, System Version, System Update Details
-(dedicated download and Compare), Manage Source Trust, and Advanced
-channel/graphics controls. Application/tool source rows and item actions belong
-to the shell rather than duplicated preference groups. Configuration,
-capability and asynchronous runtime gates determine which groups are shown.
-The automatic-updates switch uses `guardedSwitch`: programmatic rollback after
-failure or preview must not request the opposite mutation.
-
-The dedicated download's button is labelled **Download**
-(`pageview.BootcStageButtonLabel`), and its idle subtitle says it downloads
-the newest version, asks for an administrator password, and installs at the
-next restart: the stage helper checks, pulls, and stages in one operation,
-so a "Check for updates" label promised less than it did. Its Details
-expander is built hidden and revealed by the first streamed line, because a
-stage can print nothing — on Dakota bootc logged its progress to the journal
-rather than to the pipe — and a failure then does not point at Details
-(`pageview.BootcStageFailureSubtitle`). System version renders through
-`renderSystemVersion` from every observed bootc status: the startup read, the
-dedicated download's re-read, and `OnUpdateFinished`'s re-read, ordered by a
-`RefreshGate` so an older read cannot replace a newer one. Its Details rows
-carry the whole build digest and selectable subtitles, because they exist to
-be quoted in a support request.
-
-Restart is the run's only privileged surface of its own. `PhaseRestartRequired`
-is reached only when a source reports that a restart is required — the OS
-provider reads it from `bootc status`'s staged deployment, because staging an
-already-current system succeeds without staging anything (on composefs
-`bootc.StageUpdate` answers from the registry and skips the script, whose
-`bootc upgrade` fails on a current system) — and the header offers no
-primary button; its one status line reads "Restart to finish updating".
-The header is a plain box built once in `UpdateShell.build`: the wordmark,
-then the primary action (or, while checking or installing, the progress
-bar in its place — determinate when `snapshot.Determinate` is true,
-otherwise pulsing), then one status line from
-`updatepresent.Presentation.Status`, with a second `Detail` line only for
-the two failure phases. `Presentation.ShowStatus` hides the header box
-whenever a presentation leaves it empty, so it adds no spacing. The shell
-uses 12px content spacing and a 12px top margin, and announces each phase's
-status line from the visible toast overlay. The status line carries the
-accessible description "Update status", which tells it apart from a source
-row with the same words. The Operating
-system row carries the action: its subtitle reads "Deployment
-staged" and a "Restart Now" suffix calls `UpdateShell.StartRestart`, which
-sends `ublue.Restart` through the `chairlift-helper` `restart` subcommand.
-Its argv is the fixed `systemctl reboot` (`ubluehelper.RestartArgs`) with no
-delay and no target; scheduled restarts would each need their own action.
-
-After a live run or a live single-row update (which reports its one source
-as completed), `UserHome.OnUpdateFinished` refreshes the installed Homebrew
-inventory when its source completed and, when the OS source completed,
-re-reads status to refresh Compare references and the System version
-readout. The coordinator remains the badge owner. A preview refreshes nothing.
-`UpdateShell.notifyUpdateComplete` sends the single desktop notification
-(see below) and skips previews.
-
-### Action journal and desktop notifications
-
-`internal/journal` is a port of finupdate's `action_journal.rs`: JSONL intent
-records plus live helper outcome records, appended when `$CHAIRLIFT_ACTION_JOURNAL` is set,
-a no-op otherwise. A dry-run invocation is recorded with
-`Suppressed: SuppressedDryRun` and the argv that would have run, which is
-what lets a test assert the fixed helper command and validated word arguments
-without granting privilege; image references are derived inside the privileged
-helper, not sent by the GUI.
-
-ChairLift escalates through three choke points, and the record is written at
-each of them rather than at the call sites that reach them:
-
-| choke point | covers | polkit actions |
-|---|---|---|
-| `internal/helperexec.Run` | both fixed-path helper binaries, via `internal/ublue.runHelper` and `internal/updex.runHelper` | 14 `…ublue.*` + 3 `…updex.*` |
-| `internal/stageexec.Stage` | the bootc stage script, via `internal/bootc.StageUpdate` | `…bootc.stage` |
-| `views.UserHome.runMaintenanceAction` | config-declared maintenance scripts run `sudo` | none; falls back to `org.freedesktop.policykit.exec` |
-
-The journal-contract gate in `internal/installcheck` classifies execution sites
-as privileged or unprivileged and requires privileged dispatch to record both
-live and suppressed invocation intent. New executors must not bypass it.
-
-`internal/notify` sends exactly one desktop `GNotification`: the unified update
-run's completion (`notify.UpdateAllComplete`, sent from
-`UpdateShell.notifyUpdateComplete`), through `views.ToastAdder.NotifyBackground` (implemented by
-`internal/window.Window`, the one place holding a `*gtk.Application` handle).
-It is the only ChairLift action long enough that a user plausibly stepped
-away before it finished; every other toggle completes in view and already has
-a toast, so a second notification there would be noise the simple-interface
-constraint rules out.
-
-### Troubleshooting (`internal/troubleshoot`)
-
-`internal/troubleshoot` is the engine behind the Agents page's Goose row
-(`agents_page.troubleshooting_group`); `internal/agentmode` decides readiness
-and owns the launch. Everything Goose reads is ChairLift's own: a session
-runs in a dedicated profile under `$XDG_DATA_HOME/chairlift/troubleshooting`
-(`troubleshoot.Profile`). `GOOSE_PATH_ROOT` points Goose's config, data, and
-state at `goose/`; `XDG_CONFIG_HOME` points the desktop app's Electron
-profile and single-instance lock at `desktop/`, where `Profile.Write`
-symlinks the user's `mimeapps.list` and `dconf` so links open in the user's
-browser and GSettings still apply. The user's `~/.config/goose` is never
-read or written, and a Goose window the user already has open is never
-handed this launch.
-
-`Profile.Write` runs immediately before every launch and is atomic and
-dry-run gated. `RenderConfig` is the complete tool surface: `linux-tools`
-(the absolute `linux-mcp-server` with `--toolset FIXED --host-mode
-LOCAL_ONLY --no-search-for-ssh-key`) and `bluefin-knowledge` (streamable HTTP
-at `https://mcp.projectbluefin.io/mcp`, `available_tools: [search_knowledge]`)
-are enabled; every other extension already in the profile file — one a later
-Goose added — is carried over disabled, and Goose 1.53's platform extensions
-(`developer`, `extensionmanager`, …) are written disabled, because Goose adds
-a missing platform extension with its own default and keeps an `enabled`
-value already present. No provider, model, or key is written: llmman hands
-Goose its provider through the environment. `hints.md` becomes the profile's
-`.goosehints`. Missing or Goose-default `focusWindow` and `quickLauncher`
-entries in the desktop profile's `Goose/settings.json` are set to null, while
-different choices and other settings are preserved, so GNOME does not open a
-keyboard-shortcut approval dialog for Goose's defaults at launch. Knowledge searches go online, so no copy claims a session's
-questions stay on this computer. The hint explicitly names the `linux-tools`
-tools (`get_system_information`, `get_disk_usage`, `get_cpu_information`,
-…) so a small local model — the recommended Qwen family — reaches for them
-instead of answering from training data (issue #523); it also forbids
-inventing system facts the tools would have returned.
-
-`troubleshoot.Setup` installs what is missing, with `Needed` per step so a
-half-done install resumes: `ublue-os/tap` (only when a package is missing),
-`linux-mcp-server`, then `cpio` before the `goose-linux` cask — the cask's
-preflight pipes its RPM through a `cpio` it does not declare and Bluefin
-does not ship. Each `ublue-os/tap` package is trusted by its qualified name
-(`brew trust --formula`/`--cask`) right before its install when brew reports
-the tap untrusted, because Homebrew refuses packages from an untrusted tap.
-Goose Desktop is published for x86_64 only, so Setup returns
-`ErrUnsupported` elsewhere. Homebrew's `stateChangingCommands` includes
-`tap`, so dry-run never changes package sources. Nothing crosses a privilege
-boundary.
-
-`internal/aistack` is Agent Mode's runtime owner; [ADR-0015](../adr/0015-agent-mode-llmman.md)
-is the contract. [llmman](https://github.com/llmmanorg/llmman) chooses the
-engine and backend for the hardware (container runtime, prebuilt binary, or a
-`llama-server` on `$PATH`) and owns the model store. ChairLift reads the
-selected model alias back through llmman and links to its models page for
-selection, so no GPU-vendor stack matrix lives here.
-Enabling:
-
-1. Renders `Brewfile(haveLLMMan)`, with `tap "llmmanorg/tap"` and
-   `brew "llmmanorg/tap/llmman"` only when no executable resolves. In that
-   case it first taps `llmmanorg/tap` and trusts exactly that formula
-   (`brew trust --formula llmmanorg/tap/llmman`) when `brew tap-info --json`
-   reports the tap untrusted — Homebrew refuses a formula from an untrusted
-   tap, and Homebrew before 6 has neither tap trust nor `brew trust` — then runs the bundle through
-   `homebrew.BundleInstall`. Runtime provisioning installs no chat
-   client; Goose setup is the Goose row's Set Up.
-2. Resolves `llmman` (`$PATH`, then beside `homebrew.ExecutablePath()`), and
-   runs `llmman serve --pull-only`, which fetches the engine in the
-   foreground and fails if it cannot — the one mode in which llmman treats a
-   failed fetch as an error.
-3. Atomically writes `~/.config/systemd/user/chairlift-llmman.service`
-   (`RenderUnit`: `ExecStart=<abs> serve`, `LLMMAN_HOST=127.0.0.1:17434`,
-   `LLMMAN_SHELL=off`, `LLMMAN_NOHISTORY=1`) and
-   `~/.config/environment.d/10-chairlift-llmman.conf`
-   (`OLLAMA_HOST=127.0.0.1:17434`), then `enable --no-reload` and the shared
-   reload/restart/invocation-stamp boundary. A pre-start failure removes only
-   what the call created. After a possible start, cleanup uses `Disable`'s
-   stopped-state proof; an uncertain stop preserves both management files.
-4. Best-effort `dbus-update-activation-environment --systemd
-   OLLAMA_HOST=127.0.0.1:17434`, so processes started afterwards in this
-   session see it. Running processes are not changed, and the ready subtitle
-   says so.
-
-The view then waits up to a minute for `GET /llmman/node` (`WaitHealthy`,
-each probe bounded to two seconds). `Resolve(Facts)` is the pure state
-function behind the row: unavailable (no Homebrew), unconfigured,
-provisioning (in flight, or unit present and not yet probed), ready (unit
-plus a JSON answer from `/llmman/node`), degraded (unit, no answer), and
-disabled (llmman installed, no unit). On page build the non-blocking facts
-render immediately and the health probe runs off the main thread.
-
-Active Model presents downloaded models in a combo row queried live from
-`/llmman/node`. Selecting an entry sets `aliases.bluefin-active` and restarts
-the owned daemon. Further model management happens in llmman's own models page
-(`http://127.0.0.1:17434/#/models`), opened from the Manage Models row.
-A missing alias renders no selection.
-The owned unit also sets empty `LLMMAN_PEERS=` to override existing aggregation
-configuration. Removing the remote-machine controls therefore cannot leave
-hidden offload enabled; unrelated llmman configuration is not rewritten.
-
-Before an installed service is reported ready, the startup worker calls
-`ReconcileService`: compare the owned unit with `RenderUnit` and require its
-recorded systemd `InvocationID` to match the running invocation, or systemd's
-observation to prove the daemon was started from the current unit file
-(NeedDaemonReload=no and start time strictly after mtime). Disk equality
-alone cannot prove adoption after a crash between write and restart. Missing
-or mismatched stamps and unproven service states leave the new unit unstamped
-until the shared `restartService` boundary reloads, restarts, and reads a
-validated live ID. Both that path and adoption of an already-proven daemon use
-`commitServiceInvocation`: atomically write the ID as a unit comment, then
-reload the manager without restarting the daemon. A failed stamp reload removes
-the stamp, leaving a later attempt to verify adoption again. Comment-only writes
-still change the unit's mtime; without this final reload `NeedDaemonReload=yes`
-would make a later automatic service restart look unproven. If systemctl rejects
-the timestamp option or observation otherwise fails, reconciliation falls back
-to the live invocation stamp or a safe restart. Enable and alias selection use
-the same boundaries. An unchanged verified invocation whose loaded unit is
-clean incurs neither reload nor restart. A matching stamp left dirty by an older
-release gets only `daemon-reload` when `NeedDaemonReload=yes` is observed, with
-no unit rewrite or daemon restart; a failed observation invents no reload state.
-A natural restart with a loaded current file and a start time strictly after
-its mtime is adopted without a restart, preserving loaded models.
-Disabled hosts are not configured and previews write nothing. Reconciliation
-failure preserves the management unit and best-effort stops the managed daemon;
-failed stamp commits leave the unit unstamped, preventing
-generic HTTP health from declaring unverified policy ready. Live startup
-allows ten seconds for health; previews retain the bounded single probe.
-No new state artifact or privileged read is introduced, and unrelated llmman
-configuration remains intact.
-
-Disabling runs `systemctl --user disable --now`, then removes the unit and
-the fragment and `unset-environment OLLAMA_HOST`. A failed stop is accepted
-only when `is-active` reports `inactive`, `failed`, or `unknown`; otherwise
-both files stay and the UI says the service is still running. Binaries
-and models are never removed. Nothing is privileged, so there is no helper
-subcommand and no PolicyKit action.
-
-#### Contribute to Bluefin (`internal/contribute`)
-
-`internal/contribute` manages preflight and command construction for launching
-a contributor session from the Agents page. It launches Common's merged `ujust
-contribute` recipe through `xdg-terminal-exec`, running the foreground
-contributor container appliance.
-
-Preflight is read-only, uses injectable probe seams, and executes off the GTK thread (`Preflight`) at build and again each time the group is shown, so a requirement the user fixes outside ChairLift — registering with Hive, installing Podman — is picked up without a restart. A read is generation-guarded and stands aside while a session holds the action gate:
-1. `xdg-terminal-exec` on `$PATH` to launch the terminal emulator.
-2. `ujust` on `$PATH`.
-3. `ujust --summary` containing the `contribute` recipe.
-4. `podman` on `$PATH`.
-5. Hive registration file present at `${HIVE_CONTRIBUTE_REGISTRATION:-$HOME/.config/hive/contributor.env}`.
-
-When any check fails, the row displays an actionable subtitle and leaves the
-action button insensitive. A missing registration file also shows a
-**Registration Guide** button (`Result.HelpURL`) that opens the registration
-setup page; the URL is not spelled out as unclickable subtitle text. Ready actions invoke `launcher.Run`, reporting
-launch failures asynchronously through the UI toast surface; when the session ends or fails to start, the button returns through a fresh preflight. Previews under
-`--dry-run` log the launch command without opening a terminal or spawning a worker.
-
-### Printers (`internal/printerapp`)
-
-`internal/printerapp` writes rootless quadlets under
-`~/.config/containers/systemd`, driven with `systemctl --user` in the invoking
-account, with a unit, port and state volume per app.
-[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
-is the contract; [printer-applications.md](printer-applications.md) records
-the network surface and the family inventory (units, ports, volumes), and
-this section is the Control Center surface on top of it. Nothing is
-privileged: there is no helper subcommand and no PolicyKit action, and the
-package's one exec site is classified unprivileged in
-`internal/installcheck`'s journal-contract inventory.
-
-The Features page renders it as the **Printers** group (`printers_group`,
-`internal/views/printers_page.go`), floored on the `Podman` capability —
-`podman` on `$PATH`, since a quadlet is a Podman feature. One `guardedSwitch`
-row per `printerapp.Families()` entry, titled by `pageview.PrinterFamilyRow`
-and connected once at build time. What the row shows comes from the pure
-readiness model, never from the unit file alone (#331, #361):
-
-- `Observe(app, capable)` is the non-blocking half, safe on the GTK main
-  thread: the capability floor and the unit file's presence.
-- `ProbeActive(ctx, app)` is `systemctl --user is-active <service>`, off the
-  main thread; it returns the state *word*, because systemctl's exit status
-  is non-zero for every word but `active`, and treats multi-word output (no
-  user manager, no bus) as a failed probe rather than a state. `WaitSettled`
-  re-asks, bounded, while the word is `activating`/`reloading`, so a first
-  start's image pull does not leave the row saying "Starting…" forever.
-- `Resolve(Facts)` maps to `StateUnavailable` (no Podman), `StateOff` (no
-  unit), `StateStarting` (unit, not yet checked or activating), `StateReady`
-  (active — the subtitle names `http://localhost:<port>/`, where PAPPL serves
-  both IPP and the web page), or `StateFailed` (unit present but failed,
-  inactive, or uncheckable).
-- `ProbeDiagnostics` is the view's runtime observation: it combines the
-  readiness facts with systemd properties, recent user-journal output and
-  container-image presence. `Diagnose` distinguishes plugin verification,
-  rootless device access, service crash and image failures from generic failure;
-  these diagnostics do not claim hardware testing.
-
-Each newly enabled unit runs a cosign-verified digest resolved from
-`ghcr.io/projectbluefin/<id>-printer-app:stable`, without registry auto-update,
-and with `PublishPort=127.0.0.1:<port>:<port>`, never
-`Network=host`: PAPPL's web administration is unauthenticated and shares the
-IPP listener, so the port is reachable only from this computer. LAN clients
-cannot print to it and its DNS-SD advertisement stays inside the container;
-the group description explains driver availability without claiming network sharing.
-`Enable` verifies before writing the unit, reloads systemd and starts the
-service; a reload/start failure rolls a fresh install back (stop, remove,
-reload). `Refresh` verifies before rewriting and restarting an existing unit.
-Verification failure changes neither disk nor service state. ADR-0023 records
-this change from ADR-0020: old units require disable/re-enable to migrate,
-and their row's subtitle asks for it (`InstalledBeforeVerification`).
-Newer verified images reach installed units through the Updates page's
-Printer Drivers source (`updateproviders.NewPrinterApps`), which calls
-`Refresh`; there is no scheduled refresh. `Enable`, `Refresh` and `Disable`
-share one per-app lock inside `internal/printerapp`, so a toggle and an update
-of the same family never interleave. The toggle handler (`onPrinterAppToggled`) is admitted by a
-per-family `actionstate.Gate`, runs `Enable`/`Disable` off the main thread
-under a bounded context, and settles the switch from `actionmsg.PrinterApp`:
-a dry run and a failure both restore the switch and the row's last state, a
-failure toasts `pageview.PrinterAppFailureToast`, and a failed disable keeps
-the unit because the service could not be proven stopped. Structured marker:
-`views: printers group built families=<n>`, asserted by the E2E walkthrough
-and the `@features` AT-SPI scenarios. Hardware behaviour — printing through a
-real device, USB passthrough — remains unverified and unwired.
-
-### Powerwash and Factory Reset
-
-`internal/powerwash` is Powerwash's pure sequencer: `Runner.Run` executes the
-two steps (removing every
-user-scope Flatpak, removing every Distrobox container) through function
-seams, and `Summarize` aggregates the outcome. A step whose tool is not
-installed, or whose read-only inventory (`flatpak.HasUserRefs`,
-`distrobox.HasContainers`) finds nothing in the account, is `OutcomeSkipped`,
-not a failure — there is nothing for it to remove. The inventory is read
-first because both removal commands exit 0 with nothing to do, so their
-success alone would claim a removal that never happened; an unreadable
-inventory fails the step. Both steps are unprivileged;
-`internal/flatpak.RemoveAllUser` and the `internal/distrobox` package (a
-minimal wrapper existing only to detect, list, and remove every container)
-are the real implementations.
-
-Factory Reset is `bootc install reset --experimental`, dispatched
-through a new `factory-reset` action on the existing `chairlift-helper`
-— it takes no argument, since a factory reset has exactly one target, the
-image already booted. It deliberately omits `--apply`, which bootc documents
-as always rebooting immediately; the reset takes effect at the next restart,
-as the confirmation says.
-
-Both are gated by `maintenance_page`'s `reset_group`, which ships
-`enabled: false` in `config.yml` (the same default as
-`maintenance_cleanup_group`), and both require an `AdwAlertDialog`
-confirmation with a destructive-styled response before anything runs — the
-HIG's rule that destructive dialogs are reserved for genuinely non-undoable
-actions. The confirmation text lives in `pageview.PowerwashConfirmation` and
-`pageview.FactoryResetConfirmation`, table-tested to assert the Factory Reset
-body names `--experimental` explicitly: `bootc`'s own reset path is not
-stabilized upstream, and hiding that behind friendlier wording would be
-exactly the kind of detail a confirmation dialog exists to surface.
-
-Both reset controls release their in-flight gate when their buttons become
-sensitive again, so a canceled PolicyKit prompt or dry-run preview can be
-retried without restarting the application.
-
-### Automatic background updates
-
-`internal/autoupdate` classifies the state of `uupd.timer`, the unit
-Universal Blue images ship for unattended updates. It is read-only; the
-privileged writes are `auto-updates-enable` / `auto-updates-disable` on
-`chairlift-helper`. Disabling also masks and stops `uupd-resume.timer`, the
-image's second trigger of the same `uupd.service` (20 minutes after every
-resume), and enabling unmasks it, so "off" stops every unattended run.
-Because the GUI (Homebrew) and the helper (image) ship separately, after a
-successful disable the GUI re-probes `uupd-resume.timer` unprivileged via
-`autoupdate.DetectResume`; if it is still enabled — an older helper that
-predates the mask — a follow-up warning toast asks the user to re-pull the
-image. The post-check is skipped on enable, on helper failure or PolicyKit
-cancel, and in dry-run mode, since the helper did not run in those cases.
-
-The package exists because ChairLift presents this as **one switch** where
-bluefinctl presents a strategy enum, a schedule picker, per-layer switches,
-and a focus mode. Collapsing several systemd states into a binary control is
-only safe if the mapping is explicit, which is what `Classify` is:
-
-- `is-enabled` returning `""` or `not-found` — the unit is not installed, so
-  `StateUnavailable`, and the switch is not shown at all.
-- `masked` or `masked-runtime` — `StateOff`, whatever `is-active` says. A
-  masked timer cannot run. This is also how bluefinctl's "manual" strategy
-  and its "focus mode" are both represented on disk, and neither is
-  distinguishable to a user who only wants to know whether the machine
-  updates itself.
-- `enabled`/`enabled-runtime` with an active timer — `StateOn`.
-- `enabled` with an inactive or failed timer — `StateOff`. An enabled but dead
-  timer updates nothing, and calling it on is a claim the user disproves only
-  by never receiving an update.
-- anything else (`disabled`, `static`, `indirect`) — `StateOff`.
-
-Turning the switch on unmasks before enabling, because "off" has those two
-on-disk representations and a machine ever set to manual would otherwise
-refuse to turn back on. Turning it off masks rather than merely disabling, so
-a `systemctl preset` run during a package upgrade cannot quietly re-enable
-what the user turned off. The unit name is fixed in the helper: a
-caller-supplied unit would let an authenticated user enable or mask anything
-on the machine.
-
-### The release-channel table
-
-`internal/imageinfo` owns the mapping from a running image and tag to the tag
-its stable or testing counterpart is published under. The mapping is keyed on
-the **registry path**, not on the tag alone, because the same tag word means
-different things across images. Verified against GHCR by manifest request on
-2026-08-17:
-
-| Image | Stable streams | Testing streams |
-| --- | --- | --- |
-| `ghcr.io/ublue-os/bluefin` | `latest`, `stable`, `stable-daily`, `lts`, `lts-hwe` | `lts-testing`, `lts-hwe-testing` |
-| `ghcr.io/projectbluefin/bluefin-lts` | `lts`, `stable` | `testing` |
-| `ghcr.io/projectbluefin/dakota` | `latest`, `stable` | `testing` |
-
-Bluefin has no GTS stream, and ChairLift offers none: `gts` classifies as an
-unknown channel and has no driver variants.
-
-Two consequences follow, both of which a tag-only mapping gets wrong:
-
-- `ghcr.io/ublue-os/bluefin:testing` does not exist. A Bluefin Stable host on
-  `latest` or `stable` has **no testing counterpart**, and the
-  Testing Channel switch is correctly rendered insensitive there. Only the
-  `lts` and `lts-hwe` streams on that image are switchable.
-- `ghcr.io/projectbluefin/bluefin-lts:lts-testing` does not exist either; that
-  image's testing stream is the bare `testing` tag.
-
-bluefinctl's `bctl toggle-testing` uses a tag-only map that targets both of
-those nonexistent references. ChairLift does not reproduce it.
-
-An image outside the table resolves to no channel and no switch, rather than
-to a guessed tag suffix. Other images — TunaOS, a downstream rebuild, a
-private registry — are added by shipping a `channels.yml`, not by editing Go:
-
-| Path | Owner |
+| Surface | Execution owner |
 | --- | --- |
-| `/etc/chairlift/channels.yml` | administrator |
-| `/usr/share/chairlift/channels.yml` | image maintainer |
+| `/usr/libexec/bootc-update-stage` | `internal/bootc` through `internal/stageexec`; implementation supplied by the OS image |
+| `/usr/bin/chairlift-updex-helper` | `internal/updex` through `internal/helperexec`; validated operations in `internal/updexhelper` |
+| `/usr/bin/chairlift-helper` | `internal/ublue` through `internal/helperexec`; validated operations in `internal/ubluehelper` |
 
-Those two paths, in that order, are the only ones consulted. Unlike
-`internal/config`'s search order they deliberately exclude the working
-directory: the privileged helper resolves its `bootc switch` target through
-this same table, so a user-writable table would let a local user redirect an
-authenticated system switch. The GUI calls `imageinfo.LoadSystemTable()` at
-startup so it can fail closed when a table-dependent control cannot resolve a
-target. After validating argv, the helper loads that same table for
-`channel-switch`, `driver-switch`, `pin`, and `unpin`; a malformed override
-rejects those image-targeting operations but leaves unrelated fixed privileged
-commands available. A file that fails validation is rejected whole — a half-applied
-mapping is exactly the situation that produces a wrong switch target — and the
-file must contain exactly one YAML document, so content after a `---` boundary
-is rejected rather than silently ignored: the helper must never resolve a
-mapping the GUI did not read. The file configures release channels under
-`images:` and graphics-driver variants under `drivers:`. Driver entries map a
-base image registry path to supported driver flavours (`standard` required,
-`nvidia`, `nvidia-open`) and their published streams.
-`channels.example.yml` documents both formats and is installed to
-`/usr/share/doc/chairlift/`; no live table is ever installed or archived.
+Paths must match the installed policies' `exec.path`; command selection must
+match `exec.argv1`. Helpers validate the remaining argv themselves. Never add
+arbitrary privileged commands, configurable helper paths or passwordless rules.
+Image switches accept validated words, not registry references; the helper
+derives targets from trusted image metadata and tables. Accounts come from
+`PKEXEC_UID`, never caller-supplied usernames. Image channel/driver tables are
+system-owned and keyed by image, not just tag.
 
-Separately, `polkitd` reads application policies from the fixed directory
-`/usr/share/polkit-1/actions` — not `$XDG_DATA_DIRS`, not any
-`$PREFIX`-derived path — so the Makefile's `install`/`uninstall` targets
-require `PREFIX=/usr` (the default since issue #59) for a source install's
-polkit assets to land somewhere polkit actually looks. These constraints are
-system facts, not values ChairLift decides; the Makefile and
-`internal/updex.HelperPath` exist to conform to them.
+The existing trusted maintenance-script exception is separate: only the fixed
+system configuration candidates may define `sudo: true` actions, with absolute
+script paths. Development fallbacks cannot acquire this authority. Its executor
+is `internal/maintenanceexec`; do not turn it into a general helper interface.
 
-**Privileged integration delivery:** ChairLift is distributed only through
-Homebrew. The cask installs GoReleaser's release archive,
-`chairlift_<version>_linux_<arch>.tar.gz`, in user scope; there are no deb,
-rpm, or apk packages. Because a user-scoped cask cannot place root-owned
-files, the same archive carries the privileged pieces:
-`chairlift-updex-helper`, `chairlift-helper`, and the bootc, updex, and
-ublue PolicyKit policies in `data/`, together with `config.yml`,
-`channels.example.yml`, the desktop entry, the wrapper, and every GSettings
-schema XML. An OS image that wants the privileged features installs the
-helpers at `/usr/bin/chairlift-updex-helper` and
-`/usr/bin/chairlift-helper`, and the policies at
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy`,
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy`, and
-`/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy`, from
-that archive. Those are the paths the helper constants and the policies'
-`org.freedesktop.policykit.exec.path` annotations name, so the image must use
-exactly them. `make install` places the same files at the same paths for a
-source install, puts the schemas in `/usr/share/glib-2.0/schemas/`, and
-compiles the schema cache on a direct install.
-The accepted/rejected argv surface is exercised by the installed-helper E2E
-tests; historical one-off verification does not replace that contract.
+Privileged dispatch journals live and suppressed intent at shared execution
+boundaries. Helper-reported executed argv is an audit aid, not independent
+proof. Authentication dismissal is distinct from failure. Cancellation kills the
+direct escalation child, not necessarily privileged descendants; feedback must
+not claim root work has stopped. See the [helper executor contract](../../internal/helperexec/helperexec.go).
 
-The cask and the image ship on separate schedules, so an image can be older
-than the GUI running on it or carry no helper at all. The views therefore
-offer a helper-backed control only when the image provides it:
-`ublue.Status.Commands`, filled by `Detect`, is the set of helper commands for
-which `/usr/bin/chairlift-helper` is installed and an installed PolicyKit
-action names that path as `exec.path` and the command as `exec.argv1`.
-`Status.Supports` gates helper-backed mutations. Developer options remain
-discoverable but insensitive when their actions are missing; channel switching
-also remains inert when no counterpart or installed action exists. Other
-controls are shown only with the support their builders require. Restart
-feedback can ask the person to restart manually when the helper is absent.
-Reading the policies is a plain file read, needs no privilege, and is correct
-for every image already shipped. A dry run never invokes the helper, so it
-offers every command; that keeps the preview, the screenshot walkthrough, and
-the AT-SPI suite rendering the full surface.
-
-The archive does **not** ship `bootc-update-stage`. That
-operation is distro policy, so an image that enables `bootc_updates_group`
-must provide a trusted implementation at the existing fixed
-`/usr/libexec/bootc-update-stage` path. Keeping the path fixed preserves the
-PolicyKit executable boundary; making it a user-writable config value would
-allow the GUI configuration to redirect a root execution. The page already
-gates the group on its script-availability check
-(`bootc.StageScriptAvailable`), so an absent distro helper hides the
-operation.
-
-### Maintenance action execution
-
-Configurable maintenance scripts (from `config.yml` `actions` entries) are executed via `runMaintenanceAction()` in `internal/views/maintenance_page.go`. The pattern:
-
-1. `decision := actionmsg.MaintenanceScript(dryrun.Enabled(), title)` is computed once, before the goroutine, from the single process-wide dry-run flag (see "Dry-run mode" above)
-2. The button is disabled and labelled "Running…".
-3. A worker constructs one `pageview.MaintenanceCommand` for both journal and
-   execution. When `decision.Execute` is true, `maintenanceexec.Run` applies a
-   five-minute bound; `sudo: true` uses the validated trusted-config pkexec
-   route. Preview journals suppression and logs intent without constructing a
-   process. This existing trusted script boundary is separate from fixed helper
-   operations and must never be made available to untrusted fallback config.
-4. On completion, the GTK thread restores the control and reports the preview
-   or actual result.
-
-### Keyboard shortcuts
-
-`internal/navigation` is the single puregotk-free authority for sidebar page
-order, titles, icons, advertised shortcuts, registered accelerators, and the
-complete page-selection transition. Its canonical inventory is one table of
-routes, each carrying a `Kind` and a page-qualified `Refs` list that names the
-configuration namespaces whose groups build it. `navigation.VisibleItems`
-filters that inventory using `Config.IsGroupEnabled`, always retains Help, and
-assigns compacted Alt+number keys. `internal/window` uses the result for its
-sidebar, stack, actions, initial selection, and shortcuts dialog. After
-construction, `internal/app` registers `navigation.Bindings(window.NavigationItems())`,
-so the registered and advertised keys use the exact same visible inventory.
-
-The inventory holds two kinds of route. A **primary** is a sidebar
-destination: it has a row, an Alt+number, and a shortcuts-dialog entry, and its
-`Refs` are the groups that make it worth showing. A **detail** is a focused
-screen reached from the primary that owns it — `Parent` names that primary, no
-`Refs` entry of a detail is inferred from its display name, and it acquires
-neither a row nor an accelerator: `Shortcuts` and `Bindings` skip it
-structurally, so a detail can never be advertised or registered by accident.
-Powerwash is the live detail. It is a content-stack child of Maintenance, whose
-row stays selected while it is shown, and it draws on two configuration
-namespaces at once — `bootc_updates_group` on `updates_page` for its rollback
-control and `reset_group` on `maintenance_page` for its
-Powerwash and Factory Reset controls — which
-is why a route's refs are `{Page, Group}` pairs rather than one page field per
-route. `navigation.VisibleRoutes` returns the visible primaries followed by the
-details whose own refs are enabled and whose ancestor is itself visible; a
-detail whose ancestor has no row has nowhere to return to, so `Resolve` falls
-back rather than entering it.
-
-The accelerators are:
-
-- `Ctrl+Q` → quit, unless an update is running: `Window.RefuseCloseWhileUpdating`
-  (shared with the close-request handler, since `g_application_quit` emits no
-  `close-request`) shows the Updates page and its "Updates are still in
-  progress…" banner instead
-- `Ctrl+?` → show shortcuts dialog
-- `Alt+1` through `Alt+N` → navigate to the first through Nth visible page in
-  canonical order, with omitted pages leaving no gaps
-- `F1` → navigate to Help (the same `win.navigate-help` action as Help's
-  current compacted Alt+number binding)
-
-Mouse row activation, keyboard navigation actions, and the Powerwash detail's
-entry row and Back button all call `Window.navigateToPage`. That method calls
-`navigation.Resolve` against `Window.navRoutes` — `navigation.VisibleRoutes`,
-the visible primaries plus the details they offer, computed once beside the
-sidebar's `navItems` — with the window's built pages as the construction seam
-(the Powerwash ToolbarView is registered there like any primary), and enters a
-route by applying all of its state changes: select the compacted sidebar row,
-set the stack's visible child, update the content-page title, set
-`NavigationSplitView.show-content` true so a collapsed layout reveals the
-destination, and record the transition's `Back` primary in `Window.backRoute`.
-A detail resolves to its ancestor's row index with its own title, its own
-child name, and the ancestor its Back control returns to, so Powerwash keeps the
-Maintenance row selected while it is shown; `navigateBack` resolves that
-recorded primary through the same path and does nothing while a primary is
-shown. `Resolve` rejects only a name the canonical inventory does not declare.
-A detail the caller did not offer resolves to its ancestor and, failing that,
-to Help; a known primary the caller cannot enter — disabled by configuration,
-floored out by capability, or never built — has no ancestor and resolves
-straight to Help (chairlift#343), so a deep link to a hidden page still opens
-the window somewhere. No fallback can reveal a screen or fire a control the
-user cannot see, because a `Transition` carries only the state a window
-applies. `internal/navigation` tests every functional page with all of its
-groups disabled, each builder-backed group individually enabled, the Help-only
-fallback, compacted indices/accelerators, the hidden-primary and hidden-detail
-fallbacks, unknown-name rejection, the complete advertised-to-registered
-shortcut inventory, the F1 Help binding, and static app/window wiring —
-including that the Powerwash callbacks resolve through `navigateToPage` rather
-than setting the stack child or title directly. No `_test.go` is added to the
-puregotk-importing `internal/window` or `internal/app` packages.
-
-The sidebar selection belongs to `navigateToPage` alone. `GtkListBox` selects
-whichever row receives keyboard focus, so Tab and the arrow keys would move the
-highlight onto a page the content does not show without ever emitting
-`row-activated`. `navigateToPage` records the resolved index in
-`Window.shownRow`, and `bindSidebar` connects one `row-selected` handler, once
-at build time, that re-selects that row whenever the selection lands anywhere
-else; the focus ring stays where the user moved it, and Return (or a click)
-still navigates through `row-activated`.
-
-Note: `GtkShortcutsWindow` is not available in puregotk, so a custom `adw.Window` with `adw.PreferencesGroup` rows is used for the shortcuts dialog.
-
-### URL opening
-
-Help page links are opened via `xdg-open` using `exec.Command`. The process is started asynchronously and its exit is waited on in a goroutine to avoid zombie processes.
+Homebrew installs, tap trust, appearance and user services are unprivileged.
+System Flatpaks use Flatpak's own authorization, never a ChairLift pkexec wrapper.
+The GUI and image-installed helpers ship separately; helper-backed controls
+consult installed action support rather than assuming a GUI release installed
+matching helpers. See [ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md).
 
 ## Configuration
 
-Decision records: [ADR-0003](../adr/0003-two-tier-config-with-fail-closed-semantics.md)
-(config search order and fail-closed semantics),
-[ADR-0004](../adr/0004-configuration-error-diagnostic-vocabulary.md)
-(the `CONFIGURATION ERROR` diagnostic vocabulary), and
-[ADR-0005](../adr/0005-config-schema-reflected-from-canonical-struct.md)
-(the reflected schema and overlay semantics).
+[`internal/config`](../../internal/config/) owns schema, defaults, validation
+and legacy-input migration. [`CONFIG.md`](../../CONFIG.md) documents search
+precedence and fields; do not derive configuration identities from route titles.
+Only a missing candidate advances the search. An existing unreadable or invalid
+file disables every configurable group, emits `CONFIGURATION ERROR` and produces
+a persistent toast; it never falls through to a more permissive file.
 
-### Config file search order
+`internal/capability` owns non-blocking tool/asset prerequisites. Configuration
+may subtract from that floor, never add to it. Navigation and builders share the
+same composed predicate. Runtime state requiring subprocess or network queries
+remains asynchronous, not a second capability probe. User update preferences
+are separate again: disabled by policy, unsupported, user-disabled and failed
+observations are different states.
 
-1. `/etc/chairlift/config.yml` — system-wide (highest priority)
-2. `/usr/share/chairlift/config.yml` — maintainer defaults installed by
-   source `make install`, or by an OS image from the release archive
-3. `config.dev.yml` — source-checkout fallback, beside the executable when
-   present, otherwise relative to the current working directory
-4. `config.yml` — legacy development fallback, beside the executable when
-   present, otherwise relative to the current working directory
+## Updates and system state
 
-Only a missing candidate advances the search. The first existing candidate is
-authoritative; a read, parse, type, or schema error disables every feature
-group and produces both a high-signal log entry and a persistent toast. If no
-file is found, all features default to enabled except
-`maintenance_cleanup_group` and `reset_group`, which default to disabled. See
-[CONFIG.md](../../CONFIG.md) for the full reference.
+`updateflow.Coordinator` owns source inventory, phases, mutation admission and
+the badge. `updateproviders` wraps existing integrations; the coordinator runs no
+commands itself. `updatepresent` maps snapshots to text/actions; `UpdateShell`
+renders them. Manual updates, staging and image switches share admission, not
+parallel state owners. Admission waits for source readiness and excludes checks,
+other mutations and an in-flight restart; controls remain gated across snapshot
+refreshes. Failed checks preserve known state; partial applies keep only
+failed/pending work for retry. Restart requires an observed requirement,
+not merely a successful staging command.
 
-Source installs and image maintainers own only the `/usr/share` candidate and
-may replace it on upgrade. Neither writes `/etc/chairlift/config.yml`; that
-higher-precedence path remains administrator-owned. The user-scoped Homebrew
-cask does not install either system configuration candidate.
-The repository root's `config.dev.yml` shadows `config.yml` only in development
-fallback loading; source installs use `config.yml` as the trusted
-`/usr/share/chairlift/config.yml` maintainer default.
+OS reads are unprivileged. On composefs hosts `internal/bootc` reads deployment
+state and registry digests; other hosts use bootc's read commands. Staging still
+uses the image-owned fixed script, not a new `bootc upgrade` executor. SBOM
+comparison fetches only on explicit Compare and rejects stale image-pair results.
 
-### Config structure
+Manual Free Up Space and post-update maintenance share
+`updateproviders.CleanupGroup` and the typed cleanup runner. Report skipped,
+failed and completed work distinctly; never invent reclaimed bytes. Powerwash
+and Factory Reset are opt-in, require destructive confirmation and keep fixed
+scope. Factory Reset is unavailable on composefs; rollback does not itself
+restart the computer.
 
-```yaml
-page_name:
-  group_name:
-    enabled: true/false
-    # Optional per-group fields:
-    app_id: "..." # External app to launch
-    actions: # Custom scripts (updates/maintenance)
-      - title: "..."
-        script: "/path/to/script"
-        sudo: true/false
-    bundles_paths: [...] # Homebrew bundle directories
-    website: "..." # Help page URLs
-    issues: "..."
-    chat: "..."
-```
+### App collections
 
-### Key config groups
+Apps collections expose entry-by-entry checkboxes and a one-way Select All,
+with one Install action for the destination's checked entries. Installed entries
+are observed, not reinstall selections; failed inventory reads preserve known
+state. A safe, fully selected collection retains its Brewfile/tap declarations
+through `brew bundle`; partial selections install only selected entries with
+per-item commands. Preview runs neither path and does not mark entries installed.
+Selection, planning and observed status belong to
+[`bundleview`](../../internal/views/bundleview/) and
+[`bundle_install.go`](../../internal/views/bundle_install.go).
 
-The [configuration reference](../reference.md) describes the current schema.
-The [destination matrix](destination-matrix.md#configuration-references-and-owners)
-provides the complete group inventory with original namespaces, current
-mounts and action owners. Derive additions from `config.SchemaGroups`; do not
-infer keys from the sidebar. In particular,
-`channel_group` and `bootc_status_group` belong to `updates_page`, while
-routine cleanup uses `maintenance_freespace_group`. Legacy System-page input
-is handled by the migration described above, not a current System namespace.
+## Developer and hardware setup
 
-## Build and Release
+[`internal/devsetup`](../../internal/devsetup/) sequences direct and implicit
+Developer Mode promotion under one gate. WSL/Docker setup follows a confirmed
+parent grant; failed authentication starts no child work, and later optional
+failure never reverses granted access. Retries retain completed stages. Group
+access awaiting a new login is not Ready and is not an installation failure.
 
-- **Build**: `make build` builds three binaries: `build/chairlift` (main app), `build/chairlift-updex-helper` (privileged updex helper), and `build/chairlift-helper` (privileged Bluefin-family helper), all with `CGO_ENABLED=0`
-- **CI mirror**: `make ci` runs every host-independent gate from `.github/workflows/test.yml` in fail-fast order — go.mod tidy check, `go vet`, gofmt check, `golangci-lint`, unit tests (`./internal/...` under `-run "^Test[^I]" -skip "Integration"`), the race detector, and the build. Its build step reproduces CI's `linux/amd64` + `linux/arm64` matrix into `build/ci-linux-<arch>/` before rebuilding natively, so a compile failure on the non-host architecture cannot pass locally. The mill's deep gate (`.mill.toml`) calls this target. The runtime-dependent E2E job is deliberately separate, and every E2E test that needs a display runs inside the digest-pinned Dakota `testing` image selected by `test/e2e/dakota-image.sh`, through `test/e2e/dakota.sh`, so the host supplies only podman and Go. Each GUI runs under `test/e2e/wayland_session.sh` in a private D-Bus session: headless Mutter (`--headless --no-x11 --virtual-monitor`) plus PipeWire and WirePlumber for Mutter's ScreenCast API, with `GDK_BACKEND=wayland`, `XDG_SESSION_TYPE=wayland`, and `WAYLAND_DISPLAY` set to the compositor's absolute socket; there is no X server anywhere in the harness, which `internal/installcheck`'s `TestE2EHarnessHasNoX11Dependency` enforces. `make e2e` builds all three binaries, executes the application's `--help` path, boots the dry-run GTK window under that session, polls all three readiness markers for at most 30 seconds, requires one second of post-readiness stability, then sends `SIGTERM` and waits for every surviving member of its private session to exit before Go removes the temporary `HOME` those workers write into, captures the screenshot walkthrough, stages the real `make install` layout under a temporary `DESTDIR`, and executes the staged helper binaries' accepted and rejected argv. Its Go test package lives at `test/e2e`, imports no puregotk package, and is enforced by that explicit target rather than the `./internal/...` unit-test filter. The readiness markers are a log-line contract — decision record [ADR-0008](../adr/0008-e2e-readiness-is-a-log-marker-contract.md). `make e2e-atspi` runs the behave AT-SPI suite (`test/e2e/features/`, gated by `TestATSPIBehaveSuite` in `test/e2e/atspi_behave_test.go` and run by `test/e2e/run_atspi.sh`) the same way; `make e2e` skips that test because it alone takes most of the E2E time, and both run on Dakota because what the tree announces depends on the GTK/Libadwaita release (Ubuntu's Libadwaita 1.5 publishes preference groups differently from what Bluefin ships). The suite follows projectbluefin/testsuite's behave + dogtail shape against headless Mutter instead of a GNOME Shell VM; keyboard input is `dogtail.rawinput` through dogtail 2.1's `MutterInputBackend` (Mutter's RemoteDesktop API), installed by `features/lib/wayland_remote.py`, which also captures failure screenshots through Mutter's ScreenCast API. `features/environment.py` launches a fresh `--dry-run` ChairLift per scenario with its own HOME, XDG_RUNTIME_DIR, configuration fixture (`@config.<name>`, default `everything`, written as `config.dev.yml` beside a staged copy of the binary) and `$CHAIRLIFT_ACTION_JOURNAL`, so a step can assert which privileged command a click would have run without running it. Readiness still comes from the three log markers (ADR-0008); the accessibility bridge is enabled only inside the run's own private D-Bus session, the one place the suite departs from the walkthrough's deliberately a11y-free environment. The page and shortcut inventories arrive from `internal/navigation` as `CHAIRLIFT_NAVIGATION`/`CHAIRLIFT_SHORTCUTS`, so the suite cannot drift from them. Shared steps live in `features/steps/common.py`, tree helpers in `features/lib/chairlift_atspi.py`, prelaunch stubs in `features/fixtures/stubs*.py`; `TestATSPIFeaturesHaveNoUndefinedSteps` catches an undefined or ambiguous step without a display. `dakota.sh` builds the venv from `test/e2e/requirements-atspi.txt` (pinned to testsuite's behave) with the image's interpreter, sets `CHAIRLIFT_REQUIRE_ATSPI=1`, which turns a missing stack from a skip into a failure, and masks `/usr/share/chairlift`. In the test workflow the suite runs as a separate `atspi` job split into parallel tag-expression shards, which `internal/installcheck`'s `TestATSPIShardsCoverEveryFeatureOnce` holds to the feature files (every feature in exactly one shard), and each shard uploads `atspi-results-<shard>` (JUnit, logs, and accessibility-tree dumps plus screenshots for failed scenarios); the release and nightly workflows run the suite whole.
-- **Dev build**: `make dev` builds with `CGO_ENABLED=1` and `-race` flag for race detection
-- **Version**: Set via ldflags by goreleaser (`buildVersion`)
-- **Distribution**: Homebrew only — the cask installs the release archive; GoReleaser builds no deb, rpm, or apk packages
-- **Calendar versioning**: `make bump` tags the stable version printed by `scripts/next-version.sh` — `vYY.MM.N`, where N starts at 1 each calendar month and advances only over stable tags (`v26.10.1`, `v26.10.2`, …). Alpha/prerelease arguments are no longer supported; historical prerelease tags are retained but do not advance N. GoReleaser publishes these as full releases (`prerelease: false`). The zero-padded month is deliberate, which is why the release build injects `{{ .Tag }}`. `internal/installcheck.TestNextVersionStableMonthlySequence` exercises the real script in temporary repositories through its `NEXT_VERSION_SLOT` test override.
-- **CI**: GitHub Actions workflows for test and release (`.github/workflows/`);
-  the release workflow (`.github/workflows/release.yml`, job `goreleaser`) runs
-  GoReleaser OSS with `GITHUB_TOKEN` to publish the tagged commit's artifacts
-  straight to GitHub Releases. There is no separate snapshot workflow; the
-  `snapshot:` block in `.goreleaser.yaml` only sets the version template for
-  local `goreleaser release --snapshot` builds and is not used by any workflow.
-  Third-party `uses:` references require full 40-character commit SHAs with
-  readable version comments. Repository-local actions are exempt;
-  first-party `projectbluefin/actions` uses the managed `v1` contract, with a
-  narrowly scoped read-only, secret-free policy-preview candidate exception.
-  `internal/installcheck.TestWorkflowActionsUseImmutableCommitSHAs` and the
-  preview-authority gate enforce those distinct boundaries.
-- **Release**: GoReleaser config at `.goreleaser.yaml` (GoReleaser OSS, run in
-  `.github/workflows/release.yml` with `GITHUB_TOKEN` and `id-token: write`).
-  Releases generate Syft SBOMs (`sboms:`) for published archives and sign
-  archives and `checksums.txt` keyless using Sigstore bundles (`.sigstore.json`)
-  via cosign. The repository URL is a literal in `release.footer`'s
-  "Full Changelog" line — there is no `metadata.homepage` to template from,
-  since OSS has no `metadata:` block — and that literal is the single source
-  of truth for it; a static test guards it — see the "Install-path consistency
-  (`internal/installcheck`)" section of
-  [package-managers.md](./package-managers.md#install-path-consistency-internalinstallcheck).
-  The `snapshot:` block in `.goreleaser.yaml` configures local
-  `goreleaser release --snapshot` builds and needs no workflow.
-  The tag workflow installs the same pinned golangci-lint version as test.yml
-  before running `make ci`, avoiding a newer linter rejecting a previously
-  validated commit only at release time.
-- **Other targets**: `make fmt` (gofmt), `make lint` (golangci-lint), `make install`/`make uninstall` (system install including polkit policies, icons, and wrapper script; default `PREFIX=/usr`, the only prefix that matches where polkit reads policy files and the fixed pkexec exec-path annotations for both helper binaries — see "Privileged operations" above), `make build-linux-amd64`/`make build-linux-arm64` (cross-compilation)
+System Docker uses image units when present, otherwise the fixed helper installs
+verified Homebrew bottles into root-owned storage. Root never executes or loads
+from the user-owned Homebrew prefix. CLI tools remain user-scoped. Stop retains
+data, runtime and account groups. Verification and restart policy belong to
+[`internal/dockerbrew`](../../internal/dockerbrew/) and
+[ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md).
 
-### Runtime dependencies
+Game Mode stages the published gaming/non-gaming image counterpart through the
+fixed `gaming-switch enable|disable` helper, which derives the target itself.
+It shares update-shell admission, confirms the Steam/Gamescope/Open Gaming
+Collective kernel change, and leaves restart separate. The switch reflects the
+booted or staged image, not app inventory. It never installs, inventories,
+uninstalls or cleans up gaming Flatpaks; existing apps remain untouched. There
+is no optional Gaming Tools toggle or backend. The live owners are
+[`features_page.go`](../../internal/views/features_page.go) and
+[`ubluehelper.GamingSwitchArgs`](../../internal/ubluehelper/ubluehelper.go).
 
-- GTK 4 and libadwaita 1 (shared libraries loaded at runtime by puregotk)
-- Homebrew (optional)
-- Flatpak (optional)
-- `bootc` + `/usr/libexec/bootc-update-stage` (both optional; UI gated on `bootc.IsBootcBootedCached()`, i.e. a booted deployment read from composefs state or `bootc status` — not on any sentinel file)
-- Updex features configured on the system (optional; read via Go library, writes via `chairlift-updex-helper`)
-- `/usr/share/ublue-os/image-info.json` (optional; absence floors out Developer Mode, Game Mode and channel/graphics controls)
-- Fixed helper binaries and matching installed PolicyKit actions (optional; required for the corresponding privileged mutations)
-- `bootc`, `usermod`/`gpasswd`, and systemd tools used by the fixed helper actions
-- Homebrew and llmman for local Agent Mode; systemd user services and bounded HTTP health for observed readiness
-- Podman and a systemd user manager for printer quadlets; current image administration locks still forbid new enables
-- Flatpak with a system-scope Flathub remote for optional Pulp installation, authorized by Flatpak's own PolicyKit; Game Mode never manages Flatpaks
-- GSettings schema XMLs, native dconf module/settings tools, icon-cache tool and desktop-specific assets for appearance/preferences
+Development Apps installation is independent of enabling Developer Mode.
+[`internal/developerapps/catalog.go`](../../internal/developerapps/catalog.go)
+owns the supported packages, remotes and architectures: Homebrew IDEs use
+ublue-os taps only; the verified Flatpak exceptions use their system remotes.
+Do not substitute personal taps, invent package identities or treat inventory
+errors as absence.
 
-### Key external Go dependencies
+[`internal/hardware`](../../internal/hardware/) detects supported ASUS/Framework
+machines through DMI and owns their OEM cask profiles. Ordinary activation only
+reads status. Explicit initial setup installs missing packages and re-reads
+installed versions before reporting Active. Only verified installation permits
+`livery.EnsurePanelDefault` to apply the embedded OEM mark; existing choices and
+opt-outs survive. Preview neither installs packages nor confirms readiness.
 
-| Module                           | Purpose                                                                                     |
-| -------------------------------- | ------------------------------------------------------------------------------------------- |
-| `codeberg.org/puregotk/puregotk` | GTK4/Adwaita bindings (no CGO)                                                              |
-| `github.com/frostyard/snowkit`   | GObject registration, main-thread dispatch                                                  |
-| `github.com/frostyard/updex`     | Updex Go library for feature reads and helper binary (currently pinned to v1.5.0 in go.mod) |
-| `gopkg.in/yaml.v3`               | YAML config parsing                                                                         |
-| `golang.org/x/image`             | WebP decoding and image scaling for avatar transcoding                                      |
-| `github.com/frostyard/std` | Updex progress reporting |
-| `github.com/leonelquinteros/gotext` | Translatable update presentation strings |
+## Agent Mode
 
-There is no separate Go client library dependency for bootc: status/stage types (`Status`, `Deployment`, `ProgressEvent`, etc.) are defined locally in `internal/bootc`, parsed directly from `bootc status --format json` and the stage script's line output.
+[`internal/aistack`](../../internal/aistack/) owns the local llmman user service
+and selected-model alias. Readiness requires observed loopback HTTP health and
+verified adoption of the owned unit, not file presence. Reconciliation accepts
+a matching live invocation stamp or systemd proof that the loaded current unit
+started strictly after its file was written. A proven natural restart is adopted
+without restarting loaded models; an observed dirty manager gets a reload, not
+an unnecessary daemon restart. Invocation-stamp writes reload the manager and
+remove the stamp if reload fails. Unproven policy triggers safe reconciliation;
+failure best-effort stops the managed daemon and cannot report Ready. These
+boundaries belong to [`aistack/migration.go`](../../internal/aistack/migration.go).
+llmman owns models and engine selection. Disable retains models/binaries and preserves management files
+if the service cannot be proven stopped.
 
-### Headless and desktop gates
+[`internal/agentmode`](../../internal/agentmode/) owns readiness and launch;
+[`internal/troubleshoot`](../../internal/troubleshoot/) owns package setup and
+ChairLift's isolated Goose profile. Never read or rewrite the user's Goose
+configuration. The profile enables only the fixed read-only Linux tools and
+online knowledge search; credentials are not persisted into it. Ask Bluefin
+uses the same dispatcher and selected model. A supplied starting prompt stays
+in memory, is not logged and is never tool/profile configuration.
 
-Decidable UI logic lives in pure-Go leaves under `internal/`; packages importing
-puregotk cannot host ordinary headless test binaries. CI selects
-`^Test[^I]` and skips `Integration`, so ordinary internal test names must avoid
-both reserved shapes. `make e2e`, `make e2e-atspi` and `make screenshots` use
-the one Dakota harness, `test/e2e/dakota.sh`, and private headless Mutter
-Wayland/D-Bus sessions. Never run them against the developer's live runtime,
-display or portal services. The helpers remain untagged; only the GUI gets
-the centralized `chairlift_e2e` read-only display overrides. Screenshots and
-the walkthrough are referentially gated documentation, not pixel snapshots
-regenerated on every push. See [GTK headless testing](../skills/gtk-headless-testing/SKILL.md).
+## Appearance and local services
 
-## Subsystem Details
+`internal/livery` owns icon-theme overrides, settings restoration and login
+rotation; `internal/deskenv` selects supported desktop surfaces and the native
+settings backend. Page load does not apply selections. Defaults and existing-unit
+reconciliation use narrowly guarded paths, not general load-time repair.
+`internal/avatar` applies profile pictures; `internal/valhalla` owns explicit
+wallpaper setup. Neither feature promises readiness from package presence alone.
 
-- [Package Manager Wrappers](./package-managers.md) — Homebrew (including tap trust), Flatpak, bootc, and Updex wrapper details
-
-### Agent Mode and Ask Bluefin (`internal/agentmode`, `internal/aistack`)
-
-`internal/agentmode` coordinates Agent Mode's client integration, readiness evaluation, and the `chairlift --ask-bluefin` dispatcher.
-
-Goose Desktop (`ublue-os/tap/goose-linux`) is the Agent Mode desktop GUI. `agentmode.Launch` writes ChairLift's own Goose profile (above), then runs
-`llmman launch goose-desktop --model bluefin-active` (`troubleshoot.Command`) with the profile's `GOOSE_PATH_ROOT` and `XDG_CONFIG_HOME` and Homebrew on `PATH`, so llmman resolves the alias at launch and passes the endpoint through the invocation environment.
-
-Readiness (`agentmode.Evaluate`), in the order the Goose row reports it:
-- Goose Desktop is published for this architecture (x86_64); otherwise `StateUnsupported`.
-- `linux-mcp-server` and `goose-desktop` resolve to absolute paths (`$PATH`, or beside `homebrew.ExecutablePath()`); otherwise `StatePackagesMissing`, the one state the row resolves itself with **Set Up**.
-- The llmman daemon is healthy (`aistack.Healthy`) and `llmman` resolves; otherwise `StateDaemonUnavailable`.
-- An active model is selected (`aistack.ReadActiveModel`); otherwise `StateModelUnavailable`.
-
-Nothing on disk is verified: the profile is ChairLift's and is written at launch.
-
-Once set up, Ask Bluefin just opens Goose. With no session running, `agentmode.Launch` writes the profile and starts Goose through llmman. With one running — the profile's Chromium `SingletonLock` names a live process on this host and was written during this boot (a lock left by a crash before a reboot may name a reused pid) — it starts `goose-desktop` again in the same profile (`troubleshoot.ReopenCommand`), and Goose's single-instance lock hands that request to the running session, so no second Goose starts. Whether the window is raised is the compositor's call: no activation token is passed, and on GNOME a minimized window stayed minimized while the Shell showed a "Goose is ready" notification instead (lab run `chairlift-wayland-lane-n7fsg`). llmman is not involved there: it refuses a launch while the lock is held.
-
-A fresh launch returns only once Goose holds that lock, its process exits, or 15 seconds pass, so the Goose row stays busy through startup and a second click cannot race the first into a refused `llmman launch`; a non-zero exit during the wait is the launch's error. `agentmode.LaunchResult` says whether the launch started a session or handed off to one already running, and the row's toast (`pageview.GooseLaunchToast`) reports that rather than claiming a window opened — on a host where Goose cannot draw (#544) its process still holds the profile and receives every later launch. Both launches send Goose's stdout and stderr to ChairLift's own stderr, so its startup errors land in ChairLift's journal stream.
-
-`chairlift --ask-bluefin` is the entry point for Bluefin's Custom Command Menu and desktop shortcut. Cold invocations and running-application remote invocations behave identically:
-- When all readiness conditions are met, Goose Desktop is launched off the GTK main thread (the launch writes the profile) without presenting the Control Center window.
-- When any prerequisite is missing, or the launch fails to start or Goose exits non-zero during its startup wait, Control Center opens to the Agents page and displays the reason as a toast. A later asynchronous Goose exit is logged, not rerouted through the window.
-- `--prompt-file PATH` (Report a Problem's **Troubleshoot with Goose**) supplies a starting prompt. `agentmode.ReadPromptFile` accepts only a regular UTF-8 file of at most `agentmode.MaxPromptBytes` (4 KiB), opened non-blocking, and drops control characters other than newline and tab; a relative path resolves against the invoking process's working directory. The prompt is held in memory only (`agentmode.HoldPrompt`) and never logged — dry-run logs redact it. The next `agentmode.Launch`, from `--ask-bluefin` itself or from the Agents page's Goose row after setup, passes it to Goose as `goose://new-session?prompt=…` (through `llmman launch goose-desktop … --` for a fresh session, or to `goose-desktop` directly so a running session's single-instance hand-off opens it); Goose opens a new chat with the prompt prefilled but not sent. The link names no recipe, extension, or setting, so the prompt cannot change the profile or its tools. It is released once a launch goes through; when Goose is not ready the toast says the question is kept. The prompt is a command-line argument of the Goose process while that session runs, so it must carry no identity data; Report a Problem's prompt has none. Model traffic goes through `chairlift-llmman.service`, whose `LLMMAN_NOHISTORY=1` keeps it out of llmman's history.
-
-The Troubleshooting group also offers a **Show Ask Bluefin in Menu** preference. It manages the distro-owned Ask Bluefin entry in GNOME Shell's Custom Command Menu (`org.gnome.shell.extensions.custom-command-list`) via `internal/devmenu`, which recognizes the entry by its label and one of three commands: the web link, `chairlift --ask-bluefin`, or `/home/linuxbrew/.linuxbrew/bin/chairlift-wrapper --ask-bluefin` as Bluefin's distro layer ships it (projectbluefin/common#1396). ChairLift changes only the entry's visibility, never its command. When hidden, it writes a user-layer override (`visible=false`); when shown, it resets the key in the user layer to reveal the distro default without pinning it into user state. The extension renders only slots listed in its `command-order` key, so the switch reads on only when the tuple is visible and its slot is listed; showing the entry also appends a missing slot to `command-order` (resetting instead when the result equals the distro default). Dakota's distro layer moves Ask Bluefin to `command12` while inheriting Bluefin's order of 1..11, which otherwise left a visible tuple the menu never rendered.
-After every flip the switch is re-set from a fresh `devmenu.AskBluefinState` read, decided by `actionmsg.AskBluefinMenu`: a preview says the menu entry was not changed, a write that did not take effect or a failed read-back is an error toast, and a failed read-back restores the previous position rather than leaving the switch half-flipped.
+`internal/printerapp` owns rootless printer quadlets. Verify publishing identity
+and pin the verified digest before writing/enabling or refreshing a unit. Bind
+only loopback: unauthenticated administration must not be exposed to the LAN.
+Service readiness is observed, not inferred from a unit file; failed stops keep
+the management file. Device printing and USB passthrough remain unverified.
+See [printer-applications.md](printer-applications.md).
 
 ## Explicit setup flow
 
-Setup never opens automatically. `--setup`, its `--first-run` alias, and the
-menu action open Welcome, then `internal/firstrun.Pages` selects the existing
-visible Livery → Features → Apps → Agents pages, followed by a conclusion.
-Both bookends share one layout and the embedded theme-aware Bluefin wordmark.
-Welcome has normal introductory text and the website's Zavala quote; the
-conclusion has the website's Edith Wharton quote. Selection steps use their
-existing widgets and `Window.navigateToPage`; bookends use the setup stack.
-Missing pages are skipped; an empty inventory opens no flow.
+`--setup`, `--first-run` and the menu action reuse the existing visible pages
+through `internal/firstrun` and `Window.PresentFirstRun`; normal activation opens
+no wizard. Details remain navigable within their parent step. Setup explicitly
+starts OEM enablement; Next from Features applies the Bash-only Bluefin CLI
+selection. Back/navigation alone installs nothing. Finish/dismissal persist
+disposition; crashes record nothing. Preview writes nothing. The flow owner is
+[`internal/firstrun`](../../internal/firstrun/), with window wiring in
+[`internal/window`](../../internal/window/).
 
-Back and Next mutate no settings. **Finish** saves completed
-and version and returns to Control Center; a save failure reports an
-error toast. Intentional dismissal records a skip without
-demoting prior completion. Dry-run previews persistence. `0-setup.png` captures Welcome.
+## Build and Release
+
+[`Makefile`](../../Makefile) owns build/check commands;
+[`.goreleaser.yaml`](../../.goreleaser.yaml) owns release contents. `make ci`
+runs host-independent gates, including the supported architecture builds.
+Desktop checks and screenshots use the pinned Dakota harness with private
+Wayland/D-Bus sessions, never the developer's live desktop. See
+[GTK headless testing](../skills/gtk-headless-testing/SKILL.md).
+
+Homebrew installs the GUI release archive in user scope. OS images install its
+helpers and matching policies at the fixed system paths and supply the stage
+script themselves. Source installation uses `PREFIX=/usr` for that same
+privilege boundary; maintainer defaults never overwrite administrator-owned
+`/etc/chairlift/config.yml`. See
+[ADR-0018](../adr/0018-distribute-via-homebrew-release-archives.md).

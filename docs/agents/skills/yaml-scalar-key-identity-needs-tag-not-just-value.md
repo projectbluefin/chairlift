@@ -1,1 +1,0 @@
-../../skills/yaml-key-identity/SKILL.md

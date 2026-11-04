@@ -15,7 +15,7 @@ authoritative.
 
 - Never place credentials, tokens, private keys, personal data, or other
   secrets in prompts, commits, issue or pull request comments, logs, artifacts,
-  `.memory/`, or session handoffs.
+  or session handoffs.
 - Do not request or read secrets unless the task explicitly requires them and a
   maintainer has authorized that access. Use the narrowest available token and
   never print its value.

@@ -1,1 +1,0 @@
-../../skills/automated-acceptance/SKILL.md

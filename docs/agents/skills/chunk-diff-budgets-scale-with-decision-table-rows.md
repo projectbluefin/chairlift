@@ -1,1 +1,0 @@
-../../skills/change-sizing/SKILL.md

@@ -33,7 +33,7 @@ import (
 // None of this can be tested from internal/settings itself: that package
 // imports puregotk's gio and gobject, so a _test.go beside store.go builds a
 // test binary that panics during package init on a headless runner
-// (docs/agents/skills/gtk-headless-tests.md). This gate therefore does what
+// (docs/skills/gtk-headless-testing/SKILL.md). This gate therefore does what
 // TestDestructiveActionsRequireConfirmation does for internal/views — reads
 // the source with go/parser and the schema with encoding/xml, and holds them
 // to each other without loading either.

@@ -1,129 +1,39 @@
-# Spec: Developer feeds OPML catalog
+# Developer feed catalog curation
 
-This contract governs `internal/developerfeeds/developer-feeds.opml`, the
-curated developer feed catalog ChairLift compiles into the binary. A confirmed
-live Developer Mode enable may stage it for manual import when
-`features_page.dx_group.stage_feeds` is opted in; that setting and the separate
-`install_pulp` setting both default to false. The validator and catalog curator
-consume this format contract; staging never imports subscriptions into Pulp.
+The embedded [OPML catalog](../../internal/developerfeeds/developer-feeds.opml)
+is curated, not generated. [`developerfeeds.go`](../../internal/developerfeeds/developerfeeds.go)
+owns parsing and offline validation; use it for the exact accepted format rather
+than maintaining a parallel schema here.
 
-Direct Developer Mode enable and an implicit promotion requested by WSL or
-system Docker share one `developerGate` and ordered `devsetup.Run`. If the
-parent is off, the fixed `dx-enable` prerequisite must succeed first; canceled
-or failed authentication starts neither child setup nor feed work. A later
-Docker/WSL or optional setup failure never revokes confirmed developer access,
-and turning a child off never demotes the parent or removes feed artifacts.
-Docker activation uses the image's Docker units when present, or a daemon the
-fixed Docker helper installs from verified Homebrew bottles; neither Docker's
-Homebrew package disclosure nor its optional native
-VS Code setup changes these feed opt-ins. See the
-[developer workstation contract](../design/package-managers.md#developer-workstation-and-gaming-components).
+## Staging and import
 
-The native **Setup activity** checklist reports real stages and separate
-outcomes, not per-package percentages. Pulp, feed staging, and app collection
-outcomes remain independent; retry retains completed optional stages rather
-than repeating a successful promotion or re-staging successful work. Options
-are captured on the GTK main thread before the worker starts. Page load,
-disable, failed promotion, and dry-run previews stage no catalog, install no
-Pulp, and import no subscriptions. Preview preserves observed switches.
-
-The opted-in Developer disclosure includes the resolved catalog path when
-available, so the user can find the file for manual import. Resolving this hint
-never stages the file or changes the reader's subscriptions.
-
-## Interface
-
-An OPML 2.0 document. Structure, with the attribute constraints the validator
-enforces:
-
-| Element | Attribute | Required | Constraints |
-| --- | --- | --- | --- |
-| `opml` | `version` | yes | exactly `2.0` |
-| `head` | `title` | yes | non-empty; labels the imported list in a reader |
-| `body > outline` | display label (`title`, else `text`) | required categories | all three required category labels must be present; additional group names are not validated |
-| `outline` (group) | `outline` children | yes | at least one; a group MUST NOT carry `xmlUrl` |
-| `outline` (feed) | `title` | yes | non-empty; used as the display label; `text` is retained by curation convention |
-| `outline` (feed) | `type` | yes | exactly `rss` |
-| `outline` (feed) | `category` | yes | one of `changelog`, `blog`, `newsletter`, `podcast` |
-| `outline` (feed) | `xmlUrl` | yes | absolute `https` URL; no credentials, fragment, or tracking parameter |
-| `outline` (feed) | `htmlUrl` | no | same clean absolute `https` constraints as `xmlUrl` when present |
-| `outline` (feed) | `outline` children | no | a feed MUST NOT contain child outlines |
-
-Shape excerpt (the other two required groups must also contain feeds):
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
-  <head><title>Control Center developer feeds</title></head>
-  <body>
-    <outline text="Changelogs">
-      <outline text="Bluefin OS Releases" title="Bluefin OS Releases" type="rss"
-               category="changelog"
-               xmlUrl="https://github.com/projectbluefin/bluefin/releases.atom"
-               htmlUrl="https://github.com/projectbluefin/bluefin/releases"/>
-    </outline>
-    <!-- Blogs & Newsletters and Podcasts follow the same shape -->
-  </body>
-</opml>
-```
-
-The three required top-level labels are `Changelogs`, `Blogs & Newsletters`,
-and `Podcasts`. Curation groups podcasts one level further by show family and
-keeps their `podcast` category tag. The validator walks nested groups recursively;
-it does not enforce a maximum depth or category-to-group mapping.
-
-## Rules
-
-1. The document MUST be well-formed XML with balanced tags and a single
-   `<opml>` root element. A following root or non-whitespace text is invalid;
-   trailing whitespace and comments are permitted. `Parse` also ignores trailing
-   processing-instruction/directive tokens rather than enforcing a token allowlist.
-2. Every feed `xmlUrl` MUST be unique across the whole document.
-3. Sibling outlines below a top-level group MUST NOT share a display label
-   (`title` when non-empty, otherwise `text`). Required top-level labels are
-   checked for presence, not uniqueness.
-4. Every `xmlUrl` and `htmlUrl` MUST be an absolute `https` URL, and MUST NOT
-   carry userinfo, a fragment, or a campaign/tracking query parameter (`utm_*`,
-   `fbclid`, `gclid`, `igshid`, `mc_cid`, `mc_eid`, `ref_src`). A feed's URL is
-   the endpoint the publisher maintains, not the link a newsletter happened to
-   carry.
-5. Every outline MUST be either a group (children, no `xmlUrl`) or a feed
-   (`xmlUrl`, no children). An outline that is neither is a defect.
-6. The document MUST declare OPML `2.0` and carry a non-empty `head` title.
-7. Each of the three required groups MUST exist and MUST contain at least one
-   feed.
-8. Catalog parsing and validation MUST be offline: no validation rule resolves
-   a hostname, opens a socket, or runs a command. `TestPackageStaysOffline`
-   rejects direct imports of the listed network/command/GTK packages in
-   production files. It is not a transitive dependency audit: Pulp provisioning
-   separately delegates system-scope execution to `internal/flatpak`.
-9. The number of feeds per category is pinned in
-   `internal/developerfeeds/developerfeeds_test.go`. Adding or removing a feed
-   MUST update that count in the same change, which is what makes a catalog
-   edit a visible, reviewable event.
-
-Rule 9 makes a count-changing catalog edit visible to review; it does not prove
-publisher liveness or community vetting, and a same-count replacement needs the
-same review. The epic that requested this catalog
-([projectbluefin/chairlift#235](https://github.com/projectbluefin/chairlift/issues/235))
-requires community vetting; preserve that human curation step separately from
-the offline gate.
+Developer Mode's `stage_feeds` opt-in stages
+`~/.local/share/chairlift/developer-feeds.opml` after a confirmed live promotion.
+It does not import subscriptions. The separate `install_pulp` opt-in provisions
+the reader; neither option is required for developer access. Both default off.
+[`devsetup`](../../internal/devsetup/setup.go) selects follow-on work, and
+[`pulp.go`](../../internal/developerfeeds/pulp.go) owns staging and provisioning.
+Dry-run writes nothing. Disabling Developer Mode removes neither subscriptions
+nor the staged catalog. Resolve the file path through the Developer Mode
+disclosure and import it manually in the reader.
 
 ## Curation
 
-The list is curated, not generated. A change MUST name its source — the issue,
-the review thread, or the community member who proposed the feed — in the pull
-request that makes it. Issue
-[#236](https://github.com/projectbluefin/chairlift/issues/236) requests the
-initial review from `@mrbobbytables` and the surrounding community.
+Name the proposing issue, review thread or community source in the pull request.
+Community review is separate from syntactic validation: passing the offline
+gate proves neither publisher liveness nor endorsement.
+
+Preserve the OPML groups and category vocabulary accepted by the validator.
+Use canonical HTTPS feed endpoints, unique feed URLs and distinct sibling
+labels. Site links are optional; omit one rather than inventing it. Do not copy
+tracking parameters into feed or site URLs. Adding or removing entries also
+requires updating the reviewed inventory in
+[`developerfeeds_test.go`](../../internal/developerfeeds/developerfeeds_test.go).
 
 ## Manual re-verification
 
-Offline validation cannot tell whether a feed is still alive, so liveness is
-checked manually. Run this before proposing a catalog change, and on whatever
-cadence the project agrees for the standing catalog — at minimum when a user
-reports a dead feed. It needs network access and is never part of `make ci`.
-
+Check changed endpoints before proposing a catalog edit, and recheck when a
+user reports a dead feed. This requires network access and is not part of CI.
 From the repository root:
 
 ```sh
@@ -134,75 +44,21 @@ while read -r url; do
 done
 ```
 
-Every line MUST begin `200|` and the content type MUST be an XML type
-(`application/rss+xml`, `application/atom+xml`, `application/xml`, `text/xml`).
-`000|` means the host did not resolve or the connection failed; `404` or `410`
-means the publisher moved or retired the feed; `200` with `text/html` means the
-URL now serves a page rather than a feed. Repeat the same loop over `htmlUrl`
-values when site links change.
+Expect HTTP 200 and an XML content type (`application/rss+xml`,
+`application/atom+xml`, `application/xml` or `text/xml`). `000` means a connection
+or resolution failure; 404/410 suggests a moved or retired feed. HTTP 200 with
+HTML is not a valid feed. Check `htmlUrl` links separately when they change;
+those should resolve to the publisher's page rather than XML.
 
-Reachability is not activity. For each feed, confirm the most recent
-`<pubDate>`, `<updated>`, or `<published>` value is recent enough for that
-publisher's schedule — a `200` on a feed whose newest item is three years old
-is a dead subscription:
+Reachability is not activity. Inspect the latest publication date against the
+publisher's schedule:
 
 ```sh
 curl -sS -L --max-time 20 "$url" | grep -o -m1 -E '<(pubDate|updated|published)>[^<]*'
 ```
 
-When a check fails:
-
-1. Look for the publisher's replacement feed before removing anything; most
-   moves leave a redirect or an announcement post.
-2. Update `developer-feeds.opml` with the canonical endpoint, and the pinned
-   counts in `developerfeeds_test.go` if the number of feeds changed.
-3. Run `make ci` and record the re-verification date and result in the pull
-   request. Do not add a network test for this: the catalog's CI path is
-   offline by design (rule 8).
-
-### Last verification
-
-Historical evidence from 2026-09-22: all 32 feed URLs returned HTTP 200 with an
-XML content type, and all 26 site URLs (`htmlUrl`) returned HTTP 200. This is not
-current liveness evidence; repeat verification when curating a change. Command:
-
-```sh
-curl -sS -L -o /dev/null --max-time 20 \
-  -w '%{http_code}|%{content_type}|%{url_effective}' "$url"
-```
-
-### Known exclusions
-
-Historical curation rationale from 2026-09-22 for entries absent from the catalog:
-
-- **Last Week in Cloud Native** (`lwcn.dev`) — the domain served a parking page
-  and the only known URL carried a `utm_source` parameter. Recheck for a
-  canonical publisher feed before adding it.
-- **Site links for six shows** — `OpenObservability Talks`, `Geeking Out`,
-  `Agentic DevOps`, `PurePerformance`, `The Kubelist Podcast`, and `Argo
-  Unpacked` had no verified publisher page (`openobservability.fm` and
-  `pureperformance.show` did not resolve; the Heavybit Kubelist landing page
-  returned 404). `htmlUrl` is optional; their feed URLs passed that dated
-  verification. Recheck a publisher page before adding its site link.
-
-## Derived artifacts
-
-| Artifact | Derivation |
-| --- | --- |
-| `~/.local/share/chairlift/developer-feeds.opml` | Embedded asset staged only after a confirmed live enable with `stage_feeds` opted in; imported by the user, never by ChairLift |
-
-## References
-
-- Rationale: [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md)
-  (the validator is a puregotk-free leaf package precisely so it can be tested
-  headlessly), and epic
-  [#235](https://github.com/projectbluefin/chairlift/issues/235), which decides
-  the catalog's contents and its vetting requirement
-- Context: [design/overview.md](../design/overview.md)
-- Source: [`developerfeeds.go`](../../internal/developerfeeds/developerfeeds.go)
-  (offline parser/validator), [`pulp.go`](../../internal/developerfeeds/pulp.go)
-  (system-scope Pulp provisioning and user-data staging),
-  [`developer_setup.go`](../../internal/views/developer_setup.go)
-  (GTK-side task callbacks), and
-  [`setup.go`](../../internal/devsetup/setup.go)
-  (`devsetup.PostStages` opt-in admission and `Run` sequencing).
+If a feed fails, look for a publisher-announced replacement before removing it.
+Update the canonical endpoint and any affected inventory counts. Run the normal
+`make ci` gate and record the manual check's date and result in the pull request,
+not in an accumulating verification log here. Keep CI validation offline: no
+hostname resolution, outbound request or command is needed to validate OPML.

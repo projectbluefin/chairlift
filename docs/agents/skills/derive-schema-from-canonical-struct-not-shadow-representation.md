@@ -1,1 +1,0 @@
-../../skills/canonical-schema/SKILL.md

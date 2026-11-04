@@ -1,1 +1,0 @@
-../../skills/gated-test-placement/SKILL.md

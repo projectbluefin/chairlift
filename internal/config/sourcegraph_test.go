@@ -546,8 +546,7 @@ func TestValidateSourceGraphMergeInComplexKey(t *testing.T) {
 // malformed merge operand in a mapping entry that a later merge-precedence
 // pass would discard (an earlier "<<" source overridden by a later one)
 // still returns KindParseType: this slice validates every reachable entry,
-// not just the one an effective-merge pass would keep
-// (docs/agents/skills/discarded-merge-branches-still-need-validation.md).
+// not just the one an effective-merge pass would keep.
 func TestValidateSourceGraphMergeDiscardedBranchStillValidated(t *testing.T) {
 	const path = "/etc/chairlift/merge-discarded.yml"
 

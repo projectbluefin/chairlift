@@ -1,1 +1,0 @@
-../../skills/leaf-package-documentation/SKILL.md

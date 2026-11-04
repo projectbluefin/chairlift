@@ -1,1 +1,0 @@
-../../skills/error-classification/SKILL.md

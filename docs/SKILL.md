@@ -1,26 +1,15 @@
-# ChairLift skill router
+# Optional task guides
 
-Read [`AGENTS.md`](../AGENTS.md) first. Load only the package matching the task,
-then follow its source links when that branch needs them. The exhaustive local
-catalog is [`skills/index.md`](skills/index.md); it is hand-maintained, not a
-generated Common catalog.
+Load a guide only when the task needs its procedure. Source and tests own the
+implemented contract; these are not a mandatory reading tour or a lesson ledger.
 
-| Task | Load |
+| Task | Guide |
 | --- | --- |
-| Start factory-assigned work, submit through the merge queue, or cut a release | [factory-onboarding](skills/factory-onboarding/SKILL.md) |
-| File/triage a report, accept/assign work, change labels, or use Prow commands | Common's [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md) |
-| Reconcile docs, retire plans, or resolve conflicting current-state claims | [documentation-reconciliation](skills/documentation-reconciliation/SKILL.md) |
-| Change a documented invariant or package inventory | [agent-contracts](skills/agent-contracts/SKILL.md), [leaf-package-inventory](skills/leaf-package-inventory/SKILL.md) |
-| Plan acceptance checks or split implementation work | [automated-acceptance](skills/automated-acceptance/SKILL.md), then the planning entries in the catalog |
-| Add unit tests, report coverage, or drive the GTK/AT-SPI suite | [gated-test-placement](skills/gated-test-placement/SKILL.md), [gtk-headless-testing](skills/gtk-headless-testing/SKILL.md) |
-| Validate configuration, precedence, or YAML keys | [canonical-schema](skills/canonical-schema/SKILL.md), then the validation entries in the catalog |
-| Change a window, page skeleton, or dialog; audit against the GNOME HIG | [blueprint-ui](skills/blueprint-ui/SKILL.md) |
-| Render streamed external output | [bounded-stream-rendering](skills/bounded-stream-rendering/SKILL.md) |
-| Change a container digest or the Dakota E2E image | [multi-arch-digest-pinning](skills/multi-arch-digest-pinning/SKILL.md) |
-| Change a Make target | [phony-target-shadowing](skills/phony-target-shadowing/SKILL.md) |
-| Preserve a durable lesson or edit a skill | [skill-improvement](skills/skill-improvement/SKILL.md) |
+| GTK unit/E2E placement, Dakota and AT-SPI | [GTK testing](skills/gtk-headless-testing/SKILL.md) |
+| Static widget trees and bindings | [Blueprint UI](skills/blueprint-ui/SKILL.md) |
+| Streaming logs and opaque-command progress | [Bounded rendering](skills/bounded-stream-rendering/SKILL.md) |
+| Container image pin changes | [Digest pinning](skills/multi-arch-digest-pinning/SKILL.md) |
+| Merge queue or release operations | [Factory/release](skills/factory-onboarding/SKILL.md) |
 
-For cross-repository factory work, follow
-[`factory/README.md`](factory/README.md) to Common's live procedures and verify
-ChairLift's local implementation before changing state. Common's documentation-
-only direct-push exception is not authority to bypass ChairLift's merge queue.
+General build, safety, and scope rules live in [AGENTS.md](../AGENTS.md).
+Contribution steps live in [CONTRIBUTING.md](../CONTRIBUTING.md).

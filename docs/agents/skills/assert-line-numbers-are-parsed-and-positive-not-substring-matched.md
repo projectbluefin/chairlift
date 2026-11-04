@@ -1,1 +1,0 @@
-../../skills/diagnostic-assertions/SKILL.md

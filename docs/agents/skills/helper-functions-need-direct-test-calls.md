@@ -1,1 +1,0 @@
-../../skills/helper-test-surface/SKILL.md

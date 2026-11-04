@@ -1,121 +1,49 @@
 ---
 name: multi-arch-digest-pinning
-description: Use when pinning or rolling a container image reference to a content digest.
-version: 1.3.0
-last_updated: 2026-10-21
-tags:
-  - supply-chain
-  - containers
-metadata:
-  type: reference
+description: Use when pinning or rolling a container image reference.
 ---
 
-# A digest pin must name the manifest index; pinning a child manifest silently narrows the image to one architecture
+# Container digest rollout
 
-**When it applies:** Replacing a floating tag with an `@sha256:` reference, or
-rolling an existing digest, anywhere a container image is named. ChairLift's
-`internal/printerapp` now verifies a family's `:stable` reference with cosign
-and installs the digest from its verified payload (ADR-0023); never re-resolve
-the tag after that check. Its signer must remain the family's own publishing
-workflow, including for mirror overrides. Runtime verification does not check
-SBOM or provenance attestations; do not claim those checks from a signature
-alone. Agent Mode delegates engine fetching to llmman and has no
-ChairLift-owned container pin.
+Pin a manifest index when the tag publishes one, not an architecture's child
+manifest. Request these Accept types explicitly:
 
-**Runtime verification regression:** reject failed verification, absent JSON
-payloads, invalid or conflicting digests, and a mismatched explicit pin before
-writing a unit or calling systemctl. Assert the exact issuer and anchored
-per-family workflow identity in runner tests. A shape test containing
-`@sha256:` alone proves none of these trust properties. After installation, diagnostics
-must probe the persisted `Image=` reference, not the original moving tag:
-pulling a digest does not guarantee that the tag exists in local storage.
-Regression fixtures should reject the tag probe while accepting the pin.
-
-**What to do:** Resolve the *index* (manifest list) digest when the tag publishes
-one, never an architecture's child entry. A bare
-`curl -sI https://<registry>/v2/<repo>/manifests/latest` can negotiate a
-single-architecture manifest instead — for the images this was learned on, a
-`application/vnd.docker.distribution.manifest.v1+json` digest entirely
-different from the index digest. Request the list media types explicitly:
-
-```
-curl -sS -D - -o /tmp/m.json \
-  -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-  https://<registry>/v2/<repo>/manifests/latest
+```text
+application/vnd.oci.image.index.v1+json
+application/vnd.docker.distribution.manifest.list.v2+json
 ```
 
-Confirm the response's Content-Type is an index or manifest list before taking
-the `Docker-Content-Digest` header; a missing body `mediaType` is not contrary
-evidence. Inspect body metadata when present. ChairLift targets both architectures:
-`.github/workflows/test.yml` ships a `goarch: [amd64, arm64]` build matrix.
-The two pins fail in importantly different ways on an arm64 host. A child
-digest is a specific, addressable manifest, so the registry serves it happily
-and the mismatch surfaces later, as an image that will not run; the reference
-looks valid everywhere you inspect it. An index digest makes the registry
-itself answer, and the answer names the problem: podman reports "no matching
-manifest for linux/arm64". Prefer the error that arrives at pull time and
-says which architecture is missing.
+Inspect the response Content-Type (the body's `mediaType` may be absent),
+`Docker-Content-Digest`, and the index's platform entries. Confirm required
+platforms; a digest's shape does not prove architecture coverage or availability.
+For a genuinely single-platform tag, also accept its manifest type and verify
+the config blob's OS/architecture. Never claim an index exists when it does not.
+Verify SHA-256 of raw manifest bytes against the digest and fetch by digest to
+confirm it is addressable. Record the actual resolution date and platform limits.
+Pinning provides reproducibility, not publisher authentication.
 
-Inspect `.manifests[].platform.architecture` in the same response while you
-have it, and record what you found. Pinning the index stays correct even for
-a single-architecture image: two of the four images this was learned on
-published an amd64 entry only (verified 2026-09-18), so on arm64 they
-produced exactly that "no matching manifest" error — an honest report of an image upstream has not published,
-rather than something ChairLift can fix by choosing a different digest.
+## Dakota gates
 
-Two follow-through rules. First, the provenance date in the comment must be
-the date you actually performed the resolution — a pin's entire value is that
-a later reader can re-derive it, and a fabricated date destroys that. Second,
-nothing updates these digests automatically, so the roll procedure belongs
-beside the pinned values; a roll procedure that omits the Accept header
-reintroduces the bug at the next roll.
+`test/e2e/dakota-image.sh` owns the shared pin. All Dakota harnesses source it;
+never add a private floating default. CI rejects `CHAIRLIFT_DAKOTA_IMAGE`
+overrides. A local override is an experiment, not evidence for the committed pin.
 
-Do not mistake a shape test for coverage of any of this. A test asserting
-only that every image contains `@sha256:` and none contains `:latest`
-protects the
-*shape* of the pin against a future "refresh" back to a moving tag; it cannot
-see staleness and it cannot see architecture coverage. The index check
-happens at roll time, by a human, or not at all.
-
-**Learned from:** PR #127 replaced the local-AI stack's four `:latest`
-references with digests — the right direction, since a floating tag is not a
-pin — but every one of the four was the amd64 child entry of that image's
-manifest list, and the comment carried a provenance date that was not when
-the digests were taken. They were re-resolved as index digests on 2026-09-18
-with the Accept header above, and later removed with the stack itself.
-
-## Dakota E2E and release gates
-
-`test/e2e/dakota-image.sh` owns the reviewed Dakota pin. Every Dakota
-container harness sources it before invoking podman; today the tag's pin is a
-single linux/amd64 manifest, not an invented multi-arch index. `--pull=missing` is
-safe for that content-addressed reference: a cached image cannot silently
-change when `testing` moves. `CHAIRLIFT_DAKOTA_IMAGE` is a local experiment
-override only; CI (`CI=true` or `GITHUB_ACTIONS=true`) rejects a different
-value. Local override results are not evidence for the committed gate.
-
-To roll the pin:
-
-1. Obtain an anonymous GHCR pull token from
+1. Get an anonymous GHCR pull token from
    `https://ghcr.io/token?service=ghcr.io&scope=repository:projectbluefin/dakota:pull`.
-   Request `/v2/projectbluefin/dakota/manifests/testing` with that Bearer token
-   and the index/list Accept types above. Verify the response type and digest.
-2. If GHCR reports that the tag is an OCI manifest rather than an index,
-   repeat with `application/vnd.oci.image.manifest.v1+json` also accepted.
-   Verify the response's Content-Type and the config blob's `os` and
-   `architecture`. Do not select a child from an available index. On
-   2026-10-03, Dakota served a single linux/amd64 OCI manifest directly;
-   there was no index to pin. Its body omitted `mediaType`, so use the
-   response Content-Type as well. This does not provide arm64 E2E coverage.
-3. Verify SHA-256 of the raw response bytes equals `Docker-Content-Digest`,
-   and fetch the manifest by that digest to confirm it remains addressable.
-   Update the pin and resolution date together; record platform changes.
-4. Run `make ci` and `make e2e-atspi` using the committed default (no image
-   override), and exercise any other Dakota-backed E2E/screenshot targets.
-   Review the resulting logs/screenshots before accepting the update.
+2. Request `/v2/projectbluefin/dakota/manifests/testing` with that Bearer token
+   and the index/list Accept types. If it serves a single manifest, repeat with
+   the OCI manifest type accepted and inspect its config. Do not select a child
+   from an available index.
+3. Verify digest, addressability and platforms; update the shared pin and its
+   observation comment together.
+4. Run `make ci`, `make e2e-atspi`, and affected E2E/screenshot targets with the
+   committed default. Inspect logs and frames before accepting the roll.
 
-`TestDakotaImageSelection` covers CI rejection and local overrides;
-`TestDakotaHarnessesUsePinnedImage` prevents a replacement harness from
-reintroducing its own floating default. These checks cannot verify image
-contents or availability. Digest pinning gives reproducibility, not publisher
-identity verification, and an intentional update still requires review.
+## Printer images
+
+`internal/printerapp` resolves a family's stable tag through cosign and installs
+only the digest from the verified payload. Preserve the exact issuer and
+family-specific publishing identity; do not re-resolve the tag after verification.
+Missing, invalid or conflicting verification payloads fail closed. Diagnostics
+probe persisted `Image=`, not the moving tag. A signature is not SBOM/provenance
+verification. See [ADR-0023](../../adr/0023-verify-printer-images-before-installing.md).

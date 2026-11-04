@@ -1,1 +1,0 @@
-../../skills/removal-verification/SKILL.md

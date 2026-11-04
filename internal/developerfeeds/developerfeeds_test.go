@@ -11,11 +11,8 @@ import (
 	"testing"
 )
 
-// vettedInventory pins the catalog this repository has actually vetted, by
-// category. Every entry was verified live on the date recorded in
-// docs/specs/developer-feeds.md; adding or removing a feed is a curation event
-// that must be re-verified and reflected here, so a silently edited asset
-// fails instead of shipping an unvetted subscription to users.
+// vettedInventory pins the curated catalog by category. Changes require manual
+// endpoint verification; docs/specs/developer-feeds.md describes the procedure.
 var vettedInventory = map[string]int{
 	CategoryChangelog:  5,
 	CategoryBlog:       7,

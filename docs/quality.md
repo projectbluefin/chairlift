@@ -2,8 +2,8 @@
 
 This page is the entry point for auditing ChairLift's current quality signals.
 It links to live reports rather than copying pass rates or coverage percentages
-that would immediately become stale. The [public metrics catalog](metrics/)
-collects those read-only sources and their interpretation boundaries.
+that would immediately become stale. [PR metrics](metrics.md) defines the
+outcome query and its interpretation boundaries.
 
 [![Tests](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/projectbluefin/chairlift/actions/workflows/test.yml?query=branch%3Amain)
 
@@ -199,10 +199,6 @@ merge queue once a pull request has `lgtm` and `approved` and no `hold`; the
 queue still waits for **Tests Passed**, and the ruleset's required approving
 review still applies. See
 [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
-
-Reusable implementation and review prompts are available in the
-[agent prompt catalog](prompts/index.md). They are aids only; repository
-instructions and human review remain authoritative.
 
 ## Maintainer-triggered Claude review
 

@@ -19,42 +19,8 @@ import (
 // matter what it is called, fails TestSourceHelperDirectCallSurface the
 // moment a _test.go file names it unless it is listed here.
 //
-//   - parseYAMLDocument and validateSourceGraph are the two package
-//     capabilities this multi-chunk slice adds and tests directly.
-//     validateSourceGraph does not exist yet as of this chunk; listing it
-//     now costs nothing and lets a later chunk add its direct test without
-//     touching this frozen allowlist.
-//   - isMergeKey and shortYAMLTag are the only two internal helpers the
-//     spec singles out for direct testing (exact merge-key recognition and
-//     YAML tag normalization). Like validateSourceGraph, they do not exist
-//     yet as of this chunk.
-//   - defaultConfig, loadFromPath, schemaPageGroups, yamlFieldNames and
-//     yamlTagName are a frozen pre-existing baseline: they were already
-//     named directly by config_test.go/schema_test.go before this chunk
-//     and are not widened or added to here.
-//   - resolveEffective and effectiveKeyIdentity are the exactly two
-//     additions this slice's spec authorizes, added in this chunk before
-//     either function exists so no later chunk needs to touch this frozen
-//     guard again. resolveEffective does not exist yet as of this chunk;
-//     effectiveKeyIdentity does, and effectivekeys_test.go names it
-//     directly. Every other new resolver helper this slice adds in a later
-//     chunk must be exercised only indirectly, through resolveEffective —
-//     it must not be added to this allowlist.
-//   - parseAndValidate is the single addition phase1c1's chunk c1 spec
-//     authorizes, spending that chunk's one frozen-allowlist entry per
-//     docs/agents/skills/frozen-allowlist-authorization-is-per-entry-not-per-chunk.md.
-//     No other new production helper c1 adds may be added here; they are
-//     exercised only indirectly, through parseAndValidate.
-//   - resolveCandidatePath is the runtime-wiring slice's one direct-test
-//     authorization. Path resolution is observable security/diagnostic
-//     behavior and its executable/cwd branches are tested directly; all other
-//     runtime-loading helpers remain exercised through Load/loadFromPath.
-//   - isTrustedConfigPath is the sudo-provenance slice's one direct-test
-//     authorization. Load() derives provenance from a candidate's fixed
-//     index, so this predicate is only the rule for an explicitly supplied
-//     path; tests name it to build the configSource that path would get,
-//     keeping the provenance decision in one place instead of restating the
-//     trusted-directory policy in test code.
+// Validation helpers are tested directly where the contract needs a separate
+// seam. Other helpers remain exercised through the exported loading surface.
 var directCallAllowlist = map[string]bool{
 	"parseYAMLDocument": true,
 
