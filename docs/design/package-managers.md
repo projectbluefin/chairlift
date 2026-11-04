@@ -873,6 +873,17 @@ enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM
 alone is not shell readiness.
 
+Lima's `wireSSH` inserts `Include ~/.lima/*/ssh.config` before existing content
+using a synced sibling temporary file and atomic rename, never an in-place
+truncate. `sshConfigTarget` resolves the parent and follows relative, absolute,
+and chained config symlinks without replacing their inodes. A missing final
+target is created only when its parent exists; missing target directories and
+symlink cycles fail. Parent symlinks are resolved before `..` is cleaned, so
+dotfile links keep their filesystem meaning. An already-present Include skips
+the content write, while file/directory permissions are still tightened to
+0600/0700. This resolver is local to SSH wiring; configuration provenance and
+other file-writing APIs retain their own contracts.
+
 **System Docker from verified Homebrew bottles.**
 System Docker matches Bluefin DX: a rootful daemon behind `docker.socket`,
 `docker` group membership, and a CLI with buildx and compose. Its packages
