@@ -243,13 +243,22 @@ def step_choose_wsl_engine(context, engine):
 # ---------------------------------------------------------------- setup activity
 
 
-@then("Setup activity is the first Features preference group")
-def step_setup_first(context):
+@then("Gaming is the first Features preference group")
+def step_gaming_first(context):
+    gaming = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                        and atspi.name(node) == "Gaming", "the Gaming group")
+    groups = [atspi.name(node) for node in atspi.children(gaming.parent)
+              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
+    assert groups and groups[0] == "Gaming", f"Features group order is {groups}"
+
+
+@then("Setup activity follows Gaming on Features")
+def step_setup_after_gaming(context):
     activity = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
                           and atspi.name(node) == "Setup activity", "the Setup activity group")
     groups = [atspi.name(node) for node in atspi.children(activity.parent)
               if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
-    assert groups and groups[0] == "Setup activity", f"Features group order is {groups}"
+    assert groups[:2] == ["Gaming", "Setup activity"], f"Features group order is {groups}"
 
 
 @then("Setup activity shows these stage statuses")

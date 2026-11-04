@@ -10,7 +10,7 @@ import (
 
 // LiveryPageDescription introduces the tasks the current page can actually
 // perform.
-const LiveryPageDescription = "Choose a profile picture and customize the icons on your desktop."
+const LiveryPageDescription = "Choose a profile picture, set up wallpapers, and customize the icons on your desktop."
 
 // Each section names the surface it changes rather than the old Livery
 // taxonomy. Configuration identities remain the original livery_page groups.

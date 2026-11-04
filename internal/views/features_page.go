@@ -364,15 +364,16 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 		status.CanSwitchTo != imageinfo.ChannelUnknown, status.Developer,
 		dxEnabled, gamingEnabled)
 
+	if gamingEnabled {
+		uh.buildGamingGroup(page)
+	}
+
 	uh.buildSetupActivity(page)
 
 	// Optional user tools remain discoverable even without installed access
 	// actions; the privileged switch stays insensitive and explains why.
 	if dxEnabled {
 		uh.buildDeveloperGroup(page, status)
-	}
-	if gamingEnabled {
-		uh.buildGamingGroup(page)
 	}
 	return true
 }

@@ -24,6 +24,7 @@ are the current owners, not implementation instructions copied from old plans.
 | [`internal/dockerbrew`](../../internal/dockerbrew/) | Verified Homebrew-bottle Docker daemon runtime: signed index, bottle download and extraction, ELF patching, manifest, managed units | Pure library; its writes run only inside the fixed `docker-enable`/`docker-update` helper commands |
 | [`internal/devsetup`](../../internal/devsetup/setup.go) | Ordered developer setup and retry outcomes over injected tasks | Adds no privileged route; initial Developer Mode promotion uses the existing ublue helper |
 | [`internal/compass`](../../internal/compass/compass.go) | Compass launcher state and system install/removal from the image's FlatPark remote | Flatpak's own authorization; adds no remote and no pkexec route |
+| [`internal/valhalla`](../../internal/valhalla/valhalla.go) | Livery More Dinosaurs installation, PNG artwork and observed manual-source readiness | User-scope Homebrew/files/settings and system Flatpak under Flatpak's own authorization; adds no remote or pkexec route |
 
 Mutation wrappers read the single process-wide `dryrun.Enabled()` flag from
 [`internal/dryrun`](../../internal/dryrun/dryrun.go). There are no per-wrapper
@@ -303,14 +304,89 @@ whose title and subtitle are the curated name and description
 `bundleview.Describe` produces, and whose expanded child rows are the package
 list. Collections are selected with checkboxes (curated sets default checked,
 while Full Desktop Suite defaults unchecked). An "Install" header action installs
-all checked, uninstalled collections in one step. Bluefin CLI additionally enables
-shell bling and prompt integration.
+all checked, uninstalled Apps collections in one step. Enhanced Terminal Bling (`cli`) and
+Monospace Fonts (`fonts-dev`) are offered only inside the initially collapsed
+Developer Mode expander on Features, using an independent selection and explicit
+Install action backed by the same collection installer and action gate. Their
+visibility still requires `applications_page.brew_bundles_group` and Homebrew;
+installing them does not grant developer access, and enabling Developer Mode
+does not install them. Enhanced Terminal Bling additionally enables shell bling and prompt
+integration.
+Both relocated collections default to selected in ordinary and explicit wizard
+sessions. The wizard uses the same controls and preserves manual deselection
+across Next/Back navigation; it adds no automatic installation path.
 
 Each row's installed state is observed: `refreshBundleStatuses`
 (`internal/views/bundle_install.go`) runs `BundleCheck` for every collection
-off the GTK thread once the rows are built, again after every collection install
-and after a live Homebrew uninstall. When installed, a collection's checkbox is
-checked and made insensitive, and its subtitle indicates installed status.
+off the GTK thread once the rows are built, again after every live collection
+install and after a live Homebrew uninstall. When installed, a collection's
+checkbox is checked and made insensitive, and its subtitle indicates installed
+status. Failed observations preserve known state; previews do not refresh it.
+
+### Livery Wallpapers setup
+
+Livery's `wallpapers_group` is directly below Profile Picture and before the
+icon groups. The group is floored on Homebrew and offers a default-checked
+More Dinosaurs checkbox and an explicit Install button. Showing the group
+only observes readiness; it never installs, converts or configures anything.
+The `wallpaper-slideshow` and `artwork` Brewfile collections are hidden from Apps,
+so image definitions that still name Damask cannot install or advertise it.
+[`internal/valhalla`](../../internal/valhalla/valhalla.go) owns this group's
+fixed payload and complete setup through `Install(ctx, report)` and `Installed(ctx)`:
+
+- Install `io.github.tunix.valhalla` system-wide from the existing `flatpark`
+  remote, under Flatpak's own authorization. Never add a remote or a privileged
+  ChairLift helper route.
+- Install the user-scope `ublue-os/tap/bluefin-wallpapers-extra` Homebrew cask.
+  The expanded row discloses Valhalla and `bluefin-wallpapers-extra`, regardless
+  of what the old image Brewfile lists.
+  Both metadata and Caskroom lookups use that fully qualified name: a bare
+  cask token is ambiguous on a host with multiple taps publishing it.
+- Convert extra SVG, JPEG XL, and KDE's AVIF artwork to PNG now, rather than expecting
+  Valhalla to read unsupported formats. Converted files live in
+  `$XDG_DATA_HOME/chairlift/wallpaper-slideshow/png`, falling back to
+  `~/.local/share/chairlift/wallpaper-slideshow/png`; cask artwork is not rewritten.
+  SVG conversion uses `rsvg-convert`; JPEG XL uses `djxl`; AVIF uses `avifdec`.
+  Setup reuses installed tools, including Homebrew's resolved prefix, and installs
+  `librsvg`, `jpeg-xl`, or `libavif` only when the corresponding tool is missing.
+  Generated names include the installed cask version, so a pack upgrade makes
+  setup retryable until its PNGs are regenerated. A successful batch removes
+  obsolete generated PNGs, while failed conversion preserves the previous batch
+  and unrelated files in the output directory are left alone.
+  Native SVG/JPEG XL support is requested in
+  [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
+- Grant Valhalla read-only sandbox access to the generated source, add it to
+  `manual-folders` while retaining other folders, and set `active-source` to
+  `manual`. Configuration runs through the installed FlatPark app's schema at
+  `/app/extra/valhalla` (`GSETTINGS_SCHEMA_DIR` inside `flatpak run --system`),
+  not the host's schema registry or the upstream-built Flatpak's schema layout.
+
+The GTK worker calls `Installed` with a 30-second context each time the group is
+shown and `Install` with a 30-minute context only after an explicit click. A
+`RefreshGate` rejects observations overtaken by a newer read or installation;
+the section's action gate resets after every outcome. Complete usable artwork
+and configuration, not Flatpak presence alone, determine installed status.
+An absent `ublue-os/tap` is ordinary not-set-up state, observed with the read-only
+tap inventory before querying the fully qualified cask; an inventory failure is
+not treated as proof the tap is absent.
+A failed setup stays selectable for retry, and its row and error toast include
+the cause. Live completion also refreshes Apps' Homebrew inventory, including
+after partial failure. Dry-run previews setup but executes no install,
+conversion, sandbox override, or settings write and preserves observed readiness.
+Clicking Install with the checkbox unchecked skips setup entirely. Setup does
+not launch Valhalla or directly apply a desktop wallpaper.
+
+Wallpaper setup reuses Features' `setupActivity` checklist and `installProgress`
+pulsing timer, with its own fixed rows directly below the wallpaper controls.
+The provider reports five real phase boundaries: Install Valhalla, Install extra
+wallpapers, Prepare wallpaper images, Configure slideshow, and Verify setup.
+Each row becomes Working before its operation, then Complete only on success;
+failure or cancellation stops the dependent phases, leaving earlier outcomes
+visible. Preview marks the stages Preview without executing them. No percentage
+or per-package completion is inferred from opaque installer output. The busy
+button reads Installing…; completion, failure, and disposal stop the timer.
+Source registry names stay in this technical contract, not the user-facing
+wallpaper descriptions.
 
 ### Tap trust
 
@@ -734,15 +810,16 @@ GTK main thread, does external work off-thread, and marshals widget changes
 back through `sgtk.RunOnMainThread`. Failed or previewed work leaves the action
 retryable and never invents a live installation or clears known inventories.
 
-Features builds one top **Setup activity** checklist with bounded, reusable
-stage rows and a pulsing timer independent of provider output. Stage outcomes
+Gaming Mode leads Features. The **Setup activity** checklist below it has
+bounded, reusable stage rows and a pulsing timer independent of provider output. Stage outcomes
 distinguish complete, failed, canceled, preview, and awaiting-new-login work;
 there is no estimated percentage. Awaiting login is not readiness or a generic
 failure and does not offer Retry just to repeat the same permission grant.
 Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
-expanders matching Apps collections. Header activation expands an informational
-package list; a separate suffix switch runs the action, with no
-`SetActivatableWidget` binding to that switch. WSL disclosure shares
+expanders matching Apps collections. Header activation expands the package
+disclosure; a separate suffix switch runs the action, with no
+`SetActivatableWidget` binding to that switch. Developer Mode also contains
+independent Enhanced Terminal Bling and Monospace Fonts collection controls. WSL disclosure shares
 `devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
 the daemon formulae as **Homebrew, installed for the whole computer** and the
 CLI formulae as user-scope Homebrew formulae, not download progress.

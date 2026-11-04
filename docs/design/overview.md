@@ -44,6 +44,7 @@ internal/views/                 Page builders and event handlers (one file per p
         ├── internal/dockerbrew/ Pure-Go verified Homebrew-bottle Docker runtime: signed index, bottle download/extract, ELF patching, managed units
         ├── internal/devsetup/  Widget-free ordered developer setup, promotion outcomes and retry stages
         ├── internal/flatpak/   Flatpak CLI wrapper (tabular output parsing)
+        ├── internal/valhalla/  Livery More Dinosaurs payload, SVG/JXL/AVIF-to-PNG source preparation and observed Valhalla manual-source configuration
         ├── internal/bootc/     bootc wrapper (status reads, fixed stage adapter)
         ├── internal/pkexec/    Sole owner of the privilege-escalation program name (`pkexec.Command`)
         ├── internal/deskenv/   Desktop-environment detection from session variables
@@ -97,18 +98,20 @@ this inventory, independently of the original YAML namespace names.
 | Page | File under `internal/views/` | Current purpose |
 | --- | --- | --- |
 | Updates | `updates_page.go` | Aggregate updates, provider detail, automatic updates, channel/graphics controls and system version |
-| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no Flatpak inventory, external catalog launcher or package search |
+| Apps | `applications_page.go` | Homebrew collections first, installed casks and explicitly requested formulae next, then Brewfile export; no wallpaper setup, Flatpak inventory, external catalog launcher or package search |
 | Agents | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Agent Mode using llmman, Troubleshooting's Goose row (set up, then launch in ChairLift's own profile) and menu switch, and Contribute to Bluefin |
-| Features | `features_page.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Setup activity checklist, expandable Developer/WSL/Docker/Gaming package disclosures, distribution features and Printers |
-| Livery | `livery_page.go` | Profile Picture, App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
+| Features | `features_page.go`, `developer_tools.go`, `developer_setup.go`, `setup_activity.go`, `printers_page.go` | Gaming first, setup activity checklist, expandable Developer/WSL/Docker package disclosures, independent Enhanced Terminal Bling/Monospace Fonts installation under Developer Mode, distribution features and Printers |
+| Livery | `livery_page.go`, `wallpapers.go` | Profile Picture, Wallpapers (More Dinosaurs) setup, then initially collapsed App Launcher Icon, Top Bar Icon, and Files Icon surfaces |
 | Maintenance | `maintenance_page.go` | Free Up Space, administrator scripts and Powerwash entry |
 | Help | `help_page.go` | Support links, diagnostics and capability explanations |
 
-Features keeps one **Setup activity** checklist at the top and builds its
+Gaming Mode leads Features. The **Setup activity** checklist below it builds its
 bounded stage rows once. A reusable timer pulses while work runs, independent
 of command output. Developer Mode, WSL Mode, Enable Docker, and Gaming Mode
-use native expanders like Apps collections: the header discloses informational
-package rows, while an independent suffix switch starts work. Homebrew bundles
+use native expanders like Apps collections: the header discloses
+package rows, while an independent suffix switch starts work. Enhanced Terminal Bling and
+Monospace Fonts are independently installable collections inside Developer
+Mode, absent from Apps and not automatic developer-enable follow-ons. Homebrew bundles
 are opaque operations, so package lists are static disclosures, not invented
 per-package progress. Docker's rows name Homebrew formulae: the daemon set as
 **Homebrew, installed for the whole computer** (the root helper fetches those

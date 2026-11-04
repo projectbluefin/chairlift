@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.3
-last_updated: 2026-10-25
+version: 2.1.4
+last_updated: 2026-11-03
 tags:
   - testing
   - gtk
@@ -201,6 +201,16 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   preference-group order, locate a known group and compare its shared parent's
   grouping children; do not slice off a guessed number of wrappers. See the
   Apps ordering scenario in `steps/apps.py`.
+  Compact sections without a visible group heading may publish an unnamed
+  grouping around their named expander header. The shared `apps.group` lookup
+  resolves either form and returns the nearest owning group; ordering checks
+  must likewise use the header for unnamed sections rather than omitting them.
+- **Collapsed defaults need a passive assertion.** Interaction helpers may
+  expand a section before finding its controls, but the assertion that a section
+  starts collapsed must not use that helper. Exercise saved enabled switches as
+  well as empty preferences: restoring an enabled setting must not expose the
+  whole section. Livery's compact-section scenario checks each header before
+  expanding it and verifies that expansion writes no settings or icon files.
 - **A tool-call assertion needs isolated readers.** Gaming's capability floor
   is `ImageDescriptor`, so it can read Flatpak inventories even when the
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the

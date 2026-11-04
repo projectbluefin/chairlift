@@ -78,11 +78,10 @@ type UserHome struct {
 	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
-	// Bundle collection checkboxes and unified install controls.
-	bundleItems         []*bundleItemRow
-	bundleInstallButton *gtk.Button
-	bundleInstallBar    *gtk.ProgressBar
-	bundleInstallGate   actionstate.Gate
+	// Each destination selects its own collections; one gate serializes installs.
+	bundleItems       []*bundleItemRow
+	bundleSelections  []*bundleSelection
+	bundleInstallGate actionstate.Gate
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate
@@ -106,12 +105,23 @@ type UserHome struct {
 	gamingSpinner            *gtk.Spinner
 	agentModeSpinner         *gtk.Spinner
 
+	// Wallpapers owns one setup action and only the last observed readiness.
+	wallpaperRow       *adw.ExpanderRow
+	wallpaperChoice    *gtk.CheckButton
+	wallpaperButton    *gtk.Button
+	wallpaperSpinner   *gtk.Spinner
+	wallpaperActivity  *setupActivity
+	wallpaperGate      actionstate.Gate
+	wallpaperRefresh   actionstate.RefreshGate
+	wallpaperInstalled bool
+	wallpaperDisposed  bool
+
 	// Livery references. liveryState is the last state the page loaded and
 	// is what every handler compares against, so a programmatic widget
 	// update during restore is recognized as "no change" instead of being
 	// replayed as a user action; liverySuppress closes the same window
 	// explicitly. See applyLiveryState.
-	liveryAppGridGroup     *adw.PreferencesGroup
+	liveryAppGridExpander  *adw.ExpanderRow
 	liveryAppGridSwitch    *gtk.Switch
 	liveryAppGridRow       *adw.ActionRow
 	liveryPickerMode       liveryPickerMode
@@ -383,6 +393,9 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 	uh.buildLiveryPage()
 	uh.buildHelpPage()
 	uh.buildRecoveryPage()
+	if uh.collectionsAvailable() {
+		go uh.loadBrewBundles(uh.developerBundlePaths())
+	}
 
 	log.Printf("views: all pages built in %s", time.Since(start))
 	return uh

@@ -4,18 +4,24 @@ import (
 	"testing"
 )
 
-func TestLegacyWallpapersGroupStillLoads(t *testing.T) {
-	cfg, err := loadFromPath(writeConfigFile(t, "livery_page:\n  wallpapers_group:\n    enabled: true\n"))
-	if err != nil {
-		t.Fatalf("loadFromPath: %v", err)
-	}
-	if cfg.IsGroupEnabled("livery_page", "wallpapers_group") {
-		t.Fatal("retired wallpapers_group re-enabled itself")
-	}
-	for _, group := range []string{"account_group", "livery_app_grid_group", "livery_foundation_group", "livery_dock_group"} {
-		if !cfg.IsGroupEnabled("livery_page", group) {
-			t.Errorf("legacy wallpapers_group disabled %s", group)
+func TestWallpapersGroupRespectsConfiguration(t *testing.T) {
+	for _, enabled := range []bool{true, false} {
+		value := "false"
+		if enabled {
+			value = "true"
 		}
+		t.Run(value, func(t *testing.T) {
+			cfg, err := loadFromPath(writeConfigFile(t, "livery_page:\n  wallpapers_group:\n    enabled: "+value+"\n"))
+			if err != nil {
+				t.Fatalf("loadFromPath: %v", err)
+			}
+			if got := cfg.IsGroupEnabled("livery_page", "wallpapers_group"); got != enabled {
+				t.Fatalf("wallpapers_group enabled = %t, want %t", got, enabled)
+			}
+			if !cfg.IsGroupEnabled("livery_page", "account_group") {
+				t.Fatal("wallpaper configuration disabled Profile Picture")
+			}
+		})
 	}
 }
 

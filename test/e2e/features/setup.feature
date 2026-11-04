@@ -70,3 +70,25 @@ Feature: Explicit first-run software setup
     When I press "Escape"
     Then the setup wizard is not shown
     And the setup dry run would record disposition skipped
+
+  @developer-collections @args.--setup @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
+  Scenario: Wizard defaults select terminal enhancements and monospace fonts without installing them
+    Given ChairLift is running
+    Then the setup wizard shows "Welcome"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Features"
+    When I expand the "Developer Mode" list under "Developer"
+    Then the "Enhanced Terminal Bling" collection is checked
+    And the "Monospace Fonts" collection is checked
+    And the action journal is empty
+    And the application log previews no "brew bundle install"
+    When I toggle the "Enhanced Terminal Bling" collection checkbox
+    And I toggle the "Monospace Fonts" collection checkbox
+    And I use the setup "Next" button
+    Then the setup wizard shows "Apps"
+    When I use the setup "Back" button
+    Then the setup wizard shows "Features"
+    And the "Enhanced Terminal Bling" collection is unchecked
+    And the "Monospace Fonts" collection is unchecked
+    And the application log previews no "brew bundle install"
+    And the action journal is empty

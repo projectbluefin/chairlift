@@ -22,8 +22,8 @@ Tools or Local AI tools route. Wallpaper is not a shipped control.
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, the active model dropdown, the Manage Models link to llmman's own page, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
-| `features` | `features_page.go`, `developer_tools.go`, `shell_extensions.go`, `printers_page.go` | Distribution features, desktop integrations, Developer options, selected gaming components and loopback-only printer applications |
-| `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go` | Profile Picture, App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
+| `features` | `features_page.go`, `developer_tools.go`, `developer_setup.go`, `shell_extensions.go`, `printers_page.go` | Gaming first, Developer options with independent Enhanced Terminal Bling and Monospace Fonts collections inside Developer Mode, distribution features, desktop integrations and loopback-only printer applications |
+| `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go`, `wallpapers.go` | Profile Picture, More Dinosaurs wallpaper setup, and initially collapsed App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free Up Space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
 | `recovery` | `recovery.go`, `reset.go` | Previous-deployment rollback and opt-in reset actions (the published-versions calendar is withdrawn, #522) |

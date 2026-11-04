@@ -25,6 +25,10 @@ type setupActivity struct {
 }
 
 func (uh *UserHome) buildSetupActivity(page *adw.PreferencesPage) {
+	uh.setupActivity = newSetupActivity(page, devsetup.Stages[:])
+}
+
+func newSetupActivity(page *adw.PreferencesPage, stages []devsetup.Stage) *setupActivity {
 	a := &setupActivity{group: adw.NewPreferencesGroup(), rows: make(map[devsetup.Stage]*adw.ActionRow)}
 	a.group.SetTitle("Setup activity")
 	a.group.SetVisible(false)
@@ -44,7 +48,7 @@ func (uh *UserHome) buildSetupActivity(page *adw.PreferencesPage) {
 	a.retry.ConnectClicked(&clicked)
 	header.AddSuffix(&a.retry.Widget)
 	a.group.Add(&header.Widget)
-	for _, stage := range devsetup.Stages {
+	for _, stage := range stages {
 		row := adw.NewActionRow()
 		row.SetTitle(string(stage))
 		row.SetVisible(false)
@@ -54,7 +58,7 @@ func (uh *UserHome) buildSetupActivity(page *adw.PreferencesPage) {
 	destroyed := func(gtk.Widget) { a.progress.dispose() }
 	page.ConnectDestroy(&destroyed)
 	page.Add(a.group)
-	uh.setupActivity = a
+	return a
 }
 
 func (a *setupActivity) begin(title string, stages []devsetup.Stage, retry bool, action func()) bool {

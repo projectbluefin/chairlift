@@ -19,7 +19,9 @@ schedule choosers, no feature grids.
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
 the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Features**, **Apps**, **Agents**, and **Livery**. Welcome presents the
-Bluefin wordmark, introduction and Zavala quote. Unavailable pages are skipped;
+Bluefin wordmark, an introduction confirming the system is ready and guiding
+developer-tool, automated-troubleshooting, and system-default customization,
+and the Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform every action. **Back** and **Next** only
 navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
 completion and returns to Control Center; a save failure reports an
@@ -113,6 +115,15 @@ flow. A collection whose apps and tools are all already on the system reads
 **(Installed)** when the page loads, not only after an install in the same
 session.
 
+Curated collections start checked, except **Full Desktop Suite**. Uncheck any
+collection you do not want before pressing **Install**.
+
+Enhanced Terminal Bling and Monospace Fonts are under **Features → Developer Mode**,
+not App Collections. Both start checked, including in the Setup Assistant.
+Expand Developer Mode to select and install them; installing these collections
+does not enable Developer Mode. Next and Back preserve any boxes you uncheck
+and do not install software.
+
 **Installed Apps** and **Command-Line Tools** follow: installed casks first,
 then explicitly requested formulae (the packages Homebrew manages).
 Dependency-only formulae do not crowd the inventory. Removing a package asks
@@ -176,8 +187,9 @@ without opening a terminal.
 
 ![Features](screenshots/4-features.png)
 
-The **Setup activity** checklist at the top shows the current operation and
-its outcome. It names real setup stages and pulses while work is running;
+**Gaming Mode** leads the page. The **Setup activity** checklist below it
+shows the current operation and its outcome. It names real setup stages and
+pulses while work is running;
 it does not estimate percentages. Failures, authentication cancellations, and
 awaiting a new login remain distinguishable from completion. Failed optional
 setup can be retried without repeating a completed access grant; waiting for a
@@ -185,8 +197,11 @@ new login is not a failure to retry.
 
 Expand **Developer Mode**, **WSL Mode**, **Enable Docker**, or **Gaming Mode**
 to read the packages and changes involved, like App collections on Apps.
-Clicking the row expands it; the separate switch starts the action. These
-lists are informational, not individual package choices or a live package log.
+Clicking the row expands it; the separate switch starts the action. Package
+disclosures are informational, not a live package log. Developer Mode also
+contains **Enhanced Terminal Bling** and **Monospace Fonts** as independent collection
+choices with their own explicit installation action; expanding or switching
+Developer Mode does not install these collections.
 
 **Desktop Integrations** offers **Tailscale Integration** and **Sync Folder
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch
@@ -303,7 +318,7 @@ behind an older message.
 
 ![Livery](screenshots/5-livery.png)
 
-Choose your profile picture and the icons shown around your desktop.
+Choose your profile picture, set up wallpapers, and customize the icons around your desktop.
 Every profile-picture, app launcher icon, top-bar icon, and Files icon choice
 has a visual preview. Search results fetch artwork for at most twelve visible
 catalog entries; searching the rest does not download the whole catalog.
@@ -317,6 +332,33 @@ cannot be shown or the change fails, the chooser says so and your old picture
 stays put. Where AccountsService is unavailable the picture is saved to your
 home folder instead and appears after you log out and back in, and the
 confirmation says which of the two happened.
+
+**Wallpapers** is directly below Profile Picture. Its **More Dinosaurs**
+checkbox starts checked; press its **Install** button to set it up, or uncheck
+it to skip setup. Merely opening Livery changes nothing. Expanding the row shows
+the Valhalla slideshow app and extra Bluefin wallpapers. It does not install
+Damask from an older image's App collection definition; wallpaper setup is absent from Apps.
+Setup converts extra SVG/JPEG XL/AVIF backgrounds to PNG in your own data folder,
+adds that folder to Valhalla's manual folders, and selects its manual source,
+keeping any folders you already chose. The original wallpaper files are kept.
+Valhalla's native SVG/JPEG XL support is tracked in
+[Valhalla #99](https://github.com/tunix/valhalla/issues/99).
+The row reads **(Installed)** only when its wallpaper source and settings are
+ready, not simply because the app is installed. A setup failure shows its cause
+and leaves the control available to retry. A dry-run preview changes neither
+files nor settings. Setup does not open Valhalla; open it when you are ready
+to use the slideshow.
+
+During installation, **Setup activity** shows the current step: installing the
+app, installing extra wallpapers, preparing images, configuring the slideshow,
+and verifying setup. Its progress bar pulses while work is running rather than
+guessing a percentage. Completed steps stay visible if a later step fails;
+the failed step and Retry action make the next action clear. Preview is labeled
+as preview, never as completed installation.
+
+**App Launcher Icon**, **Top Bar Icon**, and **Files Icon** start collapsed.
+Expand a section to reveal its switch, picker, and any rotation controls.
+Expanding a section does not apply or change an icon.
 
 **App Launcher Icon** is your own mark on the Show Applications button on
 GNOME. On KDE Plasma, the same chooser updates each configured Kickoff applet;

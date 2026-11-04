@@ -184,6 +184,7 @@ var routes = []Item{
 		Kind:  KindPrimary,
 		Refs: refsOn("livery_page",
 			"account_group",
+			"wallpapers_group",
 			"livery_app_grid_group",
 			"livery_foundation_group",
 			"livery_dock_group",
