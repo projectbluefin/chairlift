@@ -87,8 +87,12 @@ maintenance can be retried separately. `PhaseRestartRequired` has
 
 Adapter completion is source-specific:
 
-- Flatpak checks both scopes and joins read failures. Apply runs only requested
-  scopes, then re-lists them. Completion requires that the specific applied
+- Flatpak checks both scopes. Per-remote failures become named warnings only
+  when updates were found, keeping those updates actionable. With no pending
+  inventory, original errors remain joined so network failures retain their
+  connection hint and Try Again; unrelated failures keep the log hint. Scope
+  discovery failures remain errors even beside found updates. Apply runs only
+  requested scopes, then re-lists them. Completion requires that the specific applied
   refs have disappeared, not that the whole scope is empty: newly published
   updates do not invalidate completed work. An exit-0 no-op retaining an
   applied ref reports `Changed=false`. Dry-run skips reconciliation and reports
@@ -105,7 +109,9 @@ Adapter completion is source-specific:
   the root helper ignores that hint and re-verifies against the signed index
   ([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
 - Updex counts each affected feature once if any component has an update.
-  Captured warnings fail the unified check as incomplete. Successful live
+  Captured warnings make the unified check partial, not failed: the found
+  items are kept, the warnings are logged, and `CheckResult.Warnings` says
+  "some components" were not covered (#699). Successful live
   helper execution reports Changed; preview reports Preview instead.
 - bootc performs a read-only check and reads status for restart state. Apply
   rejects unknown item scopes, stages through the fixed helper, then re-reads
@@ -164,8 +170,11 @@ resolves per call; the absent case uses the bare name only to retain
 
 ### Public operations
 
-`Package` carries installed version, pinned/outdated flags and
-`InstalledOnRequest`; the parser does not populate `Dependencies`.
+`Package` carries the installed version, pinned/outdated flags,
+`InstalledOnRequest`, the qualified name (`FullName`: the bare name for a
+homebrew/core package, `owner/repo/name` for a tap one) and the `Tap` it
+came from (`homebrew/core` or `owner/repo`). The parser does not populate
+`Dependencies`.
 
 | API | Command / result |
 | --- | --- |
@@ -174,16 +183,28 @@ resolves per call; the absent case uses the bare name only to retain
 | `ListOutdated()` | `brew outdated --json=v2`; formulae and casks, installed version strings, formula `Pinned`. The Developer tools update source omits pinned formulae, because `brew upgrade` skips them |
 | `Tap(name)` | `brew tap <name>` |
 | `Install(name, isCask)` / `Uninstall(name, isCask)` | `install` / `uninstall`, with `--cask` only for casks |
+| `InstallMany(names, isCask)` | `install [--cask] <name>…`; one transaction per kind |
 | `Upgrade(ctx, name)` | `brew upgrade [<name>]`; empty name upgrades all |
 | `Update(ctx)` | `brew update`; metadata refresh, not installed-package upgrade |
 | `Pin(name)` / `Unpin(name)` | Formula pin/unpin |
 | `BundleDump(path, force)` | `brew bundle dump [--file=...] [--force]` |
 | `BundleInstall(path)` | `brew bundle install [--file=...]` |
 | `BundleCheck(path)` | Two read-only checks returning `BundleStatus` |
+| `BundleTaps(path)` | Parses a Brewfile's `tap` directives with their `trusted:` flag |
+| `TapInfo(name)` | `brew tap-info --json <repo>`; installed and trusted state |
+| `ReadTrustStore()` | `brew trust --json=v1`; taps trusted wholesale and packages trusted one by one |
+| `TrustTap(name)` / `TrustFormula(name)` / `TrustCask(name)` | `trust --tap` / `--formula` / `--cask` |
+| `PrepareInstall(name, kind, store, trustedTaps)` | Clones a missing tap and trusts what nothing trusts yet |
 | `Cleanup()` | `brew cleanup`; live successful mutation output is discarded |
 | `AvailableBundles(paths)` | Filesystem discovery returning `[]Bundle` plus joined diagnostics |
 | `BundleContents(path)` | Parses a Brewfile returning `[]BundleItem` (Name + Kind) for every installable entry, deduped by (Kind, Name), capped at 256 entries per file |
 | `ListUntrustedTaps()` / `TrustPackages(tap)` | Receipt-backed discovery / per-user package trust |
+
+`Package` carries the installed version, the pinned/outdated flags,
+`InstalledOnRequest`, the qualified name (`FullName`: the bare name for a
+homebrew/core package, `owner/repo/name` for a tap one) and the `Tap` it
+came from (`homebrew/core` or `owner/repo`). The parser does not populate
+`Dependencies`.
 
 [`homebrew.go`](../../internal/homebrew/homebrew.go) classifies mutation argv
 through `isStateChanging` and `stateChangingCommands`: install, uninstall,
@@ -201,9 +222,13 @@ mutation budget; most other operations own their timeout context.
 two configuration groups: `brew_bundles_group` owns collections, shown first;
 `brew_group` owns installed casks, explicitly requested formulae and the
 Brewfile exporter, in that order. Both are enabled in shipped `config.yml`.
-Apps has no Flatpak inventory, external catalog launcher, or package search;
-the four retired Apps keys are accepted and stripped as legacy configuration
-(see [overview](overview.md)).
+Apps still has no Flatpak *inventory group*, external catalog launcher, or
+package search, and its capability floor is still Homebrew; the four retired
+Apps keys are accepted and stripped as legacy configuration
+(see [overview](overview.md)). A collection *entry* may report that a Flatpak
+is already installed, because a collection's Brewfile can name one: that
+state is read with `flatpak list --app --columns=application,origin`, the
+query `brew bundle` itself uses, and it never becomes a listed group.
 
 Installed uninstall/pin/unpin controls share a per-row action gate, use
 `actionmsg.Uninstall`/`actionmsg.Pin` for live versus preview wording, restore
@@ -219,7 +244,67 @@ Export restores its gate and spinner after every outcome.
 Homebrew installs started elsewhere — Goose Set Up, enabling Agent Mode,
 Features' developer tools, and collection installs, including one that
 stopped partway — call `homebrewInventoryChanged` on the main thread, which
-reloads the installed lists and re-observes every collection's status.
+reloads the installed lists and re-observes every collection's entry states.
+
+### Collection entries and the install strategy
+
+A collection is an `AdwExpanderRow` whose suffix holds a **Select All**
+`GtkButton` in front of the chevron. There is no collection-level checkbox:
+selection belongs to the entries, and a checkbox on the collection claimed a
+selection its entries did not carry. The button is one-way — it selects and
+never deselects — and is insensitive once every selectable entry is checked.
+Each entry is an `AdwActionRow` with a suffix `GtkCheckButton`, empty by
+default, because an install is opt-in entry by entry. An entry whose package
+is already installed is checked and insensitive, and its row says where the
+package is installed from.
+
+Every entry's subtitle names its **source**, not its kind: "from Homebrew",
+"from Brew Tap", "from Flathub", "from the App Store" or "from the VS Code
+Marketplace". Bare tokens and official `homebrew/core`/`homebrew/cask`
+qualifications mean Homebrew; other qualified tokens mean Brew Tap. Installed wording uses the *observed*
+source, the package's `tap` field or the Flatpak's `origin` column, falling
+back to the static shape when the inventory knew none. The vocabulary is
+closed and lives in
+[`bundleview`](../../internal/views/bundleview/entries.go); an observation
+with no word for it falls back rather than inventing a label. An `App Store`
+or `VS Code Marketplace` entry is never offered for selection. Their presence
+forces per-manager installation of only checked, supported entries, so the
+whole-file path cannot install an unchecked directive implicitly.
+
+The group header row is **Install Selected**, and it installs exactly the
+checked entries. Only a completely read collection whose every entry is supported
+and checked installs through `brew bundle install`, retaining its tap directives
+and `trusted: true` flags. Otherwise checked entries install batched per manager:
+`brew install <formula…>`, `brew install --cask <cask…>` and
+`flatpak install -y --system flathub <ref…>`.
+
+The per-item path re-derives trust, because `brew bundle` is not running.
+Before a tap-qualified entry installs, ChairLift reads the tap's state with
+`brew tap-info --json <repo>` (which answers for a repository that is not
+tapped yet), clones the tap when it is missing, and then decides what to
+trust:
+
+| The trust store says | The collection's Brewfile says | What runs |
+| --- | --- | --- |
+| the tap is trusted wholesale | — | nothing |
+| the package is trusted on its own | — | nothing |
+| neither | `tap "owner/repo", trusted: true` | `brew trust --tap owner/repo` |
+| neither | nothing | `brew trust --formula`/`--cask owner/repo/name` |
+
+The last row is the narrow one: the selection itself is the consent for that
+one package. The third row is the breadth `brew bundle` gives a tap its own
+Brewfile declares safe. The store is read once per run with
+`brew trust --json=v1`, which reports the taps trusted wholesale beside the
+packages trusted one by one; Homebrew before 6 has no `brew trust` at all,
+and its `tap-info` carries no trust key, so nothing needs trusting there.
+The toast states what the trust store gained, because trusting a source
+changes what this computer will load and is never silent.
+
+`homebrew.BundleCheck` and `homebrew.BundleStatus` remain the homebrew
+package's query about a Brewfile, but the Apps page no longer calls them:
+a collection's state now comes from its entries, which is finer than one
+answer per file.
+
 
 ### Process and diagnostic contract
 
@@ -275,17 +360,20 @@ remain Indeterminate with an error; dry-run still performs these reads. Read-onl
 `bundle check`/`bundle list` run with `HOMEBREW_NO_AUTO_UPDATE=1`, because brew
 otherwise runs `brew update --auto-update` before every `bundle` subcommand.
 
-`BundleContents(path)` parses a Brewfile into `[]BundleItem` (one entry per
-recognised directive: `brew`, `cask`, `flatpak`, `mas`, `vscode`). Entries
-are returned in source order, deduplicated by (Kind, Name), and capped at
-256 items per file so a runaway Brewfile cannot dominate the UI.
+`BundleContents(path)` returns `[]BundleItem`, a whole-file safety flag, and an
+error. Recognized directives (`brew`, `cask`, `flatpak`, `mas`, `vscode`) remain
+in source order, deduplicated by kind/name, and capped at 256 items per file.
+Only blank/comment lines, literal supported installs, and literal tap declarations
+preserve the safety flag, including exactly `trusted: true`/`false` on
+brew/cask/tap. Unknown directives (including other
+package managers), arbitrary Ruby/interpolation, unparsed options, and truncated
+or failed reads forbid executing the whole file, regardless of its item count.
 `countBundleItems` runs the same `parseBundleItemLine` against the same
 input and applies the same dedup, so a Brewfile's count and its expanded
 list always agree (including when one entry repeats or is malformed).
 [`bundleview.PresentContents`](../../internal/views/bundleview/bundleview.go)
 turns those items into the rows the Apps page renders inside each
-collection's `AdwExpanderRow`, with a kind label (Command-line tool, App,
-Flatpak, App Store, VS Code extension) per row. A Brewfile with no
+collection's `AdwExpanderRow`, with source labels per row. A Brewfile with no
 recognised entries shows a placeholder row instead; one longer than the
 256-entry cap lists the first 256 followed by a "Showing N of M entries."
 row. If the file cannot be read when the list is built, the rows read before
@@ -299,30 +387,44 @@ Built-in `bundles_paths` contains `/usr/share/ublue-os/homebrew`,
 `/usr/share/chairlift/bundles`, and `/etc/chairlift/bundles`; shipped
 [`config.yml`](../../config.yml) replaces that list with the first directory
 only. Group visibility is floored on Homebrew before discovery.
-Each collection is rendered as an `AdwExpanderRow` with a checkbox prefix
-whose title and subtitle are the curated name and description
-`bundleview.Describe` produces, and whose expanded child rows are the package
-list. Collections are selected with checkboxes (curated sets default checked,
-while Full Desktop Suite defaults unchecked). An "Install" header action installs
-all checked, uninstalled Apps collections in one step. Monospace Fonts
-(`fonts-dev`) is offered only inside the initially collapsed Developer Mode
-expander on Features, using an independent selection and explicit Install action
-backed by the same collection installer and action gate. Its visibility still
-requires `applications_page.brew_bundles_group` and Homebrew; installing it does
-not grant developer access, and enabling Developer Mode does not install it.
-Monospace Fonts defaults to selected in ordinary and explicit wizard sessions.
-The wizard uses the same controls and preserves manual deselection across
-Next/Back navigation; it adds no automatic installation path for this collection.
-Bluefin CLI is not a discoverable `cli` collection: its Bash-only lifecycle belongs
-to `internal/bluefincli` and one Features switch. Setup defaults that choice to
-selected unless explicitly disabled and applies it on Next from Features.
+Each collection is rendered as an `AdwExpanderRow` whose title and subtitle
+are the curated name and description `bundleview.Describe` produces, whose
+suffix holds the **Select All** button, and whose expanded child rows are
+the collection's entries. Every entry row carries a checkbox, its source
+label, and — when the package is already on the system — an insensitive
+checkbox and the installed wording. Descriptions load on expansion and append
+to that source label rather than replacing it.
 
-Each row's installed state is observed: `refreshBundleStatuses`
-(`internal/views/bundle_install.go`) runs `BundleCheck` for every collection
-off the GTK thread once the rows are built, again after every live collection
-install and after a live Homebrew uninstall. When installed, a collection's
-checkbox is checked and made insensitive, and its subtitle indicates installed
-status. Failed observations preserve known state; previews do not refresh it.
+Each entry's state is observed: `refreshBundleStatuses`
+(`internal/views/bundle_install.go`) reads the installed Homebrew formulae
+and casks and the installed Flatpak applications off the GTK thread once the
+rows are built, again after every collection install and after a live
+Homebrew uninstall. A package's qualified name (`full_name` for a formula,
+`full_token` for a cask) and its `tap` field are what the entry is matched
+against, so a tap package never answers for a homebrew/core package of the
+same name. The collection's own summary follows from its entries: "(Installed)"
+when every entry is installed, and "X of N installed." when only some are.
+Failed inventory reads preserve that manager's last observed entries, never
+turning a failed read into a removed installation.
+An installed-to-absent refresh clears the auto-checked entry; never-installed
+entries retain deliberate selections. Fully read, checked, supported collections
+use `brew bundle`; mixed collections containing unsupported App Store/VS Code
+directives, truncated reads, and partial read failures use only selected
+per-manager commands, never the whole file.
+`PlanInstall` deduplicates selected pending items again across merged member
+files by kind/name, keeping both batched argv and reported counts accurate.
+
+`BundleContents` deliberately drops tap directives, because a tap installs
+nothing on its own. `BundleTaps` parses them separately: the trust a
+collection's own Brewfile claims for a tap decides whether the per-item path
+may trust that tap wholesale.
+
+Monospace Fonts (`fonts-dev`) is offered under Developer Mode with independent
+entry selection and an explicit Install action sharing the same installer gate.
+It falls back to Apps when Developer Mode is disabled. Both locations retain
+the collection configuration and Homebrew floor. Entries start unchecked; setup
+Next/Back preserves selections without installing them. Bluefin CLI is instead
+owned by `internal/bluefincli` and its separate Features switch.
 
 ### Livery Wallpapers setup
 
@@ -433,15 +535,18 @@ to a hidden control. Bundle failures use `trustmsg.BundleMessage` instead.
 Flatpak retains installation scope and ref kind. `KindApplication` and
 `KindRuntime` select mutually exclusive `--app`/`--runtime` listings; the kind
 is stamped from the query, not inferred from optional parsed columns.
-`Application` carries name, ID, version, branch, installation and kind.
-`UpdateInfo` carries application ID, display name, new version and installation.
+`Application` carries name, ID, version, branch, installation, kind and the
+remote the ref came from (`origin`). `UpdateInfo` carries application ID,
+display name, new version and installation.
 
 | API | Scope / command |
 | --- | --- |
 | `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version,branch` |
 | `ListUserRuntimes()` / `ListSystemRuntimes()` | Same query with `--runtime` |
+| `ListInstalledOrigins()` | `flatpak list --app --columns=application,origin`; every installed application id with the remote it came from |
 | `ListUpdates(ctx, user)` | `remotes --columns=name,options`, then `remote-ls --updates --app --columns=name,application,version <remote>` per enabled remote, in the selected scope |
 | `Install(appID, user)` / `InstallFromRemote(appID, remote, user)` | `install -y` in explicit scope, optionally naming a remote |
+| `InstallMany(appIDs)` | `install -y --system flathub <id…>`; one transaction, the scope Bluefin's policy requires |
 | `Uninstall(appID, user)` | `uninstall -y` in explicit scope |
 | `AppRuntime(appID)` | `info --show-runtime <appID>` in any installation |
 | `RemoteAppRuntime(remote, appID, user)` | `remote-info --user/--system --app --show-runtime <remote> <appID>` |
@@ -467,9 +572,15 @@ only runtimes — the usual leftover when an application is uninstalled without
 `--unused` — can hide no update this inventory would list, so it must not
 fail the check either. A cancelled
 caller context or a missing executable still aborts the whole query. The
-healthy remotes' updates are returned alongside that error, but the
-Applications source's check still fails: the coordinator keeps the last known
-inventory on any check error rather than adopting a partial one. The
+healthy remotes' updates are returned alongside that error. The Applications
+provider treats an error made only of `*flatpak.RemoteError`s as a partial
+check: it offers those updates and names each unreadable remote ("the
+<remote> remote") in `CheckResult.Warnings`, logging the cause (#699). Any
+other member — the origin listing, the remote listing, cancellation — means
+the scope was not checked, and the check fails, so the coordinator keeps the
+last known inventory. The post-apply reconciliation still fails on a remote
+error: an applied item does not record its origin remote, so a list that
+skipped a remote cannot prove that remote's applied refs cleared. The
 post-apply reconciliation and the single-item verification read through the
 same function, so an ignored remote cannot fail them either.
 
@@ -488,8 +599,13 @@ mutation diagnostic, Flatpak prefers stderr and falls back to the stdout tail
 only when stderr is empty. Neither runner reports its own cancellation merely
 as `signal: killed`.
 
-Apps has no Flatpak inventory or removal. Flatpak remains in Updates,
-Compass and optional developer setup on Features, and maintenance/Powerwash.
+Apps has no Flatpak inventory group or removal. A collection *entry* may
+report that a Flatpak is already installed, which is read with
+`ListInstalledOrigins` and never becomes a listed group. That query carries
+no scope flag, and it does not need one: the unscoped `flatpak list`
+reports every installation, which is exactly what `brew bundle` relies on
+when it decides which of a Brewfile's Flatpak entries are already covered.
+Flatpak remains in Updates, Gaming, and maintenance/Powerwash operations.
 
 ## Shared OS stage executor (`internal/stageexec`)
 
@@ -627,8 +743,8 @@ the Features-page aggregation: **any** component update makes its feature
 outdated; group counts are features, not components. Empty results are an
 incomplete check, not current. A shared non-empty version is displayed only
 when every component agrees. Failed/incomplete group descriptions never claim
-all features are current. The unified adapter separately treats captured
-warnings as a failed check. Feature availability and read errors must remain
+all features are current. The unified adapter separately keeps the found
+items beside captured warnings and reports the check as partial. Feature availability and read errors must remain
 distinct: no definitions hides the optional group; a failed listing stays
 visible with an explanation.
 

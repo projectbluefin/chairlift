@@ -65,6 +65,19 @@ func TestParseRefList(t *testing.T) {
 			}},
 		},
 		{
+			// Runtimes commonly publish no version; the empty column must
+			// stay a column so the branch lands in Branch and the
+			// multi-word name stays whole.
+			name:        "multi-word name with an empty version column",
+			output:      "Mesa extension\torg.freedesktop.Platform.GL.default\t\t24.08\n",
+			installFlag: "--system",
+			kind:        KindRuntime,
+			want: []Application{{
+				Name: "Mesa extension", ApplicationID: "org.freedesktop.Platform.GL.default", Branch: "24.08",
+				Installation: "system", Kind: KindRuntime,
+			}},
+		},
+		{
 			// A runtime extension is the shape `--app` never reports. The
 			// kind comes from the requested filter, not from the ref
 			// column, so the classification survives a row that has to
@@ -612,6 +625,25 @@ func TestParseUpdateList(t *testing.T) {
 			user:   false,
 			want: []UpdateInfo{
 				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "system"},
+			},
+		},
+		{
+			// A multi-word display name with no published version: the
+			// empty trailing column must not push the row into the
+			// whitespace fallback, which split the name across columns.
+			name:   "multi-word name with an empty version column",
+			output: "GNU Image Manipulation Program\torg.gimp.GIMP\t\n",
+			user:   false,
+			want: []UpdateInfo{
+				{Name: "GNU Image Manipulation Program", ApplicationID: "org.gimp.GIMP", Installation: "system"},
+			},
+		},
+		{
+			name:   "empty leading name column keeps the columns aligned",
+			output: "\torg.example.App\t1.0\n",
+			user:   true,
+			want: []UpdateInfo{
+				{ApplicationID: "org.example.App", NewVersion: "1.0", Installation: "user"},
 			},
 		},
 		{

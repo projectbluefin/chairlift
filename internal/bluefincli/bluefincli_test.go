@@ -142,7 +142,7 @@ func TestEnableInstallsManifestBeforeActivatingAndPreservesPersonalConfiguration
 	if !strings.HasPrefix(readTestFile(t, h.rc()), personal) {
 		t.Fatal("personal configuration changed")
 	}
-	installed, err := homebrew.BundleContents(h.installed)
+	installed, _, err := homebrew.BundleContents(h.installed)
 	if err != nil {
 		t.Fatal(err)
 	}

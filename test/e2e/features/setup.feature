@@ -73,7 +73,7 @@ Feature: Explicit first-run software setup
     And the setup dry run would record disposition skipped
 
   @developer-collections @args.--setup @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
-  Scenario: Wizard defaults select monospace fonts without installing them
+  Scenario: Wizard font entries are opt-in and retain deliberate selections
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
     When I use the setup "Next" button
@@ -82,16 +82,17 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Features"
     When I open the Developer Mode detail
     When I expand the "Developer Mode" list under "Developer"
-    Then the "Monospace Fonts" collection is checked
+    When I expand the "Monospace Fonts" list under "Developer"
+    Then the "font-fira-code" entry checkbox is unchecked
     And the action journal is empty
     And the application log previews no "brew bundle install"
-    When I toggle the "Monospace Fonts" collection checkbox
+    When I check the "font-fira-code" entry
     And I use the setup "Next" button
     Then the setup wizard shows "Apps"
     When I use the setup "Back" button
     Then the setup wizard shows "Features"
     When I open the Developer Mode detail
-    Then the "Monospace Fonts" collection is unchecked
+    Then the "font-fira-code" entry checkbox is checked
     And the application log previews no "brew bundle install"
     And the action journal is empty
 

@@ -102,6 +102,17 @@ tags select fixtures: `@config.<name>` (`fixtures/config/<name>.yml`, default
 `@no-app`, `@known_issue.<N>`. Shared steps are in `steps/common.py`; a step
 only one destination needs goes in `steps/<destination>.py`.
 
+Keep state-word assertions in one behave step handler. A pattern such as
+`entry checkbox is {state:w}` already matches `insensitive`; a second literal
+step for that word prevents every feature from loading with `AmbiguousStep`.
+The shared handler must assert checked, unchecked, and sensitivity states,
+not drop the less common assertion to make step discovery pass.
+Likewise, reuse `common.py`'s generic button click/state steps for Select All
+instead of registering narrower button patterns that overlap them. Behave's
+[parse matcher](https://github.com/behave/behave/blob/main/docs/tutorial.rst)
+extracts named parameters from one definition; specialize the handler's state
+dispatch, not the step registry. Context7 source: `/behave/behave`.
+
 Intentional malformed-input fixtures must stay malformed. Exclude their exact
 paths from syntax-lint hooks, not the entire fixture directory or hook.
 

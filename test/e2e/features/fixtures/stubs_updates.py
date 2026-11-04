@@ -70,15 +70,18 @@ printf '%s\\n' "$*" >> "$state/flatpak.calls"
 case "$1" in
 --version) echo "Flatpak 1.16.1"; exit 0 ;;
 # The update check queries each remote separately (issue #471): every
-# installation has flathub, which its installed refs come from, and with
-# flatpak-leftover-remote also test-center, which is unreachable and serves
-# nothing installed.
+# installation has flathub and may have unreachable test-center, whose
+# installed origins determine whether its failure is relevant.
 remotes)
     echo flathub
     [ -f "$state/flatpak-leftover-remote" ] && echo test-center
     exit 0 ;;
 list)
-    case "$*" in *--columns=origin*) echo flathub ;; esac
+    case "$*" in
+    *--columns=origin*)
+        echo flathub
+        [ -f "$state/flatpak-remote-in-use" ] && echo test-center ;;
+    esac
     exit 0 ;;
 remote-ls)
     for arg in "$@"; do remote=$arg; done
@@ -201,6 +204,13 @@ def flatpak_leftover_remote(context):
     write_state(context, "flatpak-remote-ls-user", FIREFOX_UPDATE)
     write_state(context, "flatpak-leftover-remote", "")
     _install_flatpak(context)
+
+
+@stub("updates-flatpak-partial-check")
+def flatpak_partial_check(context):
+    """Firefox remains updateable while another installed app's remote fails."""
+    flatpak_leftover_remote(context)
+    write_state(context, "flatpak-remote-in-use", "")
 
 
 @stub("updates-brew-one-outdated")

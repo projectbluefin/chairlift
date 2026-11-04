@@ -224,28 +224,29 @@ const AvailableItems = 256
 // on what counts as an entry.
 var bundleEntryPrefixes = []string{"brew ", "cask ", "flatpak ", "mas ", "vscode "}
 
-// BundleContents parses a Brewfile and returns every installable entry it
-// recognises, in source order, deduplicated by (Kind, Name). A directive
-// without a recognisable token (a bare `tap "owner/repo"` or a malformed
-// line) is skipped silently; an entry outside the five installable kinds
-// is also skipped. The cap protects the parser and the UI from runaway
-// files; a Brewfile that exceeds it is truncated at AvailableItems entries.
-// An open failure returns no items; a read failure part-way through returns
-// the entries read so far alongside the error.
-func BundleContents(path string) ([]BundleItem, error) {
+// BundleContents returns recognized entries and whether every scanned line
+// belongs to the closed, literal Brewfile subset safe for a whole-file install.
+// Unknown directives, Ruby, options we cannot interpret, truncated reads, and
+// malformed lines keep their readable entries but forbid executing the file.
+// No Brewfile content is evaluated. Entries are deduplicated by kind and name.
+func BundleContents(path string) ([]BundleItem, bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer func() { _ = file.Close() }()
 
 	var items []BundleItem
+	safe := true
 	seen := make(map[BundleItemKind]map[string]struct{})
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), maxBundleDescriptionBytes)
 	for scanner.Scan() {
 		if len(items) >= AvailableItems {
-			break
+			return items, false, nil
+		}
+		if !safeBundleLine(scanner.Text()) {
+			safe = false
 		}
 		kind, name, ok := parseBundleItemLine(scanner.Text())
 		if !ok {
@@ -263,9 +264,50 @@ func BundleContents(path string) ([]BundleItem, error) {
 		items = append(items, BundleItem{Name: name, Kind: kind})
 	}
 	if err := scanner.Err(); err != nil {
-		return items, err
+		return items, false, err
 	}
-	return items, nil
+	return items, safe, nil
+}
+
+// safeBundleLine recognizes literal installs and literal trust declarations.
+// Anything not understood must use selected per-manager installs, never Ruby.
+func safeBundleLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return true
+	}
+	command, rest, ok := strings.Cut(line, " ")
+	if !ok || (command != "brew" && command != "cask" && command != "flatpak" && command != "tap") {
+		return false
+	}
+	name, tail, ok := bundleEntryToken(strings.TrimSpace(rest))
+	if !ok || name == "" {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && !strings.ContainsRune("@+._/-", r) {
+			return false
+		}
+	}
+	if command == "tap" && (strings.Count(name, "/") != 1 || strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/")) {
+		return false
+	}
+	// Comments cannot add an executable Ruby expression. The quoted token
+	// was validated above, so a # here is outside it, never interpolation.
+	tail, _, _ = strings.Cut(tail, "#")
+	tail = strings.TrimSpace(tail)
+	if tail == "" {
+		return true
+	}
+	if command == "flatpak" {
+		return false
+	}
+	options, ok := strings.CutPrefix(tail, ",")
+	if !ok {
+		return false
+	}
+	options = strings.TrimSpace(options)
+	return options == "trusted: true" || options == "trusted: false"
 }
 
 // parseBundleItemLine returns the (kind, name) of a Brewfile line, or
@@ -323,18 +365,108 @@ func classifyBundlePrefix(prefix string) (BundleItemKind, error) {
 // quote only after the line ends, is rejected so a malformed entry never
 // turns into an empty row.
 func bundleEntryName(rest string) (string, bool) {
+	name, _, ok := bundleEntryToken(rest)
+	return name, ok
+}
+
+// bundleEntryToken recovers the quoted token of a Brewfile directive and
+// whatever follows its closing quote. The tail is what carries a
+// directive's options — a tap's `trusted: true`, for one — so the two are
+// read together rather than the token alone.
+func bundleEntryToken(rest string) (name, tail string, ok bool) {
 	if rest == "" {
-		return "", false
+		return "", "", false
 	}
 	quote := rest[0]
 	if quote != '"' && quote != '\'' {
-		return "", false
+		return "", "", false
 	}
 	close := strings.IndexByte(rest[1:], quote)
 	if close < 0 {
-		return "", false
+		return "", "", false
 	}
-	return rest[1 : 1+close], true
+	return rest[1 : 1+close], strings.TrimSpace(rest[1+close+1:]), true
+}
+
+// BundleTap is one tap directive in a Brewfile, with the trust the file
+// claims for it. A tap directive installs nothing on its own; it declares
+// where the collection's other entries come from.
+type BundleTap struct {
+	Name string
+	// Trusted reports the file's `trusted: true` flag. A tap named with
+	// `trusted: { formula: [...] }` is not trusted wholesale, so it stays
+	// false here and the narrow per-package trust applies instead.
+	Trusted bool
+}
+
+// BundleTaps parses a Brewfile's tap directives and returns them in source
+// order, deduplicated by name. It is a parser of its own because
+// BundleContents deliberately drops tap directives: a tap is not an
+// installable entry, yet the trust a file claims for one decides how its
+// packages may be installed.
+//
+// A directive that is not a tap, one whose quoted token cannot be recovered,
+// and one that does not name an owner/repository pair are skipped silently,
+// so a malformed line never derails the rest of the file.
+func BundleTaps(path string) ([]BundleTap, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+
+	var taps []BundleTap
+	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 1024), maxBundleDescriptionBytes)
+	for scanner.Scan() {
+		tap, ok := parseBundleTapLine(scanner.Text())
+		if !ok {
+			continue
+		}
+		if _, dup := seen[tap.Name]; dup {
+			continue
+		}
+		seen[tap.Name] = struct{}{}
+		taps = append(taps, tap)
+	}
+	if err := scanner.Err(); err != nil {
+		return taps, err
+	}
+	return taps, nil
+}
+
+// parseBundleTapLine returns the tap a Brewfile line declares, or ok=false
+// when the line is not a tap directive or does not name one.
+func parseBundleTapLine(raw string) (BundleTap, bool) {
+	line := strings.TrimSpace(raw)
+	if !strings.HasPrefix(line, "tap ") {
+		return BundleTap{}, false
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "tap "))
+	name, tail, ok := bundleEntryToken(rest)
+	if !ok {
+		return BundleTap{}, false
+	}
+	// Homebrew's tap syntax is owner/repository. A name without one is
+	// not a tap and must not become a trust target.
+	if !strings.Contains(name, "/") {
+		return BundleTap{}, false
+	}
+	return BundleTap{Name: name, Trusted: declaresTapTrust(tail)}, true
+}
+
+// declaresTapTrust reports whether a tap directive's options claim the tap
+// is trusted wholesale. The claim is exactly the `trusted: true` option; a
+// `trusted: { formula: [...] }` option names individual packages instead
+// and does not trust the tap.
+func declaresTapTrust(tail string) bool {
+	for _, field := range strings.Split(tail, ",") {
+		if strings.TrimSpace(field) == "trusted: true" {
+			return true
+		}
+	}
+	return false
 }
 
 func countBundleItems(path string) (int, error) {

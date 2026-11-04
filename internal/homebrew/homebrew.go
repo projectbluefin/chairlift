@@ -76,12 +76,44 @@ func (e *NotFoundError) Error() string {
 
 // Package represents an installed Homebrew package
 type Package struct {
-	Name               string   `json:"name"`
+	Name string `json:"name"`
+	// FullName is the package's qualified name: the bare name for a
+	// homebrew/core package, and "owner/repo/name" for one from a tap.
+	// A Brewfile names a tap package in that qualified form, so the
+	// inventory can be matched against a collection entry exactly
+	// instead of guessing from the bare name alone.
+	FullName string `json:"full_name"`
+	// Tap is the package's source: homebrew/core for formulae,
+	// homebrew/cask for casks, or owner/repository for a third-party tap.
+	Tap                string   `json:"tap"`
 	Version            string   `json:"version"`
 	InstalledOnRequest bool     `json:"installed_on_request"`
 	Pinned             bool     `json:"pinned"`
 	Outdated           bool     `json:"outdated"`
 	Dependencies       []string `json:"dependencies,omitempty"`
+}
+
+// QualifiedName is the name a Brewfile would use for this package: the
+// qualified name when the package comes from a tap, the bare name
+// otherwise.
+func (p Package) QualifiedName() string {
+	if p.FullName != "" {
+		return p.FullName
+	}
+	return p.Name
+}
+
+// CoreTap is the tap field Homebrew reports for a package that comes from
+// homebrew/core rather than from a third-party tap.
+const CoreTap = "homebrew/core"
+
+// CaskTap is Homebrew's official cask repository, not a third-party source.
+const CaskTap = "homebrew/cask"
+
+// FromTap reports whether the package comes from a third-party source rather
+// than Homebrew's official formula or cask repositories.
+func (p Package) FromTap() bool {
+	return p.Tap != "" && p.Tap != CoreTap && p.Tap != CaskTap
 }
 
 // PackageKind identifies the Homebrew formula or cask namespace.
@@ -413,6 +445,8 @@ func parsePackagesJSON(jsonData string, isFormula bool) ([]Package, error) {
 	var data struct {
 		Formulae []struct {
 			Name     string `json:"name"`
+			FullName string `json:"full_name"`
+			Tap      string `json:"tap"`
 			Versions struct {
 				Stable string `json:"stable"`
 			} `json:"versions"`
@@ -425,6 +459,8 @@ func parsePackagesJSON(jsonData string, isFormula bool) ([]Package, error) {
 		} `json:"formulae"`
 		Casks []struct {
 			Token     string `json:"token"`
+			FullToken string `json:"full_token"`
+			Tap       string `json:"tap"`
 			Version   string `json:"version"`
 			Installed string `json:"installed"`
 			Outdated  bool   `json:"outdated"`
@@ -444,6 +480,8 @@ func parsePackagesJSON(jsonData string, isFormula bool) ([]Package, error) {
 			}
 			packages = append(packages, Package{
 				Name:               f.Name,
+				FullName:           f.FullName,
+				Tap:                f.Tap,
 				Version:            f.Installed[0].Version,
 				InstalledOnRequest: f.Installed[0].InstalledOnRequest,
 				Pinned:             f.Pinned,
@@ -454,6 +492,8 @@ func parsePackagesJSON(jsonData string, isFormula bool) ([]Package, error) {
 		for _, c := range data.Casks {
 			packages = append(packages, Package{
 				Name:     c.Token,
+				FullName: c.FullToken,
+				Tap:      c.Tap,
 				Version:  c.Installed,
 				Outdated: c.Outdated,
 			})
@@ -523,6 +563,28 @@ func Install(name string, isCask bool) error {
 		args = append(args, "--cask")
 	}
 	args = append(args, name)
+
+	_, err := runBrewCommand(args...)
+	return err
+}
+
+// InstallMany installs several packages of one kind in a single Homebrew
+// transaction: `brew install [--cask] <name>…`. One transaction per kind
+// keeps a partially selected collection's install to one command per
+// package manager, instead of one command per package.
+//
+// An empty list is a no-op: Homebrew refuses `brew install` with no
+// argument, so the caller must never reach it.
+func InstallMany(names []string, isCask bool) error {
+	if len(names) == 0 {
+		return nil
+	}
+
+	args := []string{"install"}
+	if isCask {
+		args = append(args, "--cask")
+	}
+	args = append(args, names...)
 
 	_, err := runBrewCommand(args...)
 	return err

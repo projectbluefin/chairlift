@@ -64,6 +64,34 @@ func TestSystemComponentsCheckCountsEachAffectedFeatureOnce(t *testing.T) {
 	}
 }
 
+// An updex warning (one component's manifest could not be read) makes the
+// check partial (#699): the features it did find updates for are kept, and
+// the row says some components were not covered. Before, the warning became
+// an error and the found updates were discarded.
+func TestSystemComponentsCheckKeepsUpdatesBesideWarnings(t *testing.T) {
+	provider := newSystemComponents(UpdexDeps{
+		Installed: func() bool { return true },
+		Check: func(context.Context) ([]updex.FeatureCheck, []string, error) {
+			return []updex.FeatureCheck{{
+				Feature: "graphics",
+				Results: []updex.CheckResult{{Component: "mesa", UpdateAvailable: true}},
+			}}, []string{"failed to fetch manifest for vulkan: 404"}, nil
+		},
+	})
+
+	got, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v, want a partial check", err)
+	}
+	want := updateflow.CheckResult{
+		Items:    []updateflow.Item{{Name: "graphics"}},
+		Warnings: []string{"some components"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Check() = %#v, want %#v", got, want)
+	}
+}
+
 func TestSystemComponentsCheckPropagatesError(t *testing.T) {
 	wantErr := errors.New("feature check failed")
 	provider := newSystemComponents(UpdexDeps{

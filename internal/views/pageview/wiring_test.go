@@ -251,12 +251,16 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 			retired: []string{"buildRecoveryVersionsGroup(", "buildReturnToStreamRow(", "ublue.Pin(", "ublue.Unpin("},
 		},
 		{
-			// Collection controls are named after the collection (W2-APPS-5).
+			// Collection and entry controls are named after what they
+			// act on (W2-APPS-5): the collection's "Select All" button
+			// names the collection, and every entry checkbox names its
+			// own token.
 			file:     "applications_page.go",
-			required: []string{`SetAccessibleLabel(choice, "Select "+collection.Title)`},
+			required: []string{`setNamedButtonLabel(selectAll, "Select All", bundleview.SelectAllAccessibleName(collection.Title))`, `SetAccessibleLabel(check, entry.CheckAccessibleName)`},
+			retired:  []string{`SetAccessibleLabel(choice, "Select "+collection.Title)`, "row.AddPrefix(&choice.Widget)"},
 		},
 		{
-			// Each collection consumer shares the scoped installer.
+			// Each collection consumer shares the scoped entry installer.
 			file:     "bundle_install.go",
 			required: []string{"func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection)"},
 			retired:  []string{"bundleview.InstallButtonName("},
@@ -703,5 +707,30 @@ func TestUntrustedSourceRowsStayVisibleAndDistinct(t *testing.T) {
 		if !strings.Contains(confirm, required) {
 			t.Errorf("confirmTrustTap: missing %q", required)
 		}
+	}
+}
+
+// A failed Compass re-read after a toggle restores the last observed switch
+// position and sensitivity instead of leaving the user's unconfirmed click
+// on screen with no retry (#701).
+func TestCompassFailedReadRestoresTheLastObservedSwitch(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	body := functionBody("compass_page.go", "showCompassState")
+	failure, success, ok := strings.Cut(body, "uh.compassShown = compassRendering{")
+	if !ok {
+		t.Fatal("showCompassState no longer records the last observed rendering")
+	}
+	for _, required := range []string{
+		"pageview.CompassUnavailableSubtitle",
+		"if !uh.compassShown.observed {",
+		"toggle.set(uh.compassShown.installed)",
+		"toggle.widget.SetSensitive(uh.compassShown.sensitive)",
+	} {
+		if !strings.Contains(failure, required) {
+			t.Errorf("showCompassState's failed-read path is missing %q", required)
+		}
+	}
+	if !strings.Contains(success, "observed:  true,") {
+		t.Error("showCompassState must mark a successful read as observed")
 	}
 }

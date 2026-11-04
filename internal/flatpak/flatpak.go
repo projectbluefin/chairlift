@@ -284,7 +284,7 @@ func listRefs(installFlag string, kind Kind) ([]Application, error) {
 // classified correctly.
 func parseRefList(output string, installFlag string, kind Kind) ([]Application, error) {
 	var apps []Application
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := strings.Split(output, "\n")
 
 	installation := "system"
 	if installFlag == "--user" {
@@ -292,19 +292,9 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 	}
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		fields, ok := splitColumns(line)
+		if !ok {
 			continue
-		}
-
-		// Split by tab (flatpak uses tabs as column separators)
-		fields := strings.Split(line, "\t")
-		if len(fields) < 3 {
-			// Try splitting by multiple spaces for systems that might use spaces
-			fields = strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
 		}
 
 		app := Application{
@@ -328,6 +318,44 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 	}
 
 	return apps, nil
+}
+
+// ListInstalledOrigins returns every installed Flatpak application id mapped
+// to the remote it was installed from.
+//
+// It is the query `brew bundle` itself uses to decide which Flatpaks a
+// Brewfile's `flatpak` entries already cover, and it is deliberately
+// narrower than the column listings above: it names no display name,
+// version or branch, because the only two things an install decision needs
+// are which applications are present and where each came from.
+func ListInstalledOrigins() (map[string]string, error) {
+	output, err := runFlatpakCommand("list", "--app", "--columns=application,origin")
+	if err != nil {
+		return nil, err
+	}
+	return parseApplicationOrigins(output), nil
+}
+
+// parseApplicationOrigins reads the application/origin pairs out of
+// `flatpak list --app --columns=application,origin` output.
+func parseApplicationOrigins(output string) map[string]string {
+	origins := make(map[string]string)
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		application, origin, found := strings.Cut(line, "\t")
+		if !found {
+			application, origin, found = strings.Cut(line, " ")
+		}
+		application = strings.TrimSpace(application)
+		if !found || application == "" {
+			continue
+		}
+		origins[application] = strings.TrimSpace(origin)
+	}
+	return origins
 }
 
 // Install installs a Flatpak application
@@ -360,6 +388,29 @@ func InstallFromRemote(appID, remote string, user bool) error {
 		args = append(args, remote)
 	}
 	args = append(args, appID)
+
+	_, err := runFlatpakCommand(args...)
+	return err
+}
+
+// InstallMany installs several applications in one Flatpak transaction:
+// `flatpak install -y --system flathub <id>…`. One transaction keeps a
+// partially selected collection's Flatpak install to a single command.
+//
+// The scope is always the system installation and the remote is always
+// Flathub, for the reason the privilege boundary records: Bluefin's policy
+// is system-wide Flatpaks, and its images configure Flathub only as a
+// system remote, where a `--user` install cannot resolve a ref.
+//
+// An empty list is a no-op: flatpak refuses an install with no ref, so the
+// caller must never reach it.
+func InstallMany(appIDs []string) error {
+	if len(appIDs) == 0 {
+		return nil
+	}
+
+	args := []string{"install", "-y", "--system", "flathub"}
+	args = append(args, appIDs...)
 
 	_, err := runFlatpakCommand(args...)
 	return err
@@ -620,10 +671,35 @@ func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
 	return updates, errors.Join(errs...)
 }
 
+// splitColumns splits one row of flatpak's --columns output. Flatpak
+// separates columns with tabs and leaves an empty column empty, so a row with
+// a tab is split on tabs only and never trimmed first: trimming would drop an
+// empty trailing column (an application that publishes no version) or an
+// empty leading one, and a multi-word display name such as "GNU Image
+// Manipulation Program" must stay one field. Only a row with no tab at all
+// falls back to whitespace splitting. Rows with fewer than two columns are
+// rejected.
+func splitColumns(line string) ([]string, bool) {
+	line = strings.TrimRight(line, "\r")
+	if strings.TrimSpace(line) == "" {
+		return nil, false
+	}
+	var fields []string
+	if strings.Contains(line, "\t") {
+		fields = strings.Split(line, "\t")
+	} else {
+		fields = strings.Fields(line)
+	}
+	if len(fields) < 2 {
+		return nil, false
+	}
+	return fields, true
+}
+
 // parseUpdateList parses the tabular output from the flatpak update query
 func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 	var updates []UpdateInfo
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := strings.Split(output, "\n")
 
 	installation := "system"
 	if user {
@@ -631,19 +707,9 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 	}
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		fields, ok := splitColumns(line)
+		if !ok {
 			continue
-		}
-
-		// Split by tab (flatpak uses tabs as column separators)
-		fields := strings.Split(line, "\t")
-		if len(fields) < 3 {
-			// Try splitting by multiple spaces for systems that might use spaces
-			fields = strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
 		}
 
 		update := UpdateInfo{
