@@ -1,1 +1,0 @@
-../../skills/documentation-reconciliation/SKILL.md

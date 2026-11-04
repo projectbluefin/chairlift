@@ -273,7 +273,7 @@ asserted to be the tag the catalog displays.
 
 - Shapes: [design/package-managers.md](../design/package-managers.md) (the
   registry tag catalog and the view-layer leaf packages),
-  [design/destination-matrix.md](../design/destination-matrix.md) (Recovery's
+  [design/destination-matrix.md](https://github.com/projectbluefin/chairlift/blob/fe698dd0946e077a6977c89161e0e5f65d54f5f8/docs/design/destination-matrix.md) (Recovery's
   group and action ownership)
 - Builds on: [ADR-0001](0001-fixed-path-pkexec-privilege-boundary.md) (the
   boundary this target crosses), [ADR-0007](0007-pure-leaf-packages-route-around-untestable-gtk.md)

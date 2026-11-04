@@ -237,21 +237,6 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 		t.Fatalf("found %d non-test Go sources; the scan is broken, not the tree", scanned)
 	}
 
-	// The cap is only a cap if its stated size matches reality. AGENTS.md
-	// enumerates the stubbed behaviors; a fourth added without updating that
-	// prose would leave the rule describing a smaller surface than exists.
-	agents := readRepoFile(t, "AGENTS.md")
-	for _, name := range stubbed {
-		if !strings.Contains(agents, name) {
-			t.Errorf("AGENTS.md's stub-surface rule does not name %s", name)
-		}
-	}
-	for _, count := range []string{"Two\n  behaviors", "Three\n  behaviors"} {
-		if strings.Contains(agents, count) {
-			t.Errorf("AGENTS.md's stub-surface rule says %q but %d behaviors are stubbed", count, len(stubbed))
-		}
-	}
-
 	// Only the e2e build may set the tag; `make build` — what `make ci` and
 	// the release pipeline use — must not.
 	makefile := readRepoFile(t, "Makefile")

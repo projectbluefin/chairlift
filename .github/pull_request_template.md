@@ -31,13 +31,6 @@ Closes #
 - [ ] `make ci`
 - [ ] Additional relevant checks (including `make e2e` when applicable):
 
-## Factory Self-Improvement & Two-Output Rule
-
-<!-- Every task has two outputs: the work and the learning. -->
-
-- [ ] Discovered a workaround, pattern, or convention?
-- [ ] Skill package in `docs/skills/` updated (or created) in this same PR, or verified correction recorded in `.memory/`?
-
 ## Tests and documentation
 
 <!-- Describe regression coverage for changed behavior, or explain why it is not needed. -->

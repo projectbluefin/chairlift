@@ -1,246 +1,63 @@
 # Printer Applications
 
-Living design document. The network boundary and update model are recorded in
-[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)
-and its signature-checking successor
-[ADR-0023](../adr/0023-verify-printer-images-before-installing.md);
-[ADR-0001](../adr/0001-fixed-path-pkexec-privilege-boundary.md) explains why
-this user-scoped integration stays outside the privileged helpers.
-
-## Current ownership
-
-[`internal/printerapp`](../../internal/printerapp/printerapp.go) owns rootless
-Podman quadlets under `~/.config/containers/systemd` and their
-`systemctl --user` lifecycle. The Features page builds one default application
-per entry returned by `printerapp.Families()`: **Ghostscript, HPLIP, and
-Gutenprint**. There is no PostScript entry or per-device setup UI.
-
-`features_page.printers_group` is enabled in both
-[`config.yml`](../../config.yml) and the
-[built-in defaults](../../internal/config/config.go). The
-[capability floor](../../internal/capability/capability.go) requires `podman`
-on `$PATH`; configuration may hide the group but cannot supply a missing tool.
-Neither building the group nor observing state installs or starts a unit.
-
-Turning a family on verifies its image with cosign before writing its unit
-and starting it. A missing verifier or failed signature check rejects enable.
-The error toast distinguishes an unavailable cosign executable (install it and
-make it available on PATH) from a rejected signature, rather than suggesting
-that retrying alone will fix either.
-An already-present unit stays controllable so the user can turn it off. Its
-presence means configured, not ready. The readiness model below distinguishes
-starting, running, and failed service observations.
+[`internal/printerapp`](../../internal/printerapp/) owns rootless Podman
+quadlets and their `systemctl --user` lifecycle. The Features page exposes the
+families defined in [`printerapp.go`](../../internal/printerapp/printerapp.go);
+that table owns images, ports and names. Configuration may hide Printers; its
+host capability floor requires Podman. Observing a row does not install or start
+anything.
 
 ## Network boundary
 
-[`RenderUnit`](../../internal/printerapp/printerapp.go) publishes the
-application as `PublishPort=127.0.0.1:<port>:<port>` and keeps
-`Environment=PORT=<port>` so PAPPL listens on that container port. It never
-uses `Network=host` or a non-loopback `PublishPort`. PAPPL serves IPP and its
-web interface on one listener, and the retrofit images ship that web
-administration without a credential; loopback publishing keeps it off the LAN.
+PAPPL's web administration is unauthenticated. Units publish only
+`127.0.0.1:<port>:<port>`, never host networking or a LAN address. IPP and web
+administration are available only on this computer; DNS-SD inside the container
+does not advertise a usable LAN printer. There is no pkexec route, privileged
+container or image layering.
 
-The consequence is deliberate: IPP and the web page are reachable only from
-this computer (`http://localhost:<port>/`, `ipp://localhost:<port>/ipp/print`).
-Other computers cannot print to or administer the application, and the
-in-container DNS-SD advertisement is not visible on the host or the LAN. The
-off-state subtitle says "this computer" accordingly.
-
-There is no pkexec route, helper subcommand, PolicyKit action, privileged
-container, or host image layering for printer applications. Device passthrough
-is not rendered. Physical printing, USB assignment, and restart survival
-against physical hardware remain unverified; the lifecycle and UI tests do not
-establish those outcomes.
+Physical printing and USB passthrough are not established by service readiness;
+ChairLift does not configure device passthrough. HPLIP plugin consent remains an
+interactive image-side web flow, not a headless ChairLift action. The network
+trade-off is recorded in
+[ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md).
 
 ## Family inventory and images
 
-The source of truth is the `families` table in
-[`printerapp.go`](../../internal/printerapp/printerapp.go). Each family runs
-`ghcr.io/projectbluefin/<family>-printer-app:stable`, a tag the image
-repository's release workflow moves to each release. `Enable` runs
-`cosign verify --output=json` with the GitHub Actions OIDC issuer and an
-anchored identity expression naming only that family's
-`.github/workflows/registry-actions.yml` on a branch. Cosign's default claim
-checking binds the payload to the requested image. The unit uses the SHA-256
-digest from that verified payload; ChairLift never resolves the tag again.
-This closes the verify-then-pull tag race and retains a multi-architecture
-index when the tag names one.
+Enable and refresh verify the family's configured image with cosign against its
+publishing workflow identity before writing a unit. The unit runs the verified
+digest, not a tag resolved again after verification. Missing cosign or rejected
+verification fails closed. Identity and verification details live in
+[`internal/printerapp`](../../internal/printerapp/); the decision is
+[ADR-0023](../adr/0023-verify-printer-images-before-installing.md).
 
-Newly installed units have no `AutoUpdate=registry`, and ChairLift no longer
-enables Podman's timer. It does not disable a shared timer used by other
-containers. Existing units are not automatically migrated: turn the family
-off and back on to install a verified pin. The Features page row of a family
-whose installed unit still carries `AutoUpdate=registry`
-(`InstalledBeforeVerification`) says so in its subtitle and asks for exactly
-that off-and-on, so an unchecked older install is not silent.
-
-Installed pins move forward through the Updates page, not a timer. The
-**Printer Drivers** source (`updateproviders.NewPrinterApps`, ID
-`printer-drivers`) is available where `podman` is (the same floor as the
-Printers group, `features_page`/`printers_group`) and follows the
-`printer-drivers-enabled` preference. Its check reads `Image=` from each
-enabled default app's quadlet (`InstalledImage`) and verifies the family's
-configured reference (`VerifiedImage`, the same cosign check `Enable` runs,
-writing nothing); a family whose verified digest differs from the installed
-image is offered, showing the first twelve hex digits of each digest. A unit
-still on the moving tag differs from every pin, so it is offered too, and
-applying it is the same migration as turning the family off and on. Applying
-calls `Refresh` once per selected app. `Enable`, `Refresh` and `Disable` take
-one per-app lock inside `internal/printerapp`, so an update cannot rewrite and
-restart a unit the Printers page switch removed during verification. A family
-whose check fails never hides another's update: the provider returns available
-updates and names every unchecked family in `CheckResult.Warnings`; the row
-shows those warnings beside available work, or as a retryable check failure
-when no update could be confirmed. An apply failure leaves only the failed
-apps in `ApplyResult.PendingItems`, names them in `ApplyResult.Warnings`, and
-continues with the next family. The coordinator's retry therefore refreshes
-only failed families rather than restarting those already updated. There is
-no background schedule: pins advance when the person checks for and applies
-updates. Diagnostic image presence probes read `Image=` from the installed
-quadlet, not the family's moving tag; a cached verified digest need not have a
-local `:stable` tag.
-
-`Select(family)` returns the default `App{Family: family, Name: family.ID}`.
-Its quadlet filename is the unit/container identity below plus `.container`;
-its service name is that identity plus `.service`.
-
-| Family | Unit / container identity | Loopback port | Preserved host state directory |
-| --- | --- | --- | --- |
-| Ghostscript | `chairlift-printer-ghostscript` | 18010 | `~/printer-workspaces/ghostscript/ghostscript` |
-| HPLIP | `chairlift-printer-hplip` | 18030 | `~/printer-workspaces/hplip/hplip` |
-| Gutenprint | `chairlift-printer-gutenprint` | 18050 | `~/printer-workspaces/gutenprint/gutenprint` |
-
-The package's `App` API can also name an application within a family. Such an
-app gets a sanitized family/name unit identity, its own state directory, and a
-port derived by FNV hash in 18000–18999. This is deterministic, **not a
-collision-free allocator**; there is no port registry or automatic collision
-retry. The shipped UI uses only the three fixed default ports.
-
-The volume is rendered as
-`%h/printer-workspaces/<family>/<name>:/var/lib/<family>-printer-app:z`.
-`UserNS=keep-id:uid=65532,gid=65532` maps the invoking account into the
-container. The quadlet requests `Restart=on-failure`, `RestartSec=10`, and
-`WantedBy=default.target`; these are unit declarations, not proof that a
-particular printer works after restart.
-
-`ApplyOverrides(images)` is a package API that replaces a known family's
-image with a non-empty reference, by tag or pinned `repo@sha256:…`, so a site
-can mirror or pin an image. It is not wired to a configuration key or
-application startup in the current tree. The setter itself performs no
-verification, but `Enable`/`Refresh` require the original family's publishing
-identity even for mirrors and explicit pins; there is no unsigned override.
-Do not document a configurable printer mirror as a shipped UI feature.
-
-HPLIP's proprietary plugin consent remains an interactive image-side web
-flow at `/plugin`, not a ChairLift lifecycle action. No headless consent flag
-or environment contract is wired here. Diagnostic recognition of plugin
-verification failures does not grant consent or install a plugin.
+Pins advance through the Updates page's Printer Drivers source. It checks
+enabled families, preserves other families' results when one cannot be checked,
+and retries failed refreshes without replaying successful ones. There is no
+background schedule or `AutoUpdate=registry` on new units. For an older unit
+still carrying that setting, turn the family off and on to install a verified
+pin, or apply its offered update. ChairLift does not disable a shared Podman
+timer used by unrelated containers.
 
 ## Lifecycle and failure semantics
 
-`Enable(ctx, app)` verifies first, atomically writes the pinned quadlet,
-creates the state directory, runs `daemon-reload` and starts the generated
-service. `Refresh(ctx, app)` requires an installed unit and follows the same
-verified path with `restart` instead of `start`. Missing, invalid, conflicting
-or rejected verification output returns `ErrSignatureUnverified` without any
-write or systemctl call. A later systemctl failure rolls back a unit created
-by that call (stop, remove, reload), but does not remove a pre-existing unit.
-It does not restore the previous unit contents after a reload/restart failure.
-
-`Disable(ctx, app)` stops the service, removes only its quadlet, then reloads
-the user manager. If stop fails, it queries `is-active`; only `inactive`,
-`failed`, or `unknown` proves removal is safe. An active/transitional or
-unreadable result returns an error and preserves the unit. Pulled images and
-`~/printer-workspaces` remain untouched. There is no implemented printer
-rollback operation or previous-pin store.
-
-Dry-run enable, refresh and disable log the intended work without verification,
-writes or systemctl commands. Cosign and systemctl calls have a five-minute package
-budget; the view bounds a whole mutation to ten minutes.
+Quadlets live in the account's configuration directory under
+`containers/systemd`; persistent state lives under `~/printer-workspaces`.
+Enable, refresh and disable serialize per application. Verification failure
+leaves the existing unit and service untouched. A later service failure removes
+a newly created unit, but does not restore the old contents of an existing unit.
+Disable removes the quadlet only after the service is known stopped; unreadable
+or active state preserves it. Disabling retains images and printer state.
+Dry-run logs intended mutations without verification, writes or service commands.
 
 ## Observed readiness and GTK wiring
 
-[`printerapp_readiness.go`](../../internal/printerapp/printerapp_readiness.go)
-separates cheap facts from runtime queries:
+A unit's presence means configured, not ready. The row separately observes
+systemd and classifies failures using service properties, journal output and the
+installed image. A failed configured service stays switchable off. Systemd
+active is not proof of working hardware, IPP health or successful printing.
 
-- `Observe(app, capable)` reports the capability floor and unit presence
-  without spawning a process.
-- `ProbeActive(ctx, app)` reads the single state word from
-  `systemctl --user is-active`. A nonzero exit is normal for inactive/failed
-  states; a missing or multi-word answer is a query failure, not readiness.
-- `WaitSettled(ctx, app, limit)` polls activating/reloading states until they
-  settle or the bound expires. It returns probe failures, not an invented
-  running state.
-- `Resolve(Facts)` delegates to the pure `Diagnose(DiagnosticInput)` classifier.
-  `State.On()` describes a configured application independently of readiness:
-  a present unit remains on even when its service is failed.
-
-| Facts | State | Switch meaning |
-| --- | --- | --- |
-| Capability absent | unavailable | Group omitted by the normal view floor |
-| No unit | off | Off |
-| Unit present, not checked or activating/reloading | starting | Configured on, still starting |
-| Unit present, active | ready | Configured on and systemd reports active |
-| Unit present, other state or failed probe | generic or classified failure | Configured on but not known running; disable remains possible |
-
-[`printerapp_diagnostics.go`](../../internal/printerapp/printerapp_diagnostics.go)
-adds `ProbeDiagnostics(ctx, app, capable)`, the view's current runtime probe.
-It re-observes cheap facts, returns immediately for a missing unit/capability,
-and treats an `active` state word as ready. Activating/reloading remain starting.
-For other states or a failed active query it reads systemd
-`SubState,Result,ExecMainStatus`, the latest 50 user-journal lines, and
-`podman image exists <image>` in the invoking account. Secondary commands
-are bounded to ten seconds each inside the caller's deadline; their errors are
-best-effort observations, not propagated as a successful readiness check.
-
-The pure classifier applies failure precedence in this order:
-
-| State | Observed signal | Row guidance |
-| --- | --- | --- |
-| `StateFailedPlugin` | Plugin/signature/checksum verification messages | Explain failed proprietary plugin verification |
-| `StateFailedDeviceAccess` | Device/USB references plus permission errors, or recognized device-open failures | Check USB permissions, group membership or udev rules |
-| `StateFailedCrash` | Signal/core-dump result, high exit status or crash messages | Inspect the user journal |
-| `StateFailedImage` | Pull/manifest/image failure messages; missing local image only when paired with a failed pull observation | Check network and registry access |
-| `StateFailed` | None of those signals | Not known running |
-
-`SubState` is collected but currently does not select a failure class. A failed
-local image probe alone does not establish a registry failure. These are log
-classifications, not physical-device or HTTP/IPP health probes: systemd active
-does not certify successful printing. Every
-failure state keeps the configured switch on and disableable, while showing
-the failure explicitly; an on switch is never the readiness indicator.
-
-[`printers_page.go`](../../internal/views/printers_page.go) builds rows and
-signals once, with one `actionstate.Gate` per family and a `guardedSwitch` so
-programmatic restoration cannot trigger a new mutation. Initial readiness uses
-`ProbeDiagnostics`; successful live mutations re-probe through it before
-rendering their confirmed state. Readiness and lifecycle commands run off the
-GTK thread; row updates use `sgtk.RunOnMainThread`. Initial probes have a
-fifteen-second bound and yield to an action owning the row. A successful live
-enable would settle for up to a minute. Failure and preview restore the row's
-last displayed state; a failed disable never claims the service stopped.
-Copy comes from [`pageview/printers.go`](../../internal/views/pageview/printers.go),
-and `actionmsg.PrinterApp` pairs live/preview feedback with the confirmation rule.
-
-## Verification
-
-The deterministic lifecycle/readiness/diagnostic tests inject unit directories,
-systemctl and secondary-command runners; they do not start real printer
-containers. Run the headless contract checks with the CI filter:
-
-```sh
-go test ./internal/printerapp ./internal/views/pageview ./internal/views/actionmsg -run '^Test[^I]' -skip Integration
-```
-
-The native Features surface is covered by
-[`features.feature`](../../test/e2e/features/features.feature), including
-off rows, config/capability omission, an existing failed unit, and dry-run
-disable. Run it only through the isolated Dakota Wayland harness:
-
-```sh
-make e2e-atspi ATSPI_TAGS=@features
-```
-
-Use `make ci` for the complete host-independent gate. These checks verify
-ChairLift's shipped state and boundary; they do not certify hardware
-behaviour.
+[`printers_page.go`](../../internal/views/printers_page.go) owns GTK wiring;
+[`pageview/printers.go`](../../internal/views/pageview/printers.go) owns row copy.
+Runtime queries run off-thread; failures and previews retain known state rather
+than inventing a successful enable or disable. Inspect the generated user
+service's journal when the row reports a service failure.

@@ -1,1 +1,0 @@
-../../skills/frozen-allowlists/SKILL.md

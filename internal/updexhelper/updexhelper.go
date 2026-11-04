@@ -5,7 +5,7 @@
 // so its logic can be unit-tested on a headless host — a test binary for a
 // package that imports puregotk panics while resolving GTK/graphene shared
 // libraries at package init, before any test function runs. See
-// docs/agents/skills/gtk-headless-tests.md.
+// docs/skills/gtk-headless-testing/SKILL.md.
 //
 // cmd/chairlift-updex-helper/main.go is reduced to dispatching the validated
 // Invocation returned here, then passing the per-subcommand Options struct to

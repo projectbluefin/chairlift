@@ -17,7 +17,7 @@ import (
 //
 // It lives in internal/installcheck rather than internal/window because that
 // package imports puregotk and cannot host a test binary on a headless host —
-// see docs/agents/skills/gtk-headless-tests.md.
+// see docs/skills/gtk-headless-testing/SKILL.md.
 func TestErrorToastRendersAWrappingTitle(t *testing.T) {
 	path := filepath.Join(RepoRoot(), "internal", "window", "window.go")
 	source, err := os.ReadFile(path)

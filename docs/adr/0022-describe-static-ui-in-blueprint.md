@@ -77,7 +77,7 @@ is bound only behind a runtime version check with a fallback blueprint
 ## References
 
 - Shapes: [design/overview.md](../design/overview.md),
-  [design/hig-conformance.md](../design/hig-conformance.md),
+  [design/hig-conformance.md](https://github.com/projectbluefin/chairlift/blob/fe698dd0946e077a6977c89161e0e5f65d54f5f8/docs/design/hig-conformance.md),
   [skills/blueprint-ui](../skills/blueprint-ui/SKILL.md)
 - Builds on: [ADR-0007](0007-pure-leaf-packages-route-around-untestable-gtk.md),
   [ADR-0012](0012-ship-as-control-center-keep-chairlift-code-name.md)

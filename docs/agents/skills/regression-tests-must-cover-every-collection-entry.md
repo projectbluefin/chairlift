@@ -1,1 +1,0 @@
-../../skills/collection-regressions/SKILL.md

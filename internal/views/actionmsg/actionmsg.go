@@ -11,7 +11,7 @@
 // headless host. A test binary for a package that imports puregotk panics
 // while resolving GTK/graphene shared libraries at package init — before any
 // test function runs — so logic that must be tested cannot live in the view
-// packages. See docs/agents/skills/gtk-headless-tests.md.
+// packages. See docs/skills/gtk-headless-testing/SKILL.md.
 //
 // Functions whose result only selects display text (BundleDump, Cleanup,
 // Install, Uninstall, Pin, Upgrade, Update, SelfUpdate, SystemStage,

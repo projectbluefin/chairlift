@@ -13,8 +13,7 @@ chunk = [
   "CGO_ENABLED=0 golangci-lint run 2>&1 | tail -c 4000; exit ${PIPESTATUS[0]}",
   "CGO_ENABLED=0 go build ./... 2>&1 | tail -c 4000; exit ${PIPESTATUS[0]}",
   # Tests run under CI's exact filter. GTK/GLib is dlopen'd at runtime and is
-  # absent on the gate host, so tests must be headless — see
-  # docs/agents/skills/gtk-headless-tests.md.
+  # absent on the gate host; see docs/skills/gtk-headless-testing/SKILL.md.
   "CGO_ENABLED=0 go test ./internal/... -run \"^Test[^I]\" -skip \"Integration\" 2>&1 | { grep -v '^ok ' || true; } | tail -c 6000; exit ${PIPESTATUS[0]}",
 ]
 # Heavier final gate before the ship decision. `make ci` mirrors CI exactly
@@ -24,10 +23,9 @@ chunk = [
 deep = ["make ci"]
 
 [context]
-# Docs every agent must read before planning/implementing/reviewing.
-docs = ["AGENTS.md", "docs/design/overview.md", "docs/design/package-managers.md"]
-# Durable lessons harvested from previous runs; read by all agents.
-skills_dir = "docs/agents/skills"
+# Keep always-loaded context small; agents follow task-specific links as needed.
+docs = ["AGENTS.md"]
+skills_dir = "docs/skills"
 
 [review]
 # Injected into the security reviewer's brief.
@@ -43,8 +41,8 @@ Homebrew tap trust is deliberately per-user and must not be given pkexec.
 """
 
 [harvest]
-# The only paths the harvest step may modify; everything else is reverted.
-allowlist = ["docs/agents/skills/", "AGENTS.md"]
+# Do not let automated lesson harvesting rewrite repository guidance.
+allowlist = []
 
 [limits]
 # #57-class bugs are small and well-scoped; a handful of plan rounds converge.

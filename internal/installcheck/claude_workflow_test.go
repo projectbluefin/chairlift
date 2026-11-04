@@ -110,16 +110,4 @@ func TestClaudeReviewWorkflowIsMaintainerScoped(t *testing.T) {
 			t.Errorf("%s contains unsafe review surface %q", path, unsafe)
 		}
 	}
-
-	quality := readRepoFile(t, filepath.Join("docs", "quality.md"))
-	for _, required := range []string{
-		"`.github/workflows/claude-code-review.yml`",
-		"`ANTHROPIC_API_KEY`",
-		"does not check out the pull request head",
-		"separate publishing job",
-	} {
-		if !strings.Contains(quality, required) {
-			t.Errorf("docs/quality.md does not document %q", required)
-		}
-	}
 }

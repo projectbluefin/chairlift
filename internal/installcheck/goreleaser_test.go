@@ -78,9 +78,8 @@ func TestGoreleaserArchivesShipAllSchemas(t *testing.T) {
 // desktop entry, the wrapper, maintainer defaults, the channel-table example,
 // and the license text.
 //
-// It iterates every archives[] entry rather than only archives[0], per
-// docs/skills/collection-regressions/SKILL.md: adding or reordering a second
-// archive that drops a helper or a policy must fail here too. It also rejects
+// It checks every archive, so a second archive cannot silently omit a helper
+// or policy. It also rejects
 // passwordless PolicyKit rules and a live channel table in any archive: the
 // channel table decides the image reference the privileged helper hands to
 // bootc, so only the documented example may ship.

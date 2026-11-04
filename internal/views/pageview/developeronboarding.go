@@ -11,7 +11,7 @@ type DeveloperOnboardingLink struct {
 //
 // The set lives here, in a package that imports no puregotk, so the exact
 // collection can be asserted headlessly — see
-// docs/agents/skills/gtk-headless-tests.md.
+// docs/skills/gtk-headless-testing/SKILL.md.
 //
 // It once held three links (this page, the training catalog, and the GNOME
 // Developer Center), and flipping the switch opened all three at once; on a

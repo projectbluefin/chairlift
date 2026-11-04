@@ -57,11 +57,10 @@ Installation details and optional runtime dependencies are listed in the
    run focused pure-Go tests under `internal/` with CI's name filters (below),
    then `make lint`; format Go changes with `make fmt`. `make test` runs
    `go test ./...` unfiltered and is not the headless CI gate.
-4. Update the relevant current-state documentation. Changes to behavior,
-   configuration, dependencies, or installation layout must follow the
-   [documentation consistency checklist](docs/documentation-consistency.md).
-   AI contributors leave the human-owned root `README.md` unchanged and report
-   any drift to its maintainer; update the relevant owned documentation instead.
+4. Update an existing guide only when the change makes its claims inaccurate;
+   see the [documentation checklist](docs/documentation-consistency.md).
+   Routine fixes need no new doc, skill update, or learning artifact. Root
+   `README.md` is human-owned; report drift there rather than editing it.
 5. Run `make ci` before pushing. Rebase onto the latest `upstream/main`, rerun
    the gate, then push the branch to your fork:
 

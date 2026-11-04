@@ -2,16 +2,9 @@ package config
 
 import "gopkg.in/yaml.v3"
 
-// effectiveKeyID is a comparable identity for a mapping key used by
-// merge-precedence resolution (a later chunk's resolveEffective), as
-// distinct from sourceKeyID's tag-blind duplicate-key detection in
-// sourcegraph.go. Two effectiveKeyID values compare equal, and therefore
-// collide as map keys, exactly when effectiveKeyIdentity considers their
-// source nodes "the same key" for merge-precedence purposes: see
-// effectiveKeyIdentity's doc comment for the scalar and complex identity
-// rules, and
-// docs/agents/skills/yaml-scalar-key-identity-needs-tag-not-just-value.md
-// for why a scalar identity must include its resolved tag, not just Value.
+// effectiveKeyID identifies keys for merge-precedence resolution. Unlike
+// sourceKeyID's duplicate-key detection, scalar identity includes the resolved
+// tag as well as Kind and Value; see effectiveKeyIdentity.
 type effectiveKeyID struct {
 	kind    yaml.Kind
 	tag     string

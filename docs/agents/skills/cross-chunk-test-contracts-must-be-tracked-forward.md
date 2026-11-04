@@ -1,1 +1,0 @@
-../../skills/evolving-test-contracts/SKILL.md

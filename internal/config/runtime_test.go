@@ -324,7 +324,6 @@ func TestConfigurationGuideExamplePassesStrictValidation(t *testing.T) {
 		heading string
 	}{
 		{"CONFIG.md", "## Example: Disabling Homebrew Features"},
-		{filepath.Join("docs", "reference.md"), "## Example"},
 	}
 
 	for _, tc := range tests {

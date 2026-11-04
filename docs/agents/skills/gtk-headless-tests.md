@@ -1,1 +1,0 @@
-../../skills/gtk-headless-testing/SKILL.md

@@ -245,17 +245,8 @@ func isMergeOperandMapping(n *yaml.Node) bool {
 // sourceKeyID identifies a mapping key for duplicate-key detection using
 // exactly gopkg.in/yaml.v3 v3.0.1 decode.go's uniqueKeys predicate (inside
 // decoder.mapping): two keys are the same key when their Kind and Value
-// match, nothing else. Deliberately no third field is compared, even though
-// docs/agents/skills/yaml-scalar-key-identity-needs-tag-not-just-value.md
-// requires that omitted third field for *merge/dedup key identity*
-// elsewhere in this package. This is a narrow, intentional exception:
-// yaml.v3's own duplicate-key guard never looks at that field either, so a
-// faithful reproduction means a bare `1` (resolved !!int) and a quoted "1"
-// (explicit !!str) collide as the same key here, exactly as yaml.Unmarshal
-// itself would report them with its default UniqueKeys(true) behavior.
-// Later merge-precedence identity (a different, not-yet-implemented
-// concern) is expected to need that third field and will not reuse
-// sourceKeyID.
+// match, nothing else. Unlike effectiveKeyIdentity's merge comparison, yaml.v3
+// ignores scalar tags here: a bare 1 and quoted "1" collide under UniqueKeys.
 type sourceKeyID struct {
 	Kind  yaml.Kind
 	Value string

@@ -1,1 +1,0 @@
-../../skills/scope-control/SKILL.md

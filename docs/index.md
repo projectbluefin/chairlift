@@ -143,8 +143,8 @@ install paths. PolicyKit integration requires the default prefix.
 
 The [quality dashboard](quality.md) links to live CI, coverage, build-artifact,
 and release signals and explains how to reproduce the enforced checks locally.
-The [public metrics catalog](metrics/) collects the public, read-only sources
-and documents their interpretation and agent-provenance boundaries.
+The [PR metrics definition](metrics.md) explains the outcome query and its
+agent-provenance limits.
 
 ```bash
 make run      # Build and run with --dry-run

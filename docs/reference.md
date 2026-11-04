@@ -1,125 +1,37 @@
-# Configuration Reference
+# Troubleshooting reference
 
-ChairLift is configured via a YAML file that controls which UI groups are visible and their behavior.
+[CONFIG.md](../CONFIG.md) owns configuration paths, precedence, group keys,
+fields and examples. The [walkthrough](walkthrough.md) describes the screens.
+This page keeps recovery procedures and operational limits, not another copy
+of either inventory.
 
-## File Locations
+## Recovering a failed Developer tools update
 
-Configuration files are searched in order (first found wins):
-
-1. `/etc/chairlift/config.yml` — system-wide (highest priority)
-2. `/usr/share/chairlift/config.yml` — package maintainer defaults
-3. `config.dev.yml` — source-checkout fallback, beside the executable when
-   present, otherwise relative to the current working directory
-4. `config.yml` — legacy development fallback, beside the executable when
-   present, otherwise relative to the current working directory
-
-Only a missing candidate advances the search. The first existing candidate is
-authoritative. If it cannot be read or fails YAML/schema validation, ChairLift
-hides every feature group, logs a `CONFIGURATION ERROR`, and displays a
-persistent toast with the path and cause. Fix the file and restart Control Center.
-If no file is found, built-in defaults apply: all groups are enabled except
-`maintenance_cleanup_group` and `reset_group`.
-
-The shipped [`config.yml`](../config.yml) enables Apps collections but disables
-the external catalog launcher, both Flatpak inventories, Homebrew inventory/export,
-and Homebrew search. Built-in defaults enable all six Apps groups. Collections
-remain independently configurable from inventory and export.
-The full group inventory below describes available controls, not a promise
-that every control appears with the shipped profile.
-
-Source installs (`make install`) provide the repository's maintainer defaults
-at `/usr/share/chairlift/config.yml`; an OS image may install the release
-archive's `config.yml` there instead. Whoever installs that file may replace it
-on upgrade. Administrators should put local changes in
-`/etc/chairlift/config.yml`, which has higher precedence and is never created
-or overwritten by ChairLift's install paths.
-The repository root includes `config.dev.yml` so source checkouts load
-unprivileged development defaults before the package default `config.yml`.
-
-Appearance preferences share the desktop's native dconf store. Before GUI
-startup or headless `--rotate-livery`, ChairLift discovers the installed native
-GIO dconf module and appends its directory to `GIO_EXTRA_MODULES`, preserving
-existing module entries and any explicit `GSETTINGS_BACKEND`. This avoids
-Homebrew GLib using a separate keyfile store from the desktop or rotation units.
-
-## Format
-
-```yaml
-page_name:
-  group_name:
-    enabled: true/false
-    # Optional per-group fields (see below)
-```
-
-Groups with `enabled: false` are hidden from the UI. Missing entries inherit
-their built-in values. Unknown page, group, or field names and wrong field
-types are errors. Changes require restarting ChairLift.
-
-The configuration is an overlay on built-in defaults: omitted or explicitly
-null fields inherit, while an explicit empty list or empty string clears the
-field. A non-empty list replaces the default rather than appending to it.
-See [`CONFIG.md`](../CONFIG.md#notes) for the complete overlay rules.
-
-When every builder-backed group on a functional page is disabled, the page is
-also omitted from the sidebar, content stack, shortcuts dialog, and
-Alt+number bindings. Alt+number is compacted over the remaining pages in the
-order below. Help is always retained.
-
-The host capability floor also participates in page visibility: enabling a
-group cannot supply its missing backing tool or asset. Runtime readiness is
-checked separately after the page is built.
-
-## Pages and Groups
-
-### Updates Page (`updates_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Automatic Updates | `automatic_updates_group` | The switch deciding whether this system installs updates on its own schedule; hidden on a host with no unattended-update timer. Updating now is the Updates page's own action and has no config key. |
-| bootc Updates | `bootc_updates_group` | Download and stage the next bootc system image update (applies on restart); shown only when bootc-booted and the fixed `/usr/libexec/bootc-update-stage` helper is present. A distribution must provide a trusted implementation there before enabling this group; ChairLift's release archive does not supply one. |
-| Flatpak Updates | `flatpak_updates_group` | Pending Flatpak application updates |
-| Homebrew Updates | `brew_updates_group` | Outdated Homebrew packages with upgrade buttons, plus a **Docker engine** item when Enable Docker installed the daemon from Homebrew bottles |
-| Untrusted Taps | `brew_trust_group` | Untrusted Homebrew taps with installed packages (Homebrew 6 tap trust); trust a tap to resume its updates. Shown only when there is something to trust |
-| Release Channel | `channel_group` | Release channel and graphics-driver switching. Both replace the operating system and require a restart, so they sit with updates. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| System Version | `bootc_status_group` | Compact booted/staged version readout, with image reference and build identifiers behind a details row; shown only when `bootc.IsBootcBootedCached()` reports a booted deployment |
-
-#### Recovering a failed Developer tools update
-
-If Developer tools fails with a Homebrew error such as
-`Error: /home/linuxbrew/.linuxbrew/Cellar/chezmoi/2.74.0 is not a directory`,
-Homebrew could not find the installed package directory it expected. In
-[the reported chezmoi failure (#676)](https://github.com/projectbluefin/chairlift/issues/676),
-the reporter recovered by running cleanup. This is a reported workaround;
-the missing directory's cause was not established.
-
-Wait for the current update to finish before attempting recovery. To clean
-only Homebrew, open a terminal as your normal user and preview what it will
-remove:
+If Homebrew reports an expected Cellar directory is missing, cleanup is a
+reported workaround, not an established root-cause fix. Wait for the update to
+finish; as your normal user, preview removals:
 
 ```sh
 brew cleanup --dry-run
 ```
 
-If the proposed removals are acceptable, run:
+If acceptable, run:
 
 ```sh
 brew cleanup
 ```
 
-Cleanup removes old package versions and stale downloads. See
+Cleanup removes old package versions and stale downloads; see
 [Homebrew's cleanup reference](https://docs.brew.sh/Manpage#cleanup-options-formulacask-).
-Alternatively, **Maintenance → Free Up Space** runs Homebrew cleanup too,
-when enabled; it also removes unused Flatpak runtimes and extensions. Wait
-for cleanup to finish successfully, then return to **Updates** and choose
-**Retry Failed**. If you already left the failed run, check for updates and
-start a new run.
+**Maintenance → Free Up Space** also runs Homebrew cleanup when enabled, plus
+unused Flatpak runtime/extension removal. Wait for successful cleanup, then
+choose **Updates → Retry Failed**, or check again if you left the failed run.
 
-The **Run maintenance after updates** preference runs cleanup after updates;
-it does not perform this recovery before an upgrade. The separate scheduled
-updater, `uupd`, owns its own Brew Upgrade stage. Changing that stage's order
-requires a change to that updater, rather than a Control Center release.
+**Run maintenance after updates** does not run cleanup before an upgrade.
+The scheduled updater `uupd` owns its separate Brew Upgrade stage; changing
+that stage is not a Control Center change.
 
-If cleanup or the retry still fails, keep the exact error and collect:
+If recovery fails, retain the exact error and collect:
 
 ```sh
 brew config
@@ -128,341 +40,66 @@ brew list --versions chezmoi
 journalctl -b -u uupd.service --no-pager -n 200
 ```
 
-Replace `chezmoi` with the affected package's name. The journal command is
-useful when the scheduled updater failed. Include failed diagnostic output
-in the report too, after removing personal information. Do not manually
-delete package directories to silence the error. If the system journal also
-reports `fs-verity` corruption, report it separately: successful package
-cleanup does not establish that the corruption is repaired.
+Replace `chezmoi` with the affected package. The journal is relevant to
+scheduled-update failures. Include failed diagnostics after removing personal
+information. Do not delete package directories to silence errors. Report
+`fs-verity` corruption separately; package cleanup does not prove it repaired.
 
-### Apps Page (`applications_page`)
+## Missing or unavailable controls
 
-Its sidebar title is "Apps"; `applications_page` is the configuration key.
+Configuration can hide a group; host capability can also prevent it from being
+built. **Help → Feature Availability** explains configured groups missing a
+backing tool or asset. An existing invalid configuration fails closed, logs
+`CONFIGURATION ERROR`, and shows a persistent toast; fix the named file and
+restart. It does not fall back to another configuration file.
 
-| Group | Key | Description |
-|-------|-----|-------------|
-| App Collections | `brew_bundles_group` | Install a curated set of apps and tools in one step, discovered as `*.Brewfile` definitions; displayed first |
-| Homebrew packages | `brew_group` | Installed Apps (installed casks), then Command-Line Tools (explicitly requested formulae), then Backup containing the Export app list row (a Brewfile export); uninstall and formula pin/unpin actions |
+The Homebrew GUI and image-installed privileged helpers ship separately.
+A newer GUI cannot make an older helper support a new action. Update the OS
+image when a control reports missing helper support. A dismissed authentication
+prompt is not a completed action; previews do not change installed state.
 
-Both groups are enabled in the shipped `config.yml`. Dependency-only formulae
-do not appear in the inventory. Apps has no Flatpak inventory, external catalog
-launcher, or package search. The retired `applications_installed_group`,
-`flatpak_user_group`, `flatpak_system_group`, and `brew_search_group` keys are
-accepted and ignored for compatibility, as described in [CONFIG.md](../CONFIG.md).
+## Livery settings unavailable
 
-`brew_bundles_group` supports:
+For source builds, run `make schemas` and use the `GSETTINGS_SCHEMA_DIR` it
+prints. An installed schema XML must also be compiled in a directory searched
+by GSettings; `make install` recompiles the system cache, while a Homebrew cask
+must compile its user schema directory.
 
-- `bundles_paths` — directories searched, without recursion, for
-  `*.Brewfile` collections. The built-in default in `internal/config/config.go`
-  is `["/usr/share/ublue-os/homebrew", "/usr/share/chairlift/bundles", "/etc/chairlift/bundles"]`;
-  the shipped `config.yml` narrows it to `["/usr/share/ublue-os/homebrew"]`.
-  Missing directories are ignored; other path errors are reported to the log
-  while readable directories still contribute rows. Exact duplicate paths are
-  collapsed, but same-named files in different directories remain separate.
+The GUI and headless rotation use the desktop's native dconf backend through
+`internal/deskenv`. Explicit `GSETTINGS_BACKEND` selections are preserved.
+Do not treat a Homebrew keyfile write as proof that GNOME adopted a preference,
+and never point memory-backed test fixtures at the user's settings store.
 
-Row text is resolved by `internal/views/bundleview`'s `Describe`, not taken
-from the file: the curated collections Bluefin ships (`fonts`, `fonts-dev`,
-`ai-tools`, `full-desktop`) have user-facing titles and descriptions written here.
-Legacy `cli` and retired collections (`cncf`, `swift`, etc.) are filtered out, while
-administrator-added collections remain visible. Each row also states how many apps
-and tools the definition installs, counting entry lines other than `tap`.
+## Migrating an older Homebrew Docker daemon
 
-Monospace Fonts (`fonts-dev`) appears only inside **Features → Developer Mode**,
-initially collapsed, rather than in Apps. It retains independent selection and
-explicit installation using the same collection configuration and Homebrew
-floor; it neither requires nor enables developer access. Bluefin CLI is one
-separate Features switch, not an App or Developer Mode collection.
+A daemon still running from `current/bin` cannot safely adopt a new runtime.
+If the row reports this migration prerequisite, an administrator must stop it
+through the existing fixed helper, then turn Docker on again:
 
-A failed bundle install reports the cause rather than the progress that
-preceded it: ChairLift reads both of brew's output streams, because
-`brew bundle` replays a failing entry's own installer output on stdout while
-printing its summary on stderr, and shows the first error line it finds in a
-persistent toast. Error toasts wrap, so a long message stays readable. The
-complete captured output — bounded to the last 64 KiB per stream — is written
-to ChairLift's log, which is where to look when filing a bug report.
-
-### Agents Page (`agents_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Agent Mode | `agents_group` | llmman installed with Homebrew and served as the systemd user unit `chairlift-llmman.service` on `127.0.0.1:17434`, with `OLLAMA_HOST` published to new sessions through `~/.config/environment.d/10-chairlift-llmman.conf`. Offers a visible Active Model row that reads the `bluefin-active` alias back from llmman and a "Manage Models" row that opens llmman's models page at `http://127.0.0.1:17434/#/models` while it is ready, and Contribute to Bluefin via `ujust contribute`. When llmman is missing, enabling taps `llmmanorg/tap` and trusts exactly `llmmanorg/tap/llmman` before installing it. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where Homebrew is absent. See [ADR-0015](adr/0015-agent-mode-llmman.md) |
-| Troubleshooting | `troubleshooting_group` | The Goose row and the "Show Ask Bluefin in Menu" shortcut preference. **Set Up** installs `ublue-os/tap/linux-mcp-server`, `cpio`, and the `ublue-os/tap/goose-linux` cask (x86_64 only) with Homebrew; **Launch** writes ChairLift's own Goose profile under `$XDG_DATA_HOME/chairlift/troubleshooting` — `linux-tools` with `--toolset FIXED --host-mode LOCAL_ONLY --no-search-for-ssh-key` and the online Project Bluefin knowledge search, nothing else — then runs `llmman launch goose-desktop --model bluefin-active` inside it; if Goose is already running there, the request goes to that session and no second Goose starts (GNOME may show a "Goose is ready" notification instead of raising the window). `~/.config/goose` is never read or written. Crosses no privilege boundary. Hidden where Homebrew is absent. Formerly `help_page.troubleshooting_group`, still accepted |
-
-### Features Page (`features_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Bluefin CLI | `bluefin_cli_group` | Bash only; one switch installs the Chairlift-owned Homebrew collection including `ugrep`, enables prompt/navigation/environment hooks, and migrates recognized Common Bash source blocks. Payload lives under `$XDG_DATA_HOME/chairlift/bluefin-cli`. Turning off keeps packages and personal shell configuration. Explicit opt-out is remembered. Setup defaults to selected and applies on Next from Features; ordinary startup never enables it automatically. Fish/Zsh are not configured. |
-| Desktop Integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
-| Features | `features_group` | Toggle system features managed by updex |
-| Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming | `gaming_group` | Game Mode switches the host between supported standard and gaming system images with Steam, Gamescope, and an Open Gaming Collective kernel, requiring reboot confirmation. Flatpaks in either scope stay untouched. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. Turning a family on requires cosign to verify `ghcr.io/projectbluefin/<id>-printer-app:stable` against its publishing workflow, then writes only the verified digest, without registry auto-update ([ADR-0023](adr/0023-verify-printer-images-before-installing.md)). Installed families receive newer verified images through the Updates page's **Printer Drivers** source, which lists a family when its verified `:stable` digest differs from the installed one and refreshes it with the same signature check; that source follows this group's visibility and the `printer-drivers-enabled` preference. Older units still carrying registry auto-update can migrate there or by disable/re-enable, and their row's subtitle says so. The port is published on `127.0.0.1` only ([ADR-0020](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)), so IPP and the unauthenticated web administration are reachable only from this computer; there is no LAN printing or DNS-SD advertisement. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
-| Compass | `compass_group` | Installs Compass (`org.tunaos.compass`), TunaOS's keyboard-first launcher, system-wide from the image's FlatPark system remote (`flatpak install --system flatpark org.tunaos.compass`), authorized by Flatpak's own PolicyKit rather than by ChairLift. ChairLift never adds the remote; without an enabled `flatpark` system remote, or on a non-x86_64 host (FlatPark publishes Compass for x86_64 only), the switch can only remove an existing copy. Turning off asks for confirmation, then removes Compass from every scope it is installed in and keeps user data. The switch reflects installed state re-read after each action. Hidden where `flatpak` is absent |
-
-Bluefin CLI setup seeds tealdeer's `tldr` page database before activating Bash,
-so command examples work offline immediately. An existing populated cache is
-reused. A failed download is reported and leaves Bash activation retryable;
-turning the feature off does not remove cached pages or installed tools.
-The managed block places Homebrew's `bin` and `sbin` before image-provided tools,
-so the shell uses the versions installed by setup. Personal overrides after the
-managed block still take precedence.
-
-**Game Mode** leads Features and switches system images only, keeping your
-Flatpaks untouched. Developer Mode, WSL, and Docker share the **Setup activity**
-checklist at the top of Developer Mode detail. It names bounded stages,
-pulses during work, and distinguishes completion, failure, cancellation,
-awaiting a new login, and preview without percentage estimates. Awaiting login
-is not ready and is not a failed action to repeat. Each of **Developer Mode**,
-**WSL Mode** and **Enable Docker** expands to disclose its
-packages and changes; the independent suffix switch runs the action. Disclosures
-name directly requested software (for Docker, Homebrew formulae), not every
-package-manager dependency. Developer Mode additionally offers the independently
-installable Monospace Fonts collection; it is not an automatic
-developer-enable follow-on.
-An opaque bundle command does not produce a
-fabricated per-package completion stream.
-
-Developer options include WSL Mode (an Ubuntu machine in systemd-vmspawn via
-nsl by default, or Ubuntu LTS in Lima). Turning WSL or Docker on while
-Developer Mode is off first runs the existing fixed
-`pkexec /usr/bin/chairlift-helper dx-enable` prerequisite. Authentication
-failure or cancellation aborts child setup. A refusal (exit 127, "Not authorized")
-is Failed, not Canceled; authentication cancellation requires exit 126 or
-"Request dismissed". The Developer Mode switch is confirmed only after the
-helper succeeds; a later child failure keeps granted
-developer access. Turning WSL or Docker off does not demote Developer Mode,
-and dry-run previews leave observed switches unchanged. Direct and implicit
-promotions share the same post-enable work and configuration opt-ins.
-nsl needs an x86-64 Linux host; Lima supports amd64 and arm64. Both require
-hardware virtualization and `/dev/kvm` access. nsl also requires your account
-to belong to the `kvm` group, even when `/dev/kvm` is writable without it.
-Granting `/dev/kvm` access requires a new login; adding only `kvm` group
-membership does not.
-**Enable Docker** provides Bluefin DX-style rootful Docker: a system daemon
-behind `docker.socket`, `docker` group access, and the `docker` CLI with buildx
-and compose. On images that ship Docker's units
-(`/usr/lib/systemd/system/docker.service`, as Bluefin DX does), the fixed
-`docker-enable` helper enables the image's Docker. Elsewhere it installs the
-daemon from Homebrew itself: it verifies Homebrew's signed formula index
-against a key built into ChairLift, downloads the `docker-engine`,
-`containerd`, `runc`, `tini`, `libpathrs`, and `libseccomp` bottles, checks
-each SHA-256, and installs them root-owned under `/var/lib/chairlift/docker`.
-Root never runs anything from your Homebrew prefix
-([ADR-0024](adr/0024-rootful-docker-from-verified-homebrew-bottles.md)). The
-helper writes `docker.service` and `docker.socket` to `/etc/systemd/system`
-(marked `# Managed by chairlift-helper`; it never overwrites an unmarked unit),
-creates the `docker` group when missing, adds your account, and starts the
-socket and service. This may ask for administrator approval separately from
-the Developer Mode prerequisite, and it needs a network connection. ChairLift
-then installs the `docker`, `docker-buildx`, and `docker-compose` Homebrew
-formulae for your account when Homebrew is available and links absent CLI
-plugins in `~/.docker/cli-plugins`. Once system Docker is on, a rootless Docker
-daemon an earlier ChairLift set up is turned off, and a `rootless` CLI context
-is switched back to `default`; a declined prompt or failed install leaves them
-alone. The expander lists the daemon formulae as
-**Homebrew, installed for the whole computer**.
-
-Readiness requires HTTP 200 `OK` from `/var/run/docker.sock`, independent of
-`DOCKER_HOST` or `XDG_RUNTIME_DIR`; installed CLI tools or active units alone
-are insufficient. Newly granted group access needs a new login (`NeedsLogin`),
-shown as awaiting login rather than ready or a generic daemon failure. When
-Docker runs but your account is not in the `docker` group at all, the switch
-reads off and says so; turning it on grants access. Both
-system units must be read before their active state is trusted; a later socket
-failure retains known active state so a supported stop stays available.
-Masked units or missing helper actions need an image or administrator fix;
-when the image's helper predates the Homebrew-bottle install (`docker-update`
-absent without image units), the switch stays insensitive and asks you to
-update the computer first.
-Turning Docker off uses fixed `docker-disable` to stop both system units for
-all accounts, retaining the runtime, container data, group membership, and
-Developer Mode. **Update all**'s Developer tools source updates a
-Homebrew-installed daemon through fixed `docker-update` when newer bottles are
-published.
-
-If an older Homebrew Docker daemon still runs from `current/bin`, updating its
-runtime is refused until it has stopped and adopted the locked-start service.
-The row shows a migration prerequisite rather than asking you to retry. An
-account without Docker access has an off switch already, so this recovery
-does not depend on turning that switch off: ask an administrator to run
-`pkexec /usr/bin/chairlift-helper docker-disable` in a terminal, then turn
-Docker on again. **This stops running containers for all accounts.** Arrange
-the interruption with anyone using Docker first. The refusal itself stops
-nothing, grants no access, and leaves the runtime and pending marker intact.
-
-Docker enable also attempts native Microsoft VS Code setup as a separate
-optional outcome; it does not install the editor. It seeds defaults only when
-`~/.config/Code/User/settings.json` is absent, preserving existing JSONC and
-symlinks, and installs Dev Containers (`ms-vscode-remote.remote-containers`),
-Remote SSH (`ms-vscode-remote.remote-ssh`), and Container Tools
-(`ms-azuretools.vscode-containers`). The upstream marker
-`${SETUP_CHECKER_FILE:-$HOME/.local/share/ublue/setup_versioning.json}` records
-`.version.user.vscode == "1"` only after successful setup; an existing marker
-is checked against installed extension IDs, not trusted by itself. Without
-native `code` the step is skipped; an editor failure does not reverse access.
-Failed optional stages can be retried without repeating a completed privileged
-enable. Preview
-writes no settings or marker and launches no editor CLI.
-A confirmed Developer Mode enable also installs the Dev Container CLI
-(`devcontainer`) when Homebrew is available; an install failure does not reverse
-developer access. Development Apps in the Developer Mode detail offers native
-rows with source, installed status, and Install actions for Visual Studio Code,
-VSCodium, and JetBrains Toolbox through `ublue-os` Homebrew taps only; Cursor
-and Antigravity through system FlatPark Flatpaks; Zed through system Flathub.
-These are the six catalog entries; Sublime Text is deliberately excluded for now by user approval.
-IDE installation does not require enabling Developer Mode or opening Bazaar.
-The fixed `kvm-enable` action still grants KVM access, effective after a new login.
-
-The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting
-YAML. `wsl_backend` supplies the initial choice; an existing Lima Ubuntu machine
-with no ChairLift nsl machine resolves the nsl default to Lima. nsl keeps using
-the `debian` machine an older ChairLift created instead of creating `ubuntu`
-beside it, and the chooser then says the built-in engine runs Debian.
-
-`dx_group` takes `wsl_backend`, the WSL Mode backend: `nsl` (default) or
-`lima`; any other value is a configuration error. It also supports optional steps that run off the GTK main
-thread after a confirmed live enable, and never on a disable, a page restore, a
-failed helper call, or a `--dry-run` preview:
-
-- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
-- `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
-- `install_dev_apps` — installs the `dakota-dev-flatpaks` app collection with `brew bundle install`. Skipped when `applications_page.brew_bundles_group` is disabled or Homebrew is unavailable (the same floor that hides App collections), so a host without Homebrew never attempts it
-
-The two outcomes are reported separately from developer access. The privileged
-enable has already succeeded by the time these run, so a failed Flatpak install
-says only that, and does not withdraw the groups — and disabling Developer Mode
-is a clean no-op for Pulp, the staged file, and the feeds a user has imported
-from it.
-
-Feature operations (enable, disable, update) require administrator
-authentication through PolicyKit and are performed by the fixed
-`/usr/bin/chairlift-updex-helper` binary. ChairLift installs no passwordless
-authorization rule.
-
-### Livery Page (`livery_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Profile Picture | `account_group` | The account's picture, chosen from Project Bluefin's dinosaur artwork bundled with the application, set only on Apply through AccountsService with a face-file fallback |
-| Wallpapers | `wallpapers_group` | Explicit More Dinosaurs setup installs Valhalla with extra Bluefin wallpapers and PNG conversion; directly below Profile Picture, gated on Homebrew, with no installation or settings writes on page load |
-| App Launcher Icon | `livery_app_grid_group` | The Show Applications mark on GNOME, or the configured Kickoff applets on KDE Plasma; fetched from simpleicons.org by brand name and set once, never rotated. On Plasma, the group is unavailable when no Kickoff applet is configured |
-| Top Bar Icon | `livery_foundation_group` | The GNOME top-bar menu mark, optionally advancing at each login; needs a GNOME session with the Custom Command Menu extension (omitted on Plasma) |
-| Files Icon | `livery_dock_group` | The Files icon on GNOME or Dolphin on KDE Plasma, set to a CNCF project's color mark fetched from cncf/artwork via a searchable picker; on GNOME it changes Files everywhere GNOME draws it |
-
-App Launcher Icon, Top Bar Icon, and Files Icon each start collapsed. Expand
-one to reveal its existing controls; expansion never changes saved settings.
-
-Selections persist in the `io.projectbluefin.chairlift.livery` GSettings
-schema, one of the three ChairLift ships (the others,
-`io.projectbluefin.chairlift.updates` and `io.projectbluefin.chairlift.firstrun`,
-hold the user update preferences and the setup assistant's disposition). A
-source build has no installed schema — run `make schemas` and export the
-`GSETTINGS_SCHEMA_DIR` it prints, or the page reports its settings
-unavailable. An install hits the same condition when it ships the schema XML
-without compiling it where GSettings searches (`/usr/share/glib-2.0/schemas`,
-the `glib-2.0/schemas` directory of any `$XDG_DATA_DIRS` entry, or the user's
-`~/.local/share/glib-2.0/schemas`); `make install` recompiles the system cache
-for a direct install, and a Homebrew cask has to compile the user directory
-itself.
-
-Livery publishes selections and master-switch state through the pure
-`internal/views/liverystate` transitions. A failed save or dry-run preview
-keeps the confirmed selection and switch; every previewed switch flip, pick,
-and rotation change says so in a `[DRY-RUN] Preview:` toast built by the same
-`actionmsg` decision that withholds the commit. When a selection saves but its
-artwork fails, the persisted selection is shown and a toast names the failed
-step. Queued results recheck their shared serializer before publishing. Each
-section's master switch queues first-in-first-out in the same serializer as
-that section's picks and holds the section's rows insensitive until it lands,
-so turning a section off never races a pick's Apply.
-Rotation candidates overlay the confirmed pair while work is in flight.
-Unlike an artwork selection, a rotation preference commits only after the
-user manager accepts its unit; failure preserves the previous preference
-pair and unit file, and dry-run restores both switches without writes.
-
-
-### Maintenance Page (`maintenance_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Storage | `maintenance_freespace_group` | The single "Free Up Space" action: `brew cleanup` plus `flatpak uninstall --unused`. The same key gates the post-update maintenance step of an update run, so cleanup cannot be on in one place and off in the other; while it is disabled, Preferences locks "Run maintenance after updates" off |
-| Maintenance Tasks | `maintenance_cleanup_group` | Administrator-configured scripts, listed separately and never folded into "Free Up Space" (disabled by default) |
-| Powerwash | `reset_group` | Powerwash (user Flatpaks and Distrobox containers) and Factory Reset (`bootc install reset --experimental`), irreversible actions disabled by default. Roll Back is gated by `updates_page.bootc_updates_group`; the detail retains its `recovery` route identity |
-
-`maintenance_cleanup_group` supports:
-
-- `actions` — list of scripts to offer:
-
-```yaml
-actions:
-  - title: "Clean Up Boot Old Entries"
-    script: "/usr/libexec/bls-gc"
-    sudo: true
+```sh
+pkexec /usr/bin/chairlift-helper docker-disable
 ```
 
-Each action has:
+**This stops running containers.** The terminal recovery also works when missing
+account access makes the switch already read off. Refusal itself never stops
+workloads or grants access. The replacement service starts through the locked
+`active/bin` runtime; see [provider boundaries](design/package-managers.md).
 
-| Field | Description |
-|-------|-------------|
-| `title` | Display name |
-| `script` | Absolute path to the script. Required when `sudo` is `true`. |
-| `sudo` | If `true`, runs via `pkexec` for elevated privileges. Accepted only from trusted `/etc/chairlift/config.yml` or `/usr/share/chairlift/config.yml` configurations. The check covers the effective configuration: an untrusted file may not enable a group whose actions include a privileged one, including a privileged action inherited from the built-in defaults. |
+## Service readiness and scope
 
+- Docker requires a responding system socket, not just CLI packages or active
+  units. Newly granted group access may require a new login. Disable stops the
+  system units for all accounts but retains runtime, data and group membership.
+- Optional VS Code setup does not install the editor or overwrite existing
+  settings. Failure does not revoke Developer Mode; retry optional work rather
+  than replaying a completed privileged enable.
+- Agent Mode requires observed loopback health and a selected model. Goose uses
+  ChairLift's isolated profile; knowledge searches go online. Package presence
+  does not prove a window opened.
+- Printer applications are rootless and loopback-only: no LAN printing or
+  DNS-SD. Device printing and USB passthrough remain unverified. For verified-pin
+  migration and diagnostics, see [printer applications](design/printer-applications.md).
 
-### Help Page (`help_page`)
-
-| Group | Key | Description |
-|-------|-----|-------------|
-| Resources | `help_resources_group` | Links to project resources |
-
-`help_page.troubleshooting_group`, Troubleshooting's former Help
-key, is still accepted and moved to `agents_page.troubleshooting_group`
-(below); a value set under `agents_page` wins.
-
-Help also shows a **Feature Availability** group — not configurable, and absent when empty — whose collapsed "Why Is Something Missing?" row lists each group the configuration enables but the host cannot back, with the missing tool or file (`pageview.UnavailableFeatures`, from the capability set resolved at startup; issue #209).
-
-`help_resources_group` supports:
-
-| Field | Description |
-|-------|-------------|
-| `website` | Documentation URL, titled "Browse Documentation" (default: `https://docs.projectbluefin.io/`) |
-| `issues` | Issue tracker URL, titled "Report a Problem" (default: `https://github.com/projectbluefin/dakota/issues`) |
-| `chat` | Assistant or community help URL, titled "Ask for Help" (default: `https://ask.projectbluefin.io/`) |
-
-## Example
-
-A configuration that disables all Homebrew features:
-
-```yaml
-applications_page:
-  brew_group:
-    enabled: false
-  brew_bundles_group:
-    enabled: false
-
-agents_page:
-  agents_group:
-    enabled: false
-  troubleshooting_group:
-    enabled: false
-
-features_page:
-  dx_group:
-    enabled: false # Also hides non-Homebrew Developer controls
-
-updates_page:
-  automatic_updates_group:
-    enabled: false
-  brew_updates_group:
-    enabled: false
-  brew_trust_group:
-    enabled: false
-
-maintenance_page:
-  maintenance_freespace_group:
-    enabled: false
-```
-
-All other groups remain enabled by default since they are not listed (except
-`maintenance_cleanup_group` and `reset_group`, which default to disabled).
+Provider owners and privilege boundaries are in
+[package-managers.md](design/package-managers.md); do not infer live readiness
+or successful hardware operation from dry-run screenshots.

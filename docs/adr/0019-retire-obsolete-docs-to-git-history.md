@@ -52,8 +52,8 @@ active scope, and preservation of durable lessons before deletion.
 ## References
 
 - Shapes: [documentation consistency](../documentation-consistency.md),
-  [documentation index](../README.md), [active plan template](../plans/TEMPLATE.md)
-- Procedure: [documentation reconciliation](../skills/documentation-reconciliation/SKILL.md)
+  [documentation index](../README.md), [active plan template](https://github.com/projectbluefin/chairlift/blob/fe698dd0946e077a6977c89161e0e5f65d54f5f8/docs/plans/TEMPLATE.md)
+- Procedure: [documentation reconciliation](https://github.com/projectbluefin/chairlift/blob/fe698dd0946e077a6977c89161e0e5f65d54f5f8/docs/skills/documentation-reconciliation/SKILL.md)
 - Builds on: [ADR-0010](0010-docs-are-a-ci-gated-artifact.md)
 - Retained checks: `internal/installcheck/documentation_test.go`,
   `internal/installcheck/docsourcepaths_test.go`,

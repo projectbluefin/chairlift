@@ -2,13 +2,8 @@
 // repository-level documentation, workflow, installation, packaging, and
 // PolicyKit contracts.
 //
-// This package holds no logic reachable from cmd/ or any other internal/
-// package, only shared test-time helpers. It imports no GTK bindings, directly
-// or transitively, so a _test.go living here never trips the
-// gtk-headless-tests.md constraint (docs/agents/skills/gtk-headless-tests.md),
-// and it lives under internal/... so it is actually exercised by gates_chunk,
-// make ci, and CI's `go test ./internal/...` filter, per
-// docs/agents/skills/gate-test-scope-is-internal-only.md.
+// This package holds no logic reachable from cmd/ or other internal packages.
+// Its test helpers import no GTK bindings and run under the internal unit gate.
 package installcheck
 
 import (
@@ -32,12 +27,8 @@ func RepoRoot() string {
 // unmarshaling silently ignores every field not named here, so this struct
 // does not need to (and deliberately does not) mirror the whole schema.
 //
-// There is deliberately no top-level metadata: block here. GoReleaser OSS
-// (unlike Pro) does not support metadata.description/homepage/license/
-// maintainers — see the "switch to plain GitHub Releases" note in
-// docs/design/package-managers.md — so the repository URL lives only in
-// release.footer's literal text, and the license travels as the LICENSE file
-// every release archive ships.
+// GoReleaser OSS has no top-level metadata block. The repository URL is in
+// release.footer and each archive carries the LICENSE file.
 type GoreleaserConfig struct {
 	Builds   []BuildConfig   `yaml:"builds"`
 	Archives []ArchiveConfig `yaml:"archives"`

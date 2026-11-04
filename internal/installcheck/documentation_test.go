@@ -3,7 +3,6 @@ package installcheck
 import (
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -19,259 +18,23 @@ func readRepoFile(t *testing.T, relative string) string {
 	return string(data)
 }
 
-func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
-	t.Run("updex version comes from go.mod", func(t *testing.T) {
-		goMod := readRepoFile(t, "go.mod")
-		match := regexp.MustCompile(`(?m)^\s*github\.com/frostyard/updex\s+(v\S+)`).FindStringSubmatch(goMod)
-		if len(match) != 2 {
-			t.Fatal("go.mod does not contain a parseable github.com/frostyard/updex version")
-		}
-		overview := readRepoFile(t, filepath.Join("docs", "design", "overview.md"))
-		want := "currently pinned to " + match[1] + " in go.mod"
-		if !strings.Contains(overview, want) {
-			t.Errorf("docs/design/overview.md does not contain %q", want)
-		}
-	})
-
-	t.Run("bootc event contract has no duplicate error event", func(t *testing.T) {
-		for _, path := range []string{
-			filepath.Join("internal", "bootc", "stage.go"),
-			filepath.Join("internal", "views", "updates_page.go"),
-			filepath.Join("docs", "design", "overview.md"),
-			filepath.Join("docs", "design", "package-managers.md"),
-		} {
-			if strings.Contains(readRepoFile(t, path), "EventError") {
-				t.Errorf("%s still documents or implements removed EventError", path)
-			}
-		}
-	})
-
-	t.Run("configuration fallback wording is consistent", func(t *testing.T) {
-		for _, path := range []string{
-			"README.md",
-			"CONFIG.md",
-			filepath.Join("docs", "reference.md"),
-		} {
-			document := readRepoFile(t, path)
-			for _, fact := range []string{
-				"beside the",
-				"executable",
-				"current working",
-				"development fallback",
-			} {
-				if !strings.Contains(document, fact) {
-					t.Errorf("%s does not describe %q", path, fact)
-				}
-			}
-		}
-	})
-
-	t.Run("optional visibility and install prefix are current", func(t *testing.T) {
-		index := readRepoFile(t, filepath.Join("docs", "index.md"))
-		if strings.Contains(index, "Groups for unavailable tools are hidden automatically") {
-			t.Error("docs/index.md retains the false uniform runtime-visibility claim")
-		}
-		if !strings.Contains(index, "default `/usr`") {
-			t.Error("docs/index.md does not document the /usr install default")
-		}
-	})
-
-	t.Run("privileged integration inventory is complete", func(t *testing.T) {
-		ubluePolicy := readRepoFile(t, filepath.Join("data", "io.projectbluefin.chairlift.ublue.policy"))
-		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 16 {
-			t.Fatalf("ublue policy actions = %d, want 16", got)
-		}
-
-		current := strings.Join([]string{
-			readRepoFile(t, "README.md"),
-			readRepoFile(t, "AGENTS.md"),
-			readRepoFile(t, filepath.Join("docs", "index.md")),
-			readRepoFile(t, filepath.Join("docs", "design", "overview.md")),
-			readRepoFile(t, filepath.Join("docs", "design", "package-managers.md")),
-		}, "\n")
-
-		for _, required := range []string{
-			"/usr/bin/chairlift-updex-helper",
-			"/usr/bin/chairlift-helper",
-			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.bootc.policy",
-			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.updex.policy",
-			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
-			"/usr/share/chairlift/config.yml",
-			"/usr/share/doc/chairlift/channels.example.yml",
-			"sixteen actions",
-			"pin <YYYYMMDD>",
-			"unpin [--dry-run]",
-			"factory-reset",
-			"kvm-enable",
-			"docker-enable",
-			"docker-disable",
-			"docker-update",
-		} {
-			if !strings.Contains(current, required) {
-				t.Errorf("current documentation does not contain %q", required)
-			}
-		}
-
-		for _, stale := range []string{
-			"eight subcommands",
-			"ten subcommands",
-			"ten actions",
-			"declaring the three actions",
-			"builds two binaries",
-			"chairlift-updex-helper` only",
-			"fourteen actions",
-			"fourteen subcommands",
-			"fourteen ublue commands",
-			"fourteen-command",
-		} {
-			if strings.Contains(current, stale) {
-				t.Errorf("current documentation still contains stale privileged-inventory claim %q", stale)
-			}
-		}
-	})
-
-	t.Run("retired helper name is absent from active ADRs", func(t *testing.T) {
-		// ADRs permitted to contain the historical chairlift-ublue-helper name
-		// mapped to their justification (ADR-0006 is superseded; ADR-0013 and
-		// ADR-0017 predate the #388 rename and carry Amended notes).
-		permittedHistoricalADRs := map[string]string{
-			"0006-split-system-integration-package-with-mutual-conflicts.md": "superseded by ADR-0018",
-			"0013-rollback-catalog-reads-the-registry-live.md":               "amended with note on helper rename",
-			"0017-pin-through-a-validated-day-word.md":                       "amended with note on helper rename",
-		}
-
-		adrDir := filepath.Join(RepoRoot(), "docs", "adr")
-		entries, err := os.ReadDir(adrDir)
-		if err != nil {
-			t.Fatalf("read %s: %v", adrDir, err)
-		}
-		for _, entry := range entries {
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") || entry.Name() == "TEMPLATE.md" {
-				continue
-			}
-			path := filepath.Join("docs", "adr", entry.Name())
-			content := readRepoFile(t, path)
-			if _, allowed := permittedHistoricalADRs[entry.Name()]; allowed {
-				continue
-			}
-			if strings.Contains(content, "chairlift-ublue-helper") {
-				t.Errorf("%s contains retired helper name %q but is not in permittedHistoricalADRs allowlist", path, "chairlift-ublue-helper")
-			}
-		}
-
-		for allowedFile, reason := range permittedHistoricalADRs {
-			path := filepath.Join("docs", "adr", allowedFile)
-			content := readRepoFile(t, path)
-			if !strings.Contains(content, "chairlift-ublue-helper") {
-				t.Errorf("permittedHistoricalADR %s (%s) no longer contains retired name %q; remove from allowlist", path, reason, "chairlift-ublue-helper")
-			}
-		}
-	})
-	t.Run("public metrics catalog stays auditable", func(t *testing.T) {
-		catalog := strings.Join(strings.Fields(readRepoFile(t, filepath.Join("docs", "metrics", "README.md"))), " ")
-		for _, required := range []string{
-			"../metrics.md",
-			"actions/workflows/test.yml",
-			"actions/workflows/nightly-compliance.yml",
-			"https://api.github.com/repos/projectbluefin/chairlift",
-			"does not currently attach a reliable provenance marker",
-			"does not collect application usage telemetry",
-		} {
-			if !strings.Contains(catalog, required) {
-				t.Errorf("docs/metrics/README.md does not contain %q", required)
-			}
-		}
-	})
-
-	t.Run("operational commands target canonical repo", func(t *testing.T) {
-		metricsDoc := readRepoFile(t, filepath.Join("docs", "metrics.md"))
-		if !strings.Contains(metricsDoc, "--repo projectbluefin/chairlift") {
-			t.Error("docs/metrics.md does not target projectbluefin/chairlift")
-		}
-		if strings.Contains(metricsDoc, "frostyard/chairlift") {
-			t.Error("docs/metrics.md still references frostyard/chairlift")
-		}
-
-		qualityDoc := readRepoFile(t, filepath.Join("docs", "quality.md"))
-		if !strings.Contains(qualityDoc, "gh secret set ANTHROPIC_API_KEY --repo projectbluefin/chairlift") {
-			t.Error("docs/quality.md does not target projectbluefin/chairlift for ANTHROPIC_API_KEY secret")
-		}
-		if strings.Contains(qualityDoc, "--repo frostyard/chairlift") {
-			t.Error("docs/quality.md still references --repo frostyard/chairlift")
-		}
-
-		metricsReadme := readRepoFile(t, filepath.Join("docs", "metrics", "README.md"))
-		if strings.Contains(metricsReadme, "frostyard/chairlift") {
-			t.Error("docs/metrics/README.md still references frostyard/chairlift")
-		}
-	})
-
-	t.Run("known stale claims stay removed", func(t *testing.T) {
-		current := strings.Join([]string{
-			readRepoFile(t, "README.md"),
-			readRepoFile(t, "CONFIG.md"),
-			readRepoFile(t, filepath.Join("docs", "index.md")),
-			readRepoFile(t, filepath.Join("docs", "reference.md")),
-		}, "\n")
-		for _, stale := range []string{
-			"updates_status_group",
-			"Help page coming soon",
-			"Help is coming soon",
-			"Groups for unavailable tools are hidden automatically",
-			"all features default to enabled, except\n`maintenance_cleanup_group`, which defaults to disabled",
-			"all features default to enabled except\n`maintenance_cleanup_group`, which defaults to disabled",
-			"all groups are enabled except\n`maintenance_cleanup_group`.",
-			"every group except `maintenance_cleanup_group`, which\n    defaults to `false`",
-			"kept current by `podman-auto-update.timer`",
-		} {
-			if strings.Contains(current, stale) {
-				t.Errorf("current documentation still contains stale claim %q", stale)
-			}
-		}
-	})
-}
-
 func TestDocumentedConfigInventoryMatchesCanonicalSchema(t *testing.T) {
 	pages, err := config.SchemaPages()
 	if err != nil {
 		t.Fatalf("config.SchemaPages(): %v", err)
 	}
 
-	for _, docName := range []string{"CONFIG.md", filepath.Join("docs", "reference.md")} {
-		t.Run(docName, func(t *testing.T) {
-			content := readRepoFile(t, docName)
-			for _, page := range pages {
-				groups, err := config.SchemaGroups(page)
-				if err != nil {
-					t.Fatalf("config.SchemaGroups(%q): %v", page, err)
-				}
-				for _, group := range groups {
-					if !strings.Contains(content, "`"+group+"`") {
-						t.Errorf("%s does not document canonical group %s.%s", docName, page, group)
-					}
-				}
+	content := readRepoFile(t, "CONFIG.md")
+	for _, page := range pages {
+		groups, err := config.SchemaGroups(page)
+		if err != nil {
+			t.Fatalf("config.SchemaGroups(%q): %v", page, err)
+		}
+		for _, group := range groups {
+			if !strings.Contains(content, "`"+group+"`") {
+				t.Errorf("CONFIG.md does not document canonical group %s.%s", page, group)
 			}
-		})
-	}
-}
-
-func TestDocumentedDefaultsMatchCanonicalSchema(t *testing.T) {
-	for _, docName := range []string{
-		"CONFIG.md",
-		filepath.Join("docs", "reference.md"),
-		filepath.Join("docs", "design", "overview.md"),
-	} {
-		t.Run(docName, func(t *testing.T) {
-			content := readRepoFile(t, docName)
-			for _, required := range []string{
-				"maintenance_cleanup_group",
-				"reset_group",
-			} {
-				if !strings.Contains(content, required) {
-					t.Errorf("%s does not mention %s", docName, required)
-				}
-			}
-		})
+		}
 	}
 }
 

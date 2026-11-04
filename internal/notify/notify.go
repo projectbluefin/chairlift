@@ -13,7 +13,7 @@
 // The package only decides text. Sending the GNotification happens in
 // internal/window, the one place that holds a *gtk.Application handle;
 // internal/views cannot host a test binary at all (see
-// docs/agents/skills/gtk-headless-tests.md), so the decision logic lives
+// docs/skills/gtk-headless-testing/SKILL.md), so the decision logic lives
 // here instead, where it is a plain table test.
 package notify
 
