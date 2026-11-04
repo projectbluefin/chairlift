@@ -1250,12 +1250,15 @@ An agent must not break these:
   the stamp. Even a comment-only unit write changes its mtime and otherwise
   leaves `NeedDaemonReload=yes`, defeating later automatic-restart adoption.
   Enable, model selection, and migration share the restart/stamp boundaries;
-  current verified invocations need neither reload nor restart, disabled hosts
-  stay disabled, and dry-run writes none. Failure preserves the unstamped
-  management unit and best-effort stops the old daemon. Live startup allows ten
-  seconds for health after migration; preview retains its single bounded probe.
-  Unrelated llmman
-  configuration is never rewritten.
+  a current verified invocation whose loaded unit is clean needs neither reload
+  nor restart. A matching stamp with observed `NeedDaemonReload=yes` from an
+  older release gets only `daemon-reload`, without rewriting or restarting it.
+  Failed observations retain the invocation-only fallback without inventing
+  reload state. Disabled hosts stay disabled, and dry-run writes none.
+  Reconciliation failure preserves the management unit and best-effort stops
+  the managed daemon; failed stamp commits leave it unstamped. Live startup
+  allows ten seconds for health after migration; preview retains its single
+  bounded probe. Unrelated llmman configuration is never rewritten.
   Failure renders newly observed state, not the inverse of an optimistic flip.
   Every mutation respects `dryrun.Enabled()`. Disable removes only the owned
   unit and fragment, keeping binaries and models. A failed stop that

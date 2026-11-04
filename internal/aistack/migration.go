@@ -46,6 +46,13 @@ func updateServiceUnit(ctx context.Context) (bool, error) {
 		state, err := observeService(ctx)
 		if err == nil {
 			if stamped && state.running() && stamp == state.invocation+"\n" {
+				// Older releases stamped after restart without reloading the
+				// comment write. Keep their verified daemon, but clear an
+				// observed stale manager so its next natural restart is adoptable.
+				if state.needReload == "yes" {
+					_, err := systemctl(ctx, "daemon-reload")
+					return false, err
+				}
 				return false, nil
 			}
 			info, err := os.Stat(path)

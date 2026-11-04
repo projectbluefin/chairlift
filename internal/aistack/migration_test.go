@@ -334,6 +334,11 @@ func TestObservationFailureFallsBackToRestart(t *testing.T) {
 		if restarted(h) {
 			t.Fatal("observation failure with matching stamp unexpectedly restarted service")
 		}
+		for _, call := range h.calls {
+			if !strings.HasPrefix(call, "systemctl --user show ") {
+				t.Fatalf("failed observation invented a mutation: %s", call)
+			}
+		}
 		got, _ := os.ReadFile(path)
 		if string(got) != contents {
 			t.Fatal("unit was rewritten unexpectedly")
@@ -559,6 +564,77 @@ func TestEnableStampReloadFailurePreservesOnlyExistingManagement(t *testing.T) {
 				if err != nil || string(got) != current {
 					t.Fatalf("failed enable retained a verified stamp: %q, %v", got, err)
 				}
+			}
+		})
+	}
+}
+
+func TestMatchingInvocationReloadsALegacyStampWithoutRestartOrWrite(t *testing.T) {
+	for _, failReload := range []bool{false, true} {
+		name := "reload succeeds"
+		if failReload {
+			name = "reload fails"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHost(t)
+			unit, _ := RenderUnit(h.exe)
+			written := time.Now().Add(-time.Hour)
+			path := writeUnitAt(t, unit, written)
+			id := strings.Repeat("a", 32)
+			h.setServiceState("active", "no", written.Add(time.Minute), id)
+			// An older release committed its valid stamp after the manager
+			// loaded the unit, but omitted the final daemon-reload.
+			contents := unit + serviceInvocationMark + id + "\n"
+			writeUnitAt(t, contents, written.Add(2*time.Minute))
+			before, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			failure := errors.New("legacy stamp reload failed")
+			if failReload {
+				h.fail["systemctl --user daemon-reload"] = failure
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err = ReconcileService(ctx)
+			if failReload {
+				if !errors.Is(err, failure) {
+					t.Fatalf("dirty matching stamp reload error = %v", err)
+				}
+				if !strings.Contains(strings.Join(h.calls, "\n"), "systemctl --user stop "+ServiceName) {
+					t.Fatal("failed reconciliation did not stop the daemon")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if restarted(h) {
+				t.Fatal("a dirty matching invocation was restarted")
+			}
+			after, err := os.Stat(path)
+			if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
+				t.Fatalf("legacy matching stamp was rewritten: %v", err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != contents {
+				t.Fatalf("legacy matching stamp changed: %q, %v", got, err)
+			}
+			if failReload {
+				delete(h.fail, "systemctl --user daemon-reload")
+				if err := ReconcileService(ctx); err != nil {
+					t.Fatalf("retry dirty matching stamp: %v", err)
+				}
+			}
+			if state, err := observeService(ctx); err != nil || state.needReload != "no" {
+				t.Fatalf("legacy stamp left manager stale: %+v, %v", state, err)
+			}
+			h.calls = nil
+			if err := ReconcileService(ctx); err != nil || len(h.calls) != 1 {
+				t.Fatalf("clean matching invocation did more than observe: %v, %v", h.calls, err)
+			}
+			h.startInvocation(time.Now().Add(2*time.Second), strings.Repeat("d", 32))
+			h.calls = nil
+			if err := ReconcileService(ctx); err != nil || restarted(h) {
+				t.Fatalf("automatic restart after legacy stamp reload was restarted: %v, %v", h.calls, err)
 			}
 		})
 	}

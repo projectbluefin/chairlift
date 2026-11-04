@@ -246,9 +246,12 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   Agent Mode accepts a matching live `InvocationID`, or a loaded current unit
   (`NeedDaemonReload=no`) whose main process started strictly after its mtime.
   Proven adoption re-stamps without restarting; unproven policy takes the
-  reload/restart path. Every invocation-stamp write must then `daemon-reload`,
-  even though it changes only a comment: its new mtime otherwise invalidates
-  adoption after an automatic service restart. Failed reloads remove the stamp.
+  reload/restart path. A matching stamp left dirty by an older release gets
+  only `daemon-reload` when the manager successfully reports
+  `NeedDaemonReload=yes`; failed observations do not invent reload state.
+  Every invocation-stamp write must then `daemon-reload`, even though it changes
+  only a comment: its new mtime otherwise invalidates adoption after an automatic
+  service restart. Failed stamp-commit reloads remove the new stamp.
   Model `NeedDaemonReload` from actual file writes in test doubles rather than
   pinning it to `no`, and test automatic invocation changes after both adoption
   and restart. Observe the ID, reload state and page readiness on a private user
