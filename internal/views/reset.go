@@ -187,6 +187,11 @@ func (uh *UserHome) onFactoryResetClicked(button *gtk.Button, row *adw.ActionRow
 }
 
 func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
+	if !uh.updateShell.beginMutation() {
+		uh.factoryResetGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	button.SetSensitive(false)
 	button.SetLabel(factoryResetBusyLabel)
 
@@ -197,6 +202,7 @@ func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
 		err := ublue.FactoryReset(ctx)
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			uh.factoryResetGate.Reset()
 			button.SetSensitive(true)
 			button.SetLabel(factoryResetButtonLabel)
