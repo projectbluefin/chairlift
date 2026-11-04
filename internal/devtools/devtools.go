@@ -594,13 +594,9 @@ func wireSSH() error {
 	// A dotfile manager often makes ~/.ssh/config a symlink. Write through
 	// to its target, which is what ssh reads, so the link survives the
 	// rename below instead of being replaced by a regular file.
-	target := path
-	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		resolved, err := filepath.EvalSymlinks(path)
-		if err != nil {
-			return err
-		}
-		target = resolved
+	target, err := sshConfigTarget(path)
+	if err != nil {
+		return err
 	}
 	b, err := os.ReadFile(target)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -627,6 +623,42 @@ func wireSSH() error {
 		return err
 	}
 	return os.Chmod(dir, 0o700)
+}
+
+// sshConfigTarget follows the config's links while allowing only the final
+// file to be absent, just as writing through the link did before atomic writes.
+func sshConfigTarget(path string) (string, error) {
+	for links := 0; ; links++ {
+		// Split rather than Dir preserves symlink/.. components until the
+		// parent is resolved; lexical cleaning could select a different file.
+		dir, base := filepath.Split(path)
+		dir, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(dir, base)
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		if links == 40 {
+			return "", fmt.Errorf("resolve SSH config %q: too many symbolic links", path)
+		}
+		link, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		path = link
+		if !filepath.IsAbs(link) {
+			path = dir + string(filepath.Separator) + link
+		}
+	}
 }
 
 // writeFileAtomic replaces p with data through a synced sibling temporary

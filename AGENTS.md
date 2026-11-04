@@ -876,8 +876,13 @@ An agent must not break these:
   choice is not stored: `wsl_backend` sets the default, and the first read
   follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
-  the start prerequisites are unmet. System Docker follows its own invariant
-  below. Turning Docker or WSL
+  the start prerequisites are unmet. Lima's SSH Include wiring preserves
+  relative, absolute, and chained dotfile symlinks, including a missing final
+  file when its parent already exists; missing target parents and symlink
+  cycles fail without replacing the links. Writes use a synced sibling and
+  rename, preserving previous content on write failure; a config already
+  carrying the Include is not rewritten. System Docker follows its own
+  invariant below. Turning Docker or WSL
   on first enables Developer Mode if it is off, through the existing fixed
   `dx-enable` helper under the shared `developerGate`, in the same worker.
   Helper failure or canceled authentication aborts child setup; only confirmed
