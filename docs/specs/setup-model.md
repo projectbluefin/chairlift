@@ -8,7 +8,7 @@ active present the current step without resetting progress.
 
 ## Sequence and visibility
 
-`internal/firstrun.Pages` selects Features, Apps, Agents, then Livery from the
+`internal/firstrun.Pages` selects Livery, Features, Apps, then Agents from the
 window's existing visible primary inventory. Configuration and the shared host
 capability floor therefore remove unavailable pages. Missing pages are omitted,
 not advertised and redirected to Help. An empty sequence leaves the ordinary
@@ -37,7 +37,7 @@ insensitive and its native Back route is disabled; dismissal restores both
 while keeping the current page. Each selection step opens at the top of its page.
 
 Moving Back or Next changes only navigation. It never installs software,
-changes configuration, or writes disposition. Next from Livery opens the
+changes configuration, or writes disposition. Next from Agents opens the
 conclusion. Its final action saves completion and returns to Control Center;
 save errors show a toast. Escape, Dismiss and intentional window close
 dismiss setup without closing the application.

@@ -721,7 +721,7 @@ An agent must not break these:
   never reads onboarding disposition or starts a wizard. `--first-run`,
   `--setup`/`-s`, and the setup menu action share `PresentFirstRun`.
   `internal/firstrun.Pages` filters the existing visible navigation inventory
-  into Features, Apps, Agents, Livery order between matching Welcome and
+  into Livery, Features, Apps, Agents order between matching Welcome and
   conclusion screens. The window hides its sidebar during the flow and builds
   Back/Next/final-action/Dismiss controls once. Selection steps navigate through
   `Window.navigateToPage` and use existing widgets, gates, and operations;

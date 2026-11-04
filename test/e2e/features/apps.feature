@@ -120,6 +120,23 @@ Feature: Apps destination
       | fonts.Brewfile      |
       | team-tools.Brewfile |
 
+  @config.features-no-dx @stub.apps-brew @stub.apps-collections
+  Scenario: Relocated collections fall back to Apps when Developer Mode is disabled
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then I see "Enhanced Terminal Bling"
+    And I see "Monospace Fonts"
+    And the "Enhanced Terminal Bling" collection is checked
+    And the "Monospace Fonts" collection is checked
+    When I click the "Install" button in the "Install Selected Collections" row
+    Then a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
+    And Homebrew collection previews are exactly
+      | file                |
+      | cli.Brewfile        |
+      | fonts.Brewfile      |
+      | fonts-dev.Brewfile  |
+      | team-tools.Brewfile |
+
   @wallpaper-slideshow @config.apps-bundles @stub.apps-brew @stub.apps-collections @env.CHAIRLIFT_CAPABILITIES=brew
   Scenario: More Dinosaurs is absent from Apps and excluded from its Install action
     Given ChairLift is running

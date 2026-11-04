@@ -184,6 +184,21 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			}
 			uh.bundleSelections = append(uh.bundleSelections, selection)
 		}
+		if uh.developerRow == nil && len(developerBundles) > 0 {
+			merged := make([]parsed, 0, len(appBundles)+len(developerBundles))
+			merged = append(merged, appBundles...)
+			merged = append(merged, developerBundles...)
+			sort.SliceStable(merged, func(i, j int) bool {
+				orderI := bundleview.Order(merged[i].bundle.Name)
+				orderJ := bundleview.Order(merged[j].bundle.Name)
+				if orderI != orderJ {
+					return orderI < orderJ
+				}
+				return merged[i].bundle.Name < merged[j].bundle.Name
+			})
+			appBundles = merged
+			developerBundles = nil
+		}
 		if uh.brewBundlesGroup != nil {
 			presentation := bundleview.Present(len(appBundles), warning)
 			uh.brewBundlesGroup.SetDescription(presentation.Description)
