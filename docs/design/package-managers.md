@@ -941,7 +941,13 @@ Enable runs in this order, after the Developer Mode prerequisite above:
      atomically, and prunes older sets (best-effort once the swap is done).
      Before the swap it writes a root-owned `.restart-pending` marker; while
      it exists, a rerun over the same set still reports a change, and the
-     helper clears it only after `try-restart` succeeds. A reinstall of the
+     helper clears it only after `try-restart` succeeds. The marker holds the
+     set id it was written for; `ClearRestartPending(ctx, root, id)` takes the
+     install lock and removes it only when it names `id`, the set that run's
+     `Install` made current, or is empty (a marker from a release that
+     recorded no id). An overlapping run that swapped in a newer set
+     therefore keeps its pending restart. A rerun over `current` whose marker
+     names another set rewrites it to name `current`. A reinstall of the
      same set moves the old directory aside for pruning, and a `current` whose
      target is missing reads as not installed. It refuses an install root or
      `current` that is a foreign symlink or not root-owned. Bottle downloads
@@ -953,9 +959,36 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
   downloading, so an unmanaged unit is refused before any fetch. They
   are moby's upstream units, with `ExecStart` and `PATH` pointing at
-  `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
-  existing file without that marker is never overwritten. Next it runs
-  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  `active/bin` and one added `ExecStartPre=/usr/bin/flock --exclusive
+  /var/lib/chairlift/docker/.lock /usr/bin/ln -P -fT
+  /var/lib/chairlift/docker/current /var/lib/chairlift/docker/active`.
+  Hard-linking the symlink itself preserves its relative set-id target, not
+  a live alias of `current`. Activation and swap/prune hold the same lock;
+  no caller may hold that lock while waiting for `systemctl start` or
+  `try-restart`. A migrated daemon whose restart is deferred keeps resolving
+  tools through its retained active set. Any later start adopts current.
+  Each unit begins with `# Managed by chairlift-helper`; a file without it
+  is never overwritten. For an existing runtime, unit preparation runs
+  **before** Install. A changed unit or systemd's `NeedDaemonReload` causes
+  `daemon-reload`, including retries after a previous reload failed. A
+  verified unchanged unit needs no system command.
+
+  Install requires a read-only admission callback under its install lock,
+  before all swaps, pending-marker changes, and pruning, including the
+  unchanged-set fast path. `ubluehelper.CheckDockerRuntime` accepts a stable
+  stopped service, or a running service with stable MainPID/InvocationID
+  whose actual `/proc` argv, executable target, and PATH prove it started
+  from the active set. Rewriting the unit or finding an active link alone
+  proves neither. A legacy daemon still using `current/bin`, transitional
+  state, or unreadable evidence refuses runtime mutation. The GUI surfaces
+  that helper refusal as a prerequisite: an administrator runs the existing
+  fixed terminal `docker-disable` command, with a warning that it stops running
+  containers, then the user turns Docker on again. This remains reachable
+  when NoAccess makes the switch read off. Nothing stops workloads or grants
+  access automatically. The systemd/proc readers are wired in the fixed
+  helper; decisions stay pure in `internal/ubluehelper`.
+
+  When SELinux is enforcing it defines the
   equivalence rule `semanage fcontext -a -e /usr/libexec/docker
   /var/lib/chairlift/docker` if missing and runs `restorecon -RF
   /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
@@ -970,10 +1003,10 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `chairlift-helper: docker runtime <json>`.
 
 `docker-update` prints `no Homebrew Docker runtime to update` and exits 0 when
-image units exist or no manifest does. Otherwise it repeats the verified
-install, rewrites the managed units, reloads systemd when either changed, and
-when the bottle set changed relabels the new set under the same SELinux
-condition before restarting an active daemon.
+image units exist or no manifest does. Otherwise it prepares and, when needed,
+reloads the managed units before the guarded verified install. When the bottle
+set changed it relabels the new set under the same SELinux condition before
+restarting an active daemon.
 `docker-disable` runs `systemctl disable --now docker.socket docker.service`
 and keeps the runtime, container data, and group membership. Every command's
 `--dry-run` is offline: it prints the index it would fetch, the formula set,
@@ -1044,11 +1077,17 @@ or "Request dismissed". The gate also covers ordered authentication, the
 helper-reported argv, a root-owned runtime whose manifest names the six
 formulae and whose ELF loader fields never reach the Homebrew prefix,
 marker-bearing units, the retired rootless unit, awaiting login, a real `sg`
-new-group session's HTTP 200 socket readiness from `current/bin/dockerd`, stop
+new-group session's HTTP 200 socket readiness from `active/bin/dockerd`, stop
 preserving the runtime/data/groups and Developer Mode, and a no-op
 `docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
 step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
 establish live readiness.
+`TestDockerRuntimeActivation`, selected by ordinary `make e2e`, executes the
+generated startup argv unprivileged on pinned Dakota, covering repeated starts
+and blocking on the install lock. Live failure artifacts retain the generated
+unit, service properties, link metadata and actual SELinux enforcement state;
+a disabled host does not verify enforcing-host startup.
+
 
 [`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
 stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing

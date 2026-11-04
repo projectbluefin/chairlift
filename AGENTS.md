@@ -126,15 +126,18 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   fixture also plants a v26.10.10-style rootless user `docker.service` that
   the GUI must stop and disable. Native system/user managers
   run inside rootless Podman; `--privileged` applies only to that namespace,
-  with no host Docker socket or user bus mounted. The gate sends EOF to a real
-  prerequisite authentication prompt and reports the actual outcome/exit code:
+  with no host Docker socket or user bus mounted. On each launch, including
+  the new-group login, the driver enters the Developer Mode detail from
+  Features before finding the Docker and developer switches; those controls
+  are not on the Features overview. The gate sends EOF to a real prerequisite
+  authentication prompt and reports the actual outcome/exit code:
   exit 127 with "Not authorized" is journaled as `refused` and shown as Failed,
   not live cancellation coverage. Canceled requires exit 126 or "Request
   dismissed". It also covers ordered `dx-enable` then `docker-enable` and the
   helper-reported `groupadd`/`systemctl`/`usermod` argv, the installed
   runtime (root-owned, manifest present, ELF interpreters and search paths
   free of the Homebrew prefix), marker-bearing units under
-  `/etc/systemd/system` whose `ExecStart` is `current/bin/dockerd`,
+  `/etc/systemd/system` whose `ExecStart` is `active/bin/dockerd`,
   awaiting-login feedback, a new-group session's system-socket readiness and
   non-rootless daemon, and disabling both units while retaining the runtime,
   data, account groups, and Developer Mode. A final `docker-update` through
@@ -954,11 +957,34 @@ An agent must not break these:
   files get the system loader as interpreter and `$ORIGIN/../lib` as their
   search path. `dockerbrew.Install` smoke-runs `runc` and `dockerd`, writes a
   world-readable manifest, swaps `/var/lib/chairlift/docker/current`
-  atomically under a lock, and prunes older sets; it refuses an install root
-  that is a foreign symlink or not root-owned. The helper writes
-  `docker.service` and `docker.socket` to `/etc/systemd/system` with the
-  first line `# Managed by chairlift-helper`, never overwrites a unit without
-  that marker, and removes only marked units. **Image units win:** when
+  atomically under a lock, and prunes older sets except the one `active`
+  names; it refuses an install root that is a foreign symlink or not
+  root-owned. The helper writes `docker.service` and `docker.socket` to
+  `/etc/systemd/system` with the first line `# Managed by chairlift-helper`,
+  never overwrites a unit without that marker, and removes only marked
+  units. The service runs dockerd and resolves containerd, the shim, runc,
+  `docker-init`, and `docker-proxy` through
+  `/var/lib/chairlift/docker/active/bin`, never `current/bin`; its one added
+  `ExecStartPre=/usr/bin/flock --exclusive …/.lock /usr/bin/ln -P -fT
+  …/current …/active` hard-links the relative set-id symlink under the same
+  lock as swap/prune. Repeated starts replace the link without following
+  its directory target. Before changing any existing runtime, the helper
+  prepares the managed unit and reloads it when changed or systemd reports
+  `NeedDaemonReload`; Install's mandatory admission runs under the lock even
+  on the unchanged/prune path. A stable stopped service is safe to start
+  through the locked unit. A running service needs stable MainPID and
+  InvocationID plus actual proc argv, executable, and PATH proving it uses
+  the retained active set. A legacy daemon still using `current/bin`, a
+  transitional service, or an unreadable observation refuses all runtime
+  swaps, marker changes and pruning. The GUI maps that distinctive helper
+  refusal to a visible `devtools.PrerequisiteError`, directing an administrator
+  to the existing fixed `pkexec /usr/bin/chairlift-helper docker-disable`
+  terminal command before turning Docker on again, with an explicit warning
+  that this stops running containers. This works even when NoAccess makes the
+  switch read off; refusal never stops workloads or grants access itself.
+  An active-based daemon whose restart is deferred keeps its old set until
+  its next start (#696).
+  **Image units win:** when
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
   before. Otherwise it creates `docker` with `groupadd -f -r` when neither
@@ -974,7 +1000,11 @@ An agent must not break these:
   `/var/lib/chairlift/docker/.restart-pending` marker before swapping
   `current` and reports the unchanged set as changed while it remains; the
   helper clears it (`dockerbrew.ClearRestartPending`) only after
-  `try-restart` succeeds, so an interrupted run still restarts next time. A
+  `try-restart` succeeds, so an interrupted run still restarts next time.
+  The marker names the set id it was written for, and the clear takes the
+  install lock and removes it only when it names the set that run installed
+  (an empty marker from an older release also clears), so an overlapping
+  run's newer swap keeps its pending restart (#697). A
   changed runtime restarts the daemon only when its socket reports no running
   containers; otherwise (or when that query fails) the restart waits for the
   next enable/update or a reboot, and the marker carries it. A

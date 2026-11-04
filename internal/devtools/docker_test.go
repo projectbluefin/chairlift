@@ -22,6 +22,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/journal"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 const (
@@ -864,4 +865,37 @@ func TestDockerPluginLinksNeverReplaceUserFiles(t *testing.T) {
 			t.Fatalf("dangling link created: %v", err)
 		}
 	})
+}
+
+// Exercise the exported provider and real helperexec process boundary without
+// privilege: only the namespace-local fake escalation executable can run.
+func TestDockerMigrationRefusalShowsReachableRecoveryWithoutFollowons(t *testing.T) {
+	calls, dir := fakeSystemDocker(t, dockerReport("loaded", "active"), dockerReport("loaded", "active"))
+	dockerGroupMembership = func() (bool, bool, error) { return false, false, nil }
+	dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) { return nil, os.ErrPermission })
+	state, err := DockerStatus(t.Context())
+	if !errors.Is(err, os.ErrPermission) || !state.Active || !state.NoAccess {
+		t.Fatalf("fixture is not a running inaccessible daemon: %+v, %v", state, err)
+	}
+	writeUserDockerUnit(t, "[Service]\nExecStart=/home/linuxbrew/.linuxbrew/bin/dockerd-rootless.sh\n")
+	fakeDockerCLI(t, dir)
+	t.Setenv("DOCKER_TEST_CONTEXT", "rootless")
+	script := "#!/bin/sh\nprintf '%s\\n' \"helper $*\" >> \"$DOCKER_TEST_CALLS\"\nprintf '%s\\n' '" + ubluehelper.ErrDockerRuntimeMigration.Error() + "' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, pkexec.Command), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	err = SetDocker(t.Context(), true, nil)
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerMigrationRecovery {
+		t.Fatalf("migration refusal has no visible prerequisite recovery: %v", err)
+	}
+	if !strings.Contains(prerequisite.Message, pkexec.Command+" "+ublue.HelperPath+" docker-disable") || !strings.Contains(prerequisite.Message, "stops running containers") {
+		t.Fatalf("recovery omits the reachable fixed command or its consequence: %q", prerequisite.Message)
+	}
+	if !strings.Contains(err.Error(), ubluehelper.ErrDockerRuntimeMigration.Error()) {
+		t.Fatalf("recovery lost the original diagnostic: %v", err)
+	}
+	if got, want := mutationCalls(t, calls), []string{"helper " + ublue.HelperPath + " docker-enable"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("refusal ran follow-on work: %q, want %q", got, want)
+	}
 }

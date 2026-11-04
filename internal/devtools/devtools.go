@@ -28,7 +28,9 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/outputtail"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 const (
@@ -41,9 +43,9 @@ const (
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
 
-// PrerequisiteError means the host lacks something WSL Mode needs, so trying
-// again will not help. Message is a plain sentence for the user; Err keeps the
-// raw command output for the log.
+// PrerequisiteError means a developer tool needs an explicit prerequisite,
+// so merely trying again will not help. Message is shown on its row; Err
+// keeps the raw command output for the log.
 type PrerequisiteError struct {
 	Message string
 	Err     error
@@ -63,6 +65,11 @@ const (
 	// NeedsPrerequisite means nsl doctor reported something else missing.
 	NeedsPrerequisite = "This computer is missing a part WSL Mode needs."
 )
+
+// DockerMigrationRecovery remains reachable when a legacy daemon runs but this
+// account lacks Docker access, so its switch reads off and cannot stop it.
+const DockerMigrationRecovery = "An administrator must stop system Docker before migration. In a terminal, run " +
+	pkexec.Command + " " + ublue.HelperPath + " docker-disable. This stops running containers. Then turn Docker on again."
 
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
@@ -903,6 +910,9 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 		report("Stopping system Docker…")
 	}
 	if err := apply(ctx, enabled); err != nil {
+		if enabled && strings.Contains(err.Error(), ubluehelper.DockerRuntimeMigrationPrefix) {
+			return &PrerequisiteError{Message: DockerMigrationRecovery, Err: err}
+		}
 		return err
 	}
 	if enabled {

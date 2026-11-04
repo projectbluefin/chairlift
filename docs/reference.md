@@ -281,6 +281,16 @@ Developer Mode. **Update all**'s Developer tools source updates a
 Homebrew-installed daemon through fixed `docker-update` when newer bottles are
 published.
 
+If an older Homebrew Docker daemon still runs from `current/bin`, updating its
+runtime is refused until it has stopped and adopted the locked-start service.
+The row shows a migration prerequisite rather than asking you to retry. An
+account without Docker access has an off switch already, so this recovery
+does not depend on turning that switch off: ask an administrator to run
+`pkexec /usr/bin/chairlift-helper docker-disable` in a terminal, then turn
+Docker on again. **This stops running containers for all accounts.** Arrange
+the interruption with anyone using Docker first. The refusal itself stops
+nothing, grants no access, and leaves the runtime and pending marker intact.
+
 Docker enable also attempts native Microsoft VS Code setup as a separate
 optional outcome; it does not install the editor. It seeds defaults only when
 `~/.config/Code/User/settings.json` is absent, preserving existing JSONC and
