@@ -120,8 +120,11 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   fixture also plants a v26.10.10-style rootless user `docker.service` that
   the GUI must stop and disable. Native system/user managers
   run inside rootless Podman; `--privileged` applies only to that namespace,
-  with no host Docker socket or user bus mounted. The gate sends EOF to a real
-  prerequisite authentication prompt and reports the actual outcome/exit code:
+  with no host Docker socket or user bus mounted. On each launch, including
+  the new-group login, the driver enters the Developer Mode detail from
+  Features before finding the Docker and developer switches; those controls
+  are not on the Features overview. The gate sends EOF to a real prerequisite
+  authentication prompt and reports the actual outcome/exit code:
   exit 127 with "Not authorized" is journaled as `refused` and shown as Failed,
   not live cancellation coverage. Canceled requires exit 126 or "Request
   dismissed". It also covers ordered `dx-enable` then `docker-enable` and the

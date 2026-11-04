@@ -495,6 +495,14 @@ def main(binary, output):
         rows = atspi.poll(lambda: atspi.sidebar_rows(app))
         index = next(i for i, row in enumerate(rows, 1) if atspi.label_text(row) == "Features")
         atspi.press(f"<Alt>{index}")
+        # Developer controls live on the detail, not the Features overview.
+        # As in the behave suite, enter its row through keyboard focus.
+        row = atspi.row_containing(atspi.page_root(app), "Developer Mode")
+        atspi.focus_by_tab(app, lambda node: atspi.same_node(node, row), "Developer Mode row")
+        atspi.press("Return")
+        assert atspi.poll(lambda: atspi.find_all(
+            atspi.page_root(app), lambda node: atspi.is_button(node, "Back to Features")
+        )), "Developer Mode detail never exposed its Back to Features button"
 
     def docker_row():
         return atspi.row_containing(atspi.page_root(app), "Enable Docker", timeout=1)

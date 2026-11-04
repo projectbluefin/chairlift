@@ -211,6 +211,13 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   well as empty preferences: restoring an enabled setting must not expose the
   whole section. Livery's compact-section scenario checks each header before
   expanding it and verifies that expansion writes no settings or icon files.
+- **A moved control needs every driver migrated.** Docker and the Developer
+  Mode switch live on the Developer Mode detail, not the Features overview.
+  The live `docker_system_integration.py` driver must enter that detail on
+  every launch, including its new-group login, using the same keyboard row
+  navigation and Back-to-Features readiness assertion as the behave suite.
+  Searching the overview for the old switch fails before any helper action;
+  a dry-run behave pass alone does not cover the separate live driver.
 - **A tool-call assertion needs isolated readers.** Gaming's capability floor
   is `ImageDescriptor`, so it can read Flatpak inventories even when the
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
