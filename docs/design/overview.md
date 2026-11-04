@@ -1143,13 +1143,18 @@ observation to prove the daemon was started from the current unit file
 (NeedDaemonReload=no and start time strictly after mtime). Disk equality
 alone cannot prove adoption after a crash between write and restart. Missing
 or mismatched stamps and unproven service states leave the new unit unstamped
-until the shared `restartService` boundary reloads, restarts, reads a
-validated live ID, and atomically records it as a unit comment. If systemd
-observation fails or is unsupported, reconciliation falls back to checking the
-live InvocationID or restarting rather than stopping the service. Enable and
-alias selection use the same boundary. A verified invocation incurs no
-restart; a natural service restart changes the ID and conservatively
-triggers adoption or reconciliation.
+until the shared `restartService` boundary reloads, restarts, and reads a
+validated live ID. Both that path and adoption of an already-proven daemon use
+`commitServiceInvocation`: atomically write the ID as a unit comment, then
+reload the manager without restarting the daemon. A failed stamp reload removes
+the stamp, leaving a later attempt to verify adoption again. Comment-only writes
+still change the unit's mtime; without this final reload `NeedDaemonReload=yes`
+would make a later automatic service restart look unproven. If systemctl rejects
+the timestamp option or observation otherwise fails, reconciliation falls back
+to the live invocation stamp or a safe restart. Enable and alias selection use
+the same boundaries. An unchanged verified invocation incurs neither reload nor
+restart; a natural restart with a loaded current file and a start time strictly
+after its mtime is adopted without a restart, preserving loaded models.
 Disabled hosts are not configured and previews write nothing. Failure keeps
 the unstamped management unit and best-effort stops the old daemon, preventing
 generic HTTP health from declaring unverified policy ready. Live startup

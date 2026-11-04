@@ -3,6 +3,8 @@ package aistack
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -337,4 +339,227 @@ func TestObservationFailureFallsBackToRestart(t *testing.T) {
 			t.Fatal("unit was rewritten unexpectedly")
 		}
 	})
+
+	t.Run("missing stamp restarts", func(t *testing.T) {
+		h := newHost(t)
+		current, _ := RenderUnit(h.exe)
+		path := writeUnitAt(t, current, time.Now().Add(-time.Hour))
+		h.fail["systemctl --user "+strings.Join(serviceStateArgs, " ")] = errors.New("unknown option: --timestamp=unix")
+		if err := ReconcileService(context.Background()); err != nil {
+			t.Fatalf("observation failure without a stamp caused reconcile error: %v", err)
+		}
+		if !restarted(h) {
+			t.Fatal("an unsupported observation with no stamp skipped safe reconciliation")
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != current+serviceInvocationMark+strings.Repeat("a", 32)+"\n" {
+			t.Fatalf("reconciled invocation was not stamped: %q, %v", got, err)
+		}
+	})
+}
+
+// Every stamp writer must reload its comment-only write. Otherwise a natural
+// service restart leaves NeedDaemonReload=yes and the next launch restarts it
+// again, interrupting a daemon already running the current policy.
+func TestStampedServiceAdoptsAutomaticRestartsWithoutDroppingModels(t *testing.T) {
+	for _, entry := range []string{"adopt unstamped", "adopt stale stamp", "migrate", "enable", "select model"} {
+		t.Run(entry, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			path, _ := UnitPath()
+			invocation := strings.Repeat("a", 32)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if entry != "enable" {
+				contents := current
+				switch entry {
+				case "adopt stale stamp":
+					contents += serviceInvocationMark + strings.Repeat("b", 32) + "\n"
+				case "migrate":
+					contents = strings.ReplaceAll(current, "Environment=LLMMAN_PEERS=\n", "")
+				}
+				written := time.Now().Add(-time.Hour)
+				writeUnitAt(t, contents, written)
+				if strings.HasPrefix(entry, "adopt ") {
+					invocation = strings.Repeat("c", 32)
+					h.setServiceState("active", "no", written.Add(time.Minute), invocation)
+				}
+			}
+			var err error
+			switch entry {
+			case "enable":
+				err = Enable(ctx)
+			case "select model":
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					_, _ = w.Write([]byte(`{"stored":{}}`))
+				}))
+				t.Cleanup(srv.Close)
+				nodeURL = srv.URL
+				err = ConfigureActiveModel(ctx, "example/model:Q4_K_M")
+			default:
+				err = ReconcileService(ctx)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.HasPrefix(entry, "adopt ") && restarted(h) {
+				t.Fatal("adopting a proven daemon restarted it")
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != current+serviceInvocationMark+invocation+"\n" {
+				t.Fatalf("initial invocation stamp = %q, %v", got, err)
+			}
+			if state, err := observeService(ctx); err != nil || state.needReload != "no" {
+				t.Errorf("stamp write left the manager needing reload: %+v, %v", state, err)
+			}
+
+			// An unchanged verified invocation is a read-only startup.
+			h.calls = nil
+			if err := ReconcileService(ctx); err != nil {
+				t.Fatal(err)
+			}
+			for _, call := range h.calls {
+				if !strings.HasPrefix(call, "systemctl --user show ") {
+					t.Fatalf("unchanged healthy invocation was mutated: %s", call)
+				}
+			}
+
+			// Two automatic restarts prove that re-stamping itself cannot
+			// invalidate the next start-time adoption proof.
+			for _, id := range []string{strings.Repeat("d", 32), strings.Repeat("e", 32)} {
+				h.startInvocation(time.Now().Add(2*time.Second), id)
+				h.calls = nil
+				if err := ReconcileService(ctx); err != nil {
+					t.Fatal(err)
+				}
+				if restarted(h) {
+					t.Fatalf("automatic restart was restarted again: %v", h.calls)
+				}
+				got, err := os.ReadFile(path)
+				if err != nil || string(got) != current+serviceInvocationMark+id+"\n" {
+					t.Fatalf("automatic invocation was not committed: %q, %v", got, err)
+				}
+				if state, err := observeService(ctx); err != nil || state.needReload != "no" {
+					t.Fatalf("adopted stamp left the manager needing reload: %+v, %v", state, err)
+				}
+			}
+		})
+	}
+}
+
+func TestStampReloadFailureLeavesPolicyUnverifiedAndRetryable(t *testing.T) {
+	for _, adopted := range []bool{false, true} {
+		name := "after restart"
+		if adopted {
+			name = "after adoption"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			written := time.Now().Add(-time.Hour)
+			path := writeUnitAt(t, current, written)
+			if adopted {
+				h.setServiceState("active", "no", written.Add(time.Minute), strings.Repeat("c", 32))
+			}
+			failure := errors.New("manager rejected stamped unit reload")
+			baseRun := run
+			failReload := true
+			run = func(ctx context.Context, name string, args ...string) (string, error) {
+				if name == "systemctl" && strings.Join(args, " ") == "--user daemon-reload" {
+					contents, _ := os.ReadFile(path)
+					if failReload && strings.Contains(string(contents), serviceInvocationMark) {
+						h.fail["systemctl --user daemon-reload"] = failure
+					}
+				}
+				return baseRun(ctx, name, args...)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := ReconcileService(ctx); !errors.Is(err, failure) {
+				t.Fatalf("stamp reload failure was accepted: %v", err)
+			}
+			got, err := os.ReadFile(path)
+			if err != nil || string(got) != current {
+				t.Fatalf("failed reload retained a verified stamp or lost the unit: %q, %v", got, err)
+			}
+			if !strings.Contains(strings.Join(h.calls, "\n"), "systemctl --user stop "+ServiceName) {
+				t.Fatal("failed reconciliation left the unverified daemon running")
+			}
+			failReload = false
+			delete(h.fail, "systemctl --user daemon-reload")
+			h.calls = nil
+			if err := ReconcileService(ctx); err != nil {
+				t.Fatalf("retry after stamp reload failure: %v", err)
+			}
+			if !restarted(h) {
+				t.Fatal("failed stamp reload was mistaken for verified adoption on retry")
+			}
+		})
+	}
+}
+
+func TestUnparseableServiceObservationsDoNotProveAdoption(t *testing.T) {
+	for _, missing := range []string{"ActiveState", "NeedDaemonReload", "ExecMainStartTimestamp", "InvocationID"} {
+		t.Run(missing, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			written := time.Now().Add(-time.Hour)
+			writeUnitAt(t, current, written)
+			h.setServiceState("active", "no", written.Add(time.Minute), strings.Repeat("c", 32))
+			call := "systemctl --user " + strings.Join(serviceStateArgs, " ")
+			lines := strings.Split(h.outputs[call], "\n")
+			for i, line := range lines {
+				if strings.HasPrefix(line, missing+"=") {
+					lines[i] = missing + "=unparseable"
+				}
+			}
+			h.outputs[call] = strings.Join(lines, "\n")
+			if err := ReconcileService(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if !restarted(h) {
+				t.Fatal("an incomplete observation was accepted as current policy adoption")
+			}
+		})
+	}
+}
+
+func TestEnableStampReloadFailurePreservesOnlyExistingManagement(t *testing.T) {
+	for _, existed := range []bool{false, true} {
+		name := "new unit"
+		if existed {
+			name = "existing unit"
+		}
+		t.Run(name, func(t *testing.T) {
+			h := newHost(t)
+			current, _ := RenderUnit(h.exe)
+			path, _ := UnitPath()
+			if existed {
+				writeUnitAt(t, current, time.Now().Add(-time.Hour))
+			}
+			failure := errors.New("stamp reload failed")
+			baseRun := run
+			run = func(ctx context.Context, name string, args ...string) (string, error) {
+				if name == "systemctl" && strings.Join(args, " ") == "--user daemon-reload" {
+					contents, _ := os.ReadFile(path)
+					if strings.Contains(string(contents), serviceInvocationMark) {
+						h.fail["systemctl --user daemon-reload"] = failure
+					}
+				}
+				return baseRun(ctx, name, args...)
+			}
+			if err := Enable(context.Background()); !errors.Is(err, failure) {
+				t.Fatalf("Enable stamp reload error = %v", err)
+			}
+			if h.exists(t, unitRel) != existed || h.exists(t, envRel) != existed {
+				t.Fatal("failed enable lost an existing management handle or retained a fresh stopped service")
+			}
+			if existed {
+				got, err := os.ReadFile(path)
+				if err != nil || string(got) != current {
+					t.Fatalf("failed enable retained a verified stamp: %q, %v", got, err)
+				}
+			}
+		})
+	}
 }

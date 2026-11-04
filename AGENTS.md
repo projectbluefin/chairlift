@@ -1235,20 +1235,26 @@ An agent must not break these:
   keeping the active model synchronized with Goose. A missing alias means no
   selected model, not an error or an invented default.
   Startup reconciles only an existing owned unit against `RenderUnit` plus the
-  exact live systemd `InvocationID`, committed as a unit comment only after
-  successful reload/restart. An already-written file is not proof the daemon
-  adopted it: missing or mismatched invocation stamps retry the migration,
-  unless systemd proves it runs the current file (#694): the manager reports
-  `NeedDaemonReload=no` and the main process started strictly after the
-  file's last write. That is the normal state after a reboot, when the stamp
-  is stale, so ReconcileService re-stamps the live `InvocationID` instead of
-  restarting and dropping loaded models. An inactive or failed service runs no
-  older policy, so a current unit needs no migration there.
-  Enable, model selection, and migration share that restart/stamp boundary;
-  current verified invocations do not restart, disabled hosts stay disabled,
-  and dry-run writes none. Failure preserves the unstamped management unit and
-  best-effort stops the old daemon. Live startup allows ten seconds for health
-  after migration; preview retains its single bounded probe. Unrelated llmman
+  exact live systemd `InvocationID`, recorded as a unit comment after policy
+  adoption is proven. An already-written file is not proof the daemon adopted
+  it: missing or mismatched invocation stamps retry the migration, unless
+  systemd proves it runs the current file (#694): the manager reports
+  `NeedDaemonReload=no` and the main process started strictly after the file's
+  last write. That can happen after a reboot or an automatic service restart;
+  ReconcileService then re-stamps the live ID without restarting and dropping
+  loaded models. An inactive or failed service runs no older policy, so a
+  current loaded unit needs no migration there. A failed or unsupported
+  timestamp observation falls back to the invocation stamp or a safe restart.
+  Every stamp writer uses `commitServiceInvocation`: write the comment, then
+  `daemon-reload` without restarting the proven daemon; a reload failure removes
+  the stamp. Even a comment-only unit write changes its mtime and otherwise
+  leaves `NeedDaemonReload=yes`, defeating later automatic-restart adoption.
+  Enable, model selection, and migration share the restart/stamp boundaries;
+  current verified invocations need neither reload nor restart, disabled hosts
+  stay disabled, and dry-run writes none. Failure preserves the unstamped
+  management unit and best-effort stops the old daemon. Live startup allows ten
+  seconds for health after migration; preview retains its single bounded probe.
+  Unrelated llmman
   configuration is never rewritten.
   Failure renders newly observed state, not the inverse of an optimistic flip.
   Every mutation respects `dryrun.Enabled()`. Disable removes only the owned

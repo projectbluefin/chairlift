@@ -56,10 +56,7 @@ func updateServiceUnit(ctx context.Context) (bool, error) {
 			case adoptedRunning:
 				// Record the proof so later launches in this boot take the
 				// stamp path. No restart, so loaded models survive.
-				if err := writeAtomic(path, unit+serviceInvocationMark+state.invocation+"\n"); err != nil {
-					return false, err
-				}
-				return false, nil
+				return false, commitServiceInvocation(ctx, path, unit, state.invocation)
 			case adoptedStopped:
 				// Nothing runs an older policy, and systemd starts the current
 				// file next time, so there is nothing to migrate.
@@ -121,8 +118,8 @@ func validInvocation(id string) (string, error) {
 
 // serviceStateArgs reads the loaded and running unit in one query.
 // --timestamp=unix makes ExecMainStartTimestamp comparable with the unit
-// file's mtime; a systemd too old for it prints another format, which parses
-// as unknown and falls back to the restart path.
+// file's mtime. A systemctl that rejects this option makes observation fail;
+// reconciliation then checks the invocation stamp or takes the restart path.
 var serviceStateArgs = []string{
 	"show", ServiceName,
 	"--property=ActiveState,NeedDaemonReload,ExecMainStartTimestamp,InvocationID",
@@ -230,5 +227,18 @@ func restartService(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(path, unit+serviceInvocationMark+id+"\n")
+	return commitServiceInvocation(ctx, path, unit, id)
+}
+
+// commitServiceInvocation keeps a comment-only stamp write from making the
+// manager's loaded unit stale. Reloading does not restart the proven daemon.
+// A failed reload leaves the policy unstamped so a later attempt must verify it.
+func commitServiceInvocation(ctx context.Context, path, unit, id string) error {
+	if err := writeAtomic(path, unit+serviceInvocationMark+id+"\n"); err != nil {
+		return err
+	}
+	if _, err := systemctl(ctx, "daemon-reload"); err != nil {
+		return errors.Join(err, writeAtomic(path, unit))
+	}
+	return nil
 }

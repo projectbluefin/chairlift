@@ -3,9 +3,12 @@ package aistack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -78,5 +81,31 @@ func TestConfigureActiveModel(t *testing.T) {
 	}
 	if !foundConfig {
 		t.Errorf("expected call %q in %v", wantCall, h.calls)
+	}
+}
+
+func TestModelSelectionStampReloadFailureLeavesTheUnitUnverified(t *testing.T) {
+	h := newHost(t)
+	unit, _ := RenderUnit(h.exe)
+	path, _ := UnitPath()
+	if err := writeAtomic(path, unit); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("manager rejected model invocation stamp")
+	baseRun := run
+	run = func(ctx context.Context, name string, args ...string) (string, error) {
+		// Fail only the reload after restart and the successful ID query,
+		// not the pre-start reload that proves the runtime took this unit.
+		if name == "systemctl" && strings.Join(args, " ") == "--user show "+ServiceName+" --property=InvocationID --value" {
+			h.fail["systemctl --user daemon-reload"] = failure
+		}
+		return baseRun(ctx, name, args...)
+	}
+	if err := ConfigureActiveModel(context.Background(), "example/model:Q4_K_M"); !errors.Is(err, failure) {
+		t.Fatalf("model selection accepted a failed stamp reload: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != unit {
+		t.Fatalf("model selection retained a verified stamp or lost its unit: %q, %v", got, err)
 	}
 }
