@@ -40,6 +40,37 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 	}
 }
 
+// Optional-feature toggles and the feature Update button each run a
+// privileged updex helper call; they share one gate so no two overlap, and
+// a refused toggle reverts to the position it held.
+func TestFeatureTogglesShareTheUpdexGate(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "features_page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "func (uh *UserHome) onFeatureToggled(", 2)
+	if len(parts) != 2 {
+		t.Fatal("feature toggle handler not found")
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	for _, required := range []string{
+		"if !uh.updateFeaturesGate.TryStart() {",
+		"sgtk.RunOnMainThread(func() { toggle.set(!enabled) })",
+		"pageview.FeatureChangeBusyToast",
+		"toggle.widget.SetSensitive(false)",
+		"defer uh.updateFeaturesGate.Reset()",
+		"toggle.widget.SetSensitive(true)",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("onFeatureToggled must be admitted by updateFeaturesGate and restore the switch: missing %q", required)
+		}
+	}
+}
+
 // bootc rollback toggles the selected deployment. A successful live click
 // must close its gate; only a failed attempt or dry-run preview may retry.
 func TestRollbackGateCompletesOnlyAfterLiveSuccess(t *testing.T) {
