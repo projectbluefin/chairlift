@@ -597,7 +597,13 @@ construction owner.
 | `CheckFeatures(ctx)` | Return `([]FeatureCheck, []string, error)`, retaining component warnings even on failure |
 | `EnableFeature(ctx, name)` / `DisableFeature(ctx, name)` | Fixed helper with `enable-feature <name>` / `disable-feature <name>` |
 | `UpdateFeatures(ctx)` | Fixed helper with `update` |
-| `DefaultContext()` | Five-minute context for callers |
+| `DefaultContext()` | Five-minute context for unprivileged reads |
+| `MutationContext(command)` | `updexhelper.Timeout(command)` plus `AuthenticationAllowance` (five minutes), because the GUI's clock runs while the PolicyKit prompt is open; the helper bounds `update` at 30 minutes (it downloads sysext images) and the configuration-only commands at five |
+
+The GUI's allowance ships with the Homebrew app and applies with any installed
+helper. The helper's 30-minute download budget takes effect only after the OS
+image installs the updated `/usr/bin/chairlift-updex-helper`; upgrading the GUI
+alone does not lengthen an older helper's own five-minute timeout.
 
 These context-taking reads/writes do not secretly replace caller cancellation
 with a new background context. Writes bind `helperexec.Run` to

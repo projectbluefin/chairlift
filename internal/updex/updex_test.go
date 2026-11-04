@@ -3,14 +3,16 @@ package updex
 import (
 	"context"
 	"errors"
-	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
+	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
 // writeFakePkexec writes an executable shell script standing in for pkexec:
@@ -304,5 +306,19 @@ func TestWarningCapturingReporterCapturesFormattedWarnings(t *testing.T) {
 	want := []string{"warning 1: test", "second warning"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Warnings() = %#v, want %#v", got, want)
+	}
+}
+
+// The GUI's clock runs while the PolicyKit prompt is open and the helper's
+// starts after authentication, so every mutation context must outlast the
+// helper's own budget by the authentication allowance (#695).
+func TestMutationTimeoutOutlastsTheHelperBudget(t *testing.T) {
+	for _, command := range updexhelper.SupportedCommands() {
+		if got, want := MutationTimeout(command), updexhelper.Timeout(command)+AuthenticationAllowance; got != want {
+			t.Errorf("MutationTimeout(%s) = %v, want %v", command, got, want)
+		}
+	}
+	if AuthenticationAllowance <= 0 {
+		t.Fatal("AuthenticationAllowance must be positive")
 	}
 }

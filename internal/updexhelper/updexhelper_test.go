@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/frostyard/updex/updex"
 )
@@ -185,6 +186,24 @@ func TestUpdateOptions(t *testing.T) {
 		got := UpdateOptions(dryRun)
 		if got.DryRun != dryRun {
 			t.Errorf("UpdateOptions(%v).DryRun = %v, want %v", dryRun, got.DryRun, dryRun)
+		}
+	}
+}
+
+// update downloads every enabled feature's sysext images, so it must not
+// share the configuration-only commands' five-minute budget (#695).
+func TestTimeoutGivesUpdateADownloadBudget(t *testing.T) {
+	if got := Timeout(CommandUpdate); got != UpdateTimeout || got < 30*time.Minute {
+		t.Fatalf("Timeout(update) = %v, want UpdateTimeout (>= 30m)", got)
+	}
+	for _, command := range []string{CommandEnableFeature, CommandDisableFeature} {
+		if got := Timeout(command); got != DefaultTimeout {
+			t.Errorf("Timeout(%s) = %v, want DefaultTimeout", command, got)
+		}
+	}
+	for _, command := range SupportedCommands() {
+		if Timeout(command) <= 0 {
+			t.Errorf("Timeout(%s) is not positive", command)
 		}
 	}
 }

@@ -15,6 +15,7 @@ package updexhelper
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/frostyard/updex/updex"
 )
@@ -24,6 +25,27 @@ const (
 	CommandDisableFeature = "disable-feature"
 	CommandUpdate         = "update"
 )
+
+const (
+	// DefaultTimeout bounds enable-feature and disable-feature, which change
+	// the feature configuration without downloading images.
+	DefaultTimeout = 5 * time.Minute
+
+	// UpdateTimeout bounds update, which downloads every enabled feature's
+	// sysext images; it gets the same download-sized budget as the ublue
+	// helper's image switches, so a slow link is not cut off mid-download.
+	UpdateTimeout = 30 * time.Minute
+)
+
+// Timeout returns how long the helper lets command run. The GUI's context
+// adds an authentication allowance on top (internal/updex), because its clock
+// also runs while the PolicyKit prompt is open.
+func Timeout(command string) time.Duration {
+	if command == CommandUpdate {
+		return UpdateTimeout
+	}
+	return DefaultTimeout
+}
 
 // Invocation is a validated privileged-helper command. PolicyKit selects an
 // action from the executable path and first argument; ParseInvocation is the

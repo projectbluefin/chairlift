@@ -15,6 +15,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updex"
+	"github.com/projectbluefin/chairlift/internal/updexhelper"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
 	"github.com/projectbluefin/chairlift/internal/views/featurestatus"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
@@ -278,7 +279,11 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 	}
 	toggle.widget.SetSensitive(false)
 	go func() {
-		ctx, cancel := updex.DefaultContext()
+		command := updexhelper.CommandDisableFeature
+		if enabled {
+			command = updexhelper.CommandEnableFeature
+		}
+		ctx, cancel := updex.MutationContext(command)
 		defer cancel()
 
 		var err error
@@ -326,7 +331,7 @@ func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 	button.SetLabel("Updating…")
 
 	go func() {
-		ctx, cancel := updex.DefaultContext()
+		ctx, cancel := updex.MutationContext(updexhelper.CommandUpdate)
 		defer cancel()
 
 		err := updex.UpdateFeatures(ctx)
