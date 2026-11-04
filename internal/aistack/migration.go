@@ -44,28 +44,32 @@ func updateServiceUnit(ctx context.Context) (bool, error) {
 	// usual state after a reboot, when the stamped InvocationID is stale.
 	if unit, stamp, stamped := strings.Cut(string(previous), serviceInvocationMark); unit == current && !dryrun.Enabled() {
 		state, err := observeService(ctx)
-		if err != nil {
-			return false, err
-		}
-		if stamped && state.running() && stamp == state.invocation+"\n" {
-			return false, nil
-		}
-		info, err := os.Stat(path)
-		if err != nil {
-			return false, err
-		}
-		switch state.adopted(info.ModTime()) {
-		case adoptedRunning:
-			// Record the proof so later launches in this boot take the
-			// stamp path. No restart, so loaded models survive.
-			if err := writeAtomic(path, unit+serviceInvocationMark+state.invocation+"\n"); err != nil {
+		if err == nil {
+			if stamped && state.running() && stamp == state.invocation+"\n" {
+				return false, nil
+			}
+			info, err := os.Stat(path)
+			if err != nil {
 				return false, err
 			}
-			return false, nil
-		case adoptedStopped:
-			// Nothing runs an older policy, and systemd starts the current
-			// file next time, so there is nothing to migrate.
-			return false, nil
+			switch state.adopted(info.ModTime()) {
+			case adoptedRunning:
+				// Record the proof so later launches in this boot take the
+				// stamp path. No restart, so loaded models survive.
+				if err := writeAtomic(path, unit+serviceInvocationMark+state.invocation+"\n"); err != nil {
+					return false, err
+				}
+				return false, nil
+			case adoptedStopped:
+				// Nothing runs an older policy, and systemd starts the current
+				// file next time, so there is nothing to migrate.
+				return false, nil
+			}
+		} else if stamped {
+			// Fall back to invocation-only check on older systemd or observation failure.
+			if invocation, err := serviceInvocation(ctx); err == nil && stamp == invocation+"\n" {
+				return false, nil
+			}
 		}
 	}
 	if dryrun.Enabled() {

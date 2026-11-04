@@ -286,3 +286,55 @@ func TestStoppedCurrentServiceNeedsNoMigration(t *testing.T) {
 		})
 	}
 }
+
+// TestObservationFailureFallsBackToRestart verifies that when systemctl fails on
+// serviceStateArgs (e.g. older systemd rejecting --timestamp=unix), ReconcileService
+// does not return an error and stop the service; instead, if the stamp is stale or
+// missing, it falls back to the standard restart path. If the stamp matches the
+// running invocation, it requires no restart.
+func TestObservationFailureFallsBackToRestart(t *testing.T) {
+	t.Run("stale stamp restarts and stamps", func(t *testing.T) {
+		h := newHost(t)
+		current, _ := RenderUnit(h.exe)
+		contents := current + serviceInvocationMark + strings.Repeat("b", 32) + "\n"
+		path := writeUnitAt(t, contents, time.Now().Add(-time.Hour))
+		h.fail["systemctl --user "+strings.Join(serviceStateArgs, " ")] = errors.New("unknown option: --timestamp=unix")
+		liveInvocation := strings.Repeat("a", 32)
+
+		if err := ReconcileService(context.Background()); err != nil {
+			t.Fatalf("observation failure caused reconcile error: %v", err)
+		}
+		if !restarted(h) {
+			t.Fatal("observation failure with stale stamp did not restart service")
+		}
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != current+serviceInvocationMark+liveInvocation+"\n" {
+			t.Fatalf("unit was not stamped with live invocation: %q, %v", got, err)
+		}
+		for _, call := range h.calls {
+			if strings.Contains(call, " stop ") {
+				t.Fatalf("reconcile stopped the service: %q", call)
+			}
+		}
+	})
+
+	t.Run("matching stamp needs no restart", func(t *testing.T) {
+		h := newHost(t)
+		current, _ := RenderUnit(h.exe)
+		liveInvocation := strings.Repeat("a", 32)
+		contents := current + serviceInvocationMark + liveInvocation + "\n"
+		path := writeUnitAt(t, contents, time.Now().Add(-time.Hour))
+		h.fail["systemctl --user "+strings.Join(serviceStateArgs, " ")] = errors.New("unknown option: --timestamp=unix")
+
+		if err := ReconcileService(context.Background()); err != nil {
+			t.Fatalf("observation failure with matching stamp caused reconcile error: %v", err)
+		}
+		if restarted(h) {
+			t.Fatal("observation failure with matching stamp unexpectedly restarted service")
+		}
+		got, _ := os.ReadFile(path)
+		if string(got) != contents {
+			t.Fatal("unit was rewritten unexpectedly")
+		}
+	})
+}

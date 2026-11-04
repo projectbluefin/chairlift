@@ -1138,13 +1138,18 @@ hidden offload enabled; unrelated llmman configuration is not rewritten.
 
 Before an installed service is reported ready, the startup worker calls
 `ReconcileService`: compare the owned unit with `RenderUnit` and require its
-recorded systemd `InvocationID` to match the running invocation. Disk equality
+recorded systemd `InvocationID` to match the running invocation, or systemd's
+observation to prove the daemon was started from the current unit file
+(NeedDaemonReload=no and start time strictly after mtime). Disk equality
 alone cannot prove adoption after a crash between write and restart. Missing
-or mismatched stamps leave the new unit unstamped until the shared
-`restartService` boundary reloads, restarts, reads a validated live ID, and
-atomically records it as a unit comment. Enable and alias selection use the
-same boundary. A verified invocation incurs no restart; a natural service
-restart changes the ID and conservatively triggers one reconciliation.
+or mismatched stamps and unproven service states leave the new unit unstamped
+until the shared `restartService` boundary reloads, restarts, reads a
+validated live ID, and atomically records it as a unit comment. If systemd
+observation fails or is unsupported, reconciliation falls back to checking the
+live InvocationID or restarting rather than stopping the service. Enable and
+alias selection use the same boundary. A verified invocation incurs no
+restart; a natural service restart changes the ID and conservatively
+triggers adoption or reconciliation.
 Disabled hosts are not configured and previews write nothing. Failure keeps
 the unstamped management unit and best-effort stops the old daemon, preventing
 generic HTTP health from declaring unverified policy ready. Live startup
