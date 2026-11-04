@@ -128,7 +128,7 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   helper-reported `groupadd`/`systemctl`/`usermod` argv, the installed
   runtime (root-owned, manifest present, ELF interpreters and search paths
   free of the Homebrew prefix), marker-bearing units under
-  `/etc/systemd/system` whose `ExecStart` is `current/bin/dockerd`,
+  `/etc/systemd/system` whose `ExecStart` is `active/bin/dockerd`,
   awaiting-login feedback, a new-group session's system-socket readiness and
   non-rootless daemon, and disabling both units while retaining the runtime,
   data, account groups, and Developer Mode. A final `docker-update` through
@@ -939,11 +939,20 @@ An agent must not break these:
   files get the system loader as interpreter and `$ORIGIN/../lib` as their
   search path. `dockerbrew.Install` smoke-runs `runc` and `dockerd`, writes a
   world-readable manifest, swaps `/var/lib/chairlift/docker/current`
-  atomically under a lock, and prunes older sets; it refuses an install root
-  that is a foreign symlink or not root-owned. The helper writes
-  `docker.service` and `docker.socket` to `/etc/systemd/system` with the
-  first line `# Managed by chairlift-helper`, never overwrites a unit without
-  that marker, and removes only marked units. **Image units win:** when
+  atomically under a lock, and prunes older sets except the one `active`
+  names; it refuses an install root that is a foreign symlink or not
+  root-owned. The helper writes `docker.service` and `docker.socket` to
+  `/etc/systemd/system` with the first line `# Managed by chairlift-helper`,
+  never overwrites a unit without that marker, and removes only marked
+  units. The service runs dockerd and resolves containerd, the shim, runc,
+  `docker-init`, and `docker-proxy` through
+  `/var/lib/chairlift/docker/active/bin`, never `current/bin`; its one added
+  `ExecStartPre=/usr/bin/cp -PT --remove-destination …/current …/active`
+  repoints `active` at `current` at every daemon start. A daemon whose
+  restart was deferred therefore keeps spawning from the set it started on
+  while `current` already names the new one, and any start — `try-restart`,
+  a reboot, or `Restart=always` — moves it onto the newest verified set
+  (#696). **Image units win:** when
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
   before. Otherwise it creates `docker` with `groupadd -f -r` when neither

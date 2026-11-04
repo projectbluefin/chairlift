@@ -935,7 +935,17 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
   downloading, so an unmanaged unit is refused before any fetch. They
   are moby's upstream units, with `ExecStart` and `PATH` pointing at
-  `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
+  `active/bin` and one added `ExecStartPre=/usr/bin/cp -PT
+  --remove-destination /var/lib/chairlift/docker/current
+  /var/lib/chairlift/docker/active`, which repoints `active` at `current` at
+  every daemon start. `Install` swaps `current` as soon as a new set is
+  verified, but a daemon whose restart is deferred keeps spawning shims,
+  runc, and `docker-proxy` for as long as it runs; resolving them through
+  `active` keeps it on the set it started on, and `prune` keeps the set
+  `active` names. Any start (`try-restart`, a reboot, `Restart=always`)
+  moves the daemon onto the newest set. A daemon started from a unit
+  written before this change still resolves through `current/bin` until its
+  next start. Each begins with `# Managed by chairlift-helper`, and an
   existing file without that marker is never overwritten. Next it runs
   `systemctl daemon-reload`. When SELinux is enforcing it defines the
   equivalence rule `semanage fcontext -a -e /usr/libexec/docker
@@ -1026,7 +1036,7 @@ or "Request dismissed". The gate also covers ordered authentication, the
 helper-reported argv, a root-owned runtime whose manifest names the six
 formulae and whose ELF loader fields never reach the Homebrew prefix,
 marker-bearing units, the retired rootless unit, awaiting login, a real `sg`
-new-group session's HTTP 200 socket readiness from `current/bin/dockerd`, stop
+new-group session's HTTP 200 socket readiness from `active/bin/dockerd`, stop
 preserving the runtime/data/groups and Developer Mode, and a no-op
 `docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
 step is not covered there. Dry-run AT-SPI scenarios and screenshots do not

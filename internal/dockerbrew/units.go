@@ -14,9 +14,22 @@ import (
 // 2026-10-26; both files last changed in 7263ae74cd8c80625a3dd04afe290ad1077b3bf9),
 // https://raw.githubusercontent.com/moby/moby/4237bc6cb7f07343efa5b42b2f532050377a108b/contrib/init/systemd/docker.service
 // and .../docker.socket. Only the ExecStart line differs, plus an
-// Environment=PATH line: no containerd.service is installed, so dockerd runs
-// its own managed containerd, and it finds containerd, the shim, runc,
-// docker-init, and docker-proxy through that PATH.
+// Environment=PATH line and one ExecStartPre: no containerd.service is
+// installed, so dockerd runs its own managed containerd, and it finds
+// containerd, the shim, runc, docker-init, and docker-proxy through that
+// PATH.
+//
+// Both name root/active, not root/current. Install swaps current as soon as
+// a new set is verified, but a daemon whose restart was deferred because
+// containers are running keeps spawning shims, runc, and docker-proxy for
+// as long as it runs; resolving them through current would mix the old
+// daemon with the new set's binaries (#696). active is repointed at current
+// only by the ExecStartPre, which runs at every daemon start — a
+// try-restart, a reboot, or Restart=always — so a running daemon always
+// spawns from the set it started on, and every start picks up the newest
+// verified set. cp -P copies the link itself, -T never treats active as a
+// directory to copy into, and --remove-destination replaces the previous
+// link; nothing runs it while dockerd is up.
 const mobyServiceHead = `[Unit]
 Description=Docker Application Container Engine
 Documentation=https://docs.docker.com
@@ -75,8 +88,9 @@ WantedBy=sockets.target
 
 // ServiceUnit is moby's docker.service running the engine installed under root.
 func ServiceUnit(root string) string {
-	bin := root + "/current/bin"
+	bin := root + "/" + activeName + "/bin"
 	return ManagedMarker + "\n" + mobyServiceHead +
+		"ExecStartPre=/usr/bin/cp -PT --remove-destination " + root + "/" + currentName + " " + root + "/" + activeName + "\n" +
 		"ExecStart=" + bin + "/dockerd -H fd://\n" +
 		"Environment=PATH=" + bin + ":/usr/sbin:/usr/bin:/sbin:/bin\n" +
 		mobyServiceTail
