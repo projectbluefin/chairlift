@@ -196,7 +196,7 @@ to ChairLift's log, which is where to look when filing a bug report.
 | Desktop Integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
-| Gaming | `gaming_group` | Manages Game Mode (switching the host between base and `-gaming` variants with Steam, Gamescope, and an Open Gaming Collective kernel, requiring a reboot confirmation) and optional system-wide gaming tools (ProtonPlus, Protontricks, GOverlay, MangoHud); shown only when `/usr/share/ublue-os/image-info.json` is present |
+| Gaming | `gaming_group` | Game Mode switches the host between supported standard and gaming system images with Steam, Gamescope, and an Open Gaming Collective kernel, requiring reboot confirmation. Flatpaks in either scope stay untouched. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. Turning a family on requires cosign to verify `ghcr.io/projectbluefin/<id>-printer-app:stable` against its publishing workflow, then writes only the verified digest, without registry auto-update ([ADR-0023](adr/0023-verify-printer-images-before-installing.md)). Installed families receive newer verified images through the Updates page's **Printer Drivers** source, which lists a family when its verified `:stable` digest differs from the installed one and refreshes it with the same signature check; that source follows this group's visibility and the `printer-drivers-enabled` preference. Older units still carrying registry auto-update can migrate there or by disable/re-enable, and their row's subtitle says so. The port is published on `127.0.0.1` only ([ADR-0020](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)), so IPP and the unauthenticated web administration are reachable only from this computer; there is no LAN printing or DNS-SD advertisement. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 | Compass | `compass_group` | Installs Compass (`org.tunaos.compass`), TunaOS's keyboard-first launcher, system-wide from the image's FlatPark system remote (`flatpak install --system flatpark org.tunaos.compass`), authorized by Flatpak's own PolicyKit rather than by ChairLift. ChairLift never adds the remote; without an enabled `flatpark` system remote, or on a non-x86_64 host (FlatPark publishes Compass for x86_64 only), the switch can only remove an existing copy. Turning off asks for confirmation, then removes Compass from every scope it is installed in and keeps user data. The switch reflects installed state re-read after each action. Hidden where `flatpak` is absent |
 
@@ -208,13 +208,13 @@ The managed block places Homebrew's `bin` and `sbin` before image-provided tools
 so the shell uses the versions installed by setup. Personal overrides after the
 managed block still take precedence.
 
-**Gaming Mode** leads Features, with its own **Setup activity** checklist below it.
-Developer Mode, WSL, and Docker have a separate checklist at the top of the
-Developer Mode detail. Each bounded checklist names actual stages,
+**Game Mode** leads Features and switches system images only, keeping your
+Flatpaks untouched. Developer Mode, WSL, and Docker share the **Setup activity**
+checklist at the top of Developer Mode detail. It names bounded stages,
 pulses during work, and distinguishes completion, failure, cancellation,
 awaiting a new login, and preview without percentage estimates. Awaiting login
 is not ready and is not a failed action to repeat. Each of **Developer Mode**,
-**WSL Mode**, **Enable Docker**, and **Gaming Mode** expands to disclose its
+**WSL Mode** and **Enable Docker** expands to disclose its
 packages and changes; the independent suffix switch runs the action. Disclosures
 name directly requested software (for Docker, Homebrew formulae), not every
 package-manager dependency. Developer Mode additionally offers the independently
@@ -315,7 +315,7 @@ beside it, and the chooser then says the built-in engine runs Debian.
 thread after a confirmed live enable, and never on a disable, a page restore, a
 failed helper call, or a `--dry-run` preview:
 
-- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: like gaming mode, the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
+- `install_pulp` — installs the Pulp feed reader (`org.gnome.gitlab.cheywood.Pulp`) as a system-scope Flatpak from the system Flathub remote, unless a copy is already installed in either scope. No `pkexec`: the `flatpak` CLI authorizes it through Flatpak's own PolicyKit
 - `stage_feeds` — writes the curated catalog to `~/.local/share/chairlift/developer-feeds.opml` and says so in a toast that names the path. Importing it is the user's own action inside Pulp; ChairLift never writes to Pulp's sandboxed store and never claims a subscription was imported
 - `install_dev_apps` — installs the `dakota-dev-flatpaks` app collection with `brew bundle install`. Skipped when `applications_page.brew_bundles_group` is disabled or Homebrew is unavailable (the same floor that hides App collections), so a host without Homebrew never attempts it
 

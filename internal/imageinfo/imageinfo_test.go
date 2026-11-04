@@ -197,11 +197,8 @@ func TestVariantCoversEverySupportedImage(t *testing.T) {
 	}
 }
 
-// The gaming images ship the stack as system packages, so ChairLift's
-// Flatpak-based gaming mode must not be offered on them: it would install a
-// second, shadowing copy of Steam and friends. Reported against
-// ghcr.io/projectbluefin/dakota-gaming:next and
-// ghcr.io/projectbluefin/dakota-nvidia-gaming:next.
+// Gaming image classification supports both the image switch and branding,
+// including descriptors with only a flavor, name, or reference signal.
 func TestGamingImagesAreRecognizedFromTheDescriptor(t *testing.T) {
 	tests := []struct {
 		name string

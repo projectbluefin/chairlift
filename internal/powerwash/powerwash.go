@@ -3,7 +3,7 @@
 // machine's applications return to what the base image ships.
 //
 // It is unprivileged. Both steps run in the user's own account — the same
-// reasoning as gaming mode and Homebrew tap trust — so Powerwash needs no
+// reasoning as Homebrew tap trust — so Powerwash needs no
 // pkexec prompt and touches nothing the administrator owns. That is also
 // what distinguishes it from Factory Reset (internal/ublue.FactoryReset):
 // Powerwash clears applications; Factory Reset replaces the OS image itself

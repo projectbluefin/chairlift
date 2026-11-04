@@ -450,9 +450,9 @@ is stamped from the query, not inferred from optional parsed columns.
 | `UninstallUnused()` | Independently `uninstall --unused -y --user` and `--system`; errors joined |
 | `RemoveAllUser()` | `uninstall --user --all -y`; Powerwash step, not routine cleanup |
 
-The update inventory deliberately lists applications only. A runtime extension
-such as Gaming's MangoHud requires the separate runtime inventory; it must
-not be classified absent from an application-only query.
+The update inventory deliberately lists applications only. Runtime extensions
+require the separate runtime inventory and must not be classified absent from
+an application-only query.
 
 `ListUpdates` queries each enabled remote separately because a remote-less
 `remote-ls --updates` fails the whole installation when any one remote is
@@ -488,8 +488,8 @@ mutation diagnostic, Flatpak prefers stderr and falls back to the stdout tail
 only when stderr is empty. Neither runner reports its own cancellation merely
 as `signal: killed`.
 
-Apps has no Flatpak inventory or removal. Flatpak remains in Updates, Gaming,
-and maintenance/Powerwash operations.
+Apps has no Flatpak inventory or removal. Flatpak remains in Updates,
+Compass and optional developer setup on Features, and maintenance/Powerwash.
 
 ## Shared OS stage executor (`internal/stageexec`)
 
@@ -815,12 +815,12 @@ GTK main thread, does external work off-thread, and marshals widget changes
 back through `sgtk.RunOnMainThread`. Failed or previewed work leaves the action
 retryable and never invents a live installation or clears known inventories.
 
-Gaming Mode leads Features. The **Setup activity** checklist below it has
-bounded, reusable stage rows and a pulsing timer independent of provider output. Stage outcomes
+Game Mode leads Features as an image-only switch. Developer Mode detail owns
+the **Setup activity** checklist, with bounded stage rows and a pulsing timer independent of provider output. Stage outcomes
 distinguish complete, failed, canceled, preview, and awaiting-new-login work;
 there is no estimated percentage. Awaiting login is not readiness or a generic
 failure and does not offer Retry just to repeat the same permission grant.
-Developer Mode, WSL Mode, Enable Docker, and Gaming Mode use native
+Developer Mode, WSL Mode, and Enable Docker use native
 expanders matching Apps collections. Header activation expands the package
 disclosure; a separate suffix switch runs the action, with no
 `SetActivatableWidget` binding to that switch. Developer Mode also contains
@@ -828,8 +828,7 @@ independent Monospace Fonts collection controls. WSL disclosure shares
 `devtools.WSLPackage` with execution; Docker's `devtools.DockerPackages` lists
 the daemon formulae as **Homebrew, installed for the whole computer** and the
 CLI formulae as user-scope Homebrew formulae, not download progress.
-Gaming uses `gaming.Components`. Developer Mode discloses
-its Dev Container CLI and enabled
+Developer Mode discloses its Dev Container CLI and enabled
 follow-ons, subject to the same capability/config gates as execution. An opaque
 Homebrew bundle remains one operation: its static package disclosure is not a
 live per-package completion stream. Signals and rows are built once, not per
@@ -1026,23 +1025,14 @@ preserving the runtime/data/groups and Developer Mode, and a no-op
 step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
 establish live readiness.
 
-[`internal/gaming`](../../internal/gaming/gaming.go) manages the gaming tools
-stack (ProtonPlus, Protontricks, GOverlay, MangoHud). Enable installs missing
-refs in the **system** scope (`Install(id, false)`, #503): Bluefin-family images
-configure Flathub only as a system remote, and their policy is system-wide
-Flatpaks. The `flatpak` CLI authorizes that through Flatpak's own PolicyKit
-(`org.freedesktop.Flatpak.app-install`/`runtime-install`), not ChairLift's
-`pkexec` boundary. Its inventory queries application/runtime kinds in both
-scopes, so a per-user copy from an earlier release counts as installed and is
-not duplicated. Disable removes each component from exactly the scopes it
-is observed in (`Uninstall(id, true)` for a user copy, `Uninstall(id, false)`
-for a system copy), and a ref with a copy left is a failure. A system copy the
-image declares it ships (Flatpak `preinstall.d` or Bluefin's
-`system-flatpaks.Brewfile`, read by `imageShipped`) is left in place and
-returned as kept rather than removed. Per-item failures preserve partial
-outcomes. The Features view serializes action/refresh with `gamingGate`;
-failed refreshes preserve last known state. Neither gaming nor per-user
-Homebrew trust adds a ChairLift privilege route.
+Game Mode stages a switch between the supported standard and gaming system
+images through `ublue.SetGamingMode` and the fixed `gaming-switch` helper.
+The target preserves the published stream and graphics driver. This operation
+shares update-shell admission and retains the Steam/Gamescope/Open Gaming
+Collective kernel and reboot confirmation. It never installs or removes
+Flatpaks, reads their inventory, or cleans up apps an older release installed.
+The separate Flatpak Gaming Tools control and its backend are retired; all
+existing user and system Flatpak copies remain untouched.
 
 ## Agent Mode (`internal/aistack`)
 

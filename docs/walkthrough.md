@@ -191,13 +191,10 @@ without opening a terminal.
 
 ![Features](screenshots/4-features.png)
 
-**Gaming Mode** leads the page. The **Setup activity** checklist below it
-shows the current operation and its outcome. It names real setup stages and
-pulses while work is running;
-it does not estimate percentages. Failures, authentication cancellations, and
-awaiting a new login remain distinguishable from completion. Failed optional
-setup can be retried without repeating a completed access grant; waiting for a
-new login is not a failure to retry.
+**Game Mode** leads the page and stages a change between the standard and
+gaming system images. The Steam, Gamescope, Open Gaming Collective kernel,
+and reboot warning remains explicit. Your Flatpaks stay untouched in both
+directions, including apps installed by older releases.
 
 **Bluefin CLI** in **Terminal** is one switch for the Bash terminal experience.
 It installs command-line tools (including `ugrep`), enables Starship, zoxide,
@@ -208,7 +205,7 @@ tools. Personal configuration is preserved; recognized legacy Common blocks
 are migrated on enable. Open a new Bash terminal after changing the switch.
 Fish and Zsh are explicitly unsupported and are not changed.
 
-Expand **Developer Mode**, **WSL Mode**, **Enable Docker**, or **Gaming Mode**
+Expand **Developer Mode**, **WSL Mode**, or **Enable Docker**
 to read the packages and changes involved, like App collections on Apps.
 Clicking the row expands it; the separate switch starts the action. Package
 disclosures are informational, not a live package log. Developer Mode also
@@ -289,10 +286,8 @@ machine the built-in engine made in an earlier release keeps being used, and
 the chooser says so, instead of an Ubuntu machine being created beside it.
 **Gaming** offers **Game Mode** to switch between standard and gaming OS variants
 (including Steam, Gamescope, and an Open Gaming Collective kernel with a reboot
-confirmation), alongside **Gaming Mode** to optionally install gaming tools
-(ProtonPlus, Protontricks, GOverlay, MangoHud) system-wide for every account on
-the computer. Turning tools off removes each tool from every scope it is
-installed in, leaving in place any copy that came with the system.
+confirmation). Switching images never installs, removes, or cleans up your
+Flatpaks; there is no separate gaming-tools installer or removal switch.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — offering extra drivers for printers that don't work
 on their own. Each runs as a small container in your own account and only
@@ -317,7 +312,7 @@ not set up, the row says so and the switch cannot install anything. Compass
 is published for x86_64 computers only; on other computers the row says so.
 **Optional Features** is the distribution's own feature manager; it is hidden
 where the distribution ships none. When a computer offers none of these —
-no Developer Mode, no Gaming Mode, no Printers, no Compass, no optional features — the page
+no Developer Mode, no Game Mode, no Printers, no Compass, no optional features — the page
 says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.

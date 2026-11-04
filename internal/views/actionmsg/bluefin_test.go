@@ -112,53 +112,6 @@ func TestDeveloperModeNamesSkippedGroups(t *testing.T) {
 	}
 }
 
-// Gaming mode is the one toggle whose live run can partly or wholly fail,
-// so Confirm is not simply !dryRun.
-func TestGamingModeConfirmsOnlyWhenSomethingChanged(t *testing.T) {
-	tests := []struct {
-		name        string
-		dryRun      bool
-		enable      bool
-		changed     int
-		failed      int
-		kept        int
-		wantConfirm bool
-		wantToast   string
-	}{
-		{name: "dry run", dryRun: true, enable: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be installed"},
-		{name: "dry run removal", dryRun: true, changed: 6, wantToast: "[DRY-RUN] Preview: gaming components would be removed"},
-		// Issue #352: everything selected came with the image, so a preview
-		// must not promise a removal the live run would not make.
-		{name: "dry run with only image-shipped components", dryRun: true, kept: 1, wantToast: "[DRY-RUN] Preview: nothing to remove — 1 component(s) that came with the system would be left in place"},
-		{name: "dry run partial removal names the kept ones", dryRun: true, changed: 3, kept: 1, wantToast: "1 component(s) that came with the system would be left in place"},
-		{name: "dry run with nothing to do", dryRun: true, enable: true, wantToast: "already in the requested state"},
-		{name: "dry run that could not read the inventory", dryRun: true, enable: true, failed: 1, wantToast: "could be installed (1 failed)"},
-		{name: "full install", enable: true, changed: 6, wantConfirm: true, wantToast: "Installed 6 gaming apps"},
-		{name: "full removal", changed: 6, wantConfirm: true, wantToast: "Removed 6 gaming apps"},
-		{name: "partial install still confirms", enable: true, changed: 4, failed: 2, wantConfirm: true, wantToast: "2 couldn't be installed"},
-		{name: "total failure does not confirm", enable: true, changed: 0, failed: 6, wantConfirm: false, wantToast: "Couldn't install any gaming apps"},
-		{name: "total removal failure does not confirm", changed: 0, failed: 2, wantConfirm: false, wantToast: "Couldn't remove any gaming apps"},
-		{name: "nothing to do still confirms", enable: true, changed: 0, wantConfirm: true, wantToast: "Nothing needed changing"},
-		// Everything selected came with the image, so removal is a no-op and
-		// must not claim gaming mode is now off.
-		{name: "only image-shipped components", changed: 0, kept: 1, wantConfirm: false, wantToast: "Apps installed for everyone were kept"},
-		{name: "partial removal names the kept ones", changed: 3, kept: 1, wantConfirm: true, wantToast: "Apps installed for everyone were kept"},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			decision := GamingMode(test.dryRun, test.enable, test.changed, test.failed, test.kept)
-			if decision.Confirm != test.wantConfirm {
-				t.Errorf("GamingMode(%v, %v, %d, %d, %d).Confirm = %v, want %v",
-					test.dryRun, test.enable, test.changed, test.failed, test.kept, decision.Confirm, test.wantConfirm)
-			}
-			if !strings.Contains(decision.Toast, test.wantToast) {
-				t.Errorf("GamingMode(...).Toast = %q, want it to contain %q", decision.Toast, test.wantToast)
-			}
-		})
-	}
-}
-
 // Under dry-run nothing was reordered, so the row must not claim the
 // previous image will boot next.
 func TestRollbackNeverConfirmsUnderDryRun(t *testing.T) {

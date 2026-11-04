@@ -387,9 +387,8 @@ const gamingSuffix = "-gaming"
 // IsGaming reports whether the running image already ships the gaming stack.
 //
 // The gaming images (dakota-gaming, dakota-nvidia-gaming) carry Steam and the
-// rest of the stack as system packages. ChairLift's gaming mode installs the
-// same applications as Flatpaks, so offering it here would install a
-// second, shadowing copy of software the image already provides.
+// rest of the stack as system packages. This classification drives the Game
+// Mode image switch and the default gaming panel mark, not Flatpak management.
 //
 // Two signals are accepted because only the first is authoritative and it is
 // not present on every descriptor: the descriptor's own image-flavor, and the

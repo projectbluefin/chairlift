@@ -211,11 +211,6 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   well as empty preferences: restoring an enabled setting must not expose the
   whole section. Livery's compact-section scenario checks each header before
   expanding it and verifies that expansion writes no settings or icon files.
-- **A tool-call assertion needs isolated readers.** Gaming's capability floor
-  is `ImageDescriptor`, so it can read Flatpak inventories even when the
-  `Flatpak` capability is absent. An Apps-only no-list assertion must omit the
-  image descriptor or disable Gaming, rather than treating a legitimate
-  Gaming read as evidence the Apps page still manages Flatpaks.
 - **Never read tags from `scenario.effective_tags`.** It is a set, so
   `@stub.a @stub.b` ran `b` before `a` and a refining stub was overwritten by
   its base. `environment.py`'s `before_scenario` builds the list from

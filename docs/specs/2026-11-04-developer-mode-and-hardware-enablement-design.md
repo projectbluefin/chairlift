@@ -7,8 +7,9 @@
 to Features; unavailable details fall back through the normal route resolver.
 
 The detail owns Developer Mode, WSL Mode, Docker, and developer setup activity.
-Gaming Mode and its independent activity remain on Features. Static page
-structure reuses `page.blp`; configuration-dependent rows stay in Go.
+Game Mode remains on Features as an image-only switch, with no gaming package
+setup activity or Flatpak changes. Static page structure reuses `page.blp`;
+configuration-dependent rows stay in Go.
 
 The **Development Apps** catalog contains exactly six entries: Visual Studio
 Code, VSCodium, and JetBrains Toolbox from `ublue-os` Homebrew taps only (never

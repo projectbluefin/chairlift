@@ -9,7 +9,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/devsetup"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
-	"github.com/projectbluefin/chairlift/internal/gaming"
 	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
@@ -29,10 +28,8 @@ import (
 // page needs. GtkSwitch emits ::state-set from gtk_switch_set_active whenever
 // the value actually changes, and a user's click reaches the handler by that
 // same path — so ChairLift's own writes are indistinguishable from a person
-// flipping the switch unless they are marked. Unmarked, showing the machine's
-// real state on load would run the action that produces it (installing the
-// gaming applications on a machine that already has them), and reverting
-// after a failure or a dry run would run the opposite action for real.
+// flipping the switch unless they are marked. Unmarked, restoring observed
+// state on load or after a failure or dry run would trigger a real mutation.
 type guardedSwitch struct {
 	widget *gtk.Switch
 	// applying is true only while set() moves the switch.
@@ -372,7 +369,6 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 
 	if gamingEnabled {
 		uh.buildGamingGroup(page, status)
-		uh.gamingSetupActivity = uh.buildSetupActivity(page)
 	}
 
 	// Optional user tools remain discoverable even without installed access
@@ -448,9 +444,9 @@ func (uh *UserHome) buildDeveloperEntryRow(page *adw.PreferencesPage, status ubl
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Status) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
-	group.SetDescription("Apps for playing games on this computer.")
+	group.SetDescription("Switch system images for Game Mode. Requires a restart; your Flatpaks are kept.")
 
-	// 1. Game Mode (system image switch to -gaming variant)
+	// Game Mode stages a system image switch; it never manages Flatpaks.
 	gameModeRow := adw.NewActionRow()
 	gameModeRow.SetUseMarkup(false)
 	gameModeSwitchable := status.CanSwitchGaming && status.Supports(ubluehelper.CommandGamingSwitch)
@@ -473,47 +469,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Sta
 	uh.gameModeRow = gameModeRow
 	uh.gameModeSwitch = gameModeToggle.widget
 	uh.gameModeToggle = gameModeToggle
-	// 2. Optional Flatpak Gaming Tools
-	row := adw.NewExpanderRow()
-	row.SetUseMarkup(false)
-	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
-	row.SetSubtitle(pageview.GamingCheckingSubtitle)
-	uh.gamingSpinner = newActivitySpinner()
-	row.AddSuffix(&uh.gamingSpinner.Widget)
-
-	gamingRow := row
-	var toggle *guardedSwitch
-	toggle = newGuardedSwitch(false, func(state bool) {
-		if !state {
-			uh.confirmGamingDisable(toggle, gamingRow)
-			return
-		}
-		uh.onGamingToggled(true, toggle, gamingRow)
-	})
-	SetAccessibleLabel(toggle.widget, row.GetTitle())
-	toggle.widget.SetSensitive(false)
-
-	row.AddSuffix(&toggle.widget.Widget)
-	for _, component := range gaming.Components() {
-		addSetupContents(row, component.Name, component.Description+" · System Flatpak")
-	}
-	group.Add(&row.Widget)
 	page.Add(group)
-	uh.gamingGroup, uh.gamingRow = group, row
-
-	go func() {
-		state, err := gaming.Status()
-		sgtk.RunOnMainThread(func() {
-			if err != nil {
-				log.Printf("views: gaming status unavailable: %v", err)
-				row.SetSubtitle(pageview.GamingUnavailableSubtitle)
-				return
-			}
-			toggle.widget.SetSensitive(true)
-			toggle.set(state.Enabled)
-			row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), len(state.MissingCore)).Subtitle)
-		})
-	}()
 }
 
 func (uh *UserHome) onGameModeToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
@@ -781,133 +737,4 @@ func (uh *UserHome) openDeveloperOnboarding(enabled, succeeded bool) {
 	for _, link := range pageview.DeveloperOnboardingTargets(dryrun.Enabled(), enabled, succeeded) {
 		uh.openURL(link.URL)
 	}
-}
-
-func (uh *UserHome) confirmGamingDisable(toggle *guardedSwitch, row *adw.ExpanderRow) {
-	if !uh.gamingGate.TryStart() {
-		sgtk.RunOnMainThread(func() { toggle.set(true) })
-		return
-	}
-	dialog := adw.NewAlertDialog("Turn Off Gaming Mode?", "Gaming tools are removed wherever they are installed: system-wide copies for every account on this computer, and copies installed only for your account. Steam, ProtonUp-Qt, and Flatseal left over from an earlier Gaming Mode are removed too. Tools that came with the system are left in place. Game data is kept.")
-	dialog.AddResponse("cancel", "Cancel")
-	dialog.AddResponse("remove", "Remove")
-	dialog.SetResponseAppearance("remove", adw.ResponseDestructiveValue)
-	dialog.SetDefaultResponse("cancel")
-	dialog.SetCloseResponse("cancel")
-	uh.gamingDialogs.connect(dialog, func(response string) {
-		if response == "remove" {
-			uh.onGamingToggledConfirmed(false, toggle, row)
-		} else {
-			uh.gamingGate.Reset()
-			toggle.set(true)
-		}
-	})
-	dialog.Present(&uh.featuresPage.Widget)
-}
-
-// onGamingToggled installs or removes the gaming tools stack.
-func (uh *UserHome) onGamingToggled(enabled bool, toggle *guardedSwitch, row *adw.ExpanderRow) {
-	if !uh.gamingGate.TryStart() {
-		active := toggle.widget.GetState()
-		sgtk.RunOnMainThread(func() { toggle.set(active) })
-		return
-	}
-	uh.onGamingToggledConfirmed(enabled, toggle, row)
-}
-
-func (uh *UserHome) onGamingToggledConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ExpanderRow) {
-	uh.runGamingConfirmed(enabled, toggle, row, false)
-}
-
-func (uh *UserHome) runGamingConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ExpanderRow, retry bool) {
-	beforeActive := toggle.widget.GetState()
-	if !uh.gamingSetupActivity.begin(row.GetTitle(), []devsetup.Stage{devsetup.Tools, devsetup.Verify}, retry, func() {
-		if uh.gamingGate.TryStart() {
-			uh.runGamingConfirmed(enabled, toggle, row, true)
-		}
-	}) {
-		uh.gamingGate.Reset()
-		sgtk.RunOnMainThread(func() { toggle.set(beforeActive) })
-		return
-	}
-	toggle.widget.SetSensitive(false)
-	before := row.GetSubtitle()
-	row.SetSubtitle(pageview.GamingWorkingSubtitle(enabled))
-	setActivitySpinner(uh.gamingSpinner, true)
-
-	go func() {
-		progressCb := func(step, total int, name string) {
-			uh.gamingSetupActivity.detail(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
-			sgtk.RunOnMainThread(func() {
-				row.SetSubtitle(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
-			})
-		}
-		var changed, kept []string
-		var failures []error
-		var state gaming.State
-		var refreshErr error
-		preview := dryrun.Enabled()
-		setupResult := devsetup.Run(context.Background(), devsetup.Request{Preview: preview}, nil, []devsetup.Task{
-			{Stage: devsetup.Tools, Run: func() error {
-				if enabled {
-					changed, failures = gaming.EnableWithProgress(progressCb)
-				} else {
-					changed, kept, failures = gaming.DisableWithProgress(progressCb)
-				}
-				return errors.Join(failures...)
-			}},
-			{Stage: devsetup.Verify, Run: func() error {
-				state, refreshErr = gaming.Status()
-				if refreshErr == nil && !preview && enabled && !state.Enabled {
-					return errors.New("gaming tools are not ready")
-				}
-				return refreshErr
-			}},
-		}, nil, uh.gamingSetupActivity.report)
-		for _, failure := range failures {
-			log.Printf("views: gaming component failed: %v", failure)
-		}
-		for _, id := range kept {
-			log.Printf("views: gaming component %s came with the system; its system-wide copy was left in place", id)
-		}
-		if refreshErr != nil {
-			log.Printf("views: gaming refresh failed: %v", refreshErr)
-		}
-
-		sgtk.RunOnMainThread(func() {
-			defer uh.gamingGate.Reset()
-			setActivitySpinner(uh.gamingSpinner, false)
-			toggle.widget.SetSensitive(true)
-			uh.gamingSetupActivity.finish(setupResult, preview)
-
-			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(kept))
-			active := beforeActive
-			if !preview && refreshErr == nil {
-				active = state.Enabled
-			}
-			toggle.set(active)
-			if dryrun.Enabled() {
-				row.SetSubtitle(before)
-			} else {
-				result := pageview.GamingResultSubtitle(enabled, len(changed), len(failures))
-				if len(kept) > 0 {
-					result += " Apps installed for everyone were kept."
-				}
-				if len(failures) > 0 {
-					result += " Try again."
-				}
-				if refreshErr != nil {
-					result += " Couldn't refresh the list of installed apps."
-				}
-				row.SetSubtitle(result)
-			}
-			if len(failures) > 0 {
-				uh.toastAdder.ShowErrorToast(decision.Toast)
-			} else if setupResult.Err != nil {
-				uh.toastAdder.ShowErrorToast("Couldn't verify Gaming Mode. Check Setup activity and try again.")
-			} else {
-				uh.toastAdder.ShowToast(decision.Toast)
-			}
-		})
-	}()
 }

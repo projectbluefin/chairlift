@@ -6,9 +6,8 @@
 // one quadlet per printer application and drives each the same way. Nothing
 // here is privileged. Quadlet units live under the user's
 // ~/.config/containers/systemd and are started with `systemctl --user`, so the
-// container runs rootless in the invoking account — the same reasoning that
-// keeps the AI stack and gaming mode off the pkexec path. On a bootc host that
-// also means nothing is layered onto the image.
+// container runs rootless in the invoking account. No pkexec route is involved,
+// and on a bootc host nothing is layered onto the image.
 //
 // A printer application is a Family (a published image, one per driver family:
 // Ghostscript, HPLIP, Gutenprint) plus a unique app name. A family
