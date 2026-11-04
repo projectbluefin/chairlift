@@ -1,8 +1,8 @@
 ---
 name: factory-onboarding
 description: Use when starting or resuming factory work in ChairLift, submitting changes through the merge queue, or publishing a stable release; follow Common's Prow workflow page for intake, labels and commands.
-version: 1.6.0
-last_updated: 2026-11-01
+version: 1.6.1
+last_updated: 2026-11-04
 tags:
   - factory
   - onboarding
@@ -61,11 +61,14 @@ request here, is that this repository merges through a **merge queue**:
   ```sh
   gh api graphql -f query='
     mutation($id: ID!) {
-      dequeuePullRequest(input: {pullRequestId: $id}) {
+      dequeuePullRequest(input: {id: $id}) {
         mergeQueueEntry { position }
       }
     }' -F id="$(gh pr view <n> --repo projectbluefin/chairlift --json id --jq .id)"
   ```
+
+  Source: [`DequeuePullRequestInput`](https://docs.github.com/en/graphql/reference/pulls#dequeuepullrequestinput),
+  verified against the live schema and Context7 `/websites/github_en_graphql`.
 
   Inspect the queue first with the `mergeQueue { entries }` field on
   `repository`, since a merged entry is already gone and cannot be dequeued.
