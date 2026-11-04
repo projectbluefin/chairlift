@@ -224,28 +224,29 @@ const AvailableItems = 256
 // on what counts as an entry.
 var bundleEntryPrefixes = []string{"brew ", "cask ", "flatpak ", "mas ", "vscode "}
 
-// BundleContents parses a Brewfile and returns every installable entry it
-// recognises, in source order, deduplicated by (Kind, Name). A directive
-// without a recognisable token (a bare `tap "owner/repo"` or a malformed
-// line) is skipped silently; an entry outside the five installable kinds
-// is also skipped. The cap protects the parser and the UI from runaway
-// files; a Brewfile that exceeds it is truncated at AvailableItems entries.
-// An open failure returns no items; a read failure part-way through returns
-// the entries read so far alongside the error.
-func BundleContents(path string) ([]BundleItem, error) {
+// BundleContents returns recognized entries and whether every scanned line
+// belongs to the closed, literal Brewfile subset safe for a whole-file install.
+// Unknown directives, Ruby, options we cannot interpret, truncated reads, and
+// malformed lines keep their readable entries but forbid executing the file.
+// No Brewfile content is evaluated. Entries are deduplicated by kind and name.
+func BundleContents(path string) ([]BundleItem, bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer func() { _ = file.Close() }()
 
 	var items []BundleItem
+	safe := true
 	seen := make(map[BundleItemKind]map[string]struct{})
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), maxBundleDescriptionBytes)
 	for scanner.Scan() {
 		if len(items) >= AvailableItems {
-			break
+			return items, false, nil
+		}
+		if !safeBundleLine(scanner.Text()) {
+			safe = false
 		}
 		kind, name, ok := parseBundleItemLine(scanner.Text())
 		if !ok {
@@ -263,9 +264,50 @@ func BundleContents(path string) ([]BundleItem, error) {
 		items = append(items, BundleItem{Name: name, Kind: kind})
 	}
 	if err := scanner.Err(); err != nil {
-		return items, err
+		return items, false, err
 	}
-	return items, nil
+	return items, safe, nil
+}
+
+// safeBundleLine recognizes literal installs and literal trust declarations.
+// Anything not understood must use selected per-manager installs, never Ruby.
+func safeBundleLine(raw string) bool {
+	line := strings.TrimSpace(raw)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return true
+	}
+	command, rest, ok := strings.Cut(line, " ")
+	if !ok || (command != "brew" && command != "cask" && command != "flatpak" && command != "tap") {
+		return false
+	}
+	name, tail, ok := bundleEntryToken(strings.TrimSpace(rest))
+	if !ok || name == "" {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && !strings.ContainsRune("@+._/-", r) {
+			return false
+		}
+	}
+	if command == "tap" && (strings.Count(name, "/") != 1 || strings.HasPrefix(name, "/") || strings.HasSuffix(name, "/")) {
+		return false
+	}
+	// Comments cannot add an executable Ruby expression. The quoted token
+	// was validated above, so a # here is outside it, never interpolation.
+	tail, _, _ = strings.Cut(tail, "#")
+	tail = strings.TrimSpace(tail)
+	if tail == "" {
+		return true
+	}
+	if command == "flatpak" {
+		return false
+	}
+	options, ok := strings.CutPrefix(tail, ",")
+	if !ok {
+		return false
+	}
+	options = strings.TrimSpace(options)
+	return options == "trusted: true" || options == "trusted: false"
 }
 
 // parseBundleItemLine returns the (kind, name) of a Brewfile line, or

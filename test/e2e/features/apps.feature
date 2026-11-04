@@ -356,3 +356,33 @@ Feature: Apps destination
     And I click the "Install" button in the "Install Selected" row
     Then the application log previews "brew install gh" exactly once
     And the application log previews no "brew bundle install"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: Select All cannot execute unknown directives hidden from the collection
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I click the "Select All in Opaque tools" button
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log previews "brew install gh" exactly once
+    And the application log previews no "brew bundle install"
+
+  @config.features-no-dx @stub.apps-brew-developer-installed @stub.apps-collections
+  Scenario: Official Homebrew casks retain their observed source
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I expand the "Monospace Fonts" list under "App Collections"
+    Then the "font-hack" entry checkbox is checked
+    And the "font-hack" entry checkbox is insensitive
+    And the collection entry "font-hack" says "Installed from Homebrew"
+
+  @config.apps-bundles @stub.apps-brew @stub.apps-collections
+  Scenario: Whole collection installs retain literal package trust declarations
+    Given ChairLift is running
+    When I open the "Apps" page
+    And I click the "Select All in Trusted tools" button
+    And I click the "Install" button in the "Install Selected" row
+    Then the application log contains "/bundles/trusted-tools.Brewfile"
+    And Homebrew collection previews are exactly
+      | file                   |
+      | trusted-tools.Brewfile |
+    And the application log previews no "brew install"

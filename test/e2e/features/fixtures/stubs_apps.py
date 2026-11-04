@@ -28,12 +28,12 @@ FORMULAE = [
     {"name": "not-installed", "full_name": "not-installed", "tap": "homebrew/core", "installed": [], "pinned": False},
 ]
 CASKS = [
-    {"token": "visual-studio-code", "full_token": "visual-studio-code", "tap": "homebrew/core", "version": "1.104.0", "installed": "1.104.0"},
+    {"token": "visual-studio-code", "full_token": "visual-studio-code", "tap": "homebrew/cask", "version": "1.104.0", "installed": "1.104.0"},
 ]
 
-# `flatpak list --<scope> --app --columns=name,application,version,branch,origin` rows.
-FLATPAK_USER = (("Firefox", "org.mozilla.firefox", "140.0", "stable", "flathub"),)
-FLATPAK_SYSTEM = (("Text Editor", "org.gnome.TextEditor", "48.0", "stable", "flathub"),)
+# `flatpak list --<scope> --app --columns=name,application,version,branch` rows.
+FLATPAK_USER = (("Firefox", "org.mozilla.firefox", "140.0"),)
+FLATPAK_SYSTEM = (("Text Editor", "org.gnome.TextEditor", "48.0"),)
 
 # The Flatpak applications the Apps page finds already installed, and the
 # remote each came from. This is the query `brew bundle` itself uses.
@@ -87,6 +87,15 @@ APP_COLLECTIONS = {
         'brew "gh"\n'
         'mas "Xcode", id: 497799835\n'
         'vscode "ms-vscode-remote.remote-containers"\n'
+    ),
+    "opaque-tools.Brewfile": (
+        'brew "gh"\n'
+        'npm "typescript"\n'
+        'system "touch /tmp/chairlift-should-never-evaluate-brewfiles"\n'
+    ),
+    "trusted-tools.Brewfile": (
+        'brew "gh", trusted: true\n'
+        'cask "font-hack", trusted: false\n'
     ),
 }
 
@@ -205,7 +214,7 @@ def bluefin_cli_missing_tools(context):
 
 
 def _rows(rows):
-    return "".join(f"{name}\t{app_id}\t{version}\t{branch}\t{origin}\n" for name, app_id, version, branch, origin in rows)
+    return "".join(f"{name}\t{app_id}\t{version}\tstable\n" for name, app_id, version in rows)
 
 
 def _origin_rows(rows):
@@ -238,7 +247,7 @@ def apps_brew_developer_installed(context):
             {"name": "font-fira-code", "full_name": "font-fira-code", "tap": "homebrew/core", "installed": [{"version": "1", "installed_on_request": True}]},
         ],
         extra_casks=[
-            {"token": name, "full_token": name, "tap": "homebrew/core", "installed": "1"}
+            {"token": name, "full_token": name, "tap": "homebrew/cask", "installed": "1"}
             for name in ("font-jetbrains-mono", "font-hack")
         ],
     )
@@ -278,7 +287,7 @@ list)
     case "$*" in
     *--columns=application)
         cat <<'EOF'
-{''.join(app_id + chr(10) for _, app_id, _, _, _ in system_rows)}EOF
+{''.join(app_id + chr(10) for _, app_id, _ in system_rows)}EOF
         ;;
     *--runtime*) exit 0 ;;
     *--columns=application,origin*) cat <<'EOF'

@@ -19,6 +19,8 @@ func TestContentsSourceFollowsTheTokenShape(t *testing.T) {
 		{"core formula", homebrew.BundleItem{Name: "gh", Kind: homebrew.BundleItemBrew}, SourceHomebrew},
 		{"tap formula", homebrew.BundleItem{Name: "ublue-os/tap/linux-mcp-server", Kind: homebrew.BundleItemBrew}, SourceBrewTap},
 		{"core cask", homebrew.BundleItem{Name: "visual-studio-code", Kind: homebrew.BundleItemCask}, SourceHomebrew},
+		{"qualified official formula", homebrew.BundleItem{Name: "homebrew/core/gh", Kind: homebrew.BundleItemBrew}, SourceHomebrew},
+		{"qualified official cask", homebrew.BundleItem{Name: "homebrew/cask/visual-studio-code", Kind: homebrew.BundleItemCask}, SourceHomebrew},
 		{"tap cask", homebrew.BundleItem{Name: "ublue-os/tap/goose-linux", Kind: homebrew.BundleItemCask}, SourceBrewTap},
 		{"flatpak", homebrew.BundleItem{Name: "app.drey.Damask", Kind: homebrew.BundleItemFlatpak}, SourceFlathub},
 		{"app store", homebrew.BundleItem{Name: "497799835", Kind: homebrew.BundleItemMas}, SourceAppStore},
@@ -54,6 +56,9 @@ func TestSourceAndInstalledWording(t *testing.T) {
 func TestObservedSourceRefinesTheStaticShape(t *testing.T) {
 	if got := ObservedSource(homebrew.BundleItemBrew, "homebrew/core"); got != SourceHomebrew {
 		t.Errorf("ObservedSource(core) = %q, want %q", got, SourceHomebrew)
+	}
+	if got := ObservedSource(homebrew.BundleItemCask, "homebrew/cask"); got != SourceHomebrew {
+		t.Errorf("ObservedSource(homebrew/cask) = %q, want Homebrew", got)
 	}
 	if got := ObservedSource(homebrew.BundleItemCask, "ublue-os/tap"); got != SourceBrewTap {
 		t.Errorf("ObservedSource(tap) = %q, want %q", got, SourceBrewTap)
@@ -269,6 +274,28 @@ func TestPlanInstallSkipsTheKindsItCannotInstall(t *testing.T) {
 	plan := PlanInstall(entries, []string{"/b/ide.Brewfile"})
 	if !plan.Empty() {
 		t.Errorf("plan = %+v, want nothing to install", plan)
+	}
+}
+
+func TestPlanInstallDeduplicatesMergedCollectionsByKindAndName(t *testing.T) {
+	for _, allChecked := range []bool{false, true} {
+		entries := []EntryState{
+			{Item: homebrew.BundleItem{Name: "font-noto-sans", Kind: homebrew.BundleItemCask}, Checked: true},
+			{Item: homebrew.BundleItem{Name: "font-noto-sans", Kind: homebrew.BundleItemCask, Description: "Same font in the sibling file"}, Checked: true},
+			{Item: homebrew.BundleItem{Name: "font-noto-sans", Kind: homebrew.BundleItemBrew}, Checked: true},
+			{Item: homebrew.BundleItem{Name: "already-installed", Kind: homebrew.BundleItemBrew}, Checked: allChecked, Installed: true},
+		}
+		plan := PlanInstall(entries, []string{"/b/fonts.Brewfile", "/b/dakota-fonts.Brewfile"})
+		if plan.Pending != 2 {
+			t.Errorf("allChecked=%v: Pending = %d, want one cask and one formula", allChecked, plan.Pending)
+		}
+		if allChecked {
+			if len(plan.BundlePaths) != 2 {
+				t.Errorf("plan = %+v, want both complete Brewfiles", plan)
+			}
+		} else if len(plan.BundlePaths) != 0 || len(plan.Casks) != 1 || len(plan.Formulae) != 1 {
+			t.Errorf("plan = %+v, want one batched token per kind", plan)
+		}
 	}
 }
 

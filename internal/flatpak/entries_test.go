@@ -9,37 +9,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
-// The origin of an installed application is what tells where it came from,
-// and the listing must ask for it.
-func TestParseRefListReadsTheOrigin(t *testing.T) {
-	apps, err := parseRefList(
-		"Damask\tapp.drey.Damask\t48.0\tstable\tflathub\n",
-		"--system",
-		KindApplication,
-	)
-	if err != nil {
-		t.Fatalf("parseRefList returned error: %v", err)
-	}
-	if len(apps) != 1 {
-		t.Fatalf("parseRefList = %+v, want one application", apps)
-	}
-	if apps[0].Origin != "flathub" {
-		t.Errorf("Origin = %q, want %q", apps[0].Origin, "flathub")
-	}
-}
-
-// A flatpak that answers fewer columns than asked for must not cost the
-// listing the rows it did report.
-func TestParseRefListToleratesAShortRow(t *testing.T) {
-	apps, err := parseRefList("Damask\tapp.drey.Damask\t48.0\n", "--system", KindApplication)
-	if err != nil {
-		t.Fatalf("parseRefList returned error: %v", err)
-	}
-	if len(apps) != 1 || apps[0].ApplicationID != "app.drey.Damask" || apps[0].Origin != "" {
-		t.Errorf("parseRefList = %+v, want the short row kept without an origin", apps)
-	}
-}
-
 // The origin listing is the query `brew bundle` itself uses, and it names
 // only the application id and the remote it came from.
 func TestParseApplicationOriginsReadsThePairs(t *testing.T) {

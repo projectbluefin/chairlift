@@ -78,11 +78,6 @@ func (r *checkRoute) connect(check *gtk.CheckButton, action func(gtk.CheckButton
 	check.ConnectToggled(&r.toggled)
 }
 
-// clear drops every action when the list is rebuilt.
-func (r *checkRoute) clear() {
-	r.actions.Clear()
-}
-
 func newIconButton(icon, label string) *gtk.Button {
 	button := gtk.NewButtonFromIconName(icon)
 	// Rows do not flatten their suffix buttons; a header bar does, so

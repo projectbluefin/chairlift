@@ -111,10 +111,6 @@ type Application struct {
 	Branch       string `json:"branch"`
 	Installation string `json:"installation"` // "user" or "system"
 	Kind         Kind   `json:"kind"`         // "app" or "runtime"
-	// Origin is the remote the ref was installed from ("flathub" for the
-	// remote Bluefin ships). It is what tells where an application
-	// actually came from, as opposed to where it would be installed from.
-	Origin string `json:"origin"`
 }
 
 // stateChangingCommands are commands that modify system state
@@ -273,7 +269,7 @@ func ListSystemRuntimes() ([]Application, error) {
 // listRefs lists installed refs of one kind for a given installation type
 func listRefs(installFlag string, kind Kind) ([]Application, error) {
 	// Use columns format for structured output
-	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version,branch,origin")
+	output, err := runFlatpakCommand("list", installFlag, kind.listFlag(), "--columns=name,application,version,branch")
 	if err != nil {
 		return nil, err
 	}
@@ -286,10 +282,6 @@ func listRefs(installFlag string, kind Kind) ([]Application, error) {
 // out of the ref column, so a row that falls through to the whitespace
 // fallback below — where the ref may not have been captured at all — is still
 // classified correctly.
-//
-// The columns are read by position and a short row is tolerated: a flatpak
-// that answers fewer columns than asked for must not cost the listing the
-// rows it did report.
 func parseRefList(output string, installFlag string, kind Kind) ([]Application, error) {
 	var apps []Application
 	lines := strings.Split(strings.TrimSpace(output), "\n")
@@ -331,9 +323,6 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 		}
 		if len(fields) >= 4 {
 			app.Branch = strings.TrimSpace(fields[3])
-		}
-		if len(fields) >= 5 {
-			app.Origin = strings.TrimSpace(fields[4])
 		}
 		apps = append(apps, app)
 	}

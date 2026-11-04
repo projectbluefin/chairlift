@@ -83,9 +83,8 @@ type Package struct {
 	// inventory can be matched against a collection entry exactly
 	// instead of guessing from the bare name alone.
 	FullName string `json:"full_name"`
-	// Tap is the package's source: "homebrew/core" for a core package and
-	// "owner/repo" for one from a tap. It is what tells a core package
-	// from a tap package that happens to share its name.
+	// Tap is the package's source: homebrew/core for formulae,
+	// homebrew/cask for casks, or owner/repository for a third-party tap.
 	Tap                string   `json:"tap"`
 	Version            string   `json:"version"`
 	InstalledOnRequest bool     `json:"installed_on_request"`
@@ -108,10 +107,13 @@ func (p Package) QualifiedName() string {
 // homebrew/core rather than from a third-party tap.
 const CoreTap = "homebrew/core"
 
-// FromTap reports whether the package comes from a third-party tap rather
-// than from homebrew/core.
+// CaskTap is Homebrew's official cask repository, not a third-party source.
+const CaskTap = "homebrew/cask"
+
+// FromTap reports whether the package comes from a third-party source rather
+// than Homebrew's official formula or cask repositories.
 func (p Package) FromTap() bool {
-	return p.Tap != "" && p.Tap != CoreTap
+	return p.Tap != "" && p.Tap != CoreTap && p.Tap != CaskTap
 }
 
 // PackageKind identifies the Homebrew formula or cask namespace.

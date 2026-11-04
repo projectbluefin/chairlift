@@ -156,7 +156,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--user", "--app", "--columns=name,application,version,branch,origin"},
+			want: []string{"list", "--user", "--app", "--columns=name,application,version,branch"},
 		},
 		{
 			name: "list system applications",
@@ -167,7 +167,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--system", "--app", "--columns=name,application,version,branch,origin"},
+			want: []string{"list", "--system", "--app", "--columns=name,application,version,branch"},
 		},
 		{
 			// The regression this guards: a runtime extension is invisible
@@ -181,7 +181,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--user", "--runtime", "--columns=name,application,version,branch,origin"},
+			want: []string{"list", "--user", "--runtime", "--columns=name,application,version,branch"},
 		},
 		{
 			name: "list system runtimes",
@@ -192,7 +192,7 @@ esac`
 				}
 				return err
 			},
-			want: []string{"list", "--system", "--runtime", "--columns=name,application,version,branch,origin"},
+			want: []string{"list", "--system", "--runtime", "--columns=name,application,version,branch"},
 		},
 		{name: "install user", run: func() error { return Install("org.example.App", true) }, want: []string{"install", "-y", "--user", "org.example.App"}},
 		{name: "install system", run: func() error { return Install("org.example.App", false) }, want: []string{"install", "-y", "--system", "org.example.App"}},

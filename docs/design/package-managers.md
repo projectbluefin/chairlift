@@ -254,8 +254,8 @@ package is installed from.
 
 Every entry's subtitle names its **source**, not its kind: "from Homebrew",
 "from Brew Tap", "from Flathub", "from the App Store" or "from the VS Code
-Marketplace". The static source comes from the token's shape — a `/` in a
-Homebrew token means a tap — and the installed wording uses the *observed*
+Marketplace". Bare tokens and official `homebrew/core`/`homebrew/cask`
+qualifications mean Homebrew; other qualified tokens mean Brew Tap. Installed wording uses the *observed*
 source, the package's `tap` field or the Flatpak's `origin` column, falling
 back to the static shape when the inventory knew none. The vocabulary is
 closed and lives in
@@ -354,17 +354,20 @@ remain Indeterminate with an error; dry-run still performs these reads. Read-onl
 `bundle check`/`bundle list` run with `HOMEBREW_NO_AUTO_UPDATE=1`, because brew
 otherwise runs `brew update --auto-update` before every `bundle` subcommand.
 
-`BundleContents(path)` parses a Brewfile into `[]BundleItem` (one entry per
-recognised directive: `brew`, `cask`, `flatpak`, `mas`, `vscode`). Entries
-are returned in source order, deduplicated by (Kind, Name), and capped at
-256 items per file so a runaway Brewfile cannot dominate the UI.
+`BundleContents(path)` returns `[]BundleItem`, a whole-file safety flag, and an
+error. Recognized directives (`brew`, `cask`, `flatpak`, `mas`, `vscode`) remain
+in source order, deduplicated by kind/name, and capped at 256 items per file.
+Only blank/comment lines, literal supported installs, and literal tap declarations
+preserve the safety flag, including exactly `trusted: true`/`false` on
+brew/cask/tap. Unknown directives (including other
+package managers), arbitrary Ruby/interpolation, unparsed options, and truncated
+or failed reads forbid executing the whole file, regardless of its item count.
 `countBundleItems` runs the same `parseBundleItemLine` against the same
 input and applies the same dedup, so a Brewfile's count and its expanded
 list always agree (including when one entry repeats or is malformed).
 [`bundleview.PresentContents`](../../internal/views/bundleview/bundleview.go)
 turns those items into the rows the Apps page renders inside each
-collection's `AdwExpanderRow`, with a kind label (Command-line tool, App,
-Flatpak, App Store, VS Code extension) per row. A Brewfile with no
+collection's `AdwExpanderRow`, with source labels per row. A Brewfile with no
 recognised entries shows a placeholder row instead; one longer than the
 256-entry cap lists the first 256 followed by a "Showing N of M entries."
 row. If the file cannot be read when the list is built, the rows read before
@@ -402,6 +405,8 @@ entries retain deliberate selections. Fully read, checked, supported collections
 use `brew bundle`; mixed collections containing unsupported App Store/VS Code
 directives, truncated reads, and partial read failures use only selected
 per-manager commands, never the whole file.
+`PlanInstall` deduplicates selected pending items again across merged member
+files by kind/name, keeping both batched argv and reported counts accurate.
 
 `BundleContents` deliberately drops tap directives, because a tap installs
 nothing on its own. `BundleTaps` parses them separately: the trust a
@@ -530,7 +535,7 @@ display name, new version and installation.
 
 | API | Scope / command |
 | --- | --- |
-| `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version,branch,origin` |
+| `ListUserApplications()` / `ListSystemApplications()` | `flatpak list --user/--system --app --columns=name,application,version,branch` |
 | `ListUserRuntimes()` / `ListSystemRuntimes()` | Same query with `--runtime` |
 | `ListInstalledOrigins()` | `flatpak list --app --columns=application,origin`; every installed application id with the remote it came from |
 | `ListUpdates(ctx, user)` | `remotes --columns=name,options`, then `remote-ls --updates --app --columns=name,application,version <remote>` per enabled remote, in the selected scope |

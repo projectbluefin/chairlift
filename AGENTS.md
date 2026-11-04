@@ -789,8 +789,9 @@ An agent must not break these:
 - **An entry names its source, not its kind.** The subtitle is "from
   Homebrew", "from Brew Tap", "from Flathub", "from the App Store" or "from
   the VS Code Marketplace", and an installed entry reads "Installed from
-  …". The static source comes from the token's shape (a `/` means a tap);
-  the installed wording uses the *observed* source — the package's `tap`
+  …". Bare tokens and the official `homebrew/core` and `homebrew/cask`
+  repositories mean Homebrew; other qualified tokens mean Brew Tap.
+  The installed wording uses the *observed* source — the package's `tap`
   field, the Flatpak's `origin` — and falls back to the static shape when
   the inventory knew none. The vocabulary is closed: `bundleview` owns it,
   and an observation with no word for it falls back rather than inventing a
@@ -807,6 +808,11 @@ An agent must not break these:
   App Store/VS Code directives remain unselectable and force the per-manager
   strategy, so an unchecked directive never installs implicitly.
   Truncated or partially unreadable collections also use only displayed selections.
+  The parser must also affirm that every line is a literal supported install,
+  a comment/blank, or an understood tap declaration; only literal `trusted:
+  true`/`false` options on brew/cask/tap are accepted. Unknown directives or Ruby
+  force per-entry installs even when the displayed count matches. Merged
+  collections deduplicate pending work by kind/name, including their counts.
   The per-item path re-derives trust: it clones a missing tap, then trusts
   the package on its own — unless the collection's own Brewfile marks the
   tap `trusted: true`, which `brew bundle` honours by trusting the whole

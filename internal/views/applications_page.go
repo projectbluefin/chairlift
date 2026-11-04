@@ -131,7 +131,7 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 	}
 	var appBundles, developerBundles []parsed
 	for _, bundle := range bundles {
-		items, itemsErr := homebrew.BundleContents(bundle.Path)
+		items, safe, itemsErr := homebrew.BundleContents(bundle.Path)
 		if itemsErr != nil {
 			// The Brewfile moved or became unreadable between discovery
 			// and listing. Keep whatever was read before the failure and
@@ -144,15 +144,15 @@ func (uh *UserHome) loadBrewBundles(paths []string) {
 			total = len(items)
 		}
 
-		complete := itemsErr == nil && len(items) == total && len(items) < homebrew.AvailableItems
+		complete := safe && itemsErr == nil && len(items) == total
 		memberPaths := []string{bundle.Path}
 		// Include items from sibling member bundles
 		for _, member := range bundleview.MemberBundles(bundle.Name, bundlesByName) {
 			memberPaths = append(memberPaths, member.Path)
-			if mItems, mErr := homebrew.BundleContents(member.Path); mErr == nil {
+			if mItems, memberSafe, mErr := homebrew.BundleContents(member.Path); mErr == nil {
 				items = append(items, mItems...)
 				total += member.ItemCount
-				complete = complete && len(mItems) == member.ItemCount && len(mItems) < homebrew.AvailableItems
+				complete = complete && memberSafe && len(mItems) == member.ItemCount
 			} else {
 				complete = false
 			}
@@ -303,6 +303,7 @@ func (uh *UserHome) addBundleEntryRows(item *bundleItemRow, items []homebrew.Bun
 
 		check := gtk.NewCheckButton()
 		check.SetValign(gtk.AlignCenterValue)
+		check.SetSensitive(entry.Selectable)
 		SetAccessibleLabel(check, entry.CheckAccessibleName)
 		row.AddSuffix(&check.Widget)
 

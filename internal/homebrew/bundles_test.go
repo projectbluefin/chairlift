@@ -162,7 +162,7 @@ func TestBundleContentsReadsRecognisedEntriesInSourceOrder(t *testing.T) {
 		// not appear as an item.
 		`tap "extra/extra"`+"\n")
 
-	items, err := BundleContents(path)
+	items, _, err := BundleContents(path)
 	if err != nil {
 		t.Fatalf("BundleContents() error = %v, want nil", err)
 	}
@@ -189,9 +189,12 @@ func TestBundleContentsAcceptsSingleQuotesAndSkipsComments(t *testing.T) {
 		"\n"+
 		`cask 'font-fira-code'`+"\n")
 
-	items, err := BundleContents(path)
+	items, safe, err := BundleContents(path)
 	if err != nil {
 		t.Fatalf("BundleContents() error = %v, want nil", err)
+	}
+	if !safe {
+		t.Fatal("literal entries and comments must allow a whole-file install")
 	}
 	want := []BundleItem{
 		{Name: "bat", Kind: BundleItemBrew},
@@ -206,7 +209,7 @@ func TestBundleContentsEmptyBrewfileIsNoError(t *testing.T) {
 	dir := t.TempDir()
 	path := writeBundleFile(t, dir, "empty.Brewfile", "# only a comment block\n")
 
-	items, err := BundleContents(path)
+	items, _, err := BundleContents(path)
 	if err != nil {
 		t.Fatalf("BundleContents() error = %v, want nil", err)
 	}
@@ -224,12 +227,15 @@ func TestBundleContentsCapsRunawayFiles(t *testing.T) {
 	}
 	path := writeBundleFile(t, dir, "many.Brewfile", builder.String())
 
-	items, err := BundleContents(path)
+	items, safe, err := BundleContents(path)
 	if err != nil {
 		t.Fatalf("BundleContents() error = %v, want nil", err)
 	}
 	if len(items) != AvailableItems {
 		t.Fatalf("BundleContents() length = %d, want %d", len(items), AvailableItems)
+	}
+	if safe {
+		t.Fatal("a truncated Brewfile must never allow whole-file installation")
 	}
 }
 
@@ -249,7 +255,7 @@ func TestCountBundleItemsAgreesWithContents(t *testing.T) {
 		``,
 	}, "\n"))
 
-	items, err := BundleContents(path)
+	items, _, err := BundleContents(path)
 	if err != nil {
 		t.Fatalf("BundleContents() error = %v, want nil", err)
 	}
@@ -267,7 +273,7 @@ func TestCountBundleItemsAgreesWithContents(t *testing.T) {
 
 func TestBundleContentsMissingFileReturnsError(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing.Brewfile")
-	if _, err := BundleContents(missing); err == nil {
+	if _, _, err := BundleContents(missing); err == nil {
 		t.Fatal("BundleContents() error = nil, want open failure")
 	}
 }

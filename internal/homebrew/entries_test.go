@@ -21,7 +21,7 @@ func TestParsePackagesJSONReadsQualifiedNamesAndTaps(t *testing.T) {
   "casks": [
     {"token": "goose-linux", "full_token": "ublue-os/tap/goose-linux", "tap": "ublue-os/tap",
      "installed": "1.2.3", "outdated": false},
-    {"token": "visual-studio-code", "full_token": "visual-studio-code", "tap": "homebrew/core",
+    {"token": "visual-studio-code", "full_token": "visual-studio-code", "tap": "homebrew/cask",
      "installed": "1.104.0", "outdated": false}
   ]
 }`
@@ -53,10 +53,13 @@ func TestParsePackagesJSONReadsQualifiedNamesAndTaps(t *testing.T) {
 	}
 	wantCasks := []Package{
 		{Name: "goose-linux", FullName: "ublue-os/tap/goose-linux", Tap: "ublue-os/tap", Version: "1.2.3"},
-		{Name: "visual-studio-code", FullName: "visual-studio-code", Tap: "homebrew/core", Version: "1.104.0"},
+		{Name: "visual-studio-code", FullName: "visual-studio-code", Tap: "homebrew/cask", Version: "1.104.0"},
 	}
 	if !reflect.DeepEqual(casks, wantCasks) {
 		t.Errorf("parsePackagesJSON(casks) = %+v, want %+v", casks, wantCasks)
+	}
+	if casks[1].FromTap() {
+		t.Error("a homebrew/cask package must not report a third-party tap")
 	}
 }
 
@@ -390,5 +393,62 @@ func TestTrustFlagsAreTheOnesBrewUses(t *testing.T) {
 	}
 	if got := trustFlag(Cask); got != "--cask" {
 		t.Errorf("trustFlag(Cask) = %q, want %q", got, "--cask")
+	}
+}
+
+func TestBundleContentsOnlyAllowsUnderstoodWholeFiles(t *testing.T) {
+	for _, tc := range []struct {
+		name, line string
+		safe       bool
+	}{
+		{"plain formula", `brew "jq"`, true},
+		{"single quoted cask", `cask 'font-noto-sans'`, true},
+		{"flatpak", `flatpak "org.gnome.Calculator" # desktop app`, true},
+		{"tap", `tap "ublue-os/tap"`, true},
+		{"trusted tap", `tap "ublue-os/tap", trusted: true`, true},
+		{"untrusted tap", `tap 'ublue-os/tap', trusted: false # explicit`, true},
+		{"trusted formula", `brew "anomalyco/tap/opencode", trusted: true`, true},
+		{"untrusted formula", `brew "jq", trusted: false`, true},
+		{"trusted cask", `cask "ublue-os/tap/goose-linux", trusted: true # desktop`, true},
+		{"untrusted cask", `cask "font-hack", trusted: false`, true},
+		{"flatpak trust option", `flatpak "org.gnome.Calculator", trusted: true`, false},
+		{"blank", "", true},
+		{"comment", "# optional apps", true},
+		{"cargo", `cargo "ripgrep"`, false},
+		{"go", `go "example.org/tool"`, false},
+		{"krew", `krew "ctx"`, false},
+		{"npm", `npm "typescript"`, false},
+		{"uv", `uv "ruff"`, false},
+		{"winget", `winget "Microsoft.PowerToys"`, false},
+		{"Ruby", `system "touch /tmp/not-executed"`, false},
+		{"Ruby after entry", `brew "jq"; system "touch /tmp/not-executed"`, false},
+		{"Ruby interpolation", `brew "#{system('touch /tmp/not-executed')}"`, false},
+		{"Ruby option", `brew "jq", link: system("touch /tmp/not-executed")`, false},
+		{"Ruby tap option", `tap "ublue-os/tap", trusted: true; system("touch /tmp/not-executed")`, false},
+		{"Ruby formula trust tail", `brew "jq", trusted: true; system("touch /tmp/not-executed")`, false},
+		{"Ruby cask trust tail", `cask "font-hack", trusted: false || system("touch /tmp/not-executed")`, false},
+		{"extra option after trust", `brew "jq", trusted: true, link: true`, false},
+		{"unparsed literal option", `brew "jq", link: true`, false},
+		{"malformed entry", `brew jq`, false},
+		{"malformed tap", `tap "not-a-tap"`, false},
+		{"App Store", `mas "Xcode", id: 497799835`, false},
+		{"VS Code", `vscode "golang.go"`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "apps.Brewfile")
+			if err := os.WriteFile(path, []byte("brew \"gh\"\n"+tc.line+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			items, safe, err := BundleContents(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(items) == 0 || items[0].Name != "gh" {
+				t.Fatalf("items = %+v, want the known entry retained", items)
+			}
+			if safe != tc.safe {
+				t.Errorf("safe = %v, want %v for %q", safe, tc.safe, tc.line)
+			}
+		})
 	}
 }

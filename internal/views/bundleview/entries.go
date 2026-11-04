@@ -12,7 +12,7 @@ import (
 // reading six collections should not have to learn a new source per
 // collection.
 const (
-	// SourceHomebrew is a package from homebrew/core.
+	// SourceHomebrew covers Homebrew's official formula and cask repositories.
 	SourceHomebrew = "Homebrew"
 	// SourceBrewTap is a package from a third-party Homebrew tap.
 	SourceBrewTap = "Brew Tap"
@@ -31,14 +31,12 @@ const FlathubRemote = "flathub"
 // ContentsSource returns the source a collection entry comes from, derived
 // from the entry's kind and the shape of its token.
 //
-// A Homebrew token that carries a "/" names a package from a tap; one
-// without names a homebrew/core package. The token's shape is the only
-// thing available before the package is installed, so it is what the row
-// says about an entry that is not on the system yet.
+// Bare Homebrew tokens and tokens qualified by its official repositories
+// come from Homebrew; other qualified tokens name a third-party tap.
 func ContentsSource(item homebrew.BundleItem) string {
 	switch item.Kind {
 	case homebrew.BundleItemBrew, homebrew.BundleItemCask:
-		if strings.Contains(item.Name, "/") {
+		if strings.Contains(item.Name, "/") && !strings.HasPrefix(item.Name, homebrew.CoreTap+"/") && !strings.HasPrefix(item.Name, homebrew.CaskTap+"/") {
 			return SourceBrewTap
 		}
 		return SourceHomebrew
@@ -67,7 +65,7 @@ func ObservedSource(kind homebrew.BundleItemKind, observed string) string {
 		switch observed {
 		case "":
 			return ""
-		case homebrew.CoreTap:
+		case homebrew.CoreTap, homebrew.CaskTap:
 			return SourceHomebrew
 		default:
 			return SourceBrewTap
@@ -282,11 +280,20 @@ func (p InstallPlan) Empty() bool {
 func PlanInstall(entries []EntryState, memberPaths []string) InstallPlan {
 	selections := make([]Selection, 0, len(entries))
 	var pending []EntryState
+	type entryKey struct {
+		kind homebrew.BundleItemKind
+		name string
+	}
+	seenPending := make(map[entryKey]bool, len(entries))
 	for _, entry := range entries {
 		selectable := Selectable(entry.Item.Kind)
 		selections = append(selections, Selection{Selectable: selectable, Checked: entry.Checked})
 		if selectable && entry.Checked && !entry.Installed {
-			pending = append(pending, entry)
+			key := entryKey{kind: entry.Item.Kind, name: entry.Item.Name}
+			if !seenPending[key] {
+				seenPending[key] = true
+				pending = append(pending, entry)
+			}
 		}
 	}
 	if len(pending) == 0 {
