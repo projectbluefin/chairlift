@@ -146,12 +146,14 @@ func TestValidatedCommandsNeedChannelTableOnlyForSwitches(t *testing.T) {
 			invocation, err = ParseInvocation([]string{command, ChannelTesting})
 		case CommandDriverSwitch:
 			invocation, err = ParseInvocation([]string{command, string(imageinfo.DriverNVIDIA)})
+		case CommandGamingSwitch:
+			invocation, err = ParseInvocation([]string{command, "enable"})
 		}
 		if err != nil {
 			t.Fatalf("ParseInvocation(%q) error = %v, want nil", command, err)
 		}
 
-		want := command == CommandChannelSwitch || command == CommandDriverSwitch || command == CommandPin || command == CommandUnpin
+		want := command == CommandChannelSwitch || command == CommandDriverSwitch || command == CommandGamingSwitch || command == CommandPin || command == CommandUnpin
 		if got := invocation.UsesChannelTable(); got != want {
 			t.Errorf("%s UsesChannelTable() = %t, want %t", command, got, want)
 		}
@@ -237,6 +239,7 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 		CommandAutoEnable,
 		CommandAutoDisable,
 		CommandDriverSwitch,
+		CommandGamingSwitch,
 		CommandFactoryReset,
 		CommandPin,
 		CommandUnpin,
@@ -260,6 +263,8 @@ func TestSupportedCommandsMatchesParser(t *testing.T) {
 			args = append(args, ChannelTesting)
 		case CommandDriverSwitch:
 			args = append(args, string(imageinfo.DriverNVIDIA))
+		case CommandGamingSwitch:
+			args = append(args, "enable")
 		}
 		if _, err := ParseInvocation(args); err != nil {
 			t.Errorf("ParseInvocation(%v) error = %v, want nil for advertised command", args, err)

@@ -241,6 +241,16 @@ type UserHome struct {
 	gamingRow          *adw.ExpanderRow
 	gamingGate         actionstate.Gate
 	gamingDialogs      dialogRoute
+	gameModeRow        *adw.ActionRow
+	gameModeSwitch     *gtk.Switch
+	gameModeToggle     *guardedSwitch
+	gameModeGate       actionstate.Gate
+	gameModeDialogs    dialogRoute
+	pendingImage       string
+	stagedImageLoaded  bool
+	channelSwitchable  bool
+	driverSwitchable   bool
+	gameModeSwitchable bool
 	developerOptions   []*developerOptionRow
 	wslBackend         string
 	wslCombo           *adw.ComboRow
@@ -399,7 +409,7 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 	if uh.collectionsAvailable() {
 		go uh.loadBrewBundles(uh.developerBundlePaths())
 	}
-
+	go uh.loadInitialStagedDeployment()
 	log.Printf("views: all pages built in %s", time.Since(start))
 	return uh
 }
@@ -439,6 +449,7 @@ func (uh *UserHome) OnUpdateFinished(final updateflow.Snapshot) {
 				sgtk.RunOnMainThread(func() {
 					uh.refreshChangelogAvailability(status)
 					uh.renderSystemVersion(versionGeneration, status)
+					uh.applyStagedImage(status)
 				})
 			}()
 		}

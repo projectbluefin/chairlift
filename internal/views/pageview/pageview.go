@@ -534,6 +534,35 @@ const GamingCheckingSubtitle = "Checking what is installed…"
 // error names commands and application ids, so it is logged rather than shown.
 const GamingUnavailableSubtitle = "Couldn't check which gaming apps are installed."
 
+// GameModeConfirmation returns the exact title and body for the Game Mode switch warning.
+func GameModeConfirmation() (title, body string) {
+	return "Game Mode Requires a Reboot",
+		"This mode includes Steam and Gamescope built in with an Open Gaming Collective kernel."
+}
+
+// GameModeRow returns the Game Mode row presentation.
+func GameModeRow(active, canSwitch bool) Row {
+	row := Row{Title: "Game Mode"}
+	if active {
+		row.Subtitle = "Steam, Gamescope, and Open Gaming Collective kernel are active."
+		return row
+	}
+	if !canSwitch {
+		row.Subtitle = "A matching gaming system image is not available for this computer."
+		return row
+	}
+	row.Subtitle = "Switch to the gaming system image with Steam, Gamescope, and an Open Gaming Collective kernel."
+	return row
+}
+
+// GameModeResultSubtitle returns the subtitle for Game Mode after a switch stages.
+func GameModeResultSubtitle(enabled bool) string {
+	if enabled {
+		return "Restart to switch to Game Mode."
+	}
+	return "Restart to switch to the standard mode."
+}
+
 // GamingRow returns the gaming switch row text. active reports whether
 // the gaming stack is installed. installed and missing report component counts
 // so a partially-installed stack displays what is present.

@@ -170,6 +170,7 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 		ubluehelper.CommandAutoEnable,
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandGamingSwitch,
 		ubluehelper.CommandFactoryReset,
 		ubluehelper.CommandPin,
 		ubluehelper.CommandUnpin,
@@ -238,6 +239,13 @@ func TestPolkitPoliciesMatchPrivilegedHelpers(t *testing.T) {
 			Message:     "Authentication is required to switch the system graphics driver image",
 			Path:        ublue.HelperPath,
 			Argv1:       ubluehelper.CommandDriverSwitch,
+		},
+		{
+			ID:          "io.projectbluefin.chairlift.ublue.gaming-switch",
+			Description: "Switch the system gaming mode image",
+			Message:     "Authentication is required to switch the system gaming mode image",
+			Path:        ublue.HelperPath,
+			Argv1:       ubluehelper.CommandGamingSwitch,
 		},
 		{
 			ID:          "io.projectbluefin.chairlift.ublue.factory-reset",

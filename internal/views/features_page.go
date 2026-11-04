@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/devsetup"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -369,7 +370,7 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 		dxEnabled, gamingEnabled)
 
 	if gamingEnabled {
-		uh.buildGamingGroup(page)
+		uh.buildGamingGroup(page, status)
 	}
 
 	uh.buildSetupActivity(page)
@@ -422,11 +423,35 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	uh.buildDeveloperOptions(group, status)
 }
 
-func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
+func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Status) {
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Gaming")
 	group.SetDescription("Apps for playing games on this computer.")
 
+	// 1. Game Mode (system image switch to -gaming variant)
+	gameModeRow := adw.NewActionRow()
+	gameModeRow.SetUseMarkup(false)
+	gameModeSwitchable := status.CanSwitchGaming && status.Supports(ubluehelper.CommandGamingSwitch)
+	uh.gameModeSwitchable = gameModeSwitchable
+	gameModePresentation := pageview.GameModeRow(status.Gaming, gameModeSwitchable)
+	gameModeRow.SetTitle(gameModePresentation.Title)
+	gameModeRow.SetSubtitle(gameModePresentation.Subtitle)
+
+	var gameModeToggle *guardedSwitch
+	gameModeToggle = newGuardedSwitch(status.Gaming, func(state bool) {
+		uh.onGameModeToggled(state, gameModeToggle, gameModeRow)
+	})
+	SetAccessibleLabel(gameModeToggle.widget, gameModePresentation.Title)
+	gameModeToggle.widget.SetSensitive(gameModeSwitchable && uh.stagedImageLoaded && uh.pendingImage == "")
+	gameModeRow.AddSuffix(&gameModeToggle.widget.Widget)
+	if gameModeSwitchable {
+		gameModeRow.SetActivatableWidget(&gameModeToggle.widget.Widget)
+	}
+	group.Add(&gameModeRow.Widget)
+	uh.gameModeRow = gameModeRow
+	uh.gameModeSwitch = gameModeToggle.widget
+	uh.gameModeToggle = gameModeToggle
+	// 2. Optional Flatpak Gaming Tools
 	row := adw.NewExpanderRow()
 	row.SetUseMarkup(false)
 	row.SetTitle(pageview.GamingRow(false, 0, 0).Title)
@@ -467,6 +492,187 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage) {
 			row.SetSubtitle(pageview.GamingRow(state.Enabled, len(state.Installed), len(state.MissingCore)).Subtitle)
 		})
 	}()
+}
+
+func (uh *UserHome) onGameModeToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
+	if enabled {
+		uh.confirmGameModeEnable(toggle, row)
+		return
+	}
+	uh.runGameModeSwitch(false, toggle, row)
+}
+
+func (uh *UserHome) confirmGameModeEnable(toggle *guardedSwitch, row *adw.ActionRow) {
+	if !uh.gameModeGate.TryStart() {
+		sgtk.RunOnMainThread(func() { toggle.set(false) })
+		return
+	}
+	title, body := pageview.GameModeConfirmation()
+	dialog := adw.NewAlertDialog(title, body)
+	dialog.AddResponse("cancel", "Cancel")
+	dialog.AddResponse("switch", "Switch to Game Mode")
+	dialog.SetResponseAppearance("switch", adw.ResponseSuggestedValue)
+	dialog.SetDefaultResponse("switch")
+	dialog.SetCloseResponse("cancel")
+	uh.gameModeDialogs.connect(dialog, func(response string) {
+		if response == "switch" {
+			uh.runGameModeSwitchConfirmed(true, toggle, row)
+		} else {
+			uh.gameModeGate.Reset()
+			toggle.set(false)
+		}
+	})
+	dialog.Present(&uh.featuresPage.Widget)
+}
+
+func (uh *UserHome) runGameModeSwitch(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if !uh.gameModeGate.TryStart() {
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		return
+	}
+	uh.runGameModeSwitchConfirmed(enabled, toggle, row)
+}
+
+func (uh *UserHome) runGameModeSwitchConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		uh.gameModeGate.Reset()
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
+	if !uh.updateShell.beginMutation() {
+		uh.gameModeGate.Reset()
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
+	toggle.widget.SetSensitive(false)
+	before := row.GetSubtitle()
+	row.SetSubtitle("Switching…")
+
+	go func() {
+		ctx, cancel := ublue.ImageSwitchContext()
+		defer cancel()
+
+		err := ublue.SetGamingMode(ctx, enabled)
+
+		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
+			uh.gameModeGate.Reset()
+
+			if err != nil {
+				toggle.widget.SetSensitive(true)
+				toggle.set(!enabled)
+				row.SetSubtitle(before)
+				log.Printf("views: switching Game Mode failed: %v", err)
+				uh.showPrivilegedFailure(err, "Couldn't switch Game Mode")
+				return
+			}
+
+			decision := actionmsg.GameModeSwitch(dryrun.Enabled(), enabled)
+			if decision.Confirm {
+				// The new image deployment is staged for the next boot.
+				// Keep the switch insensitive and flipped to reflect the staged
+				// target until the machine is rebooted, preventing contradictory
+				// re-requests before restart.
+				uh.pendingImage = "gaming"
+				toggle.set(enabled)
+				toggle.widget.SetSensitive(false)
+				row.SetSubtitle(pageview.GameModeResultSubtitle(enabled))
+				uh.refreshAfterOSSwitch()
+			} else {
+				// In dry run, revert the switch to the booted state and re-enable it.
+				toggle.set(!enabled)
+				toggle.widget.SetSensitive(true)
+				row.SetSubtitle(before)
+			}
+			uh.toastAdder.ShowToast(decision.Toast)
+		})
+	}()
+}
+
+func (uh *UserHome) applyStagedImage(status *bootc.Status) {
+	if status == nil || status.Status.Booted == nil || status.Status.Staged == nil {
+		return
+	}
+	target, isGaming, pending := imageinfo.PendingImageSwitch(
+		status.Status.Booted.ImageRef(),
+		status.Status.Staged.ImageRef(),
+	)
+	if !pending {
+		return
+	}
+	uh.pendingImage = target
+	if uh.channelSwitch != nil {
+		uh.channelSwitch.SetSensitive(false)
+	}
+	if uh.channelRow != nil {
+		uh.channelRow.SetSubtitle("Restart to finish installing the staged operating system.")
+	}
+	if uh.driverButton != nil {
+		uh.driverButton.SetVisible(false)
+	}
+	if uh.driverRow != nil {
+		uh.driverRow.SetSubtitle("Restart to finish installing the staged operating system.")
+	}
+	if uh.gameModeToggle != nil {
+		uh.gameModeToggle.set(isGaming)
+		uh.gameModeToggle.widget.SetSensitive(false)
+	}
+	if uh.gameModeRow != nil {
+		uh.gameModeRow.SetSubtitle(pageview.GameModeResultSubtitle(isGaming))
+	}
+}
+func (uh *UserHome) loadInitialStagedDeployment() {
+	ctx, cancel := bootc.DefaultContext()
+	defer cancel()
+
+	status, err := bootc.GetStatus(ctx)
+	sgtk.RunOnMainThread(func() {
+		if err != nil {
+			var notFound *bootc.NotFoundError
+			if errors.As(err, &notFound) {
+				// Non-bootc host: bootc binary absent, no staged deployment possible.
+				uh.stagedImageLoaded = true
+				uh.applyInitialStagedSettled()
+				return
+			}
+			log.Printf("views: reading initial staged deployment status failed: %v", err)
+			// Fail closed: retain replacement controls insensitive with an explanatory subtitle.
+			if uh.channelRow != nil {
+				uh.channelRow.SetSubtitle("Unavailable right now: couldn't verify the system update state.")
+			}
+			if uh.gameModeRow != nil {
+				uh.gameModeRow.SetSubtitle("Unavailable right now: couldn't verify the system update state.")
+			}
+			return
+		}
+		uh.stagedImageLoaded = true
+		if status != nil {
+			uh.applyStagedImage(status)
+		}
+		uh.applyInitialStagedSettled()
+	})
+}
+
+func (uh *UserHome) applyInitialStagedSettled() {
+	if uh.pendingImage != "" {
+		return
+	}
+	if uh.channelSwitch != nil {
+		uh.channelSwitch.SetSensitive(uh.channelSwitchable)
+	}
+	if uh.driverButton != nil {
+		uh.driverButton.SetSensitive(uh.driverSwitchable)
+	}
+	if uh.gameModeToggle != nil {
+		uh.gameModeToggle.widget.SetSensitive(uh.gameModeSwitchable)
+	}
 }
 
 // onDeveloperToggled grants or withdraws this account's developer access.

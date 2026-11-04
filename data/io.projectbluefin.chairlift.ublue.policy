@@ -104,6 +104,18 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">driver-switch</annotate>
   </action>
 
+  <action id="io.projectbluefin.chairlift.ublue.gaming-switch">
+    <description>Switch the system gaming mode image</description>
+    <message>Authentication is required to switch the system gaming mode image</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/chairlift-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">gaming-switch</annotate>
+  </action>
+
   <action id="io.projectbluefin.chairlift.ublue.factory-reset">
     <description>Factory reset the system</description>
     <message>Authentication is required to factory reset the system</message>

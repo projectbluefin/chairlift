@@ -287,12 +287,12 @@ engine's documentation. An existing Lima Ubuntu machine is kept as the choice wh
 built-in machine exists, rather than creating a second one. Likewise, a Debian
 machine the built-in engine made in an earlier release keeps being used, and
 the chooser says so, instead of an Ubuntu machine being created beside it.
-**Gaming** offers a single **Gaming Mode** toggle that installs gaming tools (ProtonPlus,
-Protontricks, GOverlay, MangoHud) system-wide for every account on the
-computer, which may ask for an administrator password. Turning it off removes
-each tool from every scope it is installed in, leaving in place any copy that
-came with the system. Partial failures stay visible instead of being reported
-as an all-or-nothing success.
+**Gaming** offers **Game Mode** to switch between standard and gaming OS variants
+(including Steam, Gamescope, and an Open Gaming Collective kernel with a reboot
+confirmation), alongside **Gaming Mode** to optionally install gaming tools
+(ProtonPlus, Protontricks, GOverlay, MangoHud) system-wide for every account on
+the computer. Turning tools off removes each tool from every scope it is
+installed in, leaving in place any copy that came with the system.
 **Printers** is one switch per printer driver family — Ghostscript, HP
 (HPLIP), and Gutenprint — offering extra drivers for printers that don't work
 on their own. Each runs as a small container in your own account and only

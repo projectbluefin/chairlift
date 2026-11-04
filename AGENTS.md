@@ -439,10 +439,10 @@ An agent must not break these:
   not run the script, whose `bootc upgrade` fails there instead of exiting 0),
   so a successful OS source is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-helper` carries fifteen subcommands
+  binary.** `chairlift-helper` carries sixteen subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+  `gaming-switch`, `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
   `docker-disable`, `docker-update`), each selected by exactly one PolicyKit
   action. Every one takes a fixed argv or a word validated against a closed
   set: no image reference, no username, no systemd unit, no delay, and no
@@ -890,8 +890,10 @@ An agent must not break these:
   step (`devsetup.ErrSkipped`) without an error toast; an editor failure
   remains retryable and never reverses access. Preview writes no settings or
   marker and launches no editor
-  CLI. Editor selection/installation remains in Bazaar or Apps. Gaming Mode is
-  a single toggle that manages the gaming
+  CLI. Editor selection/installation remains in Bazaar or Apps. Game Mode is
+  a privileged switch to the `-gaming` system image variant (Steam, Gamescope,
+  and an Open Gaming Collective kernel) guarded by a confirmation warning that
+  a reboot is required. Gaming Mode below it manages the optional gaming
   tools stack (ProtonPlus, Protontricks, GOverlay, MangoHud), installs
   missing ones system-wide with `flatpak install --system`, and keeps partial
   failures visible. Its inventory reads both scopes, so a copy an earlier

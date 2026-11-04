@@ -183,6 +183,7 @@ func TestEmittedCommandsAreAllHelperSupported(t *testing.T) {
 		ubluehelper.CommandAutoEnable,
 		ubluehelper.CommandAutoDisable,
 		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandGamingSwitch,
 		ubluehelper.CommandKVMEnable,
 		ubluehelper.CommandDockerEnable,
 		ubluehelper.CommandDockerDisable,
@@ -276,6 +277,7 @@ func TestSwitchTimeoutsCoverAFullImagePull(t *testing.T) {
 	long := []string{
 		ubluehelper.CommandChannelSwitch,
 		ubluehelper.CommandDriverSwitch,
+		ubluehelper.CommandGamingSwitch,
 		ubluehelper.CommandPin,
 		ubluehelper.CommandUnpin,
 		ubluehelper.CommandDockerEnable,

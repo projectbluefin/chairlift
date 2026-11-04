@@ -284,15 +284,14 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 		})
 	}
 }
-
-// Both staging entry points refresh Compare; the shell owns the aggregate badge.
-func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
+func readViewsFunctionBody(t *testing.T) func(file, name string) string {
+	t.Helper()
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("runtime.Caller could not locate wiring_test.go")
 	}
 	viewsDir := filepath.Join(filepath.Dir(filename), "..")
-	functionBody := func(file, name string) string {
+	return func(file, name string) string {
 		t.Helper()
 		path := filepath.Join(viewsDir, file)
 		source, err := os.ReadFile(path)
@@ -312,6 +311,11 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		t.Fatalf("%s: function %s not found", file, name)
 		return ""
 	}
+}
+
+// Both staging entry points refresh Compare; the shell owns the aggregate badge.
+func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
 	for _, check := range []struct {
 		file, function string
 		required       []string
@@ -353,12 +357,94 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 	}
 	// refreshAfterOSSwitch starts a check, which the shell refuses while the
 	// switch still holds its admission.
-	for _, function := range []string{"onDriverSwitchClicked", "onChannelToggled"} {
-		body := functionBody("updates_page.go", function)
+	for _, target := range []struct {
+		file     string
+		function string
+	}{
+		{"updates_page.go", "onDriverSwitchClicked"},
+		{"updates_page.go", "onChannelToggled"},
+		{"features_page.go", "runGameModeSwitchConfirmed"},
+	} {
+		body := functionBody(target.file, target.function)
 		finish := strings.Index(body, "uh.updateShell.finishMutation()")
 		refresh := strings.Index(body, "uh.refreshAfterOSSwitch()")
 		if finish < 0 || refresh < 0 || finish > refresh {
-			t.Errorf("updates_page.go.%s must end its update-shell admission before refreshAfterOSSwitch", function)
+			t.Errorf("%s.%s must end its update-shell admission before refreshAfterOSSwitch", target.file, target.function)
+		}
+	}
+}
+func TestGameModeSwitchFreezesUntilRebootOnConfirm(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	body := functionBody("features_page.go", "runGameModeSwitchConfirmed")
+	for _, snippet := range []string{
+		"if decision.Confirm {",
+		"toggle.set(enabled)",
+		"toggle.widget.SetSensitive(false)",
+		"row.SetSubtitle(pageview.GameModeResultSubtitle(enabled))",
+		"uh.refreshAfterOSSwitch()",
+		"} else {",
+		"toggle.set(!enabled)",
+		"toggle.widget.SetSensitive(true)",
+		"row.SetSubtitle(before)",
+	} {
+		if !strings.Contains(body, snippet) {
+			t.Errorf("runGameModeSwitchConfirmed omits required staged-state guard: %s", snippet)
+		}
+	}
+}
+
+func TestGameModeEnableRequiresRebootConfirmationDialog(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	onToggle := functionBody("features_page.go", "onGameModeToggled")
+	if !strings.Contains(onToggle, "if enabled {") || !strings.Contains(onToggle, "uh.confirmGameModeEnable(toggle, row)") {
+		t.Errorf("onGameModeToggled must divert an enable flip through confirmGameModeEnable")
+	}
+
+	confirmBody := functionBody("features_page.go", "confirmGameModeEnable")
+	for _, snippet := range []string{
+		"title, body := pageview.GameModeConfirmation()",
+		"dialog := adw.NewAlertDialog(title, body)",
+		`dialog.AddResponse("cancel", "Cancel")`,
+		`dialog.AddResponse("switch", "Switch to Game Mode")`,
+		`if response == "switch" {`,
+		"uh.runGameModeSwitchConfirmed(true, toggle, row)",
+		"} else {",
+		"uh.gameModeGate.Reset()",
+		"toggle.set(false)",
+	} {
+		if !strings.Contains(confirmBody, snippet) {
+			t.Errorf("confirmGameModeEnable omits required dialog or cancellation handling: %s", snippet)
+		}
+	}
+}
+
+func TestStagedDeploymentLocksAlternativeOSSwitches(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	for _, check := range []struct {
+		file, function string
+		required       []string
+	}{
+		{"features_page.go", "onGameModeToggled", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"features_page.go", "runGameModeSwitchConfirmed", []string{"if uh.pendingImage != \"\" {", "uh.gameModeGate.Reset()", "A system switch is already waiting for a restart"}},
+		{"updates_page.go", "onChannelToggled", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"features_page.go", "applyStagedImage", []string{
+			"target, isGaming, pending := imageinfo.PendingImageSwitch(",
+			"uh.pendingImage = target",
+			"uh.channelSwitch.SetSensitive(false)",
+			"uh.driverButton.SetVisible(false)",
+			"uh.gameModeToggle.set(isGaming)",
+			"uh.gameModeToggle.widget.SetSensitive(false)",
+		}},
+		{"views.go", "OnUpdateFinished", []string{"uh.applyStagedImage(status)"}},
+		{"updates_page.go", "loadBootcUpdateStatus", []string{"uh.applyStagedImage(status)"}},
+		{"features_page.go", "loadInitialStagedDeployment", []string{"bootc.GetStatus(ctx)", "uh.applyStagedImage(status)"}},
+	} {
+		body := functionBody(check.file, check.function)
+		for _, snippet := range check.required {
+			if !strings.Contains(body, snippet) {
+				t.Errorf("%s.%s missing required staged guard: %s", check.file, check.function, snippet)
+			}
 		}
 	}
 }

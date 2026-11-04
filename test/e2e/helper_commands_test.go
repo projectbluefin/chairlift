@@ -107,6 +107,7 @@ func acceptedHelperCommands() []acceptedCommand {
 		switchCases("unpin to stream", ubluehelper.CommandUnpin, "", "pin target:"),
 		switchCases("channel switch to stable", ubluehelper.CommandChannelSwitch, ubluehelper.ChannelStable, "no stable image is defined for the running tag"),
 		switchCases("driver switch to standard", ubluehelper.CommandDriverSwitch, string(imageinfo.DriverStandard), "no standard image is published for"),
+		switchCases("gaming switch to gaming", ubluehelper.CommandGamingSwitch, "enable", "no gaming image is published for", "no matching gaming image is published for"),
 		{
 			name:              "developer mode enable",
 			helper:            ublue,
