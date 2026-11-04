@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
@@ -402,5 +403,79 @@ func TestSetDockerReportsAFailedStatusRead(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if err := SetDocker(context.Background(), true, nil); err == nil {
 		t.Fatal("enable without a readable daemon state reported success")
+	}
+}
+
+// An Include already present means nothing to write: the user's SSH config
+// is not rewritten, only its mode is tightened.
+func TestWireSSHDoesNotRewriteAConfigThatAlreadyIncludesLima(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".ssh", "config")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("Include ~/.lima/*/ssh.config\n\nHost *\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := wireSSH(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(old) {
+		t.Fatal("wireSSH rewrote a config that already carried the Include")
+	}
+}
+
+// A dotfile manager's symlinked config stays a symlink; the Include lands in
+// its target, which is the file ssh reads.
+func TestWireSSHWritesThroughASymlinkedConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, "dotfiles", "ssh_config")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("Host *\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := wireSSH(); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("wireSSH replaced the symlinked config with a regular file")
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "Include ~/.lima/*/ssh.config\n\nHost *\n" {
+		t.Fatalf("symlink target = %q", b)
+	}
+	entries, err := os.ReadDir(filepath.Dir(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("temporary file left beside the target: %v", entries)
 	}
 }

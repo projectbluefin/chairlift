@@ -591,7 +591,18 @@ func wireSSH() error {
 		return err
 	}
 	path := filepath.Join(dir, "config")
-	b, err := os.ReadFile(path)
+	// A dotfile manager often makes ~/.ssh/config a symlink. Write through
+	// to its target, which is what ssh reads, so the link survives the
+	// rename below instead of being replaced by a regular file.
+	target := path
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return err
+		}
+		target = resolved
+	}
+	b, err := os.ReadFile(target)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -604,15 +615,46 @@ func wireSSH() error {
 		}
 	}
 	if !found {
-		b = append([]byte(include+"\n\n"), b...)
+		// Never truncate the user's SSH config in place: a crash or a full
+		// disk mid-write would leave it empty. Write a sibling and rename.
+		if err := writeFileAtomic(target, append([]byte(include+"\n\n"), b...), 0o600); err != nil {
+			return err
+		}
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	// ssh refuses a group- or world-writable config, so tighten an existing
+	// one even when it already carries the Include.
+	if err := os.Chmod(target, 0o600); err != nil {
 		return err
 	}
 	return os.Chmod(dir, 0o700)
+}
+
+// writeFileAtomic replaces p with data through a synced sibling temporary
+// file and a rename, so a reader or a crash sees either the old content or
+// the new, never a truncated file.
+func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(p), "."+filepath.Base(p)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer func() { _ = os.Remove(name) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, p)
 }
 
 // DockerState is the observed system Docker state. ChairLift installs the
