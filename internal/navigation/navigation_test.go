@@ -241,6 +241,13 @@ func TestDetailMetadataCoversEveryBuilderBackedGroup(t *testing.T) {
 				{Page: "updates_page", Group: "bootc_updates_group"},
 			},
 		},
+		"developer": {
+			parent: "features",
+			title:  "Developer Mode",
+			refs: []Ref{
+				{Page: "features_page", Group: "dx_group"},
+			},
+		},
 	}
 
 	details := Details()
@@ -572,11 +579,11 @@ func TestLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
 }
 
 func TestDXModeLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
-	// The --dx-mode launch intent reaches the Features page (where the Developer Mode
-	// toggle resides) the same way the sidebar row does.
+	// The --dx-mode launch intent reaches the Developer Mode detail directly,
+	// keeping the sidebar selection on Features.
 	route := routeByName(t, DXModeRoute)
-	if !isPrimary(route) {
-		t.Fatalf("DXModeRoute %q is not a canonical primary", DXModeRoute)
+	if !isDetail(route) {
+		t.Fatalf("DXModeRoute %q is not a canonical detail route", DXModeRoute)
 	}
 
 	routes := VisibleRoutes(everythingEnabled)
@@ -588,8 +595,16 @@ func TestDXModeLaunchIntentTargetsACanonicalEnterableRoute(t *testing.T) {
 	if !ok {
 		t.Fatalf("Resolve(%q) rejected the launch route", DXModeRoute)
 	}
-	if transition.Name != DXModeRoute || transition.VisibleChild != DXModeRoute {
-		t.Fatalf("Resolve(%q) = %#v, want it entered as a primary", DXModeRoute, transition)
+	if transition.Name != "developer" || !transition.Detail || transition.Back != "features" {
+		t.Fatalf("Resolve(%q) = %#v, want developer detail route with Back to features", DXModeRoute, transition)
+	}
+
+	featuresTransition, ok := Resolve("features", routes, alwaysConstructed)
+	if !ok {
+		t.Fatalf("Resolve(%q) rejected features", "features")
+	}
+	if transition.SelectedIndex != featuresTransition.SelectedIndex {
+		t.Fatalf("Resolve(%q).SelectedIndex = %d, want features row %d", DXModeRoute, transition.SelectedIndex, featuresTransition.SelectedIndex)
 	}
 }
 
@@ -702,6 +717,9 @@ func routeByName(t *testing.T, name string) Item {
 		t.Fatalf("canonical inventory declares no route %q", name)
 	}
 	return route
+}
+func isDetail(item Item) bool {
+	return item.Kind == KindDetail
 }
 
 // ancestorPages returns the configuration pages a route's primary ancestor

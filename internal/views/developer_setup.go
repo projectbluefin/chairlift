@@ -27,12 +27,12 @@ func addSetupContents(row *adw.ExpanderRow, title, subtitle string) *adw.ActionR
 // immediately. The shared gate and checklist remain busy for subsequent tools.
 func (uh *UserHome) developerSetupReport(enabled bool) func(devsetup.Stage, devsetup.Status) {
 	return func(stage devsetup.Stage, status devsetup.Status) {
-		uh.setupActivity.report(stage, status)
+		uh.developerSetupActivity.report(stage, status)
 		if stage == devsetup.Feeds && status == devsetup.Complete {
 			if path, err := developerfeeds.OPMLPath(); err == nil {
 				sgtk.RunOnMainThread(func() {
-					if !uh.setupActivity.progress.disposed {
-						uh.setupActivity.rows[stage].SetSubtitle("Complete — Saved to " + path + ". Import this OPML file in your feed reader.")
+					if !uh.developerSetupActivity.progress.disposed {
+						uh.developerSetupActivity.rows[stage].SetSubtitle("Complete — Saved to " + path + ". Import this OPML file in your feed reader.")
 					}
 				})
 			}

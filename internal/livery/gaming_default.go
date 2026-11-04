@@ -3,6 +3,7 @@ package livery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/projectbluefin/chairlift/internal/config"
@@ -32,7 +33,20 @@ var panelGroupEnabled = func() bool {
 // configuration disables the Livery page's livery_foundation_group, since the
 // user would then have no switch to turn the mark back off.
 func EnsureGamingPanelDefault(ctx context.Context) error {
-	if !detectGaming() || !panelGroupEnabled() || !PanelAvailable(ctx) {
+	if !detectGaming() {
+		return nil
+	}
+	return EnsurePanelDefault(ctx, GamingDefaultID)
+}
+
+// EnsurePanelDefault applies an embedded mark only to an unconfigured panel.
+// It preserves user selections and opt-outs, and saves the previous extension
+// settings so the Livery switch can restore them.
+func EnsurePanelDefault(ctx context.Context, id string) error {
+	if _, ok := Lookup(id); !ok {
+		return fmt.Errorf("livery: unknown default panel mark %q", id)
+	}
+	if !panelGroupEnabled() || !PanelAvailable(ctx) {
 		return nil
 	}
 	values, err := readAll(ctx)
@@ -58,12 +72,12 @@ func EnsureGamingPanelDefault(ctx context.Context) error {
 			return err
 		}
 	}
-	if err := Apply(ctx, Panel, Source{Kind: FromCatalog, Value: GamingDefaultID}); err != nil {
+	if err := Apply(ctx, Panel, Source{Kind: FromCatalog, Value: id}); err != nil {
 		return err
 	}
 	if err := SetBool(ctx, KeyPanelEnabled, true); err != nil {
 		return err
 	}
-	log.Printf("livery: applied the %s panel mark on this gaming image", GamingDefaultID)
-	return SetString(ctx, KeyPanelID, GamingDefaultID)
+	log.Printf("livery: applied the %s default panel mark", id)
+	return SetString(ctx, KeyPanelID, id)
 }

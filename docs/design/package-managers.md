@@ -804,8 +804,12 @@ Retries retain successful optional stages rather than repeating installs.
 The shared post-promotion path opens one developer documentation page and
 installs the Dev Container CLI (`devcontainer`) when Homebrew is available.
 Pulp, feed staging, and the developer app collection retain their opt-ins and
-independent outcomes; editor selection/installation remains in Bazaar or Apps,
-with native VS Code configuration a separate optional Docker-enable step.
+independent outcomes; editor selection/installation uses native Development Apps
+rows in Developer Mode: `ublue-os` Homebrew Visual Studio Code, VSCodium, and
+JetBrains Toolbox (no personal taps), system FlatPark Cursor and Antigravity,
+and system Flathub Zed. Sublime Text is deliberately excluded for now by user
+approval; the current catalog has six entries. Native VS Code configuration is
+a separate optional Docker-enable step.
 No OS image switch is involved. The run captures config on the
 GTK main thread, does external work off-thread, and marshals widget changes
 back through `sgtk.RunOnMainThread`. Failed or previewed work leaves the action

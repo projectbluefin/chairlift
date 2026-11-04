@@ -691,7 +691,32 @@ remains retryable;
 preview writes no settings or marker and launches no editor CLI. A confirmed
 Developer Mode enable installs the Dev Container CLI (`devcontainer`) through
 Homebrew when available; installation failure does not reverse developer access.
-Editor selection/installation remains in Bazaar or Apps.
+Development Apps provides native install rows for Visual Studio Code, VSCodium,
+and JetBrains Toolbox through `ublue-os` Homebrew taps only (no personal taps).
+Cursor and Antigravity use system FlatPark Flatpaks; Zed uses system Flathub.
+These six entries are the complete current catalog; Sublime Text is deliberately
+excluded for now by user approval, not a blocked requirement.
+Exact package tokens must be verified, never guessed.
+
+Developer Mode is a detail page under Features, reached by its entry row or
+`--dx-mode`; Back returns to Features. It owns the Developer Mode, WSL, Docker,
+and developer setup activity controls. Gaming setup activity stays on Features.
+The Development Apps group shows the six verified IDEs with their source,
+installed status, and individual Install actions, replacing the generic Bazaar launcher.
+Installation does not require enabling Developer Mode. GNOME Builder, Kate,
+and individual JetBrains IDE rows are excluded.
+
+Features also shows Hardware Enablement on ASUS and Framework machines detected
+through DMI. Ordinary activation only reads Homebrew's installed-cask inventory.
+Explicit initial setup installs missing `ublue-os/tap` casks: `asusctl-linux`
+and `rog-control-center-linux` for ASUS, `framework-tool` and
+`framework-wallpapers` for Framework. Active requires installed versions for
+every profile package; command or inventory failures never imply success.
+Dry-run previews missing packages without claiming they are installed.
+After verified installation, the existing Livery default path can apply the
+embedded ASUS or Framework panel mark. It preserves prior selections and
+opt-outs, requires the supported panel extension, and saves previous settings
+for restoration. The packages themselves do not supply these symbolic icons.
 
 **Why the helper paths must be absolute, and why `PREFIX=/usr`:** `pkexec`
 resolves the program it's asked to run to an absolute path and compares it

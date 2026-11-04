@@ -53,6 +53,7 @@ type UserHome struct {
 	liveryPage       *adw.ToolbarView
 	helpPage         *adw.ToolbarView
 	recoveryPage     *adw.ToolbarView // Powerwash detail, reached from Maintenance, not a sidebar page
+	developerPage    *adw.ToolbarView // Developer Mode detail, reached from Features, not a sidebar page
 
 	// PreferencesPages inside each ToolbarView - keep references to prevent GC
 	agentsPrefsPage       *adw.PreferencesPage
@@ -63,6 +64,7 @@ type UserHome struct {
 	liveryPrefsPage       *adw.PreferencesPage
 	helpPrefsPage         *adw.PreferencesPage
 	recoveryPrefsPage     *adw.PreferencesPage
+	developerPrefsPage    *adw.PreferencesPage
 	// The preferences page inside each createPage ToolbarView; it owns the
 	// scrolling, so it is what ScrollPageToTop resets.
 	pageContents map[*adw.ToolbarView]*adw.PreferencesPage
@@ -225,17 +227,21 @@ type UserHome struct {
 	updateFeaturesGate actionstate.Gate
 
 	// Bluefin-family (channel / developer mode / gaming) references
-	channelGroup       *adw.PreferencesGroup
-	channelRow         *adw.ActionRow
-	channelSwitch      *gtk.Switch
-	developerGroup     *adw.PreferencesGroup
-	developerRow       *adw.ExpanderRow
-	developerSwitch    *gtk.Switch
-	developerGate      actionstate.Gate
-	developerCanToggle bool
-	developerEnabled   bool
-	developerToggle    *guardedSwitch
-	setupActivity      *setupActivity
+	channelGroup           *adw.PreferencesGroup
+	channelRow             *adw.ActionRow
+	channelSwitch          *gtk.Switch
+	developerGroup         *adw.PreferencesGroup
+	developerRow           *adw.ExpanderRow
+	developerSwitch        *gtk.Switch
+	developerGate          actionstate.Gate
+	developerCanToggle     bool
+	developerEnabled       bool
+	developerToggle        *guardedSwitch
+	developerSetupActivity *setupActivity
+	gamingSetupActivity    *setupActivity
+	developerEntryRow      *adw.ActionRow
+	hardwareEnablement     *hardwareEnablementView
+	developerApps          *developerAppsView
 	// All developer work, including optional installs, shares developerGate.
 	gamingGroup        *adw.PreferencesGroup
 	gamingRow          *adw.ExpanderRow
@@ -355,7 +361,9 @@ type UserHome struct {
 	openRecoveryDetail  func()
 	closeRecoveryDetail func()
 
-	brewPackagesRefresh actionstate.RefreshGate
+	openDeveloperDetail  func()
+	closeDeveloperDetail func()
+	brewPackagesRefresh  actionstate.RefreshGate
 	// formulaGates and caskGates hold each installed list's row gates, so a
 	// rebuild waits for a running uninstall or pin instead of replacing
 	// the only controls that show it.
@@ -396,6 +404,7 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 	uh.liveryPage, uh.liveryPrefsPage = uh.createPage()
 	uh.helpPage, uh.helpPrefsPage = uh.createPage()
 	uh.recoveryPage, uh.recoveryPrefsPage = uh.createRecoveryPage()
+	uh.developerPage, uh.developerPrefsPage = uh.createDeveloperPage()
 
 	// Build page content
 	uh.buildAgentsPage()
@@ -410,6 +419,7 @@ func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates
 		go uh.loadBrewBundles(uh.developerBundlePaths())
 	}
 	go uh.loadInitialStagedDeployment()
+	uh.buildDeveloperPage()
 	log.Printf("views: all pages built in %s", time.Since(start))
 	return uh
 }
@@ -473,9 +483,29 @@ func (uh *UserHome) GetPage(name string) *adw.ToolbarView {
 		return uh.liveryPage
 	case "help":
 		return uh.helpPage
+	case "developer":
+		return uh.developerPage
 	default:
 		return nil
 	}
+}
+
+// DeveloperPage returns the Developer Mode detail ToolbarView so the window can
+// add it to its content stack. Nil-guarded: the page is always built by New.
+func (uh *UserHome) DeveloperPage() *adw.ToolbarView {
+	return uh.developerPage
+}
+
+// SetOpenDeveloperDetail wires the callback the Features page calls to open the
+// Developer Mode detail view.
+func (uh *UserHome) SetOpenDeveloperDetail(fn func()) {
+	uh.openDeveloperDetail = fn
+}
+
+// SetCloseDeveloperDetail wires the callback the Developer Mode back button calls
+// to return to Features.
+func (uh *UserHome) SetCloseDeveloperDetail(fn func()) {
+	uh.closeDeveloperDetail = fn
 }
 
 // ScrollPageToTop returns a page built by createPage to its top. A page keeps

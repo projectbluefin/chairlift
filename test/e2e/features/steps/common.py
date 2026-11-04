@@ -137,6 +137,17 @@ def step_open_page(context, title):
     step_page_shown(context, title)
 
 
+@step("I open the Developer Mode detail")
+def step_open_developer_detail(context):
+    from apps import step_open_row
+
+    step_open_row(context, "Developer Mode")
+    assert atspi.poll(lambda: atspi.find_all(
+        content(context), lambda node: atspi.is_button(node)
+        and atspi.name(node) == "Back to Features"
+    )), "Developer Mode detail never exposed its Back to Features button"
+
+
 @step('I select "{title}" in the sidebar')
 def step_select_sidebar(context, title):
     """Move sidebar focus to the row with the arrow keys and press Return.

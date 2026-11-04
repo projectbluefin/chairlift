@@ -299,6 +299,7 @@ func (uh *UserHome) homebrewInventoryChanged() {
 	go uh.loadHomebrewPackages()
 	uh.refreshBundleStatuses()
 	uh.refreshBluefinCLI()
+	uh.refreshDeveloperApps()
 }
 
 // loadHomebrewPackages loads installed Homebrew packages asynchronously

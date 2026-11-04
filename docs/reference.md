@@ -208,8 +208,9 @@ The managed block places Homebrew's `bin` and `sbin` before image-provided tools
 so the shell uses the versions installed by setup. Personal overrides after the
 managed block still take precedence.
 
-**Gaming Mode** leads Features. **Setup activity** appears below it for Developer Mode, WSL,
-Docker, and Gaming operations. Its bounded checklist names actual stages,
+**Gaming Mode** leads Features, with its own **Setup activity** checklist below it.
+Developer Mode, WSL, and Docker have a separate checklist at the top of the
+Developer Mode detail. Each bounded checklist names actual stages,
 pulses during work, and distinguishes completion, failure, cancellation,
 awaiting a new login, and preview without percentage estimates. Awaiting login
 is not ready and is not a failed action to repeat. Each of **Developer Mode**,
@@ -295,7 +296,12 @@ enable. Preview
 writes no settings or marker and launches no editor CLI.
 A confirmed Developer Mode enable also installs the Dev Container CLI
 (`devcontainer`) when Homebrew is available; an install failure does not reverse
-developer access. Editor selection/installation remains in Bazaar or Apps.
+developer access. Development Apps in the Developer Mode detail offers native
+rows with source, installed status, and Install actions for Visual Studio Code,
+VSCodium, and JetBrains Toolbox through `ublue-os` Homebrew taps only; Cursor
+and Antigravity through system FlatPark Flatpaks; Zed through system Flathub.
+These are the six catalog entries; Sublime Text is deliberately excluded for now by user approval.
+IDE installation does not require enabling Developer Mode or opening Bazaar.
 The fixed `kvm-enable` action still grants KVM access, effective after a new login.
 
 The **Virtual Machine Engine** chooser (Built-in for nsl, or Lima) changes the current window's backend without rewriting

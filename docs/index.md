@@ -27,7 +27,7 @@ guaranteed on every host.
 | **Updates** | Update everything in one action or per provider: stage bootc system updates, apply Flatpak updates, upgrade Homebrew packages, trust Homebrew taps, read the booted/staged system version, and switch release channel or graphics-driver variant. |
 | **Apps** | App Collections first (checkbox selection with a unified Install button), then Installed Apps (installed casks), Command-Line Tools (explicitly requested formulae), and Backup with the Export app list row (a Brewfile export). Installed packages offer uninstall and formula pin/unpin actions. No Flatpak inventory, external catalog launcher, or package search. |
 | **Agents** | Agent Mode: run a language model on this computer (llmman); Troubleshooting: set up Goose Desktop with read-only Linux tools and launch it on that model; and contribute to Bluefin. |
-| **Features** | Distribution features, Developer Mode, WSL Mode (nsl or Lima), Docker, Gaming Mode, and printer applications for this computer. |
+| **Features** | Distribution features, a Developer Mode detail with WSL, Docker, and six native Development Apps install rows (ublue-os Homebrew Visual Studio Code, VSCodium, JetBrains Toolbox; system FlatPark Cursor and Antigravity; system Flathub Zed), Gaming Mode, OEM hardware support, and printer applications for this computer. Sublime Text is deliberately excluded for now by user approval. |
 | **Livery** | Choose your profile picture and the marks shown on the app launcher button, the top-bar menu, and Files. |
 | **Maintenance** | Free Up Space, run administrator-configured maintenance scripts, and Powerwash: Roll Back (with bootc updates), plus Powerwash and Factory Reset when an administrator opts in. |
 | **Help** | Links to the project website, issue tracker, and community documentation, plus system diagnostics. |
@@ -55,7 +55,7 @@ always retained so the window always has a valid destination.
 | `--first-run`, `--setup`, `-s` | Start the same explicit Features → Apps → Agents → Livery tour on existing page controls. A running tour retains its current step. Ordinary activation never starts setup. |
 | `--ask-bluefin` | Launch Goose Desktop with the active model when Agent Mode is ready, or open Control Center to the Agents page naming the missing requirement. |
 | `--prompt-file PATH` | With `--ask-bluefin`, open Goose with the text in `PATH` (a regular UTF-8 file of at most 4 KiB) prefilled as the first message. When Goose is not ready yet, the prompt is kept until Goose is opened from the Agents page. |
-| `--dx-mode` | Open Control Center directly to the Developer Mode toggle screen on the Features page. |
+| `--dx-mode` | Open Control Center directly to the Developer Mode detail under Features. |
 
 ## Optional Dependencies
 

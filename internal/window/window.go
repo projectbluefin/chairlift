@@ -215,6 +215,8 @@ func (w *Window) buildUI() {
 	// transition named, so neither callback derives a route of its own.
 	w.views.SetOpenRecoveryDetail(w.showRecoveryDetail)
 	w.views.SetCloseRecoveryDetail(w.navigateBack)
+	w.views.SetOpenDeveloperDetail(w.showDeveloperDetail)
+	w.views.SetCloseDeveloperDetail(w.navigateBack)
 	log.Printf("window: views built in %s", time.Since(start))
 
 	w.updateShell.SetOnUpdateFinished(w.views.OnUpdateFinished)
@@ -370,6 +372,10 @@ func (w *Window) bindContentArea() {
 		w.pages["recovery"] = recovery
 		w.contentStack.AddNamed(&recovery.Widget, "recovery")
 	}
+	if developer := w.views.DeveloperPage(); developer != nil {
+		w.pages["developer"] = developer
+		w.contentStack.AddNamed(&developer.Widget, "developer")
+	}
 
 	// The content page takes its title from the first nav item.
 	if len(items) > 0 {
@@ -492,15 +498,21 @@ func (w *Window) setupActions() {
 // selection, and the only one that shows a detail: a detail keeps its
 // ancestor's row selected and records the primary its Back control returns to.
 func (w *Window) navigateToPage(pageName string) {
-	if w.firstRunActive && (w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) || pageName != w.firstRunSteps[w.firstRunIndex]) {
-		return
-	}
 	transition, ok := navigation.Resolve(pageName, w.navRoutes, func(name string) bool {
 		_, exists := w.pages[name]
 		return exists
 	})
 	if !ok {
 		return
+	}
+	if w.firstRunActive {
+		if w.firstRunIndex < 0 || w.firstRunIndex >= len(w.firstRunSteps) {
+			return
+		}
+		step := w.firstRunSteps[w.firstRunIndex]
+		if transition.Name != step && (!transition.Detail || transition.Back != step) {
+			return
+		}
 	}
 
 	w.shownRow = transition.SelectedIndex
@@ -519,6 +531,12 @@ func (w *Window) navigateToPage(pageName string) {
 // it and the page was built; otherwise it lands on Maintenance itself.
 func (w *Window) showRecoveryDetail() {
 	w.navigateToPage("recovery")
+}
+
+// showDeveloperDetail opens the Developer Mode detail from Features through the
+// canonical transition.
+func (w *Window) showDeveloperDetail() {
+	w.navigateToPage("developer")
 }
 
 // navigateBack returns from the shown detail to the primary its transition
@@ -712,6 +730,7 @@ func (w *Window) PresentFirstRun() {
 	w.firstRunIndex = -1
 	w.firstRunActive = true
 	w.views.BeginBluefinCLISetup()
+	w.views.EnableHardware()
 	w.sidebarList.SetSensitive(false)
 	// The collapsed split view's native Back goes to the sidebar, not the
 	// previous setup step. Disable that route while the wizard owns navigation.
@@ -731,10 +750,8 @@ func (w *Window) NavigateToAgentsPage() {
 	w.navigateToPage(navigation.AgentModeRoute)
 }
 
-// NavigateToDXModePage opens the Features page (where the Developer Mode toggle lives).
-// It is the GTK half of the --dx-mode launch intent: internal/app resolves the
-// decision and calls this from either the running-instance (onCommandLine) or
-// cold-start (onActivate) path, and the route is the canonical Features page.
+// NavigateToDXModePage opens the Developer Mode detail under Features.
+// Both cold-start and running-instance --dx-mode requests use the same route.
 func (w *Window) NavigateToDXModePage() {
 	w.navigateToPage(navigation.DXModeRoute)
 }

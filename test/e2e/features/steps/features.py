@@ -66,7 +66,62 @@ def _calls(context):
         return []
 
 
+@step("I capture the Developer Mode detail evidence")
+def step_capture_developer_detail(context):
+    from wayland_remote import screenshot
+
+    name = "developer-activity.png" if _groups(context, "Setup activity") else "developer-detail.png"
+    screenshot(os.path.join(context.scenario_dir, name))
+
+
+@then("Development Apps offers exactly these native IDE rows")
+def step_development_apps(context):
+    want = [entry["name"] for entry in context.table]
+    assert atspi.poll(lambda: _groups(context, "Development Apps")), \
+        "no Development Apps group in Developer Mode"
+    group = _groups(context, "Development Apps")[0]
+    rows = atspi.find_all(group, lambda node: atspi.role(node) in atspi.ROW_ROLES)
+    got = [atspi.label_text(row) for row in rows]
+    assert got == want, f"Development Apps rows {got}, want {want}"
+    for entry in context.table:
+        title, source = entry["name"], entry["source"]
+        row = atspi.row_containing(group, title)
+        texts = atspi.all_text_under(row)
+        assert any(source in text for text in texts), \
+            f"{title!r} does not disclose {source}: {texts}"
+        if source == "Flatpak":
+            assert any("system" in text.lower() for text in texts), \
+                f"{title!r} does not disclose system scope: {texts}"
+            assert any(entry["remote"].lower() in text.lower() for text in texts), \
+                f"{title!r} does not disclose {entry['remote']}: {texts}"
+        names = {f"{action} {title}" for action in
+                 ("Checking", "Install", "Installed", "Unavailable", "Retry", "Installing")}
+        button = atspi.find(row, lambda node: any(atspi.is_button(node, name) for name in names),
+                            f"the native package action for {title}")
+        assert atspi.actions(button), f"{title!r} Install button exposes no native action"
+        label = atspi.poll(lambda: next((text for text in atspi.all_text_under(button)
+                                       if text in {"Install", "Installed", "Unavailable", "Retry"}), None))
+        assert label, f"{title!r} never settled from Checking…"
+        assert atspi.sensitive(button) == (label in {"Install", "Retry"}), \
+            f"{title!r} {label!r} button has incorrect sensitivity"
+
+
+def _developer_detail_visible(context):
+    return bool(atspi.find_all(_content(context), lambda node: atspi.is_button(node, "Back to Features")))
+
+
+def _feature_surface(context, developer):
+    from common import step_open_developer_detail, step_open_page
+
+    if _developer_detail_visible(context) == developer:
+        return
+    step_open_page(context, "Features")
+    if developer:
+        step_open_developer_detail(context)
+
+
 def _switch(context, row):
+    _feature_surface(context, row in ("Developer Mode", "WSL Mode", "Enable Docker"))
     target = atspi.row_containing(_content(context), row)
     return atspi.find(target, lambda n: atspi.role(n) == "switch", f"a switch in the {row!r} row")
 
@@ -143,6 +198,7 @@ def _mutation_calls(context):
 
 
 def _disclosure_header(context, title):
+    _feature_surface(context, title != "Gaming Mode")
     group = "Gaming" if title == "Gaming Mode" else "Developer"
     return expander_header(context, title, group)
 
@@ -152,15 +208,23 @@ def _disclosure_rows(context, title):
     return [name for name in expander_rows(_disclosure_header(context, title)) if name not in non_packages]
 
 
+def _feature_switch_snapshot(context):
+    developer = _developer_detail_visible(context)
+    try:
+        return {title: bool(atspi.checked(_switch(context, title))) for title in FEATURE_SWITCH_ROWS}
+    finally:
+        _feature_surface(context, developer)
+
+
 @step("I record the Features switches and mutation evidence")
 def step_record_feature_state(context):
+    developer = _developer_detail_visible(context)
     step_developer_restored(context)
     for title in FEATURE_SWITCH_ROWS:
         assert atspi.poll(lambda: atspi.sensitive(_switch(context, title))), \
             f"{title!r} never became ready before disclosure inspection"
-    context.features_switch_snapshot = {
-        title: bool(atspi.checked(_switch(context, title))) for title in FEATURE_SWITCH_ROWS
-    }
+    context.features_switch_snapshot = _feature_switch_snapshot(context)
+    _feature_surface(context, developer)
     context.features_journal_snapshot = _journal(context)
     context.features_calls_snapshot = _mutation_calls(context)
     context.features_log_snapshot = len(_log(context))
@@ -168,12 +232,14 @@ def step_record_feature_state(context):
 
 @then("each Features switch is named and separately keyboard reachable")
 def step_feature_switch_accessibility(context):
+    developer = _developer_detail_visible(context)
     for title in FEATURE_SWITCH_ROWS:
         switch = _switch(context, title)
         assert atspi.name(switch) == title, f"{title!r} switch has accessible name {atspi.name(switch)!r}"
         assert atspi.checked(switch) is not None, f"{title!r} switch publishes no state"
         assert atspi.actions(switch), f"{title!r} switch exposes no native action"
         focus_by_tab(context, switch, f"the separate {title!r} switch")
+    _feature_surface(context, developer)
 
 
 @step('I expand the "{title}" package disclosure with the keyboard')
@@ -217,7 +283,7 @@ def step_packages_informational(context, title):
 @then("expanding disclosures changes no Features switch and requests no mutation")
 def step_disclosures_passive(context):
     def changed():
-        current = {title: bool(atspi.checked(_switch(context, title))) for title in FEATURE_SWITCH_ROWS}
+        current = _feature_switch_snapshot(context)
         if current != context.features_switch_snapshot:
             return current
         if _journal(context) != context.features_journal_snapshot:
@@ -259,6 +325,15 @@ def step_setup_after_gaming(context):
     groups = [atspi.name(node) for node in atspi.children(activity.parent)
               if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
     assert groups[:2] == ["Gaming", "Setup activity"], f"Features group order is {groups}"
+
+
+@then("Setup activity is the first Developer preference group")
+def step_setup_first_developer(context):
+    activity = atspi.find(_content(context), lambda node: atspi.role(node) == "grouping"
+                          and atspi.name(node) == "Setup activity", "the Setup activity group")
+    groups = [atspi.name(node) for node in atspi.children(activity.parent)
+              if atspi.role(node) == "grouping" and atspi.showing(node) and atspi.name(node)]
+    assert groups and groups[0] == "Setup activity", f"Developer group order is {groups}"
 
 
 @then("Setup activity shows these stage statuses")
