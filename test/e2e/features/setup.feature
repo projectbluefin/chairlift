@@ -80,6 +80,7 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Livery"
     When I use the setup "Next" button
     Then the setup wizard shows "Features"
+    When I open the Developer Mode detail
     When I expand the "Developer Mode" list under "Developer"
     Then the "Monospace Fonts" collection is checked
     And the action journal is empty
@@ -89,6 +90,7 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Apps"
     When I use the setup "Back" button
     Then the setup wizard shows "Features"
+    When I open the Developer Mode detail
     And the "Monospace Fonts" collection is unchecked
     And the application log previews no "brew bundle install"
     And the action journal is empty
@@ -112,3 +114,23 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Apps"
     And the application log contains "[DRY-RUN] Would disable Bluefin CLI for Bash"
     And the application log does not contain "[DRY-RUN] Would enable Bluefin CLI for Bash"
+
+  @developer-first-run @args.--first-run @stub.livery-tools @stub.features-gaming-none @stub.features-devmenu
+  Scenario: First-run Features opens its Developer detail without escaping the wizard
+    Given ChairLift is running
+    Then the setup wizard shows "Welcome"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Livery"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Features"
+    When I open the Developer Mode detail
+    Then the setup wizard shows "Development Apps"
+    And the Developer Mode switch shows this account's developer-group membership
+    When I press "<Alt>1"
+    Then the setup wizard shows "Development Apps"
+    When I capture the Developer Mode detail evidence
+    And I click the "Back to Features" button
+    Then the setup wizard shows "Features"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Apps"
+    And the action journal is empty
