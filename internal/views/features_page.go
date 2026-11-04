@@ -625,20 +625,31 @@ func (uh *UserHome) applyStagedImage(status *bootc.Status) {
 	}
 }
 func (uh *UserHome) loadInitialStagedDeployment() {
-	if !bootc.IsBootcBootedCached() {
-		sgtk.RunOnMainThread(func() {
-			uh.stagedImageLoaded = true
-			uh.applyInitialStagedSettled()
-		})
-		return
-	}
 	ctx, cancel := bootc.DefaultContext()
 	defer cancel()
 
 	status, err := bootc.GetStatus(ctx)
 	sgtk.RunOnMainThread(func() {
+		if err != nil {
+			var notFound *bootc.NotFoundError
+			if errors.As(err, &notFound) {
+				// Non-bootc host: bootc binary absent, no staged deployment possible.
+				uh.stagedImageLoaded = true
+				uh.applyInitialStagedSettled()
+				return
+			}
+			log.Printf("views: reading initial staged deployment status failed: %v", err)
+			// Fail closed: retain replacement controls insensitive with an explanatory subtitle.
+			if uh.channelRow != nil {
+				uh.channelRow.SetSubtitle("Unavailable right now: couldn't verify the system update state.")
+			}
+			if uh.gameModeRow != nil {
+				uh.gameModeRow.SetSubtitle("Unavailable right now: couldn't verify the system update state.")
+			}
+			return
+		}
 		uh.stagedImageLoaded = true
-		if err == nil && status != nil {
+		if status != nil {
 			uh.applyStagedImage(status)
 		}
 		uh.applyInitialStagedSettled()

@@ -438,6 +438,7 @@ func TestStagedDeploymentLocksAlternativeOSSwitches(t *testing.T) {
 		}},
 		{"views.go", "OnUpdateFinished", []string{"uh.applyStagedImage(status)"}},
 		{"updates_page.go", "loadBootcUpdateStatus", []string{"uh.applyStagedImage(status)"}},
+		{"features_page.go", "loadInitialStagedDeployment", []string{"bootc.GetStatus(ctx)", "uh.applyStagedImage(status)"}},
 	} {
 		body := functionBody(check.file, check.function)
 		for _, snippet := range check.required {
