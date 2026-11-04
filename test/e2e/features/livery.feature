@@ -220,6 +220,7 @@ Feature: Livery
     And the Livery chooser does not offer "Cloud Native Computing Foundation"
     When I pick "GNOME Foundation" in the Livery chooser
     Then the Livery chooser is closed
+    And a toast says "[DRY-RUN] Preview: the top bar icon would change — no changes made"
     And the "Mark" row in the Livery "Top Bar Icon" section says "Cloud Native Computing Foundation"
     And the Livery dry run would set panel-foundation to "gnome"
     And the Livery dry run would install the "chairlift-livery-gnome-symbolic" icon in the "hicolor" theme
@@ -227,7 +228,6 @@ Feature: Livery
     And no icon was written under the home directory
     And the "Cloud Native Computing Foundation" mark in the Livery "Top Bar Icon" gallery is selected
     And the "GNOME Foundation" mark in the Livery "Top Bar Icon" gallery is not selected
-    And a toast says "[DRY-RUN] Preview: the top bar icon would change — no changes made"
 
   @stub.livery-tools @stub.livery-panel-on
   Scenario: Escape closes the chooser from its search field
