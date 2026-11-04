@@ -17,7 +17,11 @@ import (
 )
 
 const (
-	currentName  = "current"
+	currentName = "current"
+	// activeName is the link the managed docker.service runs from. Its
+	// ExecStartPre repoints it at current whenever the daemon starts, so it
+	// names the set the running daemon spawns from; prune keeps that set.
+	activeName   = "active"
 	manifestName = "manifest.json"
 	lockName     = ".lock"
 	// restartName marks a set swapped in whose daemon has not yet been
@@ -406,17 +410,23 @@ func swapCurrent(root, id string) error {
 	return d.Sync()
 }
 
-// prune removes every set directory except keep and any leftovers of an
-// interrupted install. Callers hold the lock.
+// prune removes every set directory except keep and the set root/active
+// names, plus any leftovers of an interrupted install. Callers hold the lock.
+//
+// The active set is the one a running daemon started on. When its restart
+// onto keep was deferred because containers are running, that daemon still
+// spawns shims, runc, and docker-proxy from it, so deleting it would break
+// every container start until the restart happens (#696).
 func prune(root, keep string) error {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return err
 	}
+	active := activeSet(root)
 	var errs []error
 	for _, e := range entries {
 		name := e.Name()
-		stale := (setIDPattern.MatchString(name) && name != keep) ||
+		stale := (setIDPattern.MatchString(name) && name != keep && name != active) ||
 			strings.HasPrefix(name, stagingPre) ||
 			strings.HasPrefix(name, downloadPre) ||
 			strings.HasPrefix(name, linkPre)
@@ -425,6 +435,18 @@ func prune(root, keep string) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// activeSet returns the set id root/active names, or "" when there is no
+// such link or it names anything but a set id. Only prune reads it, and only
+// to keep a directory, so an unreadable or foreign link just protects
+// nothing.
+func activeSet(root string) string {
+	target, err := os.Readlink(filepath.Join(root, activeName))
+	if err != nil || !setIDPattern.MatchString(target) {
+		return ""
+	}
+	return target
 }
 
 // ReadManifest reads the installed set's manifest; the error wraps

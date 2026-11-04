@@ -48,6 +48,9 @@ VOLUME = "chairlift-system-integration"
 # internal/dockerbrew's fixed layout and daemon-side formula set.
 RUNTIME_ROOT = Path("/var/lib/chairlift/docker")
 CURRENT = RUNTIME_ROOT / "current"
+# The managed unit runs from active, which its ExecStartPre repoints at
+# current on every daemon start (#696).
+ACTIVE = RUNTIME_ROOT / "active"
 FORMULAE = ["docker-engine", "containerd", "runc", "tini", "libpathrs", "libseccomp"]
 BINARIES = {"dockerd", "docker-proxy", "containerd", "containerd-shim-runc-v2", "runc", "docker-init"}
 LIBRARIES = {"libpathrs.so.0", "libseccomp.so.2"}
@@ -223,7 +226,9 @@ def assert_managed_units():
     for name, text in (("docker.service", service), ("docker.socket", socket_unit)):
         assert text.splitlines()[0] == MANAGED_MARKER, f"{name} lacks the managed marker:\n{text}"
         assert "linuxbrew" not in text, f"{name} points root at the user-writable Homebrew prefix:\n{text}"
-    assert f"ExecStart={CURRENT}/bin/dockerd -H fd://" in service, service
+    assert f"ExecStartPre=/usr/bin/cp -PT --remove-destination {CURRENT} {ACTIVE}" in service, service
+    assert f"ExecStart={ACTIVE}/bin/dockerd -H fd://" in service, service
+    assert f"Environment=PATH={ACTIVE}/bin:" in service, service
     assert "ListenStream=/run/docker.sock" in socket_unit and "SocketGroup=docker" in socket_unit, socket_unit
 
 
@@ -293,7 +298,11 @@ def runtime_evidence():
     tree = CURRENT.resolve()
     assert tree == root / set_id, (tree, root, set_id)
     assert_root_owned(root)
-    assert set(os.listdir(root)) <= {"current", set_id, ".lock"}, f"stale runtime sets were kept: {os.listdir(root)}"
+    assert set(os.listdir(root)) <= {"current", "active", set_id, ".lock"}, f"stale runtime sets were kept: {os.listdir(root)}"
+    if ACTIVE.is_symlink():
+        # No restart is deferred in this fixture, so a started daemon runs
+        # from the current set.
+        assert os.readlink(ACTIVE) == set_id, f"active points at {os.readlink(ACTIVE)!r}, not the current set {set_id}"
     manifest = json.loads((CURRENT / "manifest.json").read_text())
     assert manifest["arch"] == ARCHES[machine], manifest
     assert [bottle["name"] for bottle in manifest["bottles"]] == FORMULAE, manifest
@@ -330,7 +339,8 @@ def assert_daemon_from_runtime(manifest):
     pid = run("systemctl", "show", "docker.service", "--property=MainPID", "--value").stdout.strip()
     assert pid not in ("", "0"), "docker.service has no main process"
     argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
-    assert argv[0].decode() == f"{CURRENT}/bin/dockerd", f"system dockerd is not ChairLift's runtime: {argv}"
+    assert argv[0].decode() == f"{ACTIVE}/bin/dockerd", f"system dockerd is not ChairLift's runtime: {argv}"
+    assert os.readlink(ACTIVE) == os.readlink(CURRENT), "a started daemon does not run from the current set"
     engine = next(bottle for bottle in manifest["bottles"] if bottle["name"] == "docker-engine")
     return engine["version"]
 

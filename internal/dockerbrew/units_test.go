@@ -24,11 +24,20 @@ func TestServiceUnitRunsTheEngineUnderRoot(t *testing.T) {
 		t.Fatalf("first line = %q", first)
 	}
 	kv := unitLines(body)
-	if got := kv["ExecStart"]; len(got) != 1 || got[0] != "/opt/x/current/bin/dockerd -H fd://" {
+	// The daemon runs from active, which only a daemon start repoints at
+	// current, so a deferred restart never mixes a running daemon with a
+	// newly swapped set (#696).
+	if got := kv["ExecStartPre"]; len(got) != 1 || got[0] != "/usr/bin/cp -PT --remove-destination /opt/x/current /opt/x/active" {
+		t.Errorf("ExecStartPre = %q", got)
+	}
+	if got := kv["ExecStart"]; len(got) != 1 || got[0] != "/opt/x/active/bin/dockerd -H fd://" {
 		t.Errorf("ExecStart = %q", got)
 	}
-	if got := kv["Environment"]; len(got) != 1 || got[0] != "PATH=/opt/x/current/bin:/usr/sbin:/usr/bin:/sbin:/bin" {
+	if got := kv["Environment"]; len(got) != 1 || got[0] != "PATH=/opt/x/active/bin:/usr/sbin:/usr/bin:/sbin:/bin" {
 		t.Errorf("Environment = %q", got)
+	}
+	if strings.Contains(body, "/opt/x/current/bin") {
+		t.Error("service resolves binaries through current, which Install swaps under a running daemon")
 	}
 	// Everything else is moby's unit.
 	for k, want := range map[string]string{

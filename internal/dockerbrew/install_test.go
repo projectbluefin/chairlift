@@ -190,6 +190,82 @@ func TestRuntimeInstallSwapsToANewSetAndPrunesTheOld(t *testing.T) {
 	}
 }
 
+// A daemon whose restart onto a new set was deferred still runs from the set
+// root/active names, spawning shims, runc, and docker-proxy from it. That set
+// must survive pruning until a daemon start repoints active (#696).
+func TestRuntimeInstallKeepsTheSetTheRunningDaemonUses(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	first, _, err := Install(t.Context(), e.client, e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The daemon started on the first set: its ExecStartPre copied current.
+	active := filepath.Join(e.root, activeName)
+	if err := os.Symlink(first.SetID(), active); err != nil {
+		t.Fatal(err)
+	}
+
+	e.publish("two")
+	second, changed, err := Install(t.Context(), e.client, e.root)
+	if err != nil || !changed {
+		t.Fatalf("Install = %v, %v", changed, err)
+	}
+	if e.currentTarget() != second.SetID() {
+		t.Fatalf("current -> %q, want %q", e.currentTarget(), second.SetID())
+	}
+	want := sortedNames(lockName, restartName, first.SetID(), second.SetID(), currentName, activeName)
+	if got := e.entries(); !slices.Equal(got, want) {
+		t.Fatalf("with a deferred restart root holds %v, want %v", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(active, "bin", "dockerd")); err != nil {
+		t.Fatalf("the running daemon's set lost its binaries: %v", err)
+	}
+
+	// The daemon restarts: ExecStartPre repoints active at current, and the
+	// next run prunes the set nothing runs from any more.
+	if err := os.Remove(active); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(second.SetID(), active); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearRestartPending(t.Context(), e.root, second.SetID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+		t.Fatalf("rerun = %v, %v; want unchanged", changed, err)
+	}
+	want = sortedNames(lockName, second.SetID(), currentName, activeName)
+	if got := e.entries(); !slices.Equal(got, want) {
+		t.Errorf("after the restart root holds %v, want %v", got, want)
+	}
+}
+
+// An active link naming anything but a set id protects nothing and is never
+// followed by prune.
+func TestRuntimeInstallIgnoresAForeignActiveLink(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	if _, _, err := Install(t.Context(), e.client, e.root); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(e.root, activeName)); err != nil {
+		t.Fatal(err)
+	}
+	e.publish("two")
+	if _, _, err := Install(t.Context(), e.client, e.root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("prune followed a foreign active link: %v", err)
+	}
+	if got := activeSet(e.root); got != "" {
+		t.Errorf("activeSet = %q for a foreign link", got)
+	}
+}
+
 func TestRuntimeInstallKeepsTheCurrentSetWhenANewOneFails(t *testing.T) {
 	for name, breakIt := range map[string]func(e *installEnv){
 		"smoke test fails": func(e *installEnv) { e.smokeErr = errors.New("dockerd --version: exit 127") },
