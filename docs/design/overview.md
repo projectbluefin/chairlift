@@ -837,8 +837,12 @@ confirmed inventory unchanged.
 Steam, ProtonUp-Qt, and Flatseal were part of the stack before the single
 toggle and are no longer gaming components. They are tracked as retired so an
 upgrade does not leave their installs behind invisibly: Derive reports each one
-still installed, and the status notes how many. Disable cleans them up the same
-way as the current stack — a per-user copy is always removed, and a system copy
+still installed, and the status notes how many. Steam and Flatseal are
+`KeepOnDisable`: they are ordinary apps people install on their own, and
+nothing records whether Gaming Mode or the user installed a given copy, so
+Disable reports them as kept and never removes them (#702). Disable cleans
+ProtonUp-Qt up the same way as the current stack — a per-user copy is always
+removed, and a system copy
 is kept only when the OS image declares it ships it (the exception above),
 otherwise removed under Flatpak's PolicyKit. The system copy is kept for the
 same reason a current component's is: it predates gaming mode and removing it

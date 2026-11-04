@@ -2,6 +2,8 @@ package gaming
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -319,8 +321,8 @@ func TestSummaryMentionsRetiredComponents(t *testing.T) {
 // removes a current component's, because the user copy needs no authorization.
 func TestDisableRemovesARetiredUserScopeCopy(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam),
-		User:      refsOf(steam),
+		Installed: refsOf(protonUpQt),
+		User:      refsOf(protonUpQt),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
@@ -328,15 +330,52 @@ func TestDisableRemovesARetiredUserScopeCopy(t *testing.T) {
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
-	if !reflect.DeepEqual(removed, []string{steam}) {
+	if !reflect.DeepEqual(removed, []string{protonUpQt}) {
 		t.Errorf("Disable() removed = %v, want only the retired user-scope copy", removed)
 	}
 	if len(kept) != 0 {
 		t.Errorf("Disable() kept = %v, want none", kept)
 	}
-	want := []string{"uninstall -y --user " + steam}
+	want := []string{"uninstall -y --user " + protonUpQt}
 	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
+	}
+}
+
+// Steam and Flatseal are ordinary apps people install on their own, and
+// nothing records who installed a given copy, so turning Gaming Mode off
+// keeps them in either scope and reports them as kept (#702). It does not
+// read the image's ship declaration for them, which could only make the
+// removal fail closed.
+func TestDisableKeepsRetiredAppsUsersInstallThemselves(t *testing.T) {
+	// An unreadable ship declaration (a file where a directory belongs)
+	// fails a removal closed, so Disable must not consult it here.
+	notADir := filepath.Join(t.TempDir(), "preinstall.d")
+	if err := os.WriteFile(notADir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previousDirs := preinstallDirs
+	preinstallDirs = []string{notADir}
+	t.Cleanup(func() { preinstallDirs = previousDirs })
+	stubScope(t, Scope{
+		Installed: refsOf(steam, flatseal),
+		User:      refsOf(steam),
+		System:    refsOf(flatseal),
+	}, nil)
+	log := fakeFlatpak(t, "exit 0")
+
+	removed, kept, failures := Disable()
+	if len(failures) != 0 {
+		t.Fatalf("Disable() failures = %v, want none", failures)
+	}
+	if removed != nil {
+		t.Errorf("Disable() removed = %v, want none", removed)
+	}
+	if !reflect.DeepEqual(kept, []string{steam, flatseal}) {
+		t.Errorf("Disable() kept = %v, want %v", kept, []string{steam, flatseal})
+	}
+	if calls := invocations(t, log); len(calls) != 0 {
+		t.Errorf("Disable() ran %q, want nothing", calls)
 	}
 }
 
@@ -373,8 +412,8 @@ func TestDisableKeepsAnImageShippedRetiredSystemCopy(t *testing.T) {
 // current component is installed system-wide.
 func TestDisableRemovesANonShippedRetiredSystemCopy(t *testing.T) {
 	stubScope(t, Scope{
-		Installed: refsOf(steam),
-		System:    refsOf(steam),
+		Installed: refsOf(protonUpQt),
+		System:    refsOf(protonUpQt),
 	}, nil)
 	log := fakeFlatpak(t, "exit 0")
 
@@ -382,13 +421,13 @@ func TestDisableRemovesANonShippedRetiredSystemCopy(t *testing.T) {
 	if len(failures) != 0 {
 		t.Fatalf("Disable() failures = %v, want none", failures)
 	}
-	if !reflect.DeepEqual(removed, []string{steam}) {
+	if !reflect.DeepEqual(removed, []string{protonUpQt}) {
 		t.Errorf("Disable() removed = %v, want the non-shipped retired system copy", removed)
 	}
 	if len(kept) != 0 {
 		t.Errorf("Disable() kept = %v, want none", kept)
 	}
-	want := []string{"uninstall -y --system " + steam}
+	want := []string{"uninstall -y --system " + protonUpQt}
 	if calls := invocations(t, log); !reflect.DeepEqual(calls, want) {
 		t.Errorf("Disable() ran %q, want %q", calls, want)
 	}

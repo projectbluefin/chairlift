@@ -59,6 +59,13 @@ type Component struct {
 	// branch the named application loads, and removed by one qualified ref
 	// per installed branch. Empty for single-branch components.
 	BranchOf string
+	// KeepOnDisable marks a retired component that is an ordinary app people
+	// install on their own (Steam, Flatseal). Nothing records whether Gaming
+	// Mode or the user installed a given copy, so turning Gaming Mode off
+	// leaves it in place, reported as kept, rather than uninstalling an app
+	// the user may have chosen themselves (#702). Only retiredComponents set
+	// it; a current component is always Gaming Mode's to remove.
+	KeepOnDisable bool
 }
 
 // Ref identifies one installed ref: an ID together with its kind. The kind is
@@ -124,10 +131,11 @@ var components = []Component{
 // never touched.
 var retiredComponents = []Component{
 	{
-		ID:          "com.valvesoftware.Steam",
-		Kind:        flatpak.KindApplication,
-		Name:        "Steam",
-		Description: "Valve's game client, once installed through Gaming Mode",
+		ID:            "com.valvesoftware.Steam",
+		Kind:          flatpak.KindApplication,
+		Name:          "Steam",
+		Description:   "Valve's game client, once installed through Gaming Mode",
+		KeepOnDisable: true,
 	},
 	{
 		ID:          "net.davidotek.pupgui2",
@@ -136,10 +144,11 @@ var retiredComponents = []Component{
 		Description: "Proton-GE and Wine-GE manager, once installed through Gaming Mode",
 	},
 	{
-		ID:          "com.github.tchx84.Flatseal",
-		Kind:        flatpak.KindApplication,
-		Name:        "Flatseal",
-		Description: "Per-app permission editor, once installed through Gaming Mode",
+		ID:            "com.github.tchx84.Flatseal",
+		Kind:          flatpak.KindApplication,
+		Name:          "Flatseal",
+		Description:   "Per-app permission editor, once installed through Gaming Mode",
+		KeepOnDisable: true,
 	},
 }
 
@@ -201,7 +210,7 @@ type State struct {
 	// previous release that are still installed on this host. They are not
 	// part of gaming mode now, so they do not affect Enabled, but reporting
 	// them keeps an upgrade from leaving installs behind invisibly, and
-	// Disable() removes them (see Disable).
+	// Disable() removes them unless they are KeepOnDisable (see Disable).
 	Retired []string
 }
 
@@ -279,6 +288,11 @@ func installedRef(scope Scope, id string) bool {
 // need the image's ship declaration before removing a system copy of one.
 func retiredSystemInstalled(scope Scope) bool {
 	for _, component := range retiredComponents {
+		if component.KeepOnDisable {
+			// Never removed, so its system copy needs no ship declaration;
+			// reading one would only add a way for Disable to fail closed.
+			continue
+		}
 		if scope.System[Ref{Kind: component.Kind, ID: component.ID}] {
 			return true
 		}
@@ -494,6 +508,8 @@ func uninstallAll(refs []string, user bool) error {
 // Retired components — Flatpaks a previous Gaming Mode installed that this
 // build no longer manages — are cleaned up the same way: a user copy is
 // always removed, and a system copy is kept only when the image ships it.
+// The exception is a KeepOnDisable component (Steam, Flatseal), an ordinary
+// app the user may have installed themselves, which is always kept.
 // They are matched by ID, because they are not in the current stack and so
 // have no declared ref kind.
 func Disable() (removed, kept []string, failures []error) {
@@ -576,10 +592,16 @@ func DisableWithProgress(progress ProgressCallback) (removed, kept []string, fai
 	// user copy. A system copy is kept only when the image ships it, and
 	// otherwise removed under Flatpak's own PolicyKit. They are matched by ID,
 	// because they are no longer in the stack and so have no declared ref kind.
+	// A KeepOnDisable component is an ordinary app the user may have
+	// installed themselves, so it is reported as kept and never removed.
 	for _, component := range retiredComponents {
 		id := component.ID
 		ref := Ref{Kind: component.Kind, ID: id}
 		if !installedRef(scope, id) {
+			continue
+		}
+		if component.KeepOnDisable {
+			kept = append(kept, id)
 			continue
 		}
 		var errs []error

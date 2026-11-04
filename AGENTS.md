@@ -918,9 +918,12 @@ An agent must not break these:
   component with a removable copy left is a failure, not a removal.
   Components a previous release installed that this build no longer manages
   (the Steam, ProtonUp-Qt, and Flatseal entries dropped when the stack moved
-  to ProtonPlus) are cleaned up the same way — a user copy removed, a system
-  copy kept only when the image ships it — and are reported in the status so
-  an upgrade never leaves them behind invisibly.
+  to ProtonPlus) are reported in the status so an upgrade never leaves them
+  behind invisibly. ProtonUp-Qt is cleaned up the same way — a user copy
+  removed, a system copy kept only when the image ships it. Steam and
+  Flatseal are `KeepOnDisable`: ordinary apps people install on their own,
+  and nothing records who installed a given copy, so turning Gaming Mode off
+  reports them as kept and never uninstalls them (#702).
 - **System Docker comes from verified Homebrew bottles; root never executes
   the Homebrew prefix.** Enable Docker gives Bluefin DX parity — a rootful
   daemon behind `docker.socket`, `docker` group membership, engine,
