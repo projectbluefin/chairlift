@@ -163,6 +163,41 @@ func TestFlatpakCheckSeparatesRemoteFailuresFromScopeFailures(t *testing.T) {
 	}
 }
 
+func TestFlatpakEmptyCheckPreservesRemoteFailures(t *testing.T) {
+	userErr := &flatpak.RemoteError{Remote: "flathub", Installation: "user", Err: errors.New("Could not resolve hostname")}
+	systemErr := &flatpak.RemoteError{Remote: "flathub", Installation: "system", Err: errors.New("no summary signatures found")}
+	tests := []struct {
+		name      string
+		userErr   error
+		systemErr error
+	}{
+		{name: "user", userErr: userErr},
+		{name: "system", systemErr: systemErr},
+		{name: "both", userErr: userErr, systemErr: systemErr},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := newFlatpak(FlatpakDeps{
+				ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
+					if user {
+						return nil, test.userErr
+					}
+					return nil, test.systemErr
+				},
+			})
+			got, err := provider.Check(context.Background())
+			for _, wantErr := range []error{test.userErr, test.systemErr} {
+				if wantErr != nil && !errors.Is(err, wantErr) {
+					t.Errorf("Check() error = %v, want the original remote failure %v", err, wantErr)
+				}
+			}
+			if len(got.Items) != 0 || len(got.Warnings) != 0 {
+				t.Fatalf("Check() = %#v, want a failed empty check, not text-only partial warnings", got)
+			}
+		})
+	}
+}
+
 func TestFlatpakUnavailable(t *testing.T) {
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return false },

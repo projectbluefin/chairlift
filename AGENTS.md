@@ -367,7 +367,9 @@ An agent must not break these:
   `internal/homebrew`, `internal/updex`, `internal/printerapp`, and
   `internal/bootc` entry points. A partially successful check reports the
   parts it could not cover as `CheckResult.Warnings`, which the row shows
-  beside the updates it did find. A partial apply retains only pending items
+  beside the updates it did find. Flatpak remote failures with no found updates
+  remain typed errors, preserving network-specific guidance and retry rather
+  than replacing their cause with text-only partial warnings. A partial apply retains only pending items
   in `ApplyResult.PendingItems` and names failures in `ApplyResult.Warnings`,
   so Retry Failed does not rerun successful mutations. The Developer tools
   provider also refreshes a Homebrew-bottle Docker runtime: when

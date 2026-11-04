@@ -47,9 +47,10 @@ func (p *flatpakProvider) Available() bool {
 // Check lists both installations. flatpak.ListUpdates queries each remote
 // separately and returns what the healthy remotes reported together with a
 // *flatpak.RemoteError for every in-use remote it could not read. That is a
-// partial check, not a failed one: the updates it found are offered and the
+// partial check when updates were found: those updates are offered and the
 // unreadable remotes are named in Warnings, so one unreachable remote no
 // longer hides every other application's update behind "Couldn't check".
+// With no updates found, preserve the errors and their actionable failure hints.
 // Any other failure — the remote listing itself, the origin listing that
 // decides whether a broken remote is in use, cancellation — means the scope
 // was not checked, and stays an error.
@@ -60,6 +61,9 @@ func (p *flatpakProvider) Check(ctx context.Context) (updateflow.CheckResult, er
 	var items []updateflow.Item
 	items = append(items, flatpakItems(userUpdates)...)
 	items = append(items, flatpakItems(systemUpdates)...)
+	if len(items) == 0 {
+		return updateflow.CheckResult{}, errors.Join(userErr, systemErr)
+	}
 
 	var warnings []string
 	seen := make(map[string]bool)

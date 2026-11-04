@@ -87,8 +87,12 @@ maintenance can be retried separately. `PhaseRestartRequired` has
 
 Adapter completion is source-specific:
 
-- Flatpak checks both scopes and joins read failures. Apply runs only requested
-  scopes, then re-lists them. Completion requires that the specific applied
+- Flatpak checks both scopes. Per-remote failures become named warnings only
+  when updates were found, keeping those updates actionable. With no pending
+  inventory, original errors remain joined so network failures retain their
+  connection hint and Try Again; unrelated failures keep the log hint. Scope
+  discovery failures remain errors even beside found updates. Apply runs only
+  requested scopes, then re-lists them. Completion requires that the specific applied
   refs have disappeared, not that the whole scope is empty: newly published
   updates do not invalidate completed work. An exit-0 no-op retaining an
   applied ref reports `Changed=false`. Dry-run skips reconciliation and reports
