@@ -275,6 +275,9 @@ type UserHome struct {
 	compassSpinner *gtk.Spinner
 	compassGate    actionstate.Gate
 	compassDialogs dialogRoute
+	// compassShown is the last state showCompassState rendered from a
+	// successful read, so a failed re-read can restore it (#701).
+	compassShown compassRendering
 
 	// Staged-update changelog (SBOM diff), with visible Compare and optional
 	// result details in the system-update secondary group.
