@@ -58,6 +58,12 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Free disk space for Dakota
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: remove-software
+          update-podman: "false"
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
