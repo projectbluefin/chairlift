@@ -113,6 +113,12 @@ jobs:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
+      - name: Free disk space for Dakota
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: remove-software
+          update-podman: "false"
+
       # No Go cache: an issue_comment run has the default branch's cache
       # scope, and this job runs pull request code, which could otherwise
       # seed the module cache that test.yml and release.yml restore.
