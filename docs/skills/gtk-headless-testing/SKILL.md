@@ -140,6 +140,20 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 
 **Traps, each learned the hard way:**
 
+- **Free runner space before installing Go or pulling Dakota.** Every
+  Dakota-consuming workflow job uses
+  `projectbluefin/actions/bootc-build/setup-runner@v1` with
+  `storage-backend: remove-software` and `update-podman: "false"` before
+  `actions/setup-go`. The shared cleanup removes `/opt/hostedtoolcache`;
+  putting it inside `dakota-venv`, after Go setup, deletes the toolchain the
+  harness needs. Cleanup applies to E2E, every AT-SPI shard, Docker,
+  releases, nightly compliance, and both screenshot capture workflows.
+  Do not retry image-extraction `no space left on device` failures without
+  first correcting runner capacity. Source: the shared
+  [setup-runner action](https://github.com/projectbluefin/actions/blob/v1/bootc-build/setup-runner/action.yml).
+  Step ordering and shared filesystems: Context7
+  `/websites/github_en_actions`,
+  [jobs and steps](https://docs.github.com/en/actions/get-started/understand-github-actions).
 - **A cached Dakota venv is not a host executable.** Its `bin/python` can
   symlink to an absolute interpreter path that exists only inside the pinned
   image. A host `test -x` then rejects a working cache on Ubuntu, and a plain
