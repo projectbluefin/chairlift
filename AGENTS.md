@@ -439,10 +439,10 @@ An agent must not break these:
   not run the script, whose `bootc upgrade` fails there instead of exiting 0),
   so a successful OS source is not by itself evidence anything changed.
 - **New privileged operations extend the ublue helper; they do not add a
-  binary.** `chairlift-helper` carries fifteen subcommands
+  binary.** `chairlift-helper` carries sixteen subcommands
   (`channel-switch`, `dx-enable`, `dx-disable`, `restart`, `rollback`,
   `auto-updates-enable`, `auto-updates-disable`, `driver-switch`,
-  `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
+  `gaming-switch`, `factory-reset`, `pin`, `unpin`, `kvm-enable`, `docker-enable`,
   `docker-disable`, `docker-update`), each selected by exactly one PolicyKit
   action. Every one takes a fixed argv or a word validated against a closed
   set: no image reference, no username, no systemd unit, no delay, and no

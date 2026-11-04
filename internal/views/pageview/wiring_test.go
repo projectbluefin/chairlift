@@ -418,6 +418,36 @@ func TestGameModeEnableRequiresRebootConfirmationDialog(t *testing.T) {
 	}
 }
 
+func TestStagedDeploymentLocksAlternativeOSSwitches(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	for _, check := range []struct {
+		file, function string
+		required       []string
+	}{
+		{"features_page.go", "onGameModeToggled", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"features_page.go", "runGameModeSwitchConfirmed", []string{"if uh.pendingImage != \"\" {", "uh.gameModeGate.Reset()", "A system switch is already waiting for a restart"}},
+		{"updates_page.go", "onChannelToggled", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"if uh.pendingImage != \"\" {", "A system switch is already waiting for a restart"}},
+		{"features_page.go", "applyStagedImage", []string{
+			"target, isGaming, pending := imageinfo.PendingImageSwitch(",
+			"uh.pendingImage = target",
+			"uh.channelSwitch.SetSensitive(false)",
+			"uh.driverButton.SetVisible(false)",
+			"uh.gameModeToggle.set(isGaming)",
+			"uh.gameModeToggle.widget.SetSensitive(false)",
+		}},
+		{"views.go", "OnUpdateFinished", []string{"uh.applyStagedImage(status)"}},
+		{"updates_page.go", "loadBootcUpdateStatus", []string{"uh.applyStagedImage(status)"}},
+	} {
+		body := functionBody(check.file, check.function)
+		for _, snippet := range check.required {
+			if !strings.Contains(body, snippet) {
+				t.Errorf("%s.%s missing required staged guard: %s", check.file, check.function, snippet)
+			}
+		}
+	}
+}
+
 func TestUpdateAllDryRunDoesNotAnnounceUpdates(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {

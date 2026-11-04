@@ -442,6 +442,7 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 		}
 		uh.bootcStageExpander.SetSubtitle(pageview.BootcUpdateSubtitle(staged, version))
 		uh.refreshChangelogAvailability(status)
+		uh.applyStagedImage(status)
 	})
 }
 
@@ -713,6 +714,7 @@ func (uh *UserHome) loadSystemVersion(generation uint64) {
 
 	sgtk.RunOnMainThread(func() {
 		uh.renderSystemVersion(generation, status)
+		uh.applyStagedImage(status)
 	})
 }
 
@@ -830,6 +832,7 @@ func (uh *UserHome) buildChannelGroup(page *adw.PreferencesPage, status ublue.St
 	// Nothing to switch to, or an image that does not provide the helper
 	// command, both leave the switch inert.
 	switchable := status.CanSwitchTo != imageinfo.ChannelUnknown && status.Supports(ubluehelper.CommandChannelSwitch)
+	uh.channelSwitchable = switchable
 	presentation := pageview.ChannelRow(onTesting, switchable)
 
 	row := adw.NewActionRow()
@@ -844,7 +847,7 @@ func (uh *UserHome) buildChannelGroup(page *adw.PreferencesPage, status ublue.St
 	toggle = newGuardedSwitch(onTesting, func(state bool) {
 		uh.onChannelToggled(state, toggle, channelRow)
 	})
-	toggle.widget.SetSensitive(switchable)
+	toggle.widget.SetSensitive(switchable && uh.stagedImageLoaded && uh.pendingImage == "")
 
 	row.AddSuffix(&toggle.widget.Widget)
 	if switchable {
@@ -882,8 +885,10 @@ func (uh *UserHome) buildDriverRow(status ublue.Status) {
 	if status.RecommendedDriver != "" && status.Supports(ubluehelper.CommandDriverSwitch) {
 		driver := status.RecommendedDriver
 		driverRow := row
+		uh.driverSwitchable = true
 		button := gtk.NewButtonWithLabel("Switch")
 		button.SetValign(gtk.AlignCenterValue)
+		button.SetSensitive(uh.stagedImageLoaded && uh.pendingImage == "")
 		clickedCb := func(gtk.Button) {
 			uh.onDriverSwitchClicked(driver, button, driverRow)
 		}
@@ -904,6 +909,10 @@ func (uh *UserHome) buildDriverRow(status ublue.Status) {
 // replaces the operating system, so it is admitted through the update shell
 // like a stage: it must not race an update run's own staging.
 func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.Button, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
 	if !uh.driverGate.TryStart() {
 		return
 	}
@@ -938,6 +947,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 
 			decision := actionmsg.DriverSwitch(dryrun.Enabled(), driver.DisplayName())
 			if decision.Confirm {
+				uh.pendingImage = driver.DisplayName()
 				row.SetSubtitle(pageview.GraphicsDriverResultSubtitle(driver.DisplayName()))
 				button.SetVisible(false)
 				uh.refreshAfterOSSwitch()
@@ -951,6 +961,11 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 // crosses the privileged boundary. Like a driver switch it replaces the
 // operating system, so the update shell admits it.
 func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		sgtk.RunOnMainThread(func() { toggle.set(!toTesting) })
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
 	channel := imageinfo.ChannelStable
 	if toTesting {
 		channel = imageinfo.ChannelTesting
@@ -985,10 +1000,15 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 			}
 
 			decision := actionmsg.ChannelSwitch(dryrun.Enabled(), toTesting)
-			toggle.set(decision.Confirm == toTesting)
 			if decision.Confirm {
+				uh.pendingImage = string(channel)
+				toggle.set(toTesting)
+				toggle.widget.SetSensitive(false)
 				row.SetSubtitle(pageview.ChannelSwitchResultSubtitle(toTesting))
 				uh.refreshAfterOSSwitch()
+			} else {
+				toggle.set(!toTesting)
+				toggle.widget.SetSensitive(true)
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
 		})

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 
+	"github.com/projectbluefin/chairlift/internal/bootc"
 	"github.com/projectbluefin/chairlift/internal/devmenu"
 	"github.com/projectbluefin/chairlift/internal/devsetup"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -427,6 +428,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Sta
 	gameModeRow := adw.NewActionRow()
 	gameModeRow.SetUseMarkup(false)
 	gameModeSwitchable := status.CanSwitchGaming && status.Supports(ubluehelper.CommandGamingSwitch)
+	uh.gameModeSwitchable = gameModeSwitchable
 	gameModePresentation := pageview.GameModeRow(status.Gaming, gameModeSwitchable)
 	gameModeRow.SetTitle(gameModePresentation.Title)
 	gameModeRow.SetSubtitle(gameModePresentation.Subtitle)
@@ -436,7 +438,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Sta
 		uh.onGameModeToggled(state, gameModeToggle, gameModeRow)
 	})
 	SetAccessibleLabel(gameModeToggle.widget, gameModePresentation.Title)
-	gameModeToggle.widget.SetSensitive(gameModeSwitchable)
+	gameModeToggle.widget.SetSensitive(gameModeSwitchable && uh.stagedImageLoaded && uh.pendingImage == "")
 	gameModeRow.AddSuffix(&gameModeToggle.widget.Widget)
 	if gameModeSwitchable {
 		gameModeRow.SetActivatableWidget(&gameModeToggle.widget.Widget)
@@ -444,7 +446,7 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Sta
 	group.Add(&gameModeRow.Widget)
 	uh.gameModeRow = gameModeRow
 	uh.gameModeSwitch = gameModeToggle.widget
-
+	uh.gameModeToggle = gameModeToggle
 	// 2. Optional Flatpak Gaming Tools
 	row := adw.NewExpanderRow()
 	row.SetUseMarkup(false)
@@ -489,6 +491,11 @@ func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Sta
 }
 
 func (uh *UserHome) onGameModeToggled(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
 	if enabled {
 		uh.confirmGameModeEnable(toggle, row)
 		return
@@ -528,13 +535,18 @@ func (uh *UserHome) runGameModeSwitch(enabled bool, toggle *guardedSwitch, row *
 }
 
 func (uh *UserHome) runGameModeSwitchConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ActionRow) {
+	if uh.pendingImage != "" {
+		uh.gameModeGate.Reset()
+		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
+		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
+		return
+	}
 	if !uh.updateShell.beginMutation() {
 		uh.gameModeGate.Reset()
 		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
-
 	toggle.widget.SetSensitive(false)
 	before := row.GetSubtitle()
 	row.SetSubtitle("Switching…")
@@ -564,6 +576,7 @@ func (uh *UserHome) runGameModeSwitchConfirmed(enabled bool, toggle *guardedSwit
 				// Keep the switch insensitive and flipped to reflect the staged
 				// target until the machine is rebooted, preventing contradictory
 				// re-requests before restart.
+				uh.pendingImage = "gaming"
 				toggle.set(enabled)
 				toggle.widget.SetSensitive(false)
 				row.SetSubtitle(pageview.GameModeResultSubtitle(enabled))
@@ -577,6 +590,74 @@ func (uh *UserHome) runGameModeSwitchConfirmed(enabled bool, toggle *guardedSwit
 			uh.toastAdder.ShowToast(decision.Toast)
 		})
 	}()
+}
+
+func (uh *UserHome) applyStagedImage(status *bootc.Status) {
+	if status == nil || status.Status.Booted == nil || status.Status.Staged == nil {
+		return
+	}
+	target, isGaming, pending := imageinfo.PendingImageSwitch(
+		status.Status.Booted.ImageRef(),
+		status.Status.Staged.ImageRef(),
+	)
+	if !pending {
+		return
+	}
+	uh.pendingImage = target
+	if uh.channelSwitch != nil {
+		uh.channelSwitch.SetSensitive(false)
+	}
+	if uh.channelRow != nil {
+		uh.channelRow.SetSubtitle("Restart to finish installing the staged operating system.")
+	}
+	if uh.driverButton != nil {
+		uh.driverButton.SetVisible(false)
+	}
+	if uh.driverRow != nil {
+		uh.driverRow.SetSubtitle("Restart to finish installing the staged operating system.")
+	}
+	if uh.gameModeToggle != nil {
+		uh.gameModeToggle.set(isGaming)
+		uh.gameModeToggle.widget.SetSensitive(false)
+	}
+	if uh.gameModeRow != nil {
+		uh.gameModeRow.SetSubtitle(pageview.GameModeResultSubtitle(isGaming))
+	}
+}
+func (uh *UserHome) loadInitialStagedDeployment() {
+	if !bootc.IsBootcBootedCached() {
+		sgtk.RunOnMainThread(func() {
+			uh.stagedImageLoaded = true
+			uh.applyInitialStagedSettled()
+		})
+		return
+	}
+	ctx, cancel := bootc.DefaultContext()
+	defer cancel()
+
+	status, err := bootc.GetStatus(ctx)
+	sgtk.RunOnMainThread(func() {
+		uh.stagedImageLoaded = true
+		if err == nil && status != nil {
+			uh.applyStagedImage(status)
+		}
+		uh.applyInitialStagedSettled()
+	})
+}
+
+func (uh *UserHome) applyInitialStagedSettled() {
+	if uh.pendingImage != "" {
+		return
+	}
+	if uh.channelSwitch != nil {
+		uh.channelSwitch.SetSensitive(uh.channelSwitchable)
+	}
+	if uh.driverButton != nil {
+		uh.driverButton.SetSensitive(uh.driverSwitchable)
+	}
+	if uh.gameModeToggle != nil {
+		uh.gameModeToggle.widget.SetSensitive(uh.gameModeSwitchable)
+	}
 }
 
 // onDeveloperToggled grants or withdraws this account's developer access.

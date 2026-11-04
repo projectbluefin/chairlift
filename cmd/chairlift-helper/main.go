@@ -174,7 +174,7 @@ func runGamingSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 
 	args, ok := ubluehelper.GamingSwitchArgs(info, invocation.Gaming)
 	if !ok {
-		fatal(fmt.Sprintf("no gaming mode counterpart is published for %s:%s (gaming=%t)",
+		fatal(fmt.Sprintf("no gaming image is published for %s:%s (gaming=%t)",
 			info.CleanRef(), info.EffectiveTag(), invocation.Gaming))
 	}
 

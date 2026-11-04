@@ -110,3 +110,60 @@ func TestGamingTargetHonorsAuthoritativeTables(t *testing.T) {
 		})
 	}
 }
+
+func TestPendingImageSwitch(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		booted      string
+		staged      string
+		wantTarget  string
+		wantGaming  bool
+		wantPending bool
+	}{
+		{
+			name:        "empty staged",
+			booted:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota:stable",
+			staged:      "",
+			wantPending: false,
+		},
+		{
+			name:        "routine update same repo and tag with different digest",
+			booted:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota:stable@sha256:1111",
+			staged:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota:stable@sha256:2222",
+			wantPending: false,
+		},
+		{
+			name:        "staged gaming switch",
+			booted:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota:stable@sha256:1111",
+			staged:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming:stable",
+			wantTarget:  "ghcr.io/projectbluefin/dakota-gaming:stable",
+			wantGaming:  true,
+			wantPending: true,
+		},
+		{
+			name:        "staged non-gaming switch from gaming booted",
+			booted:      "ostree-image-signed:docker://ghcr.io/projectbluefin/dakota-gaming:testing@sha256:1111",
+			staged:      "docker://ghcr.io/projectbluefin/dakota:testing",
+			wantTarget:  "ghcr.io/projectbluefin/dakota:testing",
+			wantGaming:  false,
+			wantPending: true,
+		},
+		{
+			name:        "staged channel switch",
+			booted:      "ghcr.io/projectbluefin/dakota:stable",
+			staged:      "ghcr.io/projectbluefin/dakota:testing",
+			wantTarget:  "ghcr.io/projectbluefin/dakota:testing",
+			wantGaming:  false,
+			wantPending: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			target, isGaming, pending := PendingImageSwitch(test.booted, test.staged)
+			if pending != test.wantPending || target != test.wantTarget || isGaming != test.wantGaming {
+				t.Errorf("PendingImageSwitch(%q, %q) = (%q, %t, %t), want (%q, %t, %t)",
+					test.booted, test.staged, target, isGaming, pending,
+					test.wantTarget, test.wantGaming, test.wantPending)
+			}
+		})
+	}
+}
