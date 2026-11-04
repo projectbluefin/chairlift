@@ -53,19 +53,44 @@ func (uh *UserHome) buildCompassGroup(page *adw.PreferencesPage) {
 	}()
 }
 
-// showCompassState renders an observed state. A failed read leaves the switch
-// insensitive rather than guessing; an unsupported architecture or a missing
-// remote leaves an installed copy removable but refuses to start an install
-// that cannot succeed.
+// compassRendering is what showCompassState last drew from a successful
+// read: the switch position and its sensitivity.
+type compassRendering struct {
+	observed  bool
+	installed bool
+	sensitive bool
+}
+
+// showCompassState renders an observed state. An unsupported architecture or
+// a missing remote leaves an installed copy removable but refuses to start an
+// install that cannot succeed.
+//
+// A failed read never guesses. Before any read has succeeded the switch stays
+// insensitive. After one has, a failed re-read (the one that follows a
+// toggle) restores the last observed switch position and sensitivity and
+// says the state could not be checked: the user's click already moved the
+// switch, so leaving it there would show a position nothing confirmed, and
+// leaving it insensitive would offer no retry.
 func (uh *UserHome) showCompassState(state compass.State, err error, toggle *guardedSwitch, row *adw.ActionRow) {
 	if err != nil {
 		log.Printf("views: compass status unavailable: %v", err)
+		// The current state is unknown either way; say so.
 		row.SetSubtitle(pageview.CompassUnavailableSubtitle)
-		toggle.widget.SetSensitive(false)
+		if !uh.compassShown.observed {
+			toggle.widget.SetSensitive(false)
+			return
+		}
+		toggle.set(uh.compassShown.installed)
+		toggle.widget.SetSensitive(uh.compassShown.sensitive)
 		return
 	}
-	toggle.set(state.Installed())
-	toggle.widget.SetSensitive(state.Installed() || (state.Supported && state.RemoteConfigured))
+	uh.compassShown = compassRendering{
+		observed:  true,
+		installed: state.Installed(),
+		sensitive: state.Installed() || (state.Supported && state.RemoteConfigured),
+	}
+	toggle.set(uh.compassShown.installed)
+	toggle.widget.SetSensitive(uh.compassShown.sensitive)
 	row.SetSubtitle(pageview.CompassSubtitle(state.Installed(), state.Supported, state.RemoteConfigured))
 }
 

@@ -705,3 +705,28 @@ func TestUntrustedSourceRowsStayVisibleAndDistinct(t *testing.T) {
 		}
 	}
 }
+
+// A failed Compass re-read after a toggle restores the last observed switch
+// position and sensitivity instead of leaving the user's unconfirmed click
+// on screen with no retry (#701).
+func TestCompassFailedReadRestoresTheLastObservedSwitch(t *testing.T) {
+	functionBody := readViewsFunctionBody(t)
+	body := functionBody("compass_page.go", "showCompassState")
+	failure, success, ok := strings.Cut(body, "uh.compassShown = compassRendering{")
+	if !ok {
+		t.Fatal("showCompassState no longer records the last observed rendering")
+	}
+	for _, required := range []string{
+		"pageview.CompassUnavailableSubtitle",
+		"if !uh.compassShown.observed {",
+		"toggle.set(uh.compassShown.installed)",
+		"toggle.widget.SetSensitive(uh.compassShown.sensitive)",
+	} {
+		if !strings.Contains(failure, required) {
+			t.Errorf("showCompassState's failed-read path is missing %q", required)
+		}
+	}
+	if !strings.Contains(success, "observed:  true,") {
+		t.Error("showCompassState must mark a successful read as observed")
+	}
+}
