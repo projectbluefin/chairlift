@@ -33,6 +33,34 @@ func TestChannelSwitchConfirmsAndNamesTheChannel(t *testing.T) {
 		t.Errorf("ChannelSwitch(false, false).Toast = %q, want it to say early updates are off", stable.Toast)
 	}
 }
+func TestGameModeSwitchNeverConfirmsUnderDryRun(t *testing.T) {
+	for _, enable := range []bool{true, false} {
+		decision := GameModeSwitch(true, enable)
+		if decision.Confirm {
+			t.Errorf("GameModeSwitch(true, %v).Confirm = true, want false", enable)
+		}
+		if !strings.Contains(decision.Toast, "[DRY-RUN]") {
+			t.Errorf("GameModeSwitch(true, %v).Toast = %q, want a dry-run preview", enable, decision.Toast)
+		}
+	}
+}
+
+func TestGameModeSwitchConfirmsAndRequiresRestart(t *testing.T) {
+	on := GameModeSwitch(false, true)
+	if !on.Confirm {
+		t.Error("GameModeSwitch(false, true).Confirm = false, want true")
+	}
+	if !strings.Contains(on.Toast, "Game Mode is on") || !strings.Contains(on.Toast, "Restart") {
+		t.Errorf("GameModeSwitch(false, true).Toast = %q, want on and restart", on.Toast)
+	}
+	off := GameModeSwitch(false, false)
+	if !off.Confirm {
+		t.Error("GameModeSwitch(false, false).Confirm = false, want true")
+	}
+	if !strings.Contains(off.Toast, "Game Mode is off") || !strings.Contains(off.Toast, "Restart") {
+		t.Errorf("GameModeSwitch(false, false).Toast = %q, want off and restart", off.Toast)
+	}
+}
 
 func TestDeveloperModeNeverConfirmsUnderDryRun(t *testing.T) {
 	for _, enable := range []bool{true, false} {

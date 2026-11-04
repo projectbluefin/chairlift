@@ -46,8 +46,8 @@ func main() {
 		fatal(err.Error())
 	}
 
-	// Channel and driver switches derive an image reference from the same
-	// root-owned table as the GUI. A broken override must stop those switches
+	// Channel, driver, and gaming switches derive an image reference from the
+	// same root-owned table as the GUI. A broken override must stop those switches
 	// rather than let the helper resolve a different target, but unrelated
 	// fixed commands do not depend on the optional table.
 	if invocation.UsesChannelTable() {
@@ -72,6 +72,8 @@ func main() {
 		runAutoUpdates(ctx, invocation)
 	case ubluehelper.CommandDriverSwitch:
 		runDriverSwitch(ctx, invocation)
+	case ubluehelper.CommandGamingSwitch:
+		runGamingSwitch(ctx, invocation)
 	case ubluehelper.CommandPin, ubluehelper.CommandUnpin:
 		runPin(ctx, invocation)
 	case ubluehelper.CommandFactoryReset:
@@ -159,6 +161,29 @@ func runDriverSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
 	}
 
 	switchImage(ctx, args, "driver switch failed")
+}
+
+// runGamingSwitch derives the matching gaming or non-gaming image root-side.
+// It shares signature enforcement and rollback recovery with other image
+// switches and never combines staging the change with an automatic reboot.
+func runGamingSwitch(ctx context.Context, invocation ubluehelper.Invocation) {
+	info, err := imageinfo.Detect()
+	if err != nil {
+		fatal(fmt.Sprintf("reading %s: %v", imageinfo.DescriptorPath, err))
+	}
+
+	args, ok := ubluehelper.GamingSwitchArgs(info, invocation.Gaming)
+	if !ok {
+		fatal(fmt.Sprintf("no gaming mode counterpart is published for %s:%s (gaming=%t)",
+			info.CleanRef(), info.EffectiveTag(), invocation.Gaming))
+	}
+
+	if invocation.DryRun {
+		fmt.Printf("[DRY-RUN] would execute: bootc %v\n", args)
+		return
+	}
+
+	switchImage(ctx, args, "gaming switch failed")
 }
 
 // runPin supplies only the system descriptor and single-tag registry resolver;

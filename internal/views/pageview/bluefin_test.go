@@ -102,6 +102,42 @@ func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {
 		t.Error("DeveloperResultSubtitle does not distinguish the two directions")
 	}
 }
+func TestGameModeConfirmation(t *testing.T) {
+	title, body := GameModeConfirmation()
+	if title != "Game Mode Requires a Reboot" {
+		t.Errorf("GameModeConfirmation() title = %q, want 'Game Mode Requires a Reboot'", title)
+	}
+	wantBody := "This mode includes Steam and Gamescope built in with an Open Gaming Collective kernel."
+	if body != wantBody {
+		t.Errorf("GameModeConfirmation() body = %q, want %q", body, wantBody)
+	}
+}
+
+func TestGameModeRow(t *testing.T) {
+	on := GameModeRow(true, true)
+	if on.Title != "Game Mode" || !strings.Contains(on.Subtitle, "kernel are active") {
+		t.Errorf("GameModeRow(true, true) = %+v, want title Game Mode and active subtitle", on)
+	}
+	offSwitchable := GameModeRow(false, true)
+	if offSwitchable.Title != "Game Mode" || !strings.Contains(offSwitchable.Subtitle, "Steam, Gamescope") {
+		t.Errorf("GameModeRow(false, true) = %+v, want switchable subtitle", offSwitchable)
+	}
+	offUnswitchable := GameModeRow(false, false)
+	if !strings.Contains(offUnswitchable.Subtitle, "not available") {
+		t.Errorf("GameModeRow(false, false) = %+v, want unavailable subtitle", offUnswitchable)
+	}
+}
+
+func TestGameModeResultSubtitle(t *testing.T) {
+	on := GameModeResultSubtitle(true)
+	if !strings.Contains(on, "Restart to switch to Game Mode") {
+		t.Errorf("GameModeResultSubtitle(true) = %q, want restart reminder", on)
+	}
+	off := GameModeResultSubtitle(false)
+	if !strings.Contains(off, "Restart to switch to the standard mode") {
+		t.Errorf("GameModeResultSubtitle(false) = %q, want standard mode reminder", off)
+	}
+}
 
 func TestGamingRow(t *testing.T) {
 	on := GamingRow(true, 4, 0)

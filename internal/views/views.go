@@ -241,6 +241,10 @@ type UserHome struct {
 	gamingRow          *adw.ExpanderRow
 	gamingGate         actionstate.Gate
 	gamingDialogs      dialogRoute
+	gameModeRow        *adw.ActionRow
+	gameModeSwitch     *gtk.Switch
+	gameModeGate       actionstate.Gate
+	gameModeDialogs    dialogRoute
 	developerOptions   []*developerOptionRow
 	wslBackend         string
 	wslCombo           *adw.ComboRow

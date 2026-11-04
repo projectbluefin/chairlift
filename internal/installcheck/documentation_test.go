@@ -78,8 +78,8 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 
 	t.Run("privileged integration inventory is complete", func(t *testing.T) {
 		ubluePolicy := readRepoFile(t, filepath.Join("data", "io.projectbluefin.chairlift.ublue.policy"))
-		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 15 {
-			t.Fatalf("ublue policy actions = %d, want 15", got)
+		if got := strings.Count(ubluePolicy, `<action id="io.projectbluefin.chairlift.ublue.`); got != 16 {
+			t.Fatalf("ublue policy actions = %d, want 16", got)
 		}
 
 		current := strings.Join([]string{
@@ -98,7 +98,7 @@ func TestCurrentDocumentationMatchesSourceFacts(t *testing.T) {
 			"/usr/share/polkit-1/actions/io.projectbluefin.chairlift.ublue.policy",
 			"/usr/share/chairlift/config.yml",
 			"/usr/share/doc/chairlift/channels.example.yml",
-			"fifteen actions",
+			"sixteen actions",
 			"pin <YYYYMMDD>",
 			"unpin [--dry-run]",
 			"factory-reset",

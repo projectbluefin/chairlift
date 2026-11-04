@@ -15,7 +15,7 @@
 //   - The target image reference. The helper derives it from
 //     /usr/share/ublue-os/image-info.json via internal/imageinfo, so an
 //     authenticated caller cannot direct `bootc switch` at an arbitrary
-//     registry. Only validated channel, driver, or day words cross the boundary.
+//     registry. Only validated channel, driver, gaming-mode, or day words cross the boundary.
 //   - The username. The helper resolves it from the PKEXEC_UID pkexec sets
 //     on the invoking session, so an authenticated caller cannot add an
 //     unrelated account to the privileged developer groups.
@@ -47,6 +47,7 @@ const (
 	CommandAutoEnable    = "auto-updates-enable"
 	CommandAutoDisable   = "auto-updates-disable"
 	CommandDriverSwitch  = "driver-switch"
+	CommandGamingSwitch  = "gaming-switch"
 	CommandFactoryReset  = "factory-reset"
 	CommandPin           = "pin"
 	CommandUnpin         = "unpin"
@@ -83,17 +84,18 @@ type Invocation struct {
 	Command string
 	Channel imageinfo.Channel
 	Driver  imageinfo.Driver
+	Gaming  bool
 	Day     string
 	DryRun  bool
 }
 
 // UsesChannelTable reports whether this invocation needs the administrator's
-// channel and driver configuration to resolve its fixed target. Every other
+// channel and driver configuration to resolve its fixed image target. Every other
 // command uses fixed argv and must remain available if that optional table is
 // malformed.
 func (i Invocation) UsesChannelTable() bool {
 	return i.Command == CommandChannelSwitch || i.Command == CommandDriverSwitch ||
-		i.Command == CommandPin || i.Command == CommandUnpin
+		i.Command == CommandGamingSwitch || i.Command == CommandPin || i.Command == CommandUnpin
 }
 
 // SupportedCommands returns the complete first-argument set accepted by the
@@ -110,6 +112,7 @@ func SupportedCommands() []string {
 		CommandAutoEnable,
 		CommandAutoDisable,
 		CommandDriverSwitch,
+		CommandGamingSwitch,
 		CommandFactoryReset,
 		CommandPin,
 		CommandUnpin,
@@ -130,6 +133,7 @@ func SupportedCommands() []string {
 //	auto-updates-enable [--dry-run]
 //	auto-updates-disable [--dry-run]
 //	driver-switch <standard|nvidia|nvidia-open> [--dry-run]
+//	gaming-switch <enable|disable> [--dry-run]
 //	factory-reset [--dry-run]
 //	pin <YYYYMMDD> [--dry-run]
 //	unpin [--dry-run]
@@ -191,6 +195,19 @@ func ParseInvocation(args []string) (Invocation, error) {
 		}
 		return Invocation{Command: CommandDriverSwitch, Driver: driver, DryRun: dryRun}, nil
 
+	case CommandGamingSwitch:
+		usage := fmt.Errorf("usage: chairlift-helper gaming-switch <enable|disable> [--dry-run]")
+		if len(args) != 2 && len(args) != 3 {
+			return Invocation{}, usage
+		}
+		if args[1] != "enable" && args[1] != "disable" {
+			return Invocation{}, usage
+		}
+		if len(args) == 3 && args[2] != "--dry-run" {
+			return Invocation{}, usage
+		}
+		return Invocation{Command: CommandGamingSwitch, Gaming: args[1] == "enable", DryRun: len(args) == 3}, nil
+
 	case CommandDXEnable, CommandDXDisable, CommandRestart, CommandRollback,
 		CommandAutoEnable, CommandAutoDisable, CommandFactoryReset, CommandUnpin,
 		CommandKVMEnable, CommandDockerEnable, CommandDockerDisable, CommandDockerUpdate:
@@ -224,7 +241,7 @@ const (
 
 	// ImageSwitchTimeout bounds a command that runs `bootc switch` or
 	// downloads the Docker runtime. A switch to another channel, driver
-	// variant, or dated build pulls the same multi-gigabyte image an OS update
+	// variant, gaming mode, or dated build pulls the same multi-gigabyte image an OS update
 	// stages, so it gets the OS staging budget (bootc.DefaultTimeout) rather
 	// than the default: at ten minutes a slow link had its pull killed
 	// mid-transfer. docker-enable and docker-update fetch the signed Homebrew
@@ -238,7 +255,7 @@ const (
 // its own outcome instead of the caller giving up first.
 func Timeout(command string) time.Duration {
 	switch command {
-	case CommandChannelSwitch, CommandDriverSwitch, CommandPin, CommandUnpin,
+	case CommandChannelSwitch, CommandDriverSwitch, CommandGamingSwitch, CommandPin, CommandUnpin,
 		CommandDockerEnable, CommandDockerUpdate:
 		return ImageSwitchTimeout
 	default:
@@ -286,6 +303,18 @@ func parseDriver(word string) (imageinfo.Driver, bool) {
 // driver switch is no less a change of the booted image.
 func DriverSwitchArgs(info imageinfo.Info, driver imageinfo.Driver) ([]string, bool) {
 	target, ok := imageinfo.DriverTarget(info.CleanRef(), info.EffectiveTag(), driver)
+	if !ok {
+		return nil, false
+	}
+	return []string{"switch", "--enforce-container-sigpolicy", target}, true
+}
+
+// GamingSwitchArgs returns the complete bootc argv for the published gaming
+// counterpart of the booted image, preserving its registry, stream, and driver.
+// Unknown or pinned streams and images without a published pair are refused.
+// The switch stages the image only: restarting remains a separate action.
+func GamingSwitchArgs(info imageinfo.Info, enabled bool) ([]string, bool) {
+	target, ok := imageinfo.GamingTarget(info.CleanRef(), info.EffectiveTag(), enabled)
 	if !ok {
 		return nil, false
 	}

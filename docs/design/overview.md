@@ -630,7 +630,7 @@ fixed surfaces: `data/io.projectbluefin.chairlift.bootc.policy`,
 `data/io.projectbluefin.chairlift.updex.policy`, and
 `data/io.projectbluefin.chairlift.ublue.policy`.
 
-The fifteen ublue commands include fixed `kvm-enable`, `docker-enable`,
+The sixteen ublue commands include fixed `gaming-switch`, `kvm-enable`, `docker-enable`,
 `docker-disable`, and `docker-update` actions alongside pin/unpin. The parser accepts no arbitrary
 account, service, image or command argv. Privileged developer options stay
 visible when their installed actions are missing, with affected controls insensitive.
@@ -695,7 +695,7 @@ Editor selection/installation remains in Bazaar or Apps.
 resolves the program it's asked to run to an absolute path and compares it
 textually against the `org.freedesktop.policykit.exec.path` annotation on each
 action. The updex policy's three actions annotate
-`/usr/bin/chairlift-updex-helper`; the ublue policy's fifteen actions annotate
+`/usr/bin/chairlift-updex-helper`; the ublue policy's sixteen actions annotate
 `/usr/bin/chairlift-helper`. Both helper policies use
 `org.freedesktop.policykit.exec.argv1` to select exactly one action for the
 first helper argument. PolicyKit does not validate the remainder of argv, so
@@ -709,7 +709,7 @@ accepts only `enable-feature <name> [--dry-run]`, `disable-feature <name>
 `driver-switch <standard|nvidia|nvidia-open> [--dry-run]`, `factory-reset
 [--dry-run]`, `pin <YYYYMMDD> [--dry-run]`, `unpin [--dry-run]`,
 `kvm-enable [--dry-run]`, `docker-enable [--dry-run]`,
-`docker-disable [--dry-run]`, and `docker-update [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
+`docker-disable [--dry-run]`, `gaming-switch <enable|disable> [--dry-run]`, and `docker-update [--dry-run]`. A bare, `$PATH`-resolved command name can resolve to a different
 absolute path depending on the invoking process's `$PATH`, which makes the
 path comparison miss and falls `pkexec` back to the generic, more restrictive
 action. The wrapper packages therefore always invoke their fixed `HelperPath`
