@@ -319,6 +319,7 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 // every completion, because the button is offered again after each run.
 func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
 	if !uh.updateFeaturesGate.TryStart() {
+		uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)
 		return
 	}
 	button.SetSensitive(false)

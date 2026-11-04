@@ -42,7 +42,7 @@ func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
 
 // Optional-feature toggles and the feature Update button each run a
 // privileged updex helper call; they share one gate so no two overlap, and
-// a refused toggle reverts to the position it held.
+// a refused toggle reverts to the position it held while both report why.
 func TestFeatureTogglesShareTheUpdexGate(t *testing.T) {
 	_, filename, _, ok := runtime.Caller(0)
 	if !ok {
@@ -67,6 +67,19 @@ func TestFeatureTogglesShareTheUpdexGate(t *testing.T) {
 	} {
 		if !strings.Contains(body, required) {
 			t.Errorf("onFeatureToggled must be admitted by updateFeaturesGate and restore the switch: missing %q", required)
+		}
+	}
+	updateParts := strings.SplitN(string(data), "func (uh *UserHome) onUpdateFeaturesClicked(", 2)
+	if len(updateParts) != 2 {
+		t.Fatal("feature update handler not found")
+	}
+	updateBody, _, _ := strings.Cut(updateParts[1], "\nfunc ")
+	for _, required := range []string{
+		"if !uh.updateFeaturesGate.TryStart() {",
+		"uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)",
+	} {
+		if !strings.Contains(updateBody, required) {
+			t.Errorf("onUpdateFeaturesClicked must be admitted by updateFeaturesGate and report busy: missing %q", required)
 		}
 	}
 }
