@@ -101,6 +101,21 @@ Feature: Updates
     And the "Firefox" row says "Available: 131.0"
     And I do not see "Unable to load summary"
 
+  @stub.updates-flatpak-partial-check @stub.updates-brew-current
+  Scenario: A failed in-use remote does not hide another remote's update
+    Given ChairLift is running
+    Then the Updates status reads "1 update available"
+    And the "Applications" row says "1 update available · couldn't check the test-center remote"
+    And the update for "Firefox" is listed once with an accessible action
+    And the Updates sidebar badge shows "1"
+    And the Updates page offers only the "Update All" action
+    And the "Update All" button is sensitive
+    When I click the "Update" button in the "Firefox" row
+    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox"
+    And the "Update" button in the "Firefox" row is sensitive
+    And the Updates sidebar badge shows "1"
+    And the "Applications" row says "1 update available · couldn't check the test-center remote"
+
   @stub.updates-flatpak-check-fails-locally @stub.updates-brew-current
   Scenario: A check that fails for another reason does not blame the connection
     Given ChairLift is running

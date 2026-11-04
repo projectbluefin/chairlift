@@ -87,8 +87,12 @@ maintenance can be retried separately. `PhaseRestartRequired` has
 
 Adapter completion is source-specific:
 
-- Flatpak checks both scopes and joins read failures. Apply runs only requested
-  scopes, then re-lists them. Completion requires that the specific applied
+- Flatpak checks both scopes. Per-remote failures become named warnings only
+  when updates were found, keeping those updates actionable. With no pending
+  inventory, original errors remain joined so network failures retain their
+  connection hint and Try Again; unrelated failures keep the log hint. Scope
+  discovery failures remain errors even beside found updates. Apply runs only
+  requested scopes, then re-lists them. Completion requires that the specific applied
   refs have disappeared, not that the whole scope is empty: newly published
   updates do not invalidate completed work. An exit-0 no-op retaining an
   applied ref reports `Changed=false`. Dry-run skips reconciliation and reports
@@ -105,7 +109,9 @@ Adapter completion is source-specific:
   the root helper ignores that hint and re-verifies against the signed index
   ([ADR-0024](../adr/0024-rootful-docker-from-verified-homebrew-bottles.md)).
 - Updex counts each affected feature once if any component has an update.
-  Captured warnings fail the unified check as incomplete. Successful live
+  Captured warnings make the unified check partial, not failed: the found
+  items are kept, the warnings are logged, and `CheckResult.Warnings` says
+  "some components" were not covered (#699). Successful live
   helper execution reports Changed; preview reports Preview instead.
 - bootc performs a read-only check and reads status for restart state. Apply
   rejects unknown item scopes, stages through the fixed helper, then re-reads
@@ -467,9 +473,15 @@ only runtimes — the usual leftover when an application is uninstalled without
 `--unused` — can hide no update this inventory would list, so it must not
 fail the check either. A cancelled
 caller context or a missing executable still aborts the whole query. The
-healthy remotes' updates are returned alongside that error, but the
-Applications source's check still fails: the coordinator keeps the last known
-inventory on any check error rather than adopting a partial one. The
+healthy remotes' updates are returned alongside that error. The Applications
+provider treats an error made only of `*flatpak.RemoteError`s as a partial
+check: it offers those updates and names each unreadable remote ("the
+<remote> remote") in `CheckResult.Warnings`, logging the cause (#699). Any
+other member — the origin listing, the remote listing, cancellation — means
+the scope was not checked, and the check fails, so the coordinator keeps the
+last known inventory. The post-apply reconciliation still fails on a remote
+error: an applied item does not record its origin remote, so a list that
+skipped a remote cannot prove that remote's applied refs cleared. The
 post-apply reconciliation and the single-item verification read through the
 same function, so an ignored remote cannot fail them either.
 
@@ -627,8 +639,8 @@ the Features-page aggregation: **any** component update makes its feature
 outdated; group counts are features, not components. Empty results are an
 incomplete check, not current. A shared non-empty version is displayed only
 when every component agrees. Failed/incomplete group descriptions never claim
-all features are current. The unified adapter separately treats captured
-warnings as a failed check. Feature availability and read errors must remain
+all features are current. The unified adapter separately keeps the found
+items beside captured warnings and reports the check as partial. Feature availability and read errors must remain
 distinct: no definitions hides the optional group; a failed listing stays
 visible with an explanation.
 
