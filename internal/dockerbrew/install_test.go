@@ -33,7 +33,16 @@ func newInstallEnv(t *testing.T) *installEnv {
 	}
 	useTestKey(t)
 	reg, client := newRegistry(t)
-	e := &installEnv{t: t, reg: reg, client: client, arch: arch, root: filepath.Join(t.TempDir(), "docker")}
+	// Install refuses a group- or world-writable ancestor of its root, so
+	// the test must set the mode it relies on: t.TempDir creates 0777&^umask,
+	// which is 0775 under the 0002 umask user-private-group distros
+	// (Bluefin among them) default to, and every install then failed for a
+	// reason unrelated to the test (#703).
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e := &installEnv{t: t, reg: reg, client: client, arch: arch, root: filepath.Join(parent, "docker")}
 
 	oldOwner, oldSmoke, oldPoll := ownerUID, smokeTest, lockPoll
 	ownerUID = uint32(os.Getuid())
