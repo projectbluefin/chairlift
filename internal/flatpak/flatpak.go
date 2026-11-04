@@ -284,7 +284,7 @@ func listRefs(installFlag string, kind Kind) ([]Application, error) {
 // classified correctly.
 func parseRefList(output string, installFlag string, kind Kind) ([]Application, error) {
 	var apps []Application
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := strings.Split(output, "\n")
 
 	installation := "system"
 	if installFlag == "--user" {
@@ -292,19 +292,9 @@ func parseRefList(output string, installFlag string, kind Kind) ([]Application, 
 	}
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		fields, ok := splitColumns(line)
+		if !ok {
 			continue
-		}
-
-		// Split by tab (flatpak uses tabs as column separators)
-		fields := strings.Split(line, "\t")
-		if len(fields) < 3 {
-			// Try splitting by multiple spaces for systems that might use spaces
-			fields = strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
 		}
 
 		app := Application{
@@ -620,10 +610,35 @@ func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
 	return updates, errors.Join(errs...)
 }
 
+// splitColumns splits one row of flatpak's --columns output. Flatpak
+// separates columns with tabs and leaves an empty column empty, so a row with
+// a tab is split on tabs only and never trimmed first: trimming would drop an
+// empty trailing column (an application that publishes no version) or an
+// empty leading one, and a multi-word display name such as "GNU Image
+// Manipulation Program" must stay one field. Only a row with no tab at all
+// falls back to whitespace splitting. Rows with fewer than two columns are
+// rejected.
+func splitColumns(line string) ([]string, bool) {
+	line = strings.TrimRight(line, "\r")
+	if strings.TrimSpace(line) == "" {
+		return nil, false
+	}
+	var fields []string
+	if strings.Contains(line, "\t") {
+		fields = strings.Split(line, "\t")
+	} else {
+		fields = strings.Fields(line)
+	}
+	if len(fields) < 2 {
+		return nil, false
+	}
+	return fields, true
+}
+
 // parseUpdateList parses the tabular output from the flatpak update query
 func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 	var updates []UpdateInfo
-	lines := strings.Split(strings.TrimSpace(output), "\n")
+	lines := strings.Split(output, "\n")
 
 	installation := "system"
 	if user {
@@ -631,19 +646,9 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 	}
 
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		fields, ok := splitColumns(line)
+		if !ok {
 			continue
-		}
-
-		// Split by tab (flatpak uses tabs as column separators)
-		fields := strings.Split(line, "\t")
-		if len(fields) < 3 {
-			// Try splitting by multiple spaces for systems that might use spaces
-			fields = strings.Fields(line)
-			if len(fields) < 2 {
-				continue
-			}
 		}
 
 		update := UpdateInfo{
