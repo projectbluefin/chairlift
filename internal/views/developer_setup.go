@@ -104,7 +104,7 @@ func (uh *UserHome) addDeveloperContents(row *adw.ExpanderRow) {
 		bundle, err := developerAppsBundle(paths)
 		var items []homebrew.BundleItem
 		if err == nil {
-			items, err = homebrew.BundleContents(bundle.Path)
+			items, _, err = homebrew.BundleContents(bundle.Path)
 		}
 		sgtk.RunOnMainThread(func() {
 			if err != nil {

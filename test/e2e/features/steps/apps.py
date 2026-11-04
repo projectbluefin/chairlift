@@ -197,24 +197,76 @@ def step_expander_rows_exact(context, title, group_title="App Collections"):
         f"the {title!r} list shows {expander_rows(header)}, want {want}"
 
 
-def _collection_checkbox(context, title):
-    row = atspi.row_containing(content(context), title)
-    return atspi.find(row, lambda n: atspi.role(n) == "check box", "collection checkbox for " + title)
+# ---------------------------------------------------------------- entry checkboxes
 
-@step('the "{title}" collection is {state:w}')
-def step_collection_checked(context, title, state):
+# A collection entry is a row with the Brewfile token as its title and a
+# checkbox on its right edge. The row is inside the collection's expander,
+# so it only exists once the collection is expanded.
+def _entry_row(context, token):
+    # Installed packages can appear again in the inventory below collections.
+    # Require the entry's named checkbox, not the last row sharing its title.
+    return atspi.find(
+        content(context),
+        lambda node: atspi.role(node) in atspi.ROW_ROLES and atspi.name(node) == token
+        and any(atspi.name(child) == "Select " + token
+                and atspi.role(child) in atspi.TOGGLE_ROLES
+                for child in atspi.descendants(node, only_showing=True)),
+        "the collection entry for " + token,
+    )
+
+
+def _entry_checkbox(context, token):
+    row = _entry_row(context, token)
+    return atspi.find(
+        row,
+        lambda n: atspi.role(n) in atspi.TOGGLE_ROLES,
+        "the entry checkbox for " + token,
+    )
+
+
+@then('the "{token}" entry checkbox is {state:w}')
+def step_entry_checkbox_state(context, token, state):
+    cb = _entry_checkbox(context, token)
+    if state == "insensitive":
+        assert atspi.poll(lambda: not atspi.sensitive(cb)), \
+            f"the entry checkbox for {token!r} is still sensitive"
+        return
     if state not in ("checked", "unchecked"):
         raise NotImplementedError(f"unknown checkbox state {state!r}")
     want = state == "checked"
-    cb = _collection_checkbox(context, title)
     assert atspi.poll(lambda: bool(atspi.checked(cb)) == want), \
-        f"collection {title!r} is not {state}"
+        f"the entry checkbox for {token!r} is not {state}"
 
 
-@then('the "{title}" collection checkbox refuses input')
-def step_collection_insensitive(context, title):
-    assert atspi.poll(lambda: not atspi.sensitive(_collection_checkbox(context, title))), \
-        f"installed collection {title!r} still accepts input"
+@then('the collection entry "{token}" says "{text}"')
+def step_entry_source(context, token, text):
+    assert atspi.poll(lambda: text_present(_entry_row(context, token), text)), \
+        f"the collection entry for {token!r} never said {text!r}"
+
+
+@step('I check the "{token}" entry')
+def step_check_entry(context, token):
+    """Toggle the entry's checkbox on with the keyboard."""
+    cb = _entry_checkbox(context, token)
+    if atspi.checked(cb):
+        return
+    focus_by_tab(context, cb, f"the entry checkbox for {token!r}")
+    atspi.press("space")
+    assert atspi.poll(lambda: bool(atspi.checked(_entry_checkbox(context, token)))), \
+        f"the entry checkbox for {token!r} did not become checked"
+
+
+@step('I uncheck the "{token}" entry')
+def step_uncheck_entry(context, token):
+    cb = _entry_checkbox(context, token)
+    if not atspi.checked(cb):
+        return
+    focus_by_tab(context, cb, f"the entry checkbox for {token!r}")
+    atspi.press("space")
+    assert atspi.poll(lambda: not atspi.checked(_entry_checkbox(context, token))), \
+        f"the entry checkbox for {token!r} did not become unchecked"
+
+
 
 
 @then('the "{row}" row does not say "{text}"')
@@ -222,14 +274,6 @@ def step_row_does_not_say(context, row, text):
     target = atspi.row_containing(content(context), row)
     assert not text_present(target, text), f"row {row!r} says {text!r}"
 
-@step('I toggle the "{title}" collection checkbox')
-def step_toggle_collection_checkbox(context, title):
-    cb = _collection_checkbox(context, title)
-    before = bool(atspi.checked(cb))
-    focus_by_tab(context, cb, f"the {title!r} collection checkbox")
-    atspi.press("space")
-    assert atspi.poll(lambda: bool(atspi.checked(_collection_checkbox(context, title))) != before), \
-        f"collection checkbox for {title!r} did not toggle"
 # ---------------------------------------------------------------- toasts
 
 
@@ -244,8 +288,8 @@ def step_toast(context, text):
 
 @then('Homebrew was never asked to "{command}"')
 def step_brew_never(context, command):
-    # Leading words, so "bundle install" is told apart from the read-only
-    # "bundle check" each collection row runs on load.
+    # Match leading words, so read-only inventory calls cannot stand in for
+    # an install command under --dry-run.
     words = command.split()
     ran = [line for line in calls(context, "brew") if line.split()[: len(words)] == words]
     assert not ran, f"brew ran {command!r} for real: {ran}"

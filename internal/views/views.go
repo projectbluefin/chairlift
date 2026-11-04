@@ -80,10 +80,13 @@ type UserHome struct {
 	brewTrustTaps      map[string]*untrustedTapEntry // tap name -> its expander and remaining packages
 	brewTrustError     *adw.ActionRow                // failed discovery row, nil otherwise
 	bundleButtons      buttonRoute
-	// Each destination selects its own collections; one gate serializes installs.
+	// Each destination selects its own entries; one gate serializes installs.
 	bundleItems       []*bundleItemRow
 	bundleSelections  []*bundleSelection
 	bundleInstallGate actionstate.Gate
+	// Shared callbacks avoid allocating a trampoline per entry on rebuild.
+	bundleChecks     checkRoute
+	bundleSelectAlls buttonRoute
 	// bundleStatusRefresh lets only the newest installed-state check of the
 	// collections publish; see refreshBundleStatuses.
 	bundleStatusRefresh actionstate.RefreshGate

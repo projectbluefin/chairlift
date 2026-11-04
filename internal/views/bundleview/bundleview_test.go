@@ -139,7 +139,7 @@ func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 	}
 }
 
-func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
+func TestCuratedCollectionsAreVisibleAndOrdered(t *testing.T) {
 	curatedIDs := []string{"fonts", "fonts-dev", "ai-tools", "full-desktop"}
 	for _, id := range curatedIDs {
 		if !Curated(id) {
@@ -149,16 +149,13 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 			t.Errorf("collection %q must have exactly one consumer: Apps visible=%v, Developer Mode=%v", id, got, DeveloperCollection(id))
 		}
 	}
-	if DefaultSelected("full-desktop") {
-		t.Errorf("DefaultSelected(full-desktop) = true, want false")
-	}
-	for _, id := range []string{"fonts", "fonts-dev", "ai-tools"} {
-		if !DefaultSelected(id) {
-			t.Errorf("DefaultSelected(%q) = false, want true", id)
+	for i, id := range curatedIDs {
+		if got := Order(id); got != i+3 {
+			t.Errorf("Order(%q) = %d, want %d", id, got, i+3)
 		}
 	}
-	if !DefaultSelected("custom-admin-pack") {
-		t.Errorf("DefaultSelected(custom-admin-pack) = false, want true")
+	if Order("custom-admin-pack") != 100 {
+		t.Errorf("Order(custom-admin-pack) = %d, want 100", Order("custom-admin-pack"))
 	}
 }
 
@@ -168,8 +165,8 @@ func TestDeveloperCollectionsAreRelocatedWithoutChangingTheirSelection(t *testin
 		if got := DeveloperCollection(id); got != want {
 			t.Errorf("DeveloperCollection(%q) = %v, want %v", id, got, want)
 		}
-		if want && (Visible(id, nil) || !DefaultSelected(id)) {
-			t.Errorf("relocated collection %q must stay selected by default and absent from Apps", id)
+		if want && Visible(id, nil) {
+			t.Errorf("relocated collection %q must stay absent from Apps", id)
 		}
 	}
 }
@@ -233,25 +230,6 @@ func TestNoCollectionRowLeaksToolingIdentity(t *testing.T) {
 	}
 }
 
-func TestObservedInstalledMapsEveryBundleStatus(t *testing.T) {
-	for _, tc := range []struct {
-		status        homebrew.BundleStatus
-		wantInstalled bool
-		wantKnown     bool
-	}{
-		{homebrew.BundleInstalled, true, true},
-		{homebrew.BundleUpdateAvailable, true, true},
-		{homebrew.BundleNotInstalled, false, true},
-		{homebrew.BundleIndeterminate, false, false},
-		{"", false, false},
-	} {
-		installed, known := ObservedInstalled(tc.status)
-		if installed != tc.wantInstalled || known != tc.wantKnown {
-			t.Errorf("ObservedInstalled(%q) = (%v, %v), want (%v, %v)", tc.status, installed, known, tc.wantInstalled, tc.wantKnown)
-		}
-	}
-}
-
 // Super-bundle siblings come from the catalog, never include the row
 // itself, and resolve only against collections actually discovered.
 func TestMemberBundlesResolvesDiscoveredSiblings(t *testing.T) {
@@ -299,39 +277,7 @@ func TestMembersFoldIntoDiscoveredParentOnly(t *testing.T) {
 	}
 }
 
-// The row is installed only when every member is observed installed; one
-// member observed missing makes it not installed; an undecided member with
-// no observed-missing sibling changes nothing.
-func TestAggregateInstalled(t *testing.T) {
-	const (
-		in  = homebrew.BundleInstalled
-		up  = homebrew.BundleUpdateAvailable
-		out = homebrew.BundleNotInstalled
-		ind = homebrew.BundleIndeterminate
-	)
-	for _, tc := range []struct {
-		name          string
-		statuses      []homebrew.BundleStatus
-		wantInstalled bool
-		wantKnown     bool
-	}{
-		{"no members", nil, false, false},
-		{"single installed", []homebrew.BundleStatus{in}, true, true},
-		{"all installed or upgradable", []homebrew.BundleStatus{in, up}, true, true},
-		{"one missing", []homebrew.BundleStatus{in, out}, false, true},
-		{"installed then undecided", []homebrew.BundleStatus{in, ind}, false, false},
-		{"undecided then installed", []homebrew.BundleStatus{ind, in}, false, false},
-		{"undecided then missing", []homebrew.BundleStatus{ind, out}, false, true},
-		{"all undecided", []homebrew.BundleStatus{ind, ind}, false, false},
-	} {
-		installed, known := AggregateInstalled(tc.statuses)
-		if installed != tc.wantInstalled || known != tc.wantKnown {
-			t.Errorf("%s: AggregateInstalled(%v) = (%v, %v), want (%v, %v)", tc.name, tc.statuses, installed, known, tc.wantInstalled, tc.wantKnown)
-		}
-	}
-}
-
-func TestPresentContentsBuildsRowsWithKindLabels(t *testing.T) {
+func TestPresentContentsBuildsRowsWithSourceLabels(t *testing.T) {
 	items := []homebrew.BundleItem{
 		{Name: "jq", Kind: homebrew.BundleItemBrew},
 		{Name: "ripgrep", Kind: homebrew.BundleItemBrew},
@@ -353,12 +299,12 @@ func TestPresentContentsBuildsRowsWithKindLabels(t *testing.T) {
 		t.Errorf("OverflowNotice = %q, want empty when everything fits", got.OverflowNotice)
 	}
 	wantRows := []ContentsRow{
-		{Name: "jq", KindLabel: "Command-line tool", AccessibleName: "jq"},
-		{Name: "ripgrep", KindLabel: "Command-line tool", AccessibleName: "ripgrep"},
-		{Name: "visual-studio-code", KindLabel: "App", AccessibleName: "visual-studio-code"},
-		{Name: "org.gnome.TextEditor", KindLabel: "Flatpak", AccessibleName: "org.gnome.TextEditor"},
-		{Name: "Xcode", KindLabel: "App Store", AccessibleName: "Xcode"},
-		{Name: "golang.go", KindLabel: "VS Code extension", AccessibleName: "golang.go"},
+		{Item: items[0], Name: "jq", Label: "from Homebrew", AccessibleName: "jq", CheckAccessibleName: "Select jq", Selectable: true},
+		{Item: items[1], Name: "ripgrep", Label: "from Homebrew", AccessibleName: "ripgrep", CheckAccessibleName: "Select ripgrep", Selectable: true},
+		{Item: items[2], Name: "visual-studio-code", Label: "from Homebrew", AccessibleName: "visual-studio-code", CheckAccessibleName: "Select visual-studio-code", Selectable: true},
+		{Item: items[3], Name: "org.gnome.TextEditor", Label: "from Flathub", AccessibleName: "org.gnome.TextEditor", CheckAccessibleName: "Select org.gnome.TextEditor", Selectable: true},
+		{Item: items[4], Name: "Xcode", Label: "from the App Store", AccessibleName: "Xcode", CheckAccessibleName: "Select Xcode", Selectable: false},
+		{Item: items[5], Name: "golang.go", Label: "from the VS Code Marketplace", AccessibleName: "golang.go", CheckAccessibleName: "Select golang.go", Selectable: false},
 	}
 	if !reflect.DeepEqual(got.Rows, wantRows) {
 		t.Fatalf("PresentContents().Rows = %#v, want %#v", got.Rows, wantRows)
@@ -408,20 +354,20 @@ func TestPresentContentsReportsOverflowWhenItemsAreCropped(t *testing.T) {
 	}
 }
 
-func TestContentsSubtitle(t *testing.T) {
+func TestEntryDescription(t *testing.T) {
 	for _, tc := range []struct {
 		item homebrew.BundleItem
 		want string
 	}{
-		{homebrew.BundleItem{Kind: homebrew.BundleItemBrew, Description: "JSON processor"}, "Command-line tool · JSON processor"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemCask}, "App · Description unavailable"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Flatpak · Description unavailable"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemMas}, "App Store"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemVSCode}, "VS Code extension"},
-		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak, Description: "Calculator"}, "Flatpak · Calculator"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemBrew, Description: "JSON processor"}, "JSON processor"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemCask}, "Description unavailable"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak}, "Description unavailable"},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemMas}, ""},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemVSCode}, ""},
+		{homebrew.BundleItem{Kind: homebrew.BundleItemFlatpak, Description: "Calculator"}, "Calculator"},
 		{homebrew.BundleItem{Description: "  "}, ""},
 	} {
-		if got := ContentsSubtitle(tc.item); got != tc.want {
+		if got := EntryDescription(tc.item); got != tc.want {
 			t.Errorf("got %q, want %q", got, tc.want)
 		}
 	}

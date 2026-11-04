@@ -1,8 +1,8 @@
 """Prelaunch stubs for the Apps destination (applications_page).
 
-The Apps page reads Homebrew inventories and configured Brewfiles. PATH stubs
-serve a fixed inventory and record calls; one scenario supplies Flatpak apps
-to prove the Homebrew-only page never lists them.
+The Apps page reads the installed Homebrew inventory, the installed Flatpak
+inventory, and configured Brewfiles. PATH stubs serve a fixed inventory and
+record calls.
 
 Every stub records its argv, one invocation per line, in
 <scenario>/<program>-calls.log. Under --dry-run ChairLift must never execute
@@ -16,22 +16,28 @@ import os
 from stubs import fake_executable, stub
 
 # The installed inventory `brew info --installed --json=v2` reports. Only
-# the fields internal/homebrew.parsePackagesJSON reads are populated.
+# the fields internal/homebrew.parsePackagesJSON reads are populated, plus
+# the qualified name and the tap, which are what tell a tap package from a
+# homebrew/core one.
 FORMULAE = [
-    {"name": "jq", "installed": [{"version": "1.7.1", "installed_on_request": True}], "pinned": False},
-    {"name": "ripgrep", "installed": [{"version": "14.1.1", "installed_on_request": True}], "pinned": True},
+    {"name": "jq", "full_name": "jq", "tap": "homebrew/core", "installed": [{"version": "1.7.1", "installed_on_request": True}], "pinned": False},
+    {"name": "ripgrep", "full_name": "ripgrep", "tap": "homebrew/core", "installed": [{"version": "14.1.1", "installed_on_request": True}], "pinned": True},
     # Installed dependency is real inventory, but not a requested tool.
-    {"name": "libunistring", "installed": [{"version": "1.3", "installed_on_request": False}], "pinned": False},
+    {"name": "libunistring", "full_name": "libunistring", "tap": "homebrew/core", "installed": [{"version": "1.3", "installed_on_request": False}], "pinned": False},
     # A formula brew knows about but has no installed keg for is skipped.
-    {"name": "not-installed", "installed": [], "pinned": False},
+    {"name": "not-installed", "full_name": "not-installed", "tap": "homebrew/core", "installed": [], "pinned": False},
 ]
 CASKS = [
-    {"token": "visual-studio-code", "version": "1.104.0", "installed": "1.104.0"},
+    {"token": "visual-studio-code", "full_token": "visual-studio-code", "tap": "homebrew/cask", "version": "1.104.0", "installed": "1.104.0"},
 ]
 
-# `flatpak list --<scope> --app --columns=name,application,version` rows.
+# `flatpak list --<scope> --app --columns=name,application,version,branch` rows.
 FLATPAK_USER = (("Firefox", "org.mozilla.firefox", "140.0"),)
 FLATPAK_SYSTEM = (("Text Editor", "org.gnome.TextEditor", "48.0"),)
+
+# The Flatpak applications the Apps page finds already installed, and the
+# remote each came from. This is the query `brew bundle` itself uses.
+FLATPAK_INSTALLED = (("app.drey.Damask", "flathub"),)
 
 APP_COLLECTIONS = {
     # A collection Bluefin ships: its title and summary come from
@@ -61,11 +67,35 @@ APP_COLLECTIONS = {
     # Full Desktop Suite (defaults unchecked)
     "full-desktop.Brewfile": (
         'flatpak "org.gnome.Calculator"\n'
+        'flatpak "app.drey.Damask"\n'
+        'flatpak "org.gnome.Notes"\n'
     ),
     # An administrator's own collection: humanized id, readable comment.
     "team-tools.Brewfile": (
         "# tools our team relies on every day\n"
         'brew "just"\n'
+    ),
+    # An administrator's collection that names a tap. The tap is not
+    # trusted, so installing one of its entries has to trust the package
+    # on its own first.
+    "tap-tools.Brewfile": (
+        'tap "anomalyco/tap"\n'
+        'brew "anomalyco/tap/opencode-v2"\n'
+        'brew "gh"\n'
+    ),
+    "marketplace-tools.Brewfile": (
+        'brew "gh"\n'
+        'mas "Xcode", id: 497799835\n'
+        'vscode "ms-vscode-remote.remote-containers"\n'
+    ),
+    "opaque-tools.Brewfile": (
+        'brew "gh"\n'
+        'npm "typescript"\n'
+        'system "touch /tmp/chairlift-should-never-evaluate-brewfiles"\n'
+    ),
+    "trusted-tools.Brewfile": (
+        'brew "gh", trusted: true\n'
+        'cask "font-hack", trusted: false\n'
     ),
 }
 
@@ -78,21 +108,44 @@ def _record(context, program):
     return f'printf \'%s\\n\' "$*" >> "{calls_log(context, program)}"\n'
 
 
-def _brew(context, fail=(), installed_collections=()):
+def _brew(
+    context,
+    fail=(),
+    installed_collections=(),
+    extra_formulae=(),
+    extra_casks=(),
+    trusted_taps=(),
+    tap_installed=(),
+):
     """A brew serving the fixed catalog above.
 
     fail names read operations that exit 1 when brew cannot read its API.
     installed_collections names the Brewfiles `brew bundle check` reports
     satisfied; every other collection reports unmet dependencies (exit 1),
     as brew does for a collection nobody installed.
+    extra_formulae and extra_casks add installed packages, so a scenario can
+    show a collection entry that is already on the system.
+    trusted_taps names the taps the trust store holds; every other tap is
+    untrusted, which is what an entry from a third-party tap looks like
+    before a person trusts it.
+    tap_installed names the taps that are already cloned.
     """
-    formulae = json.dumps({"formulae": FORMULAE, "casks": []})
-    casks = json.dumps({"formulae": [], "casks": CASKS})
+    formulae = json.dumps({"formulae": FORMULAE + list(extra_formulae), "casks": []})
+    casks = json.dumps({"formulae": [], "casks": CASKS + list(extra_casks)})
+    trust = json.dumps(
+        {
+            "taps": list(trusted_taps),
+            "formulae": [],
+            "casks": [],
+            "commands": [],
+        }
+    )
     info_fail = "echo 'Error: Failed to load the API' >&2; exit 1\n" if "info" in fail else ""
     satisfied = ""
     if installed_collections:
         patterns = "|".join(f"*/{name}" for name in installed_collections)
         satisfied = f'case "$*" in {patterns}) exit 0 ;; esac\n        '
+    installed = " ".join(tap_installed)
     script = _record(context, "brew") + f"""
 case "$1" in
 --version) echo "Homebrew 4.6.0"; exit 0 ;;
@@ -114,7 +167,21 @@ EOF
     esac
     exit 0 ;;
 outdated) echo '{{"formulae":[],"casks":[]}}'; exit 0 ;;
-tap-info) echo '[]'; exit 0 ;;
+tap-info)
+    case "$*" in
+    *--installed*) echo '[]' ;;
+    *) case " {installed} " in
+       *" $3 "*) printf '[{{"name":"%s","installed":true,"trusted":true}}]\n' "$3" ;;
+       *) printf '[{{"name":"%s","installed":false,"trusted":false}}]\n' "$3" ;;
+       esac ;;
+    esac
+    exit 0 ;;
+trust)
+    if [ "$2" = "--json=v1" ]; then
+        printf '%s\n' '{trust}'
+        exit 0
+    fi
+    exit 0 ;;
 tap) echo 'ublue-os/tap'; exit 0 ;;
 bundle)
     if [ "$2" = check ]; then
@@ -147,7 +214,11 @@ def bluefin_cli_missing_tools(context):
 
 
 def _rows(rows):
-    return "".join(f"{name}\t{app_id}\t{version}\n" for name, app_id, version in rows)
+    return "".join(f"{name}\t{app_id}\t{version}\tstable\n" for name, app_id, version in rows)
+
+
+def _origin_rows(rows):
+    return "".join(f"{app_id}\t{origin}\n" for app_id, origin in rows)
 
 
 @stub("apps-brew")
@@ -159,20 +230,39 @@ def apps_brew(context):
 @stub("apps-brew-team-tools-installed")
 def apps_brew_team_tools_installed(context):
     """Homebrew on which the Team tools collection is already installed."""
-    _brew(context, installed_collections=("team-tools.Brewfile",))
+    _brew(
+        context,
+        extra_formulae=[
+            {"name": "just", "full_name": "just", "tap": "homebrew/core", "installed": [{"version": "1.36.0", "installed_on_request": True}], "pinned": False},
+        ],
+    )
 
 
 @stub("apps-brew-developer-installed")
 def apps_brew_developer_installed(context):
-    """Both relocated collections are already satisfied on this host."""
-    _brew(context, installed_collections=("cli.Brewfile", "fonts-dev.Brewfile"))
-
+    """The relocated collection's entries are all installed."""
+    _brew(
+        context,
+        extra_formulae=[
+            {"name": "font-fira-code", "full_name": "font-fira-code", "tap": "homebrew/core", "installed": [{"version": "1", "installed_on_request": True}]},
+        ],
+        extra_casks=[
+            {"token": name, "full_token": name, "tap": "homebrew/cask", "installed": "1"}
+            for name in ("font-jetbrains-mono", "font-hack")
+        ],
+    )
 
 
 @stub("apps-brew-unreadable")
 def apps_brew_unreadable(context):
     """Homebrew whose installed-package listing fails."""
     _brew(context, fail=("info",))
+
+
+@stub("apps-brew-tap-trusted")
+def apps_brew_tap_trusted(context):
+    """Homebrew on which the administrator's tap is trusted wholesale."""
+    _brew(context, trusted_taps=("anomalyco/tap",), tap_installed=("anomalyco/tap",))
 
 
 @stub("apps-flatpak")
@@ -200,6 +290,9 @@ list)
 {''.join(app_id + chr(10) for _, app_id, _ in system_rows)}EOF
         ;;
     *--runtime*) exit 0 ;;
+    *--columns=application,origin*) cat <<'EOF'
+{_origin_rows(FLATPAK_INSTALLED)}EOF
+    ;;
     *--user*) cat <<'EOF'
 {_rows(FLATPAK_USER)}EOF
     ;;
