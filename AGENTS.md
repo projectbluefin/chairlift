@@ -1559,7 +1559,10 @@ An agent must not break these:
   gating the update run's post-update maintenance step
   (`updateproviders.NewMaintenance`), so one configuration switch
   governs both surfaces — a second key would let one surface clean while the
-  other claimed the feature was disabled. The action composes
+  other claimed the feature was disabled. Because it runs the same steps,
+  Free Up Space is admitted by `UpdateShell.beginMutation` and is refused
+  with `pageview.UpdateBusyToast` while a check or update run owns the
+  system. The action composes
   `internal/updateproviders`' typed step inventory; do not reintroduce
   per-package-manager cleanup buttons, which asked the user to know which
   package manager owned their wasted disk space. The wording and the
