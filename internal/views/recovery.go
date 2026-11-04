@@ -193,6 +193,14 @@ func (uh *UserHome) onBootcRollbackClicked() {
 	if !uh.bootcRollbackGate.TryStart() {
 		return
 	}
+	// Rolling back changes which deployment boots next, so it is admitted
+	// by the update shell like every other action that replaces the
+	// operating system: it must not run beside an update run's staging.
+	if !uh.updateShell.beginMutation() {
+		uh.bootcRollbackGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 
 	button := uh.bootcRollbackBtn
 	row := uh.bootcRollbackRow
@@ -205,6 +213,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 		err := ublue.Rollback(ctx)
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			if err != nil {
 				log.Printf("views: rollback failed: %v", err)
 				uh.bootcRollbackGate.Reset()
@@ -234,7 +243,15 @@ func (uh *UserHome) onBootcRollbackClicked() {
 // onBootcRollbackRestartClicked restarts into the queued rollback through the
 // helper's fixed restart command, the same one Updates offers for a staged
 // deployment.
+//
+// The update shell admits it: a restart while Update All is installing
+// would reboot in the middle of that run, and the shell's admission is also
+// what keeps a second press from starting a second restart.
 func (uh *UserHome) onBootcRollbackRestartClicked() {
+	if !uh.updateShell.beginMutation() {
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	button := uh.bootcRestartBtn
 	button.SetSensitive(false)
 	go func() {
@@ -242,6 +259,7 @@ func (uh *UserHome) onBootcRollbackRestartClicked() {
 		defer cancel()
 		err := ublue.Restart(ctx)
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			button.SetSensitive(true)
 			if err != nil {
 				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't restart. Try again."))

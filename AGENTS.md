@@ -844,7 +844,9 @@ An agent must not break these:
 - **Update inventory and badge have one state owner.** The pure
   `internal/updateflow.Coordinator` owns all source inventory and the badge;
   the shell renders snapshots and manual update actions — and the channel and
-  driver switches, which replace the OS — share its admission.
+  driver switches, which replace the OS, and Powerwash's Roll Back and its
+  Restart Now, which change or reboot into the next deployment — share its
+  admission.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Features discloses packages separately from actions.** Gaming Mode leads
