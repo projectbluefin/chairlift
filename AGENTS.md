@@ -1419,7 +1419,9 @@ An agent must not break these:
   reported two change events for three writes when one repeated a value.
   Writing a different name per selection makes the value genuinely change;
   `TestPanelIconNameVariesWithSelection` pins it, and `removePanelIcons`
-  sweeps the marks earlier selections left behind. The `chairlift-livery-`
+  sweeps the marks earlier selections left behind — only after both
+  extension keys name the new mark, so a failed switch keeps the previous
+  mark drawn. The `chairlift-livery-`
   prefix does second duty as the "ours" test, so `CapturePanelOverrides` can
   refuse to record one of ChairLift's own names as the user's previous icon
   without persisting a flag to say so.
