@@ -188,6 +188,8 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   scenario; a confirmed defect is written as a scenario tagged
   `@known_issue.<N>` rather than left untested. Never run the suite on a live
   session. The `gtk-headless-testing` skill carries the traps.
+  Setup navigation assertions identify the visible bookend and its actions;
+  introductory prose and quotations are not navigation invariants.
 - `make install`'s default `PREFIX` is `/usr` — the only prefix under which
   the installed PolicyKit policy files land where `polkitd` reads them
   (`/usr/share/polkit-1/actions`) and the updex helper's installed
