@@ -476,20 +476,20 @@ func (s *UpdateShell) notifyUpdateComplete(final updateflow.Snapshot) {
 	})
 }
 
-// Busy reports whether the coordinator is currently mutating updates.
+// Busy reports whether updates or an admitted system operation is running.
 func (s *UpdateShell) Busy() bool {
 	return s != nil &&
 		(s.mutation.Load() || (s.coordinator != nil && s.coordinator.Busy()))
 }
 
 // RevealBusyBanner keeps the user informed when a close request is rejected
-// while an update mutation is still running.
+// while updates or an admitted maintenance/system operation is still running.
 func (s *UpdateShell) RevealBusyBanner() {
 	if s == nil || s.banner == nil {
 		return
 	}
 	s.closeBlocked = true
-	s.banner.SetTitle("Updates are still in progress…")
+	s.banner.SetTitle("An operation is still in progress…")
 	s.banner.SetRevealed(true)
 }
 
@@ -516,7 +516,7 @@ func (s *UpdateShell) Render(snapshot updateflow.Snapshot) {
 		s.refresh.SetSensitive(updatepresent.CanStartOperation(s.Busy(), s.closed.Load()))
 	}
 	if s.closeBlocked && s.Busy() {
-		s.banner.SetTitle("Updates are still in progress…")
+		s.banner.SetTitle("An operation is still in progress…")
 		s.banner.SetRevealed(true)
 	} else {
 		s.closeBlocked = false
