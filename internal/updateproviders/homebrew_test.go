@@ -47,6 +47,29 @@ func TestHomebrewCheckMapsOutdatedPackages(t *testing.T) {
 	}
 }
 
+func TestHomebrewCheckOmitsPinnedFormulae(t *testing.T) {
+	provider := newHomebrew(HomebrewDeps{
+		Installed: func() bool { return true },
+		ListOutdated: func() ([]homebrew.Package, error) {
+			return []homebrew.Package{
+				{Name: "ripgrep", Version: "14.1.0"},
+				{Name: "node", Version: "22.1.0", Pinned: true},
+			}, nil
+		},
+	})
+
+	got, err := provider.Check(context.Background())
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	want := updateflow.CheckResult{Items: []updateflow.Item{
+		{Name: "ripgrep", CurrentVersion: "14.1.0"},
+	}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Check() = %#v, want %#v: brew upgrade skips a pinned formula, so it is not an applicable update", got, want)
+	}
+}
+
 func TestHomebrewCheckReturnsEmptyOutdatedList(t *testing.T) {
 	provider := newHomebrew(HomebrewDeps{
 		Installed:    func() bool { return true },

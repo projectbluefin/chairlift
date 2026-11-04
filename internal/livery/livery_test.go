@@ -885,6 +885,31 @@ func TestSwitchingPanelSelectionsLeavesOneIcon(t *testing.T) {
 	}
 }
 
+// TestFailedPanelSwitchKeepsTheCurrentMark asserts the previous selection's
+// file survives a failed switch. The extension still names that file when
+// the new selection's gsettings write fails, so sweeping before the write
+// left the top-bar menu drawing nothing.
+func TestFailedPanelSwitchKeepsTheCurrentMark(t *testing.T) {
+	useTempDataHome(t)
+	fake := newFakeCommands(t)
+
+	if err := Apply(context.Background(), Panel, Source{Kind: FromCatalog, Value: "rust"}); err != nil {
+		t.Fatalf("Apply(rust): %v", err)
+	}
+	previous, err := IconPath(Panel, "rust")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fake.fail["gsettings set "+extensionSchema+" "+extensionIconKey] = errors.New("gsettings refused")
+	if err := Apply(context.Background(), Panel, Source{Kind: FromCatalog, Value: "gnome"}); err == nil {
+		t.Fatal("Apply(gnome) succeeded although the extension icon write failed")
+	}
+	if _, err := os.Stat(previous); err != nil {
+		t.Fatalf("a failed switch removed the mark the extension still names (%s): %v", previous, err)
+	}
+}
+
 // TestCaptureNeverRecordsOurOwnIconName asserts a second enable cannot record
 // ChairLift's own mark as "the user's previous icon", which revert would then
 // restore as a file that no longer exists.

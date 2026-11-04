@@ -90,6 +90,13 @@ func (p *homebrewProvider) Check(ctx context.Context) (updateflow.CheckResult, e
 		items = make([]updateflow.Item, 0, len(packages))
 	}
 	for _, pkg := range packages {
+		// A pinned formula is the user's deliberate hold (Apps offers Pin).
+		// `brew outdated` still lists it, but `brew upgrade` skips it and
+		// exits 0, so counting it would badge an update no run can apply
+		// and then report the run complete with the same item still due.
+		if pkg.Pinned {
+			continue
+		}
 		items = append(items, updateflow.Item{
 			Name:           pkg.Name,
 			CurrentVersion: pkg.Version,
