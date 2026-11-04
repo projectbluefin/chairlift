@@ -77,8 +77,10 @@ type DockerHost struct {
 	// anything is downloaded; it only reads.
 	CheckUnits func() error
 	// RestartDone clears the install's restart-pending marker once the
-	// daemon has been restarted onto a changed runtime.
-	RestartDone func() error
+	// daemon has been restarted onto a changed runtime. It clears only the
+	// marker for the set this run's Install made current, under the install
+	// lock, so a concurrent run's newer swap keeps its pending restart.
+	RestartDone func(ctx context.Context) error
 	// ContainersRunning reports whether the running daemon has any running
 	// container. No daemon serving is (false, nil). A true result or an
 	// error defers the restart onto a changed runtime.
@@ -345,7 +347,7 @@ func restartRuntime(ctx context.Context, h DockerHost, steps dockerSteps) error 
 	if err := steps.exec("systemctl", "try-restart", "docker.service"); err != nil {
 		return fmt.Errorf("restarting Docker daemon: %w", err)
 	}
-	if err := h.RestartDone(); err != nil {
+	if err := h.RestartDone(ctx); err != nil {
 		return fmt.Errorf("recording Docker restart: %w", err)
 	}
 	return nil

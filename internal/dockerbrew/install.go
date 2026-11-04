@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -20,8 +21,13 @@ const (
 	manifestName = "manifest.json"
 	lockName     = ".lock"
 	// restartName marks a set swapped in whose daemon has not yet been
-	// restarted onto it; it survives an interrupted helper run.
+	// restarted onto it; it survives an interrupted helper run. It holds the
+	// set id it was written for, so a run that restarted onto an older set
+	// cannot clear the marker a later swap wrote. A marker written before
+	// ids were recorded is empty and names no set.
 	restartName = ".restart-pending"
+	// maxMarker bounds the marker read; a set id and newline fit easily.
+	maxMarker   = 64
 	stagingPre  = ".staging-"
 	downloadPre = ".download-"
 	linkPre     = ".current-"
@@ -78,6 +84,17 @@ func Install(ctx context.Context, c Client, root string) (m Manifest, changed bo
 			if err != nil {
 				return Manifest{}, false, err
 			}
+			if pending {
+				// A marker naming another set (a swap that failed after the
+				// marker was written, or an index that went back) would
+				// never be cleared by a restart onto this one; what is
+				// pending now is a restart onto current.
+				if named, err := readMarker(filepath.Join(root, restartName)); err != nil || named != id {
+					if err := writeFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
+						return Manifest{}, false, err
+					}
+				}
+			}
 			return m, pending, prune(root, id)
 		}
 	}
@@ -108,7 +125,7 @@ func Install(ctx context.Context, c Client, root string) (m Manifest, changed bo
 	if err := writeFileAtomic(filepath.Join(staging, manifestName), append(data, '\n'), 0o644); err != nil {
 		return Manifest{}, false, err
 	}
-	if err := writeFileAtomic(filepath.Join(root, restartName), nil, 0o644); err != nil {
+	if err := writeFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
 		return Manifest{}, false, err
 	}
 	setDir := filepath.Join(root, id)
@@ -149,13 +166,69 @@ func restartPending(root string) (bool, error) {
 }
 
 // ClearRestartPending removes the marker Install writes before swapping a
-// new set in; call it once the daemon has restarted onto that set.
-func ClearRestartPending(root string) error {
-	err := os.Remove(filepath.Join(root, restartName))
+// new set in; call it once the daemon has restarted onto set id, the set the
+// caller's own Install made current.
+//
+// It takes the install lock, so it cannot interleave with another run's
+// swap, and it removes the marker only when it names id (or is an empty
+// marker from a release that recorded no id). Otherwise a later run swapped
+// in a newer set after this caller's restart, and that set still awaits its
+// own restart: removing the marker would make every following Install
+// report the runtime unchanged and never restart onto it.
+func ClearRestartPending(ctx context.Context, root, id string) error {
+	if !setIDPattern.MatchString(id) {
+		return fmt.Errorf("dockerbrew: clearing restart marker: invalid set id %q", id)
+	}
+	unlock, err := lockRoot(ctx, root)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	p := filepath.Join(root, restartName)
+	named, err := readMarker(p)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if named != "" && named != id {
+		return nil
+	}
+	err = os.Remove(p)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
 	return err
+}
+
+// readMarker returns the set id a restart marker names, "" for an empty
+// marker. Anything but a small regular file is refused.
+func readMarker(p string) (string, error) {
+	f, err := os.OpenFile(p, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("dockerbrew: %s is not a regular file", p)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxMarker+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > maxMarker {
+		return "", fmt.Errorf("dockerbrew: %s is too large", p)
+	}
+	named := strings.TrimSpace(string(data))
+	if named != "" && !setIDPattern.MatchString(named) {
+		return "", fmt.Errorf("dockerbrew: %s names no set (%q)", p, named)
+	}
+	return named, nil
 }
 
 // ensureRoot creates root and its parent 0755 when missing and refuses either

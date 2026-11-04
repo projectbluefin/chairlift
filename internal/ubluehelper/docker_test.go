@@ -92,7 +92,7 @@ func (f *fakeDockerHost) host() DockerHost {
 			f.calls = append(f.calls, "check units")
 			return f.unitsErr
 		},
-		RestartDone: func() error {
+		RestartDone: func(context.Context) error {
 			f.calls = append(f.calls, "restart done")
 			return f.restartDoneErr
 		},

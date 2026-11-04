@@ -138,7 +138,7 @@ func TestRuntimeInstallBuildsPatchedSetAndIsIdempotent(t *testing.T) {
 	if got := e.entries(); !slices.Equal(got, sortedNames(lockName, restartName, m.SetID(), currentName)) {
 		t.Errorf("root holds %v", got)
 	}
-	if err := ClearRestartPending(e.root); err != nil {
+	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,7 +211,7 @@ func TestRuntimeInstallKeepsTheCurrentSetWhenANewOneFails(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := ClearRestartPending(e.root); err != nil {
+			if err := ClearRestartPending(t.Context(), e.root, first.SetID()); err != nil {
 				t.Fatal(err)
 			}
 			e.publish("two")
@@ -406,7 +406,8 @@ func TestRunSmokeRequiresBothBinariesToRun(t *testing.T) {
 func TestRuntimeInstallReportsAnUnfinishedRestart(t *testing.T) {
 	e := newInstallEnv(t)
 	e.publish("one")
-	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+	m, changed, err := Install(t.Context(), e.client, e.root)
+	if err != nil || !changed {
 		t.Fatalf("Install = %v, %v", changed, err)
 	}
 	// Interrupted: the restart never ran, so the marker is still there.
@@ -416,14 +417,115 @@ func TestRuntimeInstallReportsAnUnfinishedRestart(t *testing.T) {
 	if e.smokes != 1 {
 		t.Errorf("rerun reinstalled: smokes = %d", e.smokes)
 	}
-	if err := ClearRestartPending(e.root); err != nil {
+	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
 		t.Fatal(err)
 	}
-	if err := ClearRestartPending(e.root); err != nil {
+	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
 		t.Fatalf("clearing an absent marker: %v", err)
 	}
 	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
 		t.Fatalf("after restart = %v, %v; want unchanged", changed, err)
+	}
+}
+
+// Two helper runs overlap: run A restarts onto its set, run B then swaps a
+// newer set in, and only afterwards does A record its restart. A must not
+// clear B's marker, or B's set is never restarted onto (#697).
+func TestRuntimeRestartMarkerSurvivesAnOlderRunsClear(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	a, _, err := Install(t.Context(), e.client, e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.publish("two")
+	b, changed, err := Install(t.Context(), e.client, e.root)
+	if err != nil || !changed || b.SetID() == a.SetID() {
+		t.Fatalf("second Install = %v, %v, %v", b.SetID(), changed, err)
+	}
+	if err := ClearRestartPending(t.Context(), e.root, a.SetID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+		t.Fatalf("after the older run's clear, Install = %v, %v; want B's restart still pending", changed, err)
+	}
+	if err := ClearRestartPending(t.Context(), e.root, b.SetID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+		t.Fatalf("after B's own clear, Install = %v, %v; want unchanged", changed, err)
+	}
+}
+
+// A marker written by a release that recorded no set id is empty; it still
+// means a restart is pending, and a successful restart clears it.
+func TestRuntimeRestartMarkerAcceptsALegacyEmptyMarker(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	m, _, err := Install(t.Context(), e.client, e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(e.root, restartName)
+	if err := os.WriteFile(marker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+		t.Fatalf("legacy marker: Install = %v, %v; want changed", changed, err)
+	}
+	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(marker); !os.IsNotExist(err) {
+		t.Fatalf("legacy marker survived a restart: %v", err)
+	}
+}
+
+// A marker naming a set that never became current is rewritten to name
+// current, so a restart onto current can clear it rather than leaving the
+// runtime reported as changed on every run.
+func TestRuntimeRestartMarkerForANonCurrentSetIsRetargeted(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	m, _, err := Install(t.Context(), e.client, e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.root, restartName), []byte("0123456789abcdef\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || !changed {
+		t.Fatalf("Install = %v, %v; want changed", changed, err)
+	}
+	if err := ClearRestartPending(t.Context(), e.root, m.SetID()); err != nil {
+		t.Fatal(err)
+	}
+	if _, changed, err := Install(t.Context(), e.client, e.root); err != nil || changed {
+		t.Fatalf("after restart onto current, Install = %v, %v; want unchanged", changed, err)
+	}
+}
+
+// Clearing waits for the install lock, so it cannot interleave with another
+// run's swap.
+func TestRuntimeRestartMarkerClearWaitsForTheLock(t *testing.T) {
+	e := newInstallEnv(t)
+	e.publish("one")
+	m, _, err := Install(t.Context(), e.client, e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := lockRoot(t.Context(), e.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+	if err := ClearRestartPending(ctx, e.root, m.SetID()); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("clear under a held lock = %v, want the context deadline", err)
+	}
+	if _, err := os.Lstat(filepath.Join(e.root, restartName)); err != nil {
+		t.Fatalf("marker removed without the lock: %v", err)
 	}
 }
 

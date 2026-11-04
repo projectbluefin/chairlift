@@ -366,6 +366,9 @@ func dockerHost() ubluehelper.DockerHost {
 	enforce, _ := os.ReadFile("/sys/fs/selinux/enforce")
 	_, restoreconErr := exec.LookPath("restorecon")
 	_, semanageErr := exec.LookPath("semanage")
+	// installedSet is the set id Install made current in this run, shared
+	// by the Install and RestartDone closures below.
+	var installedSet string
 	return ubluehelper.DockerHost{
 		ImageUnits:       imageUnitErr == nil,
 		SELinuxEnforcing: strings.TrimSpace(string(enforce)) == "1",
@@ -389,11 +392,19 @@ func dockerHost() ubluehelper.DockerHost {
 			if err != nil {
 				return nil, false, err
 			}
+			installedSet = manifest.SetID()
 			data, err := json.Marshal(manifest)
 			return data, changed, err
 		},
-		CheckUnits:  func() error { return dockerbrew.CheckUnits(dockerbrew.UnitDir) },
-		RestartDone: func() error { return dockerbrew.ClearRestartPending(dockerbrew.Root) },
+		CheckUnits: func() error { return dockerbrew.CheckUnits(dockerbrew.UnitDir) },
+		// The restart this run performed was onto the set its own Install
+		// made current; only that set's marker may be cleared (#697).
+		RestartDone: func(ctx context.Context) error {
+			if installedSet == "" {
+				return errors.New("no Docker runtime was installed by this run")
+			}
+			return dockerbrew.ClearRestartPending(ctx, dockerbrew.Root, installedSet)
+		},
 		RuntimeInstalled: func() (bool, error) {
 			_, err := dockerbrew.ReadManifest(dockerbrew.Root)
 			if errors.Is(err, fs.ErrNotExist) {

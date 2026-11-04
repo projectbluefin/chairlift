@@ -959,7 +959,11 @@ An agent must not break these:
   `/var/lib/chairlift/docker/.restart-pending` marker before swapping
   `current` and reports the unchanged set as changed while it remains; the
   helper clears it (`dockerbrew.ClearRestartPending`) only after
-  `try-restart` succeeds, so an interrupted run still restarts next time. A
+  `try-restart` succeeds, so an interrupted run still restarts next time.
+  The marker names the set id it was written for, and the clear takes the
+  install lock and removes it only when it names the set that run installed
+  (an empty marker from an older release also clears), so an overlapping
+  run's newer swap keeps its pending restart (#697). A
   changed runtime restarts the daemon only when its socket reports no running
   containers; otherwise (or when that query fails) the restart waits for the
   next enable/update or a reboot, and the marker carries it. A

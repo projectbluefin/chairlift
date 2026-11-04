@@ -917,7 +917,13 @@ Enable runs in this order, after the Developer Mode prerequisite above:
      atomically, and prunes older sets (best-effort once the swap is done).
      Before the swap it writes a root-owned `.restart-pending` marker; while
      it exists, a rerun over the same set still reports a change, and the
-     helper clears it only after `try-restart` succeeds. A reinstall of the
+     helper clears it only after `try-restart` succeeds. The marker holds the
+     set id it was written for; `ClearRestartPending(ctx, root, id)` takes the
+     install lock and removes it only when it names `id`, the set that run's
+     `Install` made current, or is empty (a marker from a release that
+     recorded no id). An overlapping run that swapped in a newer set
+     therefore keeps its pending restart. A rerun over `current` whose marker
+     names another set rewrites it to name `current`. A reinstall of the
      same set moves the old directory aside for pruning, and a `current` whose
      target is missing reads as not installed. It refuses an install root or
      `current` that is a foreign symlink or not root-owned. Bottle downloads
