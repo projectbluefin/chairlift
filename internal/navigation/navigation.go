@@ -23,10 +23,10 @@ const helpRouteName = "help"
 // surface, and a rename can never drift the two apart.
 const AgentModeRoute = "agents"
 
-// DXModeRoute is the canonical sidebar route the --dx-mode launch intent opens.
+// DXModeRoute is the canonical route the --dx-mode launch intent opens.
 // internal/app resolves the launch decision through this constant, so the launch
-// intent and the sidebar row navigate the same surface.
-const DXModeRoute = "features"
+// intent reaches the Developer Mode detail directly.
+const DXModeRoute = "developer"
 
 // Kind classifies a route by the way a user enters it.
 type Kind string
@@ -231,6 +231,13 @@ var routes = []Item{
 			{Page: "maintenance_page", Group: "reset_group"},
 			{Page: "updates_page", Group: "bootc_updates_group"},
 		},
+	},
+	{
+		Name:   "developer",
+		Title:  "Developer Mode",
+		Kind:   KindDetail,
+		Parent: "features",
+		Refs:   refsOn("features_page", "dx_group"),
 	},
 }
 

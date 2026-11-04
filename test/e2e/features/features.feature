@@ -30,6 +30,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Docker discloses its system and command-line Homebrew formulae without enabling anything
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     And I record the Features switches and mutation evidence
     Then each Features switch is named and separately keyboard reachable
     And I expand the "Enable Docker" package disclosure with the keyboard
@@ -52,6 +53,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Both WSL engines disclose only the packages their selected backend installs
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     And I record the Features switches and mutation evidence
     And I expand the "WSL Mode" package disclosure with the keyboard
     Then the "WSL Mode" package disclosure shows exactly
@@ -73,6 +75,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Default Developer Mode discloses the Dev Container CLI but no optional installations
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     And I record the Features switches and mutation evidence
     And I expand the "Developer Mode" package disclosure with the keyboard
     Then the "Developer Mode" package disclosure shows exactly
@@ -85,6 +88,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Developer Mode discloses Pulp and every configured developer collection entry
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     And I record the Features switches and mutation evidence
     And I expand the "Developer Mode" package disclosure with the keyboard
     And I expand the "Dakota dev flatpaks" package disclosure with the keyboard
@@ -211,19 +215,51 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Showing installed Gaming Mode and Developer Mode runs no mutation
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And I do not see "IDEs and terminal editors"
     And the application log does not contain "brew install devcontainer"
-    And the switch in the "Gaming Mode" row is on
+    When I click the "Back to Features" button
+    Then the switch in the "Gaming Mode" row is on
     And the action journal is empty
     And the fake flatpak was never asked to "install"
     And the fake flatpak was never asked to "uninstall"
     And the fake dconf was never asked to "dump"
 
+  @developer-detail-smoke @stub.features-gaming-none @stub.features-devmenu
+  Scenario: Developer detail offers native IDE installs and keeps its activity separate from Gaming
+    Given ChairLift is running
+    When I open the "Features" page
+    And I open the Developer Mode detail
+    Then the Developer Mode switch shows this account's developer-group membership
+    And Development Apps offers exactly these native IDE rows
+      | name               | source   | remote   |
+      | Visual Studio Code | Homebrew |          |
+      | VSCodium           | Homebrew |          |
+      | Cursor             | Flatpak  | FlatPark |
+      | JetBrains Toolbox  | Homebrew |          |
+      | Antigravity        | Flatpak  | FlatPark |
+      | Zed                | Flatpak  | Flathub  |
+    When I capture the Developer Mode detail evidence
+    And I toggle the switch in the "Developer Mode" row
+    Then the Developer Mode change is journalled as a dry run of the fixed helper
+    And the Developer Mode switch returns to its restored state
+    And Setup activity is the first Features preference group
+    And the direct Developer activity matches the previewed action
+    When I capture the Developer Mode detail evidence
+    And I click the "Back to Features" button
+    Then the Features page shows no "Setup activity" group
+    And the switch in the "Gaming Mode" row accepts input
+    When I toggle the switch in the "Gaming Mode" row
+    Then Setup activity is the first Features preference group
+    When I open the Developer Mode detail
+    Then the direct Developer activity matches the previewed action
+
   @stub.features-gaming-none @stub.features-devmenu
   Scenario: Developer Mode previews the fixed helper and restores the switch
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     When I toggle the switch in the "Developer Mode" row
     Then the Developer Mode change is journalled as a dry run of the fixed helper
@@ -238,6 +274,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Developer Mode previews only the two Custom Command Menu entries
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     When I toggle the switch in the "Developer Mode" row
     Then the Custom Command Menu change is previewed for the two developer entries only
@@ -248,6 +285,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A dry-run Developer Mode change starts no feed onboarding
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     When I toggle the switch in the "Developer Mode" row
     Then the Developer Mode preview toast is shown
@@ -257,6 +295,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Previewing Developer Mode never runs optional Pulp feeds or collection installations
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     When I toggle the switch in the "Developer Mode" row
     Then the Developer Mode change is journalled as a dry run of the fixed helper
@@ -271,6 +310,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Disabling a running WSL machine previews stop without deleting data
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And I expand the "WSL Mode" package disclosure with the keyboard
     Then I see "Virtual Machine Engine"
@@ -294,6 +334,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Stopping Lima previews data-preserving shutdown without changing Developer Mode
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     When I expand the "WSL Mode" package disclosure with the keyboard
     And I choose the "Lima" WSL engine
@@ -314,6 +355,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: System Docker previews parent promotion before its fixed helper and stays retryable
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     And the "Enable Docker" row says "Enables Developer Mode first if needed, then turns on system Docker for all accounts. Administrator approval is required."
@@ -346,6 +388,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Setup activity exposes real pending reads and retries a failed preview without changing switches
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When Docker's system-unit check is held before failing
@@ -390,6 +433,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Docker previews native VS Code setup without creating user configuration
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When I toggle the switch in the "Enable Docker" row
@@ -403,6 +447,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Docker's editor preview preserves existing VS Code JSONC byte for byte
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When I toggle the switch in the "Enable Docker" row
@@ -415,6 +460,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: An editor preview failure never claims Docker access changed or leaks raw diagnostics
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When I toggle the switch in the "Enable Docker" row
@@ -435,6 +481,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: An unresponsive system Docker daemon remains stoppable in preview without demoting Developer Mode
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row is on
     And the switch in the "Enable Docker" row accepts input
@@ -453,6 +500,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Docker that is not installed yet is offered as an administrator-approved Homebrew install
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And I see "Enable Docker"
     And the switch in the "Enable Docker" row is off
@@ -472,6 +520,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A running Docker this account cannot use is off and offers to grant access
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row accepts input
@@ -489,6 +538,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: Enabling system Docker previews retiring the rootless Docker an earlier release set up
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When I toggle the switch in the "Enable Docker" row
@@ -503,6 +553,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A computer without VS Code skips editor setup instead of failing it
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row accepts input
     When I toggle the switch in the "Enable Docker" row
@@ -522,6 +573,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A masked system socket keeps Docker visible and explains administrator repair
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
     And the "Enable Docker" row says "Docker's system units are unavailable. Ask your administrator to repair or unmask them."
@@ -532,6 +584,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A running system service remains stoppable when its paired socket unit is missing
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the Developer Mode switch shows this account's developer-group membership
     And the switch in the "Enable Docker" row is on
     And the switch in the "Enable Docker" row accepts input
@@ -547,6 +600,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: The user runtime directory does not gate system Docker
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row accepts input
     And the action journal is empty
@@ -555,6 +609,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: An unreadable system manager is an observation failure
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the switch in the "Enable Docker" row refuses input
     And the "Enable Docker" row says "Couldn't check Docker's system service."
     And the action journal is empty
@@ -563,6 +618,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: One running unit cannot enable Docker's control when its paired read failed
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the switch in the "Enable Docker" row is off
     And the switch in the "Enable Docker" row refuses input
     And the "Enable Docker" row says "Couldn't check Docker's system service."
@@ -572,6 +628,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Gaming Mode, Printe
   Scenario: A failed system read preserves the observed running Docker switch
     Given ChairLift is running
     When I open the "Features" page
+    And I open the Developer Mode detail
     Then the switch in the "Enable Docker" row is on
     And the switch in the "Enable Docker" row accepts input
     When Docker's system manager becomes unavailable during an engine refresh

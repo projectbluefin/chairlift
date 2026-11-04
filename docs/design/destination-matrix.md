@@ -50,7 +50,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
 | `features_page` | `bluefin_cli_group` | Features Bluefin CLI switch; `buildBluefinCLIGroup`, `runBluefinCLI`, `internal/bluefincli` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
-| `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
+| `features_page` | `dx_group` | Developer Mode detail under Features, hosting Developer Mode, WSL, system Docker, and six native Development Apps rows with source/status/Install actions (ublue-os Homebrew Visual Studio Code, VSCodium, JetBrains Toolbox; system FlatPark Cursor and Antigravity; system Flathub Zed). Sublime Text is deliberately excluded for now by user approval; no personal taps. Shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |
 | `features_page` | `printers_group` | Features Printers; `onPrinterAppToggled`, `internal/printerapp` lifecycle and readiness |
 | `features_page` | `compass_group` | Features Compass launcher; `buildCompassGroup`, `runCompassToggle`, `internal/compass` over `internal/flatpak` from the image's FlatPark system remote |
@@ -206,7 +206,7 @@ for each mutation and observation.
 | Keyboard Shortcuts | `Window.onShowShortcuts`; advertised and registered inventory from `internal/navigation` |
 | About Control Center | `Window.onShowAbout`; application About dialog, not a machine-information route |
 | `--ask-bluefin` | `internal/app` command-line handler and `internal/agentmode.Dispatch`; launch ready Goose (off the GTK thread) without presenting a window, otherwise open Agents with prerequisite, open-session, or start-failure feedback; `--prompt-file` prefills Goose's first message on the next launch |
-| `--dx-mode` | `internal/app` command-line handler and `Window.NavigateToDXModePage`; open Control Center directly to the Features page where Developer Mode is toggled |
+| `--dx-mode` | `internal/app` command-line handler and `Window.NavigateToDXModePage`; enter the Developer Mode detail, keeping Features selected and Back returning there |
 | Quit / close while updating | `internal/app` lifecycle and window guard consulting `UpdateShell.Busy` |
 
 The visible primary inventory is fixed for the session and Alt+number compacts

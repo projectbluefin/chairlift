@@ -78,6 +78,8 @@ var foundations = []Foundation{
 	// The Open Gaming Collective is the default on a gaming image; see
 	// DefaultFoundationID.
 	{ID: "open-gaming-collective", Name: "Open Gaming Collective"},
+	{ID: "asus", Name: "ASUS"},
+	{ID: "framework", Name: "Framework"},
 }
 
 // DefaultID is the selection a fresh install starts from on an ordinary

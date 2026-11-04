@@ -100,6 +100,7 @@ func (uh *UserHome) buildFeaturesPage() {
 	if compassEnabled {
 		uh.buildCompassGroup(page)
 	}
+	uh.buildHardwareGroup(page)
 
 	// A host that offers nothing here — no ublue-os descriptor, no Podman,
 	// and no optional features — would otherwise show a blank page. The
@@ -370,15 +371,14 @@ func (uh *UserHome) buildBluefinGroups(page *adw.PreferencesPage) bool {
 		dxEnabled, gamingEnabled)
 
 	if gamingEnabled {
+		uh.gamingSetupActivity = uh.buildSetupActivity(page)
 		uh.buildGamingGroup(page, status)
 	}
-
-	uh.buildSetupActivity(page)
 
 	// Optional user tools remain discoverable even without installed access
 	// actions; the privileged switch stays insensitive and explains why.
 	if dxEnabled {
-		uh.buildDeveloperGroup(page, status)
+		uh.buildDeveloperEntryRow(page, status)
 	}
 	return true
 }
@@ -421,6 +421,28 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	uh.developerToggle = toggle
 	uh.developerEnabled = status.Developer
 	uh.buildDeveloperOptions(group, status)
+}
+
+// buildDeveloperEntryRow builds the entry row to Developer Mode detail subpage.
+func (uh *UserHome) buildDeveloperEntryRow(page *adw.PreferencesPage, status ublue.Status) {
+	group := adw.NewPreferencesGroup()
+	group.SetTitle("Developer")
+	row := adw.NewActionRow()
+	presentation := pageview.DeveloperRow(status.Developer)
+	row.SetTitle(presentation.Title)
+	row.SetSubtitle(presentation.Subtitle)
+	row.SetActivatable(true)
+	icon := gtk.NewImageFromIconName("go-next-symbolic")
+	row.AddSuffix(&icon.Widget)
+	rowActivatedCb := func(r adw.ActionRow) {
+		if uh.openDeveloperDetail != nil {
+			uh.openDeveloperDetail()
+		}
+	}
+	row.ConnectActivated(&rowActivatedCb)
+	group.Add(&row.Widget)
+	page.Add(group)
+	uh.developerEntryRow = row
 }
 
 func (uh *UserHome) buildGamingGroup(page *adw.PreferencesPage, status ublue.Status) {
@@ -687,14 +709,14 @@ func (uh *UserHome) runDeveloperToggle(enabled bool, toggle *guardedSwitch, row 
 	}
 	request := devsetup.Request{Developer: uh.developerEnabled, ChangeDeveloper: enabled != uh.developerEnabled, EnableDeveloper: enabled, Preview: dryrun.Enabled()}
 	tasks := uh.developerPostTasks(enabled, request.ChangeDeveloper || retry)
-	if !uh.setupActivity.begin(row.GetTitle(), setupStages(request.ChangeDeveloper, tasks), retry, func() {
+	if !uh.developerSetupActivity.begin(row.GetTitle(), setupStages(request.ChangeDeveloper, tasks), retry, func() {
 		uh.runDeveloperToggle(enabled, toggle, row, true)
 	}) {
 		uh.developerGate.Reset()
 		sgtk.RunOnMainThread(func() { toggle.set(uh.developerEnabled) })
 		return
 	}
-	previous := uh.setupActivity.completed
+	previous := uh.developerSetupActivity.completed
 	before := row.GetSubtitle()
 	uh.setDeveloperSensitive(false)
 	setActivitySpinner(uh.developerSpinner, true)
@@ -725,7 +747,10 @@ func (uh *UserHome) runDeveloperToggle(enabled bool, toggle *guardedSwitch, row 
 			if !request.Preview && request.ChangeDeveloper && result.Developer == enabled {
 				row.SetSubtitle(pageview.DeveloperResultSubtitle(enabled))
 			}
-			uh.setupActivity.finish(result, request.Preview)
+			uh.developerSetupActivity.finish(result, request.Preview)
+			if uh.developerEntryRow != nil {
+				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(result.Developer).Subtitle)
+			}
 			uh.setDeveloperSensitive(true)
 			if menuErr != nil {
 				log.Printf("views: updating custom command menu: %v", menuErr)
@@ -796,7 +821,7 @@ func (uh *UserHome) onGamingToggledConfirmed(enabled bool, toggle *guardedSwitch
 
 func (uh *UserHome) runGamingConfirmed(enabled bool, toggle *guardedSwitch, row *adw.ExpanderRow, retry bool) {
 	beforeActive := toggle.widget.GetState()
-	if !uh.setupActivity.begin(row.GetTitle(), []devsetup.Stage{devsetup.Tools, devsetup.Verify}, retry, func() {
+	if !uh.gamingSetupActivity.begin(row.GetTitle(), []devsetup.Stage{devsetup.Tools, devsetup.Verify}, retry, func() {
 		if uh.gamingGate.TryStart() {
 			uh.runGamingConfirmed(enabled, toggle, row, true)
 		}
@@ -812,7 +837,7 @@ func (uh *UserHome) runGamingConfirmed(enabled bool, toggle *guardedSwitch, row 
 
 	go func() {
 		progressCb := func(step, total int, name string) {
-			uh.setupActivity.detail(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
+			uh.gamingSetupActivity.detail(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
 			sgtk.RunOnMainThread(func() {
 				row.SetSubtitle(pageview.GamingWorkingStepSubtitle(enabled, step, total, name))
 			})
@@ -838,7 +863,7 @@ func (uh *UserHome) runGamingConfirmed(enabled bool, toggle *guardedSwitch, row 
 				}
 				return refreshErr
 			}},
-		}, nil, uh.setupActivity.report)
+		}, nil, uh.gamingSetupActivity.report)
 		for _, failure := range failures {
 			log.Printf("views: gaming component failed: %v", failure)
 		}
@@ -853,7 +878,7 @@ func (uh *UserHome) runGamingConfirmed(enabled bool, toggle *guardedSwitch, row 
 			defer uh.gamingGate.Reset()
 			setActivitySpinner(uh.gamingSpinner, false)
 			toggle.widget.SetSensitive(true)
-			uh.setupActivity.finish(setupResult, preview)
+			uh.gamingSetupActivity.finish(setupResult, preview)
 
 			decision := actionmsg.GamingMode(dryrun.Enabled(), enabled, len(changed), len(failures), len(kept))
 			active := beforeActive

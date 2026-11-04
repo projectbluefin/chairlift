@@ -768,6 +768,14 @@ An agent must not break these:
   Routine maintenance runs after updates. ChairLift's Homebrew provider and
   the separate `uupd` Brew Upgrade stage have different owners; verify the
   failing path before proposing an automatic cleanup or repair.
+- **Developer Mode's six-entry IDE catalog uses only verified sources.**
+  Homebrew provides Visual Studio Code, VSCodium, and JetBrains Toolbox from
+  `ublue-os` taps only, never `castrojo` or other personal taps. Cursor and
+  Antigravity use system Flatpaks from FlatPark; Zed uses a system Flatpak from
+  Flathub. Sublime Text is deliberately excluded for now by user approval,
+  not a blocked catalog requirement. Never invent package tokens. Native rows show
+  source/status and Install actions without opening Bazaar or requiring Developer
+  Mode enabled. GNOME Builder, Kate, and individual JetBrains IDE rows are excluded.
 - **Apps is Homebrew-only and refresh-safe.** Its only runtime configuration
   groups are `brew_bundles_group` and `brew_group`: app collections come first
   as checkbox rows with a unified Install action (curated collections default
@@ -890,7 +898,9 @@ An agent must not break these:
   step (`devsetup.ErrSkipped`) without an error toast; an editor failure
   remains retryable and never reverses access. Preview writes no settings or
   marker and launches no editor
-  CLI. Editor selection/installation remains in Bazaar or Apps. Game Mode is
+  CLI. Editor selection/installation uses Development Apps in Developer Mode:
+  ublue-os Homebrew for VS Code, VSCodium, and JetBrains Toolbox; system FlatPark
+  for Cursor and Antigravity; system Flathub for Zed. Game Mode is
   a privileged switch to the `-gaming` system image variant (Steam, Gamescope,
   and an Open Gaming Collective kernel) guarded by a confirmation warning that
   a reboot is required. Gaming Mode below it manages the optional gaming

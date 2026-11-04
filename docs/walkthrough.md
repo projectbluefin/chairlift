@@ -321,9 +321,17 @@ no Developer Mode, no Gaming Mode, no Printers, no Compass, no optional features
 says **Nothing to Set Up Here** rather than showing an empty screen.
 
 Agent Mode and Troubleshooting have their own **Agents** page.
-Developer and Gaming actions retain their row feedback alongside the shared
-Setup activity checklist; errors are shown immediately rather than hidden
-behind an older message.
+Open the **Developer Mode** detail from Features for Developer Mode, WSL, and
+Docker controls, or use `--dx-mode` to enter it directly. **Development Apps**
+shows source, installed status, and an individual **Install** action for Visual
+Studio Code, VSCodium, and JetBrains Toolbox (`ublue-os` Homebrew taps only),
+Cursor and Antigravity (system FlatPark), and Zed (system Flathub): six entries.
+Sublime Text is deliberately excluded for now by user approval. No Bazaar launch
+or enabled Developer Mode toggle is required. **Back to Features** returns to
+Gaming and other features.
+Developer and Gaming operations each retain their own
+Setup activity checklist; errors are shown immediately rather than hidden behind
+an older message.
 
 ---
 

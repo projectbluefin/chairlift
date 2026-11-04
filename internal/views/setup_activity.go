@@ -24,8 +24,8 @@ type setupActivity struct {
 	completed   map[devsetup.Stage]bool
 }
 
-func (uh *UserHome) buildSetupActivity(page *adw.PreferencesPage) {
-	uh.setupActivity = newSetupActivity(page, devsetup.Stages[:])
+func (uh *UserHome) buildSetupActivity(page *adw.PreferencesPage) *setupActivity {
+	return newSetupActivity(page, devsetup.Stages[:])
 }
 
 func newSetupActivity(page *adw.PreferencesPage, stages []devsetup.Stage) *setupActivity {

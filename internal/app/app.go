@@ -261,7 +261,7 @@ func (a *Application) onCommandLine(cl *gio.ApplicationCommandLine) int32 {
 	if agentMode && running && a.window != nil {
 		a.window.NavigateToAgentsPage()
 	}
-	// A running instance opens the Features page directly for DX Mode.
+	// A running instance opens the Developer Mode detail directly for DX Mode.
 	if dxMode && running && a.window != nil {
 		a.window.NavigateToDXModePage()
 	}

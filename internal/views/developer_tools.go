@@ -320,6 +320,11 @@ func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
 			item.toggle.widget.SetSensitive(sensitive && item.allowed)
 		}
 	}
+	if uh.developerApps != nil {
+		for _, item := range uh.developerApps.rows {
+			item.button.SetSensitive(sensitive && item.checked && !item.status.Installed && (item.status.Available || item.status.Err != nil))
+		}
+	}
 }
 
 func wslSubtitle(backend string, state devtools.WSLState, err error) string {
@@ -385,7 +390,7 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 	var docker devtools.DockerState
 	awaitingLogin := item.awaitingLogin
 	progress := func(stage string) {
-		uh.setupActivity.detail(stage)
+		uh.developerSetupActivity.detail(stage)
 		sgtk.RunOnMainThread(func() { item.row.SetSubtitle(stage) })
 	}
 	tasks := []devsetup.Task{
@@ -478,14 +483,14 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 	if post {
 		tasks = append(tasks, uh.developerPostTasks(true, true)...)
 	}
-	if !uh.setupActivity.begin(title, setupStages(request.ChangeDeveloper, tasks), retry, func() {
+	if !uh.developerSetupActivity.begin(title, setupStages(request.ChangeDeveloper, tasks), retry, func() {
 		uh.runDeveloperOption(item, enabled, true, post)
 	}) {
 		uh.developerGate.Reset()
 		sgtk.RunOnMainThread(func() { item.toggle.set(item.active) })
 		return
 	}
-	previous = uh.setupActivity.completed
+	previous = uh.developerSetupActivity.completed
 	uh.setDeveloperSensitive(false)
 	setActivitySpinner(item.spinner, true)
 	item.row.SetSubtitle("Preparing…")
@@ -510,6 +515,9 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 			defer uh.developerGate.Reset()
 			setActivitySpinner(item.spinner, false)
 			uh.developerEnabled = result.Developer
+			if uh.developerEntryRow != nil {
+				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(result.Developer).Subtitle)
+			}
 			if !request.Preview {
 				item.awaitingLogin = awaitingLogin
 			}
@@ -547,7 +555,7 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 				}
 			}
 			item.toggle.set(item.active)
-			uh.setupActivity.finish(result, request.Preview)
+			uh.developerSetupActivity.finish(result, request.Preview)
 			uh.setDeveloperSensitive(true)
 			if menuErr != nil {
 				log.Printf("views: developer menu update failed: %v", menuErr)
