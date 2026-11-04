@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.4
-last_updated: 2026-11-03
+version: 2.1.5
+last_updated: 2026-11-04
 tags:
   - testing
   - gtk
@@ -257,10 +257,20 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 - **A current unit file is not a current daemon.** Reproduce interrupted user
   service migrations with the replacement file already written and the old
   daemon still running. Native HTTP health does not prove policy adoption.
-  Agent Mode stamps the successful systemd `InvocationID` in its owned unit
-  only after reload/restart; missing or mismatched stamps retry. Observe that
-  ID and the actual page readiness on a private user manager. Do not add a
-  root read route: even same-UID `/proc/<pid>/environ` reads may be denied.
+  Agent Mode accepts a matching live `InvocationID`, or a loaded current unit
+  (`NeedDaemonReload=no`) whose main process started strictly after its mtime.
+  Proven adoption re-stamps without restarting; unproven policy takes the
+  reload/restart path. A matching stamp left dirty by an older release gets
+  only `daemon-reload` when the manager successfully reports
+  `NeedDaemonReload=yes`; failed observations do not invent reload state.
+  Every invocation-stamp write must then `daemon-reload`, even though it changes
+  only a comment: its new mtime otherwise invalidates adoption after an automatic
+  service restart. Failed stamp-commit reloads remove the new stamp.
+  Model `NeedDaemonReload` from actual file writes in test doubles rather than
+  pinning it to `no`, and test automatic invocation changes after both adoption
+  and restart. Observe the ID, reload state and page readiness on a private user
+  manager. Do not add a root read route: even same-UID `/proc/<pid>/environ`
+  reads may be denied.
 - **behave drops scenario-scoped context attributes** at scenario end; run-wide
   counters live in `context.config.userdata`.
 - **Homebrew readers escape the process group.** Teardown kills the group,
@@ -368,6 +378,8 @@ Systemd invocation identity: Context7 `/systemd/systemd`,
 [`systemctl`](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
 `systemctl --user show chairlift-llmman.service --property=InvocationID --value`
 observes the service invocation; `daemon-reload` alone does not restart it.
+Unit-file comment writes still change the fragment mtime, so the manager must
+reload after invocation-stamp writes to clear `NeedDaemonReload`.
 llmman's [peer configuration source](https://github.com/llmmanorg/llmman/blob/main/src/config.rs)
 uses an explicitly set empty `LLMMAN_PEERS` before saved aggregation settings.
 

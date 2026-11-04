@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -98,19 +99,24 @@ func TestEnvFragmentPublishesOnlyOllamaHost(t *testing.T) {
 // host isolates every seam: a temp config dir, a fake llmman beside a fake
 // brew, a recorded command runner, and a recorded bundle install.
 type host struct {
-	config  string
-	exe     string
-	calls   []string
-	brew    []string
-	bundles []string
-	fail    map[string]error
-	outputs map[string]string
+	config     string
+	exe        string
+	calls      []string
+	brew       []string
+	bundles    []string
+	fail       map[string]error
+	outputs    map[string]string
+	loadedUnit os.FileInfo
 }
 
 func newHost(t *testing.T) *host {
 	t.Helper()
 	h := &host{config: t.TempDir(), fail: map[string]error{}, outputs: map[string]string{}}
 	h.outputs["systemctl --user show "+ServiceName+" --property=InvocationID --value"] = strings.Repeat("a", 32)
+	// By default the running process predates any unit a test writes, so
+	// only a matching stamp proves adoption; tests of the start-time proof
+	// override this with setServiceState.
+	h.setServiceState("active", "no", time.Unix(1, 0), strings.Repeat("a", 32))
 	bin := t.TempDir()
 	h.exe = filepath.Join(bin, "llmman")
 	if err := os.WriteFile(h.exe, []byte("#!/bin/sh\n"), 0o755); err != nil {
@@ -143,7 +149,22 @@ func newHost(t *testing.T) *host {
 	run = func(_ context.Context, name string, args ...string) (string, error) {
 		call := strings.TrimSpace(filepath.Base(name) + " " + strings.Join(args, " "))
 		h.calls = append(h.calls, call)
-		return h.outputs[call], h.fail[call]
+		out, err := h.outputs[call], h.fail[call]
+		if err != nil {
+			return out, err
+		}
+		switch call {
+		case "systemctl --user daemon-reload":
+			h.loadedUnit, _ = os.Stat(filepath.Join(h.config, unitRel))
+			stateCall := "systemctl --user " + strings.Join(serviceStateArgs, " ")
+			h.outputs[stateCall] = strings.ReplaceAll(h.outputs[stateCall], "NeedDaemonReload=yes", "NeedDaemonReload=no")
+		case "systemctl --user " + strings.Join(serviceStateArgs, " "):
+			info, statErr := os.Stat(filepath.Join(h.config, unitRel))
+			if statErr == nil && (h.loadedUnit == nil || !os.SameFile(info, h.loadedUnit) || !info.ModTime().Equal(h.loadedUnit.ModTime())) {
+				out = strings.ReplaceAll(out, "NeedDaemonReload=no", "NeedDaemonReload=yes")
+			}
+		}
+		return out, nil
 	}
 	t.Cleanup(func() {
 		for _, f := range saved {
@@ -151,6 +172,29 @@ func newHost(t *testing.T) *host {
 		}
 	})
 	return h
+}
+
+// setServiceState establishes the initial manager observation. A loaded unit
+// records the real file identity and mtime; later stamp writes require reload.
+func (h *host) setServiceState(active, needReload string, mainStart time.Time, invocation string) {
+	h.serviceOutput(active, needReload, mainStart, invocation)
+	if needReload == "no" {
+		h.loadedUnit, _ = os.Stat(filepath.Join(h.config, unitRel))
+	}
+}
+
+func (h *host) serviceOutput(active, needReload string, mainStart time.Time, invocation string) {
+	h.outputs["systemctl --user "+strings.Join(serviceStateArgs, " ")] = "ActiveState=" + active + "\n" +
+		"NeedDaemonReload=" + needReload + "\n" +
+		"ExecMainStartTimestamp=@" + strconv.FormatInt(mainStart.Unix(), 10) + "\n" +
+		"InvocationID=" + invocation + "\n"
+}
+
+// startInvocation models Restart=on-failure: only the process identity and start
+// time change; the manager does not reload the unit from disk.
+func (h *host) startInvocation(mainStart time.Time, invocation string) {
+	h.serviceOutput("active", "no", mainStart, invocation)
+	h.outputs["systemctl --user show "+ServiceName+" --property=InvocationID --value"] = invocation
 }
 
 func (h *host) exists(t *testing.T, rel string) bool {

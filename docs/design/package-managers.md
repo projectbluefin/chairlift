@@ -1125,11 +1125,30 @@ Agents page's Manage Models row opens (#568).
 
 [`migration.go`](../../internal/aistack/migration.go) reconciles only an
 existing owned service. Matching file bytes alone do not prove that the daemon
-adopted local-only settings: `restartService` reloads, restarts, validates the
-live systemd `InvocationID`, and only then stamps that ID as a unit comment.
-A missing/mismatched stamp retries reconciliation; a verified current
-invocation does not restart, and an absent unit stays disabled. Reconciliation
-failure preserves the unstamped unit and best-effort stops the old daemon.
+adopted local-only settings: `restartService` reloads, restarts, and validates the
+live systemd `InvocationID`. It and the adoption path share
+`commitServiceInvocation`, which atomically writes that ID as a unit comment and
+reloads the manager without restarting the proven daemon. Reload failure removes
+the stamp so it cannot falsely verify a later attempt. A comment-only unit write
+still changes its mtime: the final reload keeps `NeedDaemonReload=no` so an
+automatic restart can be adopted on the next launch instead of restarted again.
+A missing/mismatched stamp retries reconciliation; an unchanged verified
+invocation with a clean loaded unit needs neither reload nor restart. A matching
+stamp with observed `NeedDaemonReload=yes` left by an older release gets only
+`daemon-reload`, without rewriting or restarting. Failed observations retain the
+invocation-only fallback without inventing reload state. An absent unit stays
+disabled.
+Systemd's report also verifies one: with the unit body equal to `RenderUnit`,
+`NeedDaemonReload=no`, and an `ExecMainStartTimestamp` (read with
+`--timestamp=unix`) strictly after the file's mtime, the running daemon was
+started from the current file. This can follow a reboot or automatic service
+restart; the live ID is stamped without restarting the daemon. A process older
+than the write, a manager needing reload, or an unparseable timestamp does not
+prove adoption. A systemctl that rejects the timestamp option makes observation
+fail; reconciliation then checks the live invocation stamp or safely restarts.
+An inactive or failed service with the current loaded unit needs no migration.
+Reconciliation failure preserves the management unit and best-effort stops the
+managed daemon; failed stamp commits leave the unit unstamped.
 Live startup waits up to ten seconds for health after reconciliation; preview
 performs one bounded probe and writes nothing.
 
