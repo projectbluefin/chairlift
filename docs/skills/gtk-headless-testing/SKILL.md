@@ -1,8 +1,8 @@
 ---
 name: gtk-headless-testing
 description: Use when deciding where tests can run without puregotk or GTK libraries, or when writing or debugging the behave AT-SPI suite under test/e2e/features.
-version: 2.1.4
-last_updated: 2026-11-03
+version: 2.1.5
+last_updated: 2026-11-04
 tags:
   - testing
   - gtk
@@ -225,6 +225,28 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   well as empty preferences: restoring an enabled setting must not expose the
   whole section. Livery's compact-section scenario checks each header before
   expanding it and verifies that expansion writes no settings or icon files.
+- **A moved control needs every driver migrated.** Docker and the Developer
+  Mode switch live on the Developer Mode detail, not the Features overview.
+  The live `docker_system_integration.py` driver must enter that detail on
+  every launch, including its new-group login, using the same keyboard row
+  navigation and Back-to-Features readiness assertion as the behave suite.
+  Searching the overview for the old switch fails before any helper action;
+  a dry-run behave pass alone does not cover the separate live driver.
+- **Execute generated startup argv, including its second run.** Pinned
+  Dakota's uutils cp 0.12.0 accepts the first `cp -PT --remove-destination`
+  from current to absent active, then rejects the existing symlink-to-directory
+  destination on restart. Static unit-string assertions cannot catch that.
+  `TestDockerRuntimeActivation` executes the generated locked `ln -P -fT`
+  activation repeatedly and verifies serialization against the install lock.
+  Keep actual link metadata and SELinux enforcement in live failure artifacts;
+  neither a disabled host nor reading policy proves enforcing execution.
+- **An off switch cannot provide a stop prerequisite.** A running Docker
+  daemon that this account cannot access reads off. Legacy-runtime migration
+  must not tell that person to toggle it off or merely Retry. Preserve the
+  runtime admission refusal and surface the existing fixed terminal disable
+  command as a visible prerequisite, explicitly warning that it stops running
+  containers. Test the exported provider's real helperexec failure path and
+  the rendered row, not only the helper's stderr.
 - **Never read tags from `scenario.effective_tags`.** It is a set, so
   `@stub.a @stub.b` ran `b` before `a` and a refining stub was overwritten by
   its base. `environment.py`'s `before_scenario` builds the list from
@@ -252,10 +274,20 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
 - **A current unit file is not a current daemon.** Reproduce interrupted user
   service migrations with the replacement file already written and the old
   daemon still running. Native HTTP health does not prove policy adoption.
-  Agent Mode stamps the successful systemd `InvocationID` in its owned unit
-  only after reload/restart; missing or mismatched stamps retry. Observe that
-  ID and the actual page readiness on a private user manager. Do not add a
-  root read route: even same-UID `/proc/<pid>/environ` reads may be denied.
+  Agent Mode accepts a matching live `InvocationID`, or a loaded current unit
+  (`NeedDaemonReload=no`) whose main process started strictly after its mtime.
+  Proven adoption re-stamps without restarting; unproven policy takes the
+  reload/restart path. A matching stamp left dirty by an older release gets
+  only `daemon-reload` when the manager successfully reports
+  `NeedDaemonReload=yes`; failed observations do not invent reload state.
+  Every invocation-stamp write must then `daemon-reload`, even though it changes
+  only a comment: its new mtime otherwise invalidates adoption after an automatic
+  service restart. Failed stamp-commit reloads remove the new stamp.
+  Model `NeedDaemonReload` from actual file writes in test doubles rather than
+  pinning it to `no`, and test automatic invocation changes after both adoption
+  and restart. Observe the ID, reload state and page readiness on a private user
+  manager. Do not add a root read route: even same-UID `/proc/<pid>/environ`
+  reads may be denied.
 - **behave drops scenario-scoped context attributes** at scenario end; run-wide
   counters live in `context.config.userdata`.
 - **Homebrew readers escape the process group.** Teardown kills the group,
@@ -363,6 +395,8 @@ Systemd invocation identity: Context7 `/systemd/systemd`,
 [`systemctl`](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
 `systemctl --user show chairlift-llmman.service --property=InvocationID --value`
 observes the service invocation; `daemon-reload` alone does not restart it.
+Unit-file comment writes still change the fragment mtime, so the manager must
+reload after invocation-stamp writes to clear `NeedDaemonReload`.
 llmman's [peer configuration source](https://github.com/llmmanorg/llmman/blob/main/src/config.rs)
 uses an explicitly set empty `LLMMAN_PEERS` before saved aggregation settings.
 

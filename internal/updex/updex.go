@@ -30,12 +30,33 @@ const (
 	// Makefile, which requires PREFIX=/usr (the default) to match.
 	HelperPath = "/usr/bin/chairlift-updex-helper"
 
+	// DefaultTimeout bounds an unprivileged read (listing or checking
+	// features).
 	DefaultTimeout = 5 * time.Minute
+
+	// AuthenticationAllowance is how much longer the GUI waits than the
+	// helper's own budget (updexhelper.Timeout). The GUI's clock also runs
+	// while the PolicyKit prompt is open, and the helper's starts only after
+	// authentication; internal/ublue carries the same allowance for the
+	// same reason.
+	AuthenticationAllowance = 5 * time.Minute
 )
 
-// DefaultContext returns a context with the default timeout
+// DefaultContext returns a context for an unprivileged read.
 func DefaultContext() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), DefaultTimeout)
+}
+
+// MutationContext returns a context for one privileged helper command
+// (updexhelper.CommandEnableFeature, CommandDisableFeature, or CommandUpdate):
+// the helper's own budget for that command plus AuthenticationAllowance.
+func MutationContext(command string) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), MutationTimeout(command))
+}
+
+// MutationTimeout is MutationContext's duration.
+func MutationTimeout(command string) time.Duration {
+	return updexhelper.Timeout(command) + AuthenticationAllowance
 }
 
 // Error represents an updex-related error. It aliases

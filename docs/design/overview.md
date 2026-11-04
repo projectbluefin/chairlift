@@ -531,7 +531,7 @@ Each wrapper in `internal/` follows a consistent shape:
 - `IsInstalled()` to check tool availability, plus `IsInstalledCached()` (`sync.Once`) for use from views during async startup
 - Homebrew, Flatpak, and Updex implement both `IsInstalled()` and `IsInstalledCached()`
 - List/Install/Uninstall/Update functions
-- Context-based timeouts. Homebrew and Flatpak both use a two-class model selected per invocation by an unexported `commandTimeout(args)` helper: 30s for read-only commands, 30m for state-changing ones (the keys of each package's `stateChangingCommands` map). updex uses 5min and bootc 30min.
+- Context-based timeouts. Homebrew and Flatpak both use a two-class model selected per invocation by an unexported `commandTimeout(args)` helper: 30s for read-only commands, 30m for state-changing ones (the keys of each package's `stateChangingCommands` map). updex reads and configuration-only helper commands use five minutes; helper updates use 30 minutes. GUI mutation contexts add five minutes for authentication. The longer helper budget requires the OS image to ship the updated helper; the GUI allowance works with an older installed helper. bootc uses 30 minutes.
 - Custom error types where needed
 
 ### Shared OS staging progress (`internal/stageexec`)
@@ -1083,15 +1083,29 @@ hidden offload enabled; unrelated llmman configuration is not rewritten.
 
 Before an installed service is reported ready, the startup worker calls
 `ReconcileService`: compare the owned unit with `RenderUnit` and require its
-recorded systemd `InvocationID` to match the running invocation. Disk equality
+recorded systemd `InvocationID` to match the running invocation, or systemd's
+observation to prove the daemon was started from the current unit file
+(NeedDaemonReload=no and start time strictly after mtime). Disk equality
 alone cannot prove adoption after a crash between write and restart. Missing
-or mismatched stamps leave the new unit unstamped until the shared
-`restartService` boundary reloads, restarts, reads a validated live ID, and
-atomically records it as a unit comment. Enable and alias selection use the
-same boundary. A verified invocation incurs no restart; a natural service
-restart changes the ID and conservatively triggers one reconciliation.
-Disabled hosts are not configured and previews write nothing. Failure keeps
-the unstamped management unit and best-effort stops the old daemon, preventing
+or mismatched stamps and unproven service states leave the new unit unstamped
+until the shared `restartService` boundary reloads, restarts, and reads a
+validated live ID. Both that path and adoption of an already-proven daemon use
+`commitServiceInvocation`: atomically write the ID as a unit comment, then
+reload the manager without restarting the daemon. A failed stamp reload removes
+the stamp, leaving a later attempt to verify adoption again. Comment-only writes
+still change the unit's mtime; without this final reload `NeedDaemonReload=yes`
+would make a later automatic service restart look unproven. If systemctl rejects
+the timestamp option or observation otherwise fails, reconciliation falls back
+to the live invocation stamp or a safe restart. Enable and alias selection use
+the same boundaries. An unchanged verified invocation whose loaded unit is
+clean incurs neither reload nor restart. A matching stamp left dirty by an older
+release gets only `daemon-reload` when `NeedDaemonReload=yes` is observed, with
+no unit rewrite or daemon restart; a failed observation invents no reload state.
+A natural restart with a loaded current file and a start time strictly after
+its mtime is adopted without a restart, preserving loaded models.
+Disabled hosts are not configured and previews write nothing. Reconciliation
+failure preserves the management unit and best-effort stops the managed daemon;
+failed stamp commits leave the unit unstamped, preventing
 generic HTTP health from declaring unverified policy ready. Live startup
 allows ten seconds for health; previews retain the bounded single probe.
 No new state artifact or privileged read is introduced, and unrelated llmman

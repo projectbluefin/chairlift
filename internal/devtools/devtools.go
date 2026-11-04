@@ -28,7 +28,9 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/outputtail"
+	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 )
 
 const (
@@ -41,9 +43,9 @@ const (
 // ErrNewLogin means access was granted but this session cannot use it yet.
 var ErrNewLogin = errors.New("hardware virtualization access granted; log out and back in, then enable WSL Mode again")
 
-// PrerequisiteError means the host lacks something WSL Mode needs, so trying
-// again will not help. Message is a plain sentence for the user; Err keeps the
-// raw command output for the log.
+// PrerequisiteError means a developer tool needs an explicit prerequisite,
+// so merely trying again will not help. Message is shown on its row; Err
+// keeps the raw command output for the log.
 type PrerequisiteError struct {
 	Message string
 	Err     error
@@ -63,6 +65,11 @@ const (
 	// NeedsPrerequisite means nsl doctor reported something else missing.
 	NeedsPrerequisite = "This computer is missing a part WSL Mode needs."
 )
+
+// DockerMigrationRecovery remains reachable when a legacy daemon runs but this
+// account lacks Docker access, so its switch reads off and cannot stop it.
+const DockerMigrationRecovery = "An administrator must stop system Docker before migration. In a terminal, run " +
+	pkexec.Command + " " + ublue.HelperPath + " docker-disable. This stops running containers. Then turn Docker on again."
 
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
@@ -591,7 +598,14 @@ func wireSSH() error {
 		return err
 	}
 	path := filepath.Join(dir, "config")
-	b, err := os.ReadFile(path)
+	// A dotfile manager often makes ~/.ssh/config a symlink. Write through
+	// to its target, which is what ssh reads, so the link survives the
+	// rename below instead of being replaced by a regular file.
+	target, err := sshConfigTarget(path)
+	if err != nil {
+		return err
+	}
+	b, err := os.ReadFile(target)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -604,15 +618,82 @@ func wireSSH() error {
 		}
 	}
 	if !found {
-		b = append([]byte(include+"\n\n"), b...)
+		// Never truncate the user's SSH config in place: a crash or a full
+		// disk mid-write would leave it empty. Write a sibling and rename.
+		if err := writeFileAtomic(target, append([]byte(include+"\n\n"), b...), 0o600); err != nil {
+			return err
+		}
 	}
-	if err := os.WriteFile(path, b, 0o600); err != nil {
-		return err
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
+	// ssh refuses a group- or world-writable config, so tighten an existing
+	// one even when it already carries the Include.
+	if err := os.Chmod(target, 0o600); err != nil {
 		return err
 	}
 	return os.Chmod(dir, 0o700)
+}
+
+// sshConfigTarget follows the config's links while allowing only the final
+// file to be absent, just as writing through the link did before atomic writes.
+func sshConfigTarget(path string) (string, error) {
+	for links := 0; ; links++ {
+		// Split rather than Dir preserves symlink/.. components until the
+		// parent is resolved; lexical cleaning could select a different file.
+		dir, base := filepath.Split(path)
+		dir, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(dir, base)
+		info, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		if links == 40 {
+			return "", fmt.Errorf("resolve SSH config %q: too many symbolic links", path)
+		}
+		link, err := os.Readlink(path)
+		if err != nil {
+			return "", err
+		}
+		path = link
+		if !filepath.IsAbs(link) {
+			path = dir + string(filepath.Separator) + link
+		}
+	}
+}
+
+// writeFileAtomic replaces p with data through a synced sibling temporary
+// file and a rename, so a reader or a crash sees either the old content or
+// the new, never a truncated file.
+func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(p), "."+filepath.Base(p)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer func() { _ = os.Remove(name) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(name, p)
 }
 
 // DockerState is the observed system Docker state. ChairLift installs the
@@ -829,6 +910,9 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 		report("Stopping system Docker…")
 	}
 	if err := apply(ctx, enabled); err != nil {
+		if enabled && strings.Contains(err.Error(), ubluehelper.DockerRuntimeMigrationPrefix) {
+			return &PrerequisiteError{Message: DockerMigrationRecovery, Err: err}
+		}
 		return err
 	}
 	if enabled {

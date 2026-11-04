@@ -366,6 +366,9 @@ func dockerHost() ubluehelper.DockerHost {
 	enforce, _ := os.ReadFile("/sys/fs/selinux/enforce")
 	_, restoreconErr := exec.LookPath("restorecon")
 	_, semanageErr := exec.LookPath("semanage")
+	// installedSet is the set id Install made current in this run, shared
+	// by the Install and RestartDone closures below.
+	var installedSet string
 	return ubluehelper.DockerHost{
 		ImageUnits:       imageUnitErr == nil,
 		SELinuxEnforcing: strings.TrimSpace(string(enforce)) == "1",
@@ -384,16 +387,25 @@ func dockerHost() ubluehelper.DockerHost {
 			_, err := user.LookupGroup(group)
 			return err == nil
 		},
-		Install: func(ctx context.Context) ([]byte, bool, error) {
-			manifest, changed, err := dockerbrew.Install(ctx, dockerbrew.Client{}, dockerbrew.Root)
+		RuntimeProbe: ubluehelper.DockerRuntimeProbe{Service: dockerServiceState, Process: dockerProcess},
+		Install: func(ctx context.Context, admit func(context.Context, string) error) ([]byte, bool, error) {
+			manifest, changed, err := dockerbrew.Install(ctx, dockerbrew.Client{}, dockerbrew.Root, admit)
 			if err != nil {
 				return nil, false, err
 			}
+			installedSet = manifest.SetID()
 			data, err := json.Marshal(manifest)
 			return data, changed, err
 		},
-		CheckUnits:  func() error { return dockerbrew.CheckUnits(dockerbrew.UnitDir) },
-		RestartDone: func() error { return dockerbrew.ClearRestartPending(dockerbrew.Root) },
+		CheckUnits: func() error { return dockerbrew.CheckUnits(dockerbrew.UnitDir) },
+		// The restart this run performed was onto the set its own Install
+		// made current; only that set's marker may be cleared (#697).
+		RestartDone: func(ctx context.Context) error {
+			if installedSet == "" {
+				return errors.New("no Docker runtime was installed by this run")
+			}
+			return dockerbrew.ClearRestartPending(ctx, dockerbrew.Root, installedSet)
+		},
 		RuntimeInstalled: func() (bool, error) {
 			_, err := dockerbrew.ReadManifest(dockerbrew.Root)
 			if errors.Is(err, fs.ErrNotExist) {
@@ -409,6 +421,47 @@ func dockerHost() ubluehelper.DockerHost {
 		},
 		ContainersRunning: dockerContainersRunning,
 	}
+}
+
+func dockerServiceState(ctx context.Context) (ubluehelper.DockerServiceState, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "systemctl", "show", "docker.service", "--property=LoadState,ActiveState,SubState,MainPID,InvocationID,NeedDaemonReload").Output()
+	if err != nil {
+		return ubluehelper.DockerServiceState{}, err
+	}
+	values := make(map[string]string, 6)
+	for _, line := range strings.Split(string(out), "\n") {
+		if key, value, ok := strings.Cut(line, "="); ok {
+			values[key] = value
+		}
+	}
+	return ubluehelper.DockerServiceState{
+		LoadState: values["LoadState"], ActiveState: values["ActiveState"], SubState: values["SubState"],
+		MainPID: values["MainPID"], InvocationID: values["InvocationID"], NeedDaemonReload: values["NeedDaemonReload"],
+	}, nil
+}
+
+func dockerProcess(pid string) (ubluehelper.DockerProcess, error) {
+	// pid was validated by the pure admission before it reaches this reader.
+	root := "/proc/" + pid
+	argv, err := os.ReadFile(root + "/cmdline")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	environment, err := os.ReadFile(root + "/environ")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	executable, err := os.Readlink(root + "/exe")
+	if err != nil {
+		return ubluehelper.DockerProcess{}, err
+	}
+	return ubluehelper.DockerProcess{
+		Argv:        strings.Split(strings.TrimSuffix(string(argv), "\x00"), "\x00"),
+		Environment: strings.Split(strings.TrimSuffix(string(environment), "\x00"), "\x00"),
+		Executable:  executable,
+	}, nil
 }
 
 // dockerContainersRunning asks the daemon on /run/docker.sock for its

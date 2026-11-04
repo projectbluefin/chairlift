@@ -93,9 +93,11 @@ counts. The shell is snapshot rendering and event wiring; production
 `internal/updateproviders` wraps existing Flatpak, Homebrew, updex and bootc
 entry points. `UpdateShell.beginMutation` admits manual item updates, metadata
 refresh, dedicated staging, the unified run, and the Advanced channel and
-graphics-driver switches, which replace the operating system and must not race
-an update run's staging; a refused Download or switch shows
-`pageview.UpdateBusyToast`. Failed observations preserve
+graphics-driver switches. Powerwash's Roll Back, Factory Reset, and Restart
+Now share that admission: deployment changes and reboots must not race an
+update run's staging. Factory Reset acquires admission after its destructive
+confirmation, not while the dialog is open, and releases it on every outcome.
+A refused operation shows `pageview.UpdateBusyToast`. Failed observations preserve
 confirmed state; dry-run previews mutate none of it. Restart is offered from
 the Operating System row only after an observed staged deployment, through the
 fixed `ublue.Restart` action, not an invented update executor.

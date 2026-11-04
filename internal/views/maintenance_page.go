@@ -128,6 +128,15 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow,
 	if !uh.freeUpSpaceGate.TryStart() {
 		return
 	}
+	// The same cleanup steps are the update run's post-update maintenance:
+	// running them beside Update All would put flatpak uninstall --unused
+	// next to flatpak update and brew cleanup next to brew upgrade. The
+	// update shell admits one such mutation at a time.
+	if !uh.updateShell.beginMutation() {
+		uh.freeUpSpaceGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	button.SetSensitive(false)
 	button.SetLabel(cleanupview.BusyLabel)
 	setActivitySpinner(spinner, true)
@@ -156,6 +165,7 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow,
 		})
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			uh.freeUpSpaceGate.Reset()
 			setActivitySpinner(spinner, false)
 			button.SetSensitive(true)

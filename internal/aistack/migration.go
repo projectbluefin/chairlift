@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
@@ -36,15 +38,42 @@ func updateServiceUnit(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	// Disk equality alone says nothing about the running daemon: a crash may
-	// have happened after the file write but before reload/restart. Only an
-	// invocation stamped after a successful restart proves policy adoption.
-	if unit, stamp, ok := strings.Cut(string(previous), serviceInvocationMark); ok && unit == current && !dryrun.Enabled() {
-		invocation, err := serviceInvocation(ctx)
-		if err != nil {
-			return false, err
-		}
-		if stamp == invocation+"\n" {
-			return false, nil
+	// have happened after the file write but before reload/restart. An
+	// invocation stamped after a successful restart proves policy adoption;
+	// so does a service systemd started from this exact file, which is the
+	// usual state after a reboot, when the stamped InvocationID is stale.
+	if unit, stamp, stamped := strings.Cut(string(previous), serviceInvocationMark); unit == current && !dryrun.Enabled() {
+		state, err := observeService(ctx)
+		if err == nil {
+			if stamped && state.running() && stamp == state.invocation+"\n" {
+				// Older releases stamped after restart without reloading the
+				// comment write. Keep their verified daemon, but clear an
+				// observed stale manager so its next natural restart is adoptable.
+				if state.needReload == "yes" {
+					_, err := systemctl(ctx, "daemon-reload")
+					return false, err
+				}
+				return false, nil
+			}
+			info, err := os.Stat(path)
+			if err != nil {
+				return false, err
+			}
+			switch state.adopted(info.ModTime()) {
+			case adoptedRunning:
+				// Record the proof so later launches in this boot take the
+				// stamp path. No restart, so loaded models survive.
+				return false, commitServiceInvocation(ctx, path, unit, state.invocation)
+			case adoptedStopped:
+				// Nothing runs an older policy, and systemd starts the current
+				// file next time, so there is nothing to migrate.
+				return false, nil
+			}
+		} else if stamped {
+			// Fall back to invocation-only check on older systemd or observation failure.
+			if invocation, err := serviceInvocation(ctx); err == nil && stamp == invocation+"\n" {
+				return false, nil
+			}
 		}
 	}
 	if dryrun.Enabled() {
@@ -78,6 +107,10 @@ func serviceInvocation(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return validInvocation(id)
+}
+
+func validInvocation(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if len(id) != 32 || strings.Trim(id, "0") == "" {
 		return "", errors.New("the model service has no running invocation")
@@ -88,6 +121,90 @@ func serviceInvocation(ctx context.Context) (string, error) {
 		}
 	}
 	return id, nil
+}
+
+// serviceStateArgs reads the loaded and running unit in one query.
+// --timestamp=unix makes ExecMainStartTimestamp comparable with the unit
+// file's mtime. A systemctl that rejects this option makes observation fail;
+// reconciliation then checks the invocation stamp or takes the restart path.
+var serviceStateArgs = []string{
+	"show", ServiceName,
+	"--property=ActiveState,NeedDaemonReload,ExecMainStartTimestamp,InvocationID",
+	"--timestamp=unix",
+}
+
+// serviceState is what systemd reports about the model service.
+type serviceState struct {
+	active       string
+	needReload   string
+	mainStart    time.Time
+	invocation   string
+	invocationOK bool
+}
+
+func observeService(ctx context.Context) (serviceState, error) {
+	out, err := systemctl(ctx, serviceStateArgs...)
+	if err != nil {
+		return serviceState{}, err
+	}
+	var state serviceState
+	for line := range strings.SplitSeq(out, "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "ActiveState":
+			state.active = value
+		case "NeedDaemonReload":
+			state.needReload = value
+		case "ExecMainStartTimestamp":
+			if seconds, ok := strings.CutPrefix(value, "@"); ok {
+				if n, err := strconv.ParseInt(seconds, 10, 64); err == nil && n > 0 {
+					state.mainStart = time.Unix(n, 0)
+				}
+			}
+		case "InvocationID":
+			if id, err := validInvocation(value); err == nil {
+				state.invocation, state.invocationOK = id, true
+			}
+		}
+	}
+	return state, nil
+}
+
+func (s serviceState) running() bool {
+	return s.active == "active" && s.invocationOK
+}
+
+type adoption int
+
+const (
+	notAdopted adoption = iota
+	adoptedRunning
+	adoptedStopped
+)
+
+// adopted reports whether the unit file on disk is what systemd runs. The
+// manager must have loaded the file as it is now (NeedDaemonReload=no), and a
+// running main process must have started strictly after the file was last
+// written: a write, a daemon-reload, and a crash before the restart leave an
+// older process under a freshly loaded unit, which this rejects. Timestamps
+// have one-second resolution, so a start in the same second as the write is
+// not trusted. An inactive or failed service runs no older policy at all.
+func (s serviceState) adopted(written time.Time) adoption {
+	if s.needReload != "no" {
+		return notAdopted
+	}
+	switch s.active {
+	case "active":
+		if s.running() && !s.mainStart.IsZero() && s.mainStart.After(written.Truncate(time.Second)) {
+			return adoptedRunning
+		}
+	case "inactive", "failed":
+		return adoptedStopped
+	}
+	return notAdopted
 }
 
 // restartService records policy adoption only after systemd starts the current
@@ -117,5 +234,18 @@ func restartService(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(path, unit+serviceInvocationMark+id+"\n")
+	return commitServiceInvocation(ctx, path, unit, id)
+}
+
+// commitServiceInvocation keeps a comment-only stamp write from making the
+// manager's loaded unit stale. Reloading does not restart the proven daemon.
+// A failed reload leaves the policy unstamped so a later attempt must verify it.
+func commitServiceInvocation(ctx context.Context, path, unit, id string) error {
+	if err := writeAtomic(path, unit+serviceInvocationMark+id+"\n"); err != nil {
+		return err
+	}
+	if _, err := systemctl(ctx, "daemon-reload"); err != nil {
+		return errors.Join(err, writeAtomic(path, unit))
+	}
+	return nil
 }

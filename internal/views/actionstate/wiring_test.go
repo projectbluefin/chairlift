@@ -388,3 +388,35 @@ func TestBluefinCLIRemovalPermittedWhenLoginShellIsNotBash(t *testing.T) {
 		t.Error("showBluefinCLIState must keep switch on and sensitive when configured or legacy integration exists under non-Bash shell")
 	}
 }
+
+// Free Up Space runs the update run's own post-update cleanup steps, so the
+// update shell admits it: it must not run flatpak uninstall --unused or brew
+// cleanup beside an Update All that is still installing (#700).
+func TestFreeUpSpaceIsAdmittedByTheUpdateShell(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "maintenance_page.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "func (uh *UserHome) onFreeUpSpaceClicked(", 2)
+	if len(parts) != 2 {
+		t.Fatal("Free Up Space handler not found")
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	for _, required := range []string{
+		"if !uh.updateShell.beginMutation() {",
+		"uh.freeUpSpaceGate.Reset()",
+		"pageview.UpdateBusyToast",
+		"uh.updateShell.finishMutation()",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("onFreeUpSpaceClicked must be admitted by the update shell: missing %q", required)
+		}
+	}
+	if strings.Index(body, "uh.freeUpSpaceGate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation()") {
+		t.Error("onFreeUpSpaceClicked must take its own gate before the update shell's admission")
+	}
+}

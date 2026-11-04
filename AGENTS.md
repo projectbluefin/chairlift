@@ -126,15 +126,18 @@ The app builds pure-Go (`CGO_ENABLED=0`); the race detector needs CGO.
   fixture also plants a v26.10.10-style rootless user `docker.service` that
   the GUI must stop and disable. Native system/user managers
   run inside rootless Podman; `--privileged` applies only to that namespace,
-  with no host Docker socket or user bus mounted. The gate sends EOF to a real
-  prerequisite authentication prompt and reports the actual outcome/exit code:
+  with no host Docker socket or user bus mounted. On each launch, including
+  the new-group login, the driver enters the Developer Mode detail from
+  Features before finding the Docker and developer switches; those controls
+  are not on the Features overview. The gate sends EOF to a real prerequisite
+  authentication prompt and reports the actual outcome/exit code:
   exit 127 with "Not authorized" is journaled as `refused` and shown as Failed,
   not live cancellation coverage. Canceled requires exit 126 or "Request
   dismissed". It also covers ordered `dx-enable` then `docker-enable` and the
   helper-reported `groupadd`/`systemctl`/`usermod` argv, the installed
   runtime (root-owned, manifest present, ELF interpreters and search paths
   free of the Homebrew prefix), marker-bearing units under
-  `/etc/systemd/system` whose `ExecStart` is `current/bin/dockerd`,
+  `/etc/systemd/system` whose `ExecStart` is `active/bin/dockerd`,
   awaiting-login feedback, a new-group session's system-socket readiness and
   non-rootless daemon, and disabling both units while retaining the runtime,
   data, account groups, and Developer Mode. A final `docker-update` through
@@ -850,7 +853,11 @@ An agent must not break these:
 - **Update inventory and badge have one state owner.** The pure
   `internal/updateflow.Coordinator` owns all source inventory and the badge;
   the shell renders snapshots and manual update actions — and the channel and
-  driver switches, which replace the OS — share its admission.
+  driver switches, which replace the OS, and Powerwash's Roll Back,
+  Factory Reset, and Restart Now, which change or reboot into the next
+  deployment — share its admission. A confirmation does not reserve the
+  system: Factory Reset asks for admission after confirmation and releases
+  both its action gate and admission after every outcome.
   Failed observations preserve confirmed state, and previews mutate none of it.
   Do not restore separate counts or a provider-status owner in `UserHome`.
 - **Features discloses packages separately from actions.** Game Mode leads
@@ -882,8 +889,13 @@ An agent must not break these:
   choice is not stored: `wsl_backend` sets the default, and the first read
   follows an existing Lima machine when no managed nsl machine exists
   (`devtools.ResolveBackend`). A running machine stays stoppable even when
-  the start prerequisites are unmet. System Docker follows its own invariant
-  below. Turning Docker or WSL
+  the start prerequisites are unmet. Lima's SSH Include wiring preserves
+  relative, absolute, and chained dotfile symlinks, including a missing final
+  file when its parent already exists; missing target parents and symlink
+  cycles fail without replacing the links. Writes use a synced sibling and
+  rename, preserving previous content on write failure; a config already
+  carrying the Include is not rewritten. System Docker follows its own
+  invariant below. Turning Docker or WSL
   on first enables Developer Mode if it is off, through the existing fixed
   `dx-enable` helper under the shared `developerGate`, in the same worker.
   Helper failure or canceled authentication aborts child setup; only confirmed
@@ -935,11 +947,34 @@ An agent must not break these:
   files get the system loader as interpreter and `$ORIGIN/../lib` as their
   search path. `dockerbrew.Install` smoke-runs `runc` and `dockerd`, writes a
   world-readable manifest, swaps `/var/lib/chairlift/docker/current`
-  atomically under a lock, and prunes older sets; it refuses an install root
-  that is a foreign symlink or not root-owned. The helper writes
-  `docker.service` and `docker.socket` to `/etc/systemd/system` with the
-  first line `# Managed by chairlift-helper`, never overwrites a unit without
-  that marker, and removes only marked units. **Image units win:** when
+  atomically under a lock, and prunes older sets except the one `active`
+  names; it refuses an install root that is a foreign symlink or not
+  root-owned. The helper writes `docker.service` and `docker.socket` to
+  `/etc/systemd/system` with the first line `# Managed by chairlift-helper`,
+  never overwrites a unit without that marker, and removes only marked
+  units. The service runs dockerd and resolves containerd, the shim, runc,
+  `docker-init`, and `docker-proxy` through
+  `/var/lib/chairlift/docker/active/bin`, never `current/bin`; its one added
+  `ExecStartPre=/usr/bin/flock --exclusive …/.lock /usr/bin/ln -P -fT
+  …/current …/active` hard-links the relative set-id symlink under the same
+  lock as swap/prune. Repeated starts replace the link without following
+  its directory target. Before changing any existing runtime, the helper
+  prepares the managed unit and reloads it when changed or systemd reports
+  `NeedDaemonReload`; Install's mandatory admission runs under the lock even
+  on the unchanged/prune path. A stable stopped service is safe to start
+  through the locked unit. A running service needs stable MainPID and
+  InvocationID plus actual proc argv, executable, and PATH proving it uses
+  the retained active set. A legacy daemon still using `current/bin`, a
+  transitional service, or an unreadable observation refuses all runtime
+  swaps, marker changes and pruning. The GUI maps that distinctive helper
+  refusal to a visible `devtools.PrerequisiteError`, directing an administrator
+  to the existing fixed `pkexec /usr/bin/chairlift-helper docker-disable`
+  terminal command before turning Docker on again, with an explicit warning
+  that this stops running containers. This works even when NoAccess makes the
+  switch read off; refusal never stops workloads or grants access itself.
+  An active-based daemon whose restart is deferred keeps its old set until
+  its next start (#696).
+  **Image units win:** when
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
   before. Otherwise it creates `docker` with `groupadd -f -r` when neither
@@ -955,7 +990,11 @@ An agent must not break these:
   `/var/lib/chairlift/docker/.restart-pending` marker before swapping
   `current` and reports the unchanged set as changed while it remains; the
   helper clears it (`dockerbrew.ClearRestartPending`) only after
-  `try-restart` succeeds, so an interrupted run still restarts next time. A
+  `try-restart` succeeds, so an interrupted run still restarts next time.
+  The marker names the set id it was written for, and the clear takes the
+  install lock and removes it only when it names the set that run installed
+  (an empty marker from an older release also clears), so an overlapping
+  run's newer swap keeps its pending restart (#697). A
   changed runtime restarts the daemon only when its socket reports no running
   containers; otherwise (or when that query fails) the restart waits for the
   next enable/update or a reboot, and the marker carries it. A
@@ -1231,15 +1270,30 @@ An agent must not break these:
   keeping the active model synchronized with Goose. A missing alias means no
   selected model, not an error or an invented default.
   Startup reconciles only an existing owned unit against `RenderUnit` plus the
-  exact live systemd `InvocationID`, committed as a unit comment only after
-  successful reload/restart. An already-written file is not proof the daemon
-  adopted it: missing or mismatched invocation stamps retry the migration.
-  Enable, model selection, and migration share that restart/stamp boundary;
-  current verified invocations do not restart, disabled hosts stay disabled,
-  and dry-run writes none. Failure preserves the unstamped management unit and
-  best-effort stops the old daemon. Live startup allows ten seconds for health
-  after migration; preview retains its single bounded probe. Unrelated llmman
-  configuration is never rewritten.
+  exact live systemd `InvocationID`, recorded as a unit comment after policy
+  adoption is proven. An already-written file is not proof the daemon adopted
+  it: missing or mismatched invocation stamps retry the migration, unless
+  systemd proves it runs the current file (#694): the manager reports
+  `NeedDaemonReload=no` and the main process started strictly after the file's
+  last write. That can happen after a reboot or an automatic service restart;
+  ReconcileService then re-stamps the live ID without restarting and dropping
+  loaded models. An inactive or failed service runs no older policy, so a
+  current loaded unit needs no migration there. A failed or unsupported
+  timestamp observation falls back to the invocation stamp or a safe restart.
+  Every stamp writer uses `commitServiceInvocation`: write the comment, then
+  `daemon-reload` without restarting the proven daemon; a reload failure removes
+  the stamp. Even a comment-only unit write changes its mtime and otherwise
+  leaves `NeedDaemonReload=yes`, defeating later automatic-restart adoption.
+  Enable, model selection, and migration share the restart/stamp boundaries;
+  a current verified invocation whose loaded unit is clean needs neither reload
+  nor restart. A matching stamp with observed `NeedDaemonReload=yes` from an
+  older release gets only `daemon-reload`, without rewriting or restarting it.
+  Failed observations retain the invocation-only fallback without inventing
+  reload state. Disabled hosts stay disabled, and dry-run writes none.
+  Reconciliation failure preserves the management unit and best-effort stops
+  the managed daemon; failed stamp commits leave it unstamped. Live startup
+  allows ten seconds for health after migration; preview retains its single
+  bounded probe. Unrelated llmman configuration is never rewritten.
   Failure renders newly observed state, not the inverse of an optimistic flip.
   Every mutation respects `dryrun.Enabled()`. Disable removes only the owned
   unit and fragment, keeping binaries and models. A failed stop that
@@ -1557,7 +1611,12 @@ An agent must not break these:
   gating the update run's post-update maintenance step
   (`updateproviders.NewMaintenance`), so one configuration switch
   governs both surfaces — a second key would let one surface clean while the
-  other claimed the feature was disabled. The action composes
+  other claimed the feature was disabled. Because it runs the same steps,
+  Free Up Space is admitted by `UpdateShell.beginMutation` and is refused
+  with `pageview.UpdateBusyToast` while a check or update run owns the
+  system. Closing or quitting remains refused while cleanup holds admission;
+  the banner names an operation in progress rather than claiming an update
+  is running. A read-only check alone does not block quitting. The action composes
   `internal/updateproviders`' typed step inventory; do not reintroduce
   per-package-manager cleanup buttons, which asked the user to know which
   package manager owned their wasted disk space. The wording and the

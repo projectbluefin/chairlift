@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
@@ -402,5 +403,246 @@ func TestSetDockerReportsAFailedStatusRead(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if err := SetDocker(context.Background(), true, nil); err == nil {
 		t.Fatal("enable without a readable daemon state reported success")
+	}
+}
+
+// An Include already present means nothing to write: the user's SSH config
+// is not rewritten, only its mode is tightened.
+func TestWireSSHDoesNotRewriteAConfigThatAlreadyIncludesLima(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".ssh", "config")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("Include ~/.lima/*/ssh.config\n\nHost *\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := wireSSH(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(old) {
+		t.Fatal("wireSSH rewrote a config that already carried the Include")
+	}
+}
+
+// A dotfile manager's symlinked config stays a symlink; the Include lands in
+// its target, which is the file ssh reads.
+func TestWireSSHWritesThroughASymlinkedConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(home, "dotfiles", "ssh_config")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("Host *\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "config")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := wireSSH(); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("wireSSH replaced the symlinked config with a regular file")
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "Include ~/.lima/*/ssh.config\n\nHost *\n" {
+		t.Fatalf("symlink target = %q", b)
+	}
+	entries, err := os.ReadDir(filepath.Dir(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("temporary file left beside the target: %v", entries)
+	}
+}
+
+func TestWireSSHPreservesDotfileLinks(t *testing.T) {
+	for _, kind := range []string{"absolute", "relative", "absolute-chain", "relative-chain", "directory-link", "directory-link-dotdot"} {
+		for _, initial := range []string{"missing", "Host work\n  User me\n", "Include ~/.lima/*/ssh.config\n\nHost work\n"} {
+			t.Run(kind+"/"+strings.Split(initial, "\n")[0], func(t *testing.T) {
+				home := t.TempDir()
+				t.Setenv("HOME", home)
+				for _, dir := range []string{".ssh", "dotfiles/nested", "links"} {
+					if err := os.MkdirAll(filepath.Join(home, dir), 0o700); err != nil {
+						t.Fatal(err)
+					}
+				}
+				target := filepath.Join(home, "dotfiles", "ssh_config")
+				links := map[string]string{}
+				config := filepath.Join(home, ".ssh", "config")
+				switch kind {
+				case "absolute":
+					links[config] = target
+				case "relative":
+					links[config] = "../dotfiles/ssh_config"
+				case "absolute-chain":
+					links[config] = filepath.Join(home, "links", "config")
+					links[links[config]] = target
+				case "relative-chain":
+					links[config] = "../links/config"
+					links[filepath.Join(home, "links", "config")] = "../dotfiles/ssh_config"
+				case "directory-link":
+					links[config] = "../alias/ssh_config"
+					links[filepath.Join(home, "alias")] = "dotfiles"
+				case "directory-link-dotdot":
+					links[config] = "../alias/../ssh_config"
+					links[filepath.Join(home, "alias")] = "dotfiles/nested"
+				}
+				before := make(map[string]os.FileInfo)
+				for path, link := range links {
+					if err := os.Symlink(link, path); err != nil {
+						t.Fatal(err)
+					}
+					info, err := os.Lstat(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					before[path] = info
+				}
+				want := "Include ~/.lima/*/ssh.config\n\n"
+				if initial != "missing" {
+					if err := os.WriteFile(target, []byte(initial), 0o644); err != nil {
+						t.Fatal(err)
+					}
+					want += initial
+				}
+				if strings.HasPrefix(initial, "Include ") {
+					want = initial
+				}
+				old := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+				for pass := range 2 {
+					var previous os.FileInfo
+					if pass > 0 || strings.HasPrefix(initial, "Include ") {
+						if err := os.Chtimes(target, old, old); err != nil {
+							t.Fatal(err)
+						}
+						var err error
+						previous, err = os.Stat(target)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+					if err := wireSSH(); err != nil {
+						t.Fatal(err)
+					}
+					if got, err := os.ReadFile(config); err != nil || string(got) != want {
+						t.Fatalf("SSH config = %q, %v; want %q", got, err, want)
+					}
+					for path, link := range links {
+						after, err := os.Lstat(path)
+						if err != nil || !os.SameFile(before[path], after) {
+							t.Fatalf("symlink inode changed at %s: %v", path, err)
+						}
+						if got, err := os.Readlink(path); err != nil || got != link {
+							t.Fatalf("symlink = %q, %v; want %q", got, err, link)
+						}
+					}
+					if previous != nil {
+						after, err := os.Stat(target)
+						if err != nil || !os.SameFile(previous, after) || !after.ModTime().Equal(old) {
+							t.Fatalf("already-correct target was rewritten: %v", err)
+						}
+					}
+					assertMode(t, target, 0o600)
+					assertMode(t, filepath.Join(home, ".ssh"), 0o700)
+				}
+				entries, err := os.ReadDir(filepath.Dir(target))
+				if err != nil || len(entries) != 2 {
+					t.Fatalf("unexpected target siblings: %v, %v", entries, err)
+				}
+			})
+		}
+	}
+}
+
+func TestWireSSHRejectsUnwritableTargetsWithoutChangingLinks(t *testing.T) {
+	for _, kind := range []string{"missing-parent", "self-cycle", "two-link-cycle", "directory-cycle", "atomic-write-error"} {
+		t.Run(kind, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			dir := filepath.Join(home, ".ssh")
+			if err := os.Mkdir(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			config := filepath.Join(dir, "config")
+			links := map[string]string{}
+			var previous string
+			switch kind {
+			case "missing-parent":
+				links[config] = "chain"
+				links[filepath.Join(dir, "chain")] = "../absent/config"
+			case "self-cycle":
+				links[config] = "config"
+			case "two-link-cycle":
+				links[config] = "chain"
+				links[filepath.Join(dir, "chain")] = "config"
+			case "directory-cycle":
+				links[config] = "../cycle/config"
+				links[filepath.Join(home, "cycle")] = "cycle"
+			case "atomic-write-error":
+				// The existing basename fits NAME_MAX, but its sibling temp name
+				// does not. This fails before rename, even when tests run as root.
+				previous = filepath.Join(home, strings.Repeat("x", 250))
+				if err := os.WriteFile(previous, []byte("Host work\n  User me\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				links[config] = previous
+			}
+			before := make(map[string]os.FileInfo)
+			for path, link := range links {
+				if err := os.Symlink(link, path); err != nil {
+					t.Fatal(err)
+				}
+				info, err := os.Lstat(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before[path] = info
+			}
+			if err := wireSSH(); err == nil {
+				t.Fatal("unwritable SSH target reported success")
+			}
+			for path, link := range links {
+				after, err := os.Lstat(path)
+				if err != nil || !os.SameFile(before[path], after) {
+					t.Fatalf("symlink inode changed at %s: %v", path, err)
+				}
+				if got, err := os.Readlink(path); err != nil || got != link {
+					t.Fatalf("symlink = %q, %v; want %q", got, err, link)
+				}
+			}
+			if _, err := os.Lstat(filepath.Join(home, "absent")); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("created missing target parent: %v", err)
+			}
+			if previous != "" {
+				if got, err := os.ReadFile(previous); err != nil || string(got) != "Host work\n  User me\n" {
+					t.Fatalf("failed atomic write changed previous content: %q, %v", got, err)
+				}
+			}
+		})
 	}
 }

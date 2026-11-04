@@ -597,7 +597,13 @@ construction owner.
 | `CheckFeatures(ctx)` | Return `([]FeatureCheck, []string, error)`, retaining component warnings even on failure |
 | `EnableFeature(ctx, name)` / `DisableFeature(ctx, name)` | Fixed helper with `enable-feature <name>` / `disable-feature <name>` |
 | `UpdateFeatures(ctx)` | Fixed helper with `update` |
-| `DefaultContext()` | Five-minute context for callers |
+| `DefaultContext()` | Five-minute context for unprivileged reads |
+| `MutationContext(command)` | `updexhelper.Timeout(command)` plus `AuthenticationAllowance` (five minutes), because the GUI's clock runs while the PolicyKit prompt is open; the helper bounds `update` at 30 minutes (it downloads sysext images) and the configuration-only commands at five |
+
+The GUI's allowance ships with the Homebrew app and applies with any installed
+helper. The helper's 30-minute download budget takes effect only after the OS
+image installs the updated `/usr/bin/chairlift-updex-helper`; upgrading the GUI
+alone does not lengthen an older helper's own five-minute timeout.
 
 These context-taking reads/writes do not secretly replace caller cancellation
 with a new background context. Writes bind `helperexec.Run` to
@@ -669,8 +675,15 @@ wording supplied by `pageview`.
 suppressed invocation journaling, stdout/stderr capture and shared error
 taxonomy; ublue and updex alias its error types. `pkexec.Command` is the sole
 owner of the escalation program name. `Run` bounds pipe draining with
-five-second WaitDelay and kills only its direct child on cancellation. Its
-cancellation message explicitly warns that privileged work may still run.
+five-second WaitDelay and kills only its direct child on cancellation. That
+kill works only while the PolicyKit prompt is open: once authentication
+succeeds pkexec runs the helper as root, an unprivileged kill fails, and `Run`
+returns only when the helper exits, bounded by the helper's own timeout. That
+wait is deliberate, because action gates and update-shell admission stay held
+until `Run` returns, so no second privileged action can start beside a running
+root helper. A post-authentication outcome is therefore the helper's real exit
+status, not `cancelled` or `timed-out`. The cancellation message explicitly
+warns that privileged work may still run.
 The child's own exit status wins when it exited normally, including a
 successful exit whose descendant held output pipes open, or a real nonzero
 exit racing cancellation. Do not misreport a completed privileged mutation
@@ -859,6 +872,17 @@ enables autostart and verifies `limactl shell ubuntu true`. Its disable removes
 autostart and stops Ubuntu without deleting its disk. A listed/running VM
 alone is not shell readiness.
 
+Lima's `wireSSH` inserts `Include ~/.lima/*/ssh.config` before existing content
+using a synced sibling temporary file and atomic rename, never an in-place
+truncate. `sshConfigTarget` resolves the parent and follows relative, absolute,
+and chained config symlinks without replacing their inodes. A missing final
+target is created only when its parent exists; missing target directories and
+symlink cycles fail. Parent symlinks are resolved before `..` is cleaned, so
+dotfile links keep their filesystem meaning. An already-present Include skips
+the content write, while file/directory permissions are still tightened to
+0600/0700. This resolver is local to SSH wiring; configuration provenance and
+other file-writing APIs retain their own contracts.
+
 **System Docker from verified Homebrew bottles.**
 System Docker matches Bluefin DX: a rootful daemon behind `docker.socket`,
 `docker` group membership, and a CLI with buildx and compose. Its packages
@@ -916,7 +940,13 @@ Enable runs in this order, after the Developer Mode prerequisite above:
      atomically, and prunes older sets (best-effort once the swap is done).
      Before the swap it writes a root-owned `.restart-pending` marker; while
      it exists, a rerun over the same set still reports a change, and the
-     helper clears it only after `try-restart` succeeds. A reinstall of the
+     helper clears it only after `try-restart` succeeds. The marker holds the
+     set id it was written for; `ClearRestartPending(ctx, root, id)` takes the
+     install lock and removes it only when it names `id`, the set that run's
+     `Install` made current, or is empty (a marker from a release that
+     recorded no id). An overlapping run that swapped in a newer set
+     therefore keeps its pending restart. A rerun over `current` whose marker
+     names another set rewrites it to name `current`. A reinstall of the
      same set moves the old directory aside for pruning, and a `current` whose
      target is missing reads as not installed. It refuses an install root or
      `current` that is a foreign symlink or not root-owned. Bottle downloads
@@ -928,9 +958,36 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `docker-enable` and `docker-update` run `dockerbrew.CheckUnits` before
   downloading, so an unmanaged unit is refused before any fetch. They
   are moby's upstream units, with `ExecStart` and `PATH` pointing at
-  `current/bin`. Each begins with `# Managed by chairlift-helper`, and an
-  existing file without that marker is never overwritten. Next it runs
-  `systemctl daemon-reload`. When SELinux is enforcing it defines the
+  `active/bin` and one added `ExecStartPre=/usr/bin/flock --exclusive
+  /var/lib/chairlift/docker/.lock /usr/bin/ln -P -fT
+  /var/lib/chairlift/docker/current /var/lib/chairlift/docker/active`.
+  Hard-linking the symlink itself preserves its relative set-id target, not
+  a live alias of `current`. Activation and swap/prune hold the same lock;
+  no caller may hold that lock while waiting for `systemctl start` or
+  `try-restart`. A migrated daemon whose restart is deferred keeps resolving
+  tools through its retained active set. Any later start adopts current.
+  Each unit begins with `# Managed by chairlift-helper`; a file without it
+  is never overwritten. For an existing runtime, unit preparation runs
+  **before** Install. A changed unit or systemd's `NeedDaemonReload` causes
+  `daemon-reload`, including retries after a previous reload failed. A
+  verified unchanged unit needs no system command.
+
+  Install requires a read-only admission callback under its install lock,
+  before all swaps, pending-marker changes, and pruning, including the
+  unchanged-set fast path. `ubluehelper.CheckDockerRuntime` accepts a stable
+  stopped service, or a running service with stable MainPID/InvocationID
+  whose actual `/proc` argv, executable target, and PATH prove it started
+  from the active set. Rewriting the unit or finding an active link alone
+  proves neither. A legacy daemon still using `current/bin`, transitional
+  state, or unreadable evidence refuses runtime mutation. The GUI surfaces
+  that helper refusal as a prerequisite: an administrator runs the existing
+  fixed terminal `docker-disable` command, with a warning that it stops running
+  containers, then the user turns Docker on again. This remains reachable
+  when NoAccess makes the switch read off. Nothing stops workloads or grants
+  access automatically. The systemd/proc readers are wired in the fixed
+  helper; decisions stay pure in `internal/ubluehelper`.
+
+  When SELinux is enforcing it defines the
   equivalence rule `semanage fcontext -a -e /usr/libexec/docker
   /var/lib/chairlift/docker` if missing and runs `restorecon -RF
   /var/lib/chairlift/docker`, so container-selinux's runtime label applies;
@@ -945,10 +1002,10 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   `chairlift-helper: docker runtime <json>`.
 
 `docker-update` prints `no Homebrew Docker runtime to update` and exits 0 when
-image units exist or no manifest does. Otherwise it repeats the verified
-install, rewrites the managed units, reloads systemd when either changed, and
-when the bottle set changed relabels the new set under the same SELinux
-condition before restarting an active daemon.
+image units exist or no manifest does. Otherwise it prepares and, when needed,
+reloads the managed units before the guarded verified install. When the bottle
+set changed it relabels the new set under the same SELinux condition before
+restarting an active daemon.
 `docker-disable` runs `systemctl disable --now docker.socket docker.service`
 and keeps the runtime, container data, and group membership. Every command's
 `--dry-run` is offline: it prints the index it would fetch, the formula set,
@@ -1019,11 +1076,17 @@ or "Request dismissed". The gate also covers ordered authentication, the
 helper-reported argv, a root-owned runtime whose manifest names the six
 formulae and whose ELF loader fields never reach the Homebrew prefix,
 marker-bearing units, the retired rootless unit, awaiting login, a real `sg`
-new-group session's HTTP 200 socket readiness from `current/bin/dockerd`, stop
+new-group session's HTTP 200 socket readiness from `active/bin/dockerd`, stop
 preserving the runtime/data/groups and Developer Mode, and a no-op
 `docker-update` (`changed=false`). The fixture has no Homebrew, so the CLI
 step is not covered there. Dry-run AT-SPI scenarios and screenshots do not
 establish live readiness.
+`TestDockerRuntimeActivation`, selected by ordinary `make e2e`, executes the
+generated startup argv unprivileged on pinned Dakota, covering repeated starts
+and blocking on the install lock. Live failure artifacts retain the generated
+unit, service properties, link metadata and actual SELinux enforcement state;
+a disabled host does not verify enforcing-host startup.
+
 
 Game Mode stages a switch between the supported standard and gaming system
 images through `ublue.SetGamingMode` and the fixed `gaming-switch` helper.
@@ -1091,11 +1154,30 @@ Agents page's Manage Models row opens (#568).
 
 [`migration.go`](../../internal/aistack/migration.go) reconciles only an
 existing owned service. Matching file bytes alone do not prove that the daemon
-adopted local-only settings: `restartService` reloads, restarts, validates the
-live systemd `InvocationID`, and only then stamps that ID as a unit comment.
-A missing/mismatched stamp retries reconciliation; a verified current
-invocation does not restart, and an absent unit stays disabled. Reconciliation
-failure preserves the unstamped unit and best-effort stops the old daemon.
+adopted local-only settings: `restartService` reloads, restarts, and validates the
+live systemd `InvocationID`. It and the adoption path share
+`commitServiceInvocation`, which atomically writes that ID as a unit comment and
+reloads the manager without restarting the proven daemon. Reload failure removes
+the stamp so it cannot falsely verify a later attempt. A comment-only unit write
+still changes its mtime: the final reload keeps `NeedDaemonReload=no` so an
+automatic restart can be adopted on the next launch instead of restarted again.
+A missing/mismatched stamp retries reconciliation; an unchanged verified
+invocation with a clean loaded unit needs neither reload nor restart. A matching
+stamp with observed `NeedDaemonReload=yes` left by an older release gets only
+`daemon-reload`, without rewriting or restarting. Failed observations retain the
+invocation-only fallback without inventing reload state. An absent unit stays
+disabled.
+Systemd's report also verifies one: with the unit body equal to `RenderUnit`,
+`NeedDaemonReload=no`, and an `ExecMainStartTimestamp` (read with
+`--timestamp=unix`) strictly after the file's mtime, the running daemon was
+started from the current file. This can follow a reboot or automatic service
+restart; the live ID is stamped without restarting the daemon. A process older
+than the write, a manager needing reload, or an unparseable timestamp does not
+prove adoption. A systemctl that rejects the timestamp option makes observation
+fail; reconciliation then checks the live invocation stamp or safely restarts.
+An inactive or failed service with the current loaded unit needs no migration.
+Reconciliation failure preserves the management unit and best-effort stops the
+managed daemon; failed stamp commits leave the unit unstamped.
 Live startup waits up to ten seconds for health after reconciliation; preview
 performs one bounded probe and writes nothing.
 
