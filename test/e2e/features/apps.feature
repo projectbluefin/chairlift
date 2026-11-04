@@ -124,15 +124,12 @@ Feature: Apps destination
   Scenario: Relocated collections fall back to Apps when Developer Mode is disabled
     Given ChairLift is running
     When I open the "Apps" page
-    Then I see "Enhanced Terminal Bling"
-    And I see "Monospace Fonts"
-    And the "Enhanced Terminal Bling" collection is checked
+    Then I see "Monospace Fonts"
     And the "Monospace Fonts" collection is checked
     When I click the "Install" button in the "Install Selected Collections" row
     Then a toast on the Apps page says "[DRY-RUN] Preview: selected collections would be installed — no changes made"
     And Homebrew collection previews are exactly
       | file                |
-      | cli.Brewfile        |
       | fonts.Brewfile      |
       | fonts-dev.Brewfile  |
       | team-tools.Brewfile |
@@ -190,7 +187,7 @@ Feature: Apps destination
     And the application log contains "/home/Brewfile --force"
     And the "Export" button in the "Export Package List" row is sensitive
     And the home directory has no "Brewfile"
-    And Homebrew was never asked to "bundle"
+    And Homebrew was never asked to "bundle dump"
 
   @config.apps-bundles @stub.apps-brew @stub.apps-collections
   Scenario: Every control on the Apps page, including every list row's, is named and operable

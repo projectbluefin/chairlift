@@ -149,10 +149,11 @@ section above); administrators can remove them when convenient.
     while bundles from readable paths remain available. Repeating the same
     path does not duplicate a row; same-named Brewfiles in different
     directories remain distinct and show their full paths.
-  - Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`) use this same
-    collection configuration and appear under Features → Developer Mode when
-    `features_page.dx_group` is enabled, or fall back to Apps if Developer Mode
-    is disabled. Their independent Install action does not enable Developer Mode.
+  - Monospace Fonts (`fonts-dev`) uses this same collection configuration and
+    appears under Features → Developer Mode when `features_page.dx_group` is
+    enabled, or falls back to Apps if Developer Mode is disabled. Its independent
+    Install action does not enable Developer Mode. The legacy `cli` collection
+    is excluded; Bluefin CLI uses `features_page.bluefin_cli_group` instead.
 
 ### Maintenance Page (`maintenance_page`)
 
@@ -166,6 +167,7 @@ section above); administrators can remove them when convenient.
 
 ### Features Page (`features_page`)
 
+- `bluefin_cli_group`: Bluefin CLI, a single Bash-only Features switch. Enabled by default where Homebrew is available. Chairlift embeds its package list (including `ugrep`) and Bash payload; it does not require Common's Brewfiles or bling scripts. Turning on installs missing tools and configures `~/.bashrc`; turning off removes only recognized managed Bash blocks and keeps packages. Fish and Zsh are unsupported and untouched. Wizard setup selects it by default unless previously disabled and applies the choice on Next from Features.
 - `desktop_integrations_group`: Tailscale Integration and Sync Folder Integration GNOME extension switches. Enabled by default; missing extensions or an unavailable GNOME session leave the switches insensitive with an explanation. Existing GNOME preferences are read on load and only explicit user actions change them.
 - `features_group`: System features managed by updex (requires `updex` command)
 - `dx_group`: Developer Mode; adds the invoking account to container, VM, and serial-device groups, and after a confirmed enable installs the Dev Container CLI (`devcontainer`) through Homebrew when Homebrew is available — a failed install is reported on its own and does not roll back developer access (shown only when `/usr/share/ublue-os/image-info.json` is present)

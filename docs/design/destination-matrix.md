@@ -22,7 +22,7 @@ Tools or Local AI tools route. Wallpaper setup ships only as Livery's More Dinos
 | `updates` | `updates_page.go`, `update_shell.go` | Unified status/action and source inventory; automatic updates; system version; staging and Compare; tap trust; channel and graphics controls |
 | `applications` | `applications_page.go` | Homebrew collections, installed casks, explicitly requested formulae and Brewfile export, in that order; no Flatpak inventory, external catalog launcher or package search |
 | `agents` | `agents_page.go`, `troubleshoot.go`, `contribute.go` | Local Agent Mode, the active model dropdown, the Manage Models link to llmman's own page, Troubleshooting's Goose row (Set Up, then Launch in ChairLift's own profile) and menu visibility, and Contribute to Bluefin |
-| `features` | `features_page.go`, `developer_tools.go`, `developer_setup.go`, `shell_extensions.go`, `printers_page.go` | Gaming first, Developer options with independent Enhanced Terminal Bling and Monospace Fonts collections inside Developer Mode, distribution features, desktop integrations and loopback-only printer applications |
+| `features` | `features_page.go`, `bluefin_cli.go`, `developer_tools.go`, `developer_setup.go`, `shell_extensions.go`, `printers_page.go` | Gaming first, a Chairlift-owned Bluefin CLI switch, Developer options with an independent Monospace Fonts collection inside Developer Mode, distribution features, desktop integrations and loopback-only printer applications |
 | `livery` | `livery_page.go`, `livery_actions.go`, `profile_picture.go`, `wallpapers.go` | Profile Picture, More Dinosaurs wallpaper setup, and initially collapsed App Launcher Icon, Top Bar Icon and Files Icon, with login rotation for the foundation surfaces |
 | `maintenance` | `maintenance_page.go` | Free Up Space, trusted administrator scripts and Powerwash entry |
 | `help` | `help_page.go` | Support links, diagnostics and capability explanations |
@@ -48,6 +48,7 @@ inventory; derive schema additions from source rather than a frozen count.
 | `applications_page` | `brew_bundles_group` | Apps collections, shown first; `loadBrewBundles`, shared collection install/progress handling |
 | `applications_page` | `brew_group` | Apps installed casks then explicitly requested formulae, followed by Brewfile export; `loadHomebrewPackages`, `runHomebrewUninstall`, `runHomebrewPin`, `onBrewBundleDumpClicked` |
 | `features_page` | `features_group` | Features toggles/update checks plus unified system-components source; `onFeatureToggled`, `onUpdateFeaturesClicked`, `internal/updex` |
+| `features_page` | `bluefin_cli_group` | Features Bluefin CLI switch; `buildBluefinCLIGroup`, `runBluefinCLI`, `internal/bluefincli` |
 | `features_page` | `desktop_integrations_group` | Features Tailscale/Sync Folder switches; `internal/shellextensions`, observed GNOME state |
 | `features_page` | `dx_group` | Features Developer Mode, WSL, and system Docker; shared `developerGate` / `internal/devsetup`, fixed helpers for developer/KVM/Docker access, `internal/dockerbrew` for the verified Homebrew-bottle daemon runtime, `internal/devtools` for observed readiness, the user-scope Docker CLI, and optional native VS Code setup |
 | `features_page` | `gaming_group` | Features gaming tools toggle; `onGamingToggled`, `internal/gaming` |

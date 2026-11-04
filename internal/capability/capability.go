@@ -253,6 +253,7 @@ var prerequisites = []Prerequisite{
 	{Page: "agents_page", Group: "troubleshooting_group", AnyOf: []Capability{Homebrew}},
 
 	// Features.
+	{Page: "features_page", Group: "bluefin_cli_group", AnyOf: []Capability{Homebrew}},
 	{Page: "features_page", Group: "dx_group", AnyOf: []Capability{ImageDescriptor}},
 	{Page: "features_page", Group: "features_group"},
 	{Page: "features_page", Group: "desktop_integrations_group"},

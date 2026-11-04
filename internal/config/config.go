@@ -382,6 +382,7 @@ func defaultConfig() *Config {
 			"reset_group": GroupConfig{Enabled: false},
 		},
 		FeaturesPage: PageConfig{
+			"bluefin_cli_group":          GroupConfig{Enabled: true},
 			"features_group":             GroupConfig{Enabled: true},
 			"desktop_integrations_group": GroupConfig{Enabled: true},
 			// Capabilities you turn on. Both hide themselves when

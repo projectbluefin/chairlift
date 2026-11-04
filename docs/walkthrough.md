@@ -22,7 +22,10 @@ walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
 Bluefin wordmark, an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
 and the Zavala quote. Unavailable pages are skipped;
-the ordinary page controls perform every action. **Back** and **Next** only
+the ordinary page controls perform actions. **Bluefin CLI** is selected by
+default for Bash unless previously disabled; **Next** from Features applies
+that choice and waits for completion. Failures stay on Features for retry.
+**Back** only navigates and preserves the choice. Other **Next** steps only
 navigate. The matching conclusion quotes Edith Wharton. **Finish** saves
 completion and returns to Control Center; a save failure reports an
 error toast. **Dismiss Setup**
@@ -118,11 +121,12 @@ session.
 Curated collections start checked, except **Full Desktop Suite**. Uncheck any
 collection you do not want before pressing **Install**.
 
-Enhanced Terminal Bling and Monospace Fonts are under **Features → Developer Mode**,
-not App Collections. Both start checked, including in the Setup Assistant.
-Expand Developer Mode to select and install them; installing these collections
-does not enable Developer Mode. Next and Back preserve any boxes you uncheck
-and do not install software.
+Monospace Fonts is under **Features → Developer Mode**, not App Collections.
+It starts checked, including in the Setup Assistant. Expand Developer Mode to
+select and install it; installing this collection does not enable Developer Mode.
+Next and Back preserve its checkbox and never install this collection.
+Bluefin CLI instead has one separate Features switch; there is no legacy
+terminal collection to install.
 
 **Installed Apps** and **Command-Line Tools** follow: installed casks first,
 then explicitly requested formulae (the packages Homebrew manages).
@@ -195,13 +199,22 @@ awaiting a new login remain distinguishable from completion. Failed optional
 setup can be retried without repeating a completed access grant; waiting for a
 new login is not a failure to retry.
 
+**Bluefin CLI** in **Terminal** is one switch for the Bash terminal experience.
+It installs command-line tools (including `ugrep`), enables Starship, zoxide,
+direnv and mise, and provides eza/bat/ug aliases. Expand it to inspect the tools.
+Chairlift owns the package definition and Bash scripts independently of the
+image. Turning it off removes managed Bash integration and keeps installed
+tools. Personal configuration is preserved; recognized legacy Common blocks
+are migrated on enable. Open a new Bash terminal after changing the switch.
+Fish and Zsh are explicitly unsupported and are not changed.
+
 Expand **Developer Mode**, **WSL Mode**, **Enable Docker**, or **Gaming Mode**
 to read the packages and changes involved, like App collections on Apps.
 Clicking the row expands it; the separate switch starts the action. Package
 disclosures are informational, not a live package log. Developer Mode also
-contains **Enhanced Terminal Bling** and **Monospace Fonts** as independent collection
-choices with their own explicit installation action; expanding or switching
-Developer Mode does not install these collections.
+contains **Monospace Fonts** as an independent collection choice with its own
+explicit installation action; expanding or switching Developer Mode does not
+install this collection.
 
 **Desktop Integrations** offers **Tailscale Integration** and **Sync Folder
 Integration** switches for GNOME Quick Settings. Tailscale's initial switch

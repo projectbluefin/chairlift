@@ -262,6 +262,9 @@ type UserHome struct {
 	driverButton       *gtk.Button
 	driverGate         actionstate.Gate
 
+	// Bash terminal feature, including its pending wizard choice.
+	bluefinCLI *bluefinCLIRow
+
 	// Compass (features_page compass_group).
 	compassSpinner *gtk.Spinner
 	compassGate    actionstate.Gate

@@ -161,17 +161,17 @@ accepted and ignored for compatibility, as described in [CONFIG.md](../CONFIG.md
   collapsed, but same-named files in different directories remain separate.
 
 Row text is resolved by `internal/views/bundleview`'s `Describe`, not taken
-from the file: the curated collections Bluefin ships (`cli`, `fonts`,
-`fonts-dev`, `ai-tools`, `full-desktop`) have user-facing titles and descriptions
-written here. Retired collections (`cncf`, `swift`, etc.) are filtered out, while
+from the file: the curated collections Bluefin ships (`fonts`, `fonts-dev`,
+`ai-tools`, `full-desktop`) have user-facing titles and descriptions written here.
+Legacy `cli` and retired collections (`cncf`, `swift`, etc.) are filtered out, while
 administrator-added collections remain visible. Each row also states how many apps
 and tools the definition installs, counting entry lines other than `tap`.
 
-Enhanced Terminal Bling (`cli`) and Monospace Fonts (`fonts-dev`) appear only inside
-**Features → Developer Mode**, initially collapsed, rather than in Apps.
-They retain independent selection and explicit installation using the same
-collection configuration and Homebrew floor; neither requires or enables
-developer access.
+Monospace Fonts (`fonts-dev`) appears only inside **Features → Developer Mode**,
+initially collapsed, rather than in Apps. It retains independent selection and
+explicit installation using the same collection configuration and Homebrew
+floor; it neither requires nor enables developer access. Bluefin CLI is one
+separate Features switch, not an App or Developer Mode collection.
 
 A failed bundle install reports the cause rather than the progress that
 preceded it: ChairLift reads both of brew's output streams, because
@@ -192,12 +192,21 @@ to ChairLift's log, which is where to look when filing a bug report.
 
 | Group | Key | Description |
 |-------|-----|-------------|
+| Bluefin CLI | `bluefin_cli_group` | Bash only; one switch installs the Chairlift-owned Homebrew collection including `ugrep`, enables prompt/navigation/environment hooks, and migrates recognized Common Bash source blocks. Payload lives under `$XDG_DATA_HOME/chairlift/bluefin-cli`. Turning off keeps packages and personal shell configuration. Explicit opt-out is remembered. Setup defaults to selected and applies on Next from Features; ordinary startup never enables it automatically. Fish/Zsh are not configured. |
 | Desktop Integrations | `desktop_integrations_group` | User-session GNOME extension switches for Tailscale and Sync Folder; unavailable extensions are explained, and existing GNOME choices are preserved |
 | Features | `features_group` | Toggle system features managed by updex |
 | Developer Mode | `dx_group` | Adds the invoking account to container, VM, and serial-device groups; a group the image does not define is skipped and named in a warning rather than reported as granted. A confirmed live enable also opens one developer documentation page and, when configured, runs the optional feed setup below. Shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Gaming | `gaming_group` | Manages Game Mode (switching the host between base and `-gaming` variants with Steam, Gamescope, and an Open Gaming Collective kernel, requiring a reboot confirmation) and optional system-wide gaming tools (ProtonPlus, Protontricks, GOverlay, MangoHud); shown only when `/usr/share/ublue-os/image-info.json` is present |
 | Printers | `printers_group` | Printer applications: one switch per driver family (Ghostscript, HPLIP, Gutenprint), each a rootless Podman quadlet under `~/.config/containers/systemd` driven with `systemctl --user`. Crosses no privilege boundary, so it has no `pkexec` route. Hidden where `podman` is absent. Turning a family on requires cosign to verify `ghcr.io/projectbluefin/<id>-printer-app:stable` against its publishing workflow, then writes only the verified digest, without registry auto-update ([ADR-0023](adr/0023-verify-printer-images-before-installing.md)). Installed families receive newer verified images through the Updates page's **Printer Drivers** source, which lists a family when its verified `:stable` digest differs from the installed one and refreshes it with the same signature check; that source follows this group's visibility and the `printer-drivers-enabled` preference. Older units still carrying registry auto-update can migrate there or by disable/re-enable, and their row's subtitle says so. The port is published on `127.0.0.1` only ([ADR-0020](adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md)), so IPP and the unauthenticated web administration are reachable only from this computer; there is no LAN printing or DNS-SD advertisement. The rows evaluate systemd state, journal logs, and container images to diagnose actionable failures (device access, image availability, plugin verification, service crash) rather than a false enabled indicator |
 | Compass | `compass_group` | Installs Compass (`org.tunaos.compass`), TunaOS's keyboard-first launcher, system-wide from the image's FlatPark system remote (`flatpak install --system flatpark org.tunaos.compass`), authorized by Flatpak's own PolicyKit rather than by ChairLift. ChairLift never adds the remote; without an enabled `flatpark` system remote, or on a non-x86_64 host (FlatPark publishes Compass for x86_64 only), the switch can only remove an existing copy. Turning off asks for confirmation, then removes Compass from every scope it is installed in and keeps user data. The switch reflects installed state re-read after each action. Hidden where `flatpak` is absent |
+
+Bluefin CLI setup seeds tealdeer's `tldr` page database before activating Bash,
+so command examples work offline immediately. An existing populated cache is
+reused. A failed download is reported and leaves Bash activation retryable;
+turning the feature off does not remove cached pages or installed tools.
+The managed block places Homebrew's `bin` and `sbin` before image-provided tools,
+so the shell uses the versions installed by setup. Personal overrides after the
+managed block still take precedence.
 
 **Gaming Mode** leads Features. **Setup activity** appears below it for Developer Mode, WSL,
 Docker, and Gaming operations. Its bounded checklist names actual stages,
@@ -207,9 +216,9 @@ is not ready and is not a failed action to repeat. Each of **Developer Mode**,
 **WSL Mode**, **Enable Docker**, and **Gaming Mode** expands to disclose its
 packages and changes; the independent suffix switch runs the action. Disclosures
 name directly requested software (for Docker, Homebrew formulae), not every
-package-manager dependency. Developer Mode additionally offers independently
-installable Enhanced Terminal Bling and Monospace Fonts collections; these are not automatic
-developer-enable follow-ons.
+package-manager dependency. Developer Mode additionally offers the independently
+installable Monospace Fonts collection; it is not an automatic
+developer-enable follow-on.
 An opaque bundle command does not produce a
 fabricated per-package completion stream.
 

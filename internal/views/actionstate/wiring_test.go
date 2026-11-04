@@ -303,6 +303,7 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 		{"agents_page.go", "func (uh *UserHome) onAgentModeToggled(", 1},
 		// The failure branch (partial install) and the live success.
 		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection)", 1},
+		{"bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(", 2},
 	} {
 		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
 			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)
@@ -315,5 +316,31 @@ func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
 	agent := body("agents_page.go", "func (uh *UserHome) onAgentModeToggled(")
 	if strings.Index(agent, refresh) > strings.Index(agent, "if err != nil {\n\t\t\t\tlog.Printf(\"views: agent mode toggle") {
 		t.Error("Agent Mode refreshes the inventory only after success; a failed enable may already have installed llmman")
+	}
+	cli := body("bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(")
+	if !strings.Contains(cli, "if !dryrun.Enabled() && on && err != nil {\n\t\t\t\tuh.homebrewInventoryChanged()") {
+		t.Error("Bluefin CLI must refresh the inventory on a failed enable because a partial install places packages")
+	}
+}
+
+func TestBluefinCLIRemovalPermittedWhenLoginShellIsNotBash(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "bluefin_cli.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	fn, _, _ := strings.Cut(text[strings.Index(text, "func (uh *UserHome) showBluefinCLIState()"):], "\nfunc ")
+	branch, _, ok := strings.Cut(fn[strings.Index(fn, "if !bluefincli.Supported()"):], "cli.toggle.set(false)")
+	if !ok {
+		t.Fatal("showBluefinCLIState missing !bluefincli.Supported() branch")
+	}
+	if !strings.Contains(branch, "cli.state.Configured || cli.state.Legacy") ||
+		!strings.Contains(branch, "cli.toggle.set(true)") ||
+		!strings.Contains(branch, "cli.toggle.widget.SetSensitive(!cli.gate.Running())") {
+		t.Error("showBluefinCLIState must keep switch on and sensitive when configured or legacy integration exists under non-Bash shell")
 	}
 }

@@ -57,13 +57,6 @@ func TestDescribeNamesEveryCollectionForAPerson(t *testing.T) {
 		wantSubtitle string
 	}{
 		{
-			name:         "curated collection Enhanced Terminal Bling",
-			id:           "cli",
-			itemCount:    16,
-			wantTitle:    "Enhanced Terminal Bling",
-			wantSubtitle: "A modern terminal environment with everyday utilities, Starship prompt, and shell bling. Includes 16 apps and tools.",
-		},
-		{
 			name:         "curated collection Fonts",
 			id:           "fonts",
 			itemCount:    21,
@@ -147,7 +140,7 @@ func TestDakotaCollectionsAreCuratedOrRetired(t *testing.T) {
 }
 
 func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
-	curatedIDs := []string{"cli", "fonts", "fonts-dev", "ai-tools", "full-desktop"}
+	curatedIDs := []string{"fonts", "fonts-dev", "ai-tools", "full-desktop"}
 	for _, id := range curatedIDs {
 		if !Curated(id) {
 			t.Errorf("Curated(%q) = false, want true", id)
@@ -159,7 +152,7 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 	if DefaultSelected("full-desktop") {
 		t.Errorf("DefaultSelected(full-desktop) = true, want false")
 	}
-	for _, id := range []string{"cli", "fonts", "fonts-dev", "ai-tools"} {
+	for _, id := range []string{"fonts", "fonts-dev", "ai-tools"} {
 		if !DefaultSelected(id) {
 			t.Errorf("DefaultSelected(%q) = false, want true", id)
 		}
@@ -171,7 +164,7 @@ func TestCuratedCollectionsOrderAndDefaults(t *testing.T) {
 
 func TestDeveloperCollectionsAreRelocatedWithoutChangingTheirSelection(t *testing.T) {
 	for _, id := range []string{"cli", "fonts-dev", "fonts", "dakota-fonts", "ai-tools", "full-desktop", "team-tools", DeveloperAppsCollection, "wallpaper-slideshow"} {
-		want := id == "cli" || id == "fonts-dev"
+		want := id == "fonts-dev"
 		if got := DeveloperCollection(id); got != want {
 			t.Errorf("DeveloperCollection(%q) = %v, want %v", id, got, want)
 		}
@@ -193,6 +186,18 @@ func TestRetiredCollectionsAreNotVisible(t *testing.T) {
 	// Unknown user-added collections remain visible.
 	if !Visible("team-tools", nil) {
 		t.Errorf("Visible(team-tools) = false, want true for custom user collection")
+	}
+}
+
+func TestBluefinCLIIsNotOfferedAsACollection(t *testing.T) {
+	if Visible("cli", map[string]homebrew.Bundle{"cli": {Name: "cli"}}) {
+		t.Fatal("legacy cli.Brewfile must not offer a second Bluefin CLI installer")
+	}
+	if DeveloperCollection("cli") {
+		t.Fatal("legacy cli.Brewfile must not offer a Developer Mode installer")
+	}
+	if !Visible("team-tools", nil) {
+		t.Fatal("retiring Bluefin CLI must preserve administrator collections")
 	}
 }
 

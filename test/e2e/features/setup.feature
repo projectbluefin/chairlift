@@ -17,7 +17,7 @@ Feature: Explicit first-run software setup
     And the setup "Back" button is insensitive
     And the action journal is empty
 
-  @args.--first-run @stub.livery-tools
+  @args.--first-run @stub.livery-tools @stub.apps-brew @env.SHELL=/bin/bash
   Scenario: First-run walks existing pages in order with Back and Finish
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
@@ -32,8 +32,10 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Livery"
     When I use the setup "Next" button
     Then the setup wizard shows "Features"
+    And the switch in the "Bluefin CLI" row is on
     When I use the setup "Next" button
     Then the setup wizard shows "Apps"
+    And the application log contains "[DRY-RUN] Would enable Bluefin CLI for Bash"
     When I use the setup "Next" button
     Then the setup wizard shows "Agents"
     When I use the setup "Back" button
@@ -71,7 +73,7 @@ Feature: Explicit first-run software setup
     And the setup dry run would record disposition skipped
 
   @developer-collections @args.--setup @config.apps-bundles @stub.features-gaming-none @stub.features-developer @stub.apps-brew @stub.apps-collections
-  Scenario: Wizard defaults select terminal enhancements and monospace fonts without installing them
+  Scenario: Wizard defaults select monospace fonts without installing them
     Given ChairLift is running
     Then the setup wizard shows "Welcome"
     When I use the setup "Next" button
@@ -79,17 +81,34 @@ Feature: Explicit first-run software setup
     When I use the setup "Next" button
     Then the setup wizard shows "Features"
     When I expand the "Developer Mode" list under "Developer"
-    Then the "Enhanced Terminal Bling" collection is checked
-    And the "Monospace Fonts" collection is checked
+    Then the "Monospace Fonts" collection is checked
     And the action journal is empty
     And the application log previews no "brew bundle install"
-    When I toggle the "Enhanced Terminal Bling" collection checkbox
-    And I toggle the "Monospace Fonts" collection checkbox
+    When I toggle the "Monospace Fonts" collection checkbox
     And I use the setup "Next" button
     Then the setup wizard shows "Apps"
     When I use the setup "Back" button
     Then the setup wizard shows "Features"
-    And the "Enhanced Terminal Bling" collection is unchecked
     And the "Monospace Fonts" collection is unchecked
     And the application log previews no "brew bundle install"
     And the action journal is empty
+
+  @args.--setup @stub.apps-brew @env.SHELL=/bin/bash
+  Scenario: Bash opt-out survives Back and Next without enabling the feature
+    Given ChairLift is running
+    When I use the setup "Next" button
+    Then the setup wizard shows "Livery"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Features"
+    And the switch in the "Bluefin CLI" row is on
+    When I toggle the switch in the "Bluefin CLI" row
+    Then the switch in the "Bluefin CLI" row is off
+    When I use the setup "Back" button
+    Then the setup wizard shows "Livery"
+    When I use the setup "Next" button
+    Then the setup wizard shows "Features"
+    And the switch in the "Bluefin CLI" row is off
+    When I use the setup "Next" button
+    Then the setup wizard shows "Apps"
+    And the application log contains "[DRY-RUN] Would disable Bluefin CLI for Bash"
+    And the application log does not contain "[DRY-RUN] Would enable Bluefin CLI for Bash"

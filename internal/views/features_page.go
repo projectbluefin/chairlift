@@ -81,6 +81,10 @@ func (uh *UserHome) buildFeaturesPage() {
 	}
 
 	bluefinGroups := uh.buildBluefinGroups(page)
+	terminal := uh.groupEnabled("features_page", "bluefin_cli_group")
+	if terminal {
+		uh.buildBluefinCLIGroup(page)
+	}
 	desktopIntegrations := uh.groupEnabled("features_page", "desktop_integrations_group")
 	if desktopIntegrations {
 		uh.buildShellExtensionsGroup(page)
@@ -110,7 +114,7 @@ func (uh *UserHome) buildFeaturesPage() {
 	emptyGroup.Add(&emptyState.Widget)
 	emptyGroup.SetVisible(false)
 	showEmptyState := func(optionalFeatures bool) {
-		text, empty := pageview.FeaturesEmptyState(bluefinGroups || desktopIntegrations || compassEnabled, printers, optionalFeatures)
+		text, empty := pageview.FeaturesEmptyState(bluefinGroups || terminal || desktopIntegrations || compassEnabled, printers, optionalFeatures)
 		if empty {
 			emptyState.SetTitle(text.Title)
 			emptyState.SetDescription(text.Subtitle)
