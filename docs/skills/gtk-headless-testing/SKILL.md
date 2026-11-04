@@ -226,6 +226,13 @@ work there. Screenshots are one PipeWire frame from Mutter's ScreenCast API.
   activation repeatedly and verifies serialization against the install lock.
   Keep actual link metadata and SELinux enforcement in live failure artifacts;
   neither a disabled host nor reading policy proves enforcing execution.
+- **An off switch cannot provide a stop prerequisite.** A running Docker
+  daemon that this account cannot access reads off. Legacy-runtime migration
+  must not tell that person to toggle it off or merely Retry. Preserve the
+  runtime admission refusal and surface the existing fixed terminal disable
+  command as a visible prerequisite, explicitly warning that it stops running
+  containers. Test the exported provider's real helperexec failure path and
+  the rendered row, not only the helper's stderr.
 - **A tool-call assertion needs isolated readers.** Gaming's capability floor
   is `ImageDescriptor`, so it can read Flatpak inventories even when the
   `Flatpak` capability is absent. An Apps-only no-list assertion must omit the

@@ -11,7 +11,11 @@ import (
 
 // ErrDockerRuntimeMigration refuses mutation until the running legacy daemon
 // has been stopped by the user. Rewriting its unit does not change its PATH.
-var ErrDockerRuntimeMigration = errors.New("docker runtime update deferred: turn Docker off and on to adopt the updated service, then retry")
+var ErrDockerRuntimeMigration = errors.New(DockerRuntimeMigrationPrefix + " an administrator must stop system Docker before migration")
+
+// DockerRuntimeMigrationPrefix survives the helper's process boundary so the
+// GUI can show a reachable prerequisite instead of an ineffective Retry.
+const DockerRuntimeMigrationPrefix = "docker runtime update deferred:"
 
 // DockerServiceState is one read-only systemd observation. Transitional states
 // are not evidence that a legacy daemon is stopped.

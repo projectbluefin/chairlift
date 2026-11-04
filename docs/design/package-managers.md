@@ -956,9 +956,12 @@ Enable runs in this order, after the Developer Mode prerequisite above:
   whose actual `/proc` argv, executable target, and PATH prove it started
   from the active set. Rewriting the unit or finding an active link alone
   proves neither. A legacy daemon still using `current/bin`, transitional
-  state, or unreadable evidence refuses runtime mutation and asks the user
-  to turn Docker off and on before retrying; it never stops workloads to
-  migrate automatically. The systemd/proc readers are wired in the fixed
+  state, or unreadable evidence refuses runtime mutation. The GUI surfaces
+  that helper refusal as a prerequisite: an administrator runs the existing
+  fixed terminal `docker-disable` command, with a warning that it stops running
+  containers, then the user turns Docker on again. This remains reachable
+  when NoAccess makes the switch read off. Nothing stops workloads or grants
+  access automatically. The systemd/proc readers are wired in the fixed
   helper; decisions stay pure in `internal/ubluehelper`.
 
   When SELinux is enforcing it defines the

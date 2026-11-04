@@ -961,9 +961,14 @@ An agent must not break these:
   InvocationID plus actual proc argv, executable, and PATH proving it uses
   the retained active set. A legacy daemon still using `current/bin`, a
   transitional service, or an unreadable observation refuses all runtime
-  swaps, marker changes and pruning; it asks the user to turn Docker off
-  and on, never stops workloads automatically. An active-based daemon whose
-  restart is deferred keeps its old set until its next start (#696).
+  swaps, marker changes and pruning. The GUI maps that distinctive helper
+  refusal to a visible `devtools.PrerequisiteError`, directing an administrator
+  to the existing fixed `pkexec /usr/bin/chairlift-helper docker-disable`
+  terminal command before turning Docker on again, with an explicit warning
+  that this stops running containers. This works even when NoAccess makes the
+  switch read off; refusal never stops workloads or grants access itself.
+  An active-based daemon whose restart is deferred keeps its old set until
+  its next start (#696).
   **Image units win:** when
   `/usr/lib/systemd/system/docker.service` exists (Bluefin DX), the helper
   removes its own marked units and enables the image's Docker exactly as
