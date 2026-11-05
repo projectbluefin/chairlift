@@ -257,6 +257,20 @@ changes none of the observed switch states.
 WSL also needs hardware virtualization and access to `/dev/kvm`; nsl also needs
 membership in the `kvm` group. Granting `/dev/kvm` access requires a new login;
 adding only `kvm` group membership does not.
+
+If WSL setup or a state check fails, open **Details** on its row in the
+**Developer Mode** detail page to read the actual action, inventory or shell
+probe error. After addressing the problem, **Recheck** refreshes inventory and,
+in live mode, shell readiness without restarting Control Center; a successful
+check clears Details. Preview skips shell probes for both engines and reports a
+running machine's readiness as unchecked. In live mode, NSL's `run` probe may
+start a VM that stops between listing and probing, so Recheck is not guaranteed
+to leave a stopped VM stopped. It never automatically repairs, migrates, resets
+or deletes a machine. A failed read keeps that engine's last confirmed switch
+state, including the option to stop a known running guest. A live stop still
+requires a fresh successful inventory read; preview mode only logs the intended
+stop.
+
 **Enable Docker** sets up the same rootful Docker that Bluefin DX ships: a
 system Docker service for the computer, membership in the `docker` group for
 you, and the `docker` command with buildx and compose. Its expanded package
@@ -291,10 +305,12 @@ access. Preview writes no
 settings or marker and launches no editor CLI.
 Use **Virtual Machine Engine** to choose the built-in engine or Lima;
 both run Ubuntu. An external documentation button beside the chooser opens the
-engine's documentation. An existing Lima Ubuntu machine is kept as the choice when no
-built-in machine exists, rather than creating a second one. Likewise, a Debian
-machine the built-in engine made in an earlier release keeps being used, and
-the chooser says so, instead of an Ubuntu machine being created beside it.
+engine's documentation. An existing Lima Ubuntu machine is kept as the choice
+only when a successful inventory confirms no built-in machine exists, rather
+than creating a second one. A failed inventory is not evidence of absence.
+Likewise, a Debian machine the built-in engine made in an earlier release
+keeps being used, and the chooser says so, instead of an Ubuntu machine being
+created beside it.
 **Gaming** offers **Game Mode** to switch between standard and gaming OS variants
 (including Steam, Gamescope, and an Open Gaming Collective kernel with a reboot
 confirmation). Switching images never installs, removes, or cleans up your

@@ -307,6 +307,23 @@ def step_choose_wsl_engine(context, engine):
     atspi.press("Return")
 
 
+@step('the WSL observation changes to "{mode}"')
+def step_wsl_observation_mode(context, mode):
+    if mode not in ("fail-list", "fail-list-disk", "fail-lima-list", "healthy"):
+        raise ValueError(f"unknown WSL fixture mode {mode!r}")
+    with open(os.path.join(context.scenario_dir, "wsl-read-mode"), "w", encoding="utf-8") as handle:
+        handle.write(mode)
+
+
+@then("the WSL diagnostic is cleared")
+def step_wsl_diagnostic_cleared(context):
+    def cleared():
+        row = atspi.row_containing(_content(context), "WSL Mode")
+        return not atspi.find_all(row, lambda node: atspi.is_button(node, "Details"))
+
+    assert atspi.poll(cleared), "WSL diagnostic remained after a successful recheck"
+
+
 # ---------------------------------------------------------------- setup activity
 
 

@@ -72,6 +72,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
       | package          |
       | frostyard/tap/nsl |
     And expanding disclosures changes no Features switch and requests no mutation
+    And the fake nsl was never asked to "run"
+    And the fake limactl was never asked to "shell"
 
   @stub.features-standard-image @stub.updates-bootc-booted
   @config.apps-bundles @stub.features-gaming-none @stub.features-developer
@@ -322,6 +324,7 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     Then the Developer Mode switch shows this account's developer-group membership
     And I expand the "WSL Mode" package disclosure with the keyboard
     Then I see "Virtual Machine Engine"
+    And the "WSL Mode" row says "Running — shell readiness is not checked in preview."
     And the switch in the "WSL Mode" row is on
     When I toggle the switch in the "WSL Mode" row
     Then the application log contains "would stop the ubuntu or debian nsl machine WSL Mode manages"
@@ -329,6 +332,9 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     And the switch in the "WSL Mode" row accepts input
     And the fake nsl was never asked to "shutdown"
     And the fake nsl was never asked to "remove"
+    And the fake nsl was never asked to "run"
+    And the fake nsl was never asked to "stop"
+    And the fake limactl was never asked to "shell"
     And the action journal is empty
     And the Developer Mode switch returns to its restored state
     And Setup activity shows these stage statuses
@@ -338,6 +344,112 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     And Setup activity has no Developer access stage
     And Setup activity has no running progress or fabricated percentage
 
+  @stub.features-gaming-none @stub.features-developer @stub.features-wsl-unreadable
+  Scenario: A failed initial NSL inventory keeps NSL selected despite an existing Lima guest
+    Given ChairLift is running
+    When I open the "Features" page
+    And I open the Developer Mode detail
+    Then the "WSL Mode" row says "Couldn't check your Linux virtual machine."
+    And the "Recheck" button in the "WSL Mode" row is sensitive
+    When I expand the "WSL Mode" package disclosure with the keyboard
+    Then the "WSL Mode" package disclosure shows exactly
+      | package          |
+      | frostyard/tap/nsl |
+    When I click the "Details" button in the "WSL Mode" row
+    Then a dialog titled "WSL Mode Details" is shown
+    And the dialog says "inventory unavailable"
+    When I choose "Close" in the dialog
+    And the WSL observation changes to "healthy"
+    And I click the "Recheck" button in the "WSL Mode" row
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    And the switch in the "WSL Mode" row accepts input
+    And the WSL diagnostic is cleared
+    And the fake nsl was never asked to "run"
+    And the fake limactl was never asked to "shell"
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-wsl-recheck
+  Scenario: A missing-disk inventory error is shown and cleared after a successful recheck
+    Given ChairLift is running
+    When I open the "Features" page
+    And I open the Developer Mode detail
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    When the WSL observation changes to "fail-list-disk"
+    And I click the "Recheck" button in the "WSL Mode" row
+    Then the "WSL Mode" row says "Couldn't check your Linux virtual machine."
+    And the switch in the "WSL Mode" row is on
+    And the switch in the "WSL Mode" row accepts input
+    And the "Recheck" button in the "WSL Mode" row is sensitive
+    When I click the "Details" button in the "WSL Mode" row
+    Then a dialog titled "WSL Mode Details" is shown
+    And the dialog says "creating ubuntu failed; nothing was kept: lstat /home/tester/.local/share/nsl/vm/data.raw: no such file or directory; the requested service state is not ready"
+    When I choose "Close" in the dialog
+    And the WSL observation changes to "healthy"
+    And I click the "Recheck" button in the "WSL Mode" row
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    And the WSL diagnostic is cleared
+    And the fake nsl was never asked to "run"
+    And the fake limactl was never asked to "shell"
+    And the fake nsl was never asked to "remove"
+    And the fake nsl was never asked to "shutdown"
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-wsl-recheck
+  Scenario: A failed WSL inventory preserves its running display and still offers a stop preview
+    Given ChairLift is running
+    When I open the "Features" page
+    And I open the Developer Mode detail
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    When the WSL observation changes to "fail-list"
+    And I click the "Recheck" button in the "WSL Mode" row
+    Then the "WSL Mode" row says "Couldn't check your Linux virtual machine."
+    And the "Recheck" button in the "WSL Mode" row is sensitive
+    And the switch in the "WSL Mode" row is on
+    And the switch in the "WSL Mode" row accepts input
+    When I toggle the switch in the "WSL Mode" row
+    Then the application log contains "would stop the ubuntu or debian nsl machine WSL Mode manages"
+    And the switch in the "WSL Mode" row is on
+    And the switch in the "WSL Mode" row accepts input
+    When I click the "Details" button in the "WSL Mode" row
+    Then a dialog titled "WSL Mode Details" is shown
+    And the dialog says "inventory unavailable"
+    When I choose "Close" in the dialog
+    And the WSL observation changes to "healthy"
+    And I click the "Recheck" button in the "WSL Mode" row
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    And the WSL diagnostic is cleared
+    And the fake nsl was never asked to "run"
+    And the fake nsl was never asked to "stop"
+    And the fake nsl was never asked to "remove"
+    And the fake nsl was never asked to "shutdown"
+    And the action journal is empty
+
+  @stub.features-gaming-none @stub.features-developer @stub.features-wsl-recheck
+  Scenario: A failed Lima read never borrows NSL's last confirmed running display
+    Given ChairLift is running
+    When I open the "Features" page
+    And I open the Developer Mode detail
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    When I expand the "WSL Mode" package disclosure with the keyboard
+    And the WSL observation changes to "fail-lima-list"
+    And I choose the "Lima" WSL engine
+    Then the "WSL Mode" row says "Couldn't check the Ubuntu virtual machine."
+    And the switch in the "WSL Mode" row is off
+    And the "Recheck" button in the "WSL Mode" row is sensitive
+    When I click the "Details" button in the "WSL Mode" row
+    Then a dialog titled "WSL Mode Details" is shown
+    And the dialog says "Lima inventory unavailable"
+    When I choose "Close" in the dialog
+    And I choose the "Built-in" WSL engine
+    Then the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    And the WSL diagnostic is cleared
+    And the fake nsl was never asked to "run"
+    And the fake limactl was never asked to "shell"
+
   @stub.features-gaming-none @stub.features-developer
   Scenario: Stopping Lima previews data-preserving shutdown without changing Developer Mode
     Given ChairLift is running
@@ -346,7 +458,14 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     Then the Developer Mode switch shows this account's developer-group membership
     When I expand the "WSL Mode" package disclosure with the keyboard
     And I choose the "Lima" WSL engine
-    Then the switch in the "WSL Mode" row is on
+    Then the "Recheck" button in the "WSL Mode" row is sensitive
+    And the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    When I click the "Recheck" button in the "WSL Mode" row
+    Then the "Recheck" button in the "WSL Mode" row is sensitive
+    And the "WSL Mode" row says "Running — shell readiness is not checked in preview."
+    And the switch in the "WSL Mode" row is on
+    And the WSL diagnostic is cleared
     And the switch in the "WSL Mode" row accepts input
     When I toggle the switch in the "WSL Mode" row
     Then the application log contains "would disable Ubuntu autostart and stop the VM without deleting data"
@@ -355,6 +474,8 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     And the Developer Mode switch returns to its restored state
     And Setup activity has no Developer access stage
     And the action journal is empty
+    And the fake nsl was never asked to "run"
+    And the fake limactl was never asked to "shell"
     And the fake limactl was never asked to "stop"
     And the fake limactl was never asked to "delete"
     And the fake limactl was never asked to "autostart"

@@ -25,7 +25,7 @@ func fakeLima(t *testing.T, body string) string {
 }
 
 func TestWSLDisableStopsOnlyUbuntuAndPreservesDataOnFailure(t *testing.T) {
-	log := fakeLima(t, "case \"$1\" in\nlist) echo '{\"name\":\"ubuntu\",\"status\":\"Running\"}' ;;\nautostart) exit 7 ;;\nstop) echo 'stop failed' >&2; exit 8 ;;\nesac\n")
+	log := fakeLima(t, "case \"$1\" in\nlist) echo '{\"name\":\"ubuntu\",\"status\":\"Running\"}' ;;\nshell) echo 'guest disk is unavailable' >&2; exit 1 ;;\nautostart) exit 7 ;;\nstop) echo 'stop failed' >&2; exit 8 ;;\nesac\n")
 	t.Setenv("HOME", t.TempDir())
 	data := filepath.Join(os.Getenv("HOME"), ".lima", "ubuntu", "disk")
 	if err := os.MkdirAll(filepath.Dir(data), 0o700); err != nil {
@@ -37,16 +37,7 @@ func TestWSLDisableStopsOnlyUbuntuAndPreservesDataOnFailure(t *testing.T) {
 	if err := SetWSL(context.Background(), BackendLima, false, nil); err == nil {
 		t.Fatal("failed stop must not report WSL disabled")
 	}
-	calls, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(calls), "autostart disable ubuntu") || !strings.Contains(string(calls), "stop --tty=false ubuntu") {
-		t.Fatalf("must attempt both disable steps, got %s", calls)
-	}
-	if strings.Contains(string(calls), "delete") {
-		t.Fatalf("disable deletes VM: %s", calls)
-	}
+	assertCalls(t, log, "list --json", "shell ubuntu true", "autostart disable ubuntu", "stop --tty=false ubuntu")
 	if b, err := os.ReadFile(data); err != nil || string(b) != "project data" {
 		t.Fatalf("disable lost data: %q %v", b, err)
 	}
@@ -361,23 +352,13 @@ func TestNSLReadinessRequiresShellProbe(t *testing.T) {
 }
 
 func TestNSLDisableStopsOnlyTheManagedMachine(t *testing.T) {
-	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'VM STATE' 'shared running' 'MACHINE STATE' 'work running' 'debian running' ;;\n*) exit 0 ;;\nesac\n")
+	log := fakeNSL(t, "case \"$1\" in\nlist) printf '%s\\n' 'VM STATE' 'shared running' 'MACHINE STATE' 'work running' 'debian running' ;;\nrun) echo 'guest disk is unavailable' >&2; exit 1 ;;\n*) exit 0 ;;\nesac\n")
 	if err := SetWSL(context.Background(), BackendNSL, false, nil); err != nil {
 		t.Fatalf("SetWSL disable failed: %v", err)
 	}
-	calls, err := os.ReadFile(log)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := strings.Split(strings.TrimSpace(string(calls)), "\n")
-	if got[len(got)-1] != "stop debian" {
-		t.Fatalf("disable must stop only the managed machine, got calls %q", got)
-	}
-	for _, call := range got {
-		if call == "shutdown" || strings.Contains(call, "work") || strings.HasPrefix(call, "remove") {
-			t.Fatalf("disable touched more than the managed machine: %q", got)
-		}
-	}
+	// A failed shell probe is not a reason to remove, shut down, or repair
+	// anything: fresh inventory names the one machine that may be stopped.
+	assertCalls(t, log, "list", "run -m debian --cd / true", "stop debian")
 }
 
 func TestNSLDryRunWritesNoVM(t *testing.T) {

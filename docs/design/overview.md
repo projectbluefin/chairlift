@@ -180,6 +180,21 @@ parent grant; failed authentication starts no child work, and later optional
 failure never reverses granted access. Retries retain completed stages. Group
 access awaiting a new login is not Ready and is not an installation failure.
 
+WSL inventory and shell readiness are separate observations in
+[`internal/devtools`](../../internal/devtools/): a failed live shell probe stays
+in `WSLState.Diagnostic` without erasing `Running`. The Developer Mode detail's
+WSL **Details** dialog retains action, inventory and probe errors; **Recheck**
+repeats inventory and, in live mode, readiness checks under the shared developer
+action gate, including after a failed read. Preview skips both NSL and Lima shell
+probes, preserves observed running state, and reports readiness as unchecked.
+Live NSL's `run` probe may start a VM if it stops between inventory and probing;
+Recheck is not guaranteed to be non-starting. Failed inventories preserve only
+the selected engine's last confirmed display state and do not prove NSL is absent
+for initial engine selection. Retained state is presentation-only: a live Stop
+requires a fresh successful inventory read before stopping the managed guest.
+Dry-run Stop is only a preview. ChairLift never automatically repairs or
+migrates a guest's disk.
+
 System Docker uses image units when present, otherwise the fixed helper installs
 verified Homebrew bottles into root-owned storage. Root never executes or loads
 from the user-owned Homebrew prefix. CLI tools remain user-scoped. Stop retains
