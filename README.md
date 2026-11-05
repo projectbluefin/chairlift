@@ -8,6 +8,9 @@
 
 ---
 
+## `brew install projectbluefin/tap/chairlift`
+This should work on any Linux that has homebrew installed. Bring the Bluefin Developer Experience (and dinosaurs!) to your system today! 
+
 ## Screenshots
 
 ![Control Center Updates page](docs/screenshots/1-updates.png)
