@@ -60,6 +60,9 @@ func WSLDetails(actionErr, stateErr error, probeDiagnostic string) string {
 
 // WSLSubtitle describes the observed machine without claiming a failed read succeeded.
 func WSLSubtitle(backend string, state devtools.WSLState, err error) string {
+	if err == nil && state.Running && state.ReadinessUnchecked {
+		return "Running — shell readiness is not checked in preview."
+	}
 	if backend == devtools.BackendLima {
 		switch {
 		case err != nil:

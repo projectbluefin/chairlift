@@ -290,7 +290,7 @@ exit 0
 
 @stub("features-wsl-recheck")
 def wsl_recheck(context):
-    """Managed guests whose inventory and shell probes fail independently."""
+    """Managed guests whose inventory reads can fail independently."""
     mode = os.path.join(context.scenario_dir, "wsl-read-mode")
     with open(mode, "w", encoding="utf-8") as handle:
         handle.write("healthy")
@@ -299,13 +299,11 @@ mode=$(cat "{mode}")
 case "$1" in
   list)
     if [ "$mode" = fail-list ]; then echo 'inventory unavailable' >&2; exit 1; fi
-    printf '%s\\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*'
-    ;;
-  run)
-    if [ "$mode" = fail-probe ]; then
+    if [ "$mode" = fail-list-disk ]; then
       echo 'creating ubuntu failed; nothing was kept: lstat /home/tester/.local/share/nsl/vm/data.raw: no such file or directory; the requested service state is not ready' >&2
       exit 1
     fi
+    printf '%s\\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*'
     ;;
 esac
 exit 0

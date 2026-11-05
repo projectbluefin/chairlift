@@ -309,7 +309,7 @@ def step_choose_wsl_engine(context, engine):
 
 @step('the WSL observation changes to "{mode}"')
 def step_wsl_observation_mode(context, mode):
-    if mode not in ("fail-probe", "fail-list", "fail-lima-list", "healthy"):
+    if mode not in ("fail-list", "fail-list-disk", "fail-lima-list", "healthy"):
         raise ValueError(f"unknown WSL fixture mode {mode!r}")
     with open(os.path.join(context.scenario_dir, "wsl-read-mode"), "w", encoding="utf-8") as handle:
         handle.write(mode)

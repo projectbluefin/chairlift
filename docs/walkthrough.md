@@ -260,14 +260,16 @@ adding only `kvm` group membership does not.
 
 If WSL setup or a state check fails, open **Details** on its row in the
 **Developer Mode** detail page to read the actual action, inventory or shell
-probe error. After addressing the problem, **Recheck** refreshes inventory and
-shell readiness without restarting Control Center; a successful check clears
-Details. NSL's `run` probe may start a VM that stops between listing and
-probing, so Recheck is not guaranteed to leave a stopped VM stopped. It never
-automatically repairs, migrates, resets or deletes a machine. A failed read
-keeps that engine's last confirmed switch state, including the option to stop
-a known running guest. A live stop still requires a fresh successful inventory
-read; preview mode only logs the intended stop.
+probe error. After addressing the problem, **Recheck** refreshes inventory and,
+in live mode, shell readiness without restarting Control Center; a successful
+check clears Details. Preview skips shell probes for both engines and reports a
+running machine's readiness as unchecked. In live mode, NSL's `run` probe may
+start a VM that stops between listing and probing, so Recheck is not guaranteed
+to leave a stopped VM stopped. It never automatically repairs, migrates, resets
+or deletes a machine. A failed read keeps that engine's last confirmed switch
+state, including the option to stop a known running guest. A live stop still
+requires a fresh successful inventory read; preview mode only logs the intended
+stop.
 
 **Enable Docker** sets up the same rootful Docker that Bluefin DX ships: a
 system Docker service for the computer, membership in the `docker` group for
