@@ -36,6 +36,10 @@ type developerOptionRow struct {
 	active        bool
 	awaitingLogin bool
 	packageRow    *adw.ActionRow
+	wslStates     map[string]devtools.WSLState
+	details       *gtk.Button
+	recheck       *gtk.Button
+	diagnostic    string
 }
 
 func (uh *UserHome) updateWSLPackage(item *developerOptionRow) {
@@ -87,6 +91,26 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 		uh.developerOptions = append(uh.developerOptions, item)
 
 		if choice.kind == "wsl" {
+			item.wslStates = make(map[string]devtools.WSLState)
+			dialog := adw.NewAlertDialog("WSL Mode Details", "")
+			dialog.SetBodyUseMarkup(false)
+			dialog.AddResponse("close", "Close")
+			dialog.SetCloseResponse("close")
+			item.details = gtk.NewButtonWithLabel("Details")
+			item.details.SetValign(gtk.AlignCenterValue)
+			item.details.SetVisible(false)
+			detailsClicked := func(_ gtk.Button) {
+				dialog.SetBody(item.diagnostic)
+				dialog.Present(&uh.developerPage.Widget)
+			}
+			item.details.ConnectClicked(&detailsClicked)
+			item.row.AddSuffix(&item.details.Widget)
+			item.recheck = gtk.NewButtonWithLabel("Recheck")
+			item.recheck.SetValign(gtk.AlignCenterValue)
+			recheckClicked := func(_ gtk.Button) { uh.refreshDeveloperOptions(status) }
+			item.recheck.ConnectClicked(&recheckClicked)
+			item.row.AddSuffix(&item.recheck.Widget)
+
 			combo := adw.NewComboRow()
 			combo.SetTitle("Virtual Machine Engine")
 			combo.SetSubtitle(devtools.EngineSubtitle(""))
@@ -122,6 +146,7 @@ func (uh *UserHome) buildDeveloperOptions(group *adw.PreferencesGroup, status ub
 					return
 				}
 				uh.wslBackend = target
+				uh.wslBackendResolved = true
 				uh.updateWSLPackage(item)
 				if uh.wslDocBtn != nil {
 					tip := pageview.WSLEngineDocumentationTooltip(target)
@@ -154,13 +179,17 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		var wslErr error
 		var doctorOutput string
 		var doctorErr error
+		resolved := backend != devtools.BackendNSL
 		if backend == devtools.BackendNSL && resolve {
 			// The backend choice is not stored: an existing Lima machine with
 			// no nsl machine means the user chose Lima, so the first read
 			// follows it instead of resetting to the default.
 			nsl, nslErr := devtools.NSLStatus(ctx)
 			lima, limaErr := devtools.LimaStatus(ctx)
-			backend = devtools.ResolveBackend(backend, nslErr == nil && nsl.Exists, limaErr == nil && lima.Exists)
+			if nslErr == nil && limaErr == nil {
+				backend = devtools.ResolveBackend(backend, nsl.Exists, lima.Exists)
+				resolved = true
+			}
 		}
 		if backend == devtools.BackendLima {
 			wsl, wslErr = devtools.LimaStatus(ctx)
@@ -183,7 +212,7 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		}
 		sgtk.RunOnMainThread(func() {
 			defer uh.developerGate.Reset()
-			if resolve {
+			if resolve && resolved {
 				uh.wslBackendResolved = true
 				if backend != uh.wslBackend {
 					uh.wslBackend = backend
@@ -211,14 +240,21 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 			for _, item := range uh.developerOptions {
 				switch item.kind {
 				case "wsl":
+					wsl = pageview.WSLObservation(item.wslStates[backend], wsl, wslErr)
 					if wslErr == nil {
-						item.active = wsl.Running
+						item.wslStates[backend] = wsl
 					}
+					item.active = wsl.Running
+					probeDiagnostic := ""
+					if wslErr == nil {
+						probeDiagnostic = wsl.Diagnostic
+					}
+					uh.setWSLDiagnostic(item, pageview.WSLDetails(errors.Join(doctorErr, nslGroupErr), wslErr, probeDiagnostic))
 					if backend == devtools.BackendLima {
 						item.canEnable = devtools.HostSupported() && brew && kvmExists && (kvmAccess || status.Supports(ubluehelper.CommandKVMEnable))
-						item.allowed = wslErr == nil && (wsl.Running || item.canEnable)
+						item.allowed = pageview.WSLAllowed(item.active, item.canEnable, wslErr)
 						item.toggle.set(item.active)
-						item.row.SetSubtitle(wslSubtitle(backend, wsl, wslErr))
+						item.row.SetSubtitle(pageview.WSLSubtitle(backend, wsl, wslErr))
 						if !wsl.Running && !devtools.HostSupported() {
 							item.row.SetSubtitle("WSL Mode doesn't work on this kind of computer.")
 						} else if !wsl.Running && !brew {
@@ -237,9 +273,9 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 						if wsl.Running {
 							// Stopping a running machine needs no prerequisite.
 							item.canEnable = nslHostOk && nslInstalled
-							item.allowed = wslErr == nil
+							item.allowed = pageview.WSLAllowed(item.active, item.canEnable, wslErr)
 							item.toggle.set(item.active)
-							item.row.SetSubtitle(wslSubtitle(backend, wsl, wslErr))
+							item.row.SetSubtitle(pageview.WSLSubtitle(backend, wsl, wslErr))
 						} else if !nslHostOk {
 							item.canEnable = false
 							item.allowed = false
@@ -268,15 +304,18 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 							item.row.SetSubtitle(devtools.NeedsPrerequisite)
 						} else if !kvmAccess {
 							item.canEnable = status.Supports(ubluehelper.CommandKVMEnable)
-							item.allowed = item.canEnable
+							item.allowed = pageview.WSLAllowed(item.active, item.canEnable, wslErr)
 							item.toggle.set(item.active)
 							item.row.SetSubtitle(devtools.NeedsKVMAccess)
 						} else {
 							item.canEnable = true
-							item.allowed = wslErr == nil && (wsl.Running || item.canEnable)
+							item.allowed = pageview.WSLAllowed(item.active, item.canEnable, wslErr)
 							item.toggle.set(item.active)
-							item.row.SetSubtitle(wslSubtitle(backend, wsl, wslErr))
+							item.row.SetSubtitle(pageview.WSLSubtitle(backend, wsl, wslErr))
 						}
+					}
+					if wslErr != nil {
+						item.row.SetSubtitle(pageview.WSLSubtitle(backend, wsl, wslErr))
 					}
 				case "docker":
 					// A running daemon this account cannot reach still counts as
@@ -319,6 +358,9 @@ func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
 		if item.toggle != nil {
 			item.toggle.widget.SetSensitive(sensitive && item.allowed)
 		}
+		if item.recheck != nil {
+			item.recheck.SetSensitive(sensitive)
+		}
 	}
 	if uh.developerApps != nil {
 		for _, item := range uh.developerApps.rows {
@@ -327,33 +369,9 @@ func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
 	}
 }
 
-func wslSubtitle(backend string, state devtools.WSLState, err error) string {
-	if backend == devtools.BackendLima {
-		switch {
-		case err != nil:
-			return "Couldn't check the Ubuntu virtual machine."
-		case state.Ready:
-			return "Ubuntu is ready in Lima. Run limactl shell ubuntu, or connect your editor over SSH to lima-ubuntu."
-		case state.Running:
-			return "Ubuntu is running but not ready yet."
-		case state.Exists:
-			return "Ubuntu is stopped. Your files are kept."
-		default:
-			return "Run Ubuntu LTS in a Lima virtual machine with writable access to your home folder. Downloads about 600 MB. Open a terminal with limactl shell ubuntu."
-		}
-	}
-	switch {
-	case err != nil:
-		return "Couldn't check your Linux virtual machine."
-	case state.Ready:
-		return "Your Linux virtual machine is ready."
-	case state.Running:
-		return "Your Linux virtual machine is running but not ready yet."
-	case state.Exists:
-		return "Your Linux virtual machine is stopped. Your files are kept."
-	default:
-		return "Run Linux in a virtual machine that keeps your files."
-	}
+func (uh *UserHome) setWSLDiagnostic(item *developerOptionRow, detail string) {
+	item.diagnostic = detail
+	item.details.SetVisible(detail != "")
 }
 
 func (uh *UserHome) onDeveloperOption(item *developerOptionRow, enabled bool) {
@@ -531,14 +549,20 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 			}
 			if request.Preview || !observed {
 				item.row.SetSubtitle(before)
+				if item.kind == "wsl" && observed && stateErr != nil {
+					item.allowed = pageview.WSLAllowed(item.active, item.canEnable, stateErr)
+					item.row.SetSubtitle(pageview.WSLSubtitle(backend, item.wslStates[backend], stateErr))
+				}
 			} else {
 				switch item.kind {
 				case "wsl":
+					wsl = pageview.WSLObservation(item.wslStates[backend], wsl, stateErr)
 					if stateErr == nil {
-						item.active = wsl.Running
+						item.wslStates[backend] = wsl
 					}
-					item.allowed = stateErr == nil && (item.active || item.canEnable)
-					item.row.SetSubtitle(wslSubtitle(backend, wsl, stateErr))
+					item.active = wsl.Running
+					item.allowed = pageview.WSLAllowed(item.active, item.canEnable, stateErr)
+					item.row.SetSubtitle(pageview.WSLSubtitle(backend, wsl, stateErr))
 				case "docker":
 					if stateErr == nil || docker.Active {
 						item.active = pageview.DockerSwitchOn(docker)
@@ -553,6 +577,17 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 				} else if operationErr != nil && !pkexec.IsAuthDismissed(operationErr) {
 					item.row.SetSubtitle(developerOptionFailure(item, enabled, operationErr))
 				}
+			}
+			if item.kind == "wsl" {
+				actionErr := result.Err
+				if pkexec.IsAuthDismissed(actionErr) {
+					actionErr = nil
+				}
+				probeDiagnostic := ""
+				if observed && stateErr == nil {
+					probeDiagnostic = wsl.Diagnostic
+				}
+				uh.setWSLDiagnostic(item, pageview.WSLDetails(actionErr, stateErr, probeDiagnostic))
 			}
 			item.toggle.set(item.active)
 			uh.developerSetupActivity.finish(result, request.Preview)

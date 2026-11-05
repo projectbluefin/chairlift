@@ -183,6 +183,9 @@ type WSLState struct {
 	// Machine is the nsl machine WSL Mode manages when it exists (see
 	// nslManagedMachines); empty for Lima or when none exists.
 	Machine string
+	// Diagnostic retains a failed shell probe without clearing observed Running.
+	// Stop admission still requires a fresh successful inventory read.
+	Diagnostic string
 }
 
 // NSLDoctor runs "nsl doctor" to check host prerequisites.
@@ -281,6 +284,9 @@ func NSLStatus(ctx context.Context) (WSLState, error) {
 		name, args := nslProbe(state.Machine)
 		_, err := command(ctx, false, name, args...)
 		state.Ready = err == nil
+		if err != nil {
+			state.Diagnostic = err.Error()
+		}
 	}
 	return state, nil
 }
@@ -316,6 +322,9 @@ func LimaStatus(ctx context.Context) (WSLState, error) {
 	if state.Running {
 		_, err := command(ctx, false, "limactl", "shell", "ubuntu", "true")
 		state.Ready = err == nil
+		if err != nil {
+			state.Diagnostic = err.Error()
+		}
 	}
 	return state, nil
 }

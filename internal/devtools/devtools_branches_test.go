@@ -105,12 +105,22 @@ func TestNSLDisableOfAStoppedMachineStopsNothing(t *testing.T) {
 	assertCalls(t, log, "list")
 }
 
-func TestNSLDisableReportsAFailedStatusRead(t *testing.T) {
-	log := fakeNSL(t, "exit 9\n")
-	if err := SetWSL(context.Background(), BackendNSL, false, nil); err == nil {
-		t.Fatal("disable after a failed status read reported success")
+func TestWSLDisableRequiresFreshInventory(t *testing.T) {
+	for _, backend := range []string{BackendNSL, BackendLima} {
+		t.Run(backend, func(t *testing.T) {
+			var log, list string
+			if backend == BackendNSL {
+				log, list = fakeNSL(t, "echo 'inventory unavailable' >&2\nexit 9\n"), "list"
+			} else {
+				log, list = fakeLima(t, "echo 'inventory unavailable' >&2\nexit 9\n"), "list --json"
+			}
+			err := SetWSL(context.Background(), backend, false, nil)
+			if err == nil || !strings.Contains(err.Error(), "inventory unavailable") {
+				t.Fatalf("disable after failed inventory = %v, want the read error", err)
+			}
+			assertCalls(t, log, list)
+		})
 	}
-	assertCalls(t, log, "list")
 }
 
 func TestNSLStartLeavesARunningMachineRunning(t *testing.T) {

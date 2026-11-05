@@ -288,6 +288,48 @@ exit 0
     context.launch_env["SETUP_CHECKER_FILE"] = os.path.join(context.home, ".local", "share", "ublue", "setup_versioning.json")
 
 
+@stub("features-wsl-recheck")
+def wsl_recheck(context):
+    """Managed guests whose inventory and shell probes fail independently."""
+    mode = os.path.join(context.scenario_dir, "wsl-read-mode")
+    with open(mode, "w", encoding="utf-8") as handle:
+        handle.write("healthy")
+    fake_executable(context, "nsl", _recorder(context) + f"""
+mode=$(cat "{mode}")
+case "$1" in
+  list)
+    if [ "$mode" = fail-list ]; then echo 'inventory unavailable' >&2; exit 1; fi
+    printf '%s\\n' 'VM\tSTATE\tIMAGE\tRESOURCES\tDATA DISK' 'shared\trunning\t-\t4 CPUs, 8 GiB\t20 GiB' '' 'MACHINE\tSTATE\tIMAGE\tTIER\tDEFAULT' 'debian\trunning\tdebian:13\tshared\t*'
+    ;;
+  run)
+    if [ "$mode" = fail-probe ]; then
+      echo 'creating ubuntu failed; nothing was kept: lstat /home/tester/.local/share/nsl/vm/data.raw: no such file or directory; the requested service state is not ready' >&2
+      exit 1
+    fi
+    ;;
+esac
+exit 0
+""")
+    fake_executable(context, "limactl", _recorder(context) + f"""
+mode=$(cat "{mode}")
+case "$1" in
+  list)
+    if [ "$mode" = fail-lima-list ]; then echo 'Lima inventory unavailable' >&2; exit 1; fi
+    echo '{{"name":"ubuntu","status":"Running"}}'
+    ;;
+  shell) exit 0 ;;
+esac
+exit 0
+""")
+
+
+@stub("features-wsl-unreadable")
+def wsl_unreadable(context):
+    wsl_recheck(context)
+    with open(os.path.join(context.scenario_dir, "wsl-read-mode"), "w", encoding="utf-8") as handle:
+        handle.write("fail-list")
+
+
 @stub("features-developer-packages")
 def developer_packages(context):
     """A local optional collection, parsed through the real Brewfile reader."""
