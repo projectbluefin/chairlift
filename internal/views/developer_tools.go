@@ -175,26 +175,12 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 	go func() {
 		ctx, cancel := ublue.DefaultContext()
 		defer cancel()
-		var wsl devtools.WSLState
-		var wslErr error
+		// Preserve the inventory used to resolve the initial choice, including
+		// errors, rather than running either engine's readiness probe twice.
+		backend, wsl, resolved, wslErr := devtools.RefreshWSLStatus(ctx, backend, resolve)
 		var doctorOutput string
 		var doctorErr error
-		resolved := backend != devtools.BackendNSL
-		if backend == devtools.BackendNSL && resolve {
-			// The backend choice is not stored: an existing Lima machine with
-			// no nsl machine means the user chose Lima, so the first read
-			// follows it instead of resetting to the default.
-			nsl, nslErr := devtools.NSLStatus(ctx)
-			lima, limaErr := devtools.LimaStatus(ctx)
-			if nslErr == nil && limaErr == nil {
-				backend = devtools.ResolveBackend(backend, nsl.Exists, lima.Exists)
-				resolved = true
-			}
-		}
-		if backend == devtools.BackendLima {
-			wsl, wslErr = devtools.LimaStatus(ctx)
-		} else {
-			wsl, wslErr = devtools.NSLStatus(ctx)
+		if backend != devtools.BackendLima {
 			if devtools.NSLInstalled() {
 				doctorOutput, doctorErr = devtools.NSLDoctor(ctx)
 			}
