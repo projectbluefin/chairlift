@@ -185,8 +185,10 @@ WSL inventory and shell readiness are separate observations in
 in `WSLState.Diagnostic` without erasing `Running`. The Developer Mode detail's
 WSL **Details** dialog retains action, inventory and probe errors; **Recheck**
 repeats inventory and, in live mode, readiness checks under the shared developer
-action gate, including after a failed read. Preview skips both NSL and Lima shell
-probes, preserves observed running state, and reports readiness as unchecked.
+action gate, including after a failed read. Initial engine selection reuses each
+engine's inventory and readiness result for that refresh, avoiding duplicate
+probes. Preview skips both NSL and Lima shell probes, preserves observed running
+state, and reports readiness as unchecked.
 Live NSL's `run` probe may start a VM if it stops between inventory and probing;
 Recheck is not guaranteed to be non-starting. Failed inventories preserve only
 the selected engine's last confirmed display state and do not prove NSL is absent
