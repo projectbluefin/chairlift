@@ -16,7 +16,11 @@ func TestWriteFileAtomicReplacesFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer old.Close()
+	defer func() {
+		if err := old.Close(); err != nil {
+			t.Errorf("close old file: %v", err)
+		}
+	}()
 	if err := WriteFileAtomic(path, []byte("new content"), 0o600); err != nil {
 		t.Fatal(err)
 	}
