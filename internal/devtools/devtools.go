@@ -26,6 +26,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/dockerbrew"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/fsutil"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/outputtail"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
@@ -639,7 +640,7 @@ func wireSSH() error {
 	if !found {
 		// Never truncate the user's SSH config in place: a crash or a full
 		// disk mid-write would leave it empty. Write a sibling and rename.
-		if err := writeFileAtomic(target, append([]byte(include+"\n\n"), b...), 0o600); err != nil {
+		if err := fsutil.WriteFileAtomic(target, append([]byte(include+"\n\n"), b...), 0o600); err != nil {
 			return err
 		}
 	}
@@ -685,34 +686,6 @@ func sshConfigTarget(path string) (string, error) {
 			path = dir + string(filepath.Separator) + link
 		}
 	}
-}
-
-// writeFileAtomic replaces p with data through a synced sibling temporary
-// file and a rename, so a reader or a crash sees either the old content or
-// the new, never a truncated file.
-func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(p), "."+filepath.Base(p)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer func() { _ = os.Remove(name) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, p)
 }
 
 // DockerState is the observed system Docker state. ChairLift installs the
