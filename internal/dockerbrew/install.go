@@ -14,6 +14,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/projectbluefin/chairlift/internal/fsutil"
 )
 
 const (
@@ -102,7 +104,7 @@ func Install(ctx context.Context, c Client, root string, admit func(context.Cont
 				// never be cleared by a restart onto this one; what is
 				// pending now is a restart onto current.
 				if named, err := readMarker(filepath.Join(root, restartName)); err != nil || named != id {
-					if err := writeFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
+					if err := fsutil.WriteFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
 						return Manifest{}, false, err
 					}
 				}
@@ -134,10 +136,10 @@ func Install(ctx context.Context, c Client, root string, admit func(context.Cont
 	if err != nil {
 		return Manifest{}, false, err
 	}
-	if err := writeFileAtomic(filepath.Join(staging, manifestName), append(data, '\n'), 0o644); err != nil {
+	if err := fsutil.WriteFileAtomic(filepath.Join(staging, manifestName), append(data, '\n'), 0o644); err != nil {
 		return Manifest{}, false, err
 	}
-	if err := writeFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
+	if err := fsutil.WriteFileAtomic(filepath.Join(root, restartName), []byte(id+"\n"), 0o644); err != nil {
 		return Manifest{}, false, err
 	}
 	setDir := filepath.Join(root, id)

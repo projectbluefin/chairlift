@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/projectbluefin/chairlift/internal/fsutil"
 )
 
 // The units are moby's contrib/init/systemd/docker.service and docker.socket
@@ -146,7 +148,7 @@ func WriteUnits(dir, root string) (changed bool, err error) {
 		if body, ok := cur[u.name]; ok && body == u.body {
 			continue
 		}
-		if err := writeFileAtomic(filepath.Join(dir, u.name), []byte(u.body), 0o644); err != nil {
+		if err := fsutil.WriteFileAtomic(filepath.Join(dir, u.name), []byte(u.body), 0o644); err != nil {
 			return changed, err
 		}
 		changed = true
@@ -193,28 +195,4 @@ func readUnit(p string) (string, bool, error) {
 	}
 	first, _, _ := strings.Cut(string(data), "\n")
 	return string(data), strings.TrimRight(string(first), "\r") == ManagedMarker, nil
-}
-
-func writeFileAtomic(p string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(p), "."+filepath.Base(p)+".tmp-")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), p)
 }
