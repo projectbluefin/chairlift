@@ -2,14 +2,15 @@
     <img src="data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg" width="128">
     <h1>Control Center</h1>
     <p>The system management tool for <a href="https://github.com/projectbluefin/bluefin">Bluefin</a></p>
-    <p>Manage your Homebrew packages, keep the whole system up to date, and maintain your computer with ease.</p>
-    <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b> — see <a href="docs/adr/0012-ship-as-control-center-keep-chairlift-code-name.md">ADR-0012</a>.</sub></p>
+    <p>Bring cloud native development to your desktop. Manage your Homebrew packages, keep the whole system up to date, and maintain your computer with ease.</p>
+    <p><sub>Control Center is the product name. The project, its binaries, and its packages are named <b>ChairLift</b>.</p>
 </div>
 
 ---
 
 ## `brew install projectbluefin/tap/chairlift`
-This should work on any Linux that has homebrew installed. Bring the Bluefin Developer Experience (and dinosaurs!) to your system today! 
+
+This should work on any Linux that has homebrew and podman installed. Bring the Bluefin Developer Experience (and dinosaurs!) to your system today! 
 
 ## Screenshots
 
