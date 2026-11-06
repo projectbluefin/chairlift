@@ -177,7 +177,7 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 		defer cancel()
 		// Preserve the inventory used to resolve the initial choice, including
 		// errors, rather than running either engine's readiness probe twice.
-		backend, wsl, wslErr, resolved := devtools.RefreshWSLStatus(ctx, backend, resolve)
+		backend, wsl, resolved, wslErr := devtools.RefreshWSLStatus(ctx, backend, resolve)
 		var doctorOutput string
 		var doctorErr error
 		if backend != devtools.BackendLima {

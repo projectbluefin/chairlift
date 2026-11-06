@@ -32,7 +32,7 @@ func TestRefreshWSLStatus(t *testing.T) {
 			nslCalls, limaCalls := 0, 0
 			nsl := func(context.Context) (WSLState, error) { nslCalls++; return tt.nsl, tt.nslErr }
 			lima := func(context.Context) (WSLState, error) { limaCalls++; return tt.lima, tt.limaErr }
-			backend, state, err, resolved := refreshWSLStatus(context.Background(), tt.backend, tt.resolve, nsl, lima)
+			backend, state, resolved, err := refreshWSLStatus(context.Background(), tt.backend, tt.resolve, nsl, lima)
 			if backend != tt.wantBackend || state != tt.wantState || !errors.Is(err, tt.wantErr) || resolved != tt.wantResolved || nslCalls != tt.wantNSL || limaCalls != tt.wantLima {
 				t.Errorf("got backend=%q state=%+v err=%v resolved=%v calls=%d/%d; want backend=%q state=%+v err=%v resolved=%v calls=%d/%d", backend, state, err, resolved, nslCalls, limaCalls, tt.wantBackend, tt.wantState, tt.wantErr, tt.wantResolved, tt.wantNSL, tt.wantLima)
 			}
