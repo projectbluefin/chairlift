@@ -48,7 +48,27 @@ func TestRunTerminatesProcessGroup(t *testing.T) {
 	// the backgrounded child is gone. A process-group kill reaps it; killing
 	// only the direct child would leave it alive.
 	time.Sleep(200 * time.Millisecond)
-	if err := syscall.Kill(childPID, 0); err == nil {
+	if processAlive(childPID) {
 		t.Fatalf("child process %d still alive after timeout: group was not terminated", childPID)
 	}
+}
+
+// processAlive reports whether pid is still running. A killed orphan whose
+// adoptive parent has not reaped it yet lingers as a zombie, which still
+// answers signal 0, so zombies count as terminated: the group kill already
+// happened and only reaping, which is outside Run's control, remains.
+func processAlive(pid int) bool {
+	if err := syscall.Kill(pid, 0); err != nil {
+		return false
+	}
+	status, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "status"))
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(status), "\n") {
+		if strings.HasPrefix(line, "State:") {
+			return !strings.Contains(line, "Z")
+		}
+	}
+	return true
 }
