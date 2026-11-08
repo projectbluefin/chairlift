@@ -21,6 +21,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/userprefs"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/activity"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
@@ -72,6 +73,11 @@ type UpdateShell struct {
 	// page is the destination's one preferences page; see PreferencesPage.
 	page             *adw.PreferencesPage
 	onUpdateFinished func(updateflow.Snapshot)
+	// activities is the window's inventory of long-running work; a check
+	// and every admitted mutation report to it. mutationTask is the
+	// admitted mutation's entry, held from beginMutation to finishMutation.
+	activities   *activity.Tracker
+	mutationTask *activity.Task
 }
 
 // SetOnUpdateFinished registers a callback invoked on the GTK main thread
@@ -91,6 +97,7 @@ func NewUpdateShell(
 	preferences func() userprefs.Values,
 	policy func() map[updateflow.SourceID]updateflow.Policy,
 	toasts ToastAdder,
+	activities *activity.Tracker,
 ) *UpdateShell {
 	lifecycle, cancel := context.WithCancel(context.Background())
 	s := &UpdateShell{
@@ -101,6 +108,7 @@ func NewUpdateShell(
 		sourceRows:  make(map[updateflow.SourceID]*sourceRow),
 		lifecycle:   lifecycle,
 		cancel:      cancel,
+		activities:  activities,
 	}
 	s.build()
 	s.Render(updateflow.Snapshot{Phase: updateflow.PhaseChecking})
@@ -157,9 +165,11 @@ func (s *UpdateShell) StartCheck() {
 	s.sourcesReady = false
 	preferences := s.currentPreferences()
 	policy := s.currentPolicy()
+	task := s.activities.Start("Checking for updates")
 	go func() {
 		defer cancel()
 		s.coordinator.Check(ctx, preferences, policy, s.publish)
+		task.Finish()
 		// Queued after the check's last publish, so it sees that snapshot.
 		sgtk.RunOnMainThread(s.checkFinished)
 	}()
@@ -194,7 +204,7 @@ func (s *UpdateShell) PreferencesChanged() {
 // StartUpdate starts the current snapshot's serial mutation away from the GTK
 // thread.
 func (s *UpdateShell) StartUpdate() {
-	if !s.beginMutation() {
+	if !s.beginMutation("Installing updates") {
 		return
 	}
 	ctx, cancel, ok := s.operationContext()
@@ -204,6 +214,7 @@ func (s *UpdateShell) StartUpdate() {
 	}
 	current := cloneSnapshot(s.snapshot)
 	preferences := s.currentPreferences()
+	task := s.mutationTask
 	go func() {
 		defer cancel()
 		defer sgtk.RunOnMainThread(s.finishMutation)
@@ -212,6 +223,7 @@ func (s *UpdateShell) StartUpdate() {
 		var final updateflow.Snapshot
 		s.coordinator.UpdateAll(ctx, current, preferences, func(snapshot updateflow.Snapshot) {
 			final = snapshot
+			reportUpdateProgress(task, snapshot)
 			s.publish(snapshot)
 		})
 		s.notifyUpdateComplete(final)
@@ -238,7 +250,9 @@ func (s *UpdateShell) StartUpdate() {
 // beginMutation admits update operations and system changes that must not
 // overlap them, including channel and driver switches, Gaming Mode, and
 // Powerwash deployment changes. Every caller runs on GTK's main thread.
-func (s *UpdateShell) beginMutation() bool {
+// title names the operation in the window's Activity list until
+// finishMutation ends it.
+func (s *UpdateShell) beginMutation(title string) bool {
 	if s == nil {
 		return false
 	}
@@ -250,6 +264,7 @@ func (s *UpdateShell) beginMutation() bool {
 		s.restartInFlight.Load() || !s.sourcesReady || updatepresent.ShowProgress(s.snapshot.Phase) || !s.mutation.CompareAndSwap(false, true) {
 		return false
 	}
+	s.mutationTask = s.activities.Start(title)
 	s.primary.SetSensitive(false)
 	s.refresh.SetSensitive(false)
 	for _, row := range s.sourceRows {
@@ -258,8 +273,25 @@ func (s *UpdateShell) beginMutation() bool {
 	return true
 }
 
+// reportUpdateProgress mirrors an Update All snapshot into its Activity
+// entry: the same line the Updates page shows, with the run's measured share
+// when the current stage measures one. It runs on the update's goroutine.
+func reportUpdateProgress(task *activity.Task, snapshot updateflow.Snapshot) {
+	if snapshot.Phase != updateflow.PhaseUpdating {
+		return
+	}
+	presentation := updatepresent.Snapshot(snapshot)
+	if presentation.ProgressDeterminate {
+		task.Progress(presentation.Status, presentation.ProgressFraction)
+		return
+	}
+	task.Working(presentation.Status)
+}
+
 func (s *UpdateShell) finishMutation() {
 	s.mutation.Store(false)
+	s.mutationTask.Finish()
+	s.mutationTask = nil
 	if s.closed.Load() {
 		return
 	}
@@ -285,7 +317,8 @@ func (s *UpdateShell) finishMutation() {
 }
 
 func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflow.Item, row *adw.ActionRow) {
-	message := actionmsg.Update(dryrun.Enabled(), updatepresent.ItemTitle(item))
+	title := updatepresent.ItemTitle(item)
+	message := actionmsg.Update(dryrun.Enabled(), title)
 	if source == updateflow.DeveloperTools {
 		message = actionmsg.Upgrade(dryrun.Enabled(), item.Name)
 	}
@@ -296,7 +329,7 @@ func (s *UpdateShell) startItemUpdate(source updateflow.SourceID, item updateflo
 		}
 		return fmt.Sprintf("Couldn't update %s. %s", updatepresent.ItemTitle(item), updatepresent.FailureHint(err))
 	}
-	s.startIndividualUpdate(source, row, func(ctx context.Context) (updateflow.ApplyResult, error) {
+	s.startIndividualUpdate(source, row, "Updating "+title, func(ctx context.Context) (updateflow.ApplyResult, error) {
 		return updateproviders.UpdateItem(ctx, source, item)
 	}, message, failed)
 }
@@ -306,19 +339,20 @@ func (s *UpdateShell) startToolRefresh() {
 	if row == nil {
 		return
 	}
-	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, updateproviders.RefreshDeveloperTools,
+	s.startIndividualUpdate(updateflow.DeveloperTools, row.row, "Checking for new tool versions", updateproviders.RefreshDeveloperTools,
 		actionmsg.SelfUpdate(dryrun.Enabled(), "Tool catalog"),
 		func(err error) string {
 			return "Couldn't check for new tool versions. " + updatepresent.FailureHint(err)
 		})
 }
 
-// startIndividualUpdate runs one row's update. A live change reports source
-// as completed through the same finished hook an Update All run uses, so the
-// Apps inventory refreshes after a single Homebrew upgrade too. A failure is
-// logged with its raw error and shown as failed(err), which is plain words.
-func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, run func(context.Context) (updateflow.ApplyResult, error), result string, failed func(error) string) {
-	if !s.beginMutation() {
+// startIndividualUpdate runs one row's update; title names it in the
+// window's Activity list. A live change reports source as completed through
+// the same finished hook an Update All run uses, so the Apps inventory
+// refreshes after a single Homebrew upgrade too. A failure is logged with its
+// raw error and shown as failed(err), which is plain words.
+func (s *UpdateShell) startIndividualUpdate(source updateflow.SourceID, row *adw.ActionRow, title string, run func(context.Context) (updateflow.ApplyResult, error), result string, failed func(error) string) {
+	if !s.beginMutation(title) {
 		return
 	}
 	ctx, cancel, ok := s.operationContext()

@@ -64,6 +64,15 @@ While checking or installing, an animated activity bar takes the button's
 place and stays moving even when the underlying tool has no new output. It
 does not claim a percentage.
 
+Long work stays visible whatever page you move to. While a check, an update,
+a system switch or rollback, **Free Up Space**, or an app collection install
+is running, a spinner appears at the top of the sidebar; its tooltip names
+the task, or counts them. Clicking it opens **Activity**, which lists every
+running task with what it is doing now, a percentage when the task can
+measure one, and roughly how long is left once that measure is steady. When
+the last task ends, the spinner goes away and the list says **No Tasks
+Running**.
+
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).
 

@@ -28,6 +28,8 @@ type windowUI struct {
 	SetupNext        *gtk.Button              `ui:"setup_next"`
 	NarrowBreakpoint *adw.Breakpoint          `ui:"narrow_breakpoint"`
 	AppSection       *gio.Menu                `ui:"app_section"`
+	ActivityButton   *gtk.Button              `ui:"activity_button"`
+	ActivitySpinner  *gtk.Spinner             `ui:"activity_spinner"`
 }
 
 // bookendUI is one first-run bookend: internal/ui/bookend.blp.
@@ -62,6 +64,14 @@ type legacyShortcutsUI struct {
 type aboutUI struct {
 	_      ui.File          `ui:"about"`
 	Dialog *adw.AboutDialog `ui:"about_dialog"`
+}
+
+// activityUI is the Activity dialog: internal/ui/activity.blp.
+type activityUI struct {
+	_         ui.File               `ui:"activity"`
+	Dialog    *adw.Dialog           `ui:"dialog"`
+	Stack     *gtk.Stack            `ui:"stack"`
+	TaskGroup *adw.PreferencesGroup `ui:"task_group"`
 }
 
 // navRowUI is one sidebar row: internal/ui/nav-row.blp.

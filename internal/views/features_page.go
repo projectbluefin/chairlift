@@ -543,7 +543,11 @@ func (uh *UserHome) runGameModeSwitchConfirmed(enabled bool, toggle *guardedSwit
 		uh.toastAdder.ShowToast("A system switch is already waiting for a restart")
 		return
 	}
-	if !uh.updateShell.beginMutation() {
+	title := "Turning off Game Mode"
+	if enabled {
+		title = "Turning on Game Mode"
+	}
+	if !uh.updateShell.beginMutation(title) {
 		uh.gameModeGate.Reset()
 		sgtk.RunOnMainThread(func() { toggle.set(!enabled) })
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)

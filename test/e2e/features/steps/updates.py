@@ -322,3 +322,30 @@ def step_sources_reachable(context):
 def step_release_flatpak_check(context):
     with open(_state(context, "flatpak-remote-ls-user.release"), "w", encoding="utf-8"):
         pass
+
+
+# The Activity indicator sits in the sidebar's header bar (internal/ui/
+# window.blp), outside the content side the other lookups search.
+ACTIVITY_LABEL = "Activity"
+
+
+def _activity_indicators(context):
+    if context.app is None:
+        raise AssertionError("ChairLift is not running in this scenario (@no-app?)")
+    window = atspi.main_window(context.app)
+    return atspi.find_all(window, lambda n: atspi.is_button(n, ACTIVITY_LABEL))
+
+
+@then("the Activity indicator is {visibility:w}")
+def step_activity_indicator(context, visibility):
+    assert visibility in ("shown", "hidden")
+    want = visibility == "shown"
+    ok = atspi.poll(lambda: bool(_activity_indicators(context)) == want)
+    assert ok, f"the Activity indicator is not {visibility}"
+
+
+@step("I open the Activity indicator")
+def step_open_activity(context):
+    found = atspi.poll(lambda: _activity_indicators(context))
+    assert found, "the Activity indicator is not shown"
+    atspi.activate(found[0])

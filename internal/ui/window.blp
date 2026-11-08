@@ -27,6 +27,23 @@ Adw.ToastOverlay toasts {
               Adw.HeaderBar {
                 show-end-title-buttons: false;
 
+                // Shown only while long-running work is in progress;
+                // internal/window starts the spinner and fills the tooltip
+                // from internal/views/activity, and the action opens the
+                // Activity dialog (internal/ui/activity.blp).
+                [start]
+                Button activity_button {
+                  visible: false;
+                  action-name: "win.show-activity";
+                  tooltip-text: _("Activity");
+
+                  accessibility {
+                    label: _("Activity");
+                  }
+
+                  child: Spinner activity_spinner {};
+                }
+
                 [end]
                 MenuButton menu_button {
                   icon-name: "open-menu-symbolic";

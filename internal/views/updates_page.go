@@ -538,7 +538,7 @@ func (s *stageProgressSink) flush() {
 func (uh *UserHome) onBootcStageClicked() {
 	// beginMutation refuses while a check, an update run, or a restart owns
 	// the system; say so instead of ignoring the click.
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Downloading the system update") {
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
@@ -916,7 +916,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 	if !uh.driverGate.TryStart() {
 		return
 	}
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Switching graphics drivers") {
 		uh.driverGate.Reset()
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
@@ -971,7 +971,11 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 		channel = imageinfo.ChannelTesting
 	}
 
-	if !uh.updateShell.beginMutation() {
+	title := "Switching back to tested updates"
+	if toTesting {
+		title = "Switching to early updates"
+	}
+	if !uh.updateShell.beginMutation(title) {
 		// This runs inside the switch's state-set emission, where moving
 		// the switch is overridden when the emission finishes; revert on
 		// the next main-loop turn instead.

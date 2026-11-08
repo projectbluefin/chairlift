@@ -132,7 +132,7 @@ func (uh *UserHome) onFreeUpSpaceClicked(button *gtk.Button, row *adw.ActionRow,
 	// running them beside Update All would put flatpak uninstall --unused
 	// next to flatpak update and brew cleanup next to brew upgrade. The
 	// update shell admits one such mutation at a time.
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Freeing up space") {
 		uh.freeUpSpaceGate.Reset()
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return

@@ -196,7 +196,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 	// Rolling back changes which deployment boots next, so it is admitted
 	// by the update shell like every other action that replaces the
 	// operating system: it must not run beside an update run's staging.
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Rolling back the system") {
 		uh.bootcRollbackGate.Reset()
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
@@ -248,7 +248,7 @@ func (uh *UserHome) onBootcRollbackClicked() {
 // would reboot in the middle of that run, and the shell's admission is also
 // what keeps a second press from starting a second restart.
 func (uh *UserHome) onBootcRollbackRestartClicked() {
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Restarting into the previous system") {
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}

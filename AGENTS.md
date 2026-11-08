@@ -59,6 +59,11 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   and the GTK shell renders snapshots. Deployment changes, restart, and cleanup
   share its mutation admission. Reuse action/refresh/row gates rather
   than adding parallel owners. Retryable controls reset their gates.
+- Long-running work reports to the window's one `internal/views/activity`
+  tracker, which the sidebar's Activity indicator and dialog draw. A check and
+  every `UpdateShell.beginMutation(title)` admission register themselves;
+  other long actions `Start` a task and `Finish` it on every path. The tracker
+  only describes work; it never admits, orders, or cancels it.
 - Game Mode changes system images only; it never manages gaming Flatpaks.
 - All mutations honor `dryrun.Enabled()`. Preview is not live success.
   Destructive actions require confirmation; preserve user-owned files/settings

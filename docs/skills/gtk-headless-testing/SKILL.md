@@ -81,6 +81,14 @@ Use the existing session/input helpers rather than another runner:
   may have separate process groups. Never signal the runner's shared session.
 - For live GNOME QA, check that the guest screen is unlocked and inspect the
   captured frames. Successful actions or focus do not prove a visible window.
+- On a host without Podman, the pinned image still runs the real suite and
+  `scripts/blueprints.sh`'s compiler: export it with `crane export` into a
+  directory and enter it through an unprivileged user and mount namespace,
+  reproducing `dakota.sh`'s mounts and masks. Enter with `pivot_root`, not
+  `chroot`: the kernel refuses a new user namespace inside a chroot, and the
+  second one is needed to run as an ordinary uid, since headless Mutter
+  refuses uid 0. Give that uid a passwd entry or `dbus-daemon` fails to start.
+  This substitutes for the container only; CI's `dakota.sh` run is the gate.
 
 ## Maintaining the native harness
 

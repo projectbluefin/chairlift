@@ -1,0 +1,39 @@
+using Gtk 4.0;
+using Adw 1;
+
+// The Activity dialog: every long-running task in progress, whichever page
+// started it. internal/window binds it once, adds one row per task to
+// task_group from internal/views/activity's inventory, and shows the empty
+// page when nothing runs (issue #734).
+Adw.Dialog dialog {
+  title: _("Activity");
+  content-width: 420;
+  content-height: 420;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Stack stack {
+      transition-type: crossfade;
+
+      StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "object-select-symbolic";
+          title: _("No Tasks Running");
+          description: _("Updates, installs and other long tasks appear here while they run");
+        };
+      }
+
+      StackPage {
+        name: "tasks";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup task_group {}
+        };
+      }
+    };
+  };
+}
