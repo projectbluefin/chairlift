@@ -56,7 +56,9 @@ def current_dialog(context, timeout=atspi.DEFAULT_TIMEOUT):
     Libadwaita presents AdwDialog and AdwAlertDialog inside the main window
     (a "dialog"/"alert" node) when it fits and as a separate top-level frame
     when it does not, as AdwAboutDialog does on the suite's display. Both
-    places are searched; an in-window dialog wins.
+    places are searched; an in-window dialog wins. The main window is known by
+    its name as well as its sidebar, because a narrow window that shows the
+    page drops the sidebar from the tree.
     """
     def lookup():
         found = None
@@ -67,7 +69,9 @@ def current_dialog(context, timeout=atspi.DEFAULT_TIMEOUT):
             return found
         extra = [
             w for w in atspi.children(app(context))
-            if atspi.showing(w) and atspi.sidebar_path(w) is None
+            if atspi.showing(w)
+            and atspi.name(w) not in atspi.APPLICATION_NAMES
+            and atspi.sidebar_path(w) is None
         ]
         return extra[-1] if extra else None
 

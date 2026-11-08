@@ -14,6 +14,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionmsg"
+	"github.com/projectbluefin/chairlift/internal/views/activity"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/progresslog"
 	"github.com/projectbluefin/chairlift/internal/views/rowset"
@@ -459,8 +460,11 @@ func (uh *UserHome) loadBootcUpdateStatus(group *adw.PreferencesGroup) {
 //
 // The split of duties is the GTK main-thread rule: consume runs on the worker
 // goroutine and touches no widget, flush runs on the main thread and owns
-// every widget this type names.
+// every widget this type names. task is the run's Activity entry; it is safe
+// from any goroutine, so consume reports each line to it directly and the
+// step stays visible from every page while the bar stays indeterminate.
 type stageProgressSink struct {
+	task        *activity.Task
 	activityRow *adw.ActionRow
 	logExpander *adw.ExpanderRow
 	lines       *progresslog.Coalescer
@@ -468,9 +472,10 @@ type stageProgressSink struct {
 }
 
 // newStageProgressSink returns a sink rendering into the run's activity row
-// and "Details" expander.
-func newStageProgressSink(activityRow *adw.ActionRow, logExpander *adw.ExpanderRow) *stageProgressSink {
+// and "Details" expander and reporting each line to the run's Activity task.
+func newStageProgressSink(activityRow *adw.ActionRow, logExpander *adw.ExpanderRow, task *activity.Task) *stageProgressSink {
 	return &stageProgressSink{
+		task:        task,
 		activityRow: activityRow,
 		logExpander: logExpander,
 		lines:       progresslog.New(progresslog.DefaultLimit),
@@ -487,6 +492,7 @@ func (s *stageProgressSink) consume(progressCh <-chan stageexec.ProgressEvent) s
 		switch event.Type {
 		case stageexec.EventMessage:
 			lastMessage = event.Message
+			s.task.Working(event.Message)
 			if s.lines.Append(event.Message) {
 				sgtk.RunOnMainThread(s.flush)
 			}
@@ -538,7 +544,7 @@ func (s *stageProgressSink) flush() {
 func (uh *UserHome) onBootcStageClicked() {
 	// beginMutation refuses while a check, an update run, or a restart owns
 	// the system; say so instead of ignoring the click.
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Downloading the system update") {
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
 	}
@@ -582,6 +588,9 @@ func (uh *UserHome) onBootcStageClicked() {
 	logExpander.SetVisible(false)
 	expander.AddRow(&logExpander.Widget)
 	uh.bootcLogExpander = logExpander
+	// Read on the main thread: finishMutation clears the field, and the
+	// worker below outlives this call.
+	task := uh.updateShell.mutationTask
 
 	go func() {
 		ctx, cancel := bootc.DefaultContext()
@@ -601,7 +610,7 @@ func (uh *UserHome) onBootcStageClicked() {
 		// whether there was one is used: the text is terminal output that
 		// can name paths a person has no use for, which is why
 		// pageview.BootcStageResultSubtitle takes no such argument.
-		hadOutput := newStageProgressSink(activityRow, logExpander).consume(progressCh) != ""
+		hadOutput := newStageProgressSink(activityRow, logExpander, task).consume(progressCh) != ""
 
 		wg.Wait()
 
@@ -916,7 +925,7 @@ func (uh *UserHome) onDriverSwitchClicked(driver imageinfo.Driver, button *gtk.B
 	if !uh.driverGate.TryStart() {
 		return
 	}
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Switching graphics drivers") {
 		uh.driverGate.Reset()
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return
@@ -971,7 +980,11 @@ func (uh *UserHome) onChannelToggled(toTesting bool, toggle *guardedSwitch, row 
 		channel = imageinfo.ChannelTesting
 	}
 
-	if !uh.updateShell.beginMutation() {
+	title := "Switching back to tested updates"
+	if toTesting {
+		title = "Switching to early updates"
+	}
+	if !uh.updateShell.beginMutation(title) {
 		// This runs inside the switch's state-set emission, where moving
 		// the switch is overridden when the emission finishes; revert on
 		// the next main-loop turn instead.

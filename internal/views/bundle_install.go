@@ -313,14 +313,18 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 		}
 		return
 	}
+	task := uh.activities.Start("Installing app collections")
+	task.Working(bundleInstallStepText(0, len(plans), plans[0].item.title))
 	uh.setBundleInstallProgress(selection, true, 0, len(plans), plans[0].item.title)
 	go func() {
+		defer task.Finish()
 		outcome := bundleview.InstallOutcome{}
 		var trustErrCollection string
 
 		for idx, plan := range plans {
 			title := plan.item.title
 			if idx > 0 {
+				task.Working(bundleInstallStepText(idx, len(plans), title))
 				sgtk.RunOnMainThread(func() {
 					uh.setBundleInstallProgress(selection, true, idx, len(plans), title)
 				})
@@ -470,13 +474,18 @@ func (uh *UserHome) setBundleInstallProgress(selection *bundleSelection, busy bo
 		controls.button.SetSensitive(!busy)
 	}
 	if busy {
-		text := fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
-		if currentName == "" {
-			text = fmt.Sprintf("Installing (%d of %d)…", current+1, total)
-		}
-		selection.progress.SetText(text)
+		selection.progress.SetText(bundleInstallStepText(current, total, currentName))
 		uh.appInstallProgress.start(selection.progress)
 	} else {
 		uh.appInstallProgress.stop(selection.progress)
 	}
+}
+
+// bundleInstallStepText says which collection an install run is on, for the
+// collection's progress bar and the window's Activity list alike.
+func bundleInstallStepText(current, total int, currentName string) string {
+	if currentName == "" {
+		return fmt.Sprintf("Installing (%d of %d)…", current+1, total)
+	}
+	return fmt.Sprintf("Installing %s (%d of %d)…", currentName, current+1, total)
 }

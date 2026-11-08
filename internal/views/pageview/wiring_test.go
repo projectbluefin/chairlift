@@ -346,14 +346,14 @@ func TestBootcStageRefreshesChangelogAvailability(t *testing.T) {
 		// admitted by the update shell, so none races an update run's own
 		// staging; a refusal says why, and the admission ends before the
 		// follow-up check the shell would otherwise refuse.
-		{"updates_page.go", "onBootcStageClicked", []string{"if !uh.updateShell.beginMutation() {", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
-		{"updates_page.go", "onDriverSwitchClicked", []string{"if !uh.updateShell.beginMutation() {", "uh.driverGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
-		{"updates_page.go", "onChannelToggled", []string{"if !uh.updateShell.beginMutation() {", "toggle.set(!toTesting)", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onBootcStageClicked", []string{"if !uh.updateShell.beginMutation(", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onDriverSwitchClicked", []string{"if !uh.updateShell.beginMutation(", "uh.driverGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"updates_page.go", "onChannelToggled", []string{"if !uh.updateShell.beginMutation(", "toggle.set(!toTesting)", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
 		// Powerwash's Roll Back and its Restart Now are reached from
 		// Maintenance, not Updates, but they change the next boot or reboot
 		// the machine, so an update run in flight must refuse them too.
-		{"recovery.go", "onBootcRollbackClicked", []string{"if !uh.updateShell.beginMutation() {", "uh.bootcRollbackGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
-		{"recovery.go", "onBootcRollbackRestartClicked", []string{"if !uh.updateShell.beginMutation() {", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"recovery.go", "onBootcRollbackClicked", []string{"if !uh.updateShell.beginMutation(", "uh.bootcRollbackGate.Reset()", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
+		{"recovery.go", "onBootcRollbackRestartClicked", []string{"if !uh.updateShell.beginMutation(", "pageview.UpdateBusyToast", "uh.updateShell.finishMutation()"}},
 		// W4: a dismissed password prompt is a brief cancellation, not a
 		// persistent error, on every Updates-page privileged action.
 		{"updates_page.go", "onBootcStageClicked", []string{"pageview.PrivilegedFailureToast(stageErr,"}},

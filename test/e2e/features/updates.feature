@@ -76,6 +76,27 @@ Feature: Updates
     And the Updates progress bar is hidden
     And the "Update All" button is sensitive
 
+  # The window's Activity indicator lists long-running work from any page
+  # (#734); the update check is the one that runs at every start. It sits
+  # above the sidebar/content split, so a narrow window that shows only the
+  # page still offers it.
+  @stub.updates-flatpak-slow-check @stub.updates-brew-current
+  Scenario: The Activity indicator lists a running check until it finishes
+    Given ChairLift is running
+    When I open the "Apps" page
+    Then the Activity indicator is shown
+    When the window is narrowed below the sidebar breakpoint
+    Then the sidebar is hidden
+    And the Activity indicator is shown
+    When I open the Activity indicator
+    Then a dialog titled "Activity" is shown
+    And the dialog says "Checking for updates"
+    When the Flatpak update check is allowed to finish
+    Then the dialog says "No Tasks Running"
+    When I press "Escape"
+    Then no dialog is shown
+    And the Activity indicator is hidden
+
   @stub.updates-flatpak-check-fails @stub.updates-brew-current
   Scenario: A check that cannot reach the network is reported and can be retried
     Given ChairLift is running

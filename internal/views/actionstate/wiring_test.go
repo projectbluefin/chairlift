@@ -407,7 +407,7 @@ func TestFreeUpSpaceIsAdmittedByTheUpdateShell(t *testing.T) {
 	}
 	body, _, _ := strings.Cut(parts[1], "\nfunc ")
 	for _, required := range []string{
-		"if !uh.updateShell.beginMutation() {",
+		"if !uh.updateShell.beginMutation(",
 		"uh.freeUpSpaceGate.Reset()",
 		"pageview.UpdateBusyToast",
 		"uh.updateShell.finishMutation()",
@@ -416,7 +416,7 @@ func TestFreeUpSpaceIsAdmittedByTheUpdateShell(t *testing.T) {
 			t.Errorf("onFreeUpSpaceClicked must be admitted by the update shell: missing %q", required)
 		}
 	}
-	if strings.Index(body, "uh.freeUpSpaceGate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation()") {
+	if strings.Index(body, "uh.freeUpSpaceGate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation(") {
 		t.Error("onFreeUpSpaceClicked must take its own gate before the update shell's admission")
 	}
 }

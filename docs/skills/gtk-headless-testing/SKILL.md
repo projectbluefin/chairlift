@@ -52,6 +52,12 @@ Release builds must not reuse writable caches from E2E jobs.
 - Assert the control's own accessible name, not a descendant-text fallback.
   A menu-button wrapper may have no action while its toggle child does.
   Dialogs may appear inside the window or as another top-level frame.
+- To test the narrow (collapsed) layout, use `the window is narrowed below
+  the sidebar breakpoint`: GTK 4 has no AT-SPI resize, so it drives Mutter's
+  Alt+F8 keyboard resize in fast bursts (dogtail's per-key delay is too slow
+  for a held check's 30 s timeout). A collapsed split view showing the page
+  drops the sidebar from the tree, so find the main window by name, not by
+  its sidebar.
 - Assert collapsed defaults before helpers expand the section. Test saved
   enabled preferences too. Identify setup bookends by page/actions, not prose.
 - Stub every external reader relevant to an assertion, including Homebrew's
@@ -81,6 +87,14 @@ Use the existing session/input helpers rather than another runner:
   may have separate process groups. Never signal the runner's shared session.
 - For live GNOME QA, check that the guest screen is unlocked and inspect the
   captured frames. Successful actions or focus do not prove a visible window.
+- On a host without Podman, the pinned image still runs the real suite and
+  `scripts/blueprints.sh`'s compiler: export it with `crane export` into a
+  directory and enter it through an unprivileged user and mount namespace,
+  reproducing `dakota.sh`'s mounts and masks. Enter with `pivot_root`, not
+  `chroot`: the kernel refuses a new user namespace inside a chroot, and the
+  second one is needed to run as an ordinary uid, since headless Mutter
+  refuses uid 0. Give that uid a passwd entry or `dbus-daemon` fails to start.
+  This substitutes for the container only; CI's `dakota.sh` run is the gate.
 
 ## Maintaining the native harness
 

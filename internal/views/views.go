@@ -14,6 +14,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/activity"
 	"github.com/projectbluefin/chairlift/internal/views/liverystate"
 	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/rowset"
@@ -43,6 +44,10 @@ type UserHome struct {
 	capabilities capability.Set
 	toastAdder   ToastAdder
 	updateShell  *UpdateShell
+	// activities is the window's inventory of long-running work; see
+	// internal/views/activity. Actions outside the update shell's admission
+	// report to it directly.
+	activities *activity.Tracker
 
 	// Pages (ToolbarViews)
 	agentsPage       *adw.ToolbarView
@@ -382,13 +387,17 @@ type UserHome struct {
 // updates is the Updates destination's preferences page, which the update
 // shell owns (UpdateShell.PreferencesPage): buildUpdatesPage appends its
 // groups after the shell's. A nil updates builds a page of its own.
-func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates *adw.PreferencesPage) *UserHome {
+//
+// activities is the window's inventory of long-running work; a nil tracker
+// records nothing.
+func New(cfg *config.Config, caps capability.Set, toastAdder ToastAdder, updates *adw.PreferencesPage, activities *activity.Tracker) *UserHome {
 	start := time.Now()
 
 	uh := &UserHome{
 		config:       cfg,
 		capabilities: caps,
 		toastAdder:   toastAdder,
+		activities:   activities,
 	}
 
 	// Create pages - createPage returns both ToolbarView and PreferencesPage

@@ -187,7 +187,7 @@ func (uh *UserHome) onFactoryResetClicked(button *gtk.Button, row *adw.ActionRow
 }
 
 func (uh *UserHome) runFactoryReset(button *gtk.Button, row *adw.ActionRow) {
-	if !uh.updateShell.beginMutation() {
+	if !uh.updateShell.beginMutation("Resetting to factory settings") {
 		uh.factoryResetGate.Reset()
 		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
 		return

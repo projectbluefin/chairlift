@@ -20,6 +20,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/version"
 	"github.com/projectbluefin/chairlift/internal/views"
+	"github.com/projectbluefin/chairlift/internal/views/activity"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
 
 	"github.com/frostyard/snowkit/gobj"
@@ -80,6 +81,11 @@ type Window struct {
 	navItems        []navigation.Item // Visible primaries: the sidebar rows, actions, and shortcuts
 	navRoutes       []navigation.Item // navItems plus the details they offer; the Resolve inventory
 	backRoute       string            // The primary the shown detail's Back returns to; "" on a primary
+	// activities is the one inventory of long-running work every page
+	// reports to; activity draws it in the sidebar header and the Activity
+	// dialog. See internal/views/activity.
+	activities *activity.Tracker
+	activity   *activityView
 }
 
 func init() {
@@ -180,6 +186,9 @@ func (w *Window) buildUI() {
 		updateproviders.NewOperatingSystem(),
 	}
 	coordinator := updateflow.New(providers, updateproviders.NewMaintenance(w.config))
+	// Created before anything that reports to it; the indicator that draws it
+	// is bound with the window's tree below and reads what already runs.
+	w.activities = activity.New()
 	store := settings.New()
 	w.updateSettings = store
 	// Each source's policy keeps the administrator's configuration and the
@@ -205,10 +214,11 @@ func (w *Window) buildUI() {
 			}
 		},
 		w,
+		w.activities,
 	)
 
 	// Create views manager
-	w.views = views.New(w.config, w.capabilities, w, w.updateShell.PreferencesPage())
+	w.views = views.New(w.config, w.capabilities, w, w.updateShell.PreferencesPage(), w.activities)
 	// Wire the Recovery detail navigation before any page can open it. Both
 	// directions go through navigateToPage: the Maintenance row activates the
 	// detail route and Recovery's back button returns to the primary the
@@ -232,6 +242,7 @@ func (w *Window) buildUI() {
 	w.firstRunContent = w.ui.SetupStack
 	w.bindSidebar()
 	w.bindContentArea()
+	w.bindActivity()
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"Welcome to",
 		"Your system is set up and ready to go. Continue through the next few pages to customize your developer tools, set up automated troubleshooting, and change other system defaults.",
@@ -471,6 +482,15 @@ func (w *Window) setupActions() {
 	}
 	aboutAction.ConnectActivate(&aboutActivateCb)
 	w.AddAction(aboutAction)
+
+	// Activity action (win.show-activity): the sidebar indicator opens the
+	// Activity dialog. See activityView.
+	activityAction := gio.NewSimpleAction("show-activity", nil)
+	activityActivateCb := func(action gio.SimpleAction, param uintptr) {
+		w.activity.present(&w.Widget)
+	}
+	activityAction.ConnectActivate(&activityActivateCb)
+	w.AddAction(activityAction)
 
 	// The setup flow's own close-request handler is connected earlier
 	// (buildUI) and stops emission while setup is active, so this

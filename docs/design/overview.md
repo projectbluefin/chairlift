@@ -72,6 +72,16 @@ routes are rejected. Navigation itself executes no provider mutations.
   main-thread callbacks and retained rows (`progresslog`, `stageProgressSink`).
   Quiet operations keep a reusable pulsing indicator; opaque commands do not
   imply per-package progress. Render external text without markup.
+- **Long work is visible from every page.** The window owns one
+  `internal/views/activity` tracker; the update check, every update-shell
+  admission (named by `beginMutation`'s title, with the system download
+  forwarding each streamed line as its current step), and app collection
+  installs report to it. A header bar above the sidebar/content split shows a
+  spinner while anything runs, so a collapsed (narrow) window keeps it on
+  every pane, and it opens the Activity dialog listing each task, its current
+  step, a percentage when the work measures one, and a time estimate once the
+  measured rate is stable. The tracker coalesces change notifications to one
+  main-thread redraw at a time and never gates work.
 - **Decisions stay GTK-free.** Put decidable presentation and transitions in
   pure packages, not widget handlers. Packages importing puregotk cannot host
   headless unit-test binaries. See [ADR-0007](../adr/0007-pure-leaf-packages-route-around-untestable-gtk.md).
