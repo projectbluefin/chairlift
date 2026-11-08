@@ -60,7 +60,7 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   share its mutation admission. Reuse action/refresh/row gates rather
   than adding parallel owners. Retryable controls reset their gates.
 - Long-running work reports to the window's one `internal/views/activity`
-  tracker, which the sidebar's Activity indicator and dialog draw. A check and
+  tracker, which the window-wide Activity indicator and dialog draw. A check and
   every `UpdateShell.beginMutation(title)` admission register themselves;
   other long actions `Start` a task and `Finish` it on every path. The tracker
   only describes work; it never admits, orders, or cancels it.

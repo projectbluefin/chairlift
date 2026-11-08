@@ -65,13 +65,15 @@ place and stays moving even when the underlying tool has no new output. It
 does not claim a percentage.
 
 Long work stays visible whatever page you move to. While a check, an update,
-a system switch or rollback, **Free Up Space**, or an app collection install
-is running, a spinner appears at the top of the sidebar; its tooltip names
-the task, or counts them. Clicking it opens **Activity**, which lists every
-running task with what it is doing now, a percentage when the task can
-measure one, and roughly how long is left once that measure is steady. When
-the last task ends, the spinner goes away and the list says **No Tasks
-Running**.
+a system download, switch or rollback, **Free Up Space**, or an app
+collection install is running, a bar with a spinner appears across the top of
+the window, above both the sidebar and the page, so it stays in reach in a
+narrow window that shows only one of them; its tooltip names the task, or
+counts them. Clicking it opens **Activity**, which lists every running task
+with what it is doing now (for a system download, the downloader's latest
+message), a percentage when the task can measure one, and roughly how long is
+left once that measure is steady. When the last task ends, the bar goes away
+and the list says **No Tasks Running**.
 
 Everything else on the page sits below the sources, each part only where it
 applies (not all of it fits in the shot above).

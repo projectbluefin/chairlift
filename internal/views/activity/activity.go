@@ -3,7 +3,7 @@
 // system, Free Up Space, and app collection installs. Each action registers a
 // Task when it starts, reports what it is doing while it runs, and finishes
 // the Task when it ends, whatever page the user has moved to in between. The
-// window renders the inventory as one indicator in the sidebar's header bar
+// window renders the inventory as one indicator in a window-wide header bar
 // and an Activity dialog that lists every running task with its progress
 // (issue #734).
 //

@@ -52,6 +52,12 @@ Release builds must not reuse writable caches from E2E jobs.
 - Assert the control's own accessible name, not a descendant-text fallback.
   A menu-button wrapper may have no action while its toggle child does.
   Dialogs may appear inside the window or as another top-level frame.
+- To test the narrow (collapsed) layout, use `the window is narrowed below
+  the sidebar breakpoint`: GTK 4 has no AT-SPI resize, so it drives Mutter's
+  Alt+F8 keyboard resize in fast bursts (dogtail's per-key delay is too slow
+  for a held check's 30 s timeout). A collapsed split view showing the page
+  drops the sidebar from the tree, so find the main window by name, not by
+  its sidebar.
 - Assert collapsed defaults before helpers expand the section. Test saved
   enabled preferences too. Identify setup bookends by page/actions, not prose.
 - Stub every external reader relevant to an assertion, including Homebrew's

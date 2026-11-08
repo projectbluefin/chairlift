@@ -34,7 +34,10 @@ func TestStagingHandlersRenderThroughTheBoundedSink(t *testing.T) {
 		// number spelled inline in the view.
 		"progresslog.New(progresslog.DefaultLimit)",
 		// Both staging handlers consume their channel through it.
-		"newStageProgressSink(activityRow, logExpander).consume(progressCh)",
+		"newStageProgressSink(activityRow, logExpander, task).consume(progressCh)",
+		// Every line also reaches the run's Activity entry, so the step
+		// stays visible after leaving the Updates page (issue #734).
+		"s.task.Working(event.Message)",
 		// The expander is trimmed back to the window after every batch, so
 		// its row count is bounded rather than merely its pending batch.
 		"s.rows.TrimTo(s.lines.Limit(),",

@@ -11,8 +11,8 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// activityView draws internal/views/activity's inventory: the sidebar
-// header's indicator, shown with a spinner while anything runs, and the
+// activityView draws internal/views/activity's inventory: the window-wide
+// header bar's indicator, shown with a spinner while anything runs, and the
 // Activity dialog it opens, which lists every running task with its progress
 // whichever page started it (issue #734).
 //

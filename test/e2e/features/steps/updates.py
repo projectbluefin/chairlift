@@ -324,8 +324,9 @@ def step_release_flatpak_check(context):
         pass
 
 
-# The Activity indicator sits in the sidebar's header bar (internal/ui/
-# window.blp), outside the content side the other lookups search.
+# The Activity indicator sits in the window-wide header bar above the
+# sidebar/content split (internal/ui/window.blp), outside the content side
+# the other lookups search.
 ACTIVITY_LABEL = "Activity"
 
 
@@ -349,3 +350,56 @@ def step_open_activity(context):
     found = atspi.poll(lambda: _activity_indicators(context))
     assert found, "the Activity indicator is not shown"
     atspi.activate(found[0])
+
+
+def _sidebar_showing(context):
+    bar = atspi.safe(lambda: atspi.sidebar(context.app))
+    return bar is not None and atspi.showing(bar)
+
+
+# Each keyboard-resize step is Mutter's normal increment (10 px); the default
+# 900 px window passes internal/ui/window.blp's 550sp breakpoint after about
+# 36, and the window's 360 px minimum stops it well after that.
+NARROW_MAX_STEPS = 80
+# The steps go in short bursts with a brief pause instead of dogtail's
+# per-key action delay and a poll after each key: at that pace narrowing takes
+# about 25 s, long enough for a held update check to reach the application's
+# 30 s command timeout before the scenario can look at it.
+NARROW_BURST = 6
+NARROW_KEY_DELAY = 0.03
+
+
+@step("the window is narrowed below the sidebar breakpoint")
+def step_narrow_window(context):
+    """Resize the window with Mutter's keyboard resize until the split collapses.
+
+    GTK 4 does not implement AT-SPI Component.SetSize, and a bare headless
+    Mutter has no Shell to script, so Alt+F8 is the input left: the first
+    arrow picks the edge to move (Left picks the left edge) and each Right
+    then moves that edge inwards. Stopping once the sidebar stops showing
+    lands just below the breakpoint, whatever size the window started at.
+    """
+    if not _sidebar_showing(context):
+        raise AssertionError("the sidebar is already hidden before narrowing the window")
+    atspi.press("<Alt>F8")
+    atspi.press("Left")
+    saved = atspi.config.actionDelay
+    atspi.config.actionDelay = NARROW_KEY_DELAY
+    try:
+        for _ in range(0, NARROW_MAX_STEPS, NARROW_BURST):
+            for _ in range(NARROW_BURST):
+                atspi.press("Right")
+            if atspi.poll(lambda: not _sidebar_showing(context), timeout=0.2):
+                break
+    finally:
+        atspi.config.actionDelay = saved
+    atspi.press("Return")
+    assert atspi.poll(lambda: not _sidebar_showing(context)), (
+        f"the sidebar still shows after {NARROW_MAX_STEPS} keyboard-resize steps"
+    )
+
+
+@step("the sidebar is hidden")
+def step_sidebar_hidden(context):
+    ok = atspi.poll(lambda: not _sidebar_showing(context))
+    assert ok, "the sidebar is still showing"
