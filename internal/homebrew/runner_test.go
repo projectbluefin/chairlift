@@ -615,3 +615,43 @@ exit 1`)
 		t.Errorf("state-changing failure = %q, want %q", got, want)
 	}
 }
+
+// A failed `brew bundle install` exposes the entry's own diagnosis as Detail,
+// so the Apps page can say which entry failed and why instead of a generic
+// "try again" (issue #732). The output is the reported Fonts failure: brew
+// replays the failing entry on stdout and restates it on stderr.
+func TestBundleFailureCarriesTheEntryDiagnosis(t *testing.T) {
+	exe := fakeBrew(t, `echo "Using colindean/fonts-nonfree"
+echo "Installing font-opendyslexic"
+echo "Using font-arial"
+echo "Error: font-opendyslexic: Cask 'font-opendyslexic' has been disabled because it is no longer reliably reachable upstream! It was disabled on 2026-09-27."
+echo "Installing font-opendyslexic has failed!" >&2
+echo "brew bundle failed! 1 Brewfile dependency failed to install" >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "bundle", "install", "--file=/b/fonts.Brewfile")
+	var brewErr *Error
+	if !errors.As(err, &brewErr) {
+		t.Fatalf("error = %v (%T), want *homebrew.Error", err, err)
+	}
+	want := "Error: font-opendyslexic: Cask 'font-opendyslexic' has been disabled because it is no longer reliably reachable upstream! It was disabled on 2026-09-27."
+	if brewErr.Detail != want {
+		t.Errorf("Detail = %q, want %q", brewErr.Detail, want)
+	}
+}
+
+// A read-only failure keeps its whole stderr in Message and offers no Detail:
+// that text is not a bounded one-line diagnosis a toast could quote.
+func TestReadOnlyFailureHasNoDetail(t *testing.T) {
+	exe := fakeBrew(t, `echo "Error: No formulae or casks found for \"demo\"." >&2
+exit 1`)
+
+	_, err := runBrewCommandAt(context.Background(), exe, "search", "--formula", "demo")
+	var brewErr *Error
+	if !errors.As(err, &brewErr) {
+		t.Fatalf("error = %v (%T), want *homebrew.Error", err, err)
+	}
+	if brewErr.Detail != "" {
+		t.Errorf("Detail = %q, want empty for a read-only command", brewErr.Detail)
+	}
+}

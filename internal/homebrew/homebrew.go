@@ -51,8 +51,14 @@ func commandOutputWriters(args []string) (commandOutputWriter, commandOutputWrit
 // Error represents a Homebrew-related error. Err, when non-nil, carries the
 // underlying cause (for example context.DeadlineExceeded or
 // context.Canceled) so callers can classify it with errors.Is.
+//
+// Detail, when non-empty, is the one-line diagnosis a failed state-changing
+// command printed — what brew said went wrong, without Message's
+// "Brew command failed:" framing — so a view can say why an install failed
+// without parsing Message.
 type Error struct {
 	Message string
+	Detail  string
 	Err     error
 }
 
@@ -369,7 +375,11 @@ func runBrewCommandAt(ctx context.Context, exe string, args ...string) (string, 
 					return "", &DependentsError{Message: fmt.Sprintf("Brew command failed: %s", message), Dependents: dependents}
 				}
 			}
-			return "", &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
+			brewErr := &Error{Message: fmt.Sprintf("Brew command failed: %s", message), Err: err}
+			if boundedOutput {
+				brewErr.Detail = message
+			}
+			return "", brewErr
 		}
 		// exec.ErrNotFound covers a bare name missing from $PATH;
 		// fs.ErrNotExist covers an explicit path that does not exist.

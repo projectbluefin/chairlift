@@ -341,7 +341,10 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 				if errors.As(err, &untrusted) {
 					trustErrCollection = title
 				}
-				outcome.Failed = append(outcome.Failed, title)
+				outcome.Failed = append(outcome.Failed, bundleview.InstallFailure{
+					Collection: title,
+					Reason:     bundleview.FailureReason(err),
+				})
 				continue
 			}
 			outcome.Installed += plan.pending
