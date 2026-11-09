@@ -118,6 +118,62 @@ func TestComposefsStatusDefersOnOtherHosts(t *testing.T) {
 	}
 }
 
+// bootc 1.17 names the booted deployment with composefs.digest= after an
+// upgrade (#738): Dakota testing moved to bootc 1.17.3, and missing that
+// argument sent the reader to root-only `bootc status`, so the Early Updates
+// and Game Mode switches said they couldn't verify the system update state.
+func TestComposefsStatusReadsBootc117DigestArgument(t *testing.T) {
+	for _, arg := range []string{
+		"composefs.digest=v1-sha512-12:" + bootedID,
+		"composefs.digest=?v1-sha512-12:" + bootedID,
+		"composefs.digest=v2-sha512-12:" + bootedID,
+	} {
+		host := dakotaHost()
+		host["proc/cmdline"] = &fstest.MapFile{Data: []byte(`initrd=\EFI\Linux\bootc_composefs-4796\initrd ` + arg + " rw quiet splash\n")}
+		status, err := readComposefsStatus(host)
+		if err != nil {
+			t.Fatalf("%s: readComposefsStatus: %v", arg, err)
+		}
+		if got := status.Status.Booted.Digest(); got != bootedDigest {
+			t.Errorf("%s: booted digest = %q, want %q", arg, got, bootedDigest)
+		}
+	}
+}
+
+// A UKI can carry the V1 digest followed by a composefs= fallback; the
+// initramfs boots the first whose image exists, so the booted deployment is
+// the first candidate with state on disk, not simply the first argument.
+func TestComposefsBootedIDFollowsTheFallbackThatBooted(t *testing.T) {
+	missing := strings.Repeat("ab", 64)
+	host := dakotaHost()
+	host["proc/cmdline"] = &fstest.MapFile{Data: []byte("composefs.digest=v1-sha512-12:" + missing + " composefs=" + bootedID + " rw\n")}
+	id, err := composefsBootedID(host)
+	if err != nil || id != bootedID {
+		t.Fatalf("composefsBootedID = %q, %v; want the composefs= fallback %q", id, err, bootedID)
+	}
+
+	// With no candidate on disk the first is reported, so the status read
+	// fails loudly instead of claiming the host is not composefs-booted.
+	host["proc/cmdline"] = &fstest.MapFile{Data: []byte("composefs.digest=v1-sha512-12:" + missing + " rw\n")}
+	if _, err := readComposefsStatus(host); err == nil || errors.Is(err, errNotComposefs) {
+		t.Fatalf("err = %v, want a read failure for the missing deployment", err)
+	}
+}
+
+// Only SHA-512 composefs.digest= values name a bootc deployment.
+func TestComposefsBootedIDRejectsForeignDigests(t *testing.T) {
+	for _, cmdline := range []string{
+		"composefs.digest=v1-sha256-12:" + strings.Repeat("ab", 32),
+		"composefs.digest=v9-sha512-12:" + bootedID,
+		"composefs.digest=" + bootedID,
+	} {
+		host := fstest.MapFS{"proc/cmdline": {Data: []byte(cmdline + "\n")}}
+		if _, err := composefsBootedID(host); !errors.Is(err, errNotComposefs) {
+			t.Errorf("%s: err = %v, want errNotComposefs", cmdline, err)
+		}
+	}
+}
+
 // A composefs host whose booted origin cannot be read is a failure, not
 // "not bootc": saying there is no operating-system update source would be
 // the same false negative this reader exists to remove.

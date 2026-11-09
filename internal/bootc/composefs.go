@@ -24,7 +24,8 @@ import (
 // host — Dakota, verified 2026-09-26 — everything they report is on disk and
 // world-readable:
 //
-//   - the booted deployment is the `composefs=<id>` kernel argument;
+//   - the booted deployment is named by the kernel command line (see
+//     composefsBootedID);
 //   - the staged deployment is /run/composefs/staged-deployment's depl_id;
 //   - each deployment's image reference and manifest digest are in
 //     /sysroot/state/deploy/<id>/<id>.origin;
@@ -38,10 +39,15 @@ import (
 var errNotComposefs = errors.New("bootc: not a composefs-booted host")
 
 const (
-	cmdlinePath       = "proc/cmdline"
-	stagedMarkerPath  = "run/composefs/staged-deployment"
-	deployDir         = "sysroot/state/deploy"
-	osReleasePath     = "usr/lib/os-release"
+	cmdlinePath      = "proc/cmdline"
+	stagedMarkerPath = "run/composefs/staged-deployment"
+	deployDir        = "sysroot/state/deploy"
+	osReleasePath    = "usr/lib/os-release"
+
+	// composefsDigestArgument is the explicit form bootc 1.17 writes on
+	// upgrade: composefs.digest=[?]v1-sha512-12:<hex> (or v2-…).
+	composefsDigestArgument = "composefs.digest="
+	// composefsArgument is the legacy V2 shorthand: composefs=[?]<hex>.
 	composefsArgument = "composefs="
 )
 
@@ -95,6 +101,15 @@ func readComposefsStatus(fsys fs.FS) (*Status, error) {
 	return status, nil
 }
 
+// composefsBootedID names the booted deployment from the kernel command line.
+//
+// bootc 1.16 wrote only composefs=<id>. bootc 1.17 writes
+// composefs.digest=v1-sha512-12:<id> on upgrade, and a UKI may carry that
+// argument followed by a composefs=<id> fallback that the initramfs mounts
+// when the first image is absent. Candidates are taken in command-line order,
+// the order the initramfs tries them, and the first that has a deployment
+// state directory wins. With none on disk the first candidate is returned so
+// reading it reports the failure.
 func composefsBootedID(fsys fs.FS) (string, error) {
 	cmdline, err := fs.ReadFile(fsys, cmdlinePath)
 	if err != nil {
@@ -103,17 +118,44 @@ func composefsBootedID(fsys fs.FS) (string, error) {
 		}
 		return "", fmt.Errorf("bootc: reading the kernel command line: %w", err)
 	}
+	var candidates []string
 	for _, arg := range strings.Fields(string(cmdline)) {
-		if id, ok := strings.CutPrefix(arg, composefsArgument); ok {
+		if value, ok := strings.CutPrefix(arg, composefsDigestArgument); ok {
+			if id, ok := composefsDigestID(value); ok {
+				candidates = append(candidates, id)
+			}
+		} else if value, ok := strings.CutPrefix(arg, composefsArgument); ok {
 			// composefs=?<id> marks an insecure (unverified) mount; the
 			// deployment ID is the same.
-			id = strings.TrimPrefix(id, "?")
-			if validDeploymentID(id) {
-				return id, nil
+			if id := strings.TrimPrefix(value, "?"); validDeploymentID(id) {
+				candidates = append(candidates, id)
 			}
 		}
 	}
-	return "", errNotComposefs
+	if len(candidates) == 0 {
+		return "", errNotComposefs
+	}
+	for _, id := range candidates {
+		if _, err := fs.Stat(fsys, originPath(id)); err == nil {
+			return id, nil
+		}
+	}
+	return candidates[0], nil
+}
+
+// composefsDigestID extracts the deployment ID from a composefs.digest=
+// value such as "v1-sha512-12:<hex>" or "?v2-sha512-12:<hex>". bootc's
+// deployment IDs are SHA-512; another algorithm names no bootc deployment.
+func composefsDigestID(value string) (string, bool) {
+	descriptor, id, ok := strings.Cut(strings.TrimPrefix(value, "?"), ":")
+	if !ok {
+		return "", false
+	}
+	version, algorithm, ok := strings.Cut(descriptor, "-")
+	if !ok || (version != "v1" && version != "v2") || !strings.HasPrefix(algorithm, "sha512-") {
+		return "", false
+	}
+	return id, validDeploymentID(id)
 }
 
 func composefsStagedID(fsys fs.FS) (string, error) {
@@ -294,7 +336,8 @@ func checkFromRegistry(ctx context.Context, status *Status, resolve tagResolver)
 }
 
 // ComposefsBooted reports whether the kernel booted a composefs deployment.
-// It reads only the kernel command line, so it is safe on the GTK thread.
+// It reads the kernel command line and stats at most one local state file
+// per composefs argument, so it is safe on the GTK thread.
 func ComposefsBooted() bool {
 	_, err := composefsBootedID(hostRoot)
 	return err == nil
