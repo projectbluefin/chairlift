@@ -1,6 +1,8 @@
 package bundleview
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -388,12 +390,50 @@ func TestToastStatesTheTrustChange(t *testing.T) {
 // A failed run names what did not install, and still says what the trust
 // store gained.
 func TestToastNamesTheFailedCollections(t *testing.T) {
-	toast := InstallToast(InstallOutcome{Failed: []string{"Agentic Tools"}, TrustedPackages: 1})
-	if !strings.Contains(toast, "Agentic Tools") {
-		t.Errorf("toast = %q, want the failed collection", toast)
+	toast := InstallToast(InstallOutcome{Failed: []InstallFailure{{Collection: "Agentic Tools"}}, TrustedPackages: 1})
+	if want := "Couldn't install all selected apps (Agentic Tools). Try again. Trusted 1 package to install it."; toast != want {
+		t.Errorf("toast = %q, want %q", toast, want)
 	}
-	if !strings.Contains(toast, "Trusted 1 package to install it.") {
-		t.Errorf("toast = %q, want the trust change", toast)
+}
+
+// A failure the package manager explained says which entry failed and why,
+// rather than a bare "try again" that cannot help an entry Homebrew disabled
+// (issue #732). A collection without a reason in the same run still asks for
+// a retry.
+func TestToastSaysWhyACollectionFailed(t *testing.T) {
+	err := &homebrew.Error{
+		Message: "Brew command failed: Error: font-opendyslexic: Cask 'font-opendyslexic' has been disabled because it is no longer reliably reachable upstream! It was disabled on 2026-09-27.",
+		Detail:  "Error: font-opendyslexic: Cask 'font-opendyslexic' has been disabled because it is no longer reliably reachable upstream! It was disabled on 2026-09-27.",
+	}
+	toast := InstallToast(InstallOutcome{Failed: []InstallFailure{
+		{Collection: "Fonts", Reason: FailureReason(fmt.Errorf("install fonts: %w", err))},
+		{Collection: "Agentic Tools"},
+	}})
+	want := "Couldn't install all selected apps." +
+		" Fonts: font-opendyslexic: Cask 'font-opendyslexic' has been disabled because it is no longer reliably reachable upstream! It was disabled on 2026-09-27." +
+		" Agentic Tools: try again."
+	if toast != want {
+		t.Errorf("toast = %q, want %q", toast, want)
+	}
+}
+
+// Only Homebrew's bounded one-line diagnosis is quoted; any other error, or a
+// Homebrew error without one, gives no reason rather than raw command text.
+func TestFailureReasonQuotesOnlyADiagnosis(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"lowercase prefix", &homebrew.Error{Detail: "error: Unable to load summary"}, "Unable to load summary"},
+		{"no prefix", &homebrew.Error{Detail: "Installing demo has failed!"}, "Installing demo has failed!"},
+		{"no detail", &homebrew.Error{Message: "Command 'brew install demo' timed out"}, ""},
+		{"other error", errors.New("Flatpak command failed: error: multi\nline"), ""},
+	}
+	for _, tc := range cases {
+		if got := FailureReason(tc.err); got != tc.want {
+			t.Errorf("%s: FailureReason = %q, want %q", tc.name, got, tc.want)
+		}
 	}
 }
 

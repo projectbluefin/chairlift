@@ -1,6 +1,7 @@
 package bundleview
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -332,15 +333,50 @@ const PreviewToast = "[DRY-RUN] Preview: selected apps would be installed — no
 type InstallOutcome struct {
 	// Installed counts the apps and tools the run installed.
 	Installed int
-	// Failed names the collections whose install did not finish.
-	Failed []string
+	// Failed lists the collections whose install did not finish.
+	Failed []InstallFailure
 	// TrustedPackages counts the packages trusted one by one.
 	TrustedPackages int
 	// TrustedTaps counts the taps trusted wholesale.
 	TrustedTaps int
 }
 
+// InstallFailure names a collection whose install did not finish and, when
+// the package manager said why, its reason.
+type InstallFailure struct {
+	// Collection is the collection's display title.
+	Collection string
+	// Reason is the package manager's own one-line diagnosis, or empty
+	// when it gave none.
+	Reason string
+}
+
+// FailureReason extracts the reason a collection install failed from its
+// error, or "" when the error carries no diagnosis worth showing.
+//
+// Only Homebrew's distilled diagnosis qualifies: it is one bounded line that
+// names the failing package ("font-opendyslexic: Cask 'font-opendyslexic'
+// has been disabled …"), which is what tells a person a retry cannot help
+// (issue #732). Brew's "Error:" prefix is dropped because the toast already
+// says the install failed.
+func FailureReason(err error) string {
+	var brewErr *homebrew.Error
+	if !errors.As(err, &brewErr) {
+		return ""
+	}
+	reason := strings.TrimSpace(brewErr.Detail)
+	const prefix = "error:"
+	if len(reason) >= len(prefix) && strings.EqualFold(reason[:len(prefix)], prefix) {
+		reason = strings.TrimSpace(reason[len(prefix):])
+	}
+	return reason
+}
+
 // InstallToast returns the toast text for a finished install run.
+//
+// A failed run names each collection that did not install and, when the
+// package manager said why, the reason, so a person can tell an entry that
+// can never install from a transient failure worth retrying.
 //
 // The toast says what the trust store gained whenever it gained anything:
 // trusting a source changes what this computer will load from it, so the
@@ -348,7 +384,7 @@ type InstallOutcome struct {
 func InstallToast(outcome InstallOutcome) string {
 	var text string
 	if len(outcome.Failed) > 0 {
-		text = fmt.Sprintf("Couldn't install all selected apps (%s). Try again.", strings.Join(outcome.Failed, ", "))
+		text = failureToast(outcome.Failed)
 	} else {
 		text = fmt.Sprintf("Installed %d %s.", outcome.Installed, plural(outcome.Installed, "app or tool", "apps and tools"))
 	}
@@ -356,6 +392,37 @@ func InstallToast(outcome InstallOutcome) string {
 		text += " " + notice
 	}
 	return text
+}
+
+// failureToast states which collections failed and, where known, why.
+func failureToast(failed []InstallFailure) string {
+	titles := make([]string, 0, len(failed))
+	explained := false
+	for _, failure := range failed {
+		titles = append(titles, failure.Collection)
+		explained = explained || failure.Reason != ""
+	}
+	if !explained {
+		return fmt.Sprintf("Couldn't install all selected apps (%s). Try again.", strings.Join(titles, ", "))
+	}
+	parts := make([]string, 0, len(failed)+1)
+	parts = append(parts, "Couldn't install all selected apps.")
+	for _, failure := range failed {
+		reason := failure.Reason
+		if reason == "" {
+			reason = "try again"
+		}
+		parts = append(parts, failure.Collection+": "+sentence(reason))
+	}
+	return strings.Join(parts, " ")
+}
+
+// sentence ends text with a full stop unless it already ends a sentence.
+func sentence(text string) string {
+	if strings.HasSuffix(text, ".") || strings.HasSuffix(text, "!") || strings.HasSuffix(text, "?") {
+		return text
+	}
+	return text + "."
 }
 
 // TrustNotice states that the trust store changed.

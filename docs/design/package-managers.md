@@ -152,7 +152,10 @@ selected pending entries install, deduplicated and batched per manager;
 unsupported App Store/VS Code entries never execute implicitly. Flatpaks use
 the existing system Flathub remote. Monospace Fonts shares this entry-selection
 contract under Developer Mode, falling back to Apps when that group is disabled;
-setup navigation preserves choices without installing them.
+setup navigation preserves choices without installing them. A failed install
+names each collection that did not finish and, when Homebrew distilled a
+one-line diagnosis (`homebrew.Error.Detail`), quotes it, so an entry upstream
+disabled is not presented as a transient failure worth retrying (#732).
 
 Trust remains per-user. Per-entry installs prepare missing taps and trust only
 the selected package unless the collection explicitly declares that tap
