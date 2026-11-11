@@ -55,7 +55,6 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 			"ContainerName=" + app.ContainerName(),
 			"WantedBy=default.target",
 			"PublishPort=127.0.0.1:" + strconv.Itoa(app.Port()) + ":" + strconv.Itoa(app.Port()),
-			"Volume=%h/printer-workspaces/" + app.Family.ID + "/" + app.Name + ":/var/lib/" + app.Family.ID + "-printer-app:z",
 			"Environment=PORT=" + strconv.Itoa(app.Port()),
 			"UserNS=keep-id:uid=65532,gid=65532",
 		} {
@@ -74,6 +73,59 @@ func TestEveryAppRendersAStartableUnit(t *testing.T) {
 				t.Errorf("%s unit publishes beyond loopback: %q", app.UnitName(), line)
 			}
 		}
+	}
+}
+
+func TestPrinterStateFollowsXDGDataHome(t *testing.T) {
+	for _, name := range []string{"default", "relative", "custom"} {
+		t.Run(name, func(t *testing.T) {
+			home, _ := stubUnitDir(t)
+			dataHome := filepath.Join(home, ".local", "share")
+			volumeHome := "%h/.local/share"
+			switch name {
+			case "relative":
+				t.Setenv("XDG_DATA_HOME", "relative/data")
+			case "custom":
+				dataHome = filepath.Join(home, "data with spaces and 100%")
+				t.Setenv("XDG_DATA_HOME", dataHome)
+				volumeHome = strings.ReplaceAll(dataHome, "%", "%%")
+			}
+			app := Select(Families()[0])
+			if err := Enable(context.Background(), app); err != nil {
+				t.Fatal(err)
+			}
+			wantDir := filepath.Join(dataHome, "chairlift", "printers", "ghostscript", "ghostscript")
+			info, err := os.Stat(wantDir)
+			if err != nil || !info.IsDir() {
+				t.Fatalf("printer data directory %s: %v", wantDir, err)
+			}
+			unit, err := os.ReadFile(filepath.Join(home, app.UnitName()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantVolume := fmt.Sprintf("Volume=%q\n", volumeHome+"/chairlift/printers/ghostscript/ghostscript:/var/lib/ghostscript-printer-app:z")
+			if !strings.Contains(string(unit), wantVolume) {
+				t.Fatalf("unit does not mount the created data directory: %s", unit)
+			}
+			if _, err := os.Stat(filepath.Join(home, "printer-workspaces")); !os.IsNotExist(err) {
+				t.Fatalf("legacy home directory was created: %v", err)
+			}
+		})
+	}
+}
+
+func TestHostVolumeDirNeedsHomeOnlyWithoutXDGDataHome(t *testing.T) {
+	home, _ := stubUnitDir(t)
+	noHome := errors.New("home unavailable")
+	userHomeDir = func() (string, error) { return "", noHome }
+	app := Select(Families()[0])
+	if _, err := app.HostVolumeDir(); !errors.Is(err, noHome) {
+		t.Fatalf("missing HOME error = %v, want %v", err, noHome)
+	}
+	t.Setenv("XDG_DATA_HOME", home)
+	want := filepath.Join(home, "chairlift", "printers", "ghostscript", "ghostscript")
+	if got, err := app.HostVolumeDir(); err != nil || got != want {
+		t.Fatalf("HostVolumeDir = %q, %v; want %q without HOME", got, err, want)
 	}
 }
 
@@ -150,6 +202,7 @@ func stubUnitDir(t *testing.T) (dir string, calls *[]string) {
 	t.Helper()
 
 	tmp := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", "")
 	previousDir := unitDir
 	previousHomeDir := userHomeDir
 	previousCosign := runCosign
@@ -289,17 +342,21 @@ func TestDisableRemovesTheUnit(t *testing.T) {
 }
 
 func TestDisableLeavesTheStateVolumeUntouched(t *testing.T) {
-	_, _ = stubUnitDir(t)
+	home, _ := stubUnitDir(t)
 	app := Select(Families()[0])
 
 	if err := Enable(context.Background(), app); err != nil {
 		t.Fatalf("Enable: %v", err)
 	}
-	// The state volume is under the user's home, which stubUnitDir does not
-	// point at a temp dir, so assert Disable does not try to remove anything
-	// outside the quadlet unit. The only removal Disable performs is the unit.
+	state := filepath.Join(home, ".local", "share", "chairlift", "printers", "ghostscript", "ghostscript", "printer.conf")
+	if err := os.WriteFile(state, []byte("configured printer"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := Disable(context.Background(), app); err != nil {
 		t.Fatalf("Disable: %v", err)
+	}
+	if got, err := os.ReadFile(state); err != nil || string(got) != "configured printer" {
+		t.Fatalf("Disable changed printer state: %q, %v", got, err)
 	}
 }
 

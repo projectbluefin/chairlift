@@ -41,7 +41,16 @@ timer used by unrelated containers.
 ## Lifecycle and failure semantics
 
 Quadlets live in the account's configuration directory under
-`containers/systemd`; persistent state lives under `~/printer-workspaces`.
+`containers/systemd`; persistent printer data lives under
+`$XDG_DATA_HOME/chairlift/printers/<family>/<name>`, defaulting to
+`~/.local/share/chairlift/printers/<family>/<name>`. Relative `XDG_DATA_HOME`
+values are ignored, as required by the
+[XDG Base Directory Specification](https://specifications.freedesktop.org/basedir/latest/).
+Existing `~/printer-workspaces` data is not moved or deleted. Existing quadlets
+keep their paths until enable or refresh rewrites them; users must move any
+printer data they want to retain before switching an existing printer to the
+new location.
+
 Enable, refresh and disable serialize per application. Verification failure
 leaves the existing unit and service untouched. A later service failure removes
 a newly created unit, but does not restore the old contents of an existing unit.
