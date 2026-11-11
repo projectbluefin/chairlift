@@ -121,20 +121,29 @@ func (a App) WebAdminURL() string {
 	return fmt.Sprintf("http://localhost:%d/", a.Port())
 }
 
-// Volume is the per-app state volume, using the systemd home escape `%h`
-// that quadlet expands. It mounts to the container's state directory
-// /var/lib/<family>-printer-app.
+// Volume is the per-app XDG data volume mounted at /var/lib/<family>-printer-app.
 func (a App) Volume() string {
-	return fmt.Sprintf("%%h/printer-workspaces/%s/%s:/var/lib/%s-printer-app:z", a.Family.ID, a.Name, a.Family.ID)
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if filepath.IsAbs(dataHome) {
+		// Literal percent signs must not become systemd specifiers.
+		dataHome = strings.ReplaceAll(dataHome, "%", "%%")
+	} else {
+		dataHome = "%h/.local/share"
+	}
+	return fmt.Sprintf("%s:/var/lib/%s-printer-app:z", filepath.Join(dataHome, "chairlift", "printers", a.Family.ID, a.Name), a.Family.ID)
 }
 
 // HostVolumeDir returns the absolute host path for the app's state volume.
 func (a App) HostVolumeDir() (string, error) {
-	home, err := userHomeDir()
-	if err != nil {
-		return "", err
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if !filepath.IsAbs(dataHome) {
+		home, err := userHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dataHome = filepath.Join(home, ".local", "share")
 	}
-	return filepath.Join(home, "printer-workspaces", a.Family.ID, a.Name), nil
+	return filepath.Join(dataHome, "chairlift", "printers", a.Family.ID, a.Name), nil
 }
 
 // families is the set of Printer Application families ChairLift can drive.
@@ -241,7 +250,7 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
-	fmt.Fprintf(&b, "Volume=%s\n\n", app.Volume())
+	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
 
 	b.WriteString("[Service]\nRestart=on-failure\nRestartSec=10\n\n")
 	b.WriteString("[Install]\nWantedBy=default.target\n")
@@ -413,7 +422,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(volDir, 0o755); err != nil {
+	if err := os.MkdirAll(volDir, 0o700); err != nil {
 		return err
 	}
 
@@ -446,7 +455,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 }
 
 // Disable stops the printer application and removes its quadlet. The pulled
-// image and the per-app state under ~/printer-workspaces are left alone: they
+// image and the per-app XDG data are left alone: they
 // are large, they are expensive to re-fetch or reconfigure, and removing them
 // is a disk-space decision the user did not make by turning a switch off.
 func Disable(ctx context.Context, app App) error {
