@@ -66,7 +66,7 @@ class TreeError(AssertionError):
     """A lookup or state assertion against the tree failed."""
 
 
-def poll(predicate, timeout=DEFAULT_TIMEOUT, interval=0.1):
+def poll(predicate, timeout=DEFAULT_TIMEOUT, interval=None):
     """Return predicate()'s first truthy value, or its last value at timeout.
 
     An exception from predicate is retried, because the tree mutates while it
@@ -76,6 +76,8 @@ def poll(predicate, timeout=DEFAULT_TIMEOUT, interval=0.1):
     read the same as a slow widget.
     """
     deadline = time.monotonic() + timeout
+    adaptive = interval is None
+    current_interval = 0.01 if adaptive else interval
     while True:
         last_error = None
         try:
@@ -91,7 +93,9 @@ def poll(predicate, timeout=DEFAULT_TIMEOUT, interval=0.1):
                     f"still failing after {timeout}s: {last_error!r}"
                 ) from last_error
             return result
-        time.sleep(interval)
+        time.sleep(current_interval)
+        if adaptive and current_interval < 0.05:
+            current_interval = min(0.05, current_interval + 0.01)
 
 
 def safe(getter, default=None):
