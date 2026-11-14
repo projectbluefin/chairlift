@@ -642,3 +642,99 @@ func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderUnitWithDevicePath(t *testing.T) {
+	prevStat := statDeviceNode
+	t.Cleanup(func() { statDeviceNode = prevStat })
+
+	// By default or when statDeviceNode is false (node missing/stale), AddDevice= is omitted
+	statDeviceNode = func(path string) bool { return false }
+	appWithoutDevice := Select(Families()[0])
+	unitWithoutDevice := RenderUnit(appWithoutDevice)
+	if strings.Contains(unitWithoutDevice, "AddDevice=") {
+		t.Errorf("unit without DevicePath contains AddDevice: %s", unitWithoutDevice)
+	}
+
+	appWithDevice := Select(Families()[0])
+	appWithDevice.DevicePath = "/dev/bus/usb/001/008"
+	unitWithMissingDevice := RenderUnit(appWithDevice)
+	if strings.Contains(unitWithMissingDevice, "AddDevice=") {
+		t.Errorf("unit with missing DevicePath must omit AddDevice to prevent container failure: %s", unitWithMissingDevice)
+	}
+
+	// When node exists and is a valid device, AddDevice= is rendered
+	statDeviceNode = func(path string) bool { return path == "/dev/bus/usb/001/008" }
+	unitWithDevice := RenderUnit(appWithDevice)
+	wantLine := "AddDevice=/dev/bus/usb/001/008\n"
+	if !strings.Contains(unitWithDevice, wantLine) {
+		t.Errorf("unit with present DevicePath missing %q: %s", wantLine, unitWithDevice)
+	}
+}
+
+func TestValidateDeviceConflicts(t *testing.T) {
+	apps := []App{
+		{Family: Families()[0], Name: "app1", DevicePath: "/dev/bus/usb/001/002"},
+		{Family: Families()[1], Name: "app2", DevicePath: "/dev/bus/usb/001/003"},
+		{Family: Families()[2], Name: "app3", DevicePath: ""},
+	}
+	if err := ValidateDeviceConflicts(apps); err != nil {
+		t.Fatalf("ValidateDeviceConflicts failed on distinct devices: %v", err)
+	}
+
+	conflicting := []App{
+		{Family: Families()[0], Name: "app1", DevicePath: "/dev/bus/usb/001/002"},
+		{Family: Families()[1], Name: "app2", DevicePath: "/dev/bus/usb/001/002"},
+	}
+	if err := ValidateDeviceConflicts(conflicting); err == nil {
+		t.Fatal("ValidateDeviceConflicts allowed duplicate DevicePath")
+	}
+}
+
+func TestScanUSBDevices(t *testing.T) {
+	sysfs := t.TempDir()
+	prevRoot := usbSysfsRoot
+	usbSysfsRoot = sysfs
+	t.Cleanup(func() { usbSysfsRoot = prevRoot })
+
+	// Device 1: Hub (not printer)
+	hubDir := filepath.Join(sysfs, "1-1")
+	if err := os.MkdirAll(filepath.Join(hubDir, "1-1:1.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(hubDir, "busnum"), []byte("1\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "devnum"), []byte("2\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "manufacturer"), []byte("Generic\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "product"), []byte("USB Hub\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "bDeviceClass"), []byte("09\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "1-1:1.0", "bInterfaceClass"), []byte("09\n"), 0o644)
+
+	// Device 2: HP LaserJet Printer (interface class 07)
+	printerDir := filepath.Join(sysfs, "1-2")
+	if err := os.MkdirAll(filepath.Join(printerDir, "1-2:1.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(printerDir, "busnum"), []byte("1\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "devnum"), []byte("8\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "manufacturer"), []byte("HP\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "product"), []byte("LaserJet M1212nf\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "bDeviceClass"), []byte("00\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "1-2:1.0", "bInterfaceClass"), []byte("07\n"), 0o644)
+
+	devices, err := ScanUSBDevices()
+	if err != nil {
+		t.Fatalf("ScanUSBDevices() error = %v", err)
+	}
+	if len(devices) != 2 {
+		t.Fatalf("ScanUSBDevices() returned %d devices, want 2", len(devices))
+	}
+
+	d1 := devices[0]
+	if d1.DevicePath != "/dev/bus/usb/001/002" || d1.IsPrinter {
+		t.Errorf("device 1 = %+v; want hub not printer", d1)
+	}
+
+	d2 := devices[1]
+	if d2.DevicePath != "/dev/bus/usb/001/008" || !d2.IsPrinter || d2.Manufacturer != "HP" || d2.Product != "LaserJet M1212nf" {
+		t.Errorf("device 2 = %+v; want HP LaserJet printer", d2)
+	}
+}
