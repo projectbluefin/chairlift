@@ -47,6 +47,22 @@ func TestATSPIShardsCoverEveryFeatureOnce(t *testing.T) {
 	if len(shards) == 0 {
 		t.Fatalf("%s has no atspi shard matrix", path)
 	}
+	var release = workflow
+	release.Jobs = nil
+	releasePath := filepath.Join(".github", "workflows", "release.yml")
+	if err := yaml.Unmarshal([]byte(readRepoFile(t, releasePath)), &release); err != nil {
+		t.Fatalf("parse %s: %v", releasePath, err)
+	}
+	releaseShards := release.Jobs["atspi"].Strategy.Matrix.Include
+	if len(releaseShards) != len(shards) {
+		t.Errorf("release AT-SPI shards = %v, want %v", releaseShards, shards)
+	} else {
+		for i := range shards {
+			if releaseShards[i] != shards[i] {
+				t.Errorf("release AT-SPI shard = %v, want %v", releaseShards[i], shards[i])
+			}
+		}
+	}
 
 	features := map[string]string{}
 	paths, err := filepath.Glob(filepath.Join(RepoRoot(), "test", "e2e", "features", "*.feature"))
