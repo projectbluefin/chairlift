@@ -230,8 +230,8 @@ type UserHome struct {
 	// Free up space admits one cleanup run at a time.
 	freeUpSpaceGate actionstate.Gate
 
-	// updateFeaturesGate admits one Features-page updex helper mutation at a time: the
-	// feature update (#488) or a single feature's enable/disable toggle.
+	// updateFeaturesGate admits one Features-page updex helper mutation at a time
+	// for a single feature's enable/disable toggle.
 	updateFeaturesGate actionstate.Gate
 
 	// Bluefin-family (channel / developer mode / gaming) references
