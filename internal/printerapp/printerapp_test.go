@@ -605,6 +605,11 @@ func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
 }
 
 func TestRenderUnitWithDevicePath(t *testing.T) {
+	prevStat := statDeviceNode
+	t.Cleanup(func() { statDeviceNode = prevStat })
+
+	// By default or when statDeviceNode is false (node missing/stale), AddDevice= is omitted
+	statDeviceNode = func(path string) bool { return false }
 	appWithoutDevice := Select(Families()[0])
 	unitWithoutDevice := RenderUnit(appWithoutDevice)
 	if strings.Contains(unitWithoutDevice, "AddDevice=") {
@@ -613,10 +618,17 @@ func TestRenderUnitWithDevicePath(t *testing.T) {
 
 	appWithDevice := Select(Families()[0])
 	appWithDevice.DevicePath = "/dev/bus/usb/001/008"
+	unitWithMissingDevice := RenderUnit(appWithDevice)
+	if strings.Contains(unitWithMissingDevice, "AddDevice=") {
+		t.Errorf("unit with missing DevicePath must omit AddDevice to prevent container failure: %s", unitWithMissingDevice)
+	}
+
+	// When node exists and is a valid device, AddDevice= is rendered
+	statDeviceNode = func(path string) bool { return path == "/dev/bus/usb/001/008" }
 	unitWithDevice := RenderUnit(appWithDevice)
 	wantLine := "AddDevice=/dev/bus/usb/001/008\n"
 	if !strings.Contains(unitWithDevice, wantLine) {
-		t.Errorf("unit with DevicePath missing %q: %s", wantLine, unitWithDevice)
+		t.Errorf("unit with present DevicePath missing %q: %s", wantLine, unitWithDevice)
 	}
 }
 

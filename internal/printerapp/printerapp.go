@@ -253,7 +253,7 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
-	if app.DevicePath != "" {
+	if app.DevicePath != "" && statDeviceNode(app.DevicePath) {
 		fmt.Fprintf(&b, "AddDevice=%s\n", app.DevicePath)
 	}
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
@@ -401,8 +401,16 @@ func ValidateDeviceConflicts(apps []App) error {
 	return nil
 }
 
+// statDeviceNode checks whether a device node path exists and is a device.
+// It is an injection seam so RenderUnit is testable without physical USB devices.
+var statDeviceNode = defaultStatDeviceNode
+
+func defaultStatDeviceNode(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && (info.Mode()&os.ModeDevice != 0)
+}
+
 // unitDir is an injection seam for the quadlet directory, so the install and
-// remove paths are testable without writing into a real home directory.
 var unitDir = defaultUnitDir
 var userHomeDir = os.UserHomeDir
 
