@@ -15,7 +15,7 @@ import (
 )
 
 func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
-	wantIDs := []string{"ghostscript", "hplip", "gutenprint"}
+	wantIDs := []string{"ghostscript", "ps", "hplip", "gutenprint"}
 	got := Families()
 	if len(got) != len(wantIDs) {
 		t.Fatalf("Families() returned %d families, want %d", len(got), len(wantIDs))
@@ -163,6 +163,42 @@ func TestUniqueNamePortAndVolumePerApp(t *testing.T) {
 		a := Select(Families()[0])
 		if a.Port() != Select(Families()[0]).Port() {
 			t.Error("the same app rendered a different port on a second call")
+		}
+	}
+}
+
+func TestPostScriptFamilyKeepsItsContractedPortNamesAndVolume(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/data")
+	var ps App
+	others := []App{}
+	for _, f := range Families() {
+		if f.ID == "ps" {
+			ps = Select(f)
+		} else {
+			others = append(others, Select(f))
+		}
+	}
+	if ps.Family.ID == "" {
+		t.Fatal("Families() has no PostScript family")
+	}
+	if got := ps.Port(); got != 18020 {
+		t.Errorf("PostScript Port = %d, want 18020", got)
+	}
+	if got := ps.UnitName(); got != "chairlift-printer-ps.container" {
+		t.Errorf("PostScript UnitName = %q", got)
+	}
+	if got := ps.ContainerName(); got != "chairlift-printer-ps" {
+		t.Errorf("PostScript ContainerName = %q", got)
+	}
+	if got, want := ps.Volume(), "/data/chairlift/printers/ps/ps:/var/lib/ps-printer-app:z"; got != want {
+		t.Errorf("PostScript Volume = %q, want %q", got, want)
+	}
+	if len(others) != 3 {
+		t.Fatalf("expected three other families, got %d", len(others))
+	}
+	for _, other := range others {
+		if other.Port() == ps.Port() || other.UnitName() == ps.UnitName() || other.Volume() == ps.Volume() {
+			t.Errorf("PostScript collides with %q: port %d/%d unit %q/%q", other.Family.ID, ps.Port(), other.Port(), ps.UnitName(), other.UnitName())
 		}
 	}
 }
@@ -476,9 +512,12 @@ func TestApplyOverridesReplacesTheImage(t *testing.T) {
 		t.Errorf("rendered unit does not run the override:\n%s", unit)
 	}
 
-	// An override for one family leaves the others alone.
-	if Families()[1].Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
-		t.Error("overriding ghostscript disturbed the hplip image")
+	// An override for one family leaves the others alone. Look hplip up by ID:
+	// its position in Families() shifts whenever a family is added.
+	for _, f := range Families() {
+		if f.ID == "hplip" && f.Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
+			t.Errorf("overriding ghostscript disturbed the hplip image: %q", f.Image)
+		}
 	}
 }
 
