@@ -223,8 +223,8 @@ func StagingLogSubtitle(shown, total int) string {
 const ChangelogComparingLabel = "Comparing…"
 
 // FeatureChangeBusyToast answers an optional-feature toggle refused because
-// another feature change or the feature update is still running; each is a
-// privileged updex helper call, and two at once would race.
+// another feature change is still running; each is a privileged updex
+// helper call, and two at once would race.
 const FeatureChangeBusyToast = "Wait for the current feature change to finish"
 
 // Feature returns the initial row text for an updex feature.
