@@ -1,0 +1,52 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "local>projectbluefin/renovate-config"
+  ],
+  "baseBranchPatterns": [
+    "main"
+  ],
+  "enabledManagers": [
+    "gomod",
+    "github-actions"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "description": "Third-party GitHub Actions updates are grouped into one PR, pinned to commit digests, and wait three days after release; then Renovate automerges them once the required checks pass. The hive also merges mergeraptor[bot] PRs once the required checks pass, because it is a trusted bot.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["!projectbluefin/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "github-actions-third-party-non-major",
+      "pinDigests": true,
+      "minimumReleaseAge": "3 days",
+      "automerge": true
+    },
+    {
+      "description": "First-party projectbluefin/** actions open at any time and Renovate automerges them as soon as the required checks pass. The hive also merges mergeraptor[bot] PRs once the required checks pass.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["projectbluefin/**"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "github-actions-first-party-non-major",
+      "pinDigests": true,
+      "schedule": ["at any time"],
+      "automerge": true
+    },
+    {
+      "description": "Go module and Go toolchain non-major updates are grouped into one PR, tidied with go mod tidy, and wait three days after release; then Renovate automerges them once the required checks pass. The hive also merges mergeraptor[bot] PRs once the required checks pass, because it is a trusted bot.",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
+      "groupName": "gomod-non-major",
+      "minimumReleaseAge": "3 days",
+      "automerge": true
+    },
+    {
+      "description": "Renovate never automerges GitHub Actions or Go module majors. The hive's trusted-bot merge policy is independent of this setting: it still merges mergeraptor[bot] PRs once the required checks pass.",
+      "matchManagers": ["github-actions", "gomod"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
+}
