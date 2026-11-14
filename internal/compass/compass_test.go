@@ -2,6 +2,7 @@ package compass
 
 import (
 	"errors"
+	"os"
 	"slices"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 type fakeHost struct {
 	arch          string
 	user, system  bool
+	host          bool
 	remotes       []string
 	listErr       error
 	remoteErr     error
@@ -33,7 +35,7 @@ func (h *fakeHost) apps(present bool) ([]flatpak.Application, error) {
 
 func installFake(t *testing.T, h *fakeHost) {
 	t.Helper()
-	old := []any{listUser, listSystem, remotes, install, uninstall, goarch}
+	old := []any{listUser, listSystem, remotes, install, uninstall, goarch, lookPath, brewExecutable}
 	t.Cleanup(func() {
 		listUser = old[0].(func() ([]flatpak.Application, error))
 		listSystem = old[1].(func() ([]flatpak.Application, error))
@@ -41,6 +43,8 @@ func installFake(t *testing.T, h *fakeHost) {
 		install = old[3].(func() error)
 		uninstall = old[4].(func(string, bool) error)
 		goarch = old[5].(string)
+		lookPath = old[6].(func(string) (string, error))
+		brewExecutable = old[7].(func() string)
 	})
 	goarch = "amd64"
 	if h.arch != "" {
@@ -57,6 +61,13 @@ func installFake(t *testing.T, h *fakeHost) {
 		h.uninstalledIn = append(h.uninstalledIn, user)
 		return h.uninstallErr[user]
 	}
+	lookPath = func(name string) (string, error) {
+		if h.host && name == "compass" {
+			return "/usr/bin/compass", nil
+		}
+		return "", errors.New("not found")
+	}
+	brewExecutable = func() string { return "" }
 }
 
 func TestStatusReportsEachScopeAndTheRemote(t *testing.T) {
@@ -100,10 +111,13 @@ func TestEnableInstallsOnlyWhenAbsentFromBothScopes(t *testing.T) {
 		"absent":              {host: fakeHost{remotes: []string{Remote}}, wantInstall: 1},
 		"user copy":           {host: fakeHost{user: true, remotes: []string{Remote}}},
 		"system copy":         {host: fakeHost{system: true, remotes: []string{Remote}}},
+		"host copy":           {host: fakeHost{host: true, remotes: []string{Remote}}},
 		"no remote":           {host: fakeHost{remotes: []string{"flathub"}}, wantErr: ErrRemoteMissing},
 		"installed no remote": {host: fakeHost{system: true}},
+		"host no remote":      {host: fakeHost{host: true}},
 		"arm64":               {host: fakeHost{arch: "arm64", remotes: []string{Remote}}, wantErr: ErrUnsupported},
 		"arm64 installed":     {host: fakeHost{arch: "arm64", system: true, remotes: []string{Remote}}},
+		"arm64 host":          {host: fakeHost{arch: "arm64", host: true, remotes: []string{Remote}}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -134,6 +148,7 @@ func TestDisableRemovesEveryObservedScopeAndOnlyThose(t *testing.T) {
 		want []bool
 	}{
 		"absent": {host: fakeHost{}},
+		"host":   {host: fakeHost{host: true}},
 		"user":   {host: fakeHost{user: true}, want: []bool{true}},
 		"system": {host: fakeHost{system: true}, want: []bool{false}},
 		"both":   {host: fakeHost{user: true, system: true}, want: []bool{true, false}},
@@ -163,5 +178,41 @@ func TestDisableAttemptsBothScopesWhenOneFails(t *testing.T) {
 	}
 	if !slices.Equal(h.uninstalledIn, []bool{true, false}) {
 		t.Fatalf("Disable() removed from user=%v, want both scopes attempted", h.uninstalledIn)
+	}
+}
+func TestStatusRecognizesHomebrewOrPath(t *testing.T) {
+	h := &fakeHost{remotes: []string{Remote}}
+	installFake(t, h)
+
+	// Test lookPath on $PATH
+	lookPath = func(name string) (string, error) {
+		if name == "compass" {
+			return "/usr/local/bin/compass", nil
+		}
+		return "", errors.New("not found")
+	}
+	state, err := Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Host || !state.Installed() {
+		t.Fatalf("expected state.Host and state.Installed() to be true for PATH compass, got %+v", state)
+	}
+
+	// Test Homebrew resolution
+	lookPath = func(string) (string, error) { return "", errors.New("not found") }
+	tmp := t.TempDir()
+	brewBin := tmp + "/brew"
+	compassBin := tmp + "/compass"
+	if err := os.WriteFile(compassBin, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brewExecutable = func() string { return brewBin }
+	state, err = Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Host || !state.Installed() {
+		t.Fatalf("expected state.Host and state.Installed() to be true for Homebrew compass, got %+v", state)
 	}
 }
