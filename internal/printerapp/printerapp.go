@@ -259,14 +259,7 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
-	if app.DevicePath != "" && statDeviceNode(app.DevicePath) {
-		// The unit starts at every login with the path written here, and a
-		// USB path changes on replug or reboot. The "-" prefix tells Quadlet
-		// to add the device only if it exists (podman-systemd.unit(5)), so a
-		// printer unplugged since the unit was written cannot stop the
-		// family from starting.
-		fmt.Fprintf(&b, "AddDevice=-%s\n", app.DevicePath)
-	}
+	b.WriteString(deviceLine(app.DevicePath))
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
 
@@ -274,6 +267,22 @@ func RenderUnit(app App) string {
 	b.WriteString("[Install]\nWantedBy=default.target\n")
 
 	return b.String()
+}
+
+// deviceLine is the AddDevice= line for a passthrough device path, or "" for
+// none or a path that is not a device node. RenderUnit and the login pass
+// (withDeviceLine) both write it, so the two never disagree.
+//
+// The unit starts at every login with the path written here, and a USB path
+// changes on replug or reboot; the login pass (ResolveUSBPrintersAtLogin)
+// rewrites it first. The "-" prefix tells Quadlet to add the device only if
+// it exists (podman-systemd.unit(5)), so a printer unplugged since the unit
+// was written cannot stop the family from starting.
+func deviceLine(path string) string {
+	if path == "" || !statDeviceNode(path) {
+		return ""
+	}
+	return "AddDevice=-" + path + "\n"
 }
 
 // RenderUnits renders a set of printer applications. The units are sorted by
@@ -611,6 +620,12 @@ func installVerified(ctx context.Context, app App, action string) error {
 		rollback()
 		return err
 	}
+	// The family already runs; a login unit that could not be written
+	// costs only the lookup at the next login, so it is logged rather than
+	// undoing a working start.
+	if err := syncLoginUnit(ctx); err != nil {
+		log.Printf("printerapp: installing %s: %v", LoginUnitName, err)
+	}
 	return nil
 }
 
@@ -638,7 +653,13 @@ func Disable(ctx context.Context, app App) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return runSystemctl(ctx, "daemon-reload")
+	if err := runSystemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := syncLoginUnit(ctx); err != nil {
+		log.Printf("printerapp: removing %s: %v", LoginUnitName, err)
+	}
+	return nil
 }
 
 func verifyStopped(ctx context.Context, service string, stopErr error) error {
