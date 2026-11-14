@@ -125,3 +125,5 @@ func Disable() (bool, error) {
 	}
 	return state.Installed(), nil
 }
+
+const launchCommand = "flatpak run " + AppID + " start"

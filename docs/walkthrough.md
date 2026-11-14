@@ -342,10 +342,10 @@ journal logs, and container images to diagnose and surface actionable failures
 service crashes — rather than displaying a false enabled or running state.
 Printing through a real device has not yet been verified against hardware.
 **Compass** is one switch that installs Compass, TunaOS's fast,
-keyboard-first launcher for apps, files, and commands, for every account on
+keyboard-first launcher for apps, files, and commands, bound to Super+Space without a background service, for every account on
 the computer. It comes from FlatPark, the community Flatpak remote the system
 already lists, and may ask for an administrator password. Turning it off asks
-first, then removes Compass and keeps your Compass settings. Where FlatPark is
+first, then removes Compass and keeps your Compass settings, releasing the Super+Space shortcut. Where FlatPark is
 not set up, the row says so and the switch cannot install anything. Compass
 is published for x86_64 computers only; on other computers the row says so.
 **Optional Features** is the distribution's own feature manager; it is hidden
