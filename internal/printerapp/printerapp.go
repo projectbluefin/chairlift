@@ -295,7 +295,13 @@ type USBDevice struct {
 	DevicePath   string
 	Manufacturer string
 	Product      string
-	IsPrinter    bool
+	// VendorID and ProductID are the device's four-digit hexadecimal USB
+	// IDs, lowercase. Serial is its serial number, empty for a device that
+	// reports none. Unlike BusNum and DevNum, these survive a replug.
+	VendorID  string
+	ProductID string
+	Serial    string
+	IsPrinter bool
 }
 
 // defaultUSBSysfsRoot is the sysfs root for USB devices.
@@ -347,6 +353,11 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 
 		manufacturer := strings.TrimSpace(string(mfgBytes))
 		product := strings.TrimSpace(string(prodBytes))
+		// A printer without a serial number has no serial file; that is
+		// normal, and its identity then rests on vendor and product alone.
+		vendorBytes, _ := os.ReadFile(filepath.Join(devDir, "idVendor"))
+		productIDBytes, _ := os.ReadFile(filepath.Join(devDir, "idProduct"))
+		serialBytes, _ := os.ReadFile(filepath.Join(devDir, "serial"))
 		devPath := fmt.Sprintf("/dev/bus/usb/%03d/%03d", busNum, devNum)
 
 		isPrinter := false
@@ -376,6 +387,9 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 			DevicePath:   devPath,
 			Manufacturer: manufacturer,
 			Product:      product,
+			VendorID:     strings.ToLower(strings.TrimSpace(string(vendorBytes))),
+			ProductID:    strings.ToLower(strings.TrimSpace(string(productIDBytes))),
+			Serial:       strings.TrimSpace(string(serialBytes)),
 			IsPrinter:    isPrinter,
 		})
 	}
