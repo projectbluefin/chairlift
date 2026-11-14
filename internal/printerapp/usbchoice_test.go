@@ -98,6 +98,13 @@ func TestParseUSBChoicesReadsWhatGSettingsPrints(t *testing.T) {
 	}
 }
 
+func TestGVariantStringsRejectsOutOfRangeUnicodeEscape(t *testing.T) {
+	got := gvariantStrings(`'\UFFFFFFFF'`)
+	if len(got) != 1 || got[0] != "�" {
+		t.Fatalf("gvariantStrings() = %q, want Unicode replacement character", got)
+	}
+}
+
 func TestAssignUSBPrinterKeepsOneOwnerPerPrinter(t *testing.T) {
 	choices := map[string]USBIdentity{"hplip": hpLaserJet}
 

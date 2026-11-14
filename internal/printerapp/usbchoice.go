@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
 
@@ -315,7 +316,11 @@ func gvariantStrings(text string) []string {
 				}
 				if i+width < len(runes) {
 					if code, err := strconv.ParseUint(string(runes[i+1:i+1+width]), 16, 32); err == nil {
-						b.WriteRune(rune(code))
+						if code <= utf8.MaxRune {
+							b.WriteRune(rune(code))
+						} else {
+							b.WriteRune(utf8.RuneError)
+						}
 						i += width
 						continue
 					}

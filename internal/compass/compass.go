@@ -150,3 +150,5 @@ func Disable() (bool, error) {
 	}
 	return state.User || state.System, nil
 }
+
+const launchCommand = "flatpak run " + AppID + " start"

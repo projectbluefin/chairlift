@@ -1,7 +1,9 @@
 package views
 
 import (
+	"context"
 	"log"
+	"os"
 
 	"github.com/projectbluefin/chairlift/internal/compass"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
@@ -132,6 +134,15 @@ func (uh *UserHome) runCompassToggle(enable bool, toggle *guardedSwitch, row *ad
 		}
 		if err != nil {
 			log.Printf("views: compass toggle failed: %v", err)
+		}
+		if err == nil && !preview {
+			if enable && compass.ShortcutAvailable() {
+				home, _ := os.UserHomeDir()
+				_ = compass.SuppressInternalHotkey(home)
+			}
+			if shortcutErr := compass.SetShortcut(context.Background(), enable); shortcutErr != nil {
+				log.Printf("views: compass shortcut toggle failed: %v", shortcutErr)
+			}
 		}
 		state, stateErr := compass.Status()
 		sgtk.RunOnMainThread(func() {
