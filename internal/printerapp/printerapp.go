@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,9 @@ type App struct {
 	Family Family
 	// Name uniquely identifies this printer within its family.
 	Name string
+	// DevicePath optionally points to a passthrough USB printer device
+	// node (e.g. "/dev/bus/usb/001/008").
+	DevicePath string
 }
 
 // UnitName is the quadlet file ChairLift writes. It is namespaced with both the
@@ -249,6 +253,9 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
+	if app.DevicePath != "" {
+		fmt.Fprintf(&b, "AddDevice=%s\n", app.DevicePath)
+	}
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
 
@@ -273,6 +280,125 @@ func RenderUnits(apps []App) string {
 		b.WriteString(RenderUnit(app))
 	}
 	return b.String()
+}
+
+// USBDevice describes a detected host USB device.
+type USBDevice struct {
+	BusNum       int
+	DevNum       int
+	DevicePath   string
+	Manufacturer string
+	Product      string
+	IsPrinter    bool
+}
+
+// defaultUSBSysfsRoot is the sysfs root for USB devices.
+const defaultUSBSysfsRoot = "/sys/bus/usb/devices"
+
+var usbSysfsRoot = defaultUSBSysfsRoot
+
+// ScanUSBDevices scans the system for connected USB devices and identifies
+// which ones are printers based on device/interface classes (class 7 = Printer).
+func ScanUSBDevices() ([]USBDevice, error) {
+	return scanUSBDevicesFrom(usbSysfsRoot)
+}
+
+func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
+	entries, err := os.ReadDir(sysfsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var devices []USBDevice
+	for _, entry := range entries {
+		// Skip interfaces (e.g. "1-1:1.0")
+		if strings.Contains(entry.Name(), ":") {
+			continue
+		}
+		devDir := filepath.Join(sysfsRoot, entry.Name())
+		busBytes, err := os.ReadFile(filepath.Join(devDir, "busnum"))
+		if err != nil {
+			continue
+		}
+		devBytes, err := os.ReadFile(filepath.Join(devDir, "devnum"))
+		if err != nil {
+			continue
+		}
+		busNum, err := strconv.Atoi(strings.TrimSpace(string(busBytes)))
+		if err != nil {
+			continue
+		}
+		devNum, err := strconv.Atoi(strings.TrimSpace(string(devBytes)))
+		if err != nil {
+			continue
+		}
+
+		mfgBytes, _ := os.ReadFile(filepath.Join(devDir, "manufacturer"))
+		prodBytes, _ := os.ReadFile(filepath.Join(devDir, "product"))
+
+		manufacturer := strings.TrimSpace(string(mfgBytes))
+		product := strings.TrimSpace(string(prodBytes))
+		devPath := fmt.Sprintf("/dev/bus/usb/%03d/%03d", busNum, devNum)
+
+		isPrinter := false
+		if clsBytes, err := os.ReadFile(filepath.Join(devDir, "bDeviceClass")); err == nil {
+			if strings.TrimSpace(string(clsBytes)) == "07" {
+				isPrinter = true
+			}
+		}
+
+		if !isPrinter {
+			subEntries, _ := os.ReadDir(devDir)
+			for _, sub := range subEntries {
+				if strings.Contains(sub.Name(), ":") {
+					if ifClsBytes, err := os.ReadFile(filepath.Join(devDir, sub.Name(), "bInterfaceClass")); err == nil {
+						if strings.TrimSpace(string(ifClsBytes)) == "07" {
+							isPrinter = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		devices = append(devices, USBDevice{
+			BusNum:       busNum,
+			DevNum:       devNum,
+			DevicePath:   devPath,
+			Manufacturer: manufacturer,
+			Product:      product,
+			IsPrinter:    isPrinter,
+		})
+	}
+
+	sort.Slice(devices, func(i, j int) bool {
+		if devices[i].BusNum != devices[j].BusNum {
+			return devices[i].BusNum < devices[j].BusNum
+		}
+		return devices[i].DevNum < devices[j].DevNum
+	})
+
+	return devices, nil
+}
+
+// ValidateDeviceConflicts ensures that no two printer applications share the same
+// passthrough DevicePath, enforcing the single-owner-per-device invariant.
+func ValidateDeviceConflicts(apps []App) error {
+	claimed := make(map[string]string)
+	for _, app := range apps {
+		if app.DevicePath == "" {
+			continue
+		}
+		cleanPath := filepath.Clean(app.DevicePath)
+		if owner, exists := claimed[cleanPath]; exists {
+			return fmt.Errorf("printerapp: device %s is already assigned to %s (conflict with %s)", cleanPath, owner, app.UnitName())
+		}
+		claimed[cleanPath] = app.UnitName()
+	}
+	return nil
 }
 
 // unitDir is an injection seam for the quadlet directory, so the install and

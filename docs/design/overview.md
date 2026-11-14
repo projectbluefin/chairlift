@@ -274,7 +274,7 @@ wallpaper setup. Neither feature promises readiness from package presence alone.
 and pin the verified digest before writing/enabling or refreshing a unit. Bind
 only loopback: unauthenticated administration must not be exposed to the LAN.
 Service readiness is observed, not inferred from a unit file; failed stops keep
-the management file. Device printing and USB passthrough remain unverified.
+the management file. Device printing remains unverified.
 See [printer-applications.md](printer-applications.md).
 
 ## Explicit setup flow

@@ -15,10 +15,11 @@ administration are available only on this computer; DNS-SD inside the container
 does not advertise a usable LAN printer. There is no pkexec route, privileged
 container or image layering.
 
-Physical printing and USB passthrough are not established by service readiness;
-ChairLift does not configure device passthrough. HPLIP plugin consent remains an
-interactive image-side web flow, not a headless ChairLift action. The network
-trade-off is recorded in
+Physical printing is not established by service readiness. For USB printers,
+ChairLift supports dedicated device passthrough by adding
+`AddDevice=/dev/bus/usb/<bus>/<device>` to the container definition with one
+owner per device. HPLIP plugin consent remains an interactive image-side web
+flow, not a headless ChairLift action. The network trade-off is recorded in
 [ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md).
 
 ## Family inventory and images
