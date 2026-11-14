@@ -161,6 +161,13 @@ func PrinterAppUSBNotConnectedSubtitle(subtitle string) string {
 	return subtitle + " USB printer not connected."
 }
 
+// PrinterAppUSBNoAccessSubtitle adds, to a family's subtitle, that its chosen
+// printer is plugged in but this account cannot use it yet. The cause is the
+// OS's device permissions; the row names no group or rule to change.
+func PrinterAppUSBNoAccessSubtitle(subtitle string) string {
+	return subtitle + " This account can't use the USB printer yet."
+}
+
 // PrinterUSBChosenToast confirms a choice. restarted says a running family
 // was restarted to pick it up; a family that is off uses it when turned on.
 func PrinterUSBChosenToast(dryRun bool, rowTitle, label string, restarted bool) string {

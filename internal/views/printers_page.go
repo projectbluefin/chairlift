@@ -142,8 +142,11 @@ func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) 
 	if pr.unverified && state.On() {
 		subtitle = pageview.PrinterAppUnverifiedSubtitle(subtitle)
 	}
-	if pr.usbStatus == printerapp.USBNotConnected {
+	switch pr.usbStatus {
+	case printerapp.USBNotConnected:
 		subtitle = pageview.PrinterAppUSBNotConnectedSubtitle(subtitle)
+	case printerapp.USBNoAccess:
+		subtitle = pageview.PrinterAppUSBNoAccessSubtitle(subtitle)
 	}
 	pr.row.SetSubtitle(subtitle)
 

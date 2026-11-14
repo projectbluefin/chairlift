@@ -208,6 +208,21 @@ func TestPrinterAppUSBNotConnectedSubtitleKeepsStateFirst(t *testing.T) {
 	}
 }
 
+// A chosen printer this account cannot open is said after the family's own
+// state, plainly, without telling the person to change groups or udev rules.
+func TestPrinterAppUSBNoAccessSubtitle(t *testing.T) {
+	base := PrinterAppSubtitle(printerapp.StateReady, 18010)
+	got := PrinterAppUSBNoAccessSubtitle(base)
+	if !strings.HasPrefix(got, base) || !strings.Contains(got, "can't use the USB printer") {
+		t.Errorf("subtitle = %q", got)
+	}
+	for _, jargon := range []string{"group", "udev", "lp", "/dev/", "permission"} {
+		if strings.Contains(strings.TrimPrefix(got, base), jargon) {
+			t.Errorf("subtitle %q mentions %q", got, jargon)
+		}
+	}
+}
+
 func TestPrinterUSBToasts(t *testing.T) {
 	if got := PrinterUSBChosenToast(true, "HP Printers (HPLIP)", "HP LaserJet", false); !strings.HasPrefix(got, "Preview") || !strings.Contains(got, "Nothing was changed") {
 		t.Errorf("dry-run toast = %q; a preview must not read as done", got)
