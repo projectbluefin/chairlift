@@ -228,11 +228,12 @@ install: build
 	# Install wrapper script
 	install -Dm755 data/chairlift-wrapper.sh $(DESTDIR)$(BINDIR)/chairlift-wrapper
 	# Install ChairLift's GSettings schemas — Livery preferences, Updates
-	# preferences, and the first-run disposition — then recompile the system
-	# schema cache so `gsettings` can see them.
+	# preferences, the first-run disposition, and USB printer choices — then
+	# recompile the system schema cache so `gsettings` can see them.
 	install -Dm644 data/io.projectbluefin.chairlift.livery.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	install -Dm644 data/io.projectbluefin.chairlift.updates.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
 	install -Dm644 data/io.projectbluefin.chairlift.firstrun.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.firstrun.gschema.xml
+	install -Dm644 data/io.projectbluefin.chairlift.printers.gschema.xml $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.printers.gschema.xml
 	# Only for a direct install. Under DESTDIR the tree is a staging area
 	# holding these schemas alone, so compiling there would produce a
 	# gschemas.compiled containing only ChairLift's schemas — and an image
@@ -289,6 +290,7 @@ schemas:
 		cp data/io.projectbluefin.chairlift.livery.gschema.xml $(BUILD_DIR)/schemas/ && \
 		cp data/io.projectbluefin.chairlift.updates.gschema.xml $(BUILD_DIR)/schemas/ && \
 		cp data/io.projectbluefin.chairlift.firstrun.gschema.xml $(BUILD_DIR)/schemas/ && \
+		cp data/io.projectbluefin.chairlift.printers.gschema.xml $(BUILD_DIR)/schemas/ && \
 		glib-compile-schemas $(BUILD_DIR)/schemas && \
 		echo "==> schemas compiled to $(BUILD_DIR)/schemas"; \
 	fi
@@ -314,6 +316,7 @@ uninstall:
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.livery.gschema.xml
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.updates.gschema.xml
 	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.firstrun.gschema.xml
+	rm -f $(DESTDIR)$(SCHEMASDIR)/io.projectbluefin.chairlift.printers.gschema.xml
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
 	rm -f $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg
 	rm -f $(DESTDIR)$(BINDIR)/$(HELPER_NAME)

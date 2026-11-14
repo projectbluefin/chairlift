@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GSettings schema for the Printers group's USB printer choices.
+
+  A printer application can be given one USB printer. The choice is a user
+  preference with no file to infer it from: the application's unit carries
+  only the printer's current device path, which changes on a replug, and
+  turning the application off removes the unit. The choice must survive both,
+  so it lives here as the printer's stable identity.
+
+  Key order matches internal/printerapp's USBKeys slice, which
+  TestPrintersSchemaDeclaresEveryKey holds to this file in both directions.
+-->
+<schemalist>
+  <schema id="io.projectbluefin.chairlift.printers" path="/io/projectbluefin/chairlift/printers/">
+    <key name="usb-printers" type="a{ss}">
+      <default>{}</default>
+      <summary>USB printer passed through to each printer application</summary>
+      <description>Maps a printer family ID (ghostscript, ps, hplip, gutenprint) to the identity of the USB printer that family's application may use, as 'vendor:product:serial' with the four-digit hexadecimal USB vendor and product IDs. The serial is empty for a printer that reports none. A family with no entry is given no USB printer.</description>
+    </key>
+  </schema>
+</schemalist>

@@ -108,7 +108,7 @@ var unprivilegedExecSites = []execSite{
 	{File: "internal/livery/apply.go", Func: "execCommand"},                      // gsettings / dconf / gtk-update-icon-cache / systemctl --user
 	{File: "internal/printerapp/signature.go", Func: "execCosign"},               // cosign verify (unprivileged registry signature check)
 	{File: "internal/printerapp/printerapp.go", Func: "execSystemctlOutput"},     // systemctl --user
-	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user
+	{File: "internal/printerapp/printerapp_diagnostics.go", Func: "execCommand"}, // journalctl --user / podman / systemctl --user / gsettings (USB printer choices)
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "Command"},             // llmman launch goose-desktop
 	{File: "internal/troubleshoot/troubleshoot.go", Func: "ReopenCommand"},       // goose-desktop (handed to the running session)
 	{File: "internal/valhalla/valhalla.go", Func: "execCommand"},                 // flatpak queries/user overrides/sandbox gsettings and Homebrew queries/rsvg-convert/djxl; installs reuse existing wrappers

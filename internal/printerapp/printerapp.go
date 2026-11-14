@@ -571,6 +571,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 		return err
 	}
 	app.Family.Image = image
+	app = withSavedUSBPrinter(ctx, app)
 
 	volDir, err := app.HostVolumeDir()
 	if err != nil {

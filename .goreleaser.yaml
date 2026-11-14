@@ -90,6 +90,7 @@ archives:
       - data/io.projectbluefin.chairlift.livery.gschema.xml
       - data/io.projectbluefin.chairlift.updates.gschema.xml
       - data/io.projectbluefin.chairlift.firstrun.gschema.xml
+      - data/io.projectbluefin.chairlift.printers.gschema.xml
       - data/icons/**/*
       - data/icons/NOTICE
       - data/io.projectbluefin.chairlift.bootc.policy

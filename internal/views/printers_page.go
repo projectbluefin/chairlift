@@ -2,6 +2,7 @@ package views
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	sgtk "github.com/frostyard/snowkit/gtk"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
+	"codeberg.org/puregotk/puregotk/v4/gobject"
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
@@ -38,6 +40,25 @@ type printerRow struct {
 	// unverified marks a unit written before signatures were checked; the
 	// subtitle asks the person to turn it off and on again (ADR-0023).
 	unverified bool
+
+	// usb picks the USB printer passed through to this family. It shares
+	// the row's gate: a choice restarts a running family, so it must not
+	// overlap a toggle. Its two handlers are connected once, at build time.
+	usb       *adw.ComboRow
+	usbNotify func(gobject.Object, uintptr)
+	usbHover  func(gtk.Widget, gtk.StateFlags)
+	// usbChoices is what the picker lists, in order; usbSaved is the saved
+	// choice, and usbStatus how it stands among the last scan.
+	usbChoices []printerapp.USBChoice
+	usbSaved   printerapp.USBIdentity
+	usbStatus  printerapp.USBStatus
+	// usbReady is set once the saved choice has been read; until then, and
+	// when it cannot be read, the picker is insensitive.
+	usbReady bool
+	// usbSuppress marks the picker's own model and selection updates, which
+	// emit the same notifications as a person's choice.
+	usbSuppress bool
+	usbScanning bool
 }
 
 // printerActionTimeout bounds one enable or disable end to end. A first
@@ -96,6 +117,7 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 		pr.row.AddSuffix(&pr.toggle.widget.Widget)
 		pr.row.SetActivatableWidget(&pr.toggle.widget.Widget)
 		group.Add(&pr.row.Widget)
+		uh.buildPrinterUSBRow(group, pr)
 		uh.printerRows = append(uh.printerRows, pr)
 
 		if facts.UnitPresent {
@@ -105,6 +127,7 @@ func (uh *UserHome) buildPrintersGroup(page *adw.PreferencesPage) {
 
 	page.Add(group)
 	uh.printersGroup = group
+	go uh.loadPrinterUSBChoices(uh.printerRows)
 
 	// A single structured readiness marker. The screenshot walkthrough and
 	// the AT-SPI suite assert on this line to confirm the captured session
@@ -118,6 +141,9 @@ func (uh *UserHome) showPrinterAppState(pr *printerRow, state printerapp.State) 
 	subtitle := pageview.PrinterAppSubtitle(state, pr.app.Port())
 	if pr.unverified && state.On() {
 		subtitle = pageview.PrinterAppUnverifiedSubtitle(subtitle)
+	}
+	if pr.usbStatus == printerapp.USBNotConnected {
+		subtitle = pageview.PrinterAppUSBNotConnectedSubtitle(subtitle)
 	}
 	pr.row.SetSubtitle(subtitle)
 
@@ -211,6 +237,212 @@ func (uh *UserHome) onPrinterAppToggled(pr *printerRow, enabled bool) {
 				uh.showPrinterAppState(pr, pr.state)
 			}
 			uh.toastAdder.ShowToast(decision.Toast)
+		})
+	}()
+}
+
+// buildPrinterUSBRow adds the picker for the USB printer passed through to
+// one family, directly under the family's row. It lists "No USB printer"
+// until the saved choice and the connected printers have been read off the
+// main thread, and it re-reads the connected printers whenever the pointer
+// or keyboard focus reaches it, so a printer plugged in after the page was
+// built is listed by the time the person opens the picker. There is no
+// timer and no hotplug watch.
+func (uh *UserHome) buildPrinterUSBRow(group *adw.PreferencesGroup, pr *printerRow) {
+	pr.usb = adw.NewComboRow()
+	pr.usb.SetTitle(pageview.PrinterUSBRowTitle())
+	pr.usb.SetSubtitle(pageview.PrinterUSBRowSubtitle())
+	// Four pickers share one title; the description says which family each
+	// belongs to.
+	pr.usb.UpdateProperty(gtk.AccessiblePropertyDescriptionValue, pr.title, -1)
+	pr.usb.SetSensitive(false)
+	uh.showPrinterUSBChoices(pr, nil)
+
+	pr.usbNotify = func(_ gobject.Object, _ uintptr) { uh.onPrinterUSBSelected(pr) }
+	pr.usb.ConnectNotify(&pr.usbNotify)
+	pr.usbHover = func(w gtk.Widget, previous gtk.StateFlags) {
+		const reached = gtk.StateFlagPrelightValue | gtk.StateFlagFocusedValue
+		if w.GetStateFlags()&reached != 0 && previous&reached == 0 {
+			uh.rescanPrinterUSB(pr)
+		}
+	}
+	pr.usb.ConnectStateFlagsChanged(&pr.usbHover)
+	group.Add(&pr.usb.Widget)
+}
+
+// loadPrinterUSBChoices reads every family's saved printer and the connected
+// printers once, off the main thread, and fills in the pickers. A failed read
+// leaves the pickers insensitive rather than offering a choice that could
+// overwrite one it could not see.
+func (uh *UserHome) loadPrinterUSBChoices(rows []*printerRow) {
+	ctx, cancel := context.WithTimeout(context.Background(), printerProbeTimeout)
+	defer cancel()
+	saved, err := printerapp.LoadUSBChoices(ctx)
+	devices, scanErr := printerapp.ScanUSBDevices()
+	if scanErr != nil {
+		log.Printf("views: scanning USB printers failed: %v", scanErr)
+	}
+
+	sgtk.RunOnMainThread(func() {
+		if err != nil {
+			if !errors.Is(err, printerapp.ErrUSBSchemaMissing) {
+				log.Printf("views: reading USB printer choices failed: %v", err)
+			}
+			for _, pr := range rows {
+				pr.usb.SetSubtitle(pageview.PrinterUSBUnavailableSubtitle())
+			}
+			return
+		}
+		for _, pr := range rows {
+			// Select the saved choice before the picker accepts input: any
+			// notification after that reads as a person's choice.
+			pr.usbSaved = saved[pr.app.Family.ID]
+			uh.showPrinterUSBChoices(pr, devices)
+			pr.usbReady = true
+			pr.usb.SetSensitive(true)
+			// A toggle in flight owns the family row's subtitle; it renders
+			// the USB status itself when it finishes.
+			if pr.gate.TryStart() {
+				uh.showPrinterAppState(pr, pr.state)
+				pr.gate.Reset()
+			}
+		}
+	})
+}
+
+// rescanPrinterUSB re-reads the connected printers for one picker, off the
+// main thread. A failed scan keeps the list the picker already shows.
+func (uh *UserHome) rescanPrinterUSB(pr *printerRow) {
+	if !pr.usbReady || pr.usbScanning {
+		return
+	}
+	pr.usbScanning = true
+	go func() {
+		devices, err := printerapp.ScanUSBDevices()
+		sgtk.RunOnMainThread(func() {
+			pr.usbScanning = false
+			if err != nil {
+				log.Printf("views: scanning USB printers failed: %v", err)
+				return
+			}
+			// A choice being saved owns the picker until it finishes.
+			if !pr.gate.TryStart() {
+				return
+			}
+			uh.showPrinterUSBChoices(pr, devices)
+			uh.showPrinterAppState(pr, pr.state)
+			pr.gate.Reset()
+		})
+	}()
+}
+
+// showPrinterUSBChoices lists the saved choice and the scanned printers and
+// selects the saved one. It replaces the model only when the list changed,
+// so a rescan that finds nothing new leaves an open picker alone. Main
+// thread only.
+func (uh *UserHome) showPrinterUSBChoices(pr *printerRow, devices []printerapp.USBDevice) {
+	choices := printerapp.USBChoicesFor(devices, pr.usbSaved)
+	pr.usbStatus = printerapp.USBStatusOf(devices, pr.usbSaved)
+	pr.usbSuppress = true
+	defer func() { pr.usbSuppress = false }()
+	if !sameUSBChoices(pr.usbChoices, choices) {
+		pr.usb.SetModel(gtk.NewStringList(pageview.PrinterUSBChoiceLabels(choices)))
+	}
+	pr.usbChoices = choices
+	pr.usb.SetSelected(uint32(printerapp.IndexOfUSBChoice(choices, pr.usbSaved)))
+}
+
+func sameUSBChoices(a, b []printerapp.USBChoice) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Identity != b[i].Identity || pageview.PrinterUSBChoiceLabel(a[i]) != pageview.PrinterUSBChoiceLabel(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// onPrinterUSBSelected saves a person's choice, off the main thread, and
+// restarts the family if it is on so its unit passes the new printer through
+// (or none). internal/printerapp refuses a printer another family already
+// has, and both the save and the restart honour dry-run. A refusal, a failure
+// and a preview all put the picker back on the saved choice.
+func (uh *UserHome) onPrinterUSBSelected(pr *printerRow) {
+	if pr.usbSuppress || !pr.usbReady {
+		return
+	}
+	pos := pr.usb.GetSelected()
+	if pos == gtk.INVALID_LIST_POSITION || int(pos) >= len(pr.usbChoices) {
+		return
+	}
+	choice := pr.usbChoices[pos]
+	if choice.Identity == pr.usbSaved {
+		return
+	}
+	if !pr.gate.TryStart() {
+		// The family is turning on or off; its result decides the unit.
+		pr.usbSuppress = true
+		pr.usb.SetSelected(uint32(printerapp.IndexOfUSBChoice(pr.usbChoices, pr.usbSaved)))
+		pr.usbSuppress = false
+		return
+	}
+	label := pageview.PrinterUSBChoiceLabel(choice)
+	pr.usb.SetSensitive(false)
+	pr.toggle.widget.SetSensitive(false)
+	dryRun := dryrun.Enabled()
+
+	go func() {
+		defer pr.gate.Reset()
+
+		ctx, cancel := context.WithTimeout(context.Background(), printerActionTimeout)
+		defer cancel()
+
+		saveErr := printerapp.SaveUSBChoice(ctx, pr.app.Family.ID, choice.Identity)
+		var restartErr error
+		restarted := false
+		state, haveState := printerapp.State(0), false
+		if saveErr == nil && printerapp.IsEnabled(pr.app) {
+			restartErr = printerapp.Refresh(ctx, pr.app)
+			restarted = restartErr == nil
+			if restarted && !dryRun {
+				if _, err := printerapp.WaitSettled(ctx, pr.app, printerSettleWait); err != nil {
+					log.Printf("views: printer application %s readiness unknown: %v", pr.app.Family.ID, err)
+				}
+				state, haveState = printerapp.ProbeDiagnostics(ctx, pr.app, true), true
+			}
+		}
+		devices, scanErr := printerapp.ScanUSBDevices()
+		if scanErr != nil {
+			log.Printf("views: scanning USB printers failed: %v", scanErr)
+		}
+
+		sgtk.RunOnMainThread(func() {
+			// Put the picker on the saved choice before it accepts input
+			// again, so re-enabling it is never read as another choice.
+			if saveErr == nil && !dryRun {
+				pr.usbSaved = choice.Identity
+			}
+			uh.showPrinterUSBChoices(pr, devices)
+			pr.usb.SetSensitive(true)
+			pr.toggle.widget.SetSensitive(true)
+			if haveState {
+				uh.showPrinterAppState(pr, state)
+			} else {
+				uh.showPrinterAppState(pr, pr.state)
+			}
+
+			switch {
+			case saveErr != nil:
+				log.Printf("views: saving USB printer for %s failed: %v", pr.app.Family.ID, saveErr)
+				uh.toastAdder.ShowErrorToast(pageview.PrinterUSBFailureToast(pr.title, saveErr))
+			case restartErr != nil:
+				log.Printf("views: restarting %s for its USB printer failed: %v", pr.app.Family.ID, restartErr)
+				uh.toastAdder.ShowErrorToast(pageview.PrinterUSBRestartFailedToast(pr.title))
+			default:
+				uh.toastAdder.ShowToast(pageview.PrinterUSBChosenToast(dryRun, pr.title, label, restarted))
+			}
 		})
 	}()
 }

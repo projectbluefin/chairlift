@@ -15,13 +15,38 @@ administration are available only on this computer; DNS-SD inside the container
 does not advertise a usable LAN printer. There is no pkexec route, privileged
 container or image layering.
 
-Physical printing and USB passthrough are not established by service readiness;
-ChairLift does not configure device passthrough in the UI. Plumbing in
-`internal/printerapp` supports dedicated device passthrough by adding
-`AddDevice=/dev/bus/usb/<bus>/<device>` when `DevicePath` is specified and
-present, with one owner per device. HPLIP plugin consent remains an interactive
-image-side web flow, not a headless ChairLift action. The network trade-off is recorded in
+Physical printing is not established by service readiness. HPLIP plugin
+consent remains an interactive image-side web flow, not a headless ChairLift
+action. The network trade-off is recorded in
 [ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md).
+
+## USB printer passthrough
+
+Each family row has a **USB Printer** picker: "No USB printer" or one of the
+connected printers, named by the maker and model it reports. The choice is saved
+as the printer's stable identity — USB vendor ID, product ID and serial number —
+in the `usb-printers` key of the `io.projectbluefin.chairlift.printers`
+GSettings schema, keyed by family. A device path such as
+`/dev/bus/usb/001/008` changes on every replug or reboot, so it is never saved.
+
+Every route that writes a unit — turning a family on, choosing a printer, and a
+Printer Drivers update — resolves the saved identity against
+`/sys/bus/usb/devices` and adds `AddDevice=/dev/bus/usb/<bus>/<device>` for the
+one printer that matches. A replugged printer therefore gets its new path the
+next time the family is turned on or refreshed. Choosing a printer while the
+family is on restarts it through the verified refresh path; "No USB printer"
+removes the `AddDevice=` line. If the saved printer is not connected, or two
+identical printers without serial numbers cannot be told apart, the unit carries
+no device, the family still starts, and its row says the USB printer is not
+connected.
+
+One printer has one owner: a printer chosen for one family is refused for
+another, by identity, so it stays taken while unplugged. The choice applies to
+the family's default application only. The picker re-reads the connected
+printers when the pointer or keyboard focus reaches it; there is no timer or
+hotplug watch. Saving honours dry-run, and no privileged route is involved:
+the choice is a user setting and the unit stays rootless. Device permissions
+inside the container are not configured here.
 
 ## Family inventory and images
 
