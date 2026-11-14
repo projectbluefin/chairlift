@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/projectbluefin/chairlift/internal/branding"
 	"github.com/projectbluefin/chairlift/internal/printerapp"
@@ -110,4 +111,79 @@ func PrinterAppFailureToast(enabling bool, rowTitle string, failure ...error) st
 		return "Couldn't turn on " + rowTitle + ". Try again."
 	}
 	return rowTitle + " is still running. Couldn't turn it off. Try again."
+}
+
+// PrinterUSBRowTitle is the title of the row under each family that picks
+// the USB printer the family's application may use.
+func PrinterUSBRowTitle() string {
+	return "USB Printer"
+}
+
+// PrinterUSBRowSubtitle says what the picker is for.
+func PrinterUSBRowSubtitle() string {
+	return "The printer plugged into this computer that these drivers may use."
+}
+
+// PrinterUSBUnavailableSubtitle replaces the picker's subtitle when the
+// saved choices cannot be read, so the picker is offered but not usable.
+func PrinterUSBUnavailableSubtitle() string {
+	return "Couldn't read the saved printer choice."
+}
+
+// PrinterUSBChoiceLabel is one entry of the picker: "No USB printer", a
+// connected printer by the maker and model it reports, or a saved printer
+// that is not plugged in right now.
+func PrinterUSBChoiceLabel(c printerapp.USBChoice) string {
+	if c.Identity.IsZero() {
+		return "No USB printer"
+	}
+	if c.Device == nil {
+		return "Saved printer (not connected)"
+	}
+	if name := strings.TrimSpace(c.Device.Manufacturer + " " + c.Device.Product); name != "" {
+		return name
+	}
+	return "USB printer " + c.Identity.VendorID + ":" + c.Identity.ProductID
+}
+
+// PrinterUSBChoiceLabels labels every entry, in order.
+func PrinterUSBChoiceLabels(choices []printerapp.USBChoice) []string {
+	labels := make([]string, len(choices))
+	for i, c := range choices {
+		labels[i] = PrinterUSBChoiceLabel(c)
+	}
+	return labels
+}
+
+// PrinterAppUSBNotConnectedSubtitle adds, to a family's subtitle, that its
+// chosen printer is not plugged in. The family still runs without it.
+func PrinterAppUSBNotConnectedSubtitle(subtitle string) string {
+	return subtitle + " USB printer not connected."
+}
+
+// PrinterUSBChosenToast confirms a choice. restarted says a running family
+// was restarted to pick it up; a family that is off uses it when turned on.
+func PrinterUSBChosenToast(dryRun bool, rowTitle, label string, restarted bool) string {
+	if dryRun {
+		return "Preview: " + rowTitle + " would use " + label + ". Nothing was changed."
+	}
+	if restarted {
+		return rowTitle + " restarted to use " + label + "."
+	}
+	return rowTitle + " will use " + label + "."
+}
+
+// PrinterUSBFailureToast says a choice was not saved, and when the printer
+// already belongs to another family, how to free it.
+func PrinterUSBFailureToast(rowTitle string, err error) string {
+	if errors.Is(err, printerapp.ErrUSBPrinterTaken) {
+		return "That printer is already used by another driver. Choose No USB printer there first."
+	}
+	return "Couldn't save the USB printer for " + rowTitle + ". Try again."
+}
+
+// PrinterUSBRestartFailedToast says a choice was saved but the running
+// family could not be restarted to use it.
+func PrinterUSBRestartFailedToast(rowTitle string) string {
+	return "Saved, but couldn't restart " + rowTitle + ". Turn it off and on again to use the printer."
 }

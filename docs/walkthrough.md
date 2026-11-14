@@ -332,7 +332,11 @@ that don't work on their own. Each runs as a small container in your own account
 this computer can use it: other computers on your network can't print to it
 or reach its settings page. When one is running, its row names the local web
 page where you add and manage printers, with a **Manage** button that opens
-it in your default browser. Turning a driver on checks that its image was
+it in your default browser. Under each driver, **USB Printer** chooses the
+printer plugged into this computer that the driver may use. The choice is
+remembered; after the printer is unplugged and plugged back in, turn the
+driver off and on (or pick the printer again) so it finds the printer at its
+new place. One printer can belong to only one driver. Turning a driver on checks that its image was
 signed by its publisher and keeps that exact version. Turn it off and back on
 to migrate an older installation, or use **Printer Drivers** on the Updates
 page to check for and apply a newer verified image. There is no background

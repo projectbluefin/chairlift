@@ -796,10 +796,15 @@ PRINTER_OFF_SUBTITLE = "Turn on to use these printers from this computer."
 
 
 def _printer_rows(context):
-    """Every list row inside the Printers group, in display order."""
+    """Every family row inside the Printers group, in display order.
+
+    Each family row carries the family's switch; the "USB Printer" picker
+    row under it does not, so it is not counted as a family.
+    """
     groups = _groups(context, PRINTERS_GROUP)
     assert groups, f"no {PRINTERS_GROUP!r} group on the Features page"
-    return atspi.find_all(groups[0], lambda n: atspi.role(n) in atspi.ROW_ROLES)
+    rows = atspi.find_all(groups[0], lambda n: atspi.role(n) in atspi.ROW_ROLES)
+    return [r for r in rows if atspi.find_all(r, lambda n: atspi.role(n) == "switch")]
 
 
 @then("the Printers group offers exactly these rows, each off and ready to turn on")

@@ -1,6 +1,8 @@
 package pageview
 
 import (
+	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -173,5 +175,58 @@ func TestPrinterAdminButtonTooltipFollowsTheState(t *testing.T) {
 	}
 	if label := PrinterAdminButtonLabel(); label == "" {
 		t.Error("AdminButtonLabel is empty; the button would be announced with no name")
+	}
+}
+
+// The picker names connected printers the way a person sees them — maker and
+// model — and never by bus numbers or USB IDs unless the printer reports no
+// name at all. "No USB printer" always comes first.
+func TestPrinterUSBChoiceLabels(t *testing.T) {
+	hp := printerapp.USBDevice{Manufacturer: "HP", Product: "LaserJet M1212nf", DevicePath: "/dev/bus/usb/001/008", VendorID: "03f0", ProductID: "052a", Serial: "ABC123", IsPrinter: true}
+	nameless := printerapp.USBDevice{DevicePath: "/dev/bus/usb/001/009", VendorID: "04b8", ProductID: "0005", IsPrinter: true}
+	saved := printerapp.USBIdentity{VendorID: "0924", ProductID: "3ce8", Serial: "Z"}
+
+	got := PrinterUSBChoiceLabels(printerapp.USBChoicesFor([]printerapp.USBDevice{hp, nameless}, saved))
+	want := []string{"No USB printer", "HP LaserJet M1212nf", "USB printer 04b8:0005", "Saved printer (not connected)"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("labels = %q, want %q", got, want)
+	}
+	for _, label := range got {
+		if strings.Contains(label, "/dev/") || strings.Contains(label, "ABC123") {
+			t.Errorf("label %q names a device path or serial number", label)
+		}
+	}
+}
+
+// A chosen printer that is unplugged is said after the family's own state,
+// so "Running" or a failure is still read first.
+func TestPrinterAppUSBNotConnectedSubtitleKeepsStateFirst(t *testing.T) {
+	base := PrinterAppSubtitle(printerapp.StateReady, 18010)
+	got := PrinterAppUSBNotConnectedSubtitle(base)
+	if !strings.HasPrefix(got, base) || !strings.Contains(got, "USB printer not connected") {
+		t.Errorf("subtitle = %q", got)
+	}
+}
+
+func TestPrinterUSBToasts(t *testing.T) {
+	if got := PrinterUSBChosenToast(true, "HP Printers (HPLIP)", "HP LaserJet", false); !strings.HasPrefix(got, "Preview") || !strings.Contains(got, "Nothing was changed") {
+		t.Errorf("dry-run toast = %q; a preview must not read as done", got)
+	}
+	if got := PrinterUSBChosenToast(false, "HP Printers (HPLIP)", "HP LaserJet", true); !strings.Contains(got, "restarted") || !strings.Contains(got, "HP LaserJet") {
+		t.Errorf("restarted toast = %q", got)
+	}
+	if got := PrinterUSBChosenToast(false, "HP Printers (HPLIP)", "No USB printer", false); !strings.Contains(got, "HP Printers (HPLIP)") || strings.Contains(got, "restarted") {
+		t.Errorf("saved toast = %q", got)
+	}
+
+	taken := fmt.Errorf("%w (hplip)", printerapp.ErrUSBPrinterTaken)
+	if got := PrinterUSBFailureToast("Gutenprint Printers", taken); !strings.Contains(got, "already used by another driver") || !strings.Contains(got, "No USB printer") {
+		t.Errorf("taken toast = %q; it must say how to free the printer", got)
+	}
+	if got := PrinterUSBFailureToast("Gutenprint Printers", errors.New("dconf")); !strings.Contains(got, "Gutenprint Printers") || strings.Contains(got, "dconf") {
+		t.Errorf("failure toast = %q; it must name the row and not the error", got)
+	}
+	if got := PrinterUSBRestartFailedToast("Gutenprint Printers"); !strings.Contains(got, "Saved") || !strings.Contains(got, "off and on again") {
+		t.Errorf("restart-failed toast = %q", got)
 	}
 }

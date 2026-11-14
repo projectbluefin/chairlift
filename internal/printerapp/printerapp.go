@@ -260,7 +260,12 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	if app.DevicePath != "" && statDeviceNode(app.DevicePath) {
-		fmt.Fprintf(&b, "AddDevice=%s\n", app.DevicePath)
+		// The unit starts at every login with the path written here, and a
+		// USB path changes on replug or reboot. The "-" prefix tells Quadlet
+		// to add the device only if it exists (podman-systemd.unit(5)), so a
+		// printer unplugged since the unit was written cannot stop the
+		// family from starting.
+		fmt.Fprintf(&b, "AddDevice=-%s\n", app.DevicePath)
 	}
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
@@ -295,7 +300,13 @@ type USBDevice struct {
 	DevicePath   string
 	Manufacturer string
 	Product      string
-	IsPrinter    bool
+	// VendorID and ProductID are the device's four-digit hexadecimal USB
+	// IDs, lowercase. Serial is its serial number, empty for a device that
+	// reports none. Unlike BusNum and DevNum, these survive a replug.
+	VendorID  string
+	ProductID string
+	Serial    string
+	IsPrinter bool
 }
 
 // defaultUSBSysfsRoot is the sysfs root for USB devices.
@@ -347,6 +358,11 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 
 		manufacturer := strings.TrimSpace(string(mfgBytes))
 		product := strings.TrimSpace(string(prodBytes))
+		// A printer without a serial number has no serial file; that is
+		// normal, and its identity then rests on vendor and product alone.
+		vendorBytes, _ := os.ReadFile(filepath.Join(devDir, "idVendor"))
+		productIDBytes, _ := os.ReadFile(filepath.Join(devDir, "idProduct"))
+		serialBytes, _ := os.ReadFile(filepath.Join(devDir, "serial"))
 		devPath := fmt.Sprintf("/dev/bus/usb/%03d/%03d", busNum, devNum)
 
 		isPrinter := false
@@ -376,6 +392,9 @@ func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
 			DevicePath:   devPath,
 			Manufacturer: manufacturer,
 			Product:      product,
+			VendorID:     strings.ToLower(strings.TrimSpace(string(vendorBytes))),
+			ProductID:    strings.ToLower(strings.TrimSpace(string(productIDBytes))),
+			Serial:       strings.TrimSpace(string(serialBytes)),
 			IsPrinter:    isPrinter,
 		})
 	}
@@ -557,6 +576,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 		return err
 	}
 	app.Family.Image = image
+	app = withSavedUSBPrinter(ctx, app)
 
 	volDir, err := app.HostVolumeDir()
 	if err != nil {
