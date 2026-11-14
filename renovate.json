@@ -3,6 +3,7 @@
   "extends": [
     "local>projectbluefin/renovate-config"
   ],
+  "forkProcessing": "enabled",
   "baseBranchPatterns": [
     "main"
   ],
