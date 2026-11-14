@@ -46,7 +46,9 @@ unit alone. The pass runs as the user; nothing is privileged. Turning a family
 on (or a Printer Drivers refresh) installs the unit, and turning the last
 family off removes it. The `-` prefix (`podman-systemd.unit(5)`: add the
 device only if it exists) still keeps a printer unplugged since login from
-stopping the family. A udev rule giving each printer a stable device link
+stopping the family. A replug during a session is not followed: the family
+keeps the old path until the next login, a re-pick or a Printer Drivers
+refresh. A udev rule giving each printer a stable device link
 belongs in the OS image, not here.
 Choosing a printer while the
 family is on restarts it through the verified refresh path; "No USB printer"
