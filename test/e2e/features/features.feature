@@ -967,9 +967,10 @@ Feature: Features page — Developer Mode, WSL Mode, Docker, Game Mode, Printers
     And the Printers group offers exactly these rows, each off and ready to turn on
       | row                  |
       | Ghostscript Printers |
+      | PostScript Printers  |
       | HP Printers (HPLIP)  |
       | Gutenprint Printers  |
-    And the application log contains "views: printers group built families=3"
+    And the application log contains "views: printers group built families=4"
     And the systemctl tool was never asked to mutate
     And no printer quadlet was written
     And the action journal is empty
