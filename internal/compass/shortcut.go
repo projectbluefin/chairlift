@@ -98,10 +98,17 @@ func SetShortcut(ctx context.Context, enable bool) error {
 			}
 		}
 		inputs, err := getList(ctx, inputSchema, inputKey)
-		if err == nil && slices.ContainsFunc(inputs, isBinding) {
-			_, _ = runCmd(ctx, "dconf", "write", displacedKey, "true")
+		if err != nil {
+			return err
+		}
+		if slices.ContainsFunc(inputs, isBinding) {
+			if _, err := runCmd(ctx, "dconf", "write", displacedKey, "true"); err != nil {
+				return err
+			}
 			filtered := slices.DeleteFunc(inputs, isBinding)
-			_ = setList(ctx, inputSchema, inputKey, filtered)
+			if err := setList(ctx, inputSchema, inputKey, filtered); err != nil {
+				return err
+			}
 		}
 	} else {
 		if slices.Contains(paths, shortcutPath) {
@@ -110,14 +117,24 @@ func SetShortcut(ctx context.Context, enable bool) error {
 				return err
 			}
 		}
-		displacedVal, _ := runCmd(ctx, "dconf", "read", displacedKey)
+		displacedVal, err := runCmd(ctx, "dconf", "read", displacedKey)
+		if err != nil {
+			return err
+		}
 		wasDisplaced := strings.TrimSpace(displacedVal) == "true" || unquote(strings.TrimSpace(displacedVal)) == "true"
-		_, _ = runCmd(ctx, "dconf", "reset", "-f", shortcutPath)
 		if wasDisplaced {
 			inputs, err := getList(ctx, inputSchema, inputKey)
-			if err == nil && !slices.ContainsFunc(inputs, isBinding) {
-				_ = setList(ctx, inputSchema, inputKey, append(inputs, Binding))
+			if err != nil {
+				return err
 			}
+			if !slices.ContainsFunc(inputs, isBinding) {
+				if err := setList(ctx, inputSchema, inputKey, append(inputs, Binding)); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := runCmd(ctx, "dconf", "reset", "-f", shortcutPath); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -204,9 +221,14 @@ func SuppressInternalHotkey(homeDir string) error {
 	}
 	cfgFile := filepath.Join(dir, "compass.json")
 	data, err := os.ReadFile(cfgFile)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	var root map[string]any
 	if err == nil {
-		_ = json.Unmarshal(data, &root)
+		if err := json.Unmarshal(data, &root); err != nil {
+			return fmt.Errorf("decoding Compass configuration: %w", err)
+		}
 	}
 	if root == nil {
 		root = make(map[string]any)

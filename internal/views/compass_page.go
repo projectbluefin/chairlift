@@ -136,7 +136,7 @@ func (uh *UserHome) runCompassToggle(enable bool, toggle *guardedSwitch, row *ad
 			log.Printf("views: compass toggle failed: %v", err)
 		}
 		if err == nil && !preview {
-			if enable {
+			if enable && compass.ShortcutAvailable() {
 				home, _ := os.UserHomeDir()
 				_ = compass.SuppressInternalHotkey(home)
 			}
