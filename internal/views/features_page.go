@@ -132,20 +132,9 @@ func (uh *UserHome) buildFeaturesPage() {
 		uh.featuresGroup.SetTitle("Optional Features")
 		uh.featuresGroup.SetDescription("Checking what this computer offers…")
 
-		// Add Update button as header suffix (disabled until features are listed)
-		updateBtn := gtk.NewButtonWithLabel("Update")
-		updateBtn.SetValign(gtk.AlignCenterValue)
-		updateBtn.AddCssClass("suggested-action")
-		updateBtn.SetSensitive(false)
-		updateClickedCb := func(btn gtk.Button) {
-			uh.onUpdateFeaturesClicked(updateBtn)
-		}
-		updateBtn.ConnectClicked(&updateClickedCb)
-		uh.featuresGroup.SetHeaderSuffix(&updateBtn.Widget)
-
 		page.Add(uh.featuresGroup)
 
-		go uh.loadFeatures(updateBtn, showEmptyState)
+		go uh.loadFeatures(showEmptyState)
 	}
 
 	page.Add(emptyGroup)
@@ -157,7 +146,7 @@ func (uh *UserHome) buildFeaturesPage() {
 // no features hides the group rather than rendering an inert one, and tells
 // onListed so the page can explain itself if nothing else is on offer; a
 // failed read is not evidence of that, so it keeps the group and says so.
-func (uh *UserHome) loadFeatures(updateBtn *gtk.Button, onListed func(optionalFeatures bool)) {
+func (uh *UserHome) loadFeatures(onListed func(optionalFeatures bool)) {
 	ctx, cancel := updex.DefaultContext()
 	defer cancel()
 
@@ -180,7 +169,6 @@ func (uh *UserHome) loadFeatures(updateBtn *gtk.Button, onListed func(optionalFe
 			return
 		}
 
-		updateBtn.SetSensitive(true)
 		uh.featuresGroup.SetDescription(pageview.FeatureGroupDescription(len(features)))
 		uh.featureRows = make(map[string]*adw.ActionRow)
 
@@ -312,39 +300,6 @@ func (uh *UserHome) onFeatureToggled(name string, enabled bool, toggle *guardedS
 			}
 
 			uh.toastAdder.ShowToast(decision.Toast)
-		})
-	}()
-}
-
-// onUpdateFeaturesClicked handles the Update button click. updateFeaturesGate
-// admits one run at a time, shared with the feature toggles, and is reset on
-// every completion, because the button is offered again after each run.
-func (uh *UserHome) onUpdateFeaturesClicked(button *gtk.Button) {
-	if !uh.updateFeaturesGate.TryStart() {
-		uh.toastAdder.ShowToast(pageview.FeatureChangeBusyToast)
-		return
-	}
-	button.SetSensitive(false)
-	button.SetLabel("Updating…")
-
-	go func() {
-		ctx, cancel := updex.MutationContext(updexhelper.CommandUpdate)
-		defer cancel()
-
-		err := updex.UpdateFeatures(ctx)
-
-		sgtk.RunOnMainThread(func() {
-			defer uh.updateFeaturesGate.Reset()
-			button.SetSensitive(true)
-			button.SetLabel("Update")
-
-			if err != nil {
-				log.Printf("views: updating features failed: %v", err)
-				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(err, "Couldn't update features. Try again."))
-				return
-			}
-
-			uh.toastAdder.ShowToast(actionmsg.FeatureUpdate(dryrun.Enabled()))
 		})
 	}()
 }
