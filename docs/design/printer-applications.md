@@ -15,11 +15,66 @@ administration are available only on this computer; DNS-SD inside the container
 does not advertise a usable LAN printer. There is no pkexec route, privileged
 container or image layering.
 
-Physical printing and USB passthrough are not established by service readiness;
-ChairLift does not configure device passthrough. HPLIP plugin consent remains an
-interactive image-side web flow, not a headless ChairLift action. The network
-trade-off is recorded in
+Physical printing is not established by service readiness. HPLIP plugin
+consent remains an interactive image-side web flow, not a headless ChairLift
+action. The network trade-off is recorded in
 [ADR-0020](../adr/0020-printer-apps-loopback-only-on-moving-stable-tag.md).
+
+## USB printer passthrough
+
+Each family row has a **USB Printer** picker: "No USB printer" or one of the
+connected printers, named by the maker and model it reports. The choice is saved
+as the printer's stable identity — USB vendor ID, product ID and serial number —
+in the `usb-printers` key of the `io.projectbluefin.chairlift.printers`
+GSettings schema, keyed by family. A device path such as
+`/dev/bus/usb/001/008` changes on every replug or reboot, so it is never saved.
+
+Every route that writes a unit — turning a family on, choosing a printer, and a
+Printer Drivers update — resolves the saved identity against
+`/sys/bus/usb/devices` and adds `AddDevice=-/dev/bus/usb/<bus>/<device>` for the
+one printer that matches. A replug or reboot gives the printer new bus and
+device numbers, so while any family is on, a user oneshot unit,
+`chairlift-printers-usb.service` (`chairlift --resolve-printer-usb`, ordered
+`Before=` every family's service), resolves each saved identity again at login.
+It rewrites only the `AddDevice=` line of a default app whose line no longer
+matches — a new path, or no line when the printer is not connected or no
+longer chosen, so a different device holding the old numbers is never passed
+through — then reloads the user manager and restarts the changed units with
+`--no-block`. The verified image digest and the rest of the unit are left as
+they are, an unchanged unit is not touched, and unreadable choices leave every
+unit alone. The pass runs as the user; nothing is privileged. Turning a family
+on (or a Printer Drivers refresh) installs the unit, and turning the last
+family off removes it. The `-` prefix (`podman-systemd.unit(5)`: add the
+device only if it exists) still keeps a printer unplugged since login from
+stopping the family. A replug during a session is not followed: the family
+keeps the old path until the next login, a re-pick or a Printer Drivers
+refresh. A udev rule giving each printer a stable device link
+belongs in the OS image, not here.
+Choosing a printer while the
+family is on restarts it through the verified refresh path; "No USB printer"
+removes the `AddDevice=` line. If the saved printer is not connected, or two
+identical printers without serial numbers cannot be told apart, the unit carries
+no device, the family still starts, and its row says the USB printer is not
+connected.
+
+One printer has one owner: a printer chosen for one family is refused for
+another, by identity, so it stays taken while unplugged. The choice applies to
+the family's default application only. The picker re-reads the connected
+printers when the pointer or keyboard focus reaches it; there is no timer or
+hotplug watch. Saving honours dry-run, and no privileged route is involved:
+the choice is a user setting and the unit stays rootless.
+
+The family runs with `UserNS=keep-id`, so inside the container the application
+has the signed-in account's own permissions on the printer's device node, and
+needs to read and write it. On a default Fedora install a USB printer's node is
+`root:lp` mode `0664` with nobody in `lp`, so the account can only read it.
+ChairLift adds no group, udev rule or privileged route for this: the OS grants
+access, through a `uaccess` rule for USB printers
+([projectbluefin/common#1681](https://github.com/projectbluefin/common/issues/1681)).
+When the saved printer is connected but the account cannot open its node for
+reading and writing, the row says the account can't use the USB printer yet.
+The unit still passes the device through, so the printer works once the OS
+grants access, with no change in ChairLift.
 
 ## Family inventory and images
 

@@ -21,6 +21,12 @@ outcome query and its interpretation boundaries.
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
 | Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
 
+The CI alert workflow opens or reopens one issue per workflow for failures on
+`main` pushes of Tests, tag pushes of goreleaser, and scheduled Nightly
+compliance and Live system Docker runs. A successful run closes its workflow's
+alert; Tests must also match the current `main` commit. Pull requests, merge
+groups, and manual runs do not create or close alerts.
+
 ## Enforced checks
 
 The repository's `Tests` workflow runs on pushes to `main`, on pull requests

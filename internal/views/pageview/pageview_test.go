@@ -512,3 +512,54 @@ func TestHomebrewPackageButtonNameCarriesThePackage(t *testing.T) {
 		}
 	}
 }
+func TestCompassSubtitleReflectsState(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		installed bool
+		supported bool
+		remote    bool
+		want      string
+	}{
+		{
+			name:      "installed",
+			installed: true,
+			supported: true,
+			remote:    true,
+			want:      "Installed for everyone on this computer. Open Compass from the app grid.",
+		},
+		{
+			name:      "installed without remote",
+			installed: true,
+			supported: false,
+			remote:    false,
+			want:      "Installed for everyone on this computer. Open Compass from the app grid.",
+		},
+		{
+			name:      "unsupported architecture",
+			installed: false,
+			supported: false,
+			remote:    true,
+			want:      "Compass is only available for x86_64 computers.",
+		},
+		{
+			name:      "missing remote",
+			installed: false,
+			supported: true,
+			remote:    false,
+			want:      "Compass installs from FlatPark, which isn't set up on this computer.",
+		},
+		{
+			name:      "available",
+			installed: false,
+			supported: true,
+			remote:    true,
+			want:      "A fast, keyboard-first launcher for apps, files, and commands. Installs from FlatPark.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CompassSubtitle(tc.installed, tc.supported, tc.remote); got != tc.want {
+				t.Errorf("CompassSubtitle(%v, %v, %v) = %q, want %q", tc.installed, tc.supported, tc.remote, got, tc.want)
+			}
+		})
+	}
+}

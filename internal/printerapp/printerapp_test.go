@@ -15,7 +15,7 @@ import (
 )
 
 func TestFamiliesCoversEveryDriverFamily(t *testing.T) {
-	wantIDs := []string{"ghostscript", "hplip", "gutenprint"}
+	wantIDs := []string{"ghostscript", "ps", "hplip", "gutenprint"}
 	got := Families()
 	if len(got) != len(wantIDs) {
 		t.Fatalf("Families() returned %d families, want %d", len(got), len(wantIDs))
@@ -163,6 +163,42 @@ func TestUniqueNamePortAndVolumePerApp(t *testing.T) {
 		a := Select(Families()[0])
 		if a.Port() != Select(Families()[0]).Port() {
 			t.Error("the same app rendered a different port on a second call")
+		}
+	}
+}
+
+func TestPostScriptFamilyKeepsItsContractedPortNamesAndVolume(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", "/data")
+	var ps App
+	others := []App{}
+	for _, f := range Families() {
+		if f.ID == "ps" {
+			ps = Select(f)
+		} else {
+			others = append(others, Select(f))
+		}
+	}
+	if ps.Family.ID == "" {
+		t.Fatal("Families() has no PostScript family")
+	}
+	if got := ps.Port(); got != 18020 {
+		t.Errorf("PostScript Port = %d, want 18020", got)
+	}
+	if got := ps.UnitName(); got != "chairlift-printer-ps.container" {
+		t.Errorf("PostScript UnitName = %q", got)
+	}
+	if got := ps.ContainerName(); got != "chairlift-printer-ps" {
+		t.Errorf("PostScript ContainerName = %q", got)
+	}
+	if got, want := ps.Volume(), "/data/chairlift/printers/ps/ps:/var/lib/ps-printer-app:z"; got != want {
+		t.Errorf("PostScript Volume = %q, want %q", got, want)
+	}
+	if len(others) != 3 {
+		t.Fatalf("expected three other families, got %d", len(others))
+	}
+	for _, other := range others {
+		if other.Port() == ps.Port() || other.UnitName() == ps.UnitName() || other.Volume() == ps.Volume() {
+			t.Errorf("PostScript collides with %q: port %d/%d unit %q/%q", other.Family.ID, ps.Port(), other.Port(), ps.UnitName(), other.UnitName())
 		}
 	}
 }
@@ -476,9 +512,12 @@ func TestApplyOverridesReplacesTheImage(t *testing.T) {
 		t.Errorf("rendered unit does not run the override:\n%s", unit)
 	}
 
-	// An override for one family leaves the others alone.
-	if Families()[1].Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
-		t.Error("overriding ghostscript disturbed the hplip image")
+	// An override for one family leaves the others alone. Look hplip up by ID:
+	// its position in Families() shifts whenever a family is added.
+	for _, f := range Families() {
+		if f.ID == "hplip" && f.Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
+			t.Errorf("overriding ghostscript disturbed the hplip image: %q", f.Image)
+		}
 	}
 }
 
@@ -601,5 +640,102 @@ func TestWebAdminURLDerivesFromAppPort(t *testing.T) {
 		if !strings.Contains(unit, wantPublish) {
 			t.Errorf("app %s rendered unit missing %q", f.ID, wantPublish)
 		}
+	}
+}
+
+func TestRenderUnitWithDevicePath(t *testing.T) {
+	prevStat := statDeviceNode
+	t.Cleanup(func() { statDeviceNode = prevStat })
+
+	// By default or when statDeviceNode is false (node missing/stale), AddDevice= is omitted
+	statDeviceNode = func(path string) bool { return false }
+	appWithoutDevice := Select(Families()[0])
+	unitWithoutDevice := RenderUnit(appWithoutDevice)
+	if strings.Contains(unitWithoutDevice, "AddDevice=") {
+		t.Errorf("unit without DevicePath contains AddDevice: %s", unitWithoutDevice)
+	}
+
+	appWithDevice := Select(Families()[0])
+	appWithDevice.DevicePath = "/dev/bus/usb/001/008"
+	unitWithMissingDevice := RenderUnit(appWithDevice)
+	if strings.Contains(unitWithMissingDevice, "AddDevice=") {
+		t.Errorf("unit with missing DevicePath must omit AddDevice to prevent container failure: %s", unitWithMissingDevice)
+	}
+
+	// When node exists and is a valid device, AddDevice= is rendered
+	statDeviceNode = func(path string) bool { return path == "/dev/bus/usb/001/008" }
+	unitWithDevice := RenderUnit(appWithDevice)
+	// The "-" prefix: a node gone by the next login must not stop the unit.
+	wantLine := "AddDevice=-/dev/bus/usb/001/008\n"
+	if !strings.Contains(unitWithDevice, wantLine) {
+		t.Errorf("unit with present DevicePath missing %q: %s", wantLine, unitWithDevice)
+	}
+}
+
+func TestValidateDeviceConflicts(t *testing.T) {
+	apps := []App{
+		{Family: Families()[0], Name: "app1", DevicePath: "/dev/bus/usb/001/002"},
+		{Family: Families()[1], Name: "app2", DevicePath: "/dev/bus/usb/001/003"},
+		{Family: Families()[2], Name: "app3", DevicePath: ""},
+	}
+	if err := ValidateDeviceConflicts(apps); err != nil {
+		t.Fatalf("ValidateDeviceConflicts failed on distinct devices: %v", err)
+	}
+
+	conflicting := []App{
+		{Family: Families()[0], Name: "app1", DevicePath: "/dev/bus/usb/001/002"},
+		{Family: Families()[1], Name: "app2", DevicePath: "/dev/bus/usb/001/002"},
+	}
+	if err := ValidateDeviceConflicts(conflicting); err == nil {
+		t.Fatal("ValidateDeviceConflicts allowed duplicate DevicePath")
+	}
+}
+
+func TestScanUSBDevices(t *testing.T) {
+	sysfs := t.TempDir()
+	prevRoot := usbSysfsRoot
+	usbSysfsRoot = sysfs
+	t.Cleanup(func() { usbSysfsRoot = prevRoot })
+
+	// Device 1: Hub (not printer)
+	hubDir := filepath.Join(sysfs, "1-1")
+	if err := os.MkdirAll(filepath.Join(hubDir, "1-1:1.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(hubDir, "busnum"), []byte("1\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "devnum"), []byte("2\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "manufacturer"), []byte("Generic\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "product"), []byte("USB Hub\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "bDeviceClass"), []byte("09\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(hubDir, "1-1:1.0", "bInterfaceClass"), []byte("09\n"), 0o644)
+
+	// Device 2: HP LaserJet Printer (interface class 07)
+	printerDir := filepath.Join(sysfs, "1-2")
+	if err := os.MkdirAll(filepath.Join(printerDir, "1-2:1.0"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(printerDir, "busnum"), []byte("1\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "devnum"), []byte("8\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "manufacturer"), []byte("HP\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "product"), []byte("LaserJet M1212nf\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "bDeviceClass"), []byte("00\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(printerDir, "1-2:1.0", "bInterfaceClass"), []byte("07\n"), 0o644)
+
+	devices, err := ScanUSBDevices()
+	if err != nil {
+		t.Fatalf("ScanUSBDevices() error = %v", err)
+	}
+	if len(devices) != 2 {
+		t.Fatalf("ScanUSBDevices() returned %d devices, want 2", len(devices))
+	}
+
+	d1 := devices[0]
+	if d1.DevicePath != "/dev/bus/usb/001/002" || d1.IsPrinter {
+		t.Errorf("device 1 = %+v; want hub not printer", d1)
+	}
+
+	d2 := devices[1]
+	if d2.DevicePath != "/dev/bus/usb/001/008" || !d2.IsPrinter || d2.Manufacturer != "HP" || d2.Product != "LaserJet M1212nf" {
+		t.Errorf("device 2 = %+v; want HP LaserJet printer", d2)
 	}
 }

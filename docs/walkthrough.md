@@ -326,13 +326,17 @@ created beside it.
 (including Steam, Gamescope, and an Open Gaming Collective kernel with a reboot
 confirmation). Switching images never installs, removes, or cleans up your
 Flatpaks; there is no separate gaming-tools installer or removal switch.
-**Printers** is one switch per printer driver family — Ghostscript, HP
-(HPLIP), and Gutenprint — offering extra drivers for printers that don't work
-on their own. Each runs as a small container in your own account and only
+**Printers** is one switch per printer driver family — Ghostscript,
+PostScript, HP (HPLIP), and Gutenprint — offering extra drivers for printers
+that don't work on their own. Each runs as a small container in your own account and only
 this computer can use it: other computers on your network can't print to it
 or reach its settings page. When one is running, its row names the local web
 page where you add and manage printers, with a **Manage** button that opens
-it in your default browser. Turning a driver on checks that its image was
+it in your default browser. Under each driver, **USB Printer** chooses the
+printer plugged into this computer that the driver may use. The choice is
+remembered, and the driver finds the printer again each time you log in,
+even after a reboot gives it a new place. If you plug it back in while
+logged in, pick the printer again. One printer can belong to only one driver. Turning a driver on checks that its image was
 signed by its publisher and keeps that exact version. Turn it off and back on
 to migrate an older installation, or use **Printer Drivers** on the Updates
 page to check for and apply a newer verified image. There is no background

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/deskenv"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/livery"
+	"github.com/projectbluefin/chairlift/internal/printerapp"
 	"github.com/projectbluefin/chairlift/internal/version"
 )
 
@@ -45,6 +47,17 @@ func main() {
 		defer cancel()
 		if err := livery.Rotate(ctx); err != nil {
 			log.Printf("livery: rotation: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
+	// The printers' USB lookup runs headless too, from the login unit
+	// printerapp installs while a printer driver is on.
+	if len(os.Args) == 2 && os.Args[1] == printerapp.ResolveUSBFlag {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := printerapp.ResolveUSBPrintersAtLogin(ctx); err != nil {
+			log.Printf("printerapp: login USB lookup: %v", err)
 			os.Exit(1)
 		}
 		return

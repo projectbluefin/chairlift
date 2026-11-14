@@ -10,7 +10,7 @@
 // and on a bootc host nothing is layered onto the image.
 //
 // A printer application is a Family (a published image, one per driver family:
-// Ghostscript, HPLIP, Gutenprint) plus a unique app name. A family
+// Ghostscript, PostScript, HPLIP, Gutenprint) plus a unique app name. A family
 // can host several printers, and each App gets its own unit, host port, and
 // state volume, so one logical device has exactly one owner and one
 // advertisement rather than two units fighting over the same port and volume.
@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,9 @@ type App struct {
 	Family Family
 	// Name uniquely identifies this printer within its family.
 	Name string
+	// DevicePath optionally points to a passthrough USB printer device
+	// node (e.g. "/dev/bus/usb/001/008").
+	DevicePath string
 }
 
 // UnitName is the quadlet file ChairLift writes. It is namespaced with both the
@@ -153,6 +157,12 @@ var families = []Family{
 		DisplayName: "Ghostscript",
 		Image:       "ghcr.io/projectbluefin/ghostscript-printer-app:stable",
 		DefaultPort: 18010,
+	},
+	{
+		ID:          "ps",
+		DisplayName: "PostScript",
+		Image:       "ghcr.io/projectbluefin/ps-printer-app:stable",
+		DefaultPort: 18020,
 	},
 	{
 		ID:          "hplip",
@@ -249,6 +259,7 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Image=%s\n", app.Family.Image)
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
+	b.WriteString(deviceLine(app.DevicePath))
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
 
@@ -256,6 +267,22 @@ func RenderUnit(app App) string {
 	b.WriteString("[Install]\nWantedBy=default.target\n")
 
 	return b.String()
+}
+
+// deviceLine is the AddDevice= line for a passthrough device path, or "" for
+// none or a path that is not a device node. RenderUnit and the login pass
+// (withDeviceLine) both write it, so the two never disagree.
+//
+// The unit starts at every login with the path written here, and a USB path
+// changes on replug or reboot; the login pass (ResolveUSBPrintersAtLogin)
+// rewrites it first. The "-" prefix tells Quadlet to add the device only if
+// it exists (podman-systemd.unit(5)), so a printer unplugged since the unit
+// was written cannot stop the family from starting.
+func deviceLine(path string) string {
+	if path == "" || !statDeviceNode(path) {
+		return ""
+	}
+	return "AddDevice=-" + path + "\n"
 }
 
 // RenderUnits renders a set of printer applications. The units are sorted by
@@ -275,8 +302,149 @@ func RenderUnits(apps []App) string {
 	return b.String()
 }
 
+// USBDevice describes a detected host USB device.
+type USBDevice struct {
+	BusNum       int
+	DevNum       int
+	DevicePath   string
+	Manufacturer string
+	Product      string
+	// VendorID and ProductID are the device's four-digit hexadecimal USB
+	// IDs, lowercase. Serial is its serial number, empty for a device that
+	// reports none. Unlike BusNum and DevNum, these survive a replug.
+	VendorID  string
+	ProductID string
+	Serial    string
+	IsPrinter bool
+}
+
+// defaultUSBSysfsRoot is the sysfs root for USB devices.
+const defaultUSBSysfsRoot = "/sys/bus/usb/devices"
+
+var usbSysfsRoot = defaultUSBSysfsRoot
+
+// ScanUSBDevices scans the system for connected USB devices and identifies
+// which ones are printers based on device/interface classes (class 7 = Printer).
+func ScanUSBDevices() ([]USBDevice, error) {
+	return scanUSBDevicesFrom(usbSysfsRoot)
+}
+
+func scanUSBDevicesFrom(sysfsRoot string) ([]USBDevice, error) {
+	entries, err := os.ReadDir(sysfsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	var devices []USBDevice
+	for _, entry := range entries {
+		// Skip interfaces (e.g. "1-1:1.0")
+		if strings.Contains(entry.Name(), ":") {
+			continue
+		}
+		devDir := filepath.Join(sysfsRoot, entry.Name())
+		busBytes, err := os.ReadFile(filepath.Join(devDir, "busnum"))
+		if err != nil {
+			continue
+		}
+		devBytes, err := os.ReadFile(filepath.Join(devDir, "devnum"))
+		if err != nil {
+			continue
+		}
+		busNum, err := strconv.Atoi(strings.TrimSpace(string(busBytes)))
+		if err != nil {
+			continue
+		}
+		devNum, err := strconv.Atoi(strings.TrimSpace(string(devBytes)))
+		if err != nil {
+			continue
+		}
+
+		mfgBytes, _ := os.ReadFile(filepath.Join(devDir, "manufacturer"))
+		prodBytes, _ := os.ReadFile(filepath.Join(devDir, "product"))
+
+		manufacturer := strings.TrimSpace(string(mfgBytes))
+		product := strings.TrimSpace(string(prodBytes))
+		// A printer without a serial number has no serial file; that is
+		// normal, and its identity then rests on vendor and product alone.
+		vendorBytes, _ := os.ReadFile(filepath.Join(devDir, "idVendor"))
+		productIDBytes, _ := os.ReadFile(filepath.Join(devDir, "idProduct"))
+		serialBytes, _ := os.ReadFile(filepath.Join(devDir, "serial"))
+		devPath := fmt.Sprintf("/dev/bus/usb/%03d/%03d", busNum, devNum)
+
+		isPrinter := false
+		if clsBytes, err := os.ReadFile(filepath.Join(devDir, "bDeviceClass")); err == nil {
+			if strings.TrimSpace(string(clsBytes)) == "07" {
+				isPrinter = true
+			}
+		}
+
+		if !isPrinter {
+			subEntries, _ := os.ReadDir(devDir)
+			for _, sub := range subEntries {
+				if strings.Contains(sub.Name(), ":") {
+					if ifClsBytes, err := os.ReadFile(filepath.Join(devDir, sub.Name(), "bInterfaceClass")); err == nil {
+						if strings.TrimSpace(string(ifClsBytes)) == "07" {
+							isPrinter = true
+							break
+						}
+					}
+				}
+			}
+		}
+
+		devices = append(devices, USBDevice{
+			BusNum:       busNum,
+			DevNum:       devNum,
+			DevicePath:   devPath,
+			Manufacturer: manufacturer,
+			Product:      product,
+			VendorID:     strings.ToLower(strings.TrimSpace(string(vendorBytes))),
+			ProductID:    strings.ToLower(strings.TrimSpace(string(productIDBytes))),
+			Serial:       strings.TrimSpace(string(serialBytes)),
+			IsPrinter:    isPrinter,
+		})
+	}
+
+	sort.Slice(devices, func(i, j int) bool {
+		if devices[i].BusNum != devices[j].BusNum {
+			return devices[i].BusNum < devices[j].BusNum
+		}
+		return devices[i].DevNum < devices[j].DevNum
+	})
+
+	return devices, nil
+}
+
+// ValidateDeviceConflicts ensures that no two printer applications share the same
+// passthrough DevicePath, enforcing the single-owner-per-device invariant.
+func ValidateDeviceConflicts(apps []App) error {
+	claimed := make(map[string]string)
+	for _, app := range apps {
+		if app.DevicePath == "" {
+			continue
+		}
+		cleanPath := filepath.Clean(app.DevicePath)
+		if owner, exists := claimed[cleanPath]; exists {
+			return fmt.Errorf("printerapp: device %s is already assigned to %s (conflict with %s)", cleanPath, owner, app.UnitName())
+		}
+		claimed[cleanPath] = app.UnitName()
+	}
+	return nil
+}
+
+// statDeviceNode checks whether a device node path exists and is a device.
+// It is an injection seam so RenderUnit is testable without physical USB devices.
+var statDeviceNode = defaultStatDeviceNode
+
+func defaultStatDeviceNode(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && (info.Mode()&os.ModeDevice != 0)
+}
+
 // unitDir is an injection seam for the quadlet directory, so the install and
-// remove paths are testable without writing into a real home directory.
 var unitDir = defaultUnitDir
 var userHomeDir = os.UserHomeDir
 
@@ -417,6 +585,7 @@ func installVerified(ctx context.Context, app App, action string) error {
 		return err
 	}
 	app.Family.Image = image
+	app = withSavedUSBPrinter(ctx, app)
 
 	volDir, err := app.HostVolumeDir()
 	if err != nil {
@@ -451,6 +620,12 @@ func installVerified(ctx context.Context, app App, action string) error {
 		rollback()
 		return err
 	}
+	// The family already runs; a login unit that could not be written
+	// costs only the lookup at the next login, so it is logged rather than
+	// undoing a working start.
+	if err := syncLoginUnit(ctx); err != nil {
+		log.Printf("printerapp: installing %s: %v", LoginUnitName, err)
+	}
 	return nil
 }
 
@@ -478,7 +653,13 @@ func Disable(ctx context.Context, app App) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	return runSystemctl(ctx, "daemon-reload")
+	if err := runSystemctl(ctx, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := syncLoginUnit(ctx); err != nil {
+		log.Printf("printerapp: removing %s: %v", LoginUnitName, err)
+	}
+	return nil
 }
 
 func verifyStopped(ctx context.Context, service string, stopErr error) error {

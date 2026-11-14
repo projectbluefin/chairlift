@@ -1,0 +1,125 @@
+name: CI alert
+
+on:
+  # This job reads run metadata only; it never checks out or runs workflow code.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: ["Tests", "goreleaser", "Nightly compliance", "Live system Docker"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: ci-alert-${{ github.event.workflow_run.name }}
+  cancel-in-progress: false
+
+jobs:
+  alert:
+    if: >-
+      ((github.event.workflow_run.name == 'Tests' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+       (github.event.workflow_run.name == 'goreleaser' && github.event.workflow_run.event == 'push') ||
+       ((github.event.workflow_run.name == 'Nightly compliance' || github.event.workflow_run.name == 'Live system Docker') && github.event.workflow_run.event == 'schedule')) &&
+      (github.event.workflow_run.conclusion == 'failure' ||
+       github.event.workflow_run.conclusion == 'cancelled' ||
+       github.event.workflow_run.conclusion == 'timed_out' ||
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Get failed jobs from the run
+        if: github.event.workflow_run.conclusion != 'success'
+        id: jobs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          JOBS=$(gh api --paginate --slurp "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100")
+          JOB_COUNT=$(jq '[.[].jobs[]] | length' <<< "$JOBS")
+          FAILURES=$(jq -r '[.[].jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out" or .conclusion == "skipped")
+                   | "- [\(.name)](\(.html_url)) (\(.conclusion))"] | join("\n")' <<< "$JOBS")
+          if [[ "$CONCLUSION" == "cancelled" && "$JOB_COUNT" == "0" ]]; then
+            echo "Run was cancelled before any job started; nothing was alerted."
+          fi
+          echo "count=${JOB_COUNT}" >> "$GITHUB_OUTPUT"
+          {
+            echo "failures<<EOF"
+            echo "$FAILURES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check for existing alert issue
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUM=$(gh api --paginate --slurp "repos/${REPO}/issues?state=all&per_page=100" \
+            | jq -r --arg title "[CI] ${WORKFLOW} failed" '[.[][] | select(.pull_request == null and .title == $title)]
+                  | if length > 1 then error("Multiple CI alert issues match; refusing to select one")
+                    else .[0].number // empty end')
+          echo "issue_number=${ISSUE_NUM:-}" >> "$GITHUB_OUTPUT"
+
+      - name: Create or reopen alert issue
+        if: github.event.workflow_run.conclusion != 'success' && (github.event.workflow_run.conclusion != 'cancelled' || steps.jobs.outputs.count != '0')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          COMMIT: ${{ github.event.workflow_run.head_sha }}
+          FAILURES: ${{ steps.jobs.outputs.failures }}
+          EXISTING: ${{ steps.find.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+          BODY="## CI alert: ${WORKFLOW} failed on \`${BRANCH}\`
+
+          Workflow run: [${RUN_URL}](${RUN_URL})
+          Commit: \`${COMMIT}\`
+
+          ### Failed jobs
+          ${FAILURES}
+
+          This issue is automatically reopened when the workflow fails again."
+          if [[ -n "$EXISTING" ]]; then
+            state=$(gh issue view "$EXISTING" --repo "$REPO" --json state --jq .state)
+            if [[ "$state" == "CLOSED" ]]; then
+              gh issue reopen "$EXISTING" --repo "$REPO"
+            fi
+            gh issue edit "$EXISTING" --repo "$REPO" \
+              --add-label 'kind/bug' --add-label 'priority/critical-urgent' --body "$BODY"
+          else
+            gh issue create --repo "$REPO" --title "[CI] ${WORKFLOW} failed" \
+              --label 'kind/bug,priority/critical-urgent' --body "$BODY"
+          fi
+
+      - name: Close alert issue once the workflow is green
+        if: github.event.workflow_run.conclusion == 'success' && steps.find.outputs.issue_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          EXISTING: ${{ steps.find.outputs.issue_number }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$WORKFLOW" == "Tests" ]]; then
+            head_sha=$(gh api "repos/${REPO}/commits/main" --jq .sha)
+            if [[ "$RUN_SHA" != "$head_sha" ]]; then
+              echo "Green run is for ${RUN_SHA}, but main HEAD is ${head_sha}; leaving alert as-is."
+              exit 0
+            fi
+          fi
+          state=$(gh issue view "$EXISTING" --repo "$REPO" --json state --jq .state)
+          if [[ "$state" == "OPEN" ]]; then
+            gh issue close "$EXISTING" --repo "$REPO" \
+              --comment "${WORKFLOW} is green again: ${RUN_URL}"
+          fi
