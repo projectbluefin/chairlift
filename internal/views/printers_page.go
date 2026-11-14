@@ -403,7 +403,7 @@ func (uh *UserHome) onPrinterUSBSelected(pr *printerRow) {
 		var restartErr error
 		restarted := false
 		state, haveState := printerapp.State(0), false
-		if saveErr == nil && printerapp.IsEnabled(pr.app) {
+		if saveErr == nil && printerapp.Observe(pr.app, true).UnitPresent {
 			restartErr = printerapp.Refresh(ctx, pr.app)
 			restarted = restartErr == nil
 			if restarted && !dryRun {
