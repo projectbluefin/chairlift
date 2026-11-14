@@ -2,8 +2,11 @@ package compass
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -186,4 +189,39 @@ func unquote(s string) string {
 
 func isBinding(s string) bool {
 	return strings.EqualFold(s, Binding) || strings.EqualFold(s, "<Mod4>space")
+}
+
+// SuppressInternalHotkey disables Compass's built-in global shortcut request
+// in its flatpak configuration so the desktop never pops up a GlobalShortcuts portal
+// permission prompt on startup.
+func SuppressInternalHotkey(homeDir string) error {
+	if homeDir == "" {
+		return nil
+	}
+	dir := filepath.Join(homeDir, ".var", "app", AppID, "config", "compass")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	cfgFile := filepath.Join(dir, "compass.json")
+	data, err := os.ReadFile(cfgFile)
+	var root map[string]any
+	if err == nil {
+		_ = json.Unmarshal(data, &root)
+	}
+	if root == nil {
+		root = make(map[string]any)
+	}
+	launcher, _ := root["launcher"].(map[string]any)
+	if launcher == nil {
+		launcher = make(map[string]any)
+	}
+	// Setting hotkey to "" tells Compass's desired() shortcuts reconciler to bind nothing.
+	launcher["hotkey"] = ""
+	root["launcher"] = launcher
+
+	out, err := json.MarshalIndent(root, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(cfgFile, append(out, '\n'), 0o644)
 }

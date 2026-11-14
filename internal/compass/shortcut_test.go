@@ -2,6 +2,8 @@ package compass
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -178,5 +180,29 @@ func TestParseAndFormatList(t *testing.T) {
 	parsed := parseList(formatted)
 	if !reflect.DeepEqual(parsed, items) {
 		t.Errorf("roundtrip failed: got %v, want %v", parsed, items)
+	}
+}
+
+func TestSuppressInternalHotkey(t *testing.T) {
+	tmp := t.TempDir()
+	if err := SuppressInternalHotkey(tmp); err != nil {
+		t.Fatalf("SuppressInternalHotkey failed: %v", err)
+	}
+
+	cfgPath := tmp + "/.var/app/org.tunaos.compass/config/compass/compass.json"
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("reading config failed: %v", err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("parsing config failed: %v", err)
+	}
+	launcher, ok := root["launcher"].(map[string]any)
+	if !ok {
+		t.Fatalf("launcher missing in config: %v", root)
+	}
+	if launcher["hotkey"] != "" {
+		t.Fatalf("expected launcher.hotkey == \"\", got %v", launcher["hotkey"])
 	}
 }
