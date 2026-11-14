@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 )
 
@@ -119,6 +121,12 @@ const (
 	// cannot be told apart from an identical one. The family still starts,
 	// without it.
 	USBNotConnected
+	// USBNoAccess means the chosen printer is plugged in but this account
+	// cannot open its device node for reading and writing. The family runs
+	// rootless with the account's own permissions on the node, so the
+	// application could not use it either. The device is still passed
+	// through, so the printer works as soon as the OS grants access.
+	USBNoAccess
 )
 
 // USBStatusOf reports how id stands among the scanned devices.
@@ -126,10 +134,22 @@ func USBStatusOf(devices []USBDevice, id USBIdentity) USBStatus {
 	if id.IsZero() {
 		return USBNone
 	}
-	if _, ok := resolveUSBIdentityIn(devices, id); ok {
-		return USBConnected
+	path, ok := resolveUSBIdentityIn(devices, id)
+	if !ok {
+		return USBNotConnected
 	}
-	return USBNotConnected
+	if !canOpenDevice(path) {
+		return USBNoAccess
+	}
+	return USBConnected
+}
+
+// canOpenDevice reports whether this account may read and write the device
+// node at path. ChairLift runs as the account whose permissions the rootless
+// container keeps (UserNS=keep-id), so this predicts what the application
+// will see. It is a seam so tests never depend on host device permissions.
+var canOpenDevice = func(path string) bool {
+	return unix.Access(path, unix.R_OK|unix.W_OK) == nil
 }
 
 // USBChoice is one entry of a family's USB printer list. The zero Identity is

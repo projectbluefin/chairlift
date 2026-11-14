@@ -53,8 +53,19 @@ another, by identity, so it stays taken while unplugged. The choice applies to
 the family's default application only. The picker re-reads the connected
 printers when the pointer or keyboard focus reaches it; there is no timer or
 hotplug watch. Saving honours dry-run, and no privileged route is involved:
-the choice is a user setting and the unit stays rootless. Device permissions
-inside the container are not configured here.
+the choice is a user setting and the unit stays rootless.
+
+The family runs with `UserNS=keep-id`, so inside the container the application
+has the signed-in account's own permissions on the printer's device node, and
+needs to read and write it. On a default Fedora install a USB printer's node is
+`root:lp` mode `0664` with nobody in `lp`, so the account can only read it.
+ChairLift adds no group, udev rule or privileged route for this: the OS grants
+access, through a `uaccess` rule for USB printers
+([projectbluefin/common#1681](https://github.com/projectbluefin/common/issues/1681)).
+When the saved printer is connected but the account cannot open its node for
+reading and writing, the row says the account can't use the USB printer yet.
+The unit still passes the device through, so the printer works once the OS
+grants access, with no change in ChairLift.
 
 ## Family inventory and images
 

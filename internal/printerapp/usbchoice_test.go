@@ -208,15 +208,51 @@ func TestUSBChoicesForListsNoneThenPrintersThenSaved(t *testing.T) {
 }
 
 func TestUSBStatusOf(t *testing.T) {
+	prevOpen := canOpenDevice
+	t.Cleanup(func() { canOpenDevice = prevOpen })
+	writable := true
+	var checked []string
+	canOpenDevice = func(path string) bool {
+		checked = append(checked, path)
+		return writable
+	}
+
 	devices := []USBDevice{{DevicePath: "/dev/bus/usb/001/008", VendorID: "03f0", ProductID: "052a", Serial: "ABC123", IsPrinter: true}}
 	if s := USBStatusOf(devices, USBIdentity{}); s != USBNone {
 		t.Errorf("no choice = %v, want USBNone", s)
 	}
 	if s := USBStatusOf(devices, hpLaserJet); s != USBConnected {
-		t.Errorf("plugged-in choice = %v, want USBConnected", s)
+		t.Errorf("plugged-in writable choice = %v, want USBConnected", s)
+	}
+	if len(checked) != 1 || checked[0] != "/dev/bus/usb/001/008" {
+		t.Errorf("access checked on %v, want the chosen printer's node only", checked)
 	}
 	if s := USBStatusOf(devices, epsonNoSN); s != USBNotConnected {
 		t.Errorf("unplugged choice = %v, want USBNotConnected", s)
+	}
+
+	writable = false
+	if s := USBStatusOf(devices, hpLaserJet); s != USBNoAccess {
+		t.Errorf("plugged-in choice this account cannot open = %v, want USBNoAccess", s)
+	}
+	if s := USBStatusOf(devices, epsonNoSN); s != USBNotConnected {
+		t.Errorf("unplugged choice without access = %v, want USBNotConnected", s)
+	}
+}
+
+// A printer this account cannot open is still passed through, so it works
+// as soon as the OS grants access, with no change to the unit.
+func TestEnablePassesThroughAPrinterThisAccountCannotOpen(t *testing.T) {
+	prevStat, prevOpen := statDeviceNode, canOpenDevice
+	statDeviceNode = func(string) bool { return true }
+	canOpenDevice = func(string) bool { return false }
+	t.Cleanup(func() { statDeviceNode, canOpenDevice = prevStat, prevOpen })
+	useFakeUSBSysfs(t, fakeUSBDevice{name: "2-1", bus: "2", dev: "14", vendor: "03f0", product: "052a", serial: "ABC123", printer: true})
+	useFakeGSettings(t, "{'hplip': '03f0:052a:ABC123'}")
+
+	app := withSavedUSBPrinter(context.Background(), Select(familyByID(t, "hplip")))
+	if !strings.Contains(RenderUnit(app), "AddDevice=-/dev/bus/usb/002/014\n") {
+		t.Errorf("unit for an unopenable printer lacks its device:\n%s", RenderUnit(app))
 	}
 }
 
