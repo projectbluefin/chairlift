@@ -665,7 +665,8 @@ func TestRenderUnitWithDevicePath(t *testing.T) {
 	// When node exists and is a valid device, AddDevice= is rendered
 	statDeviceNode = func(path string) bool { return path == "/dev/bus/usb/001/008" }
 	unitWithDevice := RenderUnit(appWithDevice)
-	wantLine := "AddDevice=/dev/bus/usb/001/008\n"
+	// The "-" prefix: a node gone by the next login must not stop the unit.
+	wantLine := "AddDevice=-/dev/bus/usb/001/008\n"
 	if !strings.Contains(unitWithDevice, wantLine) {
 		t.Errorf("unit with present DevicePath missing %q: %s", wantLine, unitWithDevice)
 	}

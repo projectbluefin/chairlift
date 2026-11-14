@@ -233,7 +233,7 @@ func TestEnablePassesTheSavedPrinterThrough(t *testing.T) {
 	cases := []struct {
 		name, stored, want string
 	}{
-		{"saved and connected", "{'hplip': '03f0:052a:ABC123'}", "AddDevice=/dev/bus/usb/002/014\n"},
+		{"saved and connected", "{'hplip': '03f0:052a:ABC123'}", "AddDevice=-/dev/bus/usb/002/014\n"},
 		{"no USB printer", "@a{ss} {}", ""},
 		{"saved but unplugged", "{'hplip': '04b8:0005:'}", ""},
 		{"another family's printer", "{'ps': '03f0:052a:ABC123'}", ""},

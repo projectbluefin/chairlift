@@ -389,6 +389,10 @@ func (uh *UserHome) onPrinterUSBSelected(pr *printerRow) {
 		return
 	}
 	label := pageview.PrinterUSBChoiceLabel(choice)
+	// Restart only a family the row shows as on. pr.state is the state
+	// printerapp.Resolve gave the row (and a probe refined), so the decision
+	// comes from the state model rather than from the unit file alone.
+	restart := pr.state.On()
 	pr.usb.SetSensitive(false)
 	pr.toggle.widget.SetSensitive(false)
 	dryRun := dryrun.Enabled()
@@ -403,7 +407,7 @@ func (uh *UserHome) onPrinterUSBSelected(pr *printerRow) {
 		var restartErr error
 		restarted := false
 		state, haveState := printerapp.State(0), false
-		if saveErr == nil && printerapp.Observe(pr.app, true).UnitPresent {
+		if saveErr == nil && restart {
 			restartErr = printerapp.Refresh(ctx, pr.app)
 			restarted = restartErr == nil
 			if restarted && !dryRun {

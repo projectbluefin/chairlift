@@ -260,7 +260,12 @@ func RenderUnit(app App) string {
 	fmt.Fprintf(&b, "Environment=PORT=%d\n", app.Port())
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	if app.DevicePath != "" && statDeviceNode(app.DevicePath) {
-		fmt.Fprintf(&b, "AddDevice=%s\n", app.DevicePath)
+		// The unit starts at every login with the path written here, and a
+		// USB path changes on replug or reboot. The "-" prefix tells Quadlet
+		// to add the device only if it exists (podman-systemd.unit(5)), so a
+		// printer unplugged since the unit was written cannot stop the
+		// family from starting.
+		fmt.Fprintf(&b, "AddDevice=-%s\n", app.DevicePath)
 	}
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
 	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
