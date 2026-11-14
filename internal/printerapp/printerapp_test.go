@@ -512,9 +512,12 @@ func TestApplyOverridesReplacesTheImage(t *testing.T) {
 		t.Errorf("rendered unit does not run the override:\n%s", unit)
 	}
 
-	// An override for one family leaves the others alone.
-	if Families()[1].Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
-		t.Error("overriding ghostscript disturbed the hplip image")
+	// An override for one family leaves the others alone. Look hplip up by ID:
+	// its position in Families() shifts whenever a family is added.
+	for _, f := range Families() {
+		if f.ID == "hplip" && f.Image != "ghcr.io/projectbluefin/hplip-printer-app:stable" {
+			t.Errorf("overriding ghostscript disturbed the hplip image: %q", f.Image)
+		}
 	}
 }
 
