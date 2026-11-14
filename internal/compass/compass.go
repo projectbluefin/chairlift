@@ -13,10 +13,14 @@ package compass
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 
 	"github.com/projectbluefin/chairlift/internal/flatpak"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 const (
@@ -36,8 +40,10 @@ var ErrUnsupported = errors.New("compass is only published for x86_64")
 
 // State is Compass's observed installation state.
 type State struct {
-	// User and System report where a copy is installed.
+	// User and System report where a Flatpak copy is installed.
 	User, System bool
+	// Host reports whether Compass is installed on the host (e.g. via Homebrew or on $PATH).
+	Host bool
 	// RemoteConfigured reports whether the system FlatPark remote exists.
 	RemoteConfigured bool
 	// Supported reports whether Compass is published for this architecture.
@@ -45,23 +51,41 @@ type State struct {
 }
 
 // Installed reports whether any copy is installed.
-func (s State) Installed() bool { return s.User || s.System }
+func (s State) Installed() bool { return s.User || s.System || s.Host }
 
 // Injection seams so the decisions below are testable without Flatpak.
 var (
-	goarch     = runtime.GOARCH
-	listUser   = flatpak.ListUserApplications
-	listSystem = flatpak.ListSystemApplications
-	remotes    = func() ([]string, error) { return flatpak.EnabledRemotes(false) }
-	install    = func() error { return flatpak.InstallFromRemote(AppID, Remote, false) }
-	uninstall  = flatpak.Uninstall
+	goarch         = runtime.GOARCH
+	listUser       = flatpak.ListUserApplications
+	listSystem     = flatpak.ListSystemApplications
+	remotes        = func() ([]string, error) { return flatpak.EnabledRemotes(false) }
+	install        = func() error { return flatpak.InstallFromRemote(AppID, Remote, false) }
+	uninstall      = flatpak.Uninstall
+	lookPath       = exec.LookPath
+	brewExecutable = homebrew.ExecutablePath
 )
+
+func resolveExecutable(name string) string {
+	if path, err := lookPath(name); err == nil && filepath.IsAbs(path) {
+		return path
+	}
+	if brew := brewExecutable(); brew != "" {
+		candidate := filepath.Join(filepath.Dir(brew), name)
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	return ""
+}
 
 // Status reads Compass's state from both installations and the system remote
 // list. Every query must answer: a failed read cannot be told apart from an
 // absent copy.
 func Status() (State, error) {
-	state := State{Supported: goarch == "amd64"}
+	state := State{
+		Supported: goarch == "amd64",
+		Host:      resolveExecutable("compass") != "",
+	}
 	for _, query := range []struct {
 		list  func() ([]flatpak.Application, error)
 		found *bool
@@ -81,7 +105,7 @@ func Status() (State, error) {
 }
 
 // Enable installs Compass system-wide from FlatPark unless a copy is already
-// installed in either scope. It returns whether it ran an install.
+// installed in either scope or on the host. It returns whether it ran an install.
 func Enable() (bool, error) {
 	state, err := Status()
 	if err != nil {
@@ -102,8 +126,9 @@ func Enable() (bool, error) {
 	return true, nil
 }
 
-// Disable removes Compass from every scope it is installed in, attempting
-// both even after one fails. It returns whether it ran any removal.
+// Disable removes Compass from every Flatpak scope it is installed in, attempting
+// both even after one fails. It returns whether it ran any removal. If Compass is
+// installed only on the host, it performs no Flatpak uninstall and returns false, nil.
 func Disable() (bool, error) {
 	state, err := Status()
 	if err != nil {
@@ -123,5 +148,5 @@ func Disable() (bool, error) {
 	if len(errs) > 0 {
 		return true, fmt.Errorf("removing %s: %w", AppID, errors.Join(errs...))
 	}
-	return state.Installed(), nil
+	return state.User || state.System, nil
 }
