@@ -14,10 +14,14 @@ import (
 // TestMain keeps every test in this package off the real dconf database:
 // withSavedUSBPrinter runs inside Enable and Refresh, which many tests drive.
 // Unless a test installs its own fake, the printers schema reads as missing.
+// It also keeps them off the real systemd user unit directory.
 func TestMain(m *testing.M) {
 	runGSettings = func(context.Context, ...string) (string, error) {
 		return "No such schema “" + USBSchemaID + "”", errors.New("exit status 1")
 	}
+	// Enable and Disable keep the login unit in step; its own tests restore
+	// the real sync, so every other test sees only the family's own calls.
+	syncLoginUnit = func(context.Context) error { return nil }
 	os.Exit(m.Run())
 }
 

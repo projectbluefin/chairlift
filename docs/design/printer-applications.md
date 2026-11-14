@@ -32,15 +32,24 @@ GSettings schema, keyed by family. A device path such as
 Every route that writes a unit — turning a family on, choosing a printer, and a
 Printer Drivers update — resolves the saved identity against
 `/sys/bus/usb/devices` and adds `AddDevice=-/dev/bus/usb/<bus>/<device>` for the
-one printer that matches. The path is resolved only when the unit is written,
-while the unit starts at every login with the path last written. A replugged or
-rebooted printer therefore gets its new path the next time the family is turned
-on, its printer is chosen again, or Printer Drivers refreshes it. Until then the
-`-` prefix (`podman-systemd.unit(5)`: add the device only if it exists) keeps a
-printer that is gone from stopping the family. It does not stop a different USB
-device that has since been given the old bus and device numbers from being
-passed through. Re-resolving the identity at login, or a udev rule that gives
-each printer a stable device link, would close that and is a follow-up.
+one printer that matches. A replug or reboot gives the printer new bus and
+device numbers, so while any family is on, a user oneshot unit,
+`chairlift-printers-usb.service` (`chairlift --resolve-printer-usb`, ordered
+`Before=` every family's service), resolves each saved identity again at login.
+It rewrites only the `AddDevice=` line of a default app whose line no longer
+matches — a new path, or no line when the printer is not connected or no
+longer chosen, so a different device holding the old numbers is never passed
+through — then reloads the user manager and restarts the changed units with
+`--no-block`. The verified image digest and the rest of the unit are left as
+they are, an unchanged unit is not touched, and unreadable choices leave every
+unit alone. The pass runs as the user; nothing is privileged. Turning a family
+on (or a Printer Drivers refresh) installs the unit, and turning the last
+family off removes it. The `-` prefix (`podman-systemd.unit(5)`: add the
+device only if it exists) still keeps a printer unplugged since login from
+stopping the family. A replug during a session is not followed: the family
+keeps the old path until the next login, a re-pick or a Printer Drivers
+refresh. A udev rule giving each printer a stable device link
+belongs in the OS image, not here.
 Choosing a printer while the
 family is on restarts it through the verified refresh path; "No USB printer"
 removes the `AddDevice=` line. If the saved printer is not connected, or two

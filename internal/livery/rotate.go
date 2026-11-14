@@ -90,6 +90,12 @@ func unitExecutable() (string, error) {
 	return stableExecutable(exe), nil
 }
 
+// UnitExecutable is unitExecutable for other packages that write a systemd
+// user unit running this binary, such as the printers' login lookup.
+func UnitExecutable() (string, error) {
+	return unitExecutable()
+}
+
 // stableExecutable maps a versioned Caskroom binary to the prefix's bin link
 // when that link resolves to the same file, and returns exe unchanged
 // otherwise. A link that points elsewhere — another build installed over it —
@@ -265,6 +271,12 @@ func systemdQuote(value string) (string, error) {
 	}
 	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%")
 	return `"` + replacer.Replace(value) + `"`, nil
+}
+
+// SystemdQuote is systemdQuote for other packages that write a systemd user
+// unit.
+func SystemdQuote(value string) (string, error) {
+	return systemdQuote(value)
 }
 
 // unitExecStart recovers the executable path systemdQuote wrote into a
