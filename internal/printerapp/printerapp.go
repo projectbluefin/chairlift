@@ -10,7 +10,7 @@
 // and on a bootc host nothing is layered onto the image.
 //
 // A printer application is a Family (a published image, one per driver family:
-// Ghostscript, HPLIP, Gutenprint) plus a unique app name. A family
+// Ghostscript, PostScript, HPLIP, Gutenprint) plus a unique app name. A family
 // can host several printers, and each App gets its own unit, host port, and
 // state volume, so one logical device has exactly one owner and one
 // advertisement rather than two units fighting over the same port and volume.
@@ -153,6 +153,12 @@ var families = []Family{
 		DisplayName: "Ghostscript",
 		Image:       "ghcr.io/projectbluefin/ghostscript-printer-app:stable",
 		DefaultPort: 18010,
+	},
+	{
+		ID:          "ps",
+		DisplayName: "PostScript",
+		Image:       "ghcr.io/projectbluefin/ps-printer-app:stable",
+		DefaultPort: 18020,
 	},
 	{
 		ID:          "hplip",
