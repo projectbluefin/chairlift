@@ -19,8 +19,8 @@ import (
 
 // atspiTimeout bounds the whole behave run. Each scenario launches its own
 // application, so this grows with the suite; the per-step deadlines inside
-// the suite are what catch a hung control. The release and nightly workflows
-// run every feature serially in one process: v26.10.11 finished in 1498s and
+// the suite are what catch a hung control. The nightly workflow runs every
+// feature serially in one process: v26.10.11 finished in 1498s and
 // v26.11.1 was killed at the former 25-minute cap, so leave headroom.
 const atspiTimeout = 40 * time.Minute
 
