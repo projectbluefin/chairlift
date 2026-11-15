@@ -1,6 +1,6 @@
 module github.com/projectbluefin/chairlift
 
-go 1.26.11
+go 1.27.4
 
 require (
 	codeberg.org/puregotk/puregotk v0.0.0-20260512093256-2a5b38c3a1c6
