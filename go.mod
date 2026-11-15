@@ -3,13 +3,13 @@ module github.com/projectbluefin/chairlift
 go 1.27.4
 
 require (
-	codeberg.org/puregotk/puregotk v0.0.0-20260512093256-2a5b38c3a1c6
-	github.com/frostyard/snowkit v0.1.0
-	github.com/frostyard/std v0.2.0
+	codeberg.org/puregotk/puregotk v0.0.0-20261003054014-d92056b0aa41
+	github.com/frostyard/snowkit v0.1.1
+	github.com/frostyard/std v0.5.0
 	github.com/frostyard/updex v1.5.0
-	github.com/leonelquinteros/gotext v1.7.2
-	golang.org/x/image v0.45.0
-	golang.org/x/sys v0.47.0
+	github.com/leonelquinteros/gotext v1.8.0
+	golang.org/x/image v0.48.0
+	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
