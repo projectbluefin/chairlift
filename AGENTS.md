@@ -11,7 +11,9 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 
 ## Commands and verification
 
-- `make build` builds the GUI and both fixed privileged helpers.
+- `make build` builds the GUI and both fixed privileged helpers. `make build-e2e`
+  builds all three plus `build/e2e/chairlift` (`-tags chairlift_e2e`); `make build-e2e-gui`
+  builds only the tagged GUI that `make e2e-atspi` needs.
 - `make ci` runs host-independent checks, filtered internal unit/race tests,
   and linux/amd64 + linux/arm64 builds. Run before submitting source changes.
 - Focused tests: `go test ./internal/<package> -run '^Test[^I]' -skip Integration`.
@@ -20,7 +22,7 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 - Never add tests to packages importing puregotk, directly or transitively:
   their binaries initialize GTK before tests run. Put decidable logic in pure
   `internal/` packages, not `cmd/`, which the unit gate does not run.
-- `make e2e`, `make e2e-atspi`, and `make screenshots` use the pinned native
+- `make e2e` (`build-e2e`), `make e2e-atspi` (`build-e2e-gui`), and `make screenshots` use the pinned native
   Dakota container through `test/e2e/dakota.sh`, with private HOME, runtime,
   bus, and headless Mutter Wayland session. Never test against the live
   desktop, `/run/user/<uid>`, host portals, or a generic Debian/Ubuntu image.

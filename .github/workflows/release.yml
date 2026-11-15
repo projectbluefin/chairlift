@@ -88,13 +88,13 @@ jobs:
       matrix:
         include:
           - shard: features
-            tags: "@features or @setup or @shell"
+            tags: "@features"
           - shard: apps
             tags: "@apps or @updates"
           - shard: livery
             tags: "@livery or @help"
           - shard: config
-            tags: "@config or @maintenance or @agents or @navigation"
+            tags: "@config or @maintenance or @agents or @navigation or @setup or @shell"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

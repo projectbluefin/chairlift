@@ -47,10 +47,27 @@ provide these independent signals:
   image pinned by digest in `test/e2e/dakota-image.sh` (currently
   linux/amd64), split into parallel shards (`AT-SPI (<shard>)`) by behave tag
   expression, each uploading its results as `atspi-results-<shard>`.
+  It builds only the tagged GUI (`build-e2e-gui`) rather than the installed
+  helpers (`build-e2e`), which are exercised by the separate `e2e` job.
 - **Verify** — tidy-module, `go vet`, and `gofmt` checks.
 - **Build** — Linux builds for amd64 and arm64.
 - **Tests Passed** — an aggregating job that succeeds only when every job
   above succeeded.
+
+## AT-SPI build cache
+
+The `atspi` job in [test.yml](../.github/workflows/test.yml) uses a dedicated
+`setup-go` cache fingerprint (`cache-dependency-path`) for its module and
+build caches. An ordinary `CGO_ENABLED=0 make build` (such as in the `Build`
+job) does not compile `./test/e2e`; if that production-only build seeds the
+immutable default cache key first, subsequent test runs cannot save the
+compiled harness dependencies into it.
+All AT-SPI shards share the workload-specific key tracking module inputs, the
+Makefile, the Dakota runner script, and its image pin. It isolates AT-SPI from
+production-only cache writers without invalidating on every source revision:
+Go validates changed sources itself, while the shared dependencies remain
+cached. `make e2e-atspi` retains `-count=1`. Release publishing remains
+cache-free as described under [Release gating](#release-gating).
 
 ## The merge queue's gate
 

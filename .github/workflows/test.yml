@@ -165,13 +165,13 @@ jobs:
       matrix:
         include:
           - shard: features
-            tags: "@features or @setup or @shell"
+            tags: "@features"
           - shard: apps
             tags: "@apps or @updates"
           - shard: livery
             tags: "@livery or @help"
           - shard: config
-            tags: "@config or @maintenance or @agents or @navigation"
+            tags: "@config or @maintenance or @agents or @navigation or @setup or @shell"
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,6 +187,13 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.11"
+          # Keep production-only builds from seeding the harness cache.
+          cache-dependency-path: |
+            go.mod
+            go.sum
+            Makefile
+            test/e2e/dakota.sh
+            test/e2e/dakota-image.sh
 
       - name: Prepare the Dakota suite environment
         uses: ./.github/actions/dakota-venv
