@@ -48,6 +48,14 @@
       "matchManagers": ["github-actions", "gomod"],
       "matchUpdateTypes": ["major"],
       "automerge": false
+    },
+    {
+      "description": "The live Docker workflow must stay on ubuntu-24.04: internal/installcheck/workflows_test.go requires that exact runner (the Ubuntu kernel/module environment it tests). Renovate still updates runners in every other workflow.",
+      "matchManagers": ["github-actions"],
+      "matchDatasources": ["github-runners"],
+      "matchPackageNames": ["ubuntu"],
+      "matchFileNames": [".github/workflows/docker-system.yml"],
+      "enabled": false
     }
   ]
 }
