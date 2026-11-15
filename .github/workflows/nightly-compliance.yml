@@ -50,8 +50,11 @@ jobs:
       - name: Run end-to-end compliance gates
         run: make e2e
 
+      # The whole suite runs serially here, while pull requests and releases
+      # split it into shards. It takes 28-34 minutes, too close to the
+      # shards' 40-minute default.
       - name: Run AT-SPI suite on Dakota
-        run: make e2e-atspi
+        run: make e2e-atspi ATSPI_TIMEOUT=60m
 
       - name: Scan Go code and dependencies for known vulnerabilities
         run: govulncheck ./...

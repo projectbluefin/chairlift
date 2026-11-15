@@ -46,5 +46,5 @@ Do not add PATs or create credentials to work around an authority gap.
 
 The release workflow runs the same AT-SPI shards as pull requests and waits for
 every shard before publishing. A timeout without a failing-scenario summary may
-be the suite cap; compare `atspiTimeout` and the workflow timeout before
+be the suite cap; compare `ATSPI_TIMEOUT` and the workflow timeout before
 diagnosing a flake.
