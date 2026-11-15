@@ -17,12 +17,18 @@ import (
 	"github.com/projectbluefin/chairlift/internal/navigation"
 )
 
-// atspiTimeout bounds the whole behave run. Each scenario launches its own
-// application, so this grows with the suite; the per-step deadlines inside
-// the suite are what catch a hung control. The nightly workflow runs every
-// feature serially in one process: v26.10.11 finished in 1498s and
-// v26.11.1 was killed at the former 25-minute cap, so leave headroom.
+// atspiTimeout bounds the whole behave run when `go test` has no deadline.
+// Otherwise the run ends atspiReportGrace before the test binary's deadline,
+// so `make e2e-atspi ATSPI_TIMEOUT=...` is the one knob. Each scenario
+// launches its own application, so the run grows with the suite; the
+// per-step deadlines inside the suite are what catch a hung control.
 const atspiTimeout = 40 * time.Minute
+
+// atspiReportGrace is how long before the `go test -timeout` deadline the
+// behave run is killed. Go's own timeout panics without logging the captured
+// behave output or the behave.log tail, so a run it stops leaves nothing to
+// say which scenario was slow or stuck.
+const atspiReportGrace = 2 * time.Minute
 
 // requireATSPIEnv makes a missing accessibility stack a failure instead of a
 // skip. The E2E workflow sets it: a skipping gate proves nothing, and before
@@ -128,7 +134,8 @@ func TestATSPIBehaveSuite(t *testing.T) {
 		}
 	})
 
-	runErr := runWithTimeout(cmd, atspiTimeout)
+	deadline, hasDeadline := t.Deadline()
+	runErr := runWithTimeout(cmd, atspiRunTimeout(time.Now(), deadline, hasDeadline))
 	t.Logf("behave output:\n%s", output.String())
 	if runErr != nil {
 		t.Fatalf("AT-SPI behave suite failed: %v\nartifacts: %s\n%s", runErr, outDir, tailFile(filepath.Join(outDir, "behave.log"), 20000))
@@ -152,6 +159,45 @@ func TestATSPIFeaturesHaveNoUndefinedSteps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("behave --dry-run failed (undefined or ambiguous steps): %v\n%s", err, out)
 	}
+}
+
+// TestATSPIRunStopsBeforeTheTestDeadline pins the order of the two timers:
+// when the behave run used the same 40 minutes as `go test -timeout`, Go's
+// panic won the race and the nightly log held no behave output at all.
+func TestATSPIRunStopsBeforeTheTestDeadline(t *testing.T) {
+	now := time.Date(2026, 11, 15, 4, 33, 54, 0, time.UTC)
+	for _, tc := range []struct {
+		name        string
+		left        time.Duration
+		hasDeadline bool
+		want        time.Duration
+	}{
+		{name: "nightly deadline", left: 60 * time.Minute, hasDeadline: true, want: 58 * time.Minute},
+		{name: "shard deadline", left: 40 * time.Minute, hasDeadline: true, want: 38 * time.Minute},
+		{name: "short deadline keeps most of it", left: 4 * time.Minute, hasDeadline: true, want: 3 * time.Minute},
+		{name: "no deadline", hasDeadline: false, want: atspiTimeout},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := atspiRunTimeout(now, now.Add(tc.left), tc.hasDeadline)
+			if got != tc.want {
+				t.Fatalf("atspiRunTimeout(%s left, deadline=%v) = %s, want %s", tc.left, tc.hasDeadline, got, tc.want)
+			}
+			if tc.hasDeadline && got >= tc.left {
+				t.Fatalf("behave run timeout %s does not end before the %s test deadline", got, tc.left)
+			}
+		})
+	}
+}
+
+// atspiRunTimeout is how long the behave run may take: until the test
+// binary's deadline less atspiReportGrace (at most a quarter of what is left),
+// or atspiTimeout when the binary has no deadline.
+func atspiRunTimeout(now, deadline time.Time, hasDeadline bool) time.Duration {
+	if !hasDeadline {
+		return atspiTimeout
+	}
+	left := deadline.Sub(now)
+	return left - min(atspiReportGrace, left/4)
 }
 
 func atspiPython() string {

@@ -193,8 +193,10 @@ e2e-docker: build-e2e schemas
 # every E2E test. Artifacts land in build/atspi/<tags|all>/. ATSPI_TAGS
 # narrows the run to a behave tag expression, e.g.
 # `make e2e-atspi ATSPI_TAGS=@maintenance`; CHAIRLIFT_ATSPI_KNOWN_ISSUES=1 also
-# runs @known_issue scenarios.
+# runs @known_issue scenarios. ATSPI_TIMEOUT is the `go test` deadline; the
+# behave run is stopped shortly before it so its log is still printed.
 ATSPI_TAGS?=
+ATSPI_TIMEOUT?=40m
 ATSPI_RUN=$(or $(shell printf '%s' '$(ATSPI_TAGS)' | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$$//'),all)
 e2e-atspi: build-e2e-gui schemas
 	@rm -rf "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)" && mkdir -p "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)"
@@ -202,7 +204,7 @@ e2e-atspi: build-e2e-gui schemas
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		CHAIRLIFT_ATSPI_OUT=$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN) \
 		CHAIRLIFT_ATSPI_TAGS='$(ATSPI_TAGS)' \
-		test/e2e/dakota.sh -count=1 -v -timeout 40m -run '^TestATSPI'
+		test/e2e/dakota.sh -count=1 -v -timeout $(ATSPI_TIMEOUT) -run '^TestATSPI'
 
 # Development build with race detector (requires CGO)
 dev:
