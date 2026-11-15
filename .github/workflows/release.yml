@@ -47,9 +47,7 @@ jobs:
   e2e:
     name: End-to-end quality gate
     runs-on: ubuntu-latest
-    # make e2e plus the serial AT-SPI suite, which alone may take up to
-    # test/e2e's atspiTimeout (40 minutes).
-    timeout-minutes: 60
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -68,24 +66,54 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.11"
-          # A tag push publishes signed binaries: never restore a cache that
-          # another workflow could have written into its validation jobs.
           cache: false
 
-      # Both run inside ghcr.io/projectbluefin/dakota:testing under a private
-      # headless Mutter Wayland session (test/e2e/dakota.sh); the runner
-      # supplies only podman and Go.
       - name: Run E2E tests
         env:
           CHAIRLIFT_SCHEMA_DIR: ${{ github.workspace }}/build/schemas
         run: make e2e
 
-      - name: Run AT-SPI suite on Dakota
-        run: make e2e-atspi
+  atspi:
+    name: AT-SPI (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: features
+            tags: "@features or @setup or @shell"
+          - shard: apps
+            tags: "@apps or @updates"
+          - shard: livery
+            tags: "@livery or @help"
+          - shard: config
+            tags: "@config or @maintenance or @agents or @navigation"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Free disk space for Dakota
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: remove-software
+          update-podman: "false"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26.11"
+          cache: false
+
+      - name: Run AT-SPI suite shard on Dakota
+        run: make e2e-atspi ATSPI_TAGS='${{ matrix.tags }}'
 
   goreleaser:
     name: Release with GoReleaser
-    needs: [gate, e2e]
+    needs: [gate, e2e, atspi]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

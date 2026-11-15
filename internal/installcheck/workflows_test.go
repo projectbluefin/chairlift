@@ -370,6 +370,7 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	}
 	hasGate := false
 	hasE2E := false
+	hasATSPI := false
 	for _, n := range needsList {
 		if n == "gate" {
 			hasGate = true
@@ -377,11 +378,13 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 		if n == "e2e" {
 			hasE2E = true
 		}
+		if n == "atspi" {
+			hasATSPI = true
+		}
 	}
-	if !hasGate || !hasE2E {
-		t.Errorf("goreleaser job needs = %v, want [gate, e2e]", needsList)
+	if !hasGate || !hasE2E || !hasATSPI {
+		t.Errorf("goreleaser job needs = %v, want [gate, e2e, atspi]", needsList)
 	}
-
 	// A tag push publishes signed binaries: no job in release.yml may restore
 	// a Go cache another workflow could have written (#644).
 	for name, job := range config.Jobs {
