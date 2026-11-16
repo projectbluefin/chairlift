@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/frostyard/updex/updex"
+	"github.com/frostyard/updex/v2/updex"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"
 )
 
