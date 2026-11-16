@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frostyard/updex/updex"
+	"github.com/frostyard/updex/v2/updex"
 )
 
 // updex returns a generic error and records each component's failure only in

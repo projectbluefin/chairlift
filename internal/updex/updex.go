@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/frostyard/std/reporter"
-	updexapi "github.com/frostyard/updex/updex"
+	updexapi "github.com/frostyard/updex/v2/updex"
 	"github.com/projectbluefin/chairlift/internal/helperexec"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/updexhelper"

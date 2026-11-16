@@ -10,12 +10,14 @@ github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ3
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/erofs/go-erofs v0.3.2 h1:GBWc9wyDOBVMLpA9OC0MkFfs4AbiEAAEhNH8SpQwD/4=
+github.com/erofs/go-erofs v0.3.2/go.mod h1:XkSeN9MHszGd4+3gcEjadJLYHCQpWzJ7/8yznzMuzJs=
 github.com/frostyard/snowkit v0.1.1 h1:adwLAcOleuqXhy9atBBXGQVfG2pv1sPol/2BBWHiQVQ=
 github.com/frostyard/snowkit v0.1.1/go.mod h1:Q4e3MMIOdvrawMSxIHy47Y2qjrvdH3HTk+bjlrLyZ28=
 github.com/frostyard/std v0.5.0 h1:SUmy+LnGpFAsfCrokeJc8Sa/M5pj3jpSlwHlgaIJR94=
 github.com/frostyard/std v0.5.0/go.mod h1:zZ6oRXY2CZvTu81OcAsXzn2MZ/+qPKluflHdZvYiG4k=
-github.com/frostyard/updex v1.5.0 h1:GSfuwOgPS9YUSvQwbeBDn4jMiJ5s7rDrmCEJlI5S/rM=
-github.com/frostyard/updex v1.5.0/go.mod h1:kfm0oyJZRuEWIJey9KoJxVrAwDRTwEiw0z3i3vX+U5U=
+github.com/frostyard/updex/v2 v2.3.1 h1:q23sNZYw0r+Isvdpr36ApyL9FKy54hZvRkEaKz4Hz68=
+github.com/frostyard/updex/v2 v2.3.1/go.mod h1:BYdIRKWdiNUc/uu4fgIR8z3tZoZFGDJ0ise5/+YjEto=
 github.com/hashicorp/go-version v1.9.0 h1:CeOIz6k+LoN3qX9Z0tyQrPtiB1DFYRPfCIBtaXPSCnA=
 github.com/hashicorp/go-version v1.9.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
 github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=
