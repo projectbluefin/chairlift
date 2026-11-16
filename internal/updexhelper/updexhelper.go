@@ -1,7 +1,7 @@
 // Package updexhelper holds the argv-parsing and Options-building logic for
 // cmd/chairlift-updex-helper, the privileged helper binary invoked via
 // pkexec to perform updex write operations. It is deliberately free of any
-// puregotk/GTK import (only stdlib plus github.com/frostyard/updex/updex),
+// puregotk/GTK import (only stdlib plus github.com/frostyard/updex/v2/updex),
 // so its logic can be unit-tested on a headless host — a test binary for a
 // package that imports puregotk panics while resolving GTK/graphene shared
 // libraries at package init, before any test function runs. See
@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/frostyard/updex/updex"
+	"github.com/frostyard/updex/v2/updex"
 )
 
 const (
