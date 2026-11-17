@@ -87,6 +87,7 @@ jobs:
             or execute project code.
           claude_args: >-
             --max-turns 20
+            --permission-mode default
             --allowedTools "Read,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*)"
             --json-schema '{"type":"object","properties":{"comment_body":{"type":"string","minLength":1,"maxLength":60000}},"required":["comment_body"],"additionalProperties":false}'
 
