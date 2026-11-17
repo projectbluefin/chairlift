@@ -126,6 +126,23 @@ update counts or phase decisions. Individual updates, metadata refresh and OS
 mutations use the same admission boundary. Restart is a separate Operating
 System row action, not an automatic final step.
 
+[`flatpak.ListUpdates`](../../internal/flatpak/flatpak.go) drops a phantom
+application update that an OCI remote's `remote-ls --updates` lists when its
+checksum already matches the deployed image. Flatpak releases before upstream
+commit `a819741d13` compare the remote checksum, an image digest, to the
+deployed OSTree commit rather than the deployed alternative ID, so the entry
+never clears and every run applies nothing (issue #810). The installed identity
+is read per ref (`application/arch/branch`) from `list --columns=application,
+arch,branch,active,options`, and an update is dropped only when its remote
+checksum equals the deployed active commit or the deployed `alt-id` from the
+options column. A differing checksum stays a real update, including a rebuild
+that keeps the version; an update with no checksum or no matching ref is kept
+because incomplete data is not evidence that nothing is pending. Cancellation
+of that read propagates; any other failure logs and keeps the reported
+inventory. The post-apply reconciliation reads through the same function, so
+the phantom is also seen as cleared instead of producing "no update was
+applied".
+
 ## Homebrew and Flatpak
 
 [`homebrew/executable.go`](../../internal/homebrew/executable.go) is the single
