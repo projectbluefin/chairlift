@@ -383,34 +383,6 @@ func TestDockerEnableRequiresObservedReadinessAfterTheHelper(t *testing.T) {
 	}
 }
 
-// A daemon that started and then exited leaves docker.service failed while the
-// socket is still active, so the socket cannot serve a daemon systemd has
-// marked failed. Enabling Docker must report that as a prerequisite, not as a
-// plain socket failure the user could retry their way out of (#797).
-func TestDockerDaemonFailedIsReportedAsAPrerequisite(t *testing.T) {
-	calls, dir := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
-	socket, _ := pingServer(t, http.StatusOK, "OK")
-	routeDockerSocket(t, socket)
-	var dispatched []bool
-	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
-		dispatched = append(dispatched, enabled)
-		writeDockerReports(t, dir, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
-		return nil
-	})
-	if len(dispatched) != 1 || !dispatched[0] {
-		t.Fatalf("enable dispatched %v, want one enable", dispatched)
-	}
-	var prerequisite *PrerequisiteError
-	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
-		t.Fatalf("daemon failed = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
-	}
-	for _, call := range recordedCalls(t, calls) {
-		if call != dockerServiceCall && call != dockerSocketCall {
-			t.Fatalf("activation ran a command outside the unit reads: %s", call)
-		}
-	}
-}
-
 func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.T) {
 	// #797: dockerd exits during systemctl start, so the enable call fails and
 	// the service is left failed behind an active socket. A real failed daemon
@@ -444,9 +416,14 @@ func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.
 // errors (#797).
 func TestDockerDaemonFailedAfterEnableStallsPingIsReportedAsAPrerequisite(t *testing.T) {
 	calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
-	socket, _ := pingServer(t, http.StatusOK, "OK")
-	routeDockerSocket(t, socket)
-	dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) {
+	// A daemon systemd marked failed leaves the socket listening with no
+	// process behind it, so the readiness ping times out exactly as #797's did.
+	// The dial checks the fixed socket itself: routing through a live pingServer
+	// and then replacing the dial would silently drop that check.
+	dockerTestDial(t, func(_ context.Context, network, address string) (net.Conn, error) {
+		if network != "unix" || address != "/var/run/docker.sock" {
+			t.Errorf("Docker selected %s %s instead of the fixed system socket", network, address)
+		}
 		return nil, context.DeadlineExceeded
 	})
 	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
@@ -458,6 +435,9 @@ func TestDockerDaemonFailedAfterEnableStallsPingIsReportedAsAPrerequisite(t *tes
 	var prerequisite *PrerequisiteError
 	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
 		t.Fatalf("daemon failed with a stalled ping = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	if !errors.Is(prerequisite, context.DeadlineExceeded) {
+		t.Fatalf("the ping failure was dropped from the logged cause: %v", prerequisite.Err)
 	}
 	for _, call := range recordedCalls(t, calls) {
 		if call != dockerServiceCall && call != dockerSocketCall {

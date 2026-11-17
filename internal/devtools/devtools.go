@@ -968,7 +968,13 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 			// journal, which records why dockerd quit. Check this before the
 			// ping error: a dead daemon stalls that ping, and the unit state is
 			// the only thing left that can see the failure (#797).
-			return &PrerequisiteError{Message: DockerDaemonFailedRecovery, Err: errors.New("docker.service failed to stay running")}
+			// The ping error and any CLI failure ride along on Err: the message
+			// is what the user reads, Err is what the log keeps, and dropping
+			// either here would hide the raw cause #797 reported.
+			return &PrerequisiteError{
+				Message: DockerDaemonFailedRecovery,
+				Err:     errors.Join(errors.New("docker.service failed to stay running"), err, cliErr),
+			}
 		}
 		if err != nil {
 			return errors.Join(err, cliErr)
