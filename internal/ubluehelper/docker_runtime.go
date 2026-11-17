@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
 // ErrDockerRuntimeMigration refuses mutation until the running legacy daemon
-// has been stopped by the user. Rewriting its unit does not change its PATH.
+// has been stopped by the user. Rewriting its unit does not change its PATH
+// or safely migrate its firewall backend, Swarm, and DOCKER-USER rules.
 var ErrDockerRuntimeMigration = errors.New(DockerRuntimeMigrationPrefix + " an administrator must stop system Docker before migration")
 
 // DockerRuntimeMigrationPrefix survives the helper's process boundary so the
@@ -69,6 +71,9 @@ func CheckDockerRuntime(ctx context.Context, root, active string, probe DockerRu
 		if len(process.Argv) == 0 || process.Argv[0] != filepath.Join(bin, "dockerd") ||
 			process.Executable != filepath.Join(root, active, "bin", "dockerd") {
 			return refuse("daemon did not start from the retained active set")
+		}
+		if !slices.Contains(process.Argv[1:], "--firewall-backend=nftables") {
+			return refuse("migrating to native nftables requires checking Swarm and DOCKER-USER firewall rules before stopping Docker")
 		}
 		paths := 0
 		for _, entry := range process.Environment {

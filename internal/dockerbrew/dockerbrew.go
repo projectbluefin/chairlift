@@ -49,7 +49,7 @@ const (
 )
 
 // The system-provided dependency docker-engine declares and that is not
-// installed from Homebrew: dockerd finds iptables/nft from the OS.
+// installed from Homebrew: the native firewall backend uses the OS's nft.
 const systemDependency = "nftables"
 
 // Formulae is the fixed daemon-side set, in install order.

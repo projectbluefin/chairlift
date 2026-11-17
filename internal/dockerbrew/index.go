@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -121,6 +122,12 @@ func SelectBottles(payload []byte, arch string) ([]Bottle, error) {
 		f := byName[name]
 		if !versionPattern.MatchString(f.Versions.Stable) || strings.Contains(f.Versions.Stable, "..") {
 			return nil, fmt.Errorf("dockerbrew: formula %q has unusable version %q", name, f.Versions.Stable)
+		}
+		if name == "docker-engine" {
+			major, _, _ := strings.Cut(f.Versions.Stable, ".")
+			if n, err := strconv.Atoi(major); err != nil || n < 29 {
+				return nil, fmt.Errorf("dockerbrew: native nftables requires Docker 29 or later, got %q", f.Versions.Stable)
+			}
 		}
 		if f.Revision < 0 {
 			return nil, fmt.Errorf("dockerbrew: formula %q has negative revision %d", name, f.Revision)

@@ -15,11 +15,15 @@ import (
 // at moby/moby commit 4237bc6cb7f07343efa5b42b2f532050377a108b (master on
 // 2026-10-26; both files last changed in 7263ae74cd8c80625a3dd04afe290ad1077b3bf9),
 // https://raw.githubusercontent.com/moby/moby/4237bc6cb7f07343efa5b42b2f532050377a108b/contrib/init/systemd/docker.service
-// and .../docker.socket. Only the ExecStart line differs, plus an
-// Environment=PATH line and one ExecStartPre: no containerd.service is
-// installed, so dockerd runs its own managed containerd, and it finds
-// containerd, the shim, runc, docker-init, and docker-proxy through that
-// PATH.
+// and .../docker.socket. The managed service adds its runtime PATH, startup
+// forwarding and runtime activation; dockerd runs its own managed containerd
+// rather than a separate containerd.service.
+// The managed engine selects Docker 29's native nftables backend: modern
+// firewalld can reject the iptables passthrough used by Docker's default.
+// Unlike iptables, this backend does not enable forwarding. Set IPv4
+// forwarding on each start (including reboot); the host firewall remains
+// responsible for non-Docker forwarding. The default bridge is IPv4, so
+// IPv6 host routing is left unchanged.
 //
 // Both name root/active, not root/current. Install swaps current as soon as
 // a new set is verified, but a daemon whose restart was deferred because
@@ -90,8 +94,9 @@ WantedBy=sockets.target
 func ServiceUnit(root string) string {
 	bin := root + "/" + activeName + "/bin"
 	return ManagedMarker + "\n" + mobyServiceHead +
+		"ExecStartPre=/usr/sbin/sysctl -w net.ipv4.ip_forward=1\n" +
 		"ExecStartPre=/usr/bin/flock --exclusive " + root + "/" + lockName + " /usr/bin/ln -P -fT " + root + "/" + currentName + " " + root + "/" + activeName + "\n" +
-		"ExecStart=" + bin + "/dockerd -H fd://\n" +
+		"ExecStart=" + bin + "/dockerd -H fd:// --firewall-backend=nftables\n" +
 		"Environment=PATH=" + bin + ":/usr/sbin:/usr/bin:/sbin:/bin\n" +
 		mobyServiceTail
 }
