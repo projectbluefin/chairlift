@@ -961,15 +961,17 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 	}
 	if enabled {
 		state, err = DockerStatus(ctx)
-		if err != nil {
-			return errors.Join(err, cliErr)
-		}
 		if state.DaemonFailed {
 			// The daemon started and exited: the socket is active but cannot
 			// serve it, so a plain "socket did not respond" would mislead the
 			// user into retrying. Name the real condition and point at the
-			// journal, which records why dockerd quit.
+			// journal, which records why dockerd quit. Check this before the
+			// ping error: a dead daemon stalls that ping, and the unit state is
+			// the only thing left that can see the failure (#797).
 			return &PrerequisiteError{Message: DockerDaemonFailedRecovery, Err: errors.New("docker.service failed to stay running")}
+		}
+		if err != nil {
+			return errors.Join(err, cliErr)
 		}
 		if !state.Ready {
 			return errors.Join(errors.New("system Docker socket did not respond after enabling Docker"), cliErr)

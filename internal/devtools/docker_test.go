@@ -437,6 +437,35 @@ func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.
 	}
 }
 
+// A daemon that starts and exits after a successful enable leaves docker.service
+// failed behind an active socket, and the socket then stalls the readiness ping
+// a healthy daemon answers. The unit state is the only thing that can see the
+// failure, so enable must report it as a prerequisite even though the ping
+// errors (#797).
+func TestDockerDaemonFailedAfterEnableStallsPingIsReportedAsAPrerequisite(t *testing.T) {
+	calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+	socket, _ := pingServer(t, http.StatusOK, "OK")
+	routeDockerSocket(t, socket)
+	dockerTestDial(t, func(context.Context, string, string) (net.Conn, error) {
+		return nil, context.DeadlineExceeded
+	})
+	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
+		if !enabled {
+			t.Fatal("enable dispatched disable")
+		}
+		return nil
+	})
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
+		t.Fatalf("daemon failed with a stalled ping = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			t.Fatalf("activation ran a command outside the unit reads: %s", call)
+		}
+	}
+}
+
 func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		for _, code := range []int{1, 126, 127} {
