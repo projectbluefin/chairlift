@@ -19,7 +19,8 @@ schedule choosers, no feature grids.
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
 the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
-Bluefin wordmark, an introduction confirming the system is ready and guiding
+running distribution's wordmark (Bazzite, Aurora, or the default Bluefin
+mark), an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
 and the Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform actions. **Bluefin CLI** is selected by
@@ -37,7 +38,7 @@ error toast. **Dismiss Setup**
 
 ![Updates](screenshots/1-updates.png)
 
-The Bluefin wordmark leads the page, with the one action button directly
+The running image's wordmark leads the page, with the one action button directly
 under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
