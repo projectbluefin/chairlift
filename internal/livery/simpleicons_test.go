@@ -1,6 +1,7 @@
 package livery
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -104,5 +105,32 @@ func TestCatalogNamesAreLiteralText(t *testing.T) {
 	}
 	if _, ok := LookupSimpleIcon("atandt"); !ok {
 		t.Error("AT&T missing: it is one of the names that exposed this")
+	}
+}
+
+// TestASUSResolvesToTheROGLogo is the regression test for the ASUS entry.
+//
+// simple-icons' `asus` mark is the "ASUS" logotype, which at app-grid size
+// reads as noise rather than a glyph. Selecting ASUS must install the
+// Republic of Gamers mark instead, recolored to currentColor like every
+// other app-grid mark so the surface stays symbolic.
+func TestASUSResolvesToTheROGLogo(t *testing.T) {
+	original := Fetch
+	var requested string
+	Fetch = func(_ context.Context, url string) ([]byte, error) {
+		requested = url
+		return []byte(`<svg fill="#FF0029" viewBox="0 0 24 24"><path d="M1 1h2v2H1z"/></svg>`), nil
+	}
+	t.Cleanup(func() { Fetch = original })
+
+	got, err := FetchSimpleIcon(context.Background(), "asus")
+	if err != nil {
+		t.Fatalf("FetchSimpleIcon(asus): %v", err)
+	}
+	if want := simpleIconsCDN + "republicofgamers"; requested != want {
+		t.Errorf("requested %q, want %q", requested, want)
+	}
+	if !strings.Contains(string(got), `fill="currentColor"`) {
+		t.Errorf("ASUS mark not recolored symbolic: %s", got)
 	}
 }
