@@ -280,10 +280,11 @@ See [printer-applications.md](printer-applications.md).
 
 ## Explicit setup flow
 
- `--setup`, `--first-run` and the menu action reuse the existing visible pages
- through `internal/firstrun` and `Window.PresentFirstRun`; normal activation opens
+`--setup`, `--first-run` and the menu action reuse the existing visible pages
+through `internal/firstrun` and `Window.PresentFirstRun`; normal activation opens
 no wizard. Setup bookends and the Updates shell present the running image's
-wordmark (Bazzite, Aurora, or default Bluefin). Details remain navigable within their parent step. Setup explicitly
+wordmark (Bazzite, Aurora, or default Bluefin). Details remain navigable within
+their parent step. Setup explicitly
 starts OEM enablement; Next from Features applies the Bash-only Bluefin CLI
 selection. Back/navigation alone installs nothing. Finish/dismissal persist
 disposition; crashes record nothing. Preview writes nothing. The flow owner is
