@@ -591,7 +591,7 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
 			} else if result.Err != nil && editorErr == nil {
 				log.Printf("views: %s setup failed: %v", title, result.Err)
-				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(result.Err, title+" setup needs attention. Retry the failed steps."))
+				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(result.Err, pageview.DeveloperSetupFailure(title, result.Err)))
 			} else if request.Preview && editorErr == nil {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: " + title + " — no changes made")
 			}

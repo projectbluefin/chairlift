@@ -899,3 +899,31 @@ func TestDockerMigrationRefusalShowsReachableRecoveryWithoutFollowons(t *testing
 		t.Fatalf("refusal ran follow-on work: %q, want %q", got, want)
 	}
 }
+
+// Utah's read-only SELinux store (projectbluefin/utah#551): the helper's
+// refusal crosses the process boundary as text and becomes a prerequisite the
+// row and toast can name, instead of a Retry that fails the same way.
+func TestDockerUnmanagedSELinuxStoreIsAPrerequisiteNotARetry(t *testing.T) {
+	calls, _ := fakeSystemDocker(t, dockerReport("not-found", "inactive"), dockerReport("not-found", "inactive"))
+	helperErr := &ublue.Error{
+		Message: "chairlift-helper stderr: " + ubluehelper.ErrSELinuxStoreUnmanaged.Error() + ": store-root /usr/lib/selinux is on a read-only file system",
+		Err:     exec.Command("/bin/sh", "-c", "exit 1").Run(),
+	}
+	err := setDocker(t.Context(), true, nil, func(context.Context, bool) error { return helperErr })
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerSELinuxStoreUnavailable {
+		t.Fatalf("unmanaged store = %v, want the SELinux prerequisite", err)
+	}
+	if !errors.Is(err, helperErr) || !strings.Contains(err.Error(), "/usr/lib/selinux is on a read-only file system") {
+		t.Fatalf("prerequisite lost the helper diagnostic: %v", err)
+	}
+	if got := mutationCalls(t, calls); len(got) != 0 {
+		t.Fatalf("refusal ran follow-on work: %q", got)
+	}
+	// Disabling never labels anything, so the same text there stays the
+	// helper's own failure.
+	fakeSystemDocker(t, dockerReport("loaded", "active"), dockerReport("loaded", "active"))
+	if err := setDocker(t.Context(), false, nil, func(context.Context, bool) error { return helperErr }); err != helperErr {
+		t.Fatalf("disable failure = %v, want the helper error unchanged", err)
+	}
+}

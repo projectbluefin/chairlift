@@ -72,6 +72,12 @@ const (
 const DockerMigrationRecovery = "An administrator must stop system Docker before migration. In a terminal, run " +
 	pkexec.Command + " " + ublue.HelperPath + " docker-disable. This stops running containers. Then turn Docker on again."
 
+// DockerSELinuxStoreUnavailable is shown when the helper refuses Docker
+// because the image's SELinux policy store cannot take the file-context rule
+// the Homebrew runtime needs. Retrying cannot help; the image has to change.
+const DockerSELinuxStoreUnavailable = "Docker can't be turned on: this image's SELinux policy store is read-only or unavailable, " +
+	"so the file-context rule Docker needs can't be added. This needs an image fix (see projectbluefin/utah#551); retrying won't help."
+
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
 const (
@@ -904,6 +910,9 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 	if err := apply(ctx, enabled); err != nil {
 		if enabled && strings.Contains(err.Error(), ubluehelper.DockerRuntimeMigrationPrefix) {
 			return &PrerequisiteError{Message: DockerMigrationRecovery, Err: err}
+		}
+		if enabled && strings.Contains(err.Error(), ubluehelper.DockerSELinuxStorePrefix) {
+			return &PrerequisiteError{Message: DockerSELinuxStoreUnavailable, Err: err}
 		}
 		return err
 	}

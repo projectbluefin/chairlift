@@ -94,3 +94,14 @@ func TestWSLActionAdmissionOnReadFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestDeveloperSetupFailureNamesAPrerequisite(t *testing.T) {
+	if got, want := DeveloperSetupFailure("Enable Docker", errors.New("exit status 1")), "Enable Docker setup needs attention. Retry the failed steps."; got != want {
+		t.Fatalf("plain failure = %q, want %q", got, want)
+	}
+	prerequisite := &devtools.PrerequisiteError{Message: devtools.DockerSELinuxStoreUnavailable, Err: errors.New("helper refused")}
+	// devsetup joins task errors; the prerequisite must survive the join.
+	if got := DeveloperSetupFailure("Enable Docker", errors.Join(prerequisite, errors.New("other"))); got != devtools.DockerSELinuxStoreUnavailable {
+		t.Fatalf("prerequisite failure = %q, want its message", got)
+	}
+}

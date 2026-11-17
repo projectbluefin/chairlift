@@ -12,6 +12,16 @@ const (
 	LimaDocumentationURL = "https://lima-vm.io/docs/"
 )
 
+// DeveloperSetupFailure is the toast for a developer setup that failed. A
+// missing prerequisite names itself, since Retry would fail the same way.
+func DeveloperSetupFailure(title string, err error) string {
+	var prerequisite *devtools.PrerequisiteError
+	if errors.As(err, &prerequisite) && prerequisite.Message != "" {
+		return prerequisite.Message
+	}
+	return title + " setup needs attention. Retry the failed steps."
+}
+
 // WSLEngineDocumentationURL returns the documentation URL for the given WSL engine backend.
 func WSLEngineDocumentationURL(backend string) string {
 	if backend == "lima" {
