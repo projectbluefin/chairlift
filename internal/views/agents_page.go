@@ -177,6 +177,13 @@ func (uh *UserHome) showAgentModeState(state aistack.State) {
 				return
 			}
 			models := node.Models()
+			// A lone model with no active model yet cannot be chosen from the
+			// row (GTK snaps a single-item combo to its only item, so the
+			// choice reads back as "no change"); make it active here.
+			if target := aistack.SingleModelToActivate(models, modelRef); target != "" {
+				uh.activateSingleModel(target)
+				return
+			}
 			uh.agentModelSuppress = true
 			uh.agentModelList = models
 			uh.agentModelActive = modelRef
@@ -254,6 +261,52 @@ func (uh *UserHome) onAgentModelSelected() {
 			}
 			uh.showAgentModeState(uh.agentModeState)
 			uh.agentModelSuppress = false
+		})
+	}()
+}
+
+func (uh *UserHome) activateSingleModel(target string) {
+	// The single-item row cannot register this choice, so ChairLift sets the
+	// alias itself. The gate keeps it from overlapping a user's own selection.
+	if !uh.agentModeGate.TryStart() {
+		return
+	}
+	uh.agentModelSuppress = true
+	uh.agentModelRow.SetSensitive(false)
+	uh.agentModeToggle.widget.SetSensitive(false)
+	setActivitySpinner(uh.agentModelSpinner, true)
+	generation := uh.agentRefresh.Begin()
+	go func() {
+		defer uh.agentModeGate.Reset()
+		ctx, cancel := aistack.DefaultContext()
+		defer cancel()
+		var err error
+		if dryrun.Enabled() {
+			log.Printf("[DRY-RUN] would configure alias %s to %s (auto-selected single model)", aistack.ActiveModelAlias, target)
+		} else {
+			err = aistack.ConfigureActiveModel(ctx, target)
+		}
+		sgtk.RunOnMainThread(func() {
+			if !uh.agentRefresh.IsCurrent(generation) {
+				return
+			}
+			uh.agentModelSuppress = false
+			uh.agentModeToggle.widget.SetSensitive(true)
+			uh.agentModelRow.SetSensitive(true)
+			setActivitySpinner(uh.agentModelSpinner, false)
+			if err != nil {
+				log.Printf("views: auto-select active model failed: %v", err)
+				uh.toastAdder.ShowErrorToast("Couldn't select the model.")
+				return
+			}
+			if dryrun.Enabled() {
+				// The alias is not written in dry-run, so a refresh would
+				// re-trigger the auto-select; stop here instead.
+				uh.toastAdder.ShowToast(fmt.Sprintf("[DRY-RUN] Would switch to %s", target))
+				return
+			}
+			uh.toastAdder.ShowToast(fmt.Sprintf("Selected %s.", target))
+			uh.showAgentModeState(uh.agentModeState)
 		})
 	}()
 }
