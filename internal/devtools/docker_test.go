@@ -383,6 +383,34 @@ func TestDockerEnableRequiresObservedReadinessAfterTheHelper(t *testing.T) {
 	}
 }
 
+// A daemon that started and then exited leaves docker.service failed while the
+// socket is still active, so the socket cannot serve a daemon systemd has
+// marked failed. Enabling Docker must report that as a prerequisite, not as a
+// plain socket failure the user could retry their way out of (#797).
+func TestDockerDaemonFailedIsReportedAsAPrerequisite(t *testing.T) {
+	calls, dir := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+	socket, _ := pingServer(t, http.StatusOK, "OK")
+	routeDockerSocket(t, socket)
+	var dispatched []bool
+	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
+		dispatched = append(dispatched, enabled)
+		writeDockerReports(t, dir, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+		return nil
+	})
+	if len(dispatched) != 1 || !dispatched[0] {
+		t.Fatalf("enable dispatched %v, want one enable", dispatched)
+	}
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
+		t.Fatalf("daemon failed = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			t.Fatalf("activation ran a command outside the unit reads: %s", call)
+		}
+	}
+}
+
 func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		for _, code := range []int{1, 126, 127} {

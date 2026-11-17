@@ -72,6 +72,12 @@ const (
 const DockerMigrationRecovery = "An administrator must stop system Docker before migration. In a terminal, run " +
 	pkexec.Command + " " + ublue.HelperPath + " docker-disable. This stops running containers. Then turn Docker on again."
 
+// DockerDaemonFailedRecovery is shown when the daemon started and then exited:
+// the socket cannot serve a daemon systemd marked failed, so retrying will not
+// help. The raw dockerd output is logged; the journal names the cause.
+const DockerDaemonFailedRecovery = "Docker's daemon did not stay running. See why in the system journal: " +
+	"`journalctl -u docker.service`"
+
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
 const (
@@ -708,6 +714,11 @@ type DockerState struct {
 	NoAccess bool
 	// Unavailable explains masked or broken system units.
 	Unavailable string
+	// DaemonFailed means docker.service is failed after enabling: the daemon
+	// started and exited, so the socket cannot serve it even though it is
+	// active. This is not a permission or a missing unit; it is a daemon that
+	// will not stay up, so retrying will not help.
+	DaemonFailed bool
 }
 
 // ErrDockerNewLogin means this session cannot access the enabled Docker socket.
@@ -768,7 +779,17 @@ func dockerUnits(ctx context.Context) (DockerState, error) {
 			return state, fmt.Errorf("%s did not report a valid LoadState", unit)
 		}
 		switch active {
-		case "inactive", "failed":
+		case "failed":
+			// Only the service failing means the daemon started and exited:
+			// the socket may be active but cannot serve a daemon systemd has
+			// marked failed, so readiness is false and retrying will not help.
+			// A failed socket alone is reported below as NoAccess/NeedsLogin.
+			if unit == "docker.service" {
+				state.DaemonFailed = true
+			}
+		case "inactive":
+			// A stopped unit is not running; leave Active false. Listed
+			// explicitly so it is not treated as unknown by the default.
 		case "active", "reloading", "activating", "deactivating", "maintenance", "refreshing":
 			state.Active = true
 		default:
@@ -928,6 +949,13 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 		state, err = DockerStatus(ctx)
 		if err != nil {
 			return errors.Join(err, cliErr)
+		}
+		if state.DaemonFailed {
+			// The daemon started and exited: the socket is active but cannot
+			// serve it, so a plain "socket did not respond" would mislead the
+			// user into retrying. Name the real condition and point at the
+			// journal, which records why dockerd quit.
+			return &PrerequisiteError{Message: DockerDaemonFailedRecovery, Err: errors.New("docker.service failed to stay running")}
 		}
 		if !state.Ready {
 			return errors.Join(errors.New("system Docker socket did not respond after enabling Docker"), cliErr)
