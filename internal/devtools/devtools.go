@@ -75,8 +75,8 @@ const DockerMigrationRecovery = "An administrator must stop system Docker before
 // DockerDaemonFailedRecovery is shown when the daemon started and then exited:
 // the socket cannot serve a daemon systemd marked failed, so retrying will not
 // help. The raw dockerd output is logged; the journal names the cause.
-const DockerDaemonFailedRecovery = "Docker's daemon did not stay running. See why in the system journal: " +
-	"`journalctl -u docker.service`"
+const DockerDaemonFailedRecovery = "Docker's daemon did not stay running. To see why, run this in a terminal: " +
+	"journalctl -b -e -u docker.service"
 
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
@@ -925,6 +925,20 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 	if err := apply(ctx, enabled); err != nil {
 		if enabled && strings.Contains(err.Error(), ubluehelper.DockerRuntimeMigrationPrefix) {
 			return &PrerequisiteError{Message: DockerMigrationRecovery, Err: err}
+		}
+		if enabled {
+			// systemctl start fails when dockerd exits before it is ready (#797);
+			// a service systemd has marked failed cannot be retried into health,
+			// so read the units again and name the real condition instead of the
+			// generic "socket did not respond" that would send the user in a
+			// circle. The socket never answers the readiness ping a healthy daemon
+			// would answer, so this unit read is what can see the failed service.
+			readCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+			after, unitErr := dockerUnits(readCtx)
+			cancel()
+			if unitErr == nil && after.DaemonFailed {
+				return &PrerequisiteError{Message: DockerDaemonFailedRecovery, Err: err}
+			}
 		}
 		return err
 	}

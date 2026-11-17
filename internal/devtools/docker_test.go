@@ -411,6 +411,32 @@ func TestDockerDaemonFailedIsReportedAsAPrerequisite(t *testing.T) {
 	}
 }
 
+func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.T) {
+	// #797: dockerd exits during systemctl start, so the enable call fails and
+	// the service is left failed behind an active socket. A real failed daemon
+	// does not answer the readiness ping a healthy one would, so the unit read
+	// is what surfaces the condition. The current code returned the raw apply
+	// error here, which the user saw as a generic retry toast.
+	calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+	var dispatched []bool
+	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
+		dispatched = append(dispatched, enabled)
+		return errors.New("changing Docker daemon: systemctl start docker.service: exit status 1")
+	})
+	if len(dispatched) != 1 || !dispatched[0] {
+		t.Fatalf("enable dispatched %v, want one enable", dispatched)
+	}
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
+		t.Fatalf("apply failed with a failed service = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			t.Fatalf("activation ran a command outside the unit reads: %s", call)
+		}
+	}
+}
+
 func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		for _, code := range []int{1, 126, 127} {
@@ -421,7 +447,13 @@ func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T
 			if err := setDocker(context.Background(), enabled, nil, func(context.Context, bool) error { return failure }); err != failure {
 				t.Fatalf("helper failure replaced: %v, want %v", err, failure)
 			}
-			assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+			// The enable path re-reads the units after a failed apply to check for a
+			// daemon that exited during start (#797); the disable path reads once.
+			if enabled {
+				assertCalls(t, calls, dockerServiceCall, dockerSocketCall, dockerServiceCall, dockerSocketCall)
+			} else {
+				assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+			}
 			state, err := DockerStatus(context.Background())
 			if err != nil || !state.Active || !state.Ready {
 				t.Fatalf("failed/dismissed mutation changed observed state: %+v %v", state, err)
