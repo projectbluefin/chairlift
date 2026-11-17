@@ -409,6 +409,29 @@ func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.
 	}
 }
 
+// A dismissed password prompt ran nothing, so a docker.service the host already
+// carried as failed is stale state rather than this run's daemon. The #797
+// enrichment must not swallow the cancellation: the raw error is what the view
+// classifies through pkexec as "Authentication canceled", and reclassifying it
+// would answer a cancelled dialog with a diagnosis of a daemon never started.
+func TestDockerDismissedAuthIsNotReclassifiedAsDaemonFailure(t *testing.T) {
+	for _, failure := range []*ublue.Error{
+		{Message: "helper failed", Err: exec.Command("/bin/sh", "-c", "exit 126").Run()},
+		{Message: "Error executing command as another user: Request dismissed"},
+	} {
+		calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+		err := setDocker(context.Background(), true, nil, func(context.Context, bool) error { return failure })
+		var prerequisite *PrerequisiteError
+		if errors.As(err, &prerequisite) {
+			t.Fatalf("a dismissed prompt was reclassified as a daemon failure: %v", err)
+		}
+		if !errors.Is(err, failure) || !pkexec.IsAuthDismissed(err) {
+			t.Fatalf("the cancellation lost its own classification: %v", err)
+		}
+		assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+	}
+}
+
 // A daemon that starts and exits after a successful enable leaves docker.service
 // failed behind an active socket, and the socket then stalls the readiness ping
 // a healthy daemon answers. The unit state is the only thing that can see the
@@ -457,12 +480,13 @@ func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T
 				t.Fatalf("helper failure replaced: %v, want %v", err, failure)
 			}
 			// The enable path re-reads the units after a failed apply to check for a
-			// daemon that exited during start (#797); the disable path reads once.
-			if enabled {
-				assertCalls(t, calls, dockerServiceCall, dockerSocketCall, dockerServiceCall, dockerSocketCall)
-			} else {
-				assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+			// daemon that exited during start (#797). A dismissed prompt never ran
+			// the helper, so it reads once, like the disable path.
+			reads := []string{dockerServiceCall, dockerSocketCall}
+			if enabled && !pkexec.IsAuthDismissed(failure) {
+				reads = append(reads, dockerServiceCall, dockerSocketCall)
 			}
+			assertCalls(t, calls, reads...)
 			state, err := DockerStatus(context.Background())
 			if err != nil || !state.Active || !state.Ready {
 				t.Fatalf("failed/dismissed mutation changed observed state: %+v %v", state, err)

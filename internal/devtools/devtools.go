@@ -926,13 +926,17 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 		if enabled && strings.Contains(err.Error(), ubluehelper.DockerRuntimeMigrationPrefix) {
 			return &PrerequisiteError{Message: DockerMigrationRecovery, Err: err}
 		}
-		if enabled {
+		if enabled && !pkexec.IsAuthDismissed(err) {
 			// systemctl start fails when dockerd exits before it is ready (#797);
 			// a service systemd has marked failed cannot be retried into health,
 			// so read the units again and name the real condition instead of the
 			// generic "socket did not respond" that would send the user in a
 			// circle. The socket never answers the readiness ping a healthy daemon
 			// would answer, so this unit read is what can see the failed service.
+			// A dismissed prompt is excluded: the helper never ran, so a failed
+			// service on disk is stale from an earlier attempt and reading it
+			// would answer the user's cancellation with a diagnosis of a daemon
+			// this run never started. The dismissal keeps its own brief toast.
 			readCtx, cancel := context.WithTimeout(ctx, statusTimeout)
 			after, unitErr := dockerUnits(readCtx)
 			cancel()
