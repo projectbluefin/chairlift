@@ -16,7 +16,6 @@ outcome query and its interpretation boundaries.
 | Live system Docker | Nightly/manual real PolicyKit, verified Homebrew-bottle install, system-daemon readiness, new-login, retained-data, and no-op update checks in an isolated Dakota fixture | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/docker-system.yml) |
 | Prow | `/command` handling, `needs-kind`, reviewer assignment, label sync, and merge-queue entry on `lgtm` + `approved` | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/prow.yml) |
 | Pull request checks | Gate results attached to each proposed change, including reruns and logs | Open a pull request and select its **Checks** tab |
-| Claude code review | Maintainer-triggered, read-only AI review comments for a selected pull request | [GitHub Actions](https://github.com/projectbluefin/chairlift/actions/workflows/claude-code-review.yml) |
 | PR acceptance | Accepted and closed pull request counts over a rolling 90-day cohort | [Metric definition and reproducible query](metrics.md) |
 | Build artifacts | Seven-day Linux binaries for the workflow's amd64 and arm64 matrix | Open a successful workflow run and view **Artifacts** |
 | Release history | Published versions and release assets | [GitHub Releases](https://github.com/projectbluefin/chairlift/releases) |
@@ -193,24 +192,6 @@ For an agent-authored pull request, audit the signals in this order:
    repository invariants and learned skills, then record concrete findings on
    the pull request.
 
-## Automated Copilot feedback
-
-`.github/workflows/copilot-review-apply.yml` closes the feedback loop for
-Copilot pull request reviews. When the trusted Copilot reviewer submits a
-commented or changes-requested review with inline findings on an open,
-non-draft pull request, the workflow posts one deduplicated `@copilot` fix
-request linked to that review. A review without inline findings does not start
-a fix cycle.
-
-An `ai-fix-requested` label is an intent marker, not acceptance or dispatch.
-A maintainer accepts the issue with `/triage accepted` and Hive assigns the
-work; `needs-human`, `blocked` and `hold` keep agents off it.
-The review-feedback workflow receives read-only contents and pull-requests
-write permission. It creates only a deduplicated request comment; it does not
-approve, merge, bypass checks, or grant issue implementation acceptance.
-Copilot's resulting changes still pass ordinary quality gates and human review;
-findings that should not be applied must be explained on the pull request.
-
 ## Prow
 
 Issues and pull requests are driven by Prow
@@ -222,38 +203,3 @@ merge queue once a pull request has `lgtm` and `approved` and no `hold`; the
 queue still waits for **Tests Passed**, and the ruleset's required approving
 review still applies. See
 [how issues and PRs work here](https://github.com/projectbluefin/common/blob/main/docs/skills/label-workflow.md).
-
-## Maintainer-triggered Claude review
-
-`.github/workflows/claude-code-review.yml` lets a maintainer request a
-read-only Claude review for a pull request:
-
-```bash
-gh workflow run claude-code-review.yml \
-  --ref main \
-  -f pull_request_number=123
-```
-
-The workflow runs only when dispatched from the default branch. It checks out
-that trusted base branch and reads the selected pull request through
-`gh pr view` and `gh pr diff`; it does not check out the pull request head or
-execute project code. Claude receives a token that can only read contents and
-pull requests, a static prompt that treats all pull request content as
-untrusted data, and tools limited to repository and pull request reads.
-
-Claude returns a schema-validated comment body to a separate publishing job.
-That job never receives the Anthropic credential or a checkout; its fixed,
-commit-pinned script has only pull request comment permission and rejects
-malformed or oversized output before posting. Claude therefore never receives
-a write-capable token and cannot approve, merge, release, or deploy.
-
-A repository administrator must configure the `ANTHROPIC_API_KEY` Actions
-secret before the first review:
-
-```bash
-gh secret set ANTHROPIC_API_KEY --repo projectbluefin/chairlift
-```
-
-Until the secret exists, a dispatch records a notice and exits without
-running Claude. Review comments are advisory evidence only; the ordinary
-required checks and human maintainer approval remain authoritative.
