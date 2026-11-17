@@ -16,6 +16,23 @@ Feature: Explicit first-run software setup
     Then the setup wizard shows "Welcome"
     And the setup "Back" button is insensitive
     And the action journal is empty
+    And the setup bookend displays the "Bluefin" logo
+
+  @stub.updates-image-bazzite
+  Scenario: Welcome displays the Bazzite logo on Bazzite
+    Given ChairLift is running
+    When I open the main menu
+    And I choose "Setup Assistant…" from the menu
+    Then the setup wizard shows "Welcome"
+    And the setup bookend displays the "Bazzite" logo
+
+  @stub.updates-image-aurora
+  Scenario: Welcome displays the Aurora logo on Aurora
+    Given ChairLift is running
+    When I open the main menu
+    And I choose "Setup Assistant…" from the menu
+    Then the setup wizard shows "Welcome"
+    And the setup bookend displays the "Aurora" logo
 
   @args.--first-run @stub.livery-tools @stub.apps-brew @env.SHELL=/bin/bash
   Scenario: First-run walks existing pages in order with Back and Finish

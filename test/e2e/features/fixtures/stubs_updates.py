@@ -316,3 +316,37 @@ def image_dakota_stable(context):
     info["image-tag"] = "stable"
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(info, handle)
+
+
+@stub("updates-image-bazzite")
+def image_bazzite(context):
+    """An image descriptor identifying the booted system as Bazzite."""
+    path = context.launch_env["CHAIRLIFT_IMAGE_INFO"]
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "image-name": "bazzite",
+                "image-tag": "stable",
+                "image-ref": "ostree-image-signed:docker://ghcr.io/ublue-os/bazzite",
+                "image-vendor": "ublue-os",
+                "image-flavor": "main",
+            },
+            handle,
+        )
+
+
+@stub("updates-image-aurora")
+def image_aurora(context):
+    """An image descriptor identifying the booted system as Aurora."""
+    path = context.launch_env["CHAIRLIFT_IMAGE_INFO"]
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "image-name": "aurora",
+                "image-tag": "stable",
+                "image-ref": "ostree-image-signed:docker://ghcr.io/ublue-os/aurora",
+                "image-vendor": "ublue-os",
+                "image-flavor": "main",
+            },
+            handle,
+        )

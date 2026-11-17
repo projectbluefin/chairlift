@@ -12,9 +12,11 @@ import (
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/config"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/navigation"
 	"github.com/projectbluefin/chairlift/internal/pkexec"
 	"github.com/projectbluefin/chairlift/internal/settings"
+	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ui"
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
@@ -201,8 +203,11 @@ func (w *Window) buildUI() {
 			Supported:  w.capabilities.Supports(page, group),
 		}
 	}
+	imageInfo, _ := ublue.DetectImage()
+	brand := firstrun.BrandForImage(imageInfo)
 	w.updateShell = views.NewUpdateShell(
 		coordinator,
+		brand,
 		store.Values,
 		func() map[updateflow.SourceID]updateflow.Policy {
 			return map[updateflow.SourceID]updateflow.Policy{
@@ -216,7 +221,6 @@ func (w *Window) buildUI() {
 		w,
 		w.activities,
 	)
-
 	// Create views manager
 	w.views = views.New(w.config, w.capabilities, w, w.updateShell.PreferencesPage(), w.activities)
 	// Wire the Recovery detail navigation before any page can open it. Both
@@ -246,11 +250,11 @@ func (w *Window) buildUI() {
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"Welcome to",
 		"Your system is set up and ready to go. Continue through the next few pages to customize your developer tools, set up automated troubleshooting, and change other system defaults.",
-		"Be the one who moves, not the one who is moved.", "Zavala"), "welcome")
+		"Be the one who moves, not the one who is moved.", "Zavala", brand), "welcome")
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"You Are Ready",
 		"You can return to this app at any time by choosing "+branding.AppName+" in your app menu.",
-		"There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton"), "conclusion")
+		"There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton", brand), "conclusion")
 	w.bindFirstRunFooter()
 
 	// The product name has one owner, so the About item is added here rather
@@ -917,7 +921,7 @@ func (w *Window) finishFirstRun(completed bool) {
 	}()
 }
 
-func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string) *gtk.Widget {
+func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string, brand firstrun.ImageBrand) *gtk.Widget {
 	var view bookendUI
 	ui.Bind(&view)
 	view.Eyebrow.SetLabel(eyebrowText)
@@ -928,9 +932,15 @@ func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author st
 	view.Attribution.SetLabel("— " + author)
 
 	wordmark := view.Wordmark
+	if brand.Name == "" {
+		brand = firstrun.BrandForImage(imageinfo.Info{})
+	}
+	if wordmark != nil {
+		wordmark.UpdateProperty(gtk.AccessiblePropertyLabelValue, brand.Name, -1)
+	}
 	styleManager := adw.StyleManagerGetDefault()
-	lightPath, lightErr := firstrun.AssetPath(firstrun.AssetWordmarkLight)
-	darkPath, darkErr := firstrun.AssetPath(firstrun.AssetWordmarkDark)
+	lightPath, lightErr := firstrun.AssetPath(brand.LightAsset)
+	darkPath, darkErr := firstrun.AssetPath(brand.DarkAsset)
 	if lightErr != nil || darkErr != nil {
 		log.Printf("firstrun: loading welcome wordmark: %v, %v", lightErr, darkErr)
 	}
