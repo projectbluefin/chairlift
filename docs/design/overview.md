@@ -159,9 +159,11 @@ failed/pending work for retry. Restart requires an observed requirement,
 not merely a successful staging command.
 
 OS reads are unprivileged. On composefs hosts `internal/bootc` reads deployment
-state and registry digests; other hosts use bootc's read commands. Staging still
-uses the image-owned fixed script, not a new `bootc upgrade` executor. SBOM
-comparison fetches only on explicit Compare and rejects stale image-pair results.
+state and registry digests; on ostree hosts it reads the booted deployment's
+`.origin`, `IMAGE_VERSION`, and the staged marker; other hosts use bootc's read
+commands. Staging still uses the image-owned fixed script, not a new
+`bootc upgrade` executor. SBOM comparison fetches only on explicit Compare and
+rejects stale image-pair results.
 
 Manual Free Up Space and post-update maintenance share
 `updateproviders.CleanupGroup` and the typed cleanup runner. Report skipped,
