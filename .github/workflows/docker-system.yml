@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Free disk space for Dakota
-        uses: projectbluefin/actions/bootc-build/setup-runner@d1f65645c53d413462117fe1f05d00b9d9382f89 # v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
           storage-backend: remove-software
           update-podman: "false"
