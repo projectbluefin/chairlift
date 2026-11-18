@@ -51,13 +51,13 @@ const (
 // readOstreeStatus builds a Status from an ostree host's on-disk state. fsys
 // is rooted at "/". It returns errNotOstree when the kernel was not booted
 // from an ostree deployment.
-func readOstreeStatus(fsys fs.FS) (*Status, error) {
+func readOstreeStatus(ctx context.Context, fsys fs.FS) (*Status, error) {
 	bootedPath, osName, err := ostreeBootedDeploymentPath(fsys)
 	if err != nil {
 		return nil, err
 	}
 
-	booted, err := readOstreeDeployment(fsys, bootedPath)
+	booted, err := readOstreeDeployment(ctx, fsys, bootedPath)
 	if err != nil {
 		return nil, fmt.Errorf("bootc: reading the booted deployment: %w", err)
 	}
@@ -74,14 +74,14 @@ func readOstreeStatus(fsys fs.FS) (*Status, error) {
 		return nil, err
 	}
 	if stagedName != "" {
-		staged, err := readOstreeDeployment(fsys, ostreeDeploymentPath(osName, stagedName))
+		staged, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, stagedName))
 		if err != nil {
 			return nil, fmt.Errorf("bootc: reading the staged deployment: %w", err)
 		}
 		status.Status.Staged = staged
 	}
 	if rollbackName != "" {
-		if rollback, err := readOstreeDeployment(fsys, ostreeDeploymentPath(osName, rollbackName)); err == nil {
+		if rollback, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, rollbackName)); err == nil {
 			status.Status.Rollback = rollback
 		}
 	}
@@ -184,7 +184,7 @@ func validOstreeDeploymentName(name string) bool {
 	return ok && validDeploymentID(csum) && validSerial(serial)
 }
 
-func readOstreeDeployment(fsys fs.FS, deployPath string) (*Deployment, error) {
+func readOstreeDeployment(ctx context.Context, fsys fs.FS, deployPath string) (*Deployment, error) {
 	data, err := fs.ReadFile(fsys, deployPath+".origin")
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func readOstreeDeployment(fsys fs.FS, deployPath string) (*Deployment, error) {
 		// the repository does and the repository is world-readable. Without
 		// it the update check has no unprivileged answer at all: bootc 1.16+
 		// refuses `bootc upgrade --check` to a non-root caller (#837).
-		digest = ostreeCommitDigest(path.Base(deployPath))
+		digest = ostreeCommitDigest(ctx, path.Base(deployPath))
 	}
 	return &Deployment{Image: &ImageStatus{
 		Image:       ImageReference{Image: image, Transport: "registry"},
@@ -211,12 +211,12 @@ func readOstreeDeployment(fsys fs.FS, deployPath string) (*Deployment, error) {
 // ostreeCommitDigest returns the manifest digest ostree recorded for a
 // deployment's commit, or "" when it cannot be read or parsed. The caller then
 // falls back exactly as it did before this read existed.
-func ostreeCommitDigest(deploymentName string) string {
+func ostreeCommitDigest(ctx context.Context, deploymentName string) string {
 	csum, _, ok := strings.Cut(deploymentName, ".")
 	if !ok || !validDeploymentID(csum) {
 		return ""
 	}
-	digest, err := ostreeManifestDigest(csum)
+	digest, err := ostreeManifestDigest(ctx, csum)
 	if err != nil {
 		return ""
 	}
@@ -224,9 +224,11 @@ func ostreeCommitDigest(deploymentName string) string {
 }
 
 // ostreeManifestDigest runs `ostree show --print-metadata-key` for a commit.
-// It is a variable so tests drive a script instead of a real repository.
-var ostreeManifestDigest = func(commit string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), ostreeShowTimeout)
+// It is a variable so tests drive a script instead of a real repository. The
+// caller's deadline bounds the read, so a canceled update check does not wait
+// on it; ostreeShowTimeout is the ceiling when the caller sets none.
+var ostreeManifestDigest = func(ctx context.Context, commit string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ostreeShowTimeout)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, "ostree",
 		"--repo="+ostreeRepoPath, "show",

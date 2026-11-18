@@ -145,7 +145,7 @@ func GetStatus(ctx context.Context) (*Status, error) {
 	if !errors.Is(err, errNotComposefs) {
 		return status, err
 	}
-	status, err = readOstreeStatus(hostRoot)
+	status, err = readOstreeStatus(ctx, hostRoot)
 	if !errors.Is(err, errNotOstree) {
 		return status, err
 	}

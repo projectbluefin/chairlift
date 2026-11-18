@@ -53,7 +53,7 @@ func ostreeHost() fstest.MapFS {
 
 // withOstreeDigest replaces the repository read. A gated test must never run
 // a real ostree: the developer's host may or may not have one.
-func withOstreeDigest(t *testing.T, read func(commit string) (string, error)) {
+func withOstreeDigest(t *testing.T, read func(context.Context, string) (string, error)) {
 	t.Helper()
 	previous := ostreeManifestDigest
 	ostreeManifestDigest = read
@@ -64,14 +64,14 @@ func withOstreeDigest(t *testing.T, read func(commit string) (string, error)) {
 // the state every ostree reader test starts from unless it supplies a digest.
 func noOstreeDigest(t *testing.T) {
 	t.Helper()
-	withOstreeDigest(t, func(commit string) (string, error) {
+	withOstreeDigest(t, func(_ context.Context, commit string) (string, error) {
 		return "", errors.New("no ostree repository on this host")
 	})
 }
 
 func TestOstreeStatusReadsDeploymentsWithoutRoot(t *testing.T) {
 	noOstreeDigest(t)
-	status, err := readOstreeStatus(ostreeHost())
+	status, err := readOstreeStatus(t.Context(), ostreeHost())
 	if err != nil {
 		t.Fatalf("readOstreeStatus: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestOstreeStatusWithoutStagedDeployment(t *testing.T) {
 	host := ostreeHost()
 	delete(host, "run/ostree/staged-deployment")
 
-	status, err := readOstreeStatus(host)
+	status, err := readOstreeStatus(t.Context(), host)
 	if err != nil {
 		t.Fatalf("readOstreeStatus: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestOstreeStatusDefersOnOtherHosts(t *testing.T) {
 		"root=UUID=1 ostree=/ostree/boot.1/" + ostreeOS + "/not-hex/" + ostreeSerial + "\n",
 	} {
 		host := fstest.MapFS{"proc/cmdline": {Data: []byte(cmdline)}}
-		if _, err := readOstreeStatus(host); !errors.Is(err, errNotOstree) {
+		if _, err := readOstreeStatus(t.Context(), host); !errors.Is(err, errNotOstree) {
 			t.Errorf("%q: err = %v, want errNotOstree", cmdline, err)
 		}
 	}
@@ -166,7 +166,7 @@ func TestOstreeStatusResolvesTheBootSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	status, err := readOstreeStatus(os.DirFS(root))
+	status, err := readOstreeStatus(t.Context(), os.DirFS(root))
 	if err != nil {
 		t.Fatalf("readOstreeStatus: %v", err)
 	}
@@ -213,7 +213,7 @@ func TestOstreeStatusMissingBootedOriginFails(t *testing.T) {
 	noOstreeDigest(t)
 	host := ostreeHost()
 	delete(host, "ostree/deploy/"+ostreeOS+"/deploy/"+ostreeBootedCsum+".0.origin")
-	_, err := readOstreeStatus(host)
+	_, err := readOstreeStatus(t.Context(), host)
 	if err == nil || errors.Is(err, errNotOstree) {
 		t.Fatalf("err = %v, want a read failure", err)
 	}
@@ -223,7 +223,7 @@ func TestOstreeStatusMalformedOriginFails(t *testing.T) {
 	noOstreeDigest(t)
 	host := ostreeHost()
 	host["ostree/deploy/"+ostreeOS+"/deploy/"+ostreeBootedCsum+".0.origin"] = &fstest.MapFile{Data: []byte("[origin]\n")}
-	_, err := readOstreeStatus(host)
+	_, err := readOstreeStatus(t.Context(), host)
 	if err == nil || errors.Is(err, errNotOstree) {
 		t.Fatalf("err = %v, want a read failure", err)
 	}
@@ -234,7 +234,7 @@ func TestOstreeStatusStagedMarkerWithoutDeploymentFails(t *testing.T) {
 	host := ostreeHost()
 	delete(host, "ostree/deploy/"+ostreeOS+"/deploy/"+ostreeStagedCsum+".0.origin")
 	delete(host, "ostree/deploy/"+ostreeOS+"/deploy/"+ostreeRollbackCsum+".0.origin")
-	_, err := readOstreeStatus(host)
+	_, err := readOstreeStatus(t.Context(), host)
 	if err == nil || errors.Is(err, errNotOstree) {
 		t.Fatalf("err = %v, want a read failure", err)
 	}
@@ -282,6 +282,35 @@ func TestCheckUpdateOnOstreeFallsBackToBootc(t *testing.T) {
 	}
 }
 
+// A staged deployment whose digest cannot be read must not fall through to
+// the registry check: that check compares only the booted digest and would
+// report an image that is already staged as a new update (#837 review).
+func TestCheckUpdateOnOstreeFallsBackWhenTheStagedDigestIsUnreadable(t *testing.T) {
+	argv := installFakeBootc(t, "echo 'No changes in: "+ostreeRef+"'\n")
+	withHostRoot(t, ostreeHost())
+	withOstreeDigest(t, func(_ context.Context, commit string) (string, error) {
+		if commit == ostreeStagedCsum {
+			return "", errors.New("staged commit is not in the repository")
+		}
+		return "sha256:" + strings.Repeat("a", 64), nil
+	})
+	withRegistryTag(t, func(context.Context, string, string) (registrytags.Tag, error) {
+		t.Fatal("registry was queried although the staged deployment has no digest")
+		return registrytags.Tag{}, nil
+	})
+
+	update, err := CheckUpdate(testContext(t))
+	if err != nil {
+		t.Fatalf("CheckUpdate: %v", err)
+	}
+	if update.Available {
+		t.Fatalf("CheckUpdate = %+v, want no update", update)
+	}
+	if _, err := os.Stat(argv); err != nil {
+		t.Fatal("bootc upgrade --check was not executed")
+	}
+}
+
 // An ostree .origin records no OCI manifest digest, but the commit in the
 // repository does and the repository is world-readable. Reading it is what
 // keeps the update check on the registry path, which needs no root (#837).
@@ -292,7 +321,7 @@ func TestOstreeStatusReadsTheRepositoryManifestDigest(t *testing.T) {
 		ostreeRollbackCsum: "sha256:" + strings.Repeat("c", 64),
 	}
 	var asked []string
-	withOstreeDigest(t, func(commit string) (string, error) {
+	withOstreeDigest(t, func(_ context.Context, commit string) (string, error) {
 		asked = append(asked, commit)
 		digest, ok := digests[commit]
 		if !ok {
@@ -301,7 +330,7 @@ func TestOstreeStatusReadsTheRepositoryManifestDigest(t *testing.T) {
 		return digest, nil
 	})
 
-	status, err := readOstreeStatus(ostreeHost())
+	status, err := readOstreeStatus(t.Context(), ostreeHost())
 	if err != nil {
 		t.Fatalf("readOstreeStatus: %v", err)
 	}
@@ -367,7 +396,7 @@ func TestParseOstreeManifestDigest(t *testing.T) {
 func TestCheckUpdateOnOstreeComparesTheRepositoryDigest(t *testing.T) {
 	argv := installFakeBootc(t, "echo 'error: must be executed as the root user' >&2; exit 1\n")
 	withHostRoot(t, ostreeHost())
-	withOstreeDigest(t, func(string) (string, error) {
+	withOstreeDigest(t, func(context.Context, string) (string, error) {
 		return "sha256:" + strings.Repeat("a", 64), nil
 	})
 	published := "sha256:" + strings.Repeat("b", 64)

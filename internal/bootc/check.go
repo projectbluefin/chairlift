@@ -32,7 +32,7 @@ type AvailableUpdate struct {
 func CheckUpdate(ctx context.Context) (AvailableUpdate, error) {
 	status, err := readComposefsStatus(hostRoot)
 	if errors.Is(err, errNotComposefs) {
-		status, err = readOstreeStatus(hostRoot)
+		status, err = readOstreeStatus(ctx, hostRoot)
 		if errors.Is(err, errNotOstree) {
 			return checkUpdateFrom(ctx, bootcCommand)
 		}
@@ -40,7 +40,11 @@ func CheckUpdate(ctx context.Context) (AvailableUpdate, error) {
 	if err != nil {
 		return AvailableUpdate{}, err
 	}
-	if status.Status.Booted == nil || status.Status.Booted.Digest() == "" {
+	// A staged deployment without a digest cannot be compared either: the
+	// registry check would only match the booted digest and report an image
+	// that is already staged as a new update, so that answer needs root.
+	if status.Status.Booted == nil || status.Status.Booted.Digest() == "" ||
+		(status.Status.Staged != nil && status.Status.Staged.Digest() == "") {
 		return checkUpdateFrom(ctx, bootcCommand)
 	}
 	return checkFromRegistry(ctx, status, registryTag)
