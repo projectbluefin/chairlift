@@ -133,9 +133,10 @@ the system is checked and cannot be chosen again, and says **Installed from
 The **Install Selected** button at the top installs exactly what you
 checked. A collection you selected in full installs as a whole, the way its
 own definition says; a partly selected one installs just the entries you
-picked. Where an app comes from a source this computer does not trust yet,
-the app is trusted on its own first, and the confirmation that follows says
-how much was trusted. Installs show stepped progress while they run, using
+picked. A whole collection trusts exactly the taps its own definition marks
+trusted, before their apps load. Otherwise an app from a source this computer
+does not trust yet is trusted on its own first. The confirmation that follows
+says how much was trusted. Installs show stepped progress while they run, using
 the same controls in the explicit setup flow. App Store and VS Code entries
 are not selectable and are never installed implicitly with a collection.
 A collection whose apps and tools are all already on the system reads
@@ -479,9 +480,11 @@ default; an applet changed to another icon is left alone.
 One button. **Free Up Space** deletes old downloads and app parts nothing uses,
 and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
-spinner remains visible while cleanup is running. Below it sit any
-**Maintenance Tasks** whoever set up this computer added. **Powerwash**
-holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
+spinner remains visible while cleanup is running. It does not start while an
+update or a Homebrew install is running; wait for that to finish and try again.
+Below it sit any **Maintenance Tasks** whoever set up this computer added.
+**Powerwash** holds the actions you can't undo (under **Maintenance →
+Powerwash**): **Roll Back**
 returns to the previous version if an update caused problems, **Powerwash**
 removes your Flatpak apps and Distrobox containers (everything on the Apps page
 stays), and **Factory Reset** reinstalls the operating system, warning first

@@ -58,9 +58,10 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   fail closed; only an absent candidate advances the search path.
 - `internal/updateflow.Coordinator` alone owns update state and badges;
   `updateproviders` adapts existing operations, `updatepresent` owns copy,
-  and the GTK shell renders snapshots. Deployment changes, restart, and cleanup
-  share its mutation admission. Reuse action/refresh/row gates rather
-  than adding parallel owners. Retryable controls reset their gates.
+  and the GTK shell renders snapshots. Deployment changes, restart, cleanup,
+  and Homebrew installs share its mutation admission. Reuse
+  action/refresh/row gates rather than adding parallel owners. Retryable
+  controls reset their gates.
 - Long-running work reports to the window's one `internal/views/activity`
   tracker, which the window-wide Activity indicator and dialog draw. A check and
   every `UpdateShell.beginMutation(title)` admission register themselves;
