@@ -196,9 +196,10 @@ owning feature requires that protection.
 
 [`bootc`](../../internal/bootc/) reads status/checks without authentication.
 Composefs hosts use world-readable deployment state and registry digest checks;
-other hosts use bootc reads. Staging always retains the fixed OS-supplied entry
-point. A current composefs deployment is checked before invoking a stager that
-would otherwise fail on a no-op.
+ostree hosts read the booted deployment's `.origin`, `IMAGE_VERSION`, and the
+staged marker; other hosts use bootc reads. Staging always retains the fixed
+OS-supplied entry point. A current composefs deployment is checked before
+invoking a stager that would otherwise fail on a no-op.
 
 [`updex`](../../internal/updex/updex.go) reads through the Go library and requires
 actual feature definitions for availability. An incomplete feature check is not
