@@ -385,7 +385,7 @@ func ChannelSwitchResultSubtitle(toTesting bool) string {
 func DeveloperRow(active bool) Row {
 	row := Row{Title: "Developer Mode"}
 	if active {
-		row.Subtitle = "Containers and virtual machines are set up for your account."
+		row.Subtitle = "Developer Mode is on."
 		return row
 	}
 	row.Subtitle = "Set up containers and virtual machines. Asks for your administrator password."

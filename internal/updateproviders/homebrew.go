@@ -3,6 +3,7 @@ package updateproviders
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"slices"
@@ -102,7 +103,11 @@ func (p *homebrewProvider) Check(ctx context.Context) (updateflow.CheckResult, e
 			CurrentVersion: pkg.Version,
 		})
 	}
-	if item, ok := dockerRuntimeUpdate(ctx, p.deps); ok {
+	if item, ok, dockerErr := dockerRuntimeUpdate(ctx, p.deps); dockerErr != nil {
+		if !errors.Is(dockerErr, os.ErrNotExist) && !errors.Is(dockerErr, errDockerRuntimeUnavailable) {
+			log.Printf("updateproviders: checking Docker runtime: %v", dockerErr)
+		}
+	} else if ok {
 		items = append(items, item)
 	}
 	return updateflow.CheckResult{Items: items}, err
@@ -112,41 +117,72 @@ func (p *homebrewProvider) Check(ctx context.Context) (updateflow.CheckResult, e
 // connection cannot hold the whole update check; a variable for tests.
 var dockerLatestTimeout = 30 * time.Second
 
+var errDockerRuntimeUnavailable = errors.New("docker runtime verification is unavailable")
+
 // dockerRuntimeUpdate offers the Homebrew Docker runtime when ChairLift
 // installed it, the image does not ship Docker, the helper can update it,
-// and Homebrew publishes different bottles. The read is advisory: an
-// unreachable API omits the item rather than failing the tools check, and the
+// and Homebrew publishes different bottles. The caller treats a read failure
+// as advisory during discovery, but preserves it during verification. The
 // helper verifies the signed index before it installs anything.
-func dockerRuntimeUpdate(ctx context.Context, deps HomebrewDeps) (updateflow.Item, bool) {
+func dockerRuntimeUpdate(ctx context.Context, deps HomebrewDeps) (updateflow.Item, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return updateflow.Item{}, false, err
+	}
 	if deps.DockerManifest == nil || deps.DockerImageUnits == nil || deps.DockerUpdateSupported == nil || deps.DockerLatest == nil || deps.UpdateDocker == nil {
-		return updateflow.Item{}, false
+		return updateflow.Item{}, false, errDockerRuntimeUnavailable
 	}
 	installed, err := deps.DockerManifest()
 	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			log.Printf("updateproviders: reading Docker runtime manifest: %v", err)
-		}
-		return updateflow.Item{}, false
+		return updateflow.Item{}, false, fmt.Errorf("read Docker runtime manifest: %w", err)
 	}
 	if deps.DockerImageUnits() || !deps.DockerUpdateSupported() {
-		return updateflow.Item{}, false
+		return updateflow.Item{}, false, errDockerRuntimeUnavailable
 	}
 	latestCtx, cancel := context.WithTimeout(ctx, dockerLatestTimeout)
 	defer cancel()
 	latest, err := deps.DockerLatest(latestCtx)
 	if err != nil {
-		log.Printf("updateproviders: checking Docker runtime bottles: %v", err)
-		return updateflow.Item{}, false
+		return updateflow.Item{}, false, fmt.Errorf("read latest Docker runtime bottles: %w", err)
+	}
+	if err := latestCtx.Err(); err != nil {
+		return updateflow.Item{}, false, err
+	}
+	if err := validateDockerObservation(installed, latest); err != nil {
+		return updateflow.Item{}, false, err
 	}
 	if !dockerbrew.Outdated(installed, latest) {
-		return updateflow.Item{}, false
+		return updateflow.Item{}, false, nil
 	}
 	return updateflow.Item{
 		ID:               DockerRuntimeItemID,
 		Name:             "Docker engine",
 		CurrentVersion:   engineVersion(installed.Bottles),
 		AvailableVersion: engineVersion(latest),
-	}, true
+	}, true, nil
+}
+
+// validateDockerObservation rejects missing data before equality can stand
+// for a verified update. A partial API answer cannot prove the whole installed
+// set current, even when the bottles it did return match.
+func validateDockerObservation(installed dockerbrew.Manifest, latest []dockerbrew.Bottle) error {
+	for _, bottles := range [][]dockerbrew.Bottle{installed.Bottles, latest} {
+		seen := make(map[string]bool, len(bottles))
+		for _, bottle := range bottles {
+			if bottle.Name == "" || bottle.Version == "" || bottle.SHA256 == "" || seen[bottle.Name] {
+				return errors.New("docker runtime bottle inventory is incomplete or ambiguous")
+			}
+			seen[bottle.Name] = true
+		}
+		if !seen["docker-engine"] {
+			return errors.New("docker runtime bottle inventory has no engine")
+		}
+	}
+	for _, bottle := range installed.Bottles {
+		if !slices.ContainsFunc(latest, func(candidate dockerbrew.Bottle) bool { return candidate.Name == bottle.Name }) {
+			return fmt.Errorf("docker runtime bottle inventory is missing %s", bottle.Name)
+		}
+	}
+	return nil
 }
 
 func engineVersion(bottles []dockerbrew.Bottle) string {
@@ -216,7 +252,9 @@ func updateDockerRuntime(ctx context.Context, deps HomebrewDeps) (updateflow.App
 	if deps.DryRun != nil && deps.DryRun() {
 		return updateflow.ApplyResult{Preview: true}, nil
 	}
-	if _, pending := dockerRuntimeUpdate(ctx, deps); pending {
+	if _, pending, err := dockerRuntimeUpdate(ctx, deps); err != nil {
+		return updateflow.ApplyResult{}, fmt.Errorf("verify Docker runtime update: %w", err)
+	} else if pending {
 		return updateflow.ApplyResult{}, nil
 	}
 	return updateflow.ApplyResult{Changed: true}, nil

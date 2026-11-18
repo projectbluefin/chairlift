@@ -49,6 +49,8 @@ can see which source is holding you up without opening anything. Only the
 sources this computer can manage are listed at all, so a source it does not
 update is absent rather than explained at length, and a group whose sources all
 drop out goes with them.
+Applications includes Flatpak runtimes and extensions, so updates to the
+supporting software remain available even when the apps themselves are current.
 **Preferences** (Ctrl+,) has a switch per source: a source you turn off there
 says **Disabled in preferences** as soon as you change it, and a source you
 cannot turn on shows its switch off, greyed out, with **Disabled by

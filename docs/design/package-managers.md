@@ -103,7 +103,10 @@ mutations. Preview changes no inventory. An unchanged apply is not completion.
 Source-specific check boundaries stay in their adapters:
 
 - [Flatpak](../../internal/updateproviders/flatpak.go) offers found updates
-  alongside named warnings only when the failures are exclusively per-remote.
+  for applications, runtimes and extensions in each installation. Individual
+  rows retain architecture and branch so parallel runtime branches stay distinct.
+  It reports updates alongside named warnings only when the failures are
+  exclusively per-remote.
   With no found updates, the original errors remain actionable failures;
   scope-discovery or cancellation errors fail the check even beside updates.
   Post-apply reconciliation must still succeed for every applied scope and
@@ -196,9 +199,10 @@ owning feature requires that protection.
 
 [`bootc`](../../internal/bootc/) reads status/checks without authentication.
 Composefs hosts use world-readable deployment state and registry digest checks;
-other hosts use bootc reads. Staging always retains the fixed OS-supplied entry
-point. A current composefs deployment is checked before invoking a stager that
-would otherwise fail on a no-op.
+ostree hosts read the booted deployment's `.origin`, `IMAGE_VERSION`, and the
+staged marker; other hosts use bootc reads. Staging always retains the fixed
+OS-supplied entry point. A current composefs deployment is checked before
+invoking a stager that would otherwise fail on a no-op.
 
 [`updex`](../../internal/updex/updex.go) reads through the Go library and requires
 actual feature definitions for availability. An incomplete feature check is not
