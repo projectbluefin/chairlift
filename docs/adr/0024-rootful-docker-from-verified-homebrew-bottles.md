@@ -88,6 +88,25 @@ root installs only what the signed index names.
 - A changed runtime restarts the daemon only when no containers are running
   (or none can be ruled out). Otherwise the restart waits for the next enable
   or update, or a reboot, and the restart-pending marker carries it.
+- The managed daemon runs `--firewall-backend=nftables`, Docker's native
+  backend, because modern firewalld rejects the iptables passthrough Docker
+  otherwise uses. That backend needs Docker 29 or later, so bottle selection
+  fails closed on an older `docker-engine` stable version instead of
+  installing a runtime the unit cannot run.
+- `docker.service` sets `net.ipv4.ip_forward=1` host-wide before each start,
+  including after a reboot: unlike the iptables backend, the nftables backend
+  installs no forward-drop policy and does not enable forwarding itself. The
+  host firewall (firewalld on Bluefin) therefore stays responsible for
+  policing non-Docker forwarding; on a machine with no active firewall this
+  makes the host an IPv4 router. A maintainer accepted that trade-off for the
+  managed runtime (2026-11-18). IPv6 forwarding is unchanged, and the default
+  bridge is IPv4.
+- A daemon still running the iptables backend is refused by enable and update
+  until an administrator stops Docker: Swarm state and `DOCKER-USER` rules do
+  not carry over to the nftables backend, so the migration is a deliberate
+  stop rather than an automatic switch. Failed Docker units are reset with
+  `systemctl reset-failed` before each start so a repaired daemon is not held
+  by systemd's rate limit.
 
 ## Alternatives considered
 
