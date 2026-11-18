@@ -29,7 +29,7 @@ func UpdateItem(ctx context.Context, source updateflow.SourceID, item updateflow
 			return updateflow.ApplyResult{}, fmt.Errorf("verify application update: %w", err)
 		}
 		for _, update := range updates {
-			if update.ApplicationID == item.ID {
+			if update.UpdateRef() == item.ID || update.ApplicationID == item.ID {
 				return updateflow.ApplyResult{}, nil
 			}
 		}

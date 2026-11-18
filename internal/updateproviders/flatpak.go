@@ -217,8 +217,7 @@ func appliedRefsForScope(items []updateflow.Item, scope string) map[string]bool 
 		}
 		if item.ID != "" {
 			refs[item.ID] = true
-		}
-		if item.Name != "" {
+		} else if item.Name != "" {
 			refs[item.Name] = true
 		}
 	}
@@ -226,7 +225,7 @@ func appliedRefsForScope(items []updateflow.Item, scope string) map[string]bool 
 }
 
 func updateMatchesApplied(u flatpak.UpdateInfo, appliedRefs map[string]bool) bool {
-	if u.ApplicationID != "" && appliedRefs[u.ApplicationID] {
+	if u.ApplicationID != "" && (appliedRefs[u.UpdateRef()] || appliedRefs[u.ApplicationID]) {
 		return true
 	}
 	if u.Name != "" && appliedRefs[u.Name] {
@@ -246,7 +245,7 @@ func flatpakItems(updates []flatpak.UpdateInfo) []updateflow.Item {
 	items := make([]updateflow.Item, 0, len(updates))
 	for _, update := range updates {
 		items = append(items, updateflow.Item{
-			ID:               update.ApplicationID,
+			ID:               update.UpdateRef(),
 			Name:             update.Name,
 			AvailableVersion: update.NewVersion,
 			Scope:            update.Installation,
