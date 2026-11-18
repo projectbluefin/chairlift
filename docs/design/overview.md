@@ -268,7 +268,9 @@ rotation; `internal/deskenv` selects supported desktop surfaces and the native
 settings backend. Page load does not apply selections. Defaults and existing-unit
 reconciliation use narrowly guarded paths, not general load-time repair.
 `internal/avatar` applies profile pictures; `internal/valhalla` owns explicit
-wallpaper setup. Neither feature promises readiness from package presence alone.
+wallpaper setup, installs its payload cask from `projectbluefin/tap`, and
+replaces a legacy `ublue-os/tap` receipt of the same token once before install.
+Neither feature promises readiness from package presence alone.
 
 `internal/printerapp` owns rootless printer quadlets. Verify publishing identity
 and pin the verified digest before writing/enabling or refreshing a unit. Bind

@@ -70,6 +70,8 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 - All mutations honor `dryrun.Enabled()`. Preview is not live success.
   Destructive actions require confirmation; preserve user-owned files/settings
   and observed package scopes. Package presence is not service readiness.
+  Homebrew payloads install from the tap that owns them: a same-token cask whose
+  receipt names a legacy tap is replaced once before the owning tap's install.
 - Connect GTK signals once at construction, not per refresh. Reuse shared
   `buttonRoute`/`dialogRoute` handlers; purego's callback table is bounded.
   Coalesce streamed output and cap retained rows through `progresslog`/`rowset`.

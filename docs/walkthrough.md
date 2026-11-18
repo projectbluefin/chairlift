@@ -400,6 +400,9 @@ Damask from an older image's App collection definition; wallpaper setup is absen
 Setup converts extra SVG/JPEG XL/AVIF backgrounds to PNG in your own data folder,
 adds that folder to Valhalla's manual folders, and selects its manual source,
 keeping any folders you already chose. The original wallpaper files are kept.
+The extra wallpapers come from Bluefin's own Homebrew tap; a copy an earlier
+release installed from another tap is replaced during setup, and the converted
+images stay in place.
 Valhalla's native SVG/JPEG XL support is tracked in
 [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
 The row reads **(Installed)** only when its wallpaper source and settings are
