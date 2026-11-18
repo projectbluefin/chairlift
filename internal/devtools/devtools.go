@@ -78,6 +78,12 @@ const DockerMigrationRecovery = "An administrator must stop system Docker before
 const DockerSELinuxStoreUnavailable = "Docker can't be turned on: this image's SELinux policy store is read-only or unavailable, " +
 	"so the file-context rule Docker needs can't be added. This needs an image fix (see projectbluefin/utah#551); retrying won't help."
 
+// DockerDaemonFailedRecovery is shown when the daemon started and then exited:
+// the socket cannot serve a daemon systemd marked failed, so retrying will not
+// help. The raw dockerd output is logged; the journal names the cause.
+const DockerDaemonFailedRecovery = "Docker's daemon did not stay running. To see why, run this in a terminal: " +
+	"journalctl -b -e -u docker.service"
+
 // nslNewMachine and nslNewDistro name the machine WSL Mode creates with the
 // built-in engine when none exists.
 const (
@@ -714,6 +720,11 @@ type DockerState struct {
 	NoAccess bool
 	// Unavailable explains masked or broken system units.
 	Unavailable string
+	// DaemonFailed means docker.service is failed after enabling: the daemon
+	// started and exited, so the socket cannot serve it even though it is
+	// active. This is not a permission or a missing unit; it is a daemon that
+	// will not stay up, so retrying will not help.
+	DaemonFailed bool
 }
 
 // ErrDockerNewLogin means this session cannot access the enabled Docker socket.
@@ -774,7 +785,17 @@ func dockerUnits(ctx context.Context) (DockerState, error) {
 			return state, fmt.Errorf("%s did not report a valid LoadState", unit)
 		}
 		switch active {
-		case "inactive", "failed":
+		case "failed":
+			// Only the service failing means the daemon started and exited:
+			// the socket may be active but cannot serve a daemon systemd has
+			// marked failed, so readiness is false and retrying will not help.
+			// A failed socket alone is reported below as NoAccess/NeedsLogin.
+			if unit == "docker.service" {
+				state.DaemonFailed = true
+			}
+		case "inactive":
+			// A stopped unit is not running; leave Active false. Listed
+			// explicitly so it is not treated as unknown by the default.
 		case "active", "reloading", "activating", "deactivating", "maintenance", "refreshing":
 			state.Active = true
 		default:
@@ -914,6 +935,24 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 		if enabled && strings.Contains(err.Error(), ubluehelper.DockerSELinuxStorePrefix) {
 			return &PrerequisiteError{Message: DockerSELinuxStoreUnavailable, Err: err}
 		}
+		if enabled && !pkexec.IsAuthDismissed(err) {
+			// systemctl start fails when dockerd exits before it is ready (#797);
+			// a service systemd has marked failed cannot be retried into health,
+			// so read the units again and name the real condition instead of the
+			// generic "socket did not respond" that would send the user in a
+			// circle. The socket never answers the readiness ping a healthy daemon
+			// would answer, so this unit read is what can see the failed service.
+			// A dismissed prompt is excluded: the helper never ran, so a failed
+			// service on disk is stale from an earlier attempt and reading it
+			// would answer the user's cancellation with a diagnosis of a daemon
+			// this run never started. The dismissal keeps its own brief toast.
+			readCtx, cancel := context.WithTimeout(ctx, statusTimeout)
+			after, unitErr := dockerUnits(readCtx)
+			cancel()
+			if unitErr == nil && after.DaemonFailed {
+				return &PrerequisiteError{Message: DockerDaemonFailedRecovery, Err: err}
+			}
+		}
 		return err
 	}
 	if enabled {
@@ -935,6 +974,21 @@ func setDocker(ctx context.Context, enabled bool, progress func(string), apply f
 	}
 	if enabled {
 		state, err = DockerStatus(ctx)
+		if state.DaemonFailed {
+			// The daemon started and exited: the socket is active but cannot
+			// serve it, so a plain "socket did not respond" would mislead the
+			// user into retrying. Name the real condition and point at the
+			// journal, which records why dockerd quit. Check this before the
+			// ping error: a dead daemon stalls that ping, and the unit state is
+			// the only thing left that can see the failure (#797).
+			// The ping error and any CLI failure ride along on Err: the message
+			// is what the user reads, Err is what the log keeps, and dropping
+			// either here would hide the raw cause #797 reported.
+			return &PrerequisiteError{
+				Message: DockerDaemonFailedRecovery,
+				Err:     errors.Join(errors.New("docker.service failed to stay running"), err, cliErr),
+			}
+		}
 		if err != nil {
 			return errors.Join(err, cliErr)
 		}

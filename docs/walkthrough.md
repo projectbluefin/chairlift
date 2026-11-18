@@ -19,7 +19,8 @@ schedule choosers, no feature grids.
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
 the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
-Bluefin wordmark, an introduction confirming the system is ready and guiding
+running distribution's wordmark (Bazzite, Aurora, or the default Bluefin
+mark), an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
 and the Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform actions. **Bluefin CLI** is selected by
@@ -37,7 +38,7 @@ error toast. **Dismiss Setup**
 
 ![Updates](screenshots/1-updates.png)
 
-The Bluefin wordmark leads the page, with the one action button directly
+The running image's wordmark leads the page, with the one action button directly
 under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
@@ -424,13 +425,15 @@ if no Kickoff applet is present, the group reports unavailable instead of
 pretending the setting can be applied. Search all 3,461 brands
 [Simple Icons](https://simpleicons.org/) publishes — your project, your
 employer, whatever you answer to — and Control Center fetches the one you pick.
-You set it once; it never changes on its own, because a personal mark that
-rotated would stop being personal. Turning the mark off resets the Kickoff applet
-to Plasma's default icon.
+ASUS installs the Republic of Gamers eye rather than the ASUS logotype, which is
+illegible at button size. You set it once; it never changes on its own, because a
+personal mark that rotated would stop being personal. Turning the mark off resets
+the Kickoff applet to Plasma's default icon.
 
 On GNOME, **Top Bar Icon** puts a foundation's mark in the top bar:
 CNCF, the Linux Foundation, GNOME, freedesktop.org, Apache, Rust, Universal
-Blue, Bazzite, Aurora, or the Open Gaming Collective. This section is omitted
+Blue, Bazzite, Aurora, the Open Gaming Collective, ASUS, or Framework. ASUS
+shows the Republic of Gamers eye. This section is omitted
 on Plasma, which has no corresponding top-bar surface. On a gaming image the
 collective's mark is the one you start with, since that is whose work the
 image ships — pick any other and it stays picked.

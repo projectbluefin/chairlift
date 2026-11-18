@@ -7,3 +7,18 @@ Project Bluefin Brand Artwork Attribution & Licensing
 - `internal/firstrun/assets/bluefin-wordmark-light.svg`
   Source: https://github.com/projectbluefin/website (public/brands/bluefin-wordmark-light.svg)
   Attribution: Project Bluefin artwork
+
+- `internal/firstrun/assets/bazzite-wordmark-dark.svg`
+  Source: https://github.com/ublue-os/bazzite (press_kit/Bazzite_Color_Long.svg)
+  License: Apache License 2.0 (Universal Blue project artwork)
+
+- `internal/firstrun/assets/bazzite-wordmark-light.svg`
+  Source: https://github.com/ublue-os/bazzite (press_kit/Bazzite_Color_Long_Light_BG.svg)
+  License: Apache License 2.0 (Universal Blue project artwork)
+
+- `internal/firstrun/assets/aurora-wordmark.svg`
+  Source: https://github.com/get-aurora-dev/common (logos/aurora-banner.svg)
+  License: Apache License 2.0 (Universal Blue project artwork)
+
+The Bazzite and Aurora names and logos are marks of their projects, shown only
+to identify the running system.

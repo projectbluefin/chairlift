@@ -198,6 +198,72 @@ func TestFlatpakEmptyCheckPreservesRemoteFailures(t *testing.T) {
 	}
 }
 
+// Issue #810: an OCI remote lists an application whose deployed image is
+// already current, so `flatpak update` applies nothing while the update
+// inventory still shows it. That phantom must not reach Check's items;
+// otherwise every run applies nothing and the coordinator reports it as a
+// failed update. A differing checksum, even with the same version, is real
+// work and is still offered.
+func TestFlatpakCheckDropsOnlyPhantomOCIUpdates(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	tests := []struct {
+		name         string
+		remoteRow    string
+		installedRow string
+		wantItems    []updateflow.Item
+	}{
+		{
+			name:         "OCI alt-id matches the remote checksum",
+			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa`,
+			wantItems:    nil,
+		},
+		{
+			name:         "OSTree active commit matches the remote checksum",
+			remoteRow:    `Firefox\torg.mozilla.firefox\t131.0\taaaaaaaaaaaa\tx86_64\tstable`,
+			installedRow: `org.mozilla.firefox\tx86_64\tstable\taaaaaaaaaaaa\tcurrent`,
+			wantItems:    nil,
+		},
+		{
+			name:         "rebuild keeps the version but changes the checksum",
+			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.1\tbbbbbbbbbbbb\tx86_64\tmaster`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
+			wantItems: []updateflow.Item{{
+				ID: "com.mitchellh.ghostty", Name: "Ghostty", AvailableVersion: "1.3.1", Scope: "user",
+			}},
+		},
+		{
+			name:         "new version and checksum",
+			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.2\tbbbbbbbbbbbb\tx86_64\tmaster`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
+			wantItems: []updateflow.Item{{
+				ID: "com.mitchellh.ghostty", Name: "Ghostty", AvailableVersion: "1.3.2", Scope: "user",
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			writeStub(t, "flatpak", `case "$1" in
+remotes) if [ "$2" = --user ]; then printf 'tuna-os\n'; fi ;;
+remote-ls) printf '`+tt.remoteRow+`\n' ;;
+list) printf '`+tt.installedRow+`\n' ;;
+*) exit 1 ;;
+esac
+`)
+
+			got, err := NewFlatpak().Check(context.Background())
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+			if !reflect.DeepEqual(got.Items, tt.wantItems) {
+				t.Fatalf("Check() items = %#v, want %#v", got.Items, tt.wantItems)
+			}
+		})
+	}
+}
+
 func TestFlatpakUnavailable(t *testing.T) {
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return false },

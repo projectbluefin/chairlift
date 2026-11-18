@@ -13,6 +13,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
+	"github.com/projectbluefin/chairlift/internal/imageinfo"
 	"github.com/projectbluefin/chairlift/internal/notify"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 	"github.com/projectbluefin/chairlift/internal/ubluehelper"
@@ -39,9 +40,10 @@ type UpdateShell struct {
 	toasts              ToastAdder
 	snapshot            updateflow.Snapshot
 	sources             []updateflow.SourceState
+	sourceRows          map[updateflow.SourceID]*sourceRow
+	brand               firstrun.ImageBrand
 	lastPhase           updateflow.Phase
 	havePhase           bool
-	sourceRows          map[updateflow.SourceID]*sourceRow
 	compactMode         bool
 	lifecycle           context.Context
 	cancel              context.CancelFunc
@@ -94,6 +96,7 @@ func (s *UpdateShell) SetOnUpdateFinished(fn func(updateflow.Snapshot)) {
 // the host cannot back is not reported as disabled by the administrator.
 func NewUpdateShell(
 	coordinator *updateflow.Coordinator,
+	brand firstrun.ImageBrand,
 	preferences func() userprefs.Values,
 	policy func() map[updateflow.SourceID]updateflow.Policy,
 	toasts ToastAdder,
@@ -102,6 +105,7 @@ func NewUpdateShell(
 	lifecycle, cancel := context.WithCancel(context.Background())
 	s := &UpdateShell{
 		coordinator: coordinator,
+		brand:       brand,
 		preferences: preferences,
 		policy:      policy,
 		toasts:      toasts,
@@ -620,8 +624,15 @@ func (s *UpdateShell) build() {
 	s.appsGroup = view.AppsGroup
 
 	s.styleManager = adw.StyleManagerGetDefault()
-	lightPath, lightErr := firstrun.AssetPath(firstrun.AssetWordmarkLight)
-	darkPath, darkErr := firstrun.AssetPath(firstrun.AssetWordmarkDark)
+	brand := s.brand
+	if brand.Name == "" {
+		brand = firstrun.BrandForImage(imageinfo.Info{})
+	}
+	if s.wordmark != nil {
+		SetAccessibleLabel(s.wordmark, brand.Name)
+	}
+	lightPath, lightErr := firstrun.AssetPath(brand.LightAsset)
+	darkPath, darkErr := firstrun.AssetPath(brand.DarkAsset)
 	if lightErr != nil || darkErr != nil {
 		log.Printf("updates: loading wordmark: %v, %v", lightErr, darkErr)
 	}

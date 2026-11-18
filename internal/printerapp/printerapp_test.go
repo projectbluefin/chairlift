@@ -103,7 +103,7 @@ func TestPrinterStateFollowsXDGDataHome(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantVolume := fmt.Sprintf("Volume=%q\n", volumeHome+"/chairlift/printers/ghostscript/ghostscript:/var/lib/ghostscript-printer-app:z")
+			wantVolume := fmt.Sprintf("Volume=%s\n", volumeHome+"/chairlift/printers/ghostscript/ghostscript:/var/lib/ghostscript-printer-app:z")
 			if !strings.Contains(string(unit), wantVolume) {
 				t.Fatalf("unit does not mount the created data directory: %s", unit)
 			}
