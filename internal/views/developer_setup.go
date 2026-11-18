@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	"fmt"
 
 	"codeberg.org/puregotk/puregotk/v4/adw"
@@ -131,24 +132,58 @@ func (uh *UserHome) developerPostTasks(enabled, succeeded bool) []devsetup.Task 
 		task := devsetup.Task{Stage: stage, Optional: true}
 		switch stage {
 		case devsetup.Devcontainer:
-			task.Run = func() error { return homebrew.Install(devsetup.DevcontainerPackage, false) }
+			task.Run = uh.withUpdateShellAdmission("Installing the Dev Container CLI", func() error {
+				return homebrew.Install(devsetup.DevcontainerPackage, false)
+			})
 		case devsetup.Pulp:
 			task.Run = developerfeeds.Provision
 		case devsetup.Feeds:
 			task.Run = developerfeeds.StageOPML
 		case devsetup.Apps:
 			paths := uh.developerBundlePaths()
-			task.Run = func() error {
+			task.Run = uh.withUpdateShellAdmission("Installing the developer app collection", func() error {
 				bundle, err := developerAppsBundle(paths)
 				if err != nil {
 					return err
 				}
-				return homebrew.BundleInstall(bundle.Path)
-			}
+				_, err = homebrew.BundleInstallTrusted(bundle.Path)
+				return err
+			})
 		}
 		tasks = append(tasks, task)
 	}
 	return tasks
+}
+
+// errHomebrewBusy reports a setup step that did not start because the update
+// shell already owns the machine. Its task stays retryable, like every other
+// optional setup failure.
+var errHomebrewBusy = errors.New("homebrew is busy; try again after the current update or cleanup finishes")
+
+// withUpdateShellAdmission admits one Homebrew install into the same mutation
+// admission Free Up Space and the update run use, so `brew cleanup` cannot
+// start beside it (#817). The task runs in a worker and the admission lives
+// on the GTK main thread, so the worker hands both transitions there and
+// waits for them: an admission that returned early would not order the two.
+// Both transitions run before the task's outcome is reported, so a failure,
+// a preview, or a dismissed prompt never leaves the admission held.
+func (uh *UserHome) withUpdateShellAdmission(title string, run func() error) func() error {
+	return func() error {
+		admitted := make(chan bool, 1)
+		sgtk.RunOnMainThread(func() { admitted <- uh.updateShell.beginMutation(title) })
+		if !<-admitted {
+			return errHomebrewBusy
+		}
+		defer func() {
+			released := make(chan struct{})
+			sgtk.RunOnMainThread(func() {
+				uh.updateShell.finishMutation()
+				close(released)
+			})
+			<-released
+		}()
+		return run()
+	}
 }
 
 func setupStages(access bool, tasks []devsetup.Task) []devsetup.Stage {

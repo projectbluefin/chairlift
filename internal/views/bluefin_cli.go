@@ -9,6 +9,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"log"
 )
 
@@ -190,6 +191,17 @@ func (uh *UserHome) runBluefinCLI(on bool, done func(bool)) {
 		}
 		return
 	}
+	// Enabling installs Homebrew packages, so it shares the update shell's
+	// one admission with Free Up Space and the update run: neither may start
+	// `brew cleanup` beside it (#817).
+	if !uh.updateShell.beginMutation("Updating the Bluefin CLI") {
+		cli.gate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		if done != nil {
+			done(false)
+		}
+		return
+	}
 	cli.toggle.widget.SetSensitive(false)
 	cli.spinner.Start()
 	cli.row.SetSubtitle("Updating Bash setup…")
@@ -215,6 +227,7 @@ func (uh *UserHome) runBluefinCLI(on bool, done func(bool)) {
 			}
 		}
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			cli.gate.Reset()
 			cli.spinner.Stop()
 			cli.state, cli.err = state, statusErr

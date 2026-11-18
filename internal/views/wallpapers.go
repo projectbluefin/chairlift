@@ -117,7 +117,15 @@ func (uh *UserHome) runWallpaperInstall() {
 	if !uh.wallpaperGate.TryStart() {
 		return
 	}
+	// The wallpaper setup installs Homebrew casks, so it must not start beside
+	// Free Up Space's `brew cleanup` or an update run (#817).
+	if !uh.updateShell.beginMutation("Installing wallpaper setup") {
+		uh.wallpaperGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	if !uh.wallpaperActivity.begin("More Dinosaurs", valhalla.Stages[:], false, uh.runWallpaperInstall) {
+		uh.updateShell.finishMutation()
 		uh.wallpaperGate.Reset()
 		return
 	}
@@ -138,6 +146,7 @@ func (uh *UserHome) runWallpaperInstall() {
 		cancel()
 		preview := dryrun.Enabled()
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			uh.wallpaperGate.Reset()
 			uh.wallpaperActivity.finish(devsetup.Result{Err: err}, preview)
 			if uh.wallpaperDisposed {

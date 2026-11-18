@@ -151,24 +151,27 @@ observations are different states.
 `updateflow.Coordinator` owns source inventory, phases, mutation admission and
 the badge. `updateproviders` wraps existing integrations; the coordinator runs no
 commands itself. `updatepresent` maps snapshots to text/actions; `UpdateShell`
-renders them. Manual updates, staging and image switches share admission, not
-parallel state owners. Admission waits for source readiness and excludes checks,
-other mutations and an in-flight restart; controls remain gated across snapshot
-refreshes. Failed checks preserve known state; partial applies keep only
-failed/pending work for retry. Restart requires an observed requirement,
-not merely a successful staging command.
+renders them. Manual updates, staging, image switches and Homebrew installs
+share admission, not parallel state owners. Admission waits for source
+readiness and excludes checks, other mutations and an in-flight restart;
+controls remain gated across snapshot refreshes. Failed checks preserve known
+state; partial applies keep only failed/pending work for retry. Restart
+requires an observed requirement, not merely a successful staging command.
 
 OS reads are unprivileged. On composefs hosts `internal/bootc` reads deployment
-state and registry digests; other hosts use bootc's read commands. Staging still
-uses the image-owned fixed script, not a new `bootc upgrade` executor. SBOM
-comparison fetches only on explicit Compare and rejects stale image-pair results.
+state and registry digests; on ostree hosts it reads the booted deployment's
+`.origin`, `IMAGE_VERSION`, and the staged marker; other hosts use bootc's read
+commands. Staging still uses the image-owned fixed script, not a new
+`bootc upgrade` executor. SBOM comparison fetches only on explicit Compare and
+rejects stale image-pair results.
 
 Manual Free Up Space and post-update maintenance share
-`updateproviders.CleanupGroup` and the typed cleanup runner. Report skipped,
-failed and completed work distinctly; never invent reclaimed bytes. Powerwash
-and Factory Reset are opt-in, require destructive confirmation and keep fixed
-scope. Factory Reset is unavailable on composefs; rollback does not itself
-restart the computer.
+`updateproviders.CleanupGroup` and the typed cleanup runner, and Free Up Space
+refuses while an update or a Homebrew install holds update-shell admission.
+Report skipped, failed and completed work distinctly; never invent reclaimed
+bytes. Powerwash and Factory Reset are opt-in, require destructive
+confirmation and keep fixed scope. Factory Reset is unavailable on composefs;
+rollback does not itself restart the computer.
 
 ### App collections
 
@@ -176,8 +179,10 @@ Apps collections expose entry-by-entry checkboxes and a one-way Select All,
 with one Install action for the destination's checked entries. Installed entries
 are observed, not reinstall selections; failed inventory reads preserve known
 state. A safe, fully selected collection retains its Brewfile/tap declarations
-through `brew bundle`; partial selections install only selected entries with
-per-item commands. Preview runs neither path and does not mark entries installed.
+through `brew bundle`, tapping and trusting only the taps the Brewfile marks
+trusted before its casks load; partial selections install only selected entries
+with per-item commands. Both paths share update-shell admission. Preview runs
+neither path and does not mark entries installed.
 Selection, planning and observed status belong to
 [`bundleview`](../../internal/views/bundleview/) and
 [`bundle_install.go`](../../internal/views/bundle_install.go).
@@ -268,7 +273,9 @@ rotation; `internal/deskenv` selects supported desktop surfaces and the native
 settings backend. Page load does not apply selections. Defaults and existing-unit
 reconciliation use narrowly guarded paths, not general load-time repair.
 `internal/avatar` applies profile pictures; `internal/valhalla` owns explicit
-wallpaper setup. Neither feature promises readiness from package presence alone.
+wallpaper setup, installs its payload cask from `projectbluefin/tap`, and
+replaces a legacy `ublue-os/tap` receipt of the same token once before install.
+Neither feature promises readiness from package presence alone.
 
 `internal/printerapp` owns rootless printer quadlets. Verify publishing identity
 and pin the verified digest before writing/enabling or refreshing a unit. Bind

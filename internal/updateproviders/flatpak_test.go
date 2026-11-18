@@ -13,22 +13,13 @@ import (
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
 
-// brokenRemoteStub is a flatpak stand-in for issue #471: the user
-// installation has flathub and a leftover test-center remote whose host no
-// longer resolves, the system installation has no remotes, and appOrigins is
-// the origin remotes of the installed applications. A runtime from
-// test-center is installed as well — the usual leftover of an application
-// uninstalled without `--unused` — so an origin listing without `--app` also
-// names test-center. flathub reports a Firefox update until `update` runs.
-func brokenRemoteStub(appOrigins string) string {
+// brokenRemoteStub models a healthy flathub and unreachable test-center remote.
+// origins lists every installed ref's origin, including runtimes.
+func brokenRemoteStub(origins string) string {
 	return `state="${0%/*}/updated"
 case "$1" in
 remotes) [ "$2" = --user ] && printf 'flathub\ntest-center\tno-gpg-verify\n' ;;
-list)
-	case "$*" in
-	*--app*) printf '` + appOrigins + `' ;;
-	*) printf '` + appOrigins + `test-center\n' ;;
-	esac ;;
+list) case "$*" in *--columns=origin*) printf '` + origins + `' ;; esac ;;
 update) : > "$state" ;;
 remote-ls)
 	case "$6" in
@@ -41,10 +32,7 @@ exit 0
 `
 }
 
-// Issue #471: a leftover remote no installed application comes from — even
-// one still serving a runtime — must not fail the Applications check or the
-// post-apply reconciliation, and the healthy remote's update must still be
-// offered and verified.
+// A remote with no installed refs must not fail the check or reconciliation.
 func TestFlatpakIgnoresABrokenUnusedRemoteEndToEnd(t *testing.T) {
 	dryrun.Set(false)
 	t.Cleanup(func() { dryrun.Set(false) })
@@ -231,7 +219,7 @@ func TestFlatpakCheckDropsOnlyPhantomOCIUpdates(t *testing.T) {
 			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.1\tbbbbbbbbbbbb\tx86_64\tmaster`,
 			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
 			wantItems: []updateflow.Item{{
-				ID: "com.mitchellh.ghostty", Name: "Ghostty", AvailableVersion: "1.3.1", Scope: "user",
+				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", AvailableVersion: "1.3.1", Scope: "user",
 			}},
 		},
 		{
@@ -239,7 +227,7 @@ func TestFlatpakCheckDropsOnlyPhantomOCIUpdates(t *testing.T) {
 			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.2\tbbbbbbbbbbbb\tx86_64\tmaster`,
 			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
 			wantItems: []updateflow.Item{{
-				ID: "com.mitchellh.ghostty", Name: "Ghostty", AvailableVersion: "1.3.2", Scope: "user",
+				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", AvailableVersion: "1.3.2", Scope: "user",
 			}},
 		},
 	}
@@ -516,9 +504,9 @@ func TestFlatpakApplyReportsUnchangedWhenUpdatesRemain(t *testing.T) {
 	}
 }
 
-func TestFlatpakApplyReportsUnchangedWhenEitherScopeRemains(t *testing.T) {
+func TestFlatpakApplyRetainsOnlyTheScopeThatRemains(t *testing.T) {
 	// One scope applied and the other did not: the source as a whole is not
-	// complete, so the coordinator must keep its entries pending.
+	// complete, so only the remaining scope belongs in the retry.
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return true },
 		ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
@@ -534,8 +522,8 @@ func TestFlatpakApplyReportsUnchangedWhenEitherScopeRemains(t *testing.T) {
 		{Name: "User App", Scope: "user"},
 		{Name: "System App", Scope: "system"},
 	}, nil)
-	if err != nil {
-		t.Fatalf("Apply() error = %v", err)
+	if err == nil || len(result.PendingItems) != 1 || result.PendingItems[0].Scope != "system" {
+		t.Fatalf("Apply() = %+v, %v; want only system work pending", result, err)
 	}
 	if result.Changed {
 		t.Fatalf("Apply() result = %#v, want unchanged when a scope remains", result)

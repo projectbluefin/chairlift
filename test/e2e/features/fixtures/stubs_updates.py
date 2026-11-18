@@ -84,6 +84,9 @@ list)
     esac
     exit 0 ;;
 remote-ls)
+    if [ -f "$state/flatpak-runtime-only" ]; then
+        case " $* " in *' --all '*) ;; *) exit 0 ;; esac
+    fi
     for arg in "$@"; do remote=$arg; done
     if [ "$remote" = test-center ]; then
         echo "error: Unable to load summary from remote test-center: Could not resolve hostname" >&2
@@ -157,6 +160,18 @@ def flatpak_one_update(context):
 @stub("updates-flatpak-current")
 def flatpak_current(context):
     """Flatpak installed with nothing to update in either installation."""
+    _install_flatpak(context)
+
+
+@stub("updates-flatpak-runtime-only")
+def flatpak_runtime_only(context):
+    """Only a runtime has an update; app-only queries return nothing."""
+    write_state(context, "flatpak-runtime-only", "")
+    write_state(
+        context,
+        "flatpak-remote-ls-user",
+        "Freedesktop Platform\torg.freedesktop.Platform\t26.08\tnew\tx86_64\t26.08\n",
+    )
     _install_flatpak(context)
 
 

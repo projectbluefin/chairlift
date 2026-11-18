@@ -10,6 +10,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/flatpak"
 	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/views/bundleview"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 	"github.com/projectbluefin/chairlift/internal/views/trustmsg"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -313,6 +314,15 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 		}
 		return
 	}
+	// A collection install runs `brew` for minutes, and Free Up Space's
+	// `brew cleanup` and an update run must not start beside it, so it takes
+	// the update shell's one mutation admission (#817). Every path below
+	// releases it on the GTK thread before the run reports its result.
+	if !uh.updateShell.beginMutation("Installing app collections") {
+		uh.bundleInstallGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	task := uh.activities.Start("Installing app collections")
 	task.Working(bundleInstallStepText(0, len(plans), plans[0].item.title))
 	uh.setBundleInstallProgress(selection, true, 0, len(plans), plans[0].item.title)
@@ -331,7 +341,7 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 			}
 			var err error
 			if len(plan.plan.BundlePaths) > 0 {
-				err = installBundleWhole(plan.plan.BundlePaths)
+				err = installBundleWhole(plan.plan.BundlePaths, &outcome)
 			} else {
 				err = installBundleEntries(plan.item, plan.plan, &outcome)
 			}
@@ -351,6 +361,7 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 		}
 
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			defer uh.bundleInstallGate.Reset()
 			uh.setBundleInstallProgress(selection, false, len(plans), len(plans), "")
 			if dryrun.Enabled() {
@@ -383,12 +394,16 @@ func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection) {
 	}()
 }
 
-// installBundleWhole installs a collection as a whole through `brew bundle`,
-// which keeps the tap directives and the trust flags the collection's own
-// Brewfile carries.
-func installBundleWhole(paths []string) error {
+// installBundleWhole installs a collection as a whole through `brew bundle`.
+// Each Brewfile's own `tap "…", trusted: true` declarations are tapped and
+// trusted first, because `brew bundle install` does not apply that flag to a
+// tap that is already present (#816). Nothing the file does not declare is
+// tapped or trusted.
+func installBundleWhole(paths []string, outcome *bundleview.InstallOutcome) error {
 	for _, path := range paths {
-		if err := homebrew.BundleInstall(path); err != nil {
+		trusted, err := homebrew.BundleInstallTrusted(path)
+		outcome.TrustedTaps += trusted
+		if err != nil {
 			return err
 		}
 	}
