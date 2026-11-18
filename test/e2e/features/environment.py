@@ -243,7 +243,7 @@ def launch_app(context, binary):
             raise RuntimeError(f"ChairLift exited before becoming ready:\n{output}")
         if time.monotonic() > deadline:
             raise RuntimeError(f"ChairLift did not become ready in {STARTUP_TIMEOUT}s:\n{output}")
-        time.sleep(0.1)
+        time.sleep(0.02)
 
     # Load from the fixture, or the scenario is testing some other file.
     expected = f"Loaded config from {context.config_path}"
@@ -274,8 +274,14 @@ def launch_app(context, binary):
     focus_in_gnome_shell(context)
 
 
+SHELL_AVAILABLE = None
+
+
 def shell_eval(script):
     """Run script in GNOME Shell; None when no Shell owns the session bus."""
+    global SHELL_AVAILABLE
+    if SHELL_AVAILABLE is False:
+        return None
     result = subprocess.run(
         [
             "gdbus", "call", "--session",
@@ -289,7 +295,13 @@ def shell_eval(script):
         check=False,
     )
     if result.returncode != 0 and "ServiceUnknown" in result.stderr:
+        # In headless Mutter without GNOME Shell, cache ServiceUnknown
+        # if the session is not GNOME (XDG_CURRENT_DESKTOP is a colon-separated list).
+        desktops = os.environ.get("XDG_CURRENT_DESKTOP", "").split(":")
+        if "GNOME" not in desktops:
+            SHELL_AVAILABLE = False
         return None
+    SHELL_AVAILABLE = True
     return result.stdout
 
 
@@ -386,13 +398,21 @@ def stop_app(context):
 def kill_scenario_processes(journal_path):
     marker = f"CHAIRLIFT_ACTION_JOURNAL={journal_path}".encode()
     own = os.getpid()
-    for entry in os.listdir("/proc"):
-        if not entry.isdigit() or int(entry) == own:
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        pid = int(entry)
+        if pid == own:
             continue
         try:
             with open(f"/proc/{entry}/environ", "rb") as handle:
-                if marker not in handle.read().split(b"\0"):
-                    continue
-            os.kill(int(entry), signal.SIGKILL)
+                env_data = handle.read()
+            if marker not in env_data.split(b"\0"):
+                continue
+            os.kill(pid, signal.SIGKILL)
         except (OSError, ProcessLookupError):
             continue
