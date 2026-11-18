@@ -226,7 +226,7 @@ def _wallpaper_source(context):
 def livery_wallpaper(context):
     """Wallpaper setup is missing; every backend command is recorded privately."""
     _install(context)
-    _brew(context)
+    _brew(context, tap_installed=("projectbluefin/tap",))
     _flatpak(context, ())
     for program in ("rsvg-convert", "djxl", "avifdec"):
         fake_executable(context, program, _record_program(context, program) + "exit 42\n")

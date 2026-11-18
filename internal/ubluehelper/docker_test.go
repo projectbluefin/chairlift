@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"slices"
@@ -20,6 +21,9 @@ type fakeDockerHost struct {
 	selinux        bool
 	tools          bool // restorecon and semanage installed
 	equivalence    bool // the Root equivalence rule already exists
+	equivalenceErr error
+	// labels, when set, is LabelsResolve; nil leaves it unset.
+	labels         func() (bool, error)
 	localGroup     bool // docker already in /etc/group
 	imageGroup     bool // ensure copies docker from the image database
 	installed      bool
@@ -47,12 +51,13 @@ func (f *fakeDockerHost) host() DockerHost {
 		Semanage:         f.tools,
 		HasEquivalence: func(context.Context) (bool, error) {
 			f.calls = append(f.calls, "read equivalence")
-			return f.equivalence, nil
+			return f.equivalence, f.equivalenceErr
 		},
-		Root:     "/var/lib/chairlift/docker",
-		UnitDir:  "/etc/systemd/system",
-		IndexURL: "https://formulae.brew.sh/api/formula.jws.json",
-		Formulae: []string{"docker-engine", "containerd"},
+		LabelsResolve: f.labelsResolve(),
+		Root:          "/var/lib/chairlift/docker",
+		UnitDir:       "/etc/systemd/system",
+		IndexURL:      "https://formulae.brew.sh/api/formula.jws.json",
+		Formulae:      []string{"docker-engine", "containerd"},
 		Run: func(_ context.Context, _ io.Writer, name string, args ...string) error {
 			argv := strings.Join(append([]string{name}, args...), " ")
 			f.calls = append(f.calls, "run "+argv)
@@ -115,6 +120,16 @@ func (f *fakeDockerHost) host() DockerHost {
 			f.probes++
 			return f.running, f.runningErr
 		},
+	}
+}
+
+func (f *fakeDockerHost) labelsResolve() func(context.Context) (bool, error) {
+	if f.labels == nil {
+		return nil
+	}
+	return func(context.Context) (bool, error) {
+		f.calls = append(f.calls, "lookup labels")
+		return f.labels()
 	}
 }
 
@@ -600,4 +615,165 @@ func TestDockerRecoversFailedManagedUnitsBeforeRetrying(t *testing.T) {
 			})
 		}
 	}
+}
+
+// utahSemanageStderr is what `semanage fcontext -l -C` prints on Utah
+// (testing-20261117-d9e5ebb), whose semanage.conf sets
+// store-root=/usr/lib/selinux on the read-only /usr (projectbluefin/utah#551).
+const utahSemanageStderr = "ValueError: SELinux policy is not managed or store cannot be accessed.\n"
+
+func TestSemanageStoreUnmanagedMatchesOnlyTheStoreRefusal(t *testing.T) {
+	if !SemanageStoreUnmanaged([]byte(utahSemanageStderr)) {
+		t.Fatal("Utah's semanage refusal was not recognised")
+	}
+	for _, stderr := range []string{"", "ValueError: File context for /x already defined\n", "libsemanage.semanage_direct_commit: ...\n"} {
+		if SemanageStoreUnmanaged([]byte(stderr)) {
+			t.Fatalf("%q classified as an unmanaged store", stderr)
+		}
+	}
+}
+
+func TestSemanageStoreRootReadsTheTopLevelKey(t *testing.T) {
+	utah := "module-store = direct\nexpand-check=0\n[sefcontext_compile]\npath = /usr/sbin/sefcontext_compile\nargs = -r $@\n[end]\nstore-root=/usr/lib/selinux\n"
+	for conf, want := range map[string]string{
+		utah:                  "/usr/lib/selinux",
+		"# store-root=/x\n":   DefaultSemanageStoreRoot,
+		"":                    DefaultSemanageStoreRoot,
+		" store-root = /y \n": "/y",
+		"store-root=\n":       DefaultSemanageStoreRoot,
+	} {
+		if got := SemanageStoreRoot([]byte(conf)); got != want {
+			t.Errorf("SemanageStoreRoot(%q) = %q, want %q", conf, got, want)
+		}
+	}
+}
+
+func TestEquivalentLabelsComparesEveryProbe(t *testing.T) {
+	const root = "/var/lib/chairlift/docker"
+	// Utah without the rule, as matchpathcon reports it.
+	utah := func(path string) (string, error) {
+		switch {
+		case path == SELinuxSource:
+			return "system_u:object_r:bin_t:s0", nil
+		case strings.HasPrefix(path, SELinuxSource+"/"):
+			return "system_u:object_r:container_runtime_exec_t:s0", nil
+		default:
+			return "system_u:object_r:var_lib_t:s0", nil
+		}
+	}
+	// The same policy with root substituted by SELinuxSource, which is what
+	// a local or image-shipped equivalence does.
+	substituted := func(path string) (string, error) {
+		if rest, ok := strings.CutPrefix(path, root); ok {
+			path = SELinuxSource + rest
+		}
+		return utah(path)
+	}
+	// Only the root directory matches; the binaries would stay var_lib_t.
+	partial := func(path string) (string, error) {
+		if path == root {
+			path = SELinuxSource
+		}
+		return utah(path)
+	}
+	for name, test := range map[string]struct {
+		lookup func(string) (string, error)
+		want   bool
+	}{
+		"utah without the rule": {utah, false},
+		"equivalence in place":  {substituted, true},
+		"only the root matches": {partial, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := EquivalentLabels(root, test.lookup)
+			if err != nil || got != test.want {
+				t.Fatalf("EquivalentLabels = %t, %v; want %t", got, err, test.want)
+			}
+		})
+	}
+	lookupErr := errors.New("matchpathcon: not found")
+	if _, err := EquivalentLabels(root, func(string) (string, error) { return "", lookupErr }); !errors.Is(err, lookupErr) {
+		t.Fatalf("lookup failure = %v, want it reported", err)
+	}
+}
+
+func TestEnableDockerRefusesAnUnmanagedSELinuxStoreBeforeDownloading(t *testing.T) {
+	storeErr := fmt.Errorf("%w: store-root /usr/lib/selinux is on a read-only file system", ErrSELinuxStoreUnmanaged)
+	fake := &fakeDockerHost{selinux: true, tools: true, equivalenceErr: storeErr, installChanged: true,
+		labels: func() (bool, error) { return false, nil }}
+	err := EnableDocker(t.Context(), fake.host(), "dev", false, io.Discard)
+	if !errors.Is(err, ErrSELinuxStoreUnmanaged) || !strings.HasPrefix(err.Error(), DockerSELinuxStorePrefix) {
+		t.Fatalf("error = %v, want the unmanaged-store refusal at the start of the message", err)
+	}
+	if !strings.Contains(err.Error(), "/usr/lib/selinux is on a read-only file system") {
+		t.Fatalf("error = %v, lost the store-root detail", err)
+	}
+	// Nothing downloaded, written, or started for a runtime that could not run.
+	assertCalls(t, fake.calls, []string{"lookup labels", "read equivalence"})
+}
+
+func TestEnableDockerKeepsOtherSemanageFailuresGeneric(t *testing.T) {
+	fake := &fakeDockerHost{selinux: true, tools: true, equivalenceErr: errors.New("exit status 1: boom")}
+	err := EnableDocker(t.Context(), fake.host(), "dev", false, io.Discard)
+	if err == nil || errors.Is(err, ErrSELinuxStoreUnmanaged) || !strings.Contains(err.Error(), "reading SELinux file contexts: exit status 1: boom") {
+		t.Fatalf("error = %v, want the generic read failure", err)
+	}
+	assertCalls(t, fake.calls, []string{"read equivalence"})
+}
+
+func TestEnableDockerSkipsTheRuleOnlyWhenTheLabelsAlreadyResolve(t *testing.T) {
+	const add = "run semanage fcontext -a -e /usr/libexec/docker /var/lib/chairlift/docker"
+	const relabel = "run restorecon -RF /var/lib/chairlift/docker"
+	for _, test := range []struct {
+		name     string
+		labels   func() (bool, error)
+		storeErr error
+		want     []string
+	}{
+		{name: "labels resolve, store unmanaged", labels: func() (bool, error) { return true, nil }, storeErr: ErrSELinuxStoreUnmanaged,
+			want: []string{"lookup labels", relabel}},
+		{name: "labels differ", labels: func() (bool, error) { return false, nil },
+			want: []string{"lookup labels", "read equivalence", add, relabel}},
+		{name: "lookup unavailable", labels: func() (bool, error) { return false, errors.New("matchpathcon missing") },
+			want: []string{"lookup labels", "read equivalence", add, relabel}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var out bytes.Buffer
+			fake := &fakeDockerHost{selinux: true, tools: true, localGroup: true, installChanged: true, labels: test.labels, equivalenceErr: test.storeErr}
+			if err := EnableDocker(t.Context(), fake.host(), "dev", false, &out); err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, call := range fake.calls {
+				if call == "lookup labels" || call == "read equivalence" || strings.Contains(call, "semanage") || strings.Contains(call, "restorecon") {
+					got = append(got, call)
+				}
+			}
+			if !slices.Equal(got, test.want) {
+				t.Fatalf("labelling = %v, want %v", got, test.want)
+			}
+			skipped := strings.Contains(out.String(), "no equivalence rule needed")
+			if skipped != !slices.Contains(got, "read equivalence") {
+				t.Fatalf("skip logged = %t for calls %v; output %q", skipped, got, out.String())
+			}
+		})
+	}
+}
+
+func TestUpdateDockerReadsTheSELinuxStoreOnlyForAChangedRuntime(t *testing.T) {
+	t.Run("unchanged", func(t *testing.T) {
+		fake := &fakeDockerHost{installed: true, selinux: true, tools: true, equivalenceErr: ErrSELinuxStoreUnmanaged}
+		if err := UpdateDocker(t.Context(), fake.host(), false, io.Discard); err != nil {
+			t.Fatalf("an update that installs nothing failed on the store: %v", err)
+		}
+		assertCalls(t, fake.calls, []string{"read manifest", "check units", "write units", "install"})
+	})
+	t.Run("changed", func(t *testing.T) {
+		fake := &fakeDockerHost{installed: true, installChanged: true, selinux: true, tools: true, equivalenceErr: ErrSELinuxStoreUnmanaged}
+		if err := UpdateDocker(t.Context(), fake.host(), false, io.Discard); !errors.Is(err, ErrSELinuxStoreUnmanaged) {
+			t.Fatalf("error = %v, want the unmanaged-store refusal", err)
+		}
+		// The daemon is not restarted onto a set that was never labelled.
+		assertCalls(t, fake.calls, []string{"read manifest", "check units", "write units", "install", "read equivalence"})
+	})
 }
