@@ -103,7 +103,10 @@ mutations. Preview changes no inventory. An unchanged apply is not completion.
 Source-specific check boundaries stay in their adapters:
 
 - [Flatpak](../../internal/updateproviders/flatpak.go) offers found updates
-  alongside named warnings only when the failures are exclusively per-remote.
+  for applications, runtimes and extensions in each installation. Individual
+  rows retain architecture and branch so parallel runtime branches stay distinct.
+  It reports updates alongside named warnings only when the failures are
+  exclusively per-remote.
   With no found updates, the original errors remain actionable failures;
   scope-discovery or cancellation errors fail the check even beside updates.
   Post-apply reconciliation must still succeed for every applied scope and

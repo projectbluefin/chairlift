@@ -248,7 +248,7 @@ esac`
 			},
 			// ListUpdates now ends with the installed-refs read it uses to
 			// drop phantom updates; TestUpdateListArgs covers remote-ls.
-			want: []string{"list", "--user", "--app", "--columns=application,arch,branch,active,options"},
+			want: []string{"list", "--user", "--all", "--columns=application,arch,branch,active,options"},
 		},
 		{name: "remove all user apps", run: RemoveAllUser, want: []string{"uninstall", "--user", "--all", "-y"}},
 	}
@@ -534,8 +534,8 @@ func TestUpdateListArgs(t *testing.T) {
 		user bool
 		want []string
 	}{
-		{name: "user installation", user: true, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version,commit,arch,branch", "--user", "flathub"}},
-		{name: "system installation", user: false, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version,commit,arch,branch", "--system", "flathub"}},
+		{name: "user installation", user: true, want: []string{"remote-ls", "--updates", "--all", "--columns=name,application,version,commit,arch,branch", "--user", "flathub"}},
+		{name: "system installation", user: false, want: []string{"remote-ls", "--updates", "--all", "--columns=name,application,version,commit,arch,branch", "--system", "flathub"}},
 	}
 
 	for _, tt := range tests {
@@ -620,28 +620,26 @@ func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
 	}
 	want := []string{
 		"remotes --user --columns=name,options",
-		"remote-ls --updates --app --columns=name,application,version,commit,arch,branch --user flathub",
-		"remote-ls --updates --app --columns=name,application,version,commit,arch,branch --user test-center",
-		"remote-ls --updates --app --columns=name,application,version,commit,arch,branch --user fedora",
-		"list --user --app --columns=application,arch,branch,active,options",
-		"list --user --app --columns=origin",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user flathub",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user test-center",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user fedora",
+		"list --user --all --columns=application,arch,branch,active,options",
+		"list --user --all --columns=origin",
 	}
 	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ListUpdates ran %q, want %q", got, want)
 	}
 }
 
-// The usual leftover of an application uninstalled without `--unused` is a
-// remote that still serves runtimes. The update inventory lists applications
-// only, so no update it could show comes from that remote: it is ignored like
-// an unused one rather than failing the check.
-func TestListUpdatesIgnoresABrokenRemoteServingOnlyRuntimes(t *testing.T) {
+// A remote serving only runtimes still supplies updates the user needs.
+func TestListUpdatesReportsABrokenRemoteServingOnlyRuntimes(t *testing.T) {
 	dryrun.Set(false)
 	fakeRemotesFlatpak(t, `flathub\nfedora\n`, `flathub\ntest-center\n`)
 
 	updates, err := ListUpdates(context.Background(), true)
-	if err != nil {
-		t.Fatalf("ListUpdates error = %v, want the runtime-only broken remote ignored", err)
+	var remoteErr *RemoteError
+	if !errors.As(err, &remoteErr) || remoteErr.Remote != "test-center" {
+		t.Fatalf("ListUpdates error = %v, want runtime remote failure", err)
 	}
 	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
 		t.Fatalf("ListUpdates = %#v, want %#v", updates, healthyRemoteUpdates)
