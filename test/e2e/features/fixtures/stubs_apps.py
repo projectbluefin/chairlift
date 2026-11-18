@@ -154,6 +154,8 @@ case "$1" in
 info)
     {info_fail}case "$*" in
     'info --json=v2 --formula just') echo '{{"formulae":[{{"name":"just","desc":"Save and run project commands"}}]}}' ;;
+    'info --json=v2 --cask projectbluefin/tap/bluefin-wallpapers-extra')
+        echo '{{"formulae":[],"casks":[{{"token":"bluefin-wallpapers-extra","full_token":"projectbluefin/tap/bluefin-wallpapers-extra","desc":"Extra Bluefin backgrounds","version":"fixture","installed":"fixture"}}]}}' ;;
     'info --json=v2 --cask ublue-os/tap/bluefin-wallpapers-extra'|'info --json=v2 --cask bluefin-wallpapers-extra')
         echo '{{"formulae":[],"casks":[{{"token":"bluefin-wallpapers-extra","full_token":"ublue-os/tap/bluefin-wallpapers-extra","desc":"Extra Bluefin backgrounds","version":"fixture","installed":"fixture"}}]}}' ;;
     *--formula*) cat <<'EOF'
@@ -182,7 +184,13 @@ trust)
         exit 0
     fi
     exit 0 ;;
-tap) echo 'ublue-os/tap'; exit 0 ;;
+list)
+    if [ "$2" = "--cask" ] && [ "$3" = "--full-name" ]; then
+        printf 'projectbluefin/tap/bluefin-wallpapers-extra\n'
+        exit 0
+    fi
+    exit 0 ;;
+tap) printf 'projectbluefin/tap\nublue-os/tap\n'; exit 0 ;;
 bundle)
     if [ "$2" = check ]; then
         {satisfied}echo "brew bundle can't satisfy your Brewfile's dependencies." >&2

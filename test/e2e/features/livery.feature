@@ -112,7 +112,7 @@ Feature: Livery
     Given ChairLift is running
     When I open the "Livery" page
     Then Flatpak was asked to "run --system --env=GSETTINGS_SCHEMA_DIR=/app/extra/valhalla --command=gsettings io.github.tunix.valhalla get io.github.tunix.valhalla active-source"
-    And Homebrew was asked to "--caskroom ublue-os/tap/bluefin-wallpapers-extra"
+    And Homebrew was asked to "--caskroom projectbluefin/tap/bluefin-wallpapers-extra"
     And the More Dinosaurs setup is checked
     And the More Dinosaurs setup is sensitive
     And the "More Dinosaurs" row does not say "(Installed)"
