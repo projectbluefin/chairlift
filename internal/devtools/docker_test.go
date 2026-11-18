@@ -383,6 +383,92 @@ func TestDockerEnableRequiresObservedReadinessAfterTheHelper(t *testing.T) {
 	}
 }
 
+func TestDockerDaemonFailedAfterEnableFailsIsReportedAsAPrerequisite(t *testing.T) {
+	// #797: dockerd exits during systemctl start, so the enable call fails and
+	// the service is left failed behind an active socket. A real failed daemon
+	// does not answer the readiness ping a healthy one would, so the unit read
+	// is what surfaces the condition. The current code returned the raw apply
+	// error here, which the user saw as a generic retry toast.
+	calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+	var dispatched []bool
+	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
+		dispatched = append(dispatched, enabled)
+		return errors.New("changing Docker daemon: systemctl start docker.service: exit status 1")
+	})
+	if len(dispatched) != 1 || !dispatched[0] {
+		t.Fatalf("enable dispatched %v, want one enable", dispatched)
+	}
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
+		t.Fatalf("apply failed with a failed service = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			t.Fatalf("activation ran a command outside the unit reads: %s", call)
+		}
+	}
+}
+
+// A dismissed password prompt ran nothing, so a docker.service the host already
+// carried as failed is stale state rather than this run's daemon. The #797
+// enrichment must not swallow the cancellation: the raw error is what the view
+// classifies through pkexec as "Authentication canceled", and reclassifying it
+// would answer a cancelled dialog with a diagnosis of a daemon never started.
+func TestDockerDismissedAuthIsNotReclassifiedAsDaemonFailure(t *testing.T) {
+	for _, failure := range []*ublue.Error{
+		{Message: "helper failed", Err: exec.Command("/bin/sh", "-c", "exit 126").Run()},
+		{Message: "Error executing command as another user: Request dismissed"},
+	} {
+		calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+		err := setDocker(context.Background(), true, nil, func(context.Context, bool) error { return failure })
+		var prerequisite *PrerequisiteError
+		if errors.As(err, &prerequisite) {
+			t.Fatalf("a dismissed prompt was reclassified as a daemon failure: %v", err)
+		}
+		if !errors.Is(err, failure) || !pkexec.IsAuthDismissed(err) {
+			t.Fatalf("the cancellation lost its own classification: %v", err)
+		}
+		assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+	}
+}
+
+// A daemon that starts and exits after a successful enable leaves docker.service
+// failed behind an active socket, and the socket then stalls the readiness ping
+// a healthy daemon answers. The unit state is the only thing that can see the
+// failure, so enable must report it as a prerequisite even though the ping
+// errors (#797).
+func TestDockerDaemonFailedAfterEnableStallsPingIsReportedAsAPrerequisite(t *testing.T) {
+	calls, _ := fakeSystemDocker(t, dockerReport("loaded", "failed"), dockerReport("loaded", "active"))
+	// A daemon systemd marked failed leaves the socket listening with no
+	// process behind it, so the readiness ping times out exactly as #797's did.
+	// The dial checks the fixed socket itself: routing through a live pingServer
+	// and then replacing the dial would silently drop that check.
+	dockerTestDial(t, func(_ context.Context, network, address string) (net.Conn, error) {
+		if network != "unix" || address != "/var/run/docker.sock" {
+			t.Errorf("Docker selected %s %s instead of the fixed system socket", network, address)
+		}
+		return nil, context.DeadlineExceeded
+	})
+	err := setDocker(context.Background(), true, func(string) {}, func(_ context.Context, enabled bool) error {
+		if !enabled {
+			t.Fatal("enable dispatched disable")
+		}
+		return nil
+	})
+	var prerequisite *PrerequisiteError
+	if !errors.As(err, &prerequisite) || prerequisite.Message != DockerDaemonFailedRecovery {
+		t.Fatalf("daemon failed with a stalled ping = %v, want prerequisite %q", err, DockerDaemonFailedRecovery)
+	}
+	if !errors.Is(prerequisite, context.DeadlineExceeded) {
+		t.Fatalf("the ping failure was dropped from the logged cause: %v", prerequisite.Err)
+	}
+	for _, call := range recordedCalls(t, calls) {
+		if call != dockerServiceCall && call != dockerSocketCall {
+			t.Fatalf("activation ran a command outside the unit reads: %s", call)
+		}
+	}
+}
+
 func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T) {
 	for _, enabled := range []bool{true, false} {
 		for _, code := range []int{1, 126, 127} {
@@ -393,7 +479,14 @@ func TestDockerHelperFailuresPreserveObservedStateAndOriginalErrors(t *testing.T
 			if err := setDocker(context.Background(), enabled, nil, func(context.Context, bool) error { return failure }); err != failure {
 				t.Fatalf("helper failure replaced: %v, want %v", err, failure)
 			}
-			assertCalls(t, calls, dockerServiceCall, dockerSocketCall)
+			// The enable path re-reads the units after a failed apply to check for a
+			// daemon that exited during start (#797). A dismissed prompt never ran
+			// the helper, so it reads once, like the disable path.
+			reads := []string{dockerServiceCall, dockerSocketCall}
+			if enabled && !pkexec.IsAuthDismissed(failure) {
+				reads = append(reads, dockerServiceCall, dockerSocketCall)
+			}
+			assertCalls(t, calls, reads...)
 			state, err := DockerStatus(context.Background())
 			if err != nil || !state.Active || !state.Ready {
 				t.Fatalf("failed/dismissed mutation changed observed state: %+v %v", state, err)

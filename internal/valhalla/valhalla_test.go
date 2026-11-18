@@ -20,6 +20,7 @@ type fixture struct {
 	root, data, folders, active string
 	calls                       []string
 	installed, access           bool
+	receipt                     string
 	fail, badOutput             string
 	untapped                    bool
 }
@@ -27,7 +28,7 @@ type fixture struct {
 func setup(t *testing.T) *fixture {
 	t.Helper()
 	base := t.TempDir()
-	f := &fixture{root: filepath.Join(base, "Caskroom", "bluefin-wallpapers-extra"), data: filepath.Join(base, "data"), folders: `['/existing, folder', '/quote\'s', '/back\\slash']`, active: "'wallhaven'"}
+	f := &fixture{root: filepath.Join(base, "Caskroom", "bluefin-wallpapers-extra"), data: filepath.Join(base, "data"), folders: `['/existing, folder', '/quote\'s', '/back\\slash']`, active: "'wallhaven'", receipt: WallpaperTap}
 	t.Setenv("HOME", filepath.Join(base, "home"))
 	t.Setenv("XDG_DATA_HOME", f.data)
 	if err := os.MkdirAll(filepath.Join(f.root, "2026-05-09", "images"), 0755); err != nil {
@@ -57,7 +58,13 @@ func setup(t *testing.T) *fixture {
 		if !cask && name != "librsvg" && name != "jpeg-xl" && name != "libavif" {
 			t.Fatalf("unexpected converter %q", name)
 		}
-		return f.failure("install-package")
+		if err := f.failure("install-package"); err != nil {
+			return err
+		}
+		if cask {
+			f.receipt = WallpaperTap
+		}
+		return nil
 	}
 	installFlatpak = func() error {
 		f.calls = append(f.calls, "install-flatpak flatpark "+AppID)
@@ -82,20 +89,29 @@ func setup(t *testing.T) *fixture {
 				if f.untapped {
 					return "", nil
 				}
-				return "ublue-os/tap\n", nil
+				return WallpaperTap + "\n", nil
+			}
+			if slices.Equal(args, []string{"list", "--cask", "--full-name"}) {
+				if f.receipt == "" {
+					return "", nil
+				}
+				return f.receipt + "/" + wallpaperToken + "\n", nil
+			}
+			if slices.Equal(args, []string{"uninstall", "--cask", legacyWallpaperCask}) {
+				return "", nil
 			}
 			if args[0] == "info" {
 				if f.untapped {
 					return "", errors.New("tap is not installed")
 				}
-				if !slices.Equal(args, []string{"info", "--json=v2", "--cask", "ublue-os/tap/bluefin-wallpapers-extra"}) {
-					return "multiple taps contain bluefin-wallpapers-extra", errors.New("ambiguous cask reference")
+				if !slices.Equal(args, []string{"info", "--json=v2", "--cask", ExtraWallpapersCask}) {
+					return "multiple taps contain " + wallpaperToken, errors.New("ambiguous cask reference")
 				}
 				return `{"casks":[{"token":"bluefin-wallpapers-extra","version":"9999","installed":"2026-05-09"}]}`, nil
 			}
 			if args[0] == "--caskroom" {
-				if !slices.Equal(args, []string{"--caskroom", "ublue-os/tap/bluefin-wallpapers-extra"}) {
-					return "multiple taps contain bluefin-wallpapers-extra", errors.New("ambiguous cask reference")
+				if !slices.Equal(args, []string{"--caskroom", ExtraWallpapersCask}) {
+					return "multiple taps contain " + wallpaperToken, errors.New("ambiguous cask reference")
 				}
 				return f.root + "\n", nil
 			}
@@ -454,5 +470,113 @@ func TestSlideshowFailedTapObservationIsNotAbsent(t *testing.T) {
 	f.fail = "brew tap"
 	if ready, err := Installed(context.Background()); ready || err == nil {
 		t.Fatalf("failed tap observation ready = %v, %v; want false with error", ready, err)
+	}
+}
+
+func TestWallpaperInstallUsesProjectBluefinCaskThroughout(t *testing.T) {
+	f := setup(t)
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	var sequence []string
+	for _, call := range f.calls {
+		switch {
+		case strings.HasPrefix(call, "tap "), strings.HasPrefix(call, "trust "), strings.HasPrefix(call, "install-package "):
+			sequence = append(sequence, call)
+		case strings.HasPrefix(call, "brew info "), strings.HasPrefix(call, "brew --caskroom "):
+			if !strings.Contains(call, ExtraWallpapersCask) {
+				t.Errorf("wallpaper read did not name the fully-qualified cask: %s", call)
+			}
+		}
+		if strings.Contains(call, legacyWallpaperTap) {
+			t.Errorf("legacy tap used without a legacy receipt: %s", call)
+		}
+	}
+	want := []string{"tap " + WallpaperTap, "trust " + ExtraWallpapersCask, "install-package " + ExtraWallpapersCask}
+	if !slices.Equal(sequence, want) {
+		t.Fatalf("installation sequence = %q, want %q", sequence, want)
+	}
+}
+
+func TestSlideshowLegacyReceiptIsNotReportedReady(t *testing.T) {
+	f := setup(t)
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := Installed(context.Background()); !ok || err != nil {
+		t.Fatalf("projectbluefin receipt ready = %v, %v", ok, err)
+	}
+	f.receipt = legacyWallpaperTap
+	if ok, err := Installed(context.Background()); ok || err != nil {
+		t.Fatalf("legacy receipt ready = %v, %v; want false, nil", ok, err)
+	}
+}
+
+func TestSlideshowMigratesALegacyReceiptOnceBeforeInstall(t *testing.T) {
+	f := setup(t)
+	f.receipt = legacyWallpaperTap
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	uninstalls, installs, trustAt, uninstallAt, installAt := 0, 0, -1, -1, -1
+	for i, call := range f.calls {
+		switch {
+		case strings.HasPrefix(call, "trust "):
+			trustAt = i
+		case strings.HasPrefix(call, "brew uninstall "):
+			uninstalls++
+			uninstallAt = i
+			if call != "brew uninstall --cask "+legacyWallpaperCask {
+				t.Errorf("migration argv = %q", call)
+			}
+		case strings.HasPrefix(call, "install-package "):
+			installs++
+			installAt = i
+		}
+	}
+	if uninstalls != 1 || installs != 1 {
+		t.Fatalf("migration/install counts = %d/%d, calls %q", uninstalls, installs, f.calls)
+	}
+	if trustAt >= uninstallAt || uninstallAt >= installAt {
+		t.Fatalf("migration is not between trust and install: %q", f.calls)
+	}
+	if ok, err := Installed(context.Background()); !ok || err != nil {
+		t.Fatalf("migrated setup ready = %v, %v", ok, err)
+	}
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	repeat := 0
+	for _, call := range f.calls {
+		if call == "brew uninstall --cask "+legacyWallpaperCask {
+			repeat++
+		}
+	}
+	if repeat != 1 {
+		t.Fatalf("legacy cask uninstalled %d times across two runs", repeat)
+	}
+}
+
+func TestSlideshowLegacyMigrationIsPreviewOnlyInDryRun(t *testing.T) {
+	f := setup(t)
+	f.receipt = legacyWallpaperTap
+	dryrun.Set(true)
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.calls) != 0 {
+		t.Fatalf("dry-run invoked commands: %q", f.calls)
+	}
+}
+
+func TestSlideshowFailedReceiptObservationIsNotAbsent(t *testing.T) {
+	f := setup(t)
+	f.installed = true
+	f.fail = "brew list"
+	if ready, err := Installed(context.Background()); ready || err == nil {
+		t.Fatalf("failed receipt observation ready = %v, %v; want false with error", ready, err)
 	}
 }

@@ -40,12 +40,19 @@ const (
 	ManualFoldersKey = "manual-folders"
 	// SchemaDir is the schema directory in the FlatPark application.
 	SchemaDir = "/app/extra/valhalla"
+	// WallpaperTap owns the collection's wallpaper cask on Bluefin.
+	WallpaperTap = "projectbluefin/tap"
 	// ExtraWallpapersCask is the collection's fixed Homebrew wallpaper payload.
-	ExtraWallpapersCask = wallpaperTap + "/bluefin-wallpapers-extra"
-	wallpaperTap        = "ublue-os/tap"
+	ExtraWallpapersCask = WallpaperTap + "/" + wallpaperToken
+	// legacyWallpaperTap is the tap earlier releases installed the same cask
+	// token from. Its receipt is migrated once, never trusted or preferred.
+	legacyWallpaperTap  = "ublue-os/tap"
+	wallpaperToken      = "bluefin-wallpapers-extra"
+	legacyWallpaperCask = legacyWallpaperTap + "/" + wallpaperToken
 
 	readTimeout       = 30 * time.Second
 	conversionTimeout = 2 * time.Minute
+	uninstallTimeout  = 2 * time.Minute
 )
 
 const (
@@ -139,8 +146,9 @@ func Install(ctx context.Context, report func(devsetup.Stage, devsetup.Status)) 
 		name string
 		run  func() error
 	}{
-		{"opening the wallpaper tap", func() error { return tap(wallpaperTap) }},
+		{"opening the wallpaper tap", func() error { return tap(WallpaperTap) }},
 		{"trusting the extra wallpaper cask", func() error { return trustCask(ExtraWallpapersCask) }},
+		{"replacing the legacy wallpaper cask", func() error { return migrateLegacyWallpaperCask(ctx, brew) }},
 		{"installing extra wallpapers", func() error { return installPackage(ExtraWallpapersCask, true) }},
 	} {
 		if err := ctx.Err(); err != nil {
@@ -200,7 +208,16 @@ func Installed(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if !slices.Contains(strings.Fields(taps), wallpaperTap) {
+	if !slices.Contains(strings.Fields(taps), WallpaperTap) {
+		return false, nil
+	}
+	// A copy whose receipt names another tap is not this setup: Homebrew treats
+	// the token as installed, so the cask must be replaced rather than upgraded.
+	receiptTap, err := installedCaskTap(ctx, brew)
+	if err != nil {
+		return false, err
+	}
+	if receiptTap != WallpaperTap {
 		return false, nil
 	}
 	art, err := installedArtwork(ctx, brew)
@@ -254,6 +271,41 @@ func Installed(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// installedCaskTap reports the tap recorded in the installed wallpaper cask's
+// receipt, or "" when no copy is installed. `brew list --cask --full-name`
+// resolves each installed cask from its own receipt rather than from the taps'
+// current definitions, so a token installed from another tap names that tap.
+func installedCaskTap(ctx context.Context, brew string) (string, error) {
+	out, err := command(ctx, readTimeout, brew, "list", "--cask", "--full-name")
+	if err != nil {
+		return "", err
+	}
+	for _, name := range strings.Fields(out) {
+		if tapName, ok := strings.CutSuffix(name, "/"+wallpaperToken); ok {
+			return tapName, nil
+		}
+	}
+	return "", nil
+}
+
+// migrateLegacyWallpaperCask removes the copy whose receipt names the legacy
+// tap before installing the projectbluefin cask. Homebrew treats a cask as
+// installed by token alone (Caskroom/<token>), so `brew install` routes the
+// qualified cask to `brew upgrade`, which does nothing when the versions match
+// and leaves the legacy receipt. This runs once, only for a receipt observed on
+// this host, and never touches ChairLift's prepared PNGs.
+func migrateLegacyWallpaperCask(ctx context.Context, brew string) error {
+	tapName, err := installedCaskTap(ctx, brew)
+	if err != nil {
+		return err
+	}
+	if tapName != legacyWallpaperTap {
+		return nil
+	}
+	_, err = command(ctx, uninstallTimeout, brew, "uninstall", "--cask", legacyWallpaperCask)
+	return err
+}
+
 func appInstalled(ctx context.Context) (bool, error) {
 	out, err := command(ctx, readTimeout, "flatpak", "list", "--system", "--app", "--columns=application")
 	if err != nil {
@@ -292,7 +344,7 @@ func installedArtwork(ctx context.Context, brew string) ([]artwork, error) {
 	}
 	version := ""
 	for _, cask := range info.Casks {
-		if cask.Token == "bluefin-wallpapers-extra" {
+		if cask.Token == wallpaperToken {
 			version = cask.Installed
 		}
 	}

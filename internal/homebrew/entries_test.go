@@ -452,3 +452,127 @@ func TestBundleContentsOnlyAllowsUnderstoodWholeFiles(t *testing.T) {
 		})
 	}
 }
+
+// tapInfoBrew points brew at a script that answers the trust store read and
+// the tap-info query, and records every argv it is given. The trust store
+// read answers empty, so a test can observe the trust it gains.
+func tapInfoBrew(t *testing.T, tapInfo string) string {
+	t.Helper()
+
+	script, argvLog := fakeBrewExecutable(t,
+		"case \"$1\" in\n  trust) printf '%s' '{\"taps\":[],\"formulae\":[],\"casks\":[]}' ;;\n  tap-info) printf '%s' '"+tapInfo+"' ;;\nesac\nexit 0")
+	withHostResolution(t, script, "")
+	return argvLog
+}
+
+// A tap the Brewfile declares trusted is trusted wholesale even when it is
+// already installed and untrusted: Homebrew applies the flag only while
+// tapping, which left every cask of an existing ublue-os/tap refused (#816).
+func TestPrepareTapTrustsAnExistingUntrustedTap(t *testing.T) {
+	argvLog := tapInfoBrew(t, `[{"name":"ublue-os/tap","installed":true,"trusted":false}]`)
+	store := TrustStore{}
+
+	change, err := PrepareTap("ublue-os/tap", &store)
+	if err != nil {
+		t.Fatalf("PrepareTap returned error: %v", err)
+	}
+	if change != TrustChangedTap {
+		t.Errorf("change = %v, want a tap trust", change)
+	}
+	if !store.TapTrusted("ublue-os/tap") {
+		t.Error("the tap must be recorded as trusted")
+	}
+	assertArgv(t, argvLog, []string{"tap-info --json ublue-os/tap", "trust --tap ublue-os/tap"})
+}
+
+// A tap that is not there yet is cloned before it is trusted.
+func TestPrepareTapClonesAMissingTapBeforeTrusting(t *testing.T) {
+	argvLog := tapInfoBrew(t, `[{"name":"ublue-os/tap","installed":false,"trusted":false}]`)
+	store := TrustStore{}
+
+	if _, err := PrepareTap("ublue-os/tap", &store); err != nil {
+		t.Fatalf("PrepareTap returned error: %v", err)
+	}
+	assertArgv(t, argvLog, []string{
+		"tap-info --json ublue-os/tap",
+		"tap ublue-os/tap",
+		"trust --tap ublue-os/tap",
+	})
+}
+
+// A tap brew already trusts needs nothing, and neither does one on a
+// Homebrew without a trust concept.
+func TestPrepareTapLeavesTrustedOrUntrustedHostsAlone(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		tapInfo string
+	}{
+		{"already trusted", `[{"name":"ublue-os/tap","installed":true,"trusted":true}]`},
+		{"no trust concept", `[{"name":"ublue-os/tap","installed":true}]`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			argvLog := tapInfoBrew(t, tc.tapInfo)
+			store := TrustStore{}
+
+			change, err := PrepareTap("ublue-os/tap", &store)
+			if err != nil {
+				t.Fatalf("PrepareTap returned error: %v", err)
+			}
+			if change != TrustUnchanged {
+				t.Errorf("change = %v, want no change", change)
+			}
+			assertArgv(t, argvLog, []string{"tap-info --json ublue-os/tap"})
+		})
+	}
+}
+
+// The Brewfile's declared taps must be tapped and trusted before
+// `brew bundle install` loads the collection's casks, and the count says how
+// many the trust store gained.
+func TestBundleInstallTrustsDeclaredTapsBeforeTheBundle(t *testing.T) {
+	argvLog := tapInfoBrew(t, `[{"name":"ublue-os/tap","installed":true,"trusted":false}]`)
+	path := filepath.Join(t.TempDir(), "ai-tools.Brewfile")
+	body := "tap \"ublue-os/tap\", trusted: true\n" +
+		"cask \"ublue-os/tap/goose-linux\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	trusted, err := BundleInstallTrusted(path)
+	if err != nil {
+		t.Fatalf("BundleInstallTrusted returned error: %v", err)
+	}
+	if trusted != 1 {
+		t.Errorf("trusted taps = %d, want 1", trusted)
+	}
+	assertArgv(t, argvLog, []string{
+		"trust --json=v1",
+		"tap-info --json ublue-os/tap",
+		"trust --tap ublue-os/tap",
+		"bundle install --file=" + path,
+	})
+}
+
+// A tap the Brewfile does not declare trusted is never trusted wholesale:
+// only the bundle install runs.
+func TestBundleInstallDoesNotTrustAnUndeclaredTap(t *testing.T) {
+	argvLog := tapInfoBrew(t, `[{"name":"anomalyco/tap","installed":true,"trusted":false}]`)
+	path := filepath.Join(t.TempDir(), "apps.Brewfile")
+	body := "tap \"anomalyco/tap\"\n" +
+		"brew \"anomalyco/tap/opencode\"\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	trusted, err := BundleInstallTrusted(path)
+	if err != nil {
+		t.Fatalf("BundleInstallTrusted returned error: %v", err)
+	}
+	if trusted != 0 {
+		t.Errorf("trusted taps = %d, want none", trusted)
+	}
+	assertArgv(t, argvLog, []string{
+		"trust --json=v1",
+		"bundle install --file=" + path,
+	})
+}

@@ -45,6 +45,19 @@ Feature: Updates
     And the "Developer Tools" row says "Up to date"
     And the Updates sidebar row shows no badge
     And the action journal is empty
+    And the Updates header displays the "Bluefin" logo
+
+  @stub.updates-image-bazzite @stub.updates-flatpak-current @stub.updates-brew-current
+  Scenario: On Bazzite the Updates header displays the Bazzite logo
+    Given ChairLift is running
+    Then the Updates header displays the "Bazzite" logo
+    And the Updates status starts with "Up to date · checked at"
+
+  @stub.updates-image-aurora @stub.updates-flatpak-current @stub.updates-brew-current
+  Scenario: On Aurora the Updates header displays the Aurora logo
+    Given ChairLift is running
+    Then the Updates header displays the "Aurora" logo
+    And the Updates status starts with "Up to date · checked at"
 
   @env.CHAIRLIFT_CAPABILITIES=image-descriptor,flatpak,brew,podman,bootc-stage
   @stub.updates-bootc-staged @stub.updates-flatpak-current @stub.updates-brew-current

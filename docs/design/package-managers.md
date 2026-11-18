@@ -122,9 +122,27 @@ process exit.
 
 [`UpdateShell`](../../internal/views/update_shell.go) renders snapshots through
 [`updatepresent`](../../internal/views/updatepresent/); it owns no parallel
-update counts or phase decisions. Individual updates, metadata refresh and OS
-mutations use the same admission boundary. Restart is a separate Operating
-System row action, not an automatic final step.
+update counts or phase decisions. Individual updates, metadata refresh, OS
+mutations and the Homebrew installs described below use the same admission
+boundary. Restart is a separate Operating System row action, not an automatic
+final step.
+
+[`flatpak.ListUpdates`](../../internal/flatpak/flatpak.go) drops a phantom
+application update that an OCI remote's `remote-ls --updates` lists when its
+checksum already matches the deployed image. Flatpak releases before upstream
+commit `a819741d13` compare the remote checksum, an image digest, to the
+deployed OSTree commit rather than the deployed alternative ID, so the entry
+never clears and every run applies nothing (issue #810). The installed identity
+is read per ref (`application/arch/branch`) from `list --columns=application,
+arch,branch,active,options`, and an update is dropped only when its remote
+checksum equals the deployed active commit or the deployed `alt-id` from the
+options column. A differing checksum stays a real update, including a rebuild
+that keeps the version; an update with no checksum or no matching ref is kept
+because incomplete data is not evidence that nothing is pending. Cancellation
+of that read propagates; any other failure logs and keeps the reported
+inventory. The post-apply reconciliation reads through the same function, so
+the phantom is also seen as cleared instead of producing "no update was
+applied".
 
 ## Homebrew and Flatpak
 
@@ -160,7 +178,11 @@ disabled is not presented as a transient failure worth retrying (#732).
 Trust remains per-user. Per-entry installs prepare missing taps and trust only
 the selected package unless the collection explicitly declares that tap
 `trusted: true`; existing trust is reused and changes are disclosed. Selecting
-one package must not silently trust its entire tap. For an update failure,
+one package must not silently trust its entire tap. A collection installed as
+a whole taps and trusts exactly the taps its Brewfile marks `trusted: true`
+before `brew bundle install` loads their casks: Homebrew applies that flag only
+while tapping, so an already-present, untrusted tap otherwise refuses every
+cask the collection names (#816). For an update failure,
 use the [recovery procedure](../reference.md#recovering-a-failed-developer-tools-update)
 rather than treating a reported workaround as a universal prerequisite.
 
@@ -174,9 +196,10 @@ owning feature requires that protection.
 
 [`bootc`](../../internal/bootc/) reads status/checks without authentication.
 Composefs hosts use world-readable deployment state and registry digest checks;
-other hosts use bootc reads. Staging always retains the fixed OS-supplied entry
-point. A current composefs deployment is checked before invoking a stager that
-would otherwise fail on a no-op.
+ostree hosts read the booted deployment's `.origin`, `IMAGE_VERSION`, and the
+staged marker; other hosts use bootc reads. Staging always retains the fixed
+OS-supplied entry point. A current composefs deployment is checked before
+invoking a stager that would otherwise fail on a no-op.
 
 [`updex`](../../internal/updex/updex.go) reads through the Go library and requires
 actual feature definitions for availability. An incomplete feature check is not
@@ -248,7 +271,15 @@ is the shared routine-cleanup owner for Free Up Space and post-update
 maintenance. Both use the same configuration key. Missing providers are skipped,
 not cleaned; cancellation is not success. Reclaimed space is reported only from
 valid before/after observations. Configured maintenance scripts remain a
-separate explicit action, not an implicit provider precondition.
+separate explicit action, not an implicit provider precondition. Free Up Space
+shares the update shell's one mutation admission with update runs, deployment
+changes, and every Homebrew install the GUI starts (app collections, Bluefin
+CLI setup, Developer Mode's collection, Dev Container CLI and per-app installs,
+Agent Mode, Goose setup, hardware support, and Livery wallpaper setup): while
+one is running it refuses with the busy toast, and each admitted run releases on
+success, failure, preview, or a dismissed authentication. A `brew cleanup`
+therefore cannot start beside an install that may still need the versions it
+would remove (#817).
 
 ## View-layer page presentation (`internal/views/pageview`)
 

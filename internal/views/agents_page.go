@@ -316,6 +316,18 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 		toggle.set(uh.agentModeState.On())
 		return
 	}
+	// Enabling installs llmman through Homebrew, so it shares the update
+	// shell's one admission with Free Up Space and the update run (#817).
+	title := "Turning on Agent Mode"
+	if !enabled {
+		title = "Turning off Agent Mode"
+	}
+	if !uh.updateShell.beginMutation(title) {
+		uh.agentModeGate.Reset()
+		toggle.set(uh.agentModeState.On())
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	previous := uh.agentModeState
 	uh.agentRefresh.Begin()
 	toggle.widget.SetSensitive(false)
@@ -343,6 +355,7 @@ func (uh *UserHome) onAgentModeToggled(enabled bool, toggle *guardedSwitch) {
 			}
 		}
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			uh.agentModeGate.Reset()
 			setActivitySpinner(uh.agentModeSpinner, false)
 			toggle.widget.SetSensitive(true)

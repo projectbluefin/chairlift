@@ -331,17 +331,56 @@ func PrepareInstall(name string, kind PackageKind, store *TrustStore, trustedTap
 		return TrustUnchanged, nil
 	}
 	if trustedTaps[tapRepo] {
-		if err := TrustTap(tapRepo); err != nil {
-			return TrustUnchanged, err
-		}
-		store.MarkTapTrusted(tapRepo)
-		return TrustChangedTap, nil
+		return trustTapIfNeeded(tapRepo, store)
 	}
 	if err := trustPackage(trustFlag(kind), name); err != nil {
 		return TrustUnchanged, err
 	}
 	store.MarkPackageTrusted(kind, name)
 	return TrustChangedPackage, nil
+}
+
+// PrepareTap makes a tap a Brewfile declares `trusted: true` present and
+// trusted wholesale before `brew bundle install` loads its casks. It clones
+// the tap when it is missing and runs `brew trust --tap` when brew reports it
+// untrusted; Homebrew applies a Brewfile's flag only while tapping, so an
+// already-present, untrusted tap refused every cask the collection named
+// (#816).
+//
+// Homebrew before 6 has no tap trust, so nothing runs there. A tap brew
+// reports trusted, or one the store already records, needs nothing.
+func PrepareTap(name string, store *TrustStore) (TrustChange, error) {
+	state, err := TapInfo(name)
+	if err != nil {
+		// The tap's state could not be read. The `brew bundle install`
+		// that follows reports the real problem, so this only goes to the
+		// log.
+		log.Printf("Could not read the state of tap %q: %v", name, err)
+	} else {
+		if !state.Installed {
+			if err := Tap(name); err != nil {
+				return TrustUnchanged, err
+			}
+		}
+		if !state.HasTrust || state.Trusted {
+			return TrustUnchanged, nil
+		}
+	}
+	return trustTapIfNeeded(name, store)
+}
+
+// trustTapIfNeeded trusts a whole tap once with `brew trust --tap` and
+// records that it did. It is the breadth a Brewfile's `trusted: true` asks
+// for, and it trusts nothing else.
+func trustTapIfNeeded(name string, store *TrustStore) (TrustChange, error) {
+	if store.TapTrusted(name) {
+		return TrustUnchanged, nil
+	}
+	if err := TrustTap(name); err != nil {
+		return TrustUnchanged, err
+	}
+	store.MarkTapTrusted(name)
+	return TrustChangedTap, nil
 }
 
 // trustFlag is the `brew trust` granularity for a package kind.

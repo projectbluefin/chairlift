@@ -158,6 +158,13 @@ func (uh *UserHome) setUpGoose() {
 	if uh.gooseLaunchBtn == nil || !uh.gooseGate.TryStart() {
 		return
 	}
+	// Setup installs Homebrew packages, so it shares the update shell's one
+	// admission with Free Up Space and the update run (#817).
+	if !uh.updateShell.beginMutation("Setting up Goose") {
+		uh.gooseGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	uh.gooseBusy = true
 	row := uh.gooseRow
 	tools := uh.gooseFacts.Tools
@@ -173,6 +180,7 @@ func (uh *UserHome) setUpGoose() {
 		defer cancel()
 		state, facts, _ := agentmode.ObserveLive(ctx)
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			uh.finishGooseAction(state, facts)
 			if !dryrun.Enabled() {
 				// Setup installs Homebrew packages Apps lists, and can
