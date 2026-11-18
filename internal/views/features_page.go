@@ -360,7 +360,7 @@ func (uh *UserHome) buildDeveloperGroup(page *adw.PreferencesPage, status ublue.
 	group.SetTitle("Developer")
 	group.SetDescription("Tools for building and running software on this computer.")
 
-	presentation := pageview.DeveloperRow(status.Developer)
+	presentation := pageview.DeveloperRow(pageview.DeveloperObservation{Active: status.Developer, Groups: status.DevGroups})
 
 	row := adw.NewExpanderRow()
 	row.SetUseMarkup(false)
@@ -399,7 +399,7 @@ func (uh *UserHome) buildDeveloperEntryRow(page *adw.PreferencesPage, status ubl
 	group := adw.NewPreferencesGroup()
 	group.SetTitle("Developer")
 	row := adw.NewActionRow()
-	presentation := pageview.DeveloperRow(status.Developer)
+	presentation := pageview.DeveloperRow(pageview.DeveloperObservation{Active: status.Developer, Groups: status.DevGroups})
 	row.SetTitle(presentation.Title)
 	row.SetSubtitle(presentation.Subtitle)
 	row.SetActivatable(true)
@@ -684,7 +684,11 @@ func (uh *UserHome) runDeveloperToggle(enabled bool, toggle *guardedSwitch, row 
 			}
 			uh.developerSetupActivity.finish(result, request.Preview)
 			if uh.developerEntryRow != nil {
-				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(result.Developer).Subtitle)
+				observed := pageview.DeveloperObservation{Active: result.Developer}
+				if grantSucceeded && !request.Preview {
+					observed.Groups = ublue.DevGroupsHeld(skipped)
+				}
+				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(observed).Subtitle)
 			}
 			uh.setDeveloperSensitive(true)
 			if menuErr != nil {

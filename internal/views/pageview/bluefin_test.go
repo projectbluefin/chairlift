@@ -69,23 +69,64 @@ func TestChannelSwitchResultAlwaysAsksForARestart(t *testing.T) {
 // groups that carry it: a group name is an implementation detail no one
 // deciding whether to switch this on can act upon.
 func TestDeveloperRowNamesTheCapabilityNotTheGroups(t *testing.T) {
-	for _, active := range []bool{true, false} {
-		row := DeveloperRow(active)
+	for _, observed := range []DeveloperObservation{
+		{},
+		{Active: true, Groups: []string{"dialout"}},
+		{Active: true, Groups: []string{"docker"}},
+		{Active: true, Groups: []string{"docker"}, Docker: &devtools.DockerState{DaemonFailed: true}},
+	} {
+		row := DeveloperRow(observed)
 		for _, group := range []string{"docker", "incus-admin", "libvirt", "dialout"} {
 			if strings.Contains(row.Subtitle, group) {
-				t.Errorf("DeveloperRow(%v).Subtitle = %q, want it not to name the group %q", active, row.Subtitle, group)
+				t.Errorf("DeveloperRow(%+v).Subtitle = %q, want it not to name the group %q", observed, row.Subtitle, group)
 			}
 		}
 	}
+}
 
-	// Turning it on needs an administrator, which the person has to be
-	// told before they press the switch, not after.
-	if !strings.Contains(DeveloperRow(false).Subtitle, "administrator password") {
-		t.Errorf("DeveloperRow(false).Subtitle = %q, want it to disclose the administrator password",
-			DeveloperRow(false).Subtitle)
+// The subtitle is a claim about what the host granted, so it may name
+// containers and virtual machines only when a group that carries them was
+// actually applied (#819). A broken Docker needs attention rather than
+// reading as success.
+func TestDeveloperRowReportsOnlyWhatWasGranted(t *testing.T) {
+	failed := devtools.DockerState{DaemonFailed: true}
+	tests := []struct {
+		name     string
+		observed DeveloperObservation
+		want     string
+	}{
+		{
+			name:     "no developer groups",
+			observed: DeveloperObservation{},
+			want:     "Set up containers and virtual machines. Asks for your administrator password.",
+		},
+		{
+			name:     "groups not observed",
+			observed: DeveloperObservation{Active: true},
+			want:     "Developer Mode is on.",
+		},
+		{
+			name:     "dialout only",
+			observed: DeveloperObservation{Active: true, Groups: []string{"dialout"}},
+			want:     "Developer Mode is on. Containers and virtual machines aren't set up on this computer.",
+		},
+		{
+			name:     "docker group held",
+			observed: DeveloperObservation{Active: true, Groups: []string{"docker", "dialout"}},
+			want:     "Containers and virtual machines are set up for your account.",
+		},
+		{
+			name:     "docker failed",
+			observed: DeveloperObservation{Active: true, Groups: []string{"docker"}, Docker: &failed},
+			want:     "Developer Mode is on, but Docker needs attention.",
+		},
 	}
-	if DeveloperRow(true).Subtitle == DeveloperRow(false).Subtitle {
-		t.Error("DeveloperRow does not distinguish on from off")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := DeveloperRow(tt.observed).Subtitle; got != tt.want {
+				t.Errorf("DeveloperRow(%+v).Subtitle = %q, want %q", tt.observed, got, tt.want)
+			}
+		})
 	}
 }
 

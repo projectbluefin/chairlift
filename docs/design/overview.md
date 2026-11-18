@@ -189,6 +189,14 @@ Developer Mode promotion under one gate. WSL/Docker setup follows a confirmed
 parent grant; failed authentication starts no child work, and later optional
 failure never reverses granted access. Retries retain completed stages. Group
 access awaiting a new login is not Ready and is not an installation failure.
+The Developer Mode row reports the groups the account actually holds: the
+containers and virtual machines sentence appears only for `docker`,
+`incus-admin`, or `libvirt`, a `dialout`-only grant reads as Developer Mode
+on, and an observed broken Docker reads as needing attention. The copy is
+derived in [`pageview`](../../internal/views/pageview/) from
+`ublue.Status.DevGroups` and the Docker row's observation. A live toggle passes
+the groups the helper did not skip (`ublue.DevGroupsHeld`); a preview or a
+grant that was not read says only that Developer Mode is on.
 
 WSL inventory and shell readiness are separate observations in
 [`internal/devtools`](../../internal/devtools/): a failed live shell probe stays

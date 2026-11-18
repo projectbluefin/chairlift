@@ -137,13 +137,18 @@ func TestPageBuildersUsePurePresentations(t *testing.T) {
 				"pageview.DeveloperRow(",
 				"pageview.GameModeRow(",
 				"pageview.DeveloperOnboardingTargets(",
+				// The matched groups are what the presenter needs to decide
+				// whether containers were actually granted (#819).
+				"status.DevGroups",
 			},
 			retired: []string{
 				"row.SetTitle(feat.Description)",
 				`fmt.Sprintf("%d features available", len(features))`,
 				`"Developer Mode"`,
 				`"Gaming Mode"`,
-				"status.DevGroups",
+				// The success claim is pageview's; an inline copy here would
+				// be exactly the overclaim #819 fixed.
+				`"Containers and virtual machines are set up for your account."`,
 			},
 		},
 		{

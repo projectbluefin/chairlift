@@ -242,6 +242,26 @@ func DeveloperState(groups []string) (bool, []string) {
 	return true, matched
 }
 
+// DevGroupsHeld returns the developer groups that were applied or already
+// held, given the groups the helper reported skipping (ubluehelper.SkippedGroups).
+// A non-skipped group is applied-or-already-held, never a guess about a group
+// the helper did not report. The result preserves ubluehelper.DevGroups order
+// and is empty but non-nil when every group was skipped, so a caller can tell
+// "holds none" from "not observed" (nil).
+func DevGroupsHeld(skipped []string) []string {
+	skippedSet := make(map[string]bool, len(skipped))
+	for _, group := range skipped {
+		skippedSet[group] = true
+	}
+	held := make([]string, 0, len(ubluehelper.DevGroups()))
+	for _, group := range ubluehelper.DevGroups() {
+		if !skippedSet[group] {
+			held = append(held, group)
+		}
+	}
+	return held
+}
+
 // detectGPU is an injection seam for the graphics-hardware probe, so
 // Detect's driver recommendation is testable on any machine.
 var detectGPU = gpu.Detect

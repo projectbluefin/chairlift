@@ -328,9 +328,27 @@ func (uh *UserHome) refreshDeveloperOptions(status ublue.Status) {
 					item.row.SetSubtitle("Developer Mode must be enabled first, but its administrator action isn't installed.")
 				}
 			}
+			uh.applyDeveloperRowObservation(status, docker, dockerErr)
 			uh.setDeveloperSensitive(true)
 		})
 	}()
+}
+
+// applyDeveloperRowObservation refreshes the Developer Mode summary from the
+// groups this account holds and the Docker state just read. Only the detail
+// page has both; the Features entry row has no Docker read of its own and is
+// rendered from the cached status at build time.
+func (uh *UserHome) applyDeveloperRowObservation(status ublue.Status, docker devtools.DockerState, dockerErr error) {
+	if uh.developerRow == nil {
+		return
+	}
+	observed := pageview.DeveloperObservation{Active: uh.developerEnabled, Groups: status.DevGroups}
+	// Docker is an independent child option; a broken or unreadable Docker
+	// only says something about Developer Mode once developer access is on.
+	if uh.developerEnabled {
+		observed.Docker, observed.DockerErr = &docker, dockerErr
+	}
+	uh.developerRow.SetSubtitle(pageview.DeveloperRow(observed).Subtitle)
 }
 
 func (uh *UserHome) setDeveloperSensitive(sensitive bool) {
@@ -520,7 +538,11 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 			setActivitySpinner(item.spinner, false)
 			uh.developerEnabled = result.Developer
 			if uh.developerEntryRow != nil {
-				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(result.Developer).Subtitle)
+				observed := pageview.DeveloperObservation{Active: result.Developer}
+				if grantSucceeded && !request.Preview {
+					observed.Groups = ublue.DevGroupsHeld(skipped)
+				}
+				uh.developerEntryRow.SetSubtitle(pageview.DeveloperRow(observed).Subtitle)
 			}
 			if !request.Preview {
 				item.awaitingLogin = awaitingLogin

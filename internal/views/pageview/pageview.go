@@ -377,19 +377,71 @@ func ChannelSwitchResultSubtitle(toTesting bool) string {
 	return "Restart to go back to tested updates."
 }
 
+// DeveloperObservation is what a caller actually observed about this
+// account's developer access. Groups is the subset of the developer groups
+// the account holds (ublue.Status.DevGroups); Docker is nil until the caller
+// has read the Docker sub-row's state. Active covers a toggle whose grant was
+// accepted before the groups were re-read.
+type DeveloperObservation struct {
+	Active    bool
+	Groups    []string
+	Docker    *devtools.DockerState
+	DockerErr error
+}
+
 // DeveloperRow returns the developer-tools switch row text. It names the
 // capability, never the supplementary groups that carry it: which groups an
 // account is added to is an implementation detail of how access is granted,
 // where what a person deciding needs is the consequence — an administrator
 // password now, and a new login before anything works.
-func DeveloperRow(active bool) Row {
+//
+// The containers and virtual machines sentence is a claim about what the host
+// actually granted, so it appears only when a container or VM group is among
+// the held groups (#819). A dialout-only grant is developer access without
+// that setup, and an observed broken Docker reads as needing attention rather
+// than success.
+func DeveloperRow(observed DeveloperObservation) Row {
 	row := Row{Title: "Developer Mode"}
-	if active {
+	switch {
+	case observed.Docker != nil && developerDockerNeedsAttention(*observed.Docker, observed.DockerErr):
+		if observed.Active {
+			row.Subtitle = "Developer Mode is on, but Docker needs attention."
+		} else {
+			row.Subtitle = "Docker needs attention. Turn on Developer Mode to retry the setup."
+		}
+	case !observed.Active:
+		row.Subtitle = "Set up containers and virtual machines. Asks for your administrator password."
+	case observed.Groups == nil:
+		// The toggle knows access was accepted but not which groups were
+		// applied; neutral copy is the only claim that cannot be wrong.
+		row.Subtitle = "Developer Mode is on."
+	case developerContainersHeld(observed.Groups):
 		row.Subtitle = "Containers and virtual machines are set up for your account."
-		return row
+	default:
+		row.Subtitle = "Developer Mode is on. Containers and virtual machines aren't set up on this computer."
 	}
-	row.Subtitle = "Set up containers and virtual machines. Asks for your administrator password."
 	return row
+}
+
+// developerContainersHeld reports whether the account holds a group that
+// actually grants container or virtual-machine access. dialout is developer
+// access too, but it carries serial hardware, not containers.
+func developerContainersHeld(groups []string) bool {
+	for _, group := range groups {
+		switch group {
+		case "docker", "incus-admin", "libvirt":
+			return true
+		}
+	}
+	return false
+}
+
+// developerDockerNeedsAttention reports an observed Docker state that failed
+// rather than one that is merely off or never installed. A stopped or absent
+// Docker reads without an error, so an error means the units or the socket
+// could not be read.
+func developerDockerNeedsAttention(state devtools.DockerState, err error) bool {
+	return err != nil || state.Unavailable != "" || state.DaemonFailed
 }
 
 // DeveloperResultSubtitle returns the subtitle after a developer-tools toggle

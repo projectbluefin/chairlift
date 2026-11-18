@@ -249,6 +249,12 @@ leaves GNOME preferences unchanged.
 **Developer tools** start with **Developer Mode**, which lets you run containers
 and virtual machines, and use USB and serial hardware, without being asked for permission each time. It needs
 your administrator password, and takes effect after you log out and back in.
+The row reports what the helper actually granted: it names containers and
+virtual machines only when a container or virtual-machine group was applied.
+An image that does not define those groups (Utah ships none of
+`docker`, `incus-admin`, or `libvirt`) shows Developer Mode on for the access
+it did grant, and a Docker failure reads as needing attention rather than
+success.
 Switching it on also installs the Dev Container CLI (`devcontainer`) when
 Homebrew is available; if that install fails you are told, and developer access
 stays on.

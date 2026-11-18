@@ -230,6 +230,40 @@ func TestDeveloperStateMatchesAnyDeveloperGroup(t *testing.T) {
 	}
 }
 
+func TestDevGroupsHeldExcludesSkippedGroups(t *testing.T) {
+	tests := []struct {
+		name    string
+		skipped []string
+		want    []string
+	}{
+		{name: "nothing skipped", want: ubluehelper.DevGroups()},
+		{
+			name:    "image lacks the container groups",
+			skipped: []string{"docker", "incus-admin", "libvirt"},
+			want:    []string{"dialout"},
+		},
+		{
+			name:    "dialout skipped",
+			skipped: []string{"dialout"},
+			want:    []string{"docker", "incus-admin", "libvirt"},
+		},
+		{name: "every group skipped", skipped: ubluehelper.DevGroups(), want: []string{}},
+		{name: "unknown name is not a developer group", skipped: []string{"wheel"}, want: ubluehelper.DevGroups()},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			held := DevGroupsHeld(test.skipped)
+			if held == nil {
+				t.Fatalf("DevGroupsHeld(%v) = nil, want an observed (possibly empty) slice", test.skipped)
+			}
+			if !reflect.DeepEqual(held, test.want) {
+				t.Errorf("DevGroupsHeld(%v) = %v, want %v", test.skipped, held, test.want)
+			}
+		})
+	}
+}
+
 // stubDetection replaces both host-dependent reads for one test: the image
 // descriptor and the invoking user's group membership.
 func stubDetection(t *testing.T, info imageinfo.Info, infoErr error, groups []string) {
