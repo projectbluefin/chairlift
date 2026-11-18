@@ -142,29 +142,8 @@ func installedFormulaeByTap(cellarDir string) map[string][]string {
 // silently omitted from the remediation UI.
 func installedCasksByTap(caskroomDir string) map[string][]string {
 	byTap := make(map[string][]string)
-	entries, err := os.ReadDir(caskroomDir)
-	if err != nil {
-		return byTap
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-			continue
-		}
-		token := entry.Name()
-		receiptPath := filepath.Join(caskroomDir, token, ".metadata", "INSTALL_RECEIPT.json")
-		data, err := os.ReadFile(receiptPath)
-		if err != nil {
-			continue
-		}
-		var receipt struct {
-			Source struct {
-				Tap string `json:"tap"`
-			} `json:"source"`
-		}
-		if err := json.Unmarshal(data, &receipt); err != nil || receipt.Source.Tap == "" {
-			continue
-		}
-		byTap[receipt.Source.Tap] = append(byTap[receipt.Source.Tap], receipt.Source.Tap+"/"+token)
+	for token, tap := range installedCaskTaps(caskroomDir) {
+		byTap[tap] = append(byTap[tap], tap+"/"+token)
 	}
 	return byTap
 }
@@ -514,6 +493,16 @@ func TrustFormula(name string) error { return trustPackage("--formula", name) }
 // TrustCask is TrustFormula for a tap cask: `brew trust --cask`, run only
 // when brew reports the cask's tap untrusted.
 func TrustCask(name string) error { return trustPackage("--cask", name) }
+
+// UntrustCask removes one cask's entry from the per-user trust store with
+// `brew untrust --cask <name>`. It is the narrow cleanup for a trust entry
+// whose qualified cask a retired tap no longer serves; Homebrew needs only
+// the qualified name, so the cask itself need not exist. Homebrew before 6
+// has no trust store at all, so callers only reach this after reading one.
+func UntrustCask(name string) error {
+	_, err := runBrewCommand("untrust", "--cask", name)
+	return err
+}
 
 // TrustTap trusts a whole tap with `brew trust --tap <repo>`. It is the
 // breadth `brew bundle` gives a tap its Brewfile marks `trusted: true`,

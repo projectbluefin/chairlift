@@ -45,6 +45,49 @@ scheduled-update failures. Include failed diagnostics after removing personal
 information. Do not delete package directories to silence errors. Report
 `fs-verity` corruption separately; package cleanup does not prove it repaired.
 
+## Duplicate Homebrew cask names in two taps
+
+Bluefin images tap `ublue-os/tap` for development tools, Goose, and OEM
+hardware packages, while Control Center's own cask and the wallpaper collection
+now come from `projectbluefin/tap`. Both taps define the same two cask tokens
+(`chairlift` and `bluefin-wallpapers-extra`), and Homebrew refuses to choose
+between them whenever it resolves a cask by bare token. Its own
+`brew list --cask --versions` therefore exits with:
+
+```
+Error: Cask chairlift exists in multiple taps:
+       * projectbluefin/tap/chairlift
+       * ublue-os/tap/chairlift
+```
+
+That is a Homebrew limitation and an upstream tap collision, not a Control
+Center failure. **Do not clear it with `brew untap --force ublue-os/tap`**: the
+forced untap also uninstalls packages installed from that tap, such as
+`linux-mcp-server`, and untapping does not stop the collision returning when
+the tap is added again for development tools.
+
+Control Center reads each installed cask's receipt, which records the tap the
+copy came from, so its cask inventory, uninstall action, and collection
+descriptions keep working with both taps present. A bare token with no installed
+copy cannot be resolved locally; the error then names both taps, and the
+package must be named fully qualified. `brew list --cask`, `brew list --cask
+--full-name`, `brew info --installed --json=v2 --cask`, `brew outdated
+--json=v2`, and `brew trust --json=v1` still work. Wallpaper setup replaces a
+legacy `ublue-os/tap` copy of `bluefin-wallpapers-extra` with the
+`projectbluefin/tap` one and removes the retired tap's trust entry for that
+cask once the retired tap no longer defines it.
+
+One consequence is not fixable from Control Center: on Linux, Homebrew's
+Brewfile skipper treats an unloadable cask — including one whose token is
+ambiguous — as macOS-only, prints `Skipping cask <token> (requires macOS)`, and
+exits 0. `brew bundle check`/`install` can therefore report a collection
+satisfied while that cask was never considered. Control Center's per-entry
+installed state comes from the receipt-based cask inventory, so the entry still
+shows as not installed.
+
+The durable fix is for the tap owners to stop publishing the same cask token in
+both taps; naming the collision here does not move or rename either tap.
+
 ## Missing or unavailable controls
 
 Configuration can hide a group; host capability can also prevent it from being

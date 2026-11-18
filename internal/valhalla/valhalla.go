@@ -76,8 +76,15 @@ var (
 	lookPath       = exec.LookPath
 	tap            = homebrew.Tap
 	trustCask      = homebrew.TrustCask
+	untrustCask    = homebrew.UntrustCask
+	readTrustStore = homebrew.ReadTrustStore
+	tapDefinesCask = homebrew.TapDefinesCask
 	installPackage = homebrew.Install
 	installFlatpak = func() error { return flatpak.InstallFromRemote(AppID, "flatpark", false) }
+	// installedCaskTaps names the tap that owns an installed cask's receipt.
+	// It reads Caskroom metadata, not a cask definition, because the token
+	// this package asks about exists in two taps (#835).
+	installedCaskTaps = homebrew.InstalledCaskTaps
 )
 
 // Install installs the collection's fixed payload, converts the installed cask's
@@ -148,7 +155,8 @@ func Install(ctx context.Context, report func(devsetup.Stage, devsetup.Status)) 
 	}{
 		{"opening the wallpaper tap", func() error { return tap(WallpaperTap) }},
 		{"trusting the extra wallpaper cask", func() error { return trustCask(ExtraWallpapersCask) }},
-		{"replacing the legacy wallpaper cask", func() error { return migrateLegacyWallpaperCask(ctx, brew) }},
+		{"replacing the legacy wallpaper cask", func() error { return migrateLegacyWallpaperCask(ctx) }},
+		{"removing the legacy wallpaper trust entry", func() error { return pruneLegacyWallpaperTrust() }},
 		{"installing extra wallpapers", func() error { return installPackage(ExtraWallpapersCask, true) }},
 	} {
 		if err := ctx.Err(); err != nil {
@@ -213,7 +221,7 @@ func Installed(ctx context.Context) (bool, error) {
 	}
 	// A copy whose receipt names another tap is not this setup: Homebrew treats
 	// the token as installed, so the cask must be replaced rather than upgraded.
-	receiptTap, err := installedCaskTap(ctx, brew)
+	receiptTap, err := installedCaskTap()
 	if err != nil {
 		return false, err
 	}
@@ -272,20 +280,15 @@ func Installed(ctx context.Context) (bool, error) {
 }
 
 // installedCaskTap reports the tap recorded in the installed wallpaper cask's
-// receipt, or "" when no copy is installed. `brew list --cask --full-name`
-// resolves each installed cask from its own receipt rather than from the taps'
-// current definitions, so a token installed from another tap names that tap.
-func installedCaskTap(ctx context.Context, brew string) (string, error) {
-	out, err := command(ctx, readTimeout, brew, "list", "--cask", "--full-name")
+// receipt, or "" when no copy is installed. It reads the Caskroom receipt
+// rather than resolving the token with brew: the token exists in two taps now,
+// and a token lookup would refuse to choose between them (#835).
+func installedCaskTap() (string, error) {
+	taps, err := installedCaskTaps()
 	if err != nil {
 		return "", err
 	}
-	for _, name := range strings.Fields(out) {
-		if tapName, ok := strings.CutSuffix(name, "/"+wallpaperToken); ok {
-			return tapName, nil
-		}
-	}
-	return "", nil
+	return taps[wallpaperToken], nil
 }
 
 // migrateLegacyWallpaperCask removes the copy whose receipt names the legacy
@@ -294,16 +297,49 @@ func installedCaskTap(ctx context.Context, brew string) (string, error) {
 // qualified cask to `brew upgrade`, which does nothing when the versions match
 // and leaves the legacy receipt. This runs once, only for a receipt observed on
 // this host, and never touches ChairLift's prepared PNGs.
-func migrateLegacyWallpaperCask(ctx context.Context, brew string) error {
-	tapName, err := installedCaskTap(ctx, brew)
+func migrateLegacyWallpaperCask(ctx context.Context) error {
+	tapName, err := installedCaskTap()
 	if err != nil {
 		return err
 	}
 	if tapName != legacyWallpaperTap {
 		return nil
 	}
-	_, err = command(ctx, uninstallTimeout, brew, "uninstall", "--cask", legacyWallpaperCask)
+	_, err = command(ctx, uninstallTimeout, brewExecutable(), "uninstall", "--cask", legacyWallpaperCask)
 	return err
+}
+
+// pruneLegacyWallpaperTrust drops the retired tap's trust entry for the
+// wallpaper cask once that tap no longer defines it. Trust authorizes loading
+// a cask from its tap; the entry is left behind when the cask moves to
+// another tap, and Homebrew then reports a trusted cask the retired tap
+// cannot serve — what the reporter of #835 saw after the wallpaper migration.
+//
+// It is deliberately narrow: one exact qualified name, only while the retired
+// tap cannot serve it. Anything it cannot establish — an unreadable trust
+// store, an uncertain tap definition — leaves the entry alone, and a failed
+// prune never fails wallpaper setup.
+func pruneLegacyWallpaperTrust() error {
+	store, err := readTrustStore()
+	if err != nil {
+		log.Printf("reading the Homebrew trust store failed: %v", err)
+		return nil
+	}
+	if !store.PackageTrusted(homebrew.Cask, legacyWallpaperCask) {
+		return nil
+	}
+	served, err := tapDefinesCask(legacyWallpaperTap, wallpaperToken)
+	if err != nil {
+		log.Printf("reading the legacy wallpaper tap failed: %v", err)
+		return nil
+	}
+	if served {
+		return nil
+	}
+	if err := untrustCask(legacyWallpaperCask); err != nil {
+		log.Printf("removing the legacy wallpaper trust entry failed: %v", err)
+	}
+	return nil
 }
 
 func appInstalled(ctx context.Context) (bool, error) {

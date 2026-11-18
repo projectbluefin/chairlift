@@ -102,7 +102,10 @@ func TestListInstalledCasksEndToEnd(t *testing.T) {
 			t.Fatalf("ListInstalledCasks() error = %v", err)
 		}
 
-		assertArgv(t, argvLog, []string{"info --installed --json=v2 --cask"})
+		// The cask namespace query is followed by the prefix probe that
+		// locates Caskroom receipts; the tap each cask came from is read
+		// from its receipt, not from Homebrew's token lookup.
+		assertArgv(t, argvLog, []string{"info --installed --json=v2 --cask", "--prefix"})
 
 		if len(packages) == 0 {
 			t.Fatal("ListInstalledCasks() returned no casks")

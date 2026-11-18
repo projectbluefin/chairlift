@@ -142,6 +142,7 @@ var stateChangingCommands = map[string]bool{
 	"bundle":    true,
 	"cleanup":   true,
 	"trust":     true,
+	"untrust":   true,
 	// tap clones a repository and changes which packages brew will
 	// install from. Leaving it out would both run it for real under
 	// --dry-run and bound a fresh clone by the 30-second read timeout.
@@ -440,14 +441,30 @@ func ListInstalledFormulae() ([]Package, error) {
 	return parsePackagesJSON(output, true)
 }
 
-// ListInstalledCasks returns all installed casks
+// ListInstalledCasks returns all installed casks.
+//
+// The answer is receipt-based on purpose. Two taps can define the same cask
+// token (projectbluefin/tap and ublue-os/tap both ship chairlift and
+// bluefin-wallpapers-extra), and Homebrew versions whose installed-cask query
+// loads the cask definition refuse with "Cask <token> exists in multiple taps"
+// instead of listing the inventory (#835). Every package's Tap and FullName
+// therefore come from its Caskroom receipt, which cannot be ambiguous, and a
+// refused query falls back to those receipts entirely.
 func ListInstalledCasks() ([]Package, error) {
 	output, err := runBrewCommand("info", "--installed", "--json=v2", "--cask")
 	if err != nil {
-		return nil, err
+		if !isAmbiguousCaskError(err) {
+			return nil, err
+		}
+		log.Printf("installed casks could not be resolved by token; reading Caskroom receipts: %v", err)
+		return installedCaskInventory()
 	}
 
-	return parsePackagesJSON(output, false)
+	packages, err := parsePackagesJSON(output, false)
+	if err != nil {
+		return nil, err
+	}
+	return applyReceiptTaps(packages), nil
 }
 
 // parsePackagesJSON parses the JSON output from brew info
@@ -600,11 +617,20 @@ func InstallMany(names []string, isCask bool) error {
 	return err
 }
 
-// Uninstall removes a package
+// Uninstall removes a package.
+//
+// A cask is uninstalled by the tap that owns its installed receipt. A bare
+// token is ambiguous as soon as two taps ship the same cask, and brew refuses
+// it with "Cask <token> exists in multiple taps" rather than removing the
+// copy that is actually installed (#835). A preview resolves nothing: it runs
+// no command, so there is no target to disambiguate yet.
 func Uninstall(name string, isCask bool) error {
 	args := []string{"uninstall"}
 	if isCask {
 		args = append(args, "--cask")
+		if !dryrun.Enabled() {
+			name = qualifiedInstalledCask(name)
+		}
 	}
 	args = append(args, name)
 
@@ -790,6 +816,13 @@ func bundleCheckWith(run func(...string) (string, error), path string) (BundleSt
 	if isMalformedManifestError(err1) {
 		return BundleIndeterminate, err1
 	}
+	// Homebrew's bundle check resolves each cask by bare token. Once two taps
+	// define one, the check exits 1 for a reason that is not "not installed",
+	// and pass 2 would repeat it; reporting the manifest as not installed
+	// would be a wrong answer for a collection that is in fact installed.
+	if isAmbiguousCaskError(err1) {
+		return BundleIndeterminate, err1
+	}
 
 	code1 := exitCode(err1)
 	if code1 != 1 {
@@ -809,7 +842,7 @@ func bundleCheckWith(run func(...string) (string, error), path string) (BundleSt
 	if errors.Is(err2, context.DeadlineExceeded) || errors.Is(err2, context.Canceled) {
 		return BundleIndeterminate, err2
 	}
-	if isMalformedManifestError(err2) {
+	if isMalformedManifestError(err2) || isAmbiguousCaskError(err2) {
 		return BundleIndeterminate, err2
 	}
 

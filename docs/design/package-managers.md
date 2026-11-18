@@ -178,6 +178,23 @@ names each collection that did not finish and, when Homebrew distilled a
 one-line diagnosis (`homebrew.Error.Detail`), quotes it, so an entry upstream
 disabled is not presented as a transient failure worth retrying (#732).
 
+Installed-cask identity belongs to
+[`homebrew/cask.go`](../../internal/homebrew/cask.go). A cask receipt
+(`Caskroom/<token>/.metadata/INSTALL_RECEIPT.json`) records the tap the copy
+came from, and that receipt is the only cask resolution that survives two taps
+defining one token: as of November 2026 `projectbluefin/tap` and `ublue-os/tap`
+both ship `chairlift` and `bluefin-wallpapers-extra`. Inventory, cask uninstall,
+and Brewfile description reads qualify the token with the receipt's tap; the
+installed-cask query falls back to reading receipts when a Homebrew version
+refuses it. A token with **no** installed copy cannot be disambiguated locally,
+so Homebrew's own refusal — which names both taps — is reported instead of
+guessing. The receipt-based inventory is also what keeps a collection's
+per-entry installed state honest when Homebrew's Brewfile skipper silently
+treats the ambiguous cask as macOS-only and `brew bundle` exits 0.
+`brew list --cask --versions` resolves by bare token and fails inside Homebrew
+itself, so ChairLift does not run it. Adding, renaming, or removing a colliding
+cask is the tap owners' decision, not ChairLift's.
+
 Trust remains per-user. Per-entry installs prepare missing taps and trust only
 the selected package unless the collection explicitly declares that tap
 `trusted: true`; existing trust is reused and changes are disclosed. Selecting
