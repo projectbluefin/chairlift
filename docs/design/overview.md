@@ -76,9 +76,10 @@ routes are rejected. Navigation itself executes no provider mutations.
   `internal/views/activity` tracker; the update check, every update-shell
   admission (named by `beginMutation`'s title, with the system download
   forwarding each streamed line as its current step), and app collection
-  installs report to it. A header bar above the sidebar/content split shows a
-  spinner while anything runs, so a collapsed (narrow) window keeps it on
-  every pane, and it opens the Activity dialog listing each task, its current
+  installs report to it. The shown page's header bar carries a spinner while
+  anything runs, so a collapsed (narrow) window keeps it on the page pane
+  without a second title bar above the split view, and it opens the Activity
+  dialog listing each task, its current
   step, a percentage when the work measures one, and a time estimate once the
   measured rate is stable. The tracker coalesces change notifications to one
   main-thread redraw at a time and never gates work.

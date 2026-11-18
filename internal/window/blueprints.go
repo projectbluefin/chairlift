@@ -28,8 +28,6 @@ type windowUI struct {
 	SetupNext        *gtk.Button              `ui:"setup_next"`
 	NarrowBreakpoint *adw.Breakpoint          `ui:"narrow_breakpoint"`
 	AppSection       *gio.Menu                `ui:"app_section"`
-	ActivityButton   *gtk.Button              `ui:"activity_button"`
-	ActivitySpinner  *gtk.Spinner             `ui:"activity_spinner"`
 }
 
 // bookendUI is one first-run bookend: internal/ui/bookend.blp.

@@ -26,6 +26,7 @@ func (uh *UserHome) createDeveloperPage() (*adw.ToolbarView, *adw.PreferencesPag
 		}
 	}
 	view.BackButton.ConnectClicked(&backClickedCb)
+	uh.recordPageHeader(view.Page, view.Header)
 	return view.Page, view.Preferences
 }
 
