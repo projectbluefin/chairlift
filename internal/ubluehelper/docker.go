@@ -46,8 +46,15 @@ type DockerHost struct {
 	Restorecon       bool
 	Semanage         bool
 	// HasEquivalence reports whether the Root equivalence rule is already
-	// defined; it only reads.
+	// defined; it only reads. It needs a policy store semanage can open and
+	// returns ErrSELinuxStoreUnmanaged when the store cannot be opened.
 	HasEquivalence func(ctx context.Context) (bool, error)
+	// LabelsResolve reports whether the loaded file contexts already give
+	// Root the labels SELinuxSource has (matchpathcon, which reads the
+	// compiled contexts and needs no policy store). When they do, the
+	// equivalence rule would change nothing and is not added. Nil, or an
+	// error, falls back to HasEquivalence.
+	LabelsResolve func(ctx context.Context) (bool, error)
 
 	// Root is the root-owned install root, UnitDir where managed units are
 	// written, IndexURL the signed index fetched, and Formulae the daemon
@@ -115,6 +122,73 @@ func SemanageArgs(root string) []string {
 	return []string{"fcontext", "-a", "-e", SELinuxSource, root}
 }
 
+// labelProbes are paths under Root, and under SELinuxSource, whose labels
+// stand for the whole runtime: the install root itself, a daemon binary, and
+// a bundled library inside a set directory (a set id is 16 hex digits).
+var labelProbes = []string{"", "/0123456789abcdef/bin/dockerd", "/0123456789abcdef/lib/libseccomp.so.2"}
+
+// EquivalentLabels reports whether lookup, the default file context the
+// loaded policy assigns a path, already labels each probe under root exactly
+// as under SELinuxSource, which is all the equivalence rule would achieve.
+func EquivalentLabels(root string, lookup func(path string) (string, error)) (bool, error) {
+	for _, probe := range labelProbes {
+		got, err := lookup(root + probe)
+		if err != nil {
+			return false, err
+		}
+		want, err := lookup(SELinuxSource + probe)
+		if err != nil {
+			return false, err
+		}
+		if got != want {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// DockerSELinuxStorePrefix survives the helper's process boundary so the GUI
+// can say why Docker cannot be turned on instead of offering an ineffective
+// Retry.
+const DockerSELinuxStorePrefix = "docker runtime cannot be labelled:"
+
+// ErrSELinuxStoreUnmanaged means semanage cannot open the SELinux policy
+// store, so the equivalence rule cannot be added: for example an image whose
+// semanage.conf store-root is on the read-only /usr. Retrying cannot help;
+// the image has to make its store manageable or ship the rule itself.
+var ErrSELinuxStoreUnmanaged = errors.New(DockerSELinuxStorePrefix + " semanage cannot open this image's SELinux policy store, so the file-context rule Docker needs cannot be added")
+
+// semanageUnmanagedStore is what semanage prints when it cannot open the
+// policy store. The helper runs semanage as root, so it means the store is
+// missing, unreadable, or not writable, not that the caller lacks privilege.
+const semanageUnmanagedStore = "SELinux policy is not managed or store cannot be accessed"
+
+// SemanageStoreUnmanaged reports whether semanage's stderr is its refusal to
+// open the policy store.
+func SemanageStoreUnmanaged(stderr []byte) bool {
+	return strings.Contains(string(stderr), semanageUnmanagedStore)
+}
+
+// DefaultSemanageStoreRoot is libsemanage's store-root when semanage.conf
+// sets none.
+const DefaultSemanageStoreRoot = "/var/lib/selinux"
+
+// SemanageStoreRoot returns the store-root semanage.conf configures, or
+// DefaultSemanageStoreRoot. Only the top-level key is read; sections such
+// as [sefcontext_compile] never set it.
+func SemanageStoreRoot(conf []byte) string {
+	root := DefaultSemanageStoreRoot
+	for line := range strings.SplitSeq(string(conf), "\n") {
+		key, value, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if ok && strings.TrimSpace(key) == "store-root" {
+			if value = strings.TrimSpace(value); value != "" {
+				root = value
+			}
+		}
+	}
+	return root
+}
+
 // relabelReady refuses an enforcing host that cannot label the runtime:
 // installing it anyway would leave a daemon systemd cannot execute.
 func (h DockerHost) relabelReady() error {
@@ -124,23 +198,38 @@ func (h DockerHost) relabelReady() error {
 	return nil
 }
 
-// relabel defines the equivalence rule when missing, then applies it. A dry
+// needsEquivalence reports whether the equivalence rule must be added. It
+// only reads. Labels the loaded file contexts already resolve need no rule;
+// otherwise the store is asked, and a store semanage cannot open is refused
+// with ErrSELinuxStoreUnmanaged, since the runtime could not be labelled.
+func (h DockerHost) needsEquivalence(steps dockerSteps) (bool, error) {
+	if h.LabelsResolve != nil {
+		if resolved, err := h.LabelsResolve(steps.ctx); err == nil && resolved {
+			steps.say("SELinux file contexts already label %s like %s; no equivalence rule needed\n", h.Root, SELinuxSource)
+			return false, nil
+		}
+	}
+	defined, err := h.HasEquivalence(steps.ctx)
+	if errors.Is(err, ErrSELinuxStoreUnmanaged) {
+		return false, err
+	}
+	if err != nil {
+		return false, fmt.Errorf("reading SELinux file contexts: %w", err)
+	}
+	return !defined, nil
+}
+
+// relabel defines the equivalence rule when addRule, then applies it. A dry
 // run previews both; ifChanged previews them as conditional on the install.
-func (h DockerHost) relabel(steps dockerSteps, ifChanged bool) error {
+func (h DockerHost) relabel(steps dockerSteps, ifChanged, addRule bool) error {
 	if !h.SELinuxEnforcing {
 		return nil
 	}
 	if steps.dryRun {
 		steps.say("[DRY-RUN] would execute if not yet defined: semanage %v\n", SemanageArgs(h.Root))
-	} else {
-		defined, err := h.HasEquivalence(steps.ctx)
-		if err != nil {
-			return fmt.Errorf("reading SELinux file contexts: %w", err)
-		}
-		if !defined {
-			if err := steps.exec("semanage", SemanageArgs(h.Root)...); err != nil {
-				return fmt.Errorf("labelling Docker runtime: %w", err)
-			}
+	} else if addRule {
+		if err := steps.exec("semanage", SemanageArgs(h.Root)...); err != nil {
+			return fmt.Errorf("labelling Docker runtime: %w", err)
 		}
 	}
 	run := steps.exec
@@ -208,6 +297,15 @@ func EnableDocker(ctx context.Context, h DockerHost, username string, dryRun boo
 	if err := h.relabelReady(); err != nil {
 		return err
 	}
+	// Decided before anything is downloaded: a host whose store cannot take
+	// the rule is refused before it gains a runtime it cannot execute.
+	addRule := false
+	if h.SELinuxEnforcing && !dryRun {
+		var err error
+		if addRule, err = h.needsEquivalence(steps); err != nil {
+			return err
+		}
+	}
 	if err := h.CheckUnits(); err != nil {
 		return fmt.Errorf("writing Docker units: %w", err)
 	}
@@ -259,7 +357,7 @@ func EnableDocker(ctx context.Context, h DockerHost, username string, dryRun boo
 			return err
 		}
 	}
-	if err := h.relabel(steps, false); err != nil {
+	if err := h.relabel(steps, false, addRule); err != nil {
 		return err
 	}
 	if changed {
@@ -317,7 +415,7 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 		if err := steps.execIfChanged("systemctl", "daemon-reload"); err != nil {
 			return err
 		}
-		if err := h.relabel(steps, true); err != nil {
+		if err := h.relabel(steps, true, false); err != nil {
 			return err
 		}
 		return steps.execIfChanged("systemctl", "try-restart", "docker.service")
@@ -333,8 +431,15 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 	steps.sayManifest(manifest, changed)
 	if changed {
 		// The new set inherited its parent's label; apply the policy's
-		// before the daemon restarts onto it.
-		if err := h.relabel(steps, false); err != nil {
+		// before the daemon restarts onto it. An unchanged runtime reads
+		// nothing, so an update that installs nothing still succeeds.
+		addRule := false
+		if h.SELinuxEnforcing {
+			if addRule, err = h.needsEquivalence(steps); err != nil {
+				return err
+			}
+		}
+		if err := h.relabel(steps, false, addRule); err != nil {
 			return err
 		}
 		if err := restartRuntime(ctx, h, steps); err != nil {

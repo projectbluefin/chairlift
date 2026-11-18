@@ -375,12 +375,17 @@ func dockerHost() ubluehelper.DockerHost {
 		Restorecon:       restoreconErr == nil,
 		Semanage:         semanageErr == nil,
 		HasEquivalence:   hasDockerEquivalence,
-		Root:             dockerbrew.Root,
-		UnitDir:          dockerbrew.UnitDir,
-		IndexURL:         dockerbrew.IndexURL,
-		Formulae:         dockerbrew.Formulae(),
-		Run:              runCapture,
-		EnsureGroup:      ensureLocalGroup,
+		LabelsResolve: func(ctx context.Context) (bool, error) {
+			return ubluehelper.EquivalentLabels(dockerbrew.Root, func(path string) (string, error) {
+				return defaultFileContext(ctx, path)
+			})
+		},
+		Root:        dockerbrew.Root,
+		UnitDir:     dockerbrew.UnitDir,
+		IndexURL:    dockerbrew.IndexURL,
+		Formulae:    dockerbrew.Formulae(),
+		Run:         runCapture,
+		EnsureGroup: ensureLocalGroup,
 		GroupExists: func(group string) bool {
 			// Built with CGO_ENABLED=0, os/user reads /etc/group directly,
 			// which is the database groupadd and usermod edit.
@@ -513,9 +518,20 @@ func dockerContainersRunning(ctx context.Context) (bool, error) {
 // hasDockerEquivalence reports whether the local SELinux equivalence rule
 // mapping dockerbrew.Root onto ubluehelper.SELinuxSource already exists.
 // `semanage fcontext -l -C` lists local customizations as "<target> = <source>".
+// A store semanage cannot open is reported as ErrSELinuxStoreUnmanaged.
 func hasDockerEquivalence(ctx context.Context) (bool, error) {
 	out, err := exec.CommandContext(ctx, "semanage", "fcontext", "-l", "-C").Output()
 	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			return false, err
+		}
+		if ubluehelper.SemanageStoreUnmanaged(exit.Stderr) {
+			return false, unmanagedSELinuxStore()
+		}
+		if detail := strings.TrimSpace(string(exit.Stderr)); detail != "" {
+			return false, fmt.Errorf("%w: %s", err, detail)
+		}
 		return false, err
 	}
 	want := dockerbrew.Root + " = " + ubluehelper.SELinuxSource
@@ -525,6 +541,29 @@ func hasDockerEquivalence(ctx context.Context) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// unmanagedSELinuxStore names semanage's configured store-root, and says so
+// when it is on a read-only file system (the reason on images that point
+// store-root into /usr).
+func unmanagedSELinuxStore() error {
+	conf, _ := os.ReadFile("/etc/selinux/semanage.conf")
+	root := ubluehelper.SemanageStoreRoot(conf)
+	// W_OK; access(2) reports EROFS for a read-only mount even to root.
+	if err := syscall.Access(root, 2); errors.Is(err, syscall.EROFS) {
+		return fmt.Errorf("%w: store-root %s is on a read-only file system", ubluehelper.ErrSELinuxStoreUnmanaged, root)
+	}
+	return fmt.Errorf("%w (store-root %s)", ubluehelper.ErrSELinuxStoreUnmanaged, root)
+}
+
+// defaultFileContext is the context the loaded file contexts assign path,
+// read with matchpathcon, which needs no policy store and no existing file.
+func defaultFileContext(ctx context.Context, path string) (string, error) {
+	out, err := exec.CommandContext(ctx, "matchpathcon", "-n", path).Output()
+	if err != nil {
+		return "", fmt.Errorf("matchpathcon %s: %w", path, err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // invokingUsername resolves the account pkexec authenticated for from
