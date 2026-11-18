@@ -73,14 +73,14 @@ func (p *operatingSystemProvider) checkBootc(ctx context.Context) (updateflow.Ch
 	}
 	update, err := p.deps.BootcCheck(ctx)
 	if err != nil {
-		return updateflow.CheckResult{}, err
+		return updateflow.CheckResult{}, operatingSystemCheckError(err)
 	}
 
 	var status *bootc.Status
 	if p.deps.BootcStatus != nil {
 		status, err = p.deps.BootcStatus(ctx)
 		if err != nil {
-			return updateflow.CheckResult{}, err
+			return updateflow.CheckResult{}, operatingSystemCheckError(err)
 		}
 	}
 
@@ -101,6 +101,17 @@ func (p *operatingSystemProvider) checkBootc(ctx context.Context) (updateflow.Ch
 	}
 	result.Items = []updateflow.Item{item}
 	return result, nil
+}
+
+// operatingSystemCheckError maps bootc's refusal to run a read as root to
+// updateflow.ErrUnavailable: that host cannot answer the check without
+// authentication, and the coordinator renders such a source as not available
+// instead of as a failure the user sees on every launch (#837).
+func operatingSystemCheckError(err error) error {
+	if bootc.IsRootRefusal(err) {
+		return fmt.Errorf("operating system update check needs root: %w", updateflow.ErrUnavailable)
+	}
+	return err
 }
 
 func (p *operatingSystemProvider) Apply(

@@ -1,9 +1,11 @@
 package bootc
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
+	"os/exec"
 	"path"
 	"sort"
 	"strings"
@@ -21,6 +23,8 @@ import (
 //     entry is a symlink to /ostree/deploy/<os>/deploy/<csum>.<serial>;
 //   - that deployment's .origin keyfile names the image in
 //     [origin] container-image-reference;
+//   - the image's OCI manifest digest is a commit metadata key in the
+//     repository, which `ostree show --print-metadata-key` prints;
 //   - the booted version is /usr/lib/os-release's IMAGE_VERSION;
 //   - /run/ostree/staged-deployment exists while a deployment is staged.
 //
@@ -36,18 +40,24 @@ var errNotOstree = errors.New("bootc: not an ostree-booted host")
 const (
 	ostreeStagedMarkerPath = "run/ostree/staged-deployment"
 	ostreeDeployRoot       = "ostree/deploy"
+	// ostreeRepoPath is the repository the booted deployment came from. In a
+	// deployment /ostree is a symbolic link to it, and the physical root is
+	// always mounted at /sysroot.
+	ostreeRepoPath = "/sysroot/ostree/repo"
+	// ostreeShowTimeout bounds the one local read this reader runs.
+	ostreeShowTimeout = 10 * time.Second
 )
 
 // readOstreeStatus builds a Status from an ostree host's on-disk state. fsys
 // is rooted at "/". It returns errNotOstree when the kernel was not booted
 // from an ostree deployment.
-func readOstreeStatus(fsys fs.FS) (*Status, error) {
+func readOstreeStatus(ctx context.Context, fsys fs.FS) (*Status, error) {
 	bootedPath, osName, err := ostreeBootedDeploymentPath(fsys)
 	if err != nil {
 		return nil, err
 	}
 
-	booted, err := readOstreeDeployment(fsys, bootedPath)
+	booted, err := readOstreeDeployment(ctx, fsys, bootedPath)
 	if err != nil {
 		return nil, fmt.Errorf("bootc: reading the booted deployment: %w", err)
 	}
@@ -64,14 +74,14 @@ func readOstreeStatus(fsys fs.FS) (*Status, error) {
 		return nil, err
 	}
 	if stagedName != "" {
-		staged, err := readOstreeDeployment(fsys, ostreeDeploymentPath(osName, stagedName))
+		staged, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, stagedName))
 		if err != nil {
 			return nil, fmt.Errorf("bootc: reading the staged deployment: %w", err)
 		}
 		status.Status.Staged = staged
 	}
 	if rollbackName != "" {
-		if rollback, err := readOstreeDeployment(fsys, ostreeDeploymentPath(osName, rollbackName)); err == nil {
+		if rollback, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, rollbackName)); err == nil {
 			status.Status.Rollback = rollback
 		}
 	}
@@ -174,7 +184,7 @@ func validOstreeDeploymentName(name string) bool {
 	return ok && validDeploymentID(csum) && validSerial(serial)
 }
 
-func readOstreeDeployment(fsys fs.FS, deployPath string) (*Deployment, error) {
+func readOstreeDeployment(ctx context.Context, fsys fs.FS, deployPath string) (*Deployment, error) {
 	data, err := fs.ReadFile(fsys, deployPath+".origin")
 	if err != nil {
 		return nil, err
@@ -184,10 +194,76 @@ func readOstreeDeployment(fsys fs.FS, deployPath string) (*Deployment, error) {
 	if err != nil {
 		return nil, fmt.Errorf("deployment %s: %w", path.Base(deployPath), err)
 	}
+	digest := values["image.manifest_digest"]
+	if digest == "" {
+		// An ostree origin records no OCI manifest digest, but the commit in
+		// the repository does and the repository is world-readable. Without
+		// it the update check has no unprivileged answer at all: bootc 1.16+
+		// refuses `bootc upgrade --check` to a non-root caller (#837).
+		digest = ostreeCommitDigest(ctx, path.Base(deployPath))
+	}
 	return &Deployment{Image: &ImageStatus{
 		Image:       ImageReference{Image: image, Transport: "registry"},
-		ImageDigest: values["image.manifest_digest"],
+		ImageDigest: digest,
 	}}, nil
+}
+
+// ostreeCommitDigest returns the manifest digest ostree recorded for a
+// deployment's commit, or "" when it cannot be read or parsed. The caller then
+// falls back exactly as it did before this read existed.
+func ostreeCommitDigest(ctx context.Context, deploymentName string) string {
+	csum, _, ok := strings.Cut(deploymentName, ".")
+	if !ok || !validDeploymentID(csum) {
+		return ""
+	}
+	digest, err := ostreeManifestDigest(ctx, csum)
+	if err != nil {
+		return ""
+	}
+	return digest
+}
+
+// ostreeManifestDigest runs `ostree show --print-metadata-key` for a commit.
+// It is a variable so tests drive a script instead of a real repository. The
+// caller's deadline bounds the read, so a canceled update check does not wait
+// on it; ostreeShowTimeout is the ceiling when the caller sets none.
+var ostreeManifestDigest = func(ctx context.Context, commit string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, ostreeShowTimeout)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "ostree",
+		"--repo="+ostreeRepoPath, "show",
+		"--print-metadata-key=ostree.manifest-digest", commit).Output()
+	if err != nil {
+		return "", fmt.Errorf("bootc: reading ostree.manifest-digest for %s: %w", commit, err)
+	}
+	return parseOstreeManifestDigest(string(output))
+}
+
+// parseOstreeManifestDigest extracts the digest from `ostree show
+// --print-metadata-key`, which prints the metadata value in GVariant text form
+// ('sha256:<hex>'). Anything but one well-formed digest is rejected, so a
+// caller falls back to its previous behavior instead of comparing a
+// fabricated value against the registry.
+func parseOstreeManifestDigest(output string) (string, error) {
+	value := strings.Trim(strings.TrimSpace(output), "'")
+	if !validManifestDigest(value) {
+		return "", fmt.Errorf("bootc: unexpected ostree.manifest-digest %q", output)
+	}
+	return value, nil
+}
+
+// validManifestDigest accepts the sha256 digest form container tooling uses.
+func validManifestDigest(value string) bool {
+	hex, ok := strings.CutPrefix(value, "sha256:")
+	if !ok || len(hex) != 64 {
+		return false
+	}
+	for _, r := range hex {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // ostreeImageReference strips the ostree transport prefix from an origin's

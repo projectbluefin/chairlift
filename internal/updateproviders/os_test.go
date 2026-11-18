@@ -90,6 +90,40 @@ func TestOperatingSystemSelectionMatrix(t *testing.T) {
 	}
 }
 
+// A host whose update check can only be answered by a root-requiring command
+// is not a failed check: bootc refuses the read, the coordinator renders the
+// source as not available, and the Updates page shows no error (#837).
+func TestOperatingSystemCheckMapsRootRefusalToUnavailable(t *testing.T) {
+	refusal := &bootc.Error{
+		Message: "bootc update check failed (exit 1): error: Initializing storage: Preparing for write: " +
+			"Querying root privilege: This command must be executed as the root user",
+	}
+	provider := newOperatingSystem(OSDeps{
+		BootcBooted:         func() bool { return true },
+		BootcStageAvailable: func() bool { return true },
+		BootcCheck:          func(context.Context) (bootc.AvailableUpdate, error) { return bootc.AvailableUpdate{}, refusal },
+	})
+
+	if _, err := provider.Check(context.Background()); !errors.Is(err, updateflow.ErrUnavailable) {
+		t.Fatalf("Check() error = %v, want it to wrap updateflow.ErrUnavailable", err)
+	}
+
+	// Every other failure stays a failure, so a real breakage is still shown.
+	other := errors.New("registry is down")
+	provider = newOperatingSystem(OSDeps{
+		BootcBooted:         func() bool { return true },
+		BootcStageAvailable: func() bool { return true },
+		BootcCheck:          func(context.Context) (bootc.AvailableUpdate, error) { return bootc.AvailableUpdate{}, other },
+	})
+	_, err := provider.Check(context.Background())
+	if !errors.Is(err, other) {
+		t.Fatalf("Check() error = %v, want %v", err, other)
+	}
+	if errors.Is(err, updateflow.ErrUnavailable) {
+		t.Fatalf("Check() error = %v, want a real failure, not unavailable", err)
+	}
+}
+
 func TestOperatingSystemCheckMapsCurrentVersionAndRestartState(t *testing.T) {
 	bootcProvider := newOperatingSystem(OSDeps{
 		BootcBooted:         func() bool { return true },

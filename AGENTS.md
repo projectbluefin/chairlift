@@ -45,7 +45,11 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   `internal/helperexec` owns invocation journaling. OS staging goes through
   `internal/bootc` and `internal/stageexec`, never a second upgrade route.
   Reads must not introduce authentication prompts: composefs and ostree hosts
-  are read from world-readable on-disk state.
+  are read from world-readable on-disk state, an ostree deployment's manifest
+  digest included (`ostree show --print-metadata-key` against
+  `/sysroot/ostree/repo`). When bootc refuses a read to a non-root caller, the
+  operating-system source reports `updateflow.ErrUnavailable` instead of a
+  failed check.
 - Root must never execute or load from the user-owned Homebrew prefix.
   `internal/dockerbrew` verifies signed metadata and bottle hashes for the
   fixed system Docker helper. Flatpak uses its own authorization, not pkexec;

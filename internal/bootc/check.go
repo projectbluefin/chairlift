@@ -26,12 +26,13 @@ type AvailableUpdate struct {
 // CheckUpdate reports whether a newer image is published for the booted
 // stream. On a composefs host it compares the registry's digest for the
 // booted tag with the booted and staged deployments, without root. An ostree
-// origin records no OCI manifest digest, so an ostree host falls back to
-// `bootc upgrade --check`; so does any other host.
+// host answers the same way from the digest its repository records; a host
+// whose digest cannot be read falls back to `bootc upgrade --check`, as does
+// any other host.
 func CheckUpdate(ctx context.Context) (AvailableUpdate, error) {
 	status, err := readComposefsStatus(hostRoot)
 	if errors.Is(err, errNotComposefs) {
-		status, err = readOstreeStatus(hostRoot)
+		status, err = readOstreeStatus(ctx, hostRoot)
 		if errors.Is(err, errNotOstree) {
 			return checkUpdateFrom(ctx, bootcCommand)
 		}
@@ -39,7 +40,11 @@ func CheckUpdate(ctx context.Context) (AvailableUpdate, error) {
 	if err != nil {
 		return AvailableUpdate{}, err
 	}
-	if status.Status.Booted == nil || status.Status.Booted.Digest() == "" {
+	// A staged deployment without a digest cannot be compared either: the
+	// registry check would only match the booted digest and report an image
+	// that is already staged as a new update, so that answer needs root.
+	if status.Status.Booted == nil || status.Status.Booted.Digest() == "" ||
+		(status.Status.Staged != nil && status.Status.Staged.Digest() == "") {
 		return checkUpdateFrom(ctx, bootcCommand)
 	}
 	return checkFromRegistry(ctx, status, registryTag)
@@ -68,6 +73,20 @@ func checkUpdateFrom(ctx context.Context, executable string) (AvailableUpdate, e
 		return AvailableUpdate{}, &Error{Message: err.Error(), Err: err}
 	}
 	return parseUpgradeCheck(string(output))
+}
+
+// rootRefusalMarker is bootc's message when it refuses a read to a caller that
+// is not root. bootc 1.16+ answers `bootc status` and `bootc upgrade --check`
+// with it even though both only read.
+const rootRefusalMarker = "must be executed as the root user"
+
+// IsRootRefusal reports whether err is bootc refusing to run a read because
+// the caller is not root. A host whose only remaining update check is that
+// command cannot answer it without authentication, so callers report the
+// source as unavailable instead of as a failed check.
+func IsRootRefusal(err error) bool {
+	var bootcErr *Error
+	return errors.As(err, &bootcErr) && strings.Contains(bootcErr.Message, rootRefusalMarker)
 }
 
 func parseUpgradeCheck(output string) (AvailableUpdate, error) {

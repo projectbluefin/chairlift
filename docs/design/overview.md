@@ -160,8 +160,11 @@ requires an observed requirement, not merely a successful staging command.
 
 OS reads are unprivileged. On composefs hosts `internal/bootc` reads deployment
 state and registry digests; on ostree hosts it reads the booted deployment's
-`.origin`, `IMAGE_VERSION`, and the staged marker; other hosts use bootc's read
-commands. Staging still uses the image-owned fixed script, not a new
+`.origin`, `IMAGE_VERSION`, the staged marker, and the commit's manifest digest
+from the local repository. Both then compare that digest with the registry.
+Other hosts use bootc's read commands, and a bootc refusal to run them as
+non-root reports the source as unavailable rather than as a failed check.
+Staging still uses the image-owned fixed script, not a new
 `bootc upgrade` executor. SBOM comparison fetches only on explicit Compare and
 rejects stale image-pair results.
 
