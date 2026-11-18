@@ -18,6 +18,7 @@ package printerapp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -603,13 +604,23 @@ func installVerified(ctx context.Context, app App, action string) error {
 	existed := statErr == nil
 	// rollback undoes a fresh install. The stop matters once start has
 	// succeeded: without it a removed unit would leave its container running.
-	rollback := func() {
+	rollback := func() error {
 		if existed {
-			return
+			return nil
 		}
-		_ = runSystemctl(ctx, "stop", app.ServiceName())
-		_ = os.Remove(path)
-		_ = runSystemctl(ctx, "daemon-reload")
+		// A cancelled start may still have queued a systemd job. Give cleanup
+		// its own bounded lifetime and retain the unit until stopping is proven.
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), commandTimeout)
+		defer cancel()
+		if err := runSystemctl(rollbackCtx, "stop", app.ServiceName()); err != nil {
+			if verifyErr := verifyStopped(rollbackCtx, app.ServiceName(), err); verifyErr != nil {
+				return fmt.Errorf("printerapp: rollback: %w", verifyErr)
+			}
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("printerapp: rollback: remove unit: %w", err)
+		}
+		return runSystemctl(rollbackCtx, "daemon-reload")
 	}
 
 	if err := writeAtomic(path, []byte(RenderUnit(app))); err != nil {
@@ -617,12 +628,10 @@ func installVerified(ctx context.Context, app App, action string) error {
 	}
 
 	if err := runSystemctl(ctx, "daemon-reload"); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	if err := runSystemctl(ctx, action, app.ServiceName()); err != nil {
-		rollback()
-		return err
+		return errors.Join(err, rollback())
 	}
 	// The family already runs; a login unit that could not be written
 	// costs only the lookup at the next login, so it is logged rather than

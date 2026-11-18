@@ -27,6 +27,21 @@ Feature: Updates
     And the Updates page shows no "Operating System" row
     And the Updates sidebar badge shows "1"
 
+  @stub.updates-flatpak-runtime-only @stub.updates-brew-current
+  Scenario: Runtime-only updates offer both Update All and a branch-specific row action
+    Given ChairLift is running
+    Then the Updates status reads "1 update available"
+    And the "Applications" row says "1 update available"
+    And the "Update All" button is sensitive
+    And the update for "Freedesktop Platform" is listed once with an accessible action
+    When I click the "Update All" button
+    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user"
+    And the "Update All" button is sensitive
+    When I click the "Update" button in the "Freedesktop Platform" row
+    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.freedesktop.Platform/x86_64/26.08"
+    And the "Update" button in the "Freedesktop Platform" row is sensitive
+    And the flatpak tool was never asked to "update"
+
   @stub.updates-printer-partial-check @stub.updates-flatpak-current @stub.updates-brew-current
   Scenario: A failed printer signature check does not hide verified driver updates
     Given ChairLift is running
