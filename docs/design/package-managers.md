@@ -122,9 +122,10 @@ process exit.
 
 [`UpdateShell`](../../internal/views/update_shell.go) renders snapshots through
 [`updatepresent`](../../internal/views/updatepresent/); it owns no parallel
-update counts or phase decisions. Individual updates, metadata refresh and OS
-mutations use the same admission boundary. Restart is a separate Operating
-System row action, not an automatic final step.
+update counts or phase decisions. Individual updates, metadata refresh, OS
+mutations and the Homebrew installs described below use the same admission
+boundary. Restart is a separate Operating System row action, not an automatic
+final step.
 
 ## Homebrew and Flatpak
 
@@ -160,7 +161,11 @@ disabled is not presented as a transient failure worth retrying (#732).
 Trust remains per-user. Per-entry installs prepare missing taps and trust only
 the selected package unless the collection explicitly declares that tap
 `trusted: true`; existing trust is reused and changes are disclosed. Selecting
-one package must not silently trust its entire tap. For an update failure,
+one package must not silently trust its entire tap. A collection installed as
+a whole taps and trusts exactly the taps its Brewfile marks `trusted: true`
+before `brew bundle install` loads their casks: Homebrew applies that flag only
+while tapping, so an already-present, untrusted tap otherwise refuses every
+cask the collection names (#816). For an update failure,
 use the [recovery procedure](../reference.md#recovering-a-failed-developer-tools-update)
 rather than treating a reported workaround as a universal prerequisite.
 
@@ -248,7 +253,15 @@ is the shared routine-cleanup owner for Free Up Space and post-update
 maintenance. Both use the same configuration key. Missing providers are skipped,
 not cleaned; cancellation is not success. Reclaimed space is reported only from
 valid before/after observations. Configured maintenance scripts remain a
-separate explicit action, not an implicit provider precondition.
+separate explicit action, not an implicit provider precondition. Free Up Space
+shares the update shell's one mutation admission with update runs, deployment
+changes, and every Homebrew install the GUI starts (app collections, Bluefin
+CLI setup, Developer Mode's collection, Dev Container CLI and per-app installs,
+Agent Mode, Goose setup, hardware support, and Livery wallpaper setup): while
+one is running it refuses with the busy toast, and each admitted run releases on
+success, failure, preview, or a dismissed authentication. A `brew cleanup`
+therefore cannot start beside an install that may still need the versions it
+would remove (#817).
 
 ## View-layer page presentation (`internal/views/pageview`)
 

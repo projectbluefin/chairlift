@@ -10,6 +10,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/hardware"
 	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -76,6 +77,13 @@ func (uh *UserHome) EnableHardware() {
 	if view == nil || !view.setup.TryStart() {
 		return
 	}
+	// The OEM packages are Homebrew casks, so they must not install beside
+	// Free Up Space's `brew cleanup` or an update run (#817).
+	if !uh.updateShell.beginMutation("Installing hardware support") {
+		view.setup.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	generation := view.refresh.Begin()
 	view.row.SetSubtitle("Checking and installing hardware support…")
 	go func() {
@@ -87,6 +95,7 @@ func (uh *UserHome) EnableHardware() {
 			cancel()
 		}
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			view.setup.Reset()
 			if view.refresh.IsCurrent(generation) {
 				view.render(status, err, dryrun.Enabled())
