@@ -1,8 +1,9 @@
 // Package bootc provides an interface to bootc-based system updates.
 // Status and update checks never need root: on a composefs host they are
 // read from on-disk state and the registry (composefs.go), on an ostree host
-// from the booted deployment's .origin and the staged marker (ostree.go), and
-// elsewhere from `bootc status` and `bootc upgrade --check` run unprivileged.
+// from the booted deployment's .origin, the commit's manifest digest in the
+// local repository, and the staged marker (ostree.go), and elsewhere from
+// `bootc status` and `bootc upgrade --check` run unprivileged.
 // Update staging is delegated to the fixed /usr/libexec/bootc-update-stage
 // via pkexec.
 package bootc

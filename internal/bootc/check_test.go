@@ -152,6 +152,38 @@ func TestCheckUpdateFromCommandFailure(t *testing.T) {
 	}
 }
 
+// bootc 1.16+ refuses `upgrade --check` to a non-root caller. That refusal is
+// distinguishable from a real failure only by its own output, which is what
+// the update source maps to "not available".
+func TestCheckUpdateFromClassifiesARootRefusal(t *testing.T) {
+	refusal := writeScript(t, "echo 'error: Initializing storage: Preparing for write: Querying root privilege: This command must be executed as the root user' >&2\nexit 1\n")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+
+	_, err := checkUpdateFrom(ctx, refusal)
+	if err == nil {
+		t.Fatal("checkUpdateFrom() = nil error, want the refusal to surface")
+	}
+	if !IsRootRefusal(err) {
+		t.Fatalf("IsRootRefusal(%v) = false, want true", err)
+	}
+	var bootcErr *Error
+	if !errors.As(err, &bootcErr) {
+		t.Fatalf("errors.As(*Error) = false; err = %T %v", err, err)
+	}
+
+	// A refusal is a specific answer, not "any non-zero exit".
+	plain := writeScript(t, "echo 'cannot check updates' >&2\nexit 4\n")
+	_, err = checkUpdateFrom(ctx, plain)
+	if err == nil {
+		t.Fatal("checkUpdateFrom() = nil error, want the failure to surface")
+	}
+	if IsRootRefusal(err) {
+		t.Fatalf("IsRootRefusal(%v) = true for a plain failure", err)
+	}
+}
+
 func TestCheckUpdateFromMissingExecutable(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "no-such-bootc")
 
