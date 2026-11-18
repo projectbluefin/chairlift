@@ -196,3 +196,49 @@ func TestBundleDescriptionsReportAmbiguousUninstalledCask(t *testing.T) {
 		t.Fatal("isAmbiguousCaskError did not recognize Homebrew's refusal")
 	}
 }
+
+// A Caskroom that exists but cannot be read must not report "no casks
+// installed": the receipt is the only record of where a copy came from, so
+// the failure is returned (#835 review).
+func TestCaskReceiptsReportAnUnreadableCaskroom(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads a mode-000 directory")
+	}
+	prefix, _, _ := caskFixture(t, "")
+	caskroom := filepath.Join(prefix, "Caskroom")
+	writeCaskReceipt(t, prefix, "chairlift", "projectbluefin/tap", "26.11.7")
+	if err := os.Chmod(caskroom, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(caskroom, 0o755) })
+
+	if _, err := InstalledCaskTaps(); err == nil {
+		t.Fatal("unreadable Caskroom read as an empty installed-cask inventory")
+	}
+}
+
+// A damaged receipt is reported, not treated as a cask that is not installed.
+func TestCaskReceiptsReportADamagedReceipt(t *testing.T) {
+	prefix, _, _ := caskFixture(t, "")
+	receipt := filepath.Join(prefix, "Caskroom", "bluefin-wallpapers-extra", ".metadata", "INSTALL_RECEIPT.json")
+	if err := os.MkdirAll(filepath.Dir(receipt), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(receipt, []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := InstalledCaskTaps(); err == nil || !strings.Contains(err.Error(), "parsing cask receipt") {
+		t.Fatalf("damaged receipt error = %v, want a parse failure", err)
+	}
+}
+
+// A missing Caskroom is an empty inventory, not a failure: no cask installed
+// is the state of every host that never used Homebrew casks.
+func TestCaskReceiptsTreatAMissingCaskroomAsEmpty(t *testing.T) {
+	caskFixture(t, "")
+	taps, err := InstalledCaskTaps()
+	if err != nil || len(taps) != 0 {
+		t.Fatalf("missing Caskroom = %v, %v; want an empty inventory", taps, err)
+	}
+}

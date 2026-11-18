@@ -3,6 +3,7 @@ package homebrew
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log"
 	"os"
@@ -10,7 +11,7 @@ import (
 	"strings"
 )
 
-// TapCaskAmbiguity is the phrase Homebrew prints when a bare cask token is
+// tapCaskAmbiguity is the phrase Homebrew prints when a bare cask token is
 // defined by more than one installed tap. Its token lookup refuses to guess,
 // so every command that resolves a cask by token alone exits non-zero once
 // both projectbluefin/tap and ublue-os/tap ship the same cask (#835).
@@ -35,34 +36,49 @@ func InstalledCaskTaps() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return installedCaskTaps(filepath.Join(prefix, "Caskroom")), nil
+	return installedCaskTaps(filepath.Join(prefix, "Caskroom"))
 }
 
-// installedCaskTaps reads the source tap out of each Caskroom receipt.
-func installedCaskTaps(caskroomDir string) map[string]string {
+// installedCaskTaps reads the source tap out of each Caskroom receipt. Only a
+// missing Caskroom is an empty inventory; a directory or receipt that exists
+// but cannot be read is reported, so a damaged install record is never
+// mistaken for "this cask is not installed" (#835 review).
+func installedCaskTaps(caskroomDir string) (map[string]string, error) {
 	taps := make(map[string]string)
 	entries, err := os.ReadDir(caskroomDir)
 	if err != nil {
-		return taps
+		if errors.Is(err, fs.ErrNotExist) {
+			return taps, nil
+		}
+		return nil, err
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		if tap := caskReceiptTap(filepath.Join(caskroomDir, entry.Name(), ".metadata", "INSTALL_RECEIPT.json")); tap != "" {
+		tap, err := caskReceiptTap(filepath.Join(caskroomDir, entry.Name(), ".metadata", "INSTALL_RECEIPT.json"))
+		if err != nil {
+			return nil, err
+		}
+		if tap != "" {
 			taps[entry.Name()] = tap
 		}
 	}
-	return taps
+	return taps, nil
 }
 
 // caskReceiptTap reads source.tap from one cask installation receipt. The
 // older versioned Casks/<token>.json metadata is not used: current Homebrew
-// no longer records the source tap there.
-func caskReceiptTap(path string) string {
+// no longer records the source tap there. A receipt that is missing names no
+// tap and no error; one that exists but cannot be read or parsed is reported,
+// because it is the only record of where the installed copy came from.
+func caskReceiptTap(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", nil
+		}
+		return "", fmt.Errorf("reading cask receipt %s: %w", path, err)
 	}
 	var receipt struct {
 		Source struct {
@@ -70,9 +86,9 @@ func caskReceiptTap(path string) string {
 		} `json:"source"`
 	}
 	if err := json.Unmarshal(data, &receipt); err != nil {
-		return ""
+		return "", fmt.Errorf("parsing cask receipt %s: %w", path, err)
 	}
-	return receipt.Source.Tap
+	return receipt.Source.Tap, nil
 }
 
 // qualifiedInstalledCask returns name qualified by the tap that owns its
@@ -169,7 +185,10 @@ func installedCaskInventory() ([]Package, error) {
 			continue
 		}
 		token := entry.Name()
-		tap := caskReceiptTap(filepath.Join(caskroom, token, ".metadata", "INSTALL_RECEIPT.json"))
+		tap, err := caskReceiptTap(filepath.Join(caskroom, token, ".metadata", "INSTALL_RECEIPT.json"))
+		if err != nil {
+			return nil, &Error{Message: "Failed to read installed casks: " + err.Error(), Err: err}
+		}
 		pkg := Package{
 			Name:     token,
 			FullName: caskFullName(tap, token),

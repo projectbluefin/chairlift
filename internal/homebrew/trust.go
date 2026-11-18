@@ -142,7 +142,13 @@ func installedFormulaeByTap(cellarDir string) map[string][]string {
 // silently omitted from the remediation UI.
 func installedCasksByTap(caskroomDir string) map[string][]string {
 	byTap := make(map[string][]string)
-	for token, tap := range installedCaskTaps(caskroomDir) {
+	taps, err := installedCaskTaps(caskroomDir)
+	if err != nil {
+		// The remediation list is advisory; a damaged receipt leaves the tap
+		// out of it rather than inventing an owner for the cask.
+		return byTap
+	}
+	for token, tap := range taps {
 		byTap[tap] = append(byTap[tap], tap+"/"+token)
 	}
 	return byTap
