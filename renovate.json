@@ -36,6 +36,12 @@
       "automerge": true
     },
     {
+      "description": "Keep first-party projectbluefin/** actions on the managed @v1 tag that AGENTS.md and .github/zizmor.yml require. This rule must not carry matchUpdateTypes: Renovate decides on digest pinning during lookup, before an update has a type, and skips any rule with matchUpdateTypes at that stage. It overrides the inherited config:best-practices helpers:pinGitHubActionDigests rule that produced #840.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["projectbluefin/**"],
+      "pinDigests": false
+    },
+    {
       "description": "Go module and Go toolchain non-major updates are grouped into one PR, tidied with go mod tidy, and wait three days after release; then Renovate automerges them once the required checks pass. The hive also merges mergeraptor[bot] PRs once the required checks pass, because it is a trusted bot.",
       "matchManagers": ["gomod"],
       "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"],
