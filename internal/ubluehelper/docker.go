@@ -357,6 +357,9 @@ func EnableDocker(ctx context.Context, h DockerHost, username string, dryRun boo
 			return err
 		}
 	}
+	if dryRun {
+		steps.say("[DRY-RUN] would execute if Docker failed: systemctl [reset-failed docker.service docker.socket]\n")
+	}
 	if err := h.relabel(steps, false, addRule); err != nil {
 		return err
 	}
@@ -415,6 +418,7 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 		if err := steps.execIfChanged("systemctl", "daemon-reload"); err != nil {
 			return err
 		}
+		steps.say("[DRY-RUN] would execute if Docker failed: systemctl [reset-failed docker.service docker.socket]\n")
 		if err := h.relabel(steps, true, false); err != nil {
 			return err
 		}
@@ -451,7 +455,8 @@ func UpdateDocker(ctx context.Context, h DockerHost, dryRun bool, stdout io.Writ
 
 // prepareRuntime loads the locked-start unit before Install can change an
 // existing runtime. NeedDaemonReload retries a previous failed reload even
-// when the file on disk already matches; a verified no-op runs no command.
+// when the file on disk already matches; failed starts clear only Docker's
+// rate limits so a repaired daemon can be retried immediately.
 func (h DockerHost) prepareRuntime(steps dockerSteps) error {
 	changed, err := h.WriteUnits()
 	if err != nil {
@@ -462,7 +467,12 @@ func (h DockerHost) prepareRuntime(steps dockerSteps) error {
 		return fmt.Errorf("reading Docker service: %w", err)
 	}
 	if changed || state.NeedDaemonReload != "no" {
-		return steps.exec("systemctl", "daemon-reload")
+		if err := steps.exec("systemctl", "daemon-reload"); err != nil {
+			return err
+		}
+	}
+	if state.ActiveState == "failed" {
+		return steps.exec("systemctl", "reset-failed", "docker.service", "docker.socket")
 	}
 	return nil
 }

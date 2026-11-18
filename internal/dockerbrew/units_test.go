@@ -27,10 +27,10 @@ func TestServiceUnitRunsTheEngineUnderRoot(t *testing.T) {
 	// The daemon runs from active, which only a daemon start repoints at
 	// current, so a deferred restart never mixes a running daemon with a
 	// newly swapped set (#696).
-	if got := kv["ExecStartPre"]; len(got) != 1 || got[0] != "/usr/bin/flock --exclusive /opt/x/.lock /usr/bin/ln -P -fT /opt/x/current /opt/x/active" {
+	if got := kv["ExecStartPre"]; len(got) != 2 || got[0] != "/usr/sbin/sysctl -w net.ipv4.ip_forward=1" || got[1] != "/usr/bin/flock --exclusive /opt/x/.lock /usr/bin/ln -P -fT /opt/x/current /opt/x/active" {
 		t.Errorf("ExecStartPre = %q", got)
 	}
-	if got := kv["ExecStart"]; len(got) != 1 || got[0] != "/opt/x/active/bin/dockerd -H fd://" {
+	if got := kv["ExecStart"]; len(got) != 1 || got[0] != "/opt/x/active/bin/dockerd -H fd:// --firewall-backend=nftables" {
 		t.Errorf("ExecStart = %q", got)
 	}
 	if got := kv["Environment"]; len(got) != 1 || got[0] != "PATH=/opt/x/active/bin:/usr/sbin:/usr/bin:/sbin:/bin" {
@@ -96,6 +96,31 @@ func TestWriteUnitsWritesOnceAndRewritesOnChange(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(dir); len(entries) != 2 {
 		t.Errorf("left temporary files: %v", entries)
+	}
+}
+
+func TestWriteUnitsMigratesTheManagedIPTablesDaemon(t *testing.T) {
+	dir := t.TempDir()
+	legacy := strings.Replace(ServiceUnit(Root), " --firewall-backend=nftables", "", 1)
+	if strings.Contains(legacy, "--firewall-backend") {
+		t.Fatal("legacy fixture still selects a firewall backend")
+	}
+	if err := os.WriteFile(filepath.Join(dir, ServiceName), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, SocketName), []byte(SocketUnit()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := WriteUnits(dir, Root)
+	if err != nil || !changed {
+		t.Fatalf("migrating managed iptables unit: changed=%t, err=%v", changed, err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, ServiceName))
+	if err != nil || !strings.Contains(string(body), "ExecStart="+Root+"/active/bin/dockerd -H fd:// --firewall-backend=nftables\n") {
+		t.Fatalf("native nftables daemon was not installed: %s, err=%v", body, err)
+	}
+	if changed, err := WriteUnits(dir, Root); err != nil || changed {
+		t.Fatalf("repeated migration: changed=%t, err=%v", changed, err)
 	}
 }
 

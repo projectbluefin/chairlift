@@ -322,6 +322,7 @@ func TestEnableDockerDryRunIsOfflineAndWritesNothing(t *testing.T) {
 		"[DRY-RUN] would execute: groupadd [-f -r docker]\n" +
 		"[DRY-RUN] would write /etc/systemd/system/docker.service and /etc/systemd/system/docker.socket\n" +
 		"[DRY-RUN] would execute: systemctl [daemon-reload]\n" +
+		"[DRY-RUN] would execute if Docker failed: systemctl [reset-failed docker.service docker.socket]\n" +
 		"[DRY-RUN] would execute if not yet defined: semanage [fcontext -a -e /usr/libexec/docker /var/lib/chairlift/docker]\n" +
 		"[DRY-RUN] would execute: restorecon [-RF /var/lib/chairlift/docker]\n" +
 		"[DRY-RUN] would execute if the runtime changed: systemctl [try-restart docker.service]\n" +
@@ -475,7 +476,8 @@ func TestUpdateDockerDryRunIsOffline(t *testing.T) {
 	}
 	assertCalls(t, fake.calls, []string{"read manifest", "check units"})
 	if !strings.Contains(out.String(), "[DRY-RUN] would fetch and verify ") ||
-		!strings.Contains(out.String(), "[DRY-RUN] would execute if the runtime changed: systemctl [try-restart docker.service]\n") {
+		!strings.Contains(out.String(), "[DRY-RUN] would execute if the runtime changed: systemctl [try-restart docker.service]\n") ||
+		!strings.Contains(out.String(), "[DRY-RUN] would execute if Docker failed: systemctl [reset-failed docker.service docker.socket]\n") {
 		t.Fatalf("dry-run output = %q", out.String())
 	}
 }
@@ -574,6 +576,45 @@ func TestDockerRuntimePreparationRetriesAFailedReload(t *testing.T) {
 		t.Fatal("failed reload accepted")
 	}
 	assertCalls(t, fake.calls, []string{"read manifest", "check units", "write units", "run systemctl daemon-reload"})
+}
+
+func TestDockerRecoversFailedManagedUnitsBeforeRetrying(t *testing.T) {
+	for _, command := range []string{"enable", "update"} {
+		for _, failReset := range []bool{false, true} {
+			t.Run(command+"/reset-fails="+map[bool]string{false: "false", true: "true"}[failReset], func(t *testing.T) {
+				fake := &fakeDockerHost{installed: true, localGroup: true, unitsChanged: true,
+					state: DockerServiceState{LoadState: "loaded", ActiveState: "failed", SubState: "failed", MainPID: "0", NeedDaemonReload: "no"},
+				}
+				const reset = "systemctl reset-failed docker.service docker.socket"
+				if failReset {
+					fake.failRun = reset
+				}
+				var err error
+				if command == "enable" {
+					err = EnableDocker(t.Context(), fake.host(), "dev", false, io.Discard)
+				} else {
+					err = UpdateDocker(t.Context(), fake.host(), false, io.Discard)
+				}
+				if failReset != (err != nil) {
+					t.Fatalf("reset-fails=%t: err=%v", failReset, err)
+				}
+				want := []string{"read manifest", "check units", "write units", "run systemctl daemon-reload", "run " + reset}
+				if command == "enable" {
+					want[0], want[1] = want[1], want[0]
+				}
+				if !failReset {
+					want = append(want, "install")
+					if command == "enable" {
+						want = append(want, "run usermod -aG docker dev", "run systemctl enable --now docker.socket", "run systemctl start docker.service")
+					}
+				}
+				assertCalls(t, fake.calls, want)
+				if fake.probes != 0 {
+					t.Fatal("an unchanged runtime restart was attempted during failure recovery")
+				}
+			})
+		}
+	}
 }
 
 // utahSemanageStderr is what `semanage fcontext -l -C` prints on Utah

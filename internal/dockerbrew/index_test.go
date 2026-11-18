@@ -133,6 +133,21 @@ func TestSelectBottlesPicksTheFixedSetPerArch(t *testing.T) {
 	}
 }
 
+func TestSelectBottlesRequiresNativeNFTablesSupport(t *testing.T) {
+	for _, arch := range []string{"x86_64_linux", "arm64_linux"} {
+		for _, version := range []string{"28.5.2", "garbage"} {
+			t.Run(arch+"/"+version, func(t *testing.T) {
+				fs := indexFormulae()
+				find(fs, "docker-engine")["versions"] = map[string]any{"stable": version}
+				_, err := SelectBottles(marshalPayload(t, fs), arch)
+				if err == nil || !strings.Contains(err.Error(), "native nftables requires Docker 29 or later") {
+					t.Fatalf("unsupported engine: %v", err)
+				}
+			})
+		}
+	}
+}
+
 func TestSelectBottlesRejectsDependencyDrift(t *testing.T) {
 	for name, mutate := range map[string]func([]formula) []formula{
 		"engine gains a dependency": func(fs []formula) []formula {

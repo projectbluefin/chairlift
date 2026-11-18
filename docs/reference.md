@@ -128,6 +128,31 @@ account access makes the switch already read off. Refusal itself never stops
 workloads or grants access. The replacement service starts through the locked
 `active/bin` runtime; see [provider boundaries](design/package-managers.md).
 
+## Managed Docker's nftables firewall backend
+
+The managed `docker.service` starts dockerd with Docker's native
+`--firewall-backend=nftables`, because a modern firewalld rejects the iptables
+passthrough Docker otherwise uses. Three consequences matter to an operator:
+
+- The backend needs Docker 29 or later. Bottle selection fails closed on an
+  older `docker-engine` stable version rather than installing a runtime the
+  managed unit cannot run; there is no fallback to the iptables backend.
+- Each start sets `net.ipv4.ip_forward=1` for the whole host, including after a
+  reboot. Unlike the iptables backend, this one installs no forward-drop policy
+  and does not enable forwarding itself, so the host firewall (firewalld on
+  Bluefin) remains responsible for policing non-Docker forwarding. On a
+  machine with no active firewall the host routes IPv4 between its interfaces.
+  IPv6 forwarding is unchanged.
+- Swarm state and `DOCKER-USER` rules do not carry over to nftables. A daemon
+  still running the iptables backend is refused by enable and update until an
+  administrator stops Docker, as above. Failed Docker units are reset with
+  `systemctl reset-failed` before each start, so a repaired daemon is not held
+  by systemd's rate limit.
+
+ADR-0024 records the original decision to install rootful Docker from verified
+Homebrew bottles; this section is the operative contract for the firewall
+backend and the forwarding side effect.
+
 ## Service readiness and scope
 
 - Docker requires a responding system socket, not just CLI packages or active
