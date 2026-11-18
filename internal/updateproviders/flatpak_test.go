@@ -516,9 +516,9 @@ func TestFlatpakApplyReportsUnchangedWhenUpdatesRemain(t *testing.T) {
 	}
 }
 
-func TestFlatpakApplyReportsUnchangedWhenEitherScopeRemains(t *testing.T) {
+func TestFlatpakApplyRetainsOnlyTheScopeThatRemains(t *testing.T) {
 	// One scope applied and the other did not: the source as a whole is not
-	// complete, so the coordinator must keep its entries pending.
+	// complete, so only the remaining scope belongs in the retry.
 	provider := newFlatpak(FlatpakDeps{
 		Installed: func() bool { return true },
 		ListUpdates: func(_ context.Context, user bool) ([]flatpak.UpdateInfo, error) {
@@ -534,8 +534,8 @@ func TestFlatpakApplyReportsUnchangedWhenEitherScopeRemains(t *testing.T) {
 		{Name: "User App", Scope: "user"},
 		{Name: "System App", Scope: "system"},
 	}, nil)
-	if err != nil {
-		t.Fatalf("Apply() error = %v", err)
+	if err == nil || len(result.PendingItems) != 1 || result.PendingItems[0].Scope != "system" {
+		t.Fatalf("Apply() = %+v, %v; want only system work pending", result, err)
 	}
 	if result.Changed {
 		t.Fatalf("Apply() result = %#v, want unchanged when a scope remains", result)
