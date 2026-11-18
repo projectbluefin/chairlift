@@ -46,6 +46,20 @@ func FetchNodeStatus(ctx context.Context) (NodeStatus, error) {
 	return node, nil
 }
 
+// SingleModelToActivate returns the stored model that should become active
+// automatically, or "" when there is nothing to do. It returns the lone
+// model only when no active model has been chosen yet and exactly one model
+// is stored: a single-item selection row cannot register a choice, because
+// GTK snaps it to its only item, so a choice always reads back as "no
+// change" and the alias is never written. With more than one model the user
+// still chooses by hand, and a model that is already active is left alone.
+func SingleModelToActivate(models []string, activeModel string) string {
+	if activeModel != "" || len(models) != 1 {
+		return ""
+	}
+	return models[0]
+}
+
 // ConfigureActiveModel maps the bluefin-active alias to modelRef and restarts
 // the local model daemon so it serves the new selection.
 func ConfigureActiveModel(ctx context.Context, modelRef string) error {

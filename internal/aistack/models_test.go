@@ -12,6 +12,34 @@ import (
 	"testing"
 )
 
+// SingleModelToActivate makes the single downloaded model active when the
+// alias is unset, because the one-item selection row cannot register that
+// choice. It does nothing while a model is already active, with no models,
+// or with more than one model for the user to choose between.
+func TestSingleModelToActivate(t *testing.T) {
+	one := []string{"hf.co/unsloth/Qwen2.5-7B-Instruct-GGUF:Q4_K_M"}
+	tests := []struct {
+		name        string
+		models      []string
+		activeModel string
+		want        string
+	}{
+		{"single model, alias unset activates it", one, "", one[0]},
+		{"single model, alias already set leaves it", one, one[0], ""},
+		{"alias set to a different form leaves it", one, "docker.io/" + one[0], ""},
+		{"no models does nothing", nil, "", ""},
+		{"two models leaves the choice to the user", []string{"a/model:q4", "b/model:q4"}, "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SingleModelToActivate(tt.models, tt.activeModel)
+			if got != tt.want {
+				t.Errorf("SingleModelToActivate(%v, %q) = %q, want %q", tt.models, tt.activeModel, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNodeStatusModels(t *testing.T) {
 	status := NodeStatus{
 		Stored: map[string]json.RawMessage{
