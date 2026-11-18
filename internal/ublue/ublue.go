@@ -148,14 +148,17 @@ func SetDescriptorOverride(path string) {
 	log.Printf("ublue image descriptor override: %s", path)
 }
 
-func Detect() (Status, error) {
-	detect := detectInfo
+// DetectImage reads the GUI's image identity without probing helper commands,
+// account groups, or graphics hardware. It shares Detect's display-only E2E seam.
+func DetectImage() (imageinfo.Info, error) {
 	if descriptorOverride != "" {
-		path := descriptorOverride
-		detect = func() (imageinfo.Info, error) { return imageinfo.Load(path) }
+		return imageinfo.Load(descriptorOverride)
 	}
+	return detectInfo()
+}
 
-	info, err := detect()
+func Detect() (Status, error) {
+	info, err := DetectImage()
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			// Factory Reset and Roll Back do not depend on the image

@@ -25,15 +25,22 @@ type AvailableUpdate struct {
 
 // CheckUpdate reports whether a newer image is published for the booted
 // stream. On a composefs host it compares the registry's digest for the
-// booted tag with the booted and staged deployments, without root; elsewhere
-// it runs `bootc upgrade --check`.
+// booted tag with the booted and staged deployments, without root. An ostree
+// origin records no OCI manifest digest, so an ostree host falls back to
+// `bootc upgrade --check`; so does any other host.
 func CheckUpdate(ctx context.Context) (AvailableUpdate, error) {
 	status, err := readComposefsStatus(hostRoot)
 	if errors.Is(err, errNotComposefs) {
-		return checkUpdateFrom(ctx, bootcCommand)
+		status, err = readOstreeStatus(hostRoot)
+		if errors.Is(err, errNotOstree) {
+			return checkUpdateFrom(ctx, bootcCommand)
+		}
 	}
 	if err != nil {
 		return AvailableUpdate{}, err
+	}
+	if status.Status.Booted == nil || status.Status.Booted.Digest() == "" {
+		return checkUpdateFrom(ctx, bootcCommand)
 	}
 	return checkFromRegistry(ctx, status, registryTag)
 }

@@ -25,7 +25,7 @@ func WallpaperSetupRow(installed bool, err error) Row {
 func WallpaperPackages() []Row {
 	return []Row{
 		{Title: "Valhalla", Subtitle: "Wallpaper slideshow app"},
-		{Title: strings.TrimPrefix(valhalla.ExtraWallpapersCask, "ublue-os/tap/"), Subtitle: "Homebrew cask · Extra Bluefin backgrounds"},
+		{Title: strings.TrimPrefix(valhalla.ExtraWallpapersCask, valhalla.WallpaperTap+"/"), Subtitle: "Homebrew cask · Extra Bluefin backgrounds"},
 	}
 }
 

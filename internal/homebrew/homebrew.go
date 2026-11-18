@@ -676,6 +676,39 @@ func BundleInstall(path string) error {
 	return err
 }
 
+// BundleInstallTrusted installs a Brewfile and honours the trust the file
+// declares: every tap it marks `trusted: true` is cloned and trusted before
+// `brew bundle install` loads the collection's casks, and nothing else is
+// tapped or trusted here.
+//
+// It exists because Homebrew applies that flag only while tapping, so a tap
+// that is already present stays untrusted and refuses every cask the
+// collection names (#816). The returned count is how many taps the trust
+// store gained, so the caller can say so rather than escalating silently.
+func BundleInstallTrusted(path string) (trustedTaps int, err error) {
+	store, err := ReadTrustStore()
+	if err != nil {
+		log.Printf("Could not read the Homebrew trust store: %v", err)
+	}
+	taps, err := BundleTaps(path)
+	if err != nil {
+		return 0, fmt.Errorf("read the tap declarations of %q: %w", path, err)
+	}
+	for _, tap := range taps {
+		if !tap.Trusted {
+			continue
+		}
+		change, err := PrepareTap(tap.Name, &store)
+		if err != nil {
+			return trustedTaps, err
+		}
+		if change == TrustChangedTap {
+			trustedTaps++
+		}
+	}
+	return trustedTaps, BundleInstall(path)
+}
+
 // BundleStatus represents the multi-state status of a Brewfile bundle.
 type BundleStatus string
 

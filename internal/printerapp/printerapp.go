@@ -261,7 +261,11 @@ func RenderUnit(app App) string {
 	b.WriteString("UserNS=keep-id:uid=65532,gid=65532\n")
 	b.WriteString(deviceLine(app.DevicePath))
 	fmt.Fprintf(&b, "PublishPort=127.0.0.1:%d:%d\n", app.Port(), app.Port())
-	fmt.Fprintf(&b, "Volume=%q\n\n", app.Volume())
+	// Quadlet's Volume= key passes its value through verbatim; podman 6 does
+	// not unwrap the quotes a %q directive would add, so the mount options end
+	// up as `z"` and podman rejects them (issue #814). Write it unquoted —
+	// quadlet escapes a literal space in the host path itself.
+	fmt.Fprintf(&b, "Volume=%s\n\n", app.Volume())
 
 	b.WriteString("[Service]\nRestart=on-failure\nRestartSec=10\n\n")
 	b.WriteString("[Install]\nWantedBy=default.target\n")

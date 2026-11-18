@@ -70,3 +70,13 @@ def step_would_record_nothing(context):
 @then("the setup dry run would record the completed version")
 def step_would_record_version(context):
     assert atspi.poll(lambda: f"[DRY-RUN] would set {FIRSTRUN_SCHEMA} completed-version=" in read_log(context))
+
+
+@then('the setup bookend displays the "{brand}" logo')
+def step_setup_bookend_displays_logo(context, brand):
+    def logo_showing():
+        root = atspi.page_root(context.app)
+        images = atspi.find_all(root, lambda n: atspi.role(n) == "image" and atspi.name(n) == brand)
+        return bool(images)
+
+    assert atspi.poll(logo_showing), f"setup bookend logo {brand!r} not found"

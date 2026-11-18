@@ -117,6 +117,19 @@ func ValidSlug(slug string) bool {
 // fillPattern matches the fill attribute the CDN emits on the root element.
 var fillPattern = regexp.MustCompile(`fill="[^"]*"`)
 
+// simpleIconOverrides maps a catalog slug to the slug whose artwork is
+// installed for it. The catalog label and slug stay as the user typed and
+// searched them; only the fetched mark changes.
+//
+// ASUS is the lone entry: simple-icons' `asus` mark is the "ASUS" logotype,
+// which at app-grid size reads as noise rather than a glyph. Selecting ASUS
+// installs the Republic of Gamers mark — the ROG eye — which a gaming ASUS
+// host identifies with. `republicofgamers` is recolored to currentColor like
+// every other app-grid mark, so the result is symbolic.
+var simpleIconOverrides = map[string]string{
+	"asus": "republicofgamers",
+}
+
 // FetchSimpleIcon retrieves a brand mark and prepares it for installation.
 //
 // The mark is recolored to currentColor, which is what a symbolic surface
@@ -128,6 +141,9 @@ func FetchSimpleIcon(ctx context.Context, slug string) ([]byte, error) {
 	slug = NormalizeSlug(slug)
 	if !ValidSlug(slug) {
 		return nil, fmt.Errorf("livery: %q is not a valid Simple Icons name", slug)
+	}
+	if rep, ok := simpleIconOverrides[slug]; ok {
+		slug = rep
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)

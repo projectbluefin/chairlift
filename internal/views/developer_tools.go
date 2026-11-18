@@ -591,7 +591,7 @@ func (uh *UserHome) runDeveloperOption(item *developerOptionRow, enabled, retry,
 				uh.toastAdder.ShowToast(pageview.KVMAccessNeedsNewLogin)
 			} else if result.Err != nil && editorErr == nil {
 				log.Printf("views: %s setup failed: %v", title, result.Err)
-				uh.toastAdder.ShowErrorToast(pkexec.UserMessage(result.Err, title+" setup needs attention. Retry the failed steps."))
+				uh.toastAdder.ShowErrorToast(setupFailureToast(title, result.Err))
 			} else if request.Preview && editorErr == nil {
 				uh.toastAdder.ShowToast("[DRY-RUN] Preview: " + title + " — no changes made")
 			}
@@ -621,4 +621,17 @@ func developerOptionFailure(item *developerOptionRow, enabled bool, err error) s
 		return "Couldn't turn on " + name + ". Try again."
 	}
 	return "Couldn't turn off " + name + ". Try again."
+}
+
+// setupFailureToast is the toast for a developer option that could not do what
+// was asked. A missing prerequisite shows its own sentence, since retrying
+// would not help; every other failure keeps the generic retry line. The toast
+// is message-only, so it carries the same sentence developerOptionFailure puts
+// on the row for a prerequisite instead of the uninformative retry prompt.
+func setupFailureToast(title string, err error) string {
+	var prerequisite *devtools.PrerequisiteError
+	if errors.As(err, &prerequisite) {
+		return prerequisite.Message
+	}
+	return pkexec.UserMessage(err, title+" setup needs attention. Retry the failed steps.")
 }

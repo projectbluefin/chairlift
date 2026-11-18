@@ -44,7 +44,8 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 - `internal/pkexec` owns escalation naming and dismissed-auth classification;
   `internal/helperexec` owns invocation journaling. OS staging goes through
   `internal/bootc` and `internal/stageexec`, never a second upgrade route.
-  Reads must not introduce authentication prompts.
+  Reads must not introduce authentication prompts: composefs and ostree hosts
+  are read from world-readable on-disk state.
 - Root must never execute or load from the user-owned Homebrew prefix.
   `internal/dockerbrew` verifies signed metadata and bottle hashes for the
   fixed system Docker helper. Flatpak uses its own authorization, not pkexec;
@@ -58,9 +59,10 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   fail closed; only an absent candidate advances the search path.
 - `internal/updateflow.Coordinator` alone owns update state and badges;
   `updateproviders` adapts existing operations, `updatepresent` owns copy,
-  and the GTK shell renders snapshots. Deployment changes, restart, and cleanup
-  share its mutation admission. Reuse action/refresh/row gates rather
-  than adding parallel owners. Retryable controls reset their gates.
+  and the GTK shell renders snapshots. Deployment changes, restart, cleanup,
+  and Homebrew installs share its mutation admission. Reuse
+  action/refresh/row gates rather than adding parallel owners. Retryable
+  controls reset their gates.
 - Long-running work reports to the window's one `internal/views/activity`
   tracker, which the window-wide Activity indicator and dialog draw. A check and
   every `UpdateShell.beginMutation(title)` admission register themselves;
@@ -70,6 +72,8 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 - All mutations honor `dryrun.Enabled()`. Preview is not live success.
   Destructive actions require confirmation; preserve user-owned files/settings
   and observed package scopes. Package presence is not service readiness.
+  Homebrew payloads install from the tap that owns them: a same-token cask whose
+  receipt names a legacy tap is replaced once before the owning tap's install.
 - Connect GTK signals once at construction, not per refresh. Reuse shared
   `buttonRoute`/`dialogRoute` handlers; purego's callback table is bounded.
   Coalesce streamed output and cap retained rows through `progresslog`/`rowset`.

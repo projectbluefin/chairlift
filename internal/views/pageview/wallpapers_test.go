@@ -45,6 +45,9 @@ func TestWallpaperPackagesDescribeTheAppWithoutSourceJargon(t *testing.T) {
 	if len(rows) != 2 || rows[0].Title != "Valhalla" || rows[0].Subtitle != "Wallpaper slideshow app" {
 		t.Fatalf("WallpaperPackages() = %+v", rows)
 	}
+	if rows[1].Title != "bluefin-wallpapers-extra" {
+		t.Fatalf("wallpaper payload title = %q, want the bare cask token", rows[1].Title)
+	}
 	for _, row := range rows {
 		if strings.Contains(strings.ToLower(row.Title+row.Subtitle), "flatpark") {
 			t.Fatalf("wallpaper disclosure contains source jargon: %+v", row)
