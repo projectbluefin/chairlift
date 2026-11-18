@@ -463,6 +463,19 @@ func TestBundleCheckTwoPassStatusDiscrimination(t *testing.T) {
 			},
 		},
 		{
+			name: "Pass 1 ambiguous cask token -> Indeterminate",
+			path: "/usr/share/bundles/gaming.Brewfile",
+			runner: func(args ...string) (string, error) {
+				return "", &mockExitErr{code: 1, msg: "Error: Cask chairlift exists in multiple taps:\n" +
+					"       * projectbluefin/tap/chairlift\n       * ublue-os/tap/chairlift"}
+			},
+			wantStatus: BundleIndeterminate,
+			wantErr:    true,
+			wantCalls: [][]string{
+				{"bundle", "check", "--file=/usr/share/bundles/gaming.Brewfile"},
+			},
+		},
+		{
 			name: "Pass 1 exit code 2 (usage/exec error) -> Indeterminate",
 			path: "/usr/share/bundles/cli.Brewfile",
 			runner: func(args ...string) (string, error) {

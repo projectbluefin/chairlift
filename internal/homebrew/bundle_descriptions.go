@@ -44,6 +44,15 @@ func DescribeBundleItems(ctx context.Context, items []BundleItem) ([]BundleItem,
 			continue
 		}
 		descriptions, err := describeNames(ctx, flag, kind, names)
+		if err != nil && kind == BundleItemCask && isAmbiguousCaskError(err) && ctx.Err() == nil {
+			// A Brewfile names a cask by bare token. Once two taps ship the
+			// same token, `brew info --cask <token>` refuses to guess, so ask
+			// for the token qualified by the tap its receipt names. The parsed
+			// map still carries the bare token, so callers key on their own
+			// spelling.
+			names = qualifyInstalledCaskNames(names)
+			descriptions, err = describeNames(ctx, flag, kind, names)
+		}
 		if err != nil && len(names) > 1 && ctx.Err() == nil {
 			// Homebrew emits no JSON when any single name is unresolvable
 			// (untapped tap, renamed formula, typo), so retry each name alone

@@ -6,8 +6,8 @@ import (
 )
 
 func TestCommandTimeout(t *testing.T) {
-	if len(stateChangingCommands) != 11 {
-		t.Fatalf("stateChangingCommands has %d entries, want 11: update this test when the map changes", len(stateChangingCommands))
+	if len(stateChangingCommands) != 12 {
+		t.Fatalf("stateChangingCommands has %d entries, want 12: update this test when the map changes", len(stateChangingCommands))
 	}
 
 	for cmd := range stateChangingCommands {

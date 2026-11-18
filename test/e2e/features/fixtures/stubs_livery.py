@@ -208,6 +208,14 @@ def _wallpaper_source(context):
     relative = "bluefin/extra-day.svg"
     cask = os.path.join(context.scenario_dir, "brew-prefix", "Caskroom",
                         "bluefin-wallpapers-extra", "fixture")
+    # The cask's installation receipt is what names the tap the installed copy
+    # came from; ChairLift reads it instead of resolving the token with brew,
+    # which refuses once two taps ship the same cask (#835). The stub brew
+    # reports this copy from projectbluefin/tap, so the receipt says so.
+    metadata = os.path.join(cask, "..", ".metadata")
+    os.makedirs(metadata, exist_ok=True)
+    with open(os.path.join(metadata, "INSTALL_RECEIPT.json"), "w", encoding="utf-8") as handle:
+        handle.write('{"source": {"tap": "projectbluefin/tap"}}\n')
     source = os.path.join(cask, relative)
     os.makedirs(os.path.dirname(source), exist_ok=True)
     with open(source, "w", encoding="utf-8") as handle:

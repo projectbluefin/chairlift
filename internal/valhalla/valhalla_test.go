@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/projectbluefin/chairlift/internal/dryrun"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 )
 
 type fixture struct {
@@ -23,6 +24,7 @@ type fixture struct {
 	receipt                     string
 	fail, badOutput             string
 	untapped                    bool
+	trusted, legacyTapServes    bool
 }
 
 func setup(t *testing.T) *fixture {
@@ -36,14 +38,50 @@ func setup(t *testing.T) *fixture {
 	}
 	oldRun, oldBrew, oldLookup := runCommand, brewExecutable, lookPath
 	oldTap, oldTrust, oldInstall, oldFlatpak := tap, trustCask, installPackage, installFlatpak
+	oldUntrust, oldTrustStore, oldTapDefines := untrustCask, readTrustStore, tapDefinesCask
+	oldReceipts := installedCaskTaps
 	t.Cleanup(func() {
 		runCommand, brewExecutable, lookPath = oldRun, oldBrew, oldLookup
 		tap, trustCask, installPackage, installFlatpak = oldTap, oldTrust, oldInstall, oldFlatpak
+		untrustCask, readTrustStore, tapDefinesCask = oldUntrust, oldTrustStore, oldTapDefines
+		installedCaskTaps = oldReceipts
 		dryrun.Set(false)
 	})
 	dryrun.Set(false)
 	brewExecutable = func() string { return filepath.Join(base, "brew", "bin", "brew") }
 	lookPath = func(name string) (string, error) { return "/tools/" + name, nil }
+	installedCaskTaps = func() (map[string]string, error) {
+		f.calls = append(f.calls, "read-cask-taps")
+		if err := f.failure("read-cask-taps"); err != nil {
+			return nil, err
+		}
+		if f.receipt == "" {
+			return map[string]string{}, nil
+		}
+		return map[string]string{wallpaperToken: f.receipt}, nil
+	}
+	readTrustStore = func() (homebrew.TrustStore, error) {
+		f.calls = append(f.calls, "read-trust-store")
+		if err := f.failure("read-trust-store"); err != nil {
+			return homebrew.TrustStore{}, err
+		}
+		var store homebrew.TrustStore
+		if f.trusted {
+			store.MarkPackageTrusted(homebrew.Cask, legacyWallpaperCask)
+		}
+		return store, nil
+	}
+	tapDefinesCask = func(tap, token string) (bool, error) {
+		f.calls = append(f.calls, "tap-defines "+tap+"/"+token)
+		if err := f.failure("tap-defines"); err != nil {
+			return false, err
+		}
+		return f.legacyTapServes, nil
+	}
+	untrustCask = func(name string) error {
+		f.calls = append(f.calls, "untrust "+name)
+		return f.failure("untrust")
+	}
 	tap = func(name string) error {
 		f.calls = append(f.calls, "tap "+name)
 		if err := f.failure("tap"); err != nil {
@@ -90,12 +128,6 @@ func setup(t *testing.T) *fixture {
 					return "", nil
 				}
 				return WallpaperTap + "\n", nil
-			}
-			if slices.Equal(args, []string{"list", "--cask", "--full-name"}) {
-				if f.receipt == "" {
-					return "", nil
-				}
-				return f.receipt + "/" + wallpaperToken + "\n", nil
 			}
 			if slices.Equal(args, []string{"uninstall", "--cask", legacyWallpaperCask}) {
 				return "", nil
@@ -489,7 +521,9 @@ func TestWallpaperInstallUsesProjectBluefinCaskThroughout(t *testing.T) {
 				t.Errorf("wallpaper read did not name the fully-qualified cask: %s", call)
 			}
 		}
-		if strings.Contains(call, legacyWallpaperTap) {
+		// The trust prune asks whether the retired tap still defines the
+		// cask; nothing it runs may use that tap as a package source.
+		if strings.Contains(call, legacyWallpaperTap) && !strings.HasPrefix(call, "tap-defines ") {
 			t.Errorf("legacy tap used without a legacy receipt: %s", call)
 		}
 	}
@@ -575,8 +609,79 @@ func TestSlideshowLegacyMigrationIsPreviewOnlyInDryRun(t *testing.T) {
 func TestSlideshowFailedReceiptObservationIsNotAbsent(t *testing.T) {
 	f := setup(t)
 	f.installed = true
-	f.fail = "brew list"
+	f.fail = "read-cask-taps"
 	if ready, err := Installed(context.Background()); ready || err == nil {
 		t.Fatalf("failed receipt observation ready = %v, %v; want false with error", ready, err)
+	}
+}
+
+func TestSlideshowPrunesTheRetiredWallpaperTrustEntry(t *testing.T) {
+	f := setup(t)
+	f.trusted = true
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	untrusts := 0
+	for _, call := range f.calls {
+		if call == "untrust "+legacyWallpaperCask {
+			untrusts++
+		}
+	}
+	if untrusts != 1 {
+		t.Fatalf("legacy trust entry pruned %d times, want exactly once: %q", untrusts, f.calls)
+	}
+}
+
+func TestSlideshowKeepsTrustForACaskTheRetiredTapStillServes(t *testing.T) {
+	f := setup(t)
+	f.trusted = true
+	f.legacyTapServes = true
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range f.calls {
+		if strings.HasPrefix(call, "untrust ") {
+			t.Fatalf("removed trust for a cask the retired tap still defines: %q", f.calls)
+		}
+	}
+}
+
+func TestSlideshowDoesNotPruneAnUntrustedCask(t *testing.T) {
+	f := setup(t)
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range f.calls {
+		if strings.HasPrefix(call, "untrust ") || strings.HasPrefix(call, "tap-defines ") {
+			t.Fatalf("looked for a trust entry that does not exist: %q", f.calls)
+		}
+	}
+}
+
+func TestSlideshowPruneFailureDoesNotFailSetup(t *testing.T) {
+	f := setup(t)
+	f.trusted = true
+	f.fail = "untrust"
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatalf("stale trust entry cleanup failed the wallpaper setup: %v", err)
+	}
+}
+
+func TestSlideshowUnreadableTrustStoreLeavesSetupWorking(t *testing.T) {
+	f := setup(t)
+	f.trusted = true
+	f.fail = "read-trust-store"
+	f.artwork(t, "day.png")
+	if err := Install(context.Background(), nil); err != nil {
+		t.Fatalf("unreadable trust store failed the wallpaper setup: %v", err)
+	}
+	for _, call := range f.calls {
+		if strings.HasPrefix(call, "untrust ") {
+			t.Fatalf("pruned from an unreadable trust store: %q", f.calls)
+		}
 	}
 }
