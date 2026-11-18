@@ -88,8 +88,12 @@ workloads or grants access. The replacement service starts through the locked
 ## Service readiness and scope
 
 - Docker requires a responding system socket, not just CLI packages or active
-  units. Newly granted group access may require a new login. Disable stops the
-  system units for all accounts but retains runtime, data and group membership.
+  units. Newly granted group access may require a new login. A daemon that
+  exited during start leaves systemd marking `docker.service` failed while the
+  socket stays active; that is reported as its own prerequisite naming the
+  journal command that records the cause, never as a socket retry. Disable
+  stops the system units for all accounts but retains runtime, data and group
+  membership.
 - Optional VS Code setup does not install the editor or overwrite existing
   settings. Failure does not revoke Developer Mode; retry optional work rather
   than replaying a completed privileged enable.

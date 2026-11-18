@@ -1,8 +1,10 @@
 // Package bootc provides an interface to bootc-based system updates.
 // Status and update checks never need root: on a composefs host they are
-// read from on-disk state and the registry (composefs.go), elsewhere from
-// `bootc status` and `bootc upgrade --check` run unprivileged. Update staging
-// is delegated to the fixed /usr/libexec/bootc-update-stage via pkexec.
+// read from on-disk state and the registry (composefs.go), on an ostree host
+// from the booted deployment's .origin and the staged marker (ostree.go), and
+// elsewhere from `bootc status` and `bootc upgrade --check` run unprivileged.
+// Update staging is delegated to the fixed /usr/libexec/bootc-update-stage
+// via pkexec.
 package bootc
 
 import (
@@ -135,11 +137,15 @@ var registryTag tagResolver = func(ctx context.Context, repository, tag string) 
 }
 
 // GetStatus returns the current bootc host status without root: from
-// composefs state when the host booted from it, otherwise from
-// `bootc status`.
+// composefs state when the host booted from it, from ostree state when it
+// booted from that, otherwise from `bootc status`.
 func GetStatus(ctx context.Context) (*Status, error) {
 	status, err := readComposefsStatus(hostRoot)
 	if !errors.Is(err, errNotComposefs) {
+		return status, err
+	}
+	status, err = readOstreeStatus(hostRoot)
+	if !errors.Is(err, errNotOstree) {
 		return status, err
 	}
 	return getStatusFrom(ctx, bootcCommand)

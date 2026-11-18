@@ -246,7 +246,9 @@ esac`
 				}
 				return err
 			},
-			want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user", "flathub"},
+			// ListUpdates now ends with the installed-refs read it uses to
+			// drop phantom updates; TestUpdateListArgs covers remote-ls.
+			want: []string{"list", "--user", "--all", "--columns=application,arch,branch,active,options"},
 		},
 		{name: "remove all user apps", run: RemoveAllUser, want: []string{"uninstall", "--user", "--all", "-y"}},
 	}
@@ -303,6 +305,136 @@ func TestListUpdatesHonoursContextCancellation(t *testing.T) {
 	}
 	if elapsed > 5*time.Second {
 		t.Fatalf("ListUpdates took %v; cancelled ctx should abort well under the 30s read timeout", elapsed)
+	}
+}
+
+// TestListUpdatesInstalledRefsHonoursCancellation covers the second query the
+// phantom filter adds: a cancellation during the installed-refs read must
+// abort the run instead of being logged as a failed read and returning a
+// stale inventory as success.
+func TestListUpdatesInstalledRefsHonoursCancellation(t *testing.T) {
+	dryrun.Set(false)
+	t.Cleanup(func() { dryrun.Set(false) })
+
+	dir := t.TempDir()
+	script := filepath.Join(dir, "flatpak")
+	source := `#!/bin/sh
+case "$1" in
+remotes) printf 'flathub\n' ;;
+remote-ls) printf 'Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster\n' ;;
+list) : > "$CHAIRLIFT_LIST_MARKER"; sleep 30 ;;
+esac
+exit 0
+`
+	if err := os.WriteFile(script, []byte(source), 0o755); err != nil {
+		t.Fatalf("write fake flatpak: %v", err)
+	}
+	// Prepend the system PATH so `sleep` resolves; the temp dir alone has no
+	// shell utilities.
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	marker := filepath.Join(dir, "list-started")
+	t.Setenv("CHAIRLIFT_LIST_MARKER", marker)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		for range 400 {
+			if _, err := os.Stat(marker); err == nil {
+				cancel()
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := ListUpdates(ctx, true)
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("ListUpdates error = %v, want context.Canceled", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("ListUpdates took %v; cancellation during the installed-refs read must abort promptly", elapsed)
+	}
+}
+
+// Issue #810: an OCI remote's `remote-ls --updates` lists an application whose
+// deployed image is already current, so `flatpak update` applies nothing.
+// ListUpdates must drop that phantom by matching the remote checksum against
+// the deployed OSTree commit or the deployed OCI alt-id. A differing checksum
+// is a real update even when the version matches (a rebuild), and refs are
+// matched per application/arch/branch so one branch cannot clear another.
+func TestListUpdatesDropsPhantomOCIUpdate(t *testing.T) {
+	dryrun.Set(false)
+	tests := []struct {
+		name          string
+		remoteRow     string
+		installedRows string
+		wantUpdates   []UpdateInfo
+	}{
+		{
+			name:          "OCI alt-id matches the remote checksum",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa",
+			wantUpdates:   nil,
+		},
+		{
+			name:          "OSTree active commit matches the remote checksum",
+			remoteRow:     "Firefox\torg.mozilla.firefox\t131.0\taaaaaaaaaaaa\tx86_64\tstable",
+			installedRows: "org.mozilla.firefox\tx86_64\tstable\taaaaaaaaaaaa\tcurrent",
+			wantUpdates:   nil,
+		},
+		{
+			name:          "rebuild keeps the version but changes the checksum",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\tbbbbbbbbbbbb\tx86_64\tmaster",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent",
+			wantUpdates: []UpdateInfo{{
+				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.1",
+				Commit: "bbbbbbbbbbbb", Arch: "x86_64", Branch: "master", Installation: "user",
+			}},
+		},
+		{
+			name:      "another branch's commit does not clear this ref",
+			remoteRow: "Foo\tcom.example.Foo\t2.0\tbbbbbbbbbbbb\tx86_64\tstable",
+			installedRows: "com.example.Foo\tx86_64\tstable\taaaaaaaaaaaa\tcurrent\n" +
+				"com.example.Foo\tx86_64\tbeta\tbbbbbbbbbbbb\tcurrent",
+			wantUpdates: []UpdateInfo{{
+				Name: "Foo", ApplicationID: "com.example.Foo", NewVersion: "2.0",
+				Commit: "bbbbbbbbbbbb", Arch: "x86_64", Branch: "stable", Installation: "user",
+			}},
+		},
+		{
+			name:          "missing remote checksum keeps the update",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent",
+			wantUpdates: []UpdateInfo{{
+				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.1", Installation: "user",
+			}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			source := "#!/bin/sh\ncase \"$1\" in\n" +
+				"remotes) printf 'tuna-os\\n' ;;\n" +
+				"remote-ls) printf '" + tt.remoteRow + "\\n' ;;\n" +
+				"list) printf '" + tt.installedRows + "\\n' ;;\n" +
+				"*) exit 1 ;;\nesac\n"
+			if err := os.WriteFile(filepath.Join(dir, "flatpak"), []byte(source), 0o755); err != nil {
+				t.Fatalf("write fake flatpak: %v", err)
+			}
+			t.Setenv("PATH", dir)
+
+			got, err := ListUpdates(context.Background(), true)
+			if err != nil {
+				t.Fatalf("ListUpdates error = %v", err)
+			}
+			if !reflect.DeepEqual(got, tt.wantUpdates) {
+				t.Fatalf("ListUpdates = %#v, want %#v", got, tt.wantUpdates)
+			}
+		})
 	}
 }
 
@@ -402,8 +534,8 @@ func TestUpdateListArgs(t *testing.T) {
 		user bool
 		want []string
 	}{
-		{name: "user installation", user: true, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--user", "flathub"}},
-		{name: "system installation", user: false, want: []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", "--system", "flathub"}},
+		{name: "user installation", user: true, want: []string{"remote-ls", "--updates", "--all", "--columns=name,application,version,commit,arch,branch", "--user", "flathub"}},
+		{name: "system installation", user: false, want: []string{"remote-ls", "--updates", "--all", "--columns=name,application,version,commit,arch,branch", "--system", "flathub"}},
 	}
 
 	for _, tt := range tests {
@@ -488,27 +620,26 @@ func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
 	}
 	want := []string{
 		"remotes --user --columns=name,options",
-		"remote-ls --updates --app --columns=name,application,version --user flathub",
-		"remote-ls --updates --app --columns=name,application,version --user test-center",
-		"remote-ls --updates --app --columns=name,application,version --user fedora",
-		"list --user --app --columns=origin",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user flathub",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user test-center",
+		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user fedora",
+		"list --user --all --columns=application,arch,branch,active,options",
+		"list --user --all --columns=origin",
 	}
 	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {
 		t.Fatalf("ListUpdates ran %q, want %q", got, want)
 	}
 }
 
-// The usual leftover of an application uninstalled without `--unused` is a
-// remote that still serves runtimes. The update inventory lists applications
-// only, so no update it could show comes from that remote: it is ignored like
-// an unused one rather than failing the check.
-func TestListUpdatesIgnoresABrokenRemoteServingOnlyRuntimes(t *testing.T) {
+// A remote serving only runtimes still supplies updates the user needs.
+func TestListUpdatesReportsABrokenRemoteServingOnlyRuntimes(t *testing.T) {
 	dryrun.Set(false)
 	fakeRemotesFlatpak(t, `flathub\nfedora\n`, `flathub\ntest-center\n`)
 
 	updates, err := ListUpdates(context.Background(), true)
-	if err != nil {
-		t.Fatalf("ListUpdates error = %v, want the runtime-only broken remote ignored", err)
+	var remoteErr *RemoteError
+	if !errors.As(err, &remoteErr) || remoteErr.Remote != "test-center" {
+		t.Fatalf("ListUpdates error = %v, want runtime remote failure", err)
 	}
 	if !reflect.DeepEqual(updates, healthyRemoteUpdates) {
 		t.Fatalf("ListUpdates = %#v, want %#v", updates, healthyRemoteUpdates)
@@ -593,6 +724,14 @@ func TestParseUpdateList(t *testing.T) {
 			want: []UpdateInfo{
 				{Name: "Firefox", ApplicationID: "org.mozilla.firefox", NewVersion: "120.0", Installation: "system"},
 				{Name: "GIMP", ApplicationID: "org.gimp.GIMP", NewVersion: "2.10.36", Installation: "system"},
+			},
+		},
+		{
+			name:   "commit, arch, and branch columns",
+			output: "Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster\n",
+			user:   false,
+			want: []UpdateInfo{
+				{Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.1", Commit: "aaaaaaaaaaaa", Arch: "x86_64", Branch: "master", Installation: "system"},
 			},
 		},
 		{

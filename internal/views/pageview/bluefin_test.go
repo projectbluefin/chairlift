@@ -89,6 +89,14 @@ func TestDeveloperRowNamesTheCapabilityNotTheGroups(t *testing.T) {
 	}
 }
 
+func TestDeveloperRowDoesNotPromiseContainerOrVMSetup(t *testing.T) {
+	// A single developer group, such as dialout, makes the row active even
+	// when no container or virtual machine access was granted.
+	if got := DeveloperRow(true).Subtitle; got != "Developer Mode is on." {
+		t.Errorf("DeveloperRow(true).Subtitle = %q, want an enabled status without claiming container or VM setup", got)
+	}
+}
+
 // The change only applies to new login sessions, so neither outcome may read
 // as immediately effective.
 func TestDeveloperResultAlwaysAsksForALogout(t *testing.T) {

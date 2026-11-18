@@ -19,7 +19,8 @@ schedule choosers, no feature grids.
 Setup Assistant never opens automatically. Choose **Setup Assistant…** from
 the menu, `chairlift --setup`, or its `--first-run` alias to open Welcome, then
 walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
-Bluefin wordmark, an introduction confirming the system is ready and guiding
+running distribution's wordmark (Bazzite, Aurora, or the default Bluefin
+mark), an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
 and the Zavala quote. Unavailable pages are skipped;
 the ordinary page controls perform actions. **Bluefin CLI** is selected by
@@ -37,7 +38,7 @@ error toast. **Dismiss Setup**
 
 ![Updates](screenshots/1-updates.png)
 
-The Bluefin wordmark leads the page, with the one action button directly
+The running image's wordmark leads the page, with the one action button directly
 under it and a single line of status under the button: **Up to date ·
 checked at** a time, how many updates are available, or **Restart to finish
 updating**. If something went wrong, a second line says what. **System
@@ -48,6 +49,8 @@ can see which source is holding you up without opening anything. Only the
 sources this computer can manage are listed at all, so a source it does not
 update is absent rather than explained at length, and a group whose sources all
 drop out goes with them.
+Applications includes Flatpak runtimes and extensions, so updates to the
+supporting software remain available even when the apps themselves are current.
 **Preferences** (Ctrl+,) has a switch per source: a source you turn off there
 says **Disabled in preferences** as soon as you change it, and a source you
 cannot turn on shows its switch off, greyed out, with **Disabled by
@@ -132,9 +135,10 @@ the system is checked and cannot be chosen again, and says **Installed from
 The **Install Selected** button at the top installs exactly what you
 checked. A collection you selected in full installs as a whole, the way its
 own definition says; a partly selected one installs just the entries you
-picked. Where an app comes from a source this computer does not trust yet,
-the app is trusted on its own first, and the confirmation that follows says
-how much was trusted. Installs show stepped progress while they run, using
+picked. A whole collection trusts exactly the taps its own definition marks
+trusted, before their apps load. Otherwise an app from a source this computer
+does not trust yet is trusted on its own first. The confirmation that follows
+says how much was trusted. Installs show stepped progress while they run, using
 the same controls in the explicit setup flow. App Store and VS Code entries
 are not selectable and are never installed implicitly with a collection.
 A collection whose apps and tools are all already on the system reads
@@ -399,6 +403,9 @@ Damask from an older image's App collection definition; wallpaper setup is absen
 Setup converts extra SVG/JPEG XL/AVIF backgrounds to PNG in your own data folder,
 adds that folder to Valhalla's manual folders, and selects its manual source,
 keeping any folders you already chose. The original wallpaper files are kept.
+The extra wallpapers come from Bluefin's own Homebrew tap; a copy an earlier
+release installed from another tap is replaced during setup, and the converted
+images stay in place.
 Valhalla's native SVG/JPEG XL support is tracked in
 [Valhalla #99](https://github.com/tunix/valhalla/issues/99).
 The row reads **(Installed)** only when its wallpaper source and settings are
@@ -424,13 +431,15 @@ if no Kickoff applet is present, the group reports unavailable instead of
 pretending the setting can be applied. Search all 3,461 brands
 [Simple Icons](https://simpleicons.org/) publishes — your project, your
 employer, whatever you answer to — and Control Center fetches the one you pick.
-You set it once; it never changes on its own, because a personal mark that
-rotated would stop being personal. Turning the mark off resets the Kickoff applet
-to Plasma's default icon.
+ASUS installs the Republic of Gamers eye rather than the ASUS logotype, which is
+illegible at button size. You set it once; it never changes on its own, because a
+personal mark that rotated would stop being personal. Turning the mark off resets
+the Kickoff applet to Plasma's default icon.
 
 On GNOME, **Top Bar Icon** puts a foundation's mark in the top bar:
 CNCF, the Linux Foundation, GNOME, freedesktop.org, Apache, Rust, Universal
-Blue, Bazzite, Aurora, or the Open Gaming Collective. This section is omitted
+Blue, Bazzite, Aurora, the Open Gaming Collective, ASUS, or Framework. ASUS
+shows the Republic of Gamers eye. This section is omitted
 on Plasma, which has no corresponding top-bar surface. On a gaming image the
 collective's mark is the one you start with, since that is whose work the
 image ships — pick any other and it stays picked.
@@ -473,9 +482,11 @@ default; an applet changed to another icon is left alone.
 One button. **Free Up Space** deletes old downloads and app parts nothing uses,
 and leaves your apps, files, and containers alone. It
 tells you how much it reclaimed only when it could measure it. An activity
-spinner remains visible while cleanup is running. Below it sit any
-**Maintenance Tasks** whoever set up this computer added. **Powerwash**
-holds the actions you can't undo (under **Maintenance → Powerwash**): **Roll Back**
+spinner remains visible while cleanup is running. It does not start while an
+update or a Homebrew install is running; wait for that to finish and try again.
+Below it sit any **Maintenance Tasks** whoever set up this computer added.
+**Powerwash** holds the actions you can't undo (under **Maintenance →
+Powerwash**): **Roll Back**
 returns to the previous version if an update caused problems, **Powerwash**
 removes your Flatpak apps and Distrobox containers (everything on the Apps page
 stays), and **Factory Reset** reinstalls the operating system, warning first

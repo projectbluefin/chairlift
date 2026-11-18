@@ -14,7 +14,7 @@
 .PHONY: build-linux-amd64 build-linux-arm64
 .PHONY: run dev clean
 .PHONY: test fmt lint
-.PHONY: build-e2e e2e e2e-atspi
+.PHONY: build-e2e build-e2e-gui e2e e2e-atspi
 .PHONY: install uninstall
 .PHONY: bump
 
@@ -109,7 +109,10 @@ E2E_BUILD_DIR=$(BUILD_DIR)/e2e
 E2E_COVERDIR?=
 E2E_COVER_FLAG=$(if $(E2E_COVERDIR),-cover -covermode=atomic,)
 
-build-e2e: build
+build-e2e: build build-e2e-gui
+
+# AT-SPI needs only the tagged GUI, not the installed helper binaries.
+build-e2e-gui: schemas
 	@mkdir -p $(E2E_BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(E2E_COVER_FLAG) -tags $(E2E_TAGS) -o $(E2E_BUILD_DIR)/$(BINARY_NAME) ./cmd/chairlift
 
@@ -190,16 +193,18 @@ e2e-docker: build-e2e schemas
 # every E2E test. Artifacts land in build/atspi/<tags|all>/. ATSPI_TAGS
 # narrows the run to a behave tag expression, e.g.
 # `make e2e-atspi ATSPI_TAGS=@maintenance`; CHAIRLIFT_ATSPI_KNOWN_ISSUES=1 also
-# runs @known_issue scenarios.
+# runs @known_issue scenarios. ATSPI_TIMEOUT is the `go test` deadline; the
+# behave run is stopped shortly before it so its log is still printed.
 ATSPI_TAGS?=
+ATSPI_TIMEOUT?=40m
 ATSPI_RUN=$(or $(shell printf '%s' '$(ATSPI_TAGS)' | tr -cs 'A-Za-z0-9' '-' | sed 's/^-//; s/-$$//'),all)
-e2e-atspi: build-e2e schemas
+e2e-atspi: build-e2e-gui schemas
 	@rm -rf "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)" && mkdir -p "$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN)"
 	CHAIRLIFT_E2E_BUILD_DIR=$(abspath $(BUILD_DIR)) \
 		CHAIRLIFT_SCHEMA_DIR=$(abspath $(BUILD_DIR))/schemas \
 		CHAIRLIFT_ATSPI_OUT=$(abspath $(BUILD_DIR))/atspi/$(ATSPI_RUN) \
 		CHAIRLIFT_ATSPI_TAGS='$(ATSPI_TAGS)' \
-		test/e2e/dakota.sh -count=1 -v -timeout 40m -run '^TestATSPI'
+		test/e2e/dakota.sh -count=1 -v -timeout $(ATSPI_TIMEOUT) -run '^TestATSPI'
 
 # Development build with race detector (requires CGO)
 dev:

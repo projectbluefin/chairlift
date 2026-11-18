@@ -7,6 +7,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/developerapps"
 	"github.com/projectbluefin/chairlift/internal/dryrun"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
+	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -121,6 +122,13 @@ func (uh *UserHome) installDeveloperApp(item *developerAppRow) {
 	if !item.checked || item.status.Installed || !item.status.Available || !uh.developerGate.TryStart() {
 		return
 	}
+	// A Homebrew install must not start beside Free Up Space's `brew cleanup`
+	// or an update run (#817).
+	if !uh.updateShell.beginMutation("Installing " + item.app.Name) {
+		uh.developerGate.Reset()
+		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		return
+	}
 	view := uh.developerApps
 	view.installing = true
 	view.refresh.Begin() // Invalidate observations made before this mutation.
@@ -131,6 +139,7 @@ func (uh *UserHome) installDeveloperApp(item *developerAppRow) {
 	go func() {
 		state, err := developerapps.Install(item.app)
 		sgtk.RunOnMainThread(func() {
+			uh.updateShell.finishMutation()
 			view.refresh.Begin() // Reject any inventory snapshot predating completion.
 			view.installing = false
 			uh.developerGate.Reset()

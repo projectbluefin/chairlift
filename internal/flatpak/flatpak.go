@@ -505,7 +505,19 @@ type UpdateInfo struct {
 	Name          string `json:"name"`
 	ApplicationID string `json:"application"`
 	NewVersion    string `json:"new_version"`
+	Commit        string `json:"commit"` // remote checksum, short form
+	Arch          string `json:"arch"`
+	Branch        string `json:"branch"`
 	Installation  string `json:"installation"` // "user" or "system"
+}
+
+// UpdateRef preserves the architecture and branch when updating one row.
+// A runtime can have several installed branches with the same ID and name.
+func (u UpdateInfo) UpdateRef() string {
+	if u.ApplicationID != "" && u.Arch != "" && u.Branch != "" {
+		return refKey(u.ApplicationID, u.Arch, u.Branch)
+	}
+	return u.ApplicationID
 }
 
 // installationFlag returns the scope flag every per-installation query passes.
@@ -549,13 +561,10 @@ func EnabledRemotes(user bool) ([]string, error) {
 	return parseUpdateRemotes(output), nil
 }
 
-// originListArgs lists the origin remote of every installed application in
-// the scope. "--app" matches the update query's own filter: runtimes never
-// appear in the update inventory, so a remote that serves only runtimes —
-// the usual leftover when an application is uninstalled without
-// `--unused` — cannot hide an update the inventory would list.
+// originListArgs covers all installed refs, including runtime extensions. A
+// failed remote is relevant whenever any installed ref needs it for updates.
 func originListArgs(user bool) []string {
-	return []string{"list", installationFlag(user), "--app", "--columns=origin"}
+	return []string{"list", installationFlag(user), "--all", "--columns=origin"}
 }
 
 // parseOrigins returns the set of remotes named in `flatpak list
@@ -571,10 +580,10 @@ func parseOrigins(output string) map[string]bool {
 }
 
 // updateListArgs builds the flatpak argument list used to query one remote's
-// available updates. "--app" restricts the query to applications so runtimes
-// never appear as updates.
+// available updates. Include runtimes and otherwise-hidden extensions so
+// runtime-only fixes can make Update All actionable.
 func updateListArgs(user bool, remote string) []string {
-	return []string{"remote-ls", "--updates", "--app", "--columns=name,application,version", installationFlag(user), remote}
+	return []string{"remote-ls", "--updates", "--all", "--columns=name,application,version,commit,arch,branch", installationFlag(user), remote}
 }
 
 // RemoteError reports a remote whose update query failed while installed
@@ -603,12 +612,12 @@ func readCtx(ctx context.Context, args ...string) (string, error) {
 	return runFlatpakCommandCtx(runCtx, args...)
 }
 
-// ListUpdates returns available updates for Flatpak applications in one
+// ListUpdates returns available updates for Flatpak applications and runtimes in one
 // installation. It queries each enabled remote separately, because a single
 // remote-less `remote-ls --updates` fails outright when any one remote is
 // unreachable — a leftover remote from an uninstalled application then hid
 // every other remote's updates (issue #471). A remote whose query fails is
-// ignored, with a log line, when no installed application in the
+// ignored, with a log line, when no installed ref in the
 // installation comes from it; otherwise it is reported as a *RemoteError.
 // When the returned error is non-nil the slice still holds the updates the
 // healthy remotes reported, for callers that can use a partial inventory.
@@ -646,6 +655,31 @@ func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
 		remoteUpdates, _ := parseUpdateList(output, user)
 		updates = append(updates, remoteUpdates...)
 	}
+
+	// Drop phantom updates before reporting: an OCI remote's
+	// `remote-ls --updates` lists an application whose deployed image is
+	// already current, because it compares the remote checksum to the
+	// deployed OSTree commit rather than the deployed alternative ID that
+	// `flatpak update` uses (issue #810). A remote checksum matching either
+	// installed identity is that no-op, not a real update.
+	if len(updates) > 0 {
+		installed, err := installedRefs(ctx, user)
+		if err != nil {
+			// A cancelled run and a missing binary are not this read's
+			// failure; only a genuine read error may be judged below.
+			var notFound *NotFoundError
+			if ctx.Err() != nil || errors.As(err, &notFound) {
+				return nil, err
+			}
+			// Without installed identities a phantom cannot be told from a
+			// real update; keep the inventory as reported rather than drop a
+			// real update on a failed read.
+			log.Printf("flatpak: cannot read installed refs to filter phantom updates: %v", err)
+		} else {
+			updates = dropPhantomUpdates(updates, installed)
+		}
+	}
+
 	if len(failed) == 0 {
 		return updates, nil
 	}
@@ -663,7 +697,7 @@ func ListUpdates(ctx context.Context, user bool) ([]UpdateInfo, error) {
 	var errs []error
 	for _, remoteErr := range failed {
 		if !origins[remoteErr.Remote] {
-			log.Printf("flatpak: ignoring %s remote %q, which no installed application uses: %v", installation, remoteErr.Remote, remoteErr.Err)
+			log.Printf("flatpak: ignoring %s remote %q, which no installed ref uses: %v", installation, remoteErr.Remote, remoteErr.Err)
 			continue
 		}
 		errs = append(errs, remoteErr)
@@ -725,11 +759,102 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 		if len(fields) >= 3 {
 			update.NewVersion = strings.TrimSpace(fields[2])
 		}
+		if len(fields) >= 4 {
+			update.Commit = strings.TrimSpace(fields[3])
+		}
+		if len(fields) >= 5 {
+			update.Arch = strings.TrimSpace(fields[4])
+		}
+		if len(fields) >= 6 {
+			update.Branch = strings.TrimSpace(fields[5])
+		}
 
 		updates = append(updates, update)
 	}
 
 	return updates, nil
+}
+
+// installedRef is the installed identity of one ref: the deployed OSTree
+// commit and, for an OCI install, the deployed alternative image digest.
+type installedRef struct {
+	Active string
+	AltID  string
+}
+
+// refKey identifies one ref within an installation. Flatpak's `list` and
+// `remote-ls` disagree on the `ref` column's kind prefix, so the key is
+// composed from columns both commands report identically.
+func refKey(applicationID, arch, branch string) string {
+	return applicationID + "/" + arch + "/" + branch
+}
+
+// installedRefs returns the installed identity of each application/runtime ref in the
+// scope, keyed by refKey. It is the cross-reference that lets ListUpdates drop
+// a phantom update: an OCI remote's `remote-ls --updates` lists an
+// application whose deployed image is already current, comparing the remote
+// checksum against the alternative ID that only the deploy data carries
+// (issue #810, flatpak commit a819741d13).
+func installedRefs(ctx context.Context, user bool) (map[string]installedRef, error) {
+	output, err := readCtx(ctx, "list", installationFlag(user), "--all", "--columns=application,arch,branch,active,options")
+	if err != nil {
+		return nil, err
+	}
+
+	refs := make(map[string]installedRef)
+	for _, line := range strings.Split(output, "\n") {
+		fields, ok := splitColumns(line)
+		if !ok || len(fields) < 4 {
+			continue
+		}
+		appID := strings.TrimSpace(fields[0])
+		if appID == "" {
+			continue
+		}
+		ref := installedRef{Active: strings.TrimSpace(fields[3])}
+		if len(fields) >= 5 {
+			ref.AltID = parseAltID(fields[4])
+		}
+		refs[refKey(appID, strings.TrimSpace(fields[1]), strings.TrimSpace(fields[2]))] = ref
+	}
+	return refs, nil
+}
+
+// parseAltID pulls the OCI alternative image digest out of the `options`
+// column, where `flatpak list` appends `alt-id=<12 hex>` for an OCI install.
+func parseAltID(options string) string {
+	for _, option := range strings.Split(options, ",") {
+		if altID, ok := strings.CutPrefix(strings.TrimSpace(option), "alt-id="); ok {
+			return altID
+		}
+	}
+	return ""
+}
+
+// dropPhantomUpdates removes updates that `flatpak update` would not apply.
+// The remote checksum equals either the deployed OSTree commit (an OSTree
+// remote) or the deployed alternative image digest (an OCI remote), and
+// `flatpak update` treats either match as nothing to do. A remote whose
+// checksum matches neither is a real update, including a rebuild that keeps
+// the version. An update with no remote checksum, or whose installed ref is
+// unknown, is kept: incomplete data is not evidence that nothing is pending.
+func dropPhantomUpdates(updates []UpdateInfo, installed map[string]installedRef) []UpdateInfo {
+	kept := updates[:0]
+	for _, update := range updates {
+		ref, ok := installed[refKey(update.ApplicationID, update.Arch, update.Branch)]
+		if !ok || update.Commit == "" {
+			kept = append(kept, update)
+			continue
+		}
+		if update.Commit == ref.Active || (ref.AltID != "" && update.Commit == ref.AltID) {
+			continue
+		}
+		kept = append(kept, update)
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
 }
 
 // UninstallUnused removes unused Flatpak runtimes and extensions in both the

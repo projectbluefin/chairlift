@@ -297,9 +297,10 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 			Needs       any               `yaml:"needs"`
 			Permissions map[string]string `yaml:"permissions"`
 			Steps       []struct {
-				Name string `yaml:"name"`
-				Run  string `yaml:"run"`
-				Uses string `yaml:"uses"`
+				Name string            `yaml:"name"`
+				Run  string            `yaml:"run"`
+				Uses string            `yaml:"uses"`
+				Env  map[string]string `yaml:"env"`
 				With struct {
 					Cache *bool `yaml:"cache"`
 				} `yaml:"with"`
@@ -349,6 +350,23 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 		t.Errorf("e2e job steps must execute 'make e2e'")
 	}
 
+	atspiJob, ok := config.Jobs["atspi"]
+	if !ok {
+		t.Fatal("release.yml must define an 'atspi' job")
+	}
+	if len(atspiJob.Permissions) != 1 || atspiJob.Permissions["contents"] != "read" {
+		t.Errorf("atspi job permissions = %v, want contents: read", atspiJob.Permissions)
+	}
+	atspiRunsShard := false
+	for _, step := range atspiJob.Steps {
+		if step.Run == "make e2e-atspi" && step.Env["ATSPI_TAGS"] == "${{ matrix.tags }}" {
+			atspiRunsShard = true
+		}
+	}
+	if !atspiRunsShard {
+		t.Error("atspi job must run each matrix tag expression")
+	}
+
 	goreleaserJob, ok := config.Jobs["goreleaser"]
 	if !ok {
 		t.Fatal("release.yml must define a 'goreleaser' job")
@@ -385,6 +403,7 @@ func TestReleaseWorkflowGatedOnRequiredChecks(t *testing.T) {
 	if !hasGate || !hasE2E || !hasATSPI {
 		t.Errorf("goreleaser job needs = %v, want [gate, e2e, atspi]", needsList)
 	}
+
 	// A tag push publishes signed binaries: no job in release.yml may restore
 	// a Go cache another workflow could have written (#644).
 	for name, job := range config.Jobs {

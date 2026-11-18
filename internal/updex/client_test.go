@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	updexapi "github.com/frostyard/updex/updex"
+	updexapi "github.com/frostyard/updex/v2/updex"
 
-	updexconfig "github.com/frostyard/updex/config"
+	updexconfig "github.com/frostyard/updex/v2/config"
 )
 
 // hermeticRoot is the single systemd-style search root every test in this

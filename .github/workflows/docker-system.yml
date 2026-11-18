@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
 
       - name: Free disk space for Dakota
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@d1f65645c53d413462117fe1f05d00b9d9382f89 # v1
         with:
           storage-backend: remove-software
           update-podman: "false"
@@ -63,7 +63,7 @@ jobs:
       # are redacted by docker_system_integration.py before they reach disk.
       - name: Upload live system-Docker evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: docker-system-results
           path: |

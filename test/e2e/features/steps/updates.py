@@ -403,3 +403,13 @@ def step_narrow_window(context):
 def step_sidebar_hidden(context):
     ok = atspi.poll(lambda: not _sidebar_showing(context))
     assert ok, "the sidebar is still showing"
+
+
+@then('the Updates header displays the "{brand}" logo')
+def step_updates_header_displays_logo(context, brand):
+    def logo_showing():
+        root = content(context)
+        images = atspi.find_all(root, lambda n: atspi.role(n) == "image" and atspi.name(n) == brand)
+        return bool(images)
+
+    assert atspi.poll(logo_showing), f"Updates header logo {brand!r} not found"

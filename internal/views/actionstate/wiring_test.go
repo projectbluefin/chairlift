@@ -407,3 +407,137 @@ func TestFreeUpSpaceIsAdmittedByTheUpdateShell(t *testing.T) {
 		t.Error("onFreeUpSpaceClicked must take its own gate before the update shell's admission")
 	}
 }
+
+// Every Homebrew install the GUI starts must be admitted by the update shell,
+// or Free Up Space's `brew cleanup` can begin beside it and fail on Homebrew's
+// Cellar lock while an install that needs those versions is still running
+// (#817). Admission lasts until the run's own result is reported, and every
+// outcome releases it.
+func TestBrewInstallsShareTheUpdateShellAdmission(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
+	read := func(file string) string {
+		t.Helper()
+		data, err := os.ReadFile(filepath.Join(viewsDir, file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	functionBody := func(source, name string) string {
+		t.Helper()
+		parts := strings.SplitN(source, "func "+name+"(", 2)
+		if len(parts) != 2 {
+			t.Fatalf("function %s not found", name)
+		}
+		body, _, _ := strings.Cut(parts[1], "\nfunc ")
+		return body
+	}
+
+	bundleInstall := read("bundle_install.go")
+	body := functionBody(bundleInstall, "(uh *UserHome) runSelectedBundlesInstall")
+	for _, required := range []string{
+		"if !uh.updateShell.beginMutation(",
+		"uh.bundleInstallGate.Reset()",
+		"pageview.UpdateBusyToast",
+		"uh.updateShell.finishMutation()",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("runSelectedBundlesInstall must be admitted by the update shell: missing %q", required)
+		}
+	}
+	if strings.Index(body, "uh.bundleInstallGate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation(") {
+		t.Error("runSelectedBundlesInstall must take its own gate before the update shell's admission")
+	}
+	if finish, reset := strings.Index(body, "uh.updateShell.finishMutation()"), strings.Index(body, "defer uh.bundleInstallGate.Reset()"); finish < 0 || reset < 0 || finish > reset {
+		t.Error("runSelectedBundlesInstall must release the admission before its own gate")
+	}
+	// One release, in the closure every outcome reaches: a failed collection
+	// only `continue`s the loop, and a preview runs after the release.
+	if n := strings.Count(body, "uh.updateShell.finishMutation()"); n != 1 {
+		t.Errorf("runSelectedBundlesInstall releases the admission %d times, want exactly 1 on every path", n)
+	}
+	if finish, preview := strings.Index(body, "uh.updateShell.finishMutation()"), strings.Index(body, "if dryrun.Enabled()"); finish < 0 || preview < 0 || finish > preview {
+		t.Error("runSelectedBundlesInstall must release the admission before its preview path reports")
+	}
+	if !strings.Contains(bundleInstall, "homebrew.BundleInstallTrusted(") {
+		t.Error("a whole-collection install must trust the taps its Brewfile declares before loading casks (#816)")
+	}
+
+	cli := read("bluefin_cli.go")
+	body = functionBody(cli, "(uh *UserHome) runBluefinCLI")
+	for _, required := range []string{
+		"if !uh.updateShell.beginMutation(",
+		"cli.gate.Reset()",
+		"pageview.UpdateBusyToast",
+		"uh.updateShell.finishMutation()",
+	} {
+		if !strings.Contains(body, required) {
+			t.Errorf("runBluefinCLI must be admitted by the update shell: missing %q", required)
+		}
+	}
+	if strings.Index(body, "cli.gate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation(") {
+		t.Error("runBluefinCLI must take its own gate before the update shell's admission")
+	}
+	if finish, reset := strings.LastIndex(body, "uh.updateShell.finishMutation()"), strings.LastIndex(body, "cli.gate.Reset()"); finish < 0 || reset < 0 || finish > reset {
+		t.Error("runBluefinCLI must release the admission before reporting its outcome")
+	}
+	// A failed apply and a preview both report through the same closure, and
+	// it releases the admission before either branch writes a toast.
+	if n := strings.Count(body, "uh.updateShell.finishMutation()"); n != 1 {
+		t.Errorf("runBluefinCLI releases the admission %d times, want exactly 1 on every path", n)
+	}
+	if finish, preview := strings.Index(body, "uh.updateShell.finishMutation()"), strings.LastIndex(body, "dryrun.Enabled()"); finish < 0 || preview < 0 || finish > preview {
+		t.Error("runBluefinCLI must release the admission before its preview path reports")
+	}
+
+	developer := read("developer_setup.go")
+	for _, required := range []string{
+		"func (uh *UserHome) withUpdateShellAdmission(",
+		"uh.updateShell.beginMutation(",
+		"uh.updateShell.finishMutation()",
+		`"Installing the Dev Container CLI"`,
+		`"Installing the developer app collection"`,
+		"homebrew.BundleInstallTrusted(",
+	} {
+		if !strings.Contains(developer, required) {
+			t.Errorf("Developer Mode Homebrew installs must be admitted by the update shell: missing %q", required)
+		}
+	}
+
+	// The other pages that install Homebrew packages follow the same shape:
+	// their own gate first, then update-shell admission, a visible refusal,
+	// and finishMutation on every release path.
+	for _, site := range []struct {
+		file, function, gate string
+		// finishes is how many release paths the site has: the run's one
+		// completion closure, plus an early abort that had already admitted.
+		finishes int
+	}{
+		{"agents_page.go", "(uh *UserHome) onAgentModeToggled", "uh.agentModeGate.TryStart()", 1},
+		{"troubleshoot.go", "(uh *UserHome) setUpGoose", "uh.gooseGate.TryStart()", 1},
+		{"developer_apps.go", "(uh *UserHome) installDeveloperApp", "uh.developerGate.TryStart()", 1},
+		{"hardware_group.go", "(uh *UserHome) EnableHardware", "view.setup.TryStart()", 1},
+		{"wallpapers.go", "(uh *UserHome) runWallpaperInstall", "uh.wallpaperGate.TryStart()", 2},
+	} {
+		body = functionBody(read(site.file), site.function)
+		for _, required := range []string{
+			"if !uh.updateShell.beginMutation(",
+			"pageview.UpdateBusyToast",
+			"uh.updateShell.finishMutation()",
+		} {
+			if !strings.Contains(body, required) {
+				t.Errorf("%s must be admitted by the update shell: missing %q", site.function, required)
+			}
+		}
+		if strings.Index(body, site.gate) > strings.Index(body, "uh.updateShell.beginMutation(") {
+			t.Errorf("%s must take its own gate before the update shell's admission", site.function)
+		}
+		if n := strings.Count(body, "uh.updateShell.finishMutation()"); n != site.finishes {
+			t.Errorf("%s releases the admission %d times, want %d", site.function, n, site.finishes)
+		}
+	}
+}

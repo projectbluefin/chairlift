@@ -29,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.11"
+          go-version: "1.27.4"
           # A tag push publishes signed binaries: never restore a cache that
           # another workflow could have written into its validation jobs.
           cache: false
@@ -37,7 +37,7 @@ jobs:
       - name: Install golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
-          version: v2.12.2
+          version: v2.15.0
 
       - name: Run host-independent quality gate
         run: make ci
@@ -47,7 +47,7 @@ jobs:
   e2e:
     name: End-to-end quality gate
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -57,7 +57,7 @@ jobs:
           persist-credentials: false
 
       - name: Free disk space for Dakota
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@d1f65645c53d413462117fe1f05d00b9d9382f89 # v1
         with:
           storage-backend: remove-software
           update-podman: "false"
@@ -65,17 +65,22 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.11"
+          go-version: "1.27.4"
+          # A tag push publishes signed binaries: never restore a cache that
+          # another workflow could have written into its validation jobs.
           cache: false
 
+      # Run in the pinned Dakota image under a private Wayland session.
       - name: Run E2E tests
         env:
           CHAIRLIFT_SCHEMA_DIR: ${{ github.workspace }}/build/schemas
         run: make e2e
 
+  # Match the pull-request shards; publishing waits for every shard.
   atspi:
     name: AT-SPI (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     strategy:
@@ -83,33 +88,32 @@ jobs:
       matrix:
         include:
           - shard: features
-            tags: "@features or @setup or @shell"
+            tags: "@features"
           - shard: apps
             tags: "@apps or @updates"
           - shard: livery
             tags: "@livery or @help"
           - shard: config
-            tags: "@config or @maintenance or @agents or @navigation"
+            tags: "@config or @maintenance or @agents or @navigation or @setup or @shell"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - name: Free disk space for Dakota
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@d1f65645c53d413462117fe1f05d00b9d9382f89 # v1
         with:
           storage-backend: remove-software
           update-podman: "false"
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: "1.26.11"
+          go-version: "1.27.4"
           cache: false
-
       - name: Run AT-SPI suite shard on Dakota
-        run: make e2e-atspi ATSPI_TAGS='${{ matrix.tags }}'
+        env:
+          ATSPI_TAGS: ${{ matrix.tags }}
+        run: make e2e-atspi
 
   goreleaser:
     name: Release with GoReleaser
@@ -133,7 +137,7 @@ jobs:
           # `stable` would let an unchanged tag rebuild against a newer
           # compiler. See ci pin Go and GoReleaser in the write-capable
           # release job (#88).
-          go-version: "1.26.11"
+          go-version: "1.27.4"
           # Do not restore or save Go caches in the write-capable release build;
           # prevents caches populated or modified by preceding gate/e2e jobs
           # from reaching the release binaries.
@@ -144,16 +148,16 @@ jobs:
       # Install cosign for keyless (Fulcio/Rekor) signing of the archives and
       # checksums file below. Needs the id-token: write permission above.
       - name: Install cosign
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Install syft
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
           distribution: goreleaser
           # Exact reviewed release (latest stable v2 at time of #88);
           # `~> v2` would let the same tag publish under a newer GoReleaser.
-          version: "v2.18.2"
+          version: "v2.20.2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

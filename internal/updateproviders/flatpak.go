@@ -123,8 +123,9 @@ func flatpakRemoteWarning(remote string) string {
 
 func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, progress func(updateflow.Progress)) (updateflow.ApplyResult, error) {
 	scopes := scopesFromItems(items)
+	pending := append([]updateflow.Item{}, items...)
 	ran := false
-
+	preview := p.isDryRun()
 	for _, user := range []bool{true, false} {
 		scope := "system"
 		if user {
@@ -134,79 +135,73 @@ func (p *flatpakProvider) Apply(ctx context.Context, items []updateflow.Item, pr
 			continue
 		}
 		if progress != nil {
-			label := "user applications"
-			if !user {
-				label = "system applications"
-			}
-			progress(updateflow.Progress{
-				Source:  updateflow.Applications,
-				Message: "Updating " + label + "…",
-			})
+			progress(updateflow.Progress{Source: updateflow.Applications, Message: "Updating " + scope + " applications…"})
 		}
 		if err := ctx.Err(); err != nil {
-			return updateflow.ApplyResult{}, err
+			return updateflow.ApplyResult{PendingItems: pending, Preview: ran && preview}, err
 		}
 		if err := p.deps.Update(ctx, "", user); err != nil {
-			return updateflow.ApplyResult{}, err
+			return updateflow.ApplyResult{PendingItems: pending, Preview: ran && preview}, err
 		}
 		ran = true
+		if preview {
+			continue
+		}
+
+		// Reconcile each successful scope before starting the next one, so a
+		// later failure cannot put already-verified work back in the retry.
+		remaining, err := p.pendingAfterScope(ctx, pending, scope)
+		if err != nil {
+			return updateflow.ApplyResult{PendingItems: pending}, err
+		}
+		pending = remaining
 	}
-	if ran && p.isDryRun() {
+	if ran && preview {
 		return updateflow.ApplyResult{Preview: true}, nil
 	}
 	if !ran {
 		return updateflow.ApplyResult{}, nil
 	}
-
-	// `flatpak update` exits 0 on paths that pull nothing — it prints
-	// "Nothing to update." and returns success when it has no work. A zero
-	// exit is therefore not evidence that the pending inventory was applied,
-	// and reporting a completed update here would be a claim the command
-	// cannot support. Re-list the scopes the run was asked to apply and claim
-	// the mutation only when those applied entries are gone; otherwise the
-	// source stays pending and the coordinator reports it as unchanged.
-	// Newly appeared updates (published between check and apply) were not
-	// part of the applied set and do not mark the run unchanged.
-	changed, err := p.updatesCleared(ctx, items, scopes)
-	if err != nil {
-		return updateflow.ApplyResult{}, err
+	if len(pending) > 0 {
+		if len(pending) < len(items) {
+			return updateflow.ApplyResult{PendingItems: pending}, errors.New("some Flatpak updates are still available")
+		}
+		// Preserve the unchanged outcome when no selected item was applied.
+		return updateflow.ApplyResult{}, nil
 	}
-	return updateflow.ApplyResult{Changed: changed}, nil
+	return updateflow.ApplyResult{Changed: true}, nil
 }
 
-// updatesCleared reports whether all applied updates in the scopes that ran an
-// update are no longer listed in available updates. It is the post-hoc
-// reconciliation flatpak requires: the tool has no dry-run, so the only proof
-// that a zero exit applied the inventory is that the inventory is gone.
-// Newly appeared updates (updates published after the check) were not part of
-// the applied set and do not mark the run unchanged.
-func (p *flatpakProvider) updatesCleared(ctx context.Context, items []updateflow.Item, scopes map[string]bool) (bool, error) {
-	for _, user := range []bool{true, false} {
-		scope := "system"
-		if user {
-			scope = "user"
-		}
-		if !scopes[scope] {
+// pendingAfterScope removes only selected items proven absent after a successful
+// update in scope. Failed observations retain the entire unverified inventory;
+// newly published updates do not prevent completion of the selected items.
+func (p *flatpakProvider) pendingAfterScope(ctx context.Context, items []updateflow.Item, scope string) ([]updateflow.Item, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	updates, err := p.deps.ListUpdates(ctx, scope == "user")
+	if err != nil {
+		return nil, fmt.Errorf("verify Flatpak updates after apply: %w", err)
+	}
+	pending := make([]updateflow.Item, 0, len(items))
+	for _, item := range items {
+		if item.Scope != scope {
+			pending = append(pending, item)
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		updates, err := p.deps.ListUpdates(ctx, user)
-		if err != nil {
-			return false, fmt.Errorf("verify Flatpak updates after apply: %w", err)
-		}
-		applied := appliedRefsForScope(items, scope)
-		if len(applied) == 0 {
-			return false, nil
-		}
-		for _, u := range updates {
-			if updateMatchesApplied(u, applied) {
-				return false, nil
+		refs := appliedRefsForScope([]updateflow.Item{item}, scope)
+		stillPending := len(refs) == 0
+		for _, update := range updates {
+			if updateMatchesApplied(update, refs) {
+				stillPending = true
+				break
 			}
 		}
+		if stillPending {
+			pending = append(pending, item)
+		}
 	}
-	return true, nil
+	return pending, nil
 }
 
 func appliedRefsForScope(items []updateflow.Item, scope string) map[string]bool {
@@ -217,8 +212,7 @@ func appliedRefsForScope(items []updateflow.Item, scope string) map[string]bool 
 		}
 		if item.ID != "" {
 			refs[item.ID] = true
-		}
-		if item.Name != "" {
+		} else if item.Name != "" {
 			refs[item.Name] = true
 		}
 	}
@@ -226,7 +220,7 @@ func appliedRefsForScope(items []updateflow.Item, scope string) map[string]bool 
 }
 
 func updateMatchesApplied(u flatpak.UpdateInfo, appliedRefs map[string]bool) bool {
-	if u.ApplicationID != "" && appliedRefs[u.ApplicationID] {
+	if u.ApplicationID != "" && (appliedRefs[u.UpdateRef()] || appliedRefs[u.ApplicationID]) {
 		return true
 	}
 	if u.Name != "" && appliedRefs[u.Name] {
@@ -246,7 +240,7 @@ func flatpakItems(updates []flatpak.UpdateInfo) []updateflow.Item {
 	items := make([]updateflow.Item, 0, len(updates))
 	for _, update := range updates {
 		items = append(items, updateflow.Item{
-			ID:               update.ApplicationID,
+			ID:               update.UpdateRef(),
 			Name:             update.Name,
 			AvailableVersion: update.NewVersion,
 			Scope:            update.Installation,
