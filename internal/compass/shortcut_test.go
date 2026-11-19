@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -204,5 +205,76 @@ func TestSuppressInternalHotkey(t *testing.T) {
 	}
 	if launcher["hotkey"] != "" {
 		t.Fatalf("expected launcher.hotkey == \"\", got %v", launcher["hotkey"])
+	}
+}
+
+func writeCompassConfig(t *testing.T, home, body string) string {
+	t.Helper()
+	dir := filepath.Join(home, ".var", "app", AppID, "config", "compass")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "compass.json")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// The user's own Compass settings survive: only launcher.hotkey changes.
+func TestSuppressInternalHotkeyPreservesExistingSettings(t *testing.T) {
+	home := t.TempDir()
+	path := writeCompassConfig(t, home, `{"theme":"dark","launcher":{"hotkey":"<Super>space","width":640}}`)
+
+	if err := SuppressInternalHotkey(home); err != nil {
+		t.Fatalf("SuppressInternalHotkey: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("parsing rewritten config: %v", err)
+	}
+	if root["theme"] != "dark" {
+		t.Errorf("theme = %v, want dark (top-level setting lost)", root["theme"])
+	}
+	launcher, ok := root["launcher"].(map[string]any)
+	if !ok {
+		t.Fatalf("launcher missing in config: %v", root)
+	}
+	if launcher["width"] != float64(640) {
+		t.Errorf("launcher.width = %v, want 640 (launcher setting lost)", launcher["width"])
+	}
+	if launcher["hotkey"] != "" {
+		t.Errorf("launcher.hotkey = %v, want empty", launcher["hotkey"])
+	}
+}
+
+// A config Compass cannot parse is reported and left as it was, never
+// replaced by a near-empty one.
+func TestSuppressInternalHotkeyLeavesMalformedConfigUntouched(t *testing.T) {
+	home := t.TempDir()
+	const body = `{"theme": "dark",`
+	path := writeCompassConfig(t, home, body)
+
+	if err := SuppressInternalHotkey(home); err == nil {
+		t.Fatal("SuppressInternalHotkey accepted malformed JSON")
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != body {
+		t.Errorf("malformed config rewritten to %q, want it unchanged", data)
+	}
+}
+
+func TestSuppressInternalHotkeySkipsEmptyHome(t *testing.T) {
+	if err := SuppressInternalHotkey(""); err != nil {
+		t.Fatalf("SuppressInternalHotkey(\"\") = %v, want nil", err)
 	}
 }
