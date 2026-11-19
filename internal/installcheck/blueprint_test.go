@@ -378,3 +378,56 @@ func TestBlueprintActionsAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+// TestWindowToolbarHasNoTopBar holds the window's outer toolbar to one title
+// bar. A top bar there is a second header bar above the sidebar/content
+// split: it pushed the real title bar down and read as a broken title bar
+// when the Activity indicator lived in one. The indicator belongs in the
+// shown page's header bar instead.
+func TestWindowToolbarHasNoTopBar(t *testing.T) {
+	root := RepoRoot()
+	path := filepath.Join(root, blueprintDir, "window.ui")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	decoder := xml.NewDecoder(strings.NewReader(string(data)))
+	depth := 0
+	toolbarDepth := 0
+	found := false
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			break
+		}
+		switch element := tok.(type) {
+		case xml.StartElement:
+			depth++
+			if element.Name.Local == "object" && xmlAttribute(element, "id") == "setup_toolbar" {
+				toolbarDepth = depth
+				found = true
+			}
+			if toolbarDepth != 0 && depth == toolbarDepth+1 && element.Name.Local == "child" && xmlAttribute(element, "type") == "top" {
+				t.Fatalf("%s: the window's outer toolbar has a top bar; the title bar is the split view's, and a second header bar above it reads as a broken title bar", path)
+			}
+		case xml.EndElement:
+			if depth == toolbarDepth {
+				toolbarDepth = 0
+			}
+			depth--
+		}
+	}
+	if !found {
+		t.Fatalf("%s: no object with id setup_toolbar; update this test if the window's outer toolbar was renamed", path)
+	}
+}
+
+// xmlAttribute returns one attribute of a start element, or "".
+func xmlAttribute(element xml.StartElement, name string) string {
+	for _, attr := range element.Attr {
+		if attr.Name.Local == name {
+			return attr.Value
+		}
+	}
+	return ""
+}

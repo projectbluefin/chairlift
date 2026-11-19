@@ -54,6 +54,7 @@ type UpdateShell struct {
 	sourcesReady        bool
 	closeBlocked        bool
 	toolbarView         *adw.ToolbarView
+	headerBar           *adw.HeaderBar
 	toastOverlay        *adw.ToastOverlay
 	header              *gtk.Box
 	statusLine          *gtk.Label
@@ -134,6 +135,15 @@ func (s *UpdateShell) ToolbarView() *adw.ToolbarView {
 		return nil
 	}
 	return s.toolbarView
+}
+
+// HeaderBar returns the Updates page's header bar, so the window can place
+// the Activity indicator in the shown page's title bar.
+func (s *UpdateShell) HeaderBar() *adw.HeaderBar {
+	if s == nil {
+		return nil
+	}
+	return s.headerBar
 }
 
 // PreferencesPage is the Updates destination's one preferences page. The
@@ -590,6 +600,7 @@ type updateShellUI struct {
 	_                 ui.File               `ui:"update-shell"`
 	ToastOverlay      *adw.ToastOverlay     `ui:"toast_overlay"`
 	ToolbarView       *adw.ToolbarView      `ui:"toolbar_view"`
+	HeaderBar         *adw.HeaderBar        `ui:"header_bar"`
 	Refresh           *gtk.Button           `ui:"refresh"`
 	Banner            *adw.Banner           `ui:"banner"`
 	BreakpointBin     *adw.BreakpointBin    `ui:"breakpoint_bin"`
@@ -610,6 +621,7 @@ func (s *UpdateShell) build() {
 	ui.Bind(&view)
 	s.toastOverlay = view.ToastOverlay
 	s.toolbarView = view.ToolbarView
+	s.headerBar = view.HeaderBar
 	s.refresh = view.Refresh
 	s.banner = view.Banner
 	s.breakpointBin = view.BreakpointBin

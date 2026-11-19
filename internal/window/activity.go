@@ -2,6 +2,7 @@ package window
 
 import (
 	"github.com/projectbluefin/chairlift/internal/ui"
+	"github.com/projectbluefin/chairlift/internal/views"
 	"github.com/projectbluefin/chairlift/internal/views/activity"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
@@ -11,10 +12,15 @@ import (
 	"codeberg.org/puregotk/puregotk/v4/gtk"
 )
 
-// activityView draws internal/views/activity's inventory: the window-wide
-// header bar's indicator, shown with a spinner while anything runs, and the
-// Activity dialog it opens, which lists every running task with its progress
-// whichever page started it (issue #734).
+// activityView draws internal/views/activity's inventory: the shown page's
+// header bar carries the indicator, shown with a spinner while anything runs,
+// and it opens the Activity dialog, which lists every running task with its
+// progress whichever page started it (issue #734).
+//
+// The indicator lives in the page pane's header bar rather than a bar of its
+// own above the split view: a second header bar pushed the window's title bar
+// down and read as a broken title bar, and the page pane's header bar is the
+// one title bar a narrow window still shows.
 //
 // Rows are kept per task and updated in place; they connect no signals, so
 // the callback-table invariant in AGENTS.md is not at stake. The dialog is
@@ -23,10 +29,15 @@ type activityView struct {
 	tracker *activity.Tracker
 	button  *gtk.Button
 	spinner *gtk.Spinner
-	dialog  *adw.Dialog
-	stack   *gtk.Stack
-	group   *adw.PreferencesGroup
-	rows    map[uint64]*activityRow
+	// owner is the header bar the button is packed into. PackStart parents
+	// the child into the header bar's internal box, so the button's parent
+	// is never the header bar itself; the owner is what lets a navigation
+	// skip an unchanged page and Remove the button from the old bar.
+	owner  *adw.HeaderBar
+	dialog *adw.Dialog
+	stack  *gtk.Stack
+	group  *adw.PreferencesGroup
+	rows   map[uint64]*activityRow
 	// One pulse callback for every indeterminate bar, as installProgress
 	// does in internal/views: an action that cannot measure its progress
 	// still visibly runs.
@@ -45,10 +56,17 @@ type activityRow struct {
 func (w *Window) bindActivity() {
 	var view activityUI
 	ui.Bind(&view)
+	button := gtk.NewButton()
+	spinner := gtk.NewSpinner()
+	button.SetChild(&spinner.Widget)
+	button.SetActionName("win.show-activity")
+	button.SetTooltipText("Activity")
+	views.SetAccessibleLabel(button, "Activity")
+	button.SetVisible(false)
 	a := &activityView{
 		tracker: w.activities,
-		button:  w.ui.ActivityButton,
-		spinner: w.ui.ActivitySpinner,
+		button:  button,
+		spinner: spinner,
 		dialog:  view.Dialog,
 		stack:   view.Stack,
 		group:   view.TaskGroup,
@@ -67,6 +85,28 @@ func (w *Window) bindActivity() {
 	// until render reads it again.
 	w.activities.SetNotify(func() { sgtk.RunOnMainThread(a.render) })
 	a.render()
+	w.placeActivityButton(w.contentStack.GetVisibleChildName())
+}
+
+// placeActivityButton moves the Activity indicator into the shown page's
+// header bar. The window has one indicator, so it follows the visible page
+// rather than being duplicated into every page's title bar.
+func (w *Window) placeActivityButton(name string) {
+	if w.activity == nil || w.activity.button == nil {
+		return
+	}
+	header := w.pageHeaders[name]
+	if header == nil || w.activity.owner == header {
+		return
+	}
+	// HeaderBar.Remove disconnects the notify::visible handler PackStart
+	// installed; Unparent would leave it connected and accumulate one per
+	// navigation.
+	if w.activity.owner != nil {
+		w.activity.owner.Remove(&w.activity.button.Widget)
+	}
+	header.PackStart(&w.activity.button.Widget)
+	w.activity.owner = header
 }
 
 // present opens the Activity dialog over the window.

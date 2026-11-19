@@ -64,6 +64,7 @@ type Window struct {
 	toasts       *adw.ToastOverlay
 
 	pages           map[string]*adw.ToolbarView
+	pageHeaders     map[string]*adw.HeaderBar  // Each page's title bar; the Activity indicator follows the shown one
 	navRows         map[string]*gtk.ListBoxRow // Store references to nav rows for badges
 	config          *config.Config
 	capabilities    capability.Set // Resolved once; the policy floor for every entry path
@@ -84,8 +85,8 @@ type Window struct {
 	navRoutes       []navigation.Item // navItems plus the details they offer; the Resolve inventory
 	backRoute       string            // The primary the shown detail's Back returns to; "" on a primary
 	// activities is the one inventory of long-running work every page
-	// reports to; activity draws it in the sidebar header and the Activity
-	// dialog. See internal/views/activity.
+	// reports to; activity draws it in the shown page's header bar and the
+	// Activity dialog. See internal/views/activity.
 	activities *activity.Tracker
 	activity   *activityView
 }
@@ -358,18 +359,21 @@ func (w *Window) createNavRow(item navigation.Item) *gtk.ListBoxRow {
 func (w *Window) bindContentArea() {
 	w.contentStack = w.ui.ContentStack
 	w.contentPage = w.ui.ContentPage
+	w.pageHeaders = make(map[string]*adw.HeaderBar)
 	// Add pages to the stack
 	items := w.navItems
 	for _, item := range items {
 		page := w.views.GetPage(item.Name)
 		if page != nil {
 			w.pages[item.Name] = page
+			w.pageHeaders[item.Name] = w.views.PageHeader(page)
 		}
 		if item.Name == "updates" && w.updateShell != nil && w.updateShell.Widget() != nil {
 			// The Updates destination is the status-first shell, whose one
 			// preferences page also holds everything else the Updates page
 			// owns. See UpdateShell.PreferencesPage.
 			w.pages[item.Name] = w.updateShell.ToolbarView()
+			w.pageHeaders[item.Name] = w.updateShell.HeaderBar()
 			w.contentStack.AddNamed(w.updateShell.Widget(), item.Name)
 			continue
 		}
@@ -385,10 +389,12 @@ func (w *Window) bindContentArea() {
 	// is shown. See #241.
 	if recovery := w.views.RecoveryPage(); recovery != nil {
 		w.pages["recovery"] = recovery
+		w.pageHeaders["recovery"] = w.views.PageHeader(recovery)
 		w.contentStack.AddNamed(&recovery.Widget, "recovery")
 	}
 	if developer := w.views.DeveloperPage(); developer != nil {
 		w.pages["developer"] = developer
+		w.pageHeaders["developer"] = w.views.PageHeader(developer)
 		w.contentStack.AddNamed(&developer.Widget, "developer")
 	}
 
@@ -546,6 +552,7 @@ func (w *Window) navigateToPage(pageName string) {
 		w.sidebarList.SelectRow(row)
 	}
 	w.contentStack.SetVisibleChildName(transition.VisibleChild)
+	w.placeActivityButton(transition.VisibleChild)
 	w.contentPage.SetTitle(transition.Title)
 	w.splitView.SetShowContent(transition.ShowContent)
 }

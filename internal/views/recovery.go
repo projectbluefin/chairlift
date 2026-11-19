@@ -40,6 +40,7 @@ func (uh *UserHome) createRecoveryPage() (*adw.ToolbarView, *adw.PreferencesPage
 		}
 	}
 	view.BackButton.ConnectClicked(&backClickedCb)
+	uh.recordPageHeader(view.Page, view.Header)
 	return view.Page, view.Preferences
 }
 

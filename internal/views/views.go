@@ -73,6 +73,9 @@ type UserHome struct {
 	// The preferences page inside each createPage ToolbarView; it owns the
 	// scrolling, so it is what ScrollPageToTop resets.
 	pageContents map[*adw.ToolbarView]*adw.PreferencesPage
+	// The header bar inside each page's ToolbarView, so the window can place
+	// the Activity indicator in the shown page's title bar.
+	pageHeaders map[*adw.ToolbarView]*adw.HeaderBar
 
 	// References for dynamic updates
 	installedFormulae  *adw.PreferencesGroup
@@ -544,7 +547,25 @@ func (uh *UserHome) createPage() (*adw.ToolbarView, *adw.PreferencesPage) {
 		uh.pageContents = map[*adw.ToolbarView]*adw.PreferencesPage{}
 	}
 	uh.pageContents[view.Page] = view.Preferences
+	uh.recordPageHeader(view.Page, view.Header)
 	return view.Page, view.Preferences
+}
+
+// recordPageHeader remembers a page's header bar for PageHeader.
+func (uh *UserHome) recordPageHeader(page *adw.ToolbarView, header *adw.HeaderBar) {
+	if uh.pageHeaders == nil {
+		uh.pageHeaders = map[*adw.ToolbarView]*adw.HeaderBar{}
+	}
+	uh.pageHeaders[page] = header
+}
+
+// PageHeader returns the header bar of a page built by createPage, so the
+// window can place the Activity indicator in the shown page's title bar.
+func (uh *UserHome) PageHeader(page *adw.ToolbarView) *adw.HeaderBar {
+	if uh == nil || page == nil {
+		return nil
+	}
+	return uh.pageHeaders[page]
 }
 
 // AttachUpdateShell shares the unified mutation owner with secondary actions.

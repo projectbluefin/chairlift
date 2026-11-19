@@ -10,7 +10,7 @@ corresponding .blp file and regenerate this file with blueprint-compiler.
     <property name="child">
       <object class="AdwToolbarView" id="toolbar_view">
         <child type="top">
-          <object class="AdwHeaderBar">
+          <object class="AdwHeaderBar" id="header_bar">
             <child type="start">
               <object class="GtkButton" id="refresh">
                 <property name="icon-name">view-refresh-symbolic</property>

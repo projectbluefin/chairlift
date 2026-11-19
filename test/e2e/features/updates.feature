@@ -106,7 +106,7 @@ Feature: Updates
 
   # The window's Activity indicator lists long-running work from any page
   # (#734); the update check is the one that runs at every start. It sits
-  # above the sidebar/content split, so a narrow window that shows only the
+  # in the shown page's header bar, so a narrow window that shows only the
   # page still offers it.
   @stub.updates-flatpak-slow-check @stub.updates-brew-current
   Scenario: The Activity indicator lists a running check until it finishes
