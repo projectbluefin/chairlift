@@ -394,6 +394,7 @@ func TestWindowToolbarHasNoTopBar(t *testing.T) {
 	decoder := xml.NewDecoder(strings.NewReader(string(data)))
 	depth := 0
 	toolbarDepth := 0
+	found := false
 	for {
 		tok, err := decoder.Token()
 		if err != nil {
@@ -404,6 +405,7 @@ func TestWindowToolbarHasNoTopBar(t *testing.T) {
 			depth++
 			if element.Name.Local == "object" && xmlAttribute(element, "id") == "setup_toolbar" {
 				toolbarDepth = depth
+				found = true
 			}
 			if toolbarDepth != 0 && depth == toolbarDepth+1 && element.Name.Local == "child" && xmlAttribute(element, "type") == "top" {
 				t.Fatalf("%s: the window's outer toolbar has a top bar; the title bar is the split view's, and a second header bar above it reads as a broken title bar", path)
@@ -414,6 +416,9 @@ func TestWindowToolbarHasNoTopBar(t *testing.T) {
 			}
 			depth--
 		}
+	}
+	if !found {
+		t.Fatalf("%s: no object with id setup_toolbar; update this test if the window's outer toolbar was renamed", path)
 	}
 }
 

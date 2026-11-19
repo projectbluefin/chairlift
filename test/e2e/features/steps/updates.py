@@ -324,9 +324,9 @@ def step_release_flatpak_check(context):
         pass
 
 
-# The Activity indicator sits in the window-wide header bar above the
-# sidebar/content split (internal/ui/window.blp), outside the content side
-# the other lookups search.
+# The Activity indicator sits in the shown page's header bar
+# (internal/window/activity.go placeActivityButton), so it is searched for
+# across the whole window.
 ACTIVITY_LABEL = "Activity"
 
 
