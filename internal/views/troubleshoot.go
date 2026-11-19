@@ -221,6 +221,21 @@ func (uh *UserHome) launchGoose() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		state, facts, _ := agentmode.ObserveLive(ctx)
+		// A click to use Goose is the user's acknowledgment, so when the
+		// freshly observed state reports the packages gone (for example after a
+		// system update removed the Homebrew installs while the profile persists),
+		// reinstall them here instead of leaving the row idle. The cached label may
+		// still have said Launch: the state is read live here, not from the stale
+		// cached value.
+		if state.CanSetUp() {
+			// finishGooseAction and setUpGoose touch the row, so run them on the
+			// main thread: this goroutine is not it.
+			sgtk.RunOnMainThread(func() {
+				uh.finishGooseAction(state, facts)
+				uh.setUpGoose()
+			})
+			return
+		}
 		var launchErr error
 		var result agentmode.LaunchResult
 		if state.Ready() {

@@ -541,3 +541,39 @@ func TestBrewInstallsShareTheUpdateShellAdmission(t *testing.T) {
 		}
 	}
 }
+
+// A click to use Goose is the user's acknowledgment, so when a launch
+// re-reads live readiness and finds the packages gone (for example after a
+// system update removed the Homebrew installs while the profile persists),
+// the row must reinstall rather than show an idle "Goose isn't set up yet"
+// toast. Issue #845.
+func TestLaunchDelegatesToSetupWhenPackagesMissing(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "troubleshoot.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "func (uh *UserHome) launchGoose()", 2)
+	if len(parts) != 2 {
+		t.Fatal("launchGoose not found")
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+
+	if !strings.Contains(body, "if state.CanSetUp() {") {
+		t.Error("launchGoose must re-check readiness with state.CanSetUp()")
+	}
+	// The delegation runs on the main thread (it touches the row) and reuses
+	// the same Set Up path, so one click reinstalls.
+	if !strings.Contains(body, "uh.setUpGoose()") || !strings.Contains(body, "sgtk.RunOnMainThread") {
+		t.Error("launchGoose must delegate the reinstall to setUpGoose on the main thread")
+	}
+	// After delegating, launchGoose returns rather than falling through to the
+	// launch path with the packages missing.
+	branch, _, _ := strings.Cut(body[strings.Index(body, "if state.CanSetUp() {"):], "\n\t\t}\n")
+	if !strings.Contains(branch, "uh.setUpGoose()") || !strings.Contains(branch, "return") {
+		t.Error("the CanSetUp branch must delegate to setUpGoose and return")
+	}
+}
