@@ -242,6 +242,7 @@ func flatpakItems(updates []flatpak.UpdateInfo) []updateflow.Item {
 		items = append(items, updateflow.Item{
 			ID:               update.UpdateRef(),
 			Name:             update.Name,
+			CurrentVersion:   update.CurrentVersion,
 			AvailableVersion: update.NewVersion,
 			Scope:            update.Installation,
 		})

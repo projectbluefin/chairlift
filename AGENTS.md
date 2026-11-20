@@ -63,7 +63,10 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
   fail closed; only an absent candidate advances the search path.
 - `internal/updateflow.Coordinator` alone owns update state and badges;
   `updateproviders` adapts existing operations, `updatepresent` owns copy,
-  and the GTK shell renders snapshots. Deployment changes, restart, cleanup,
+  and the GTK shell renders snapshots. Per-item rows name the installed and
+  available versions; Flatpak's installed version comes from the same
+  installed-refs read that drops phantom updates, and install scope is not
+  shown. Deployment changes, restart, cleanup,
   and Homebrew installs share its mutation admission. Reuse
   action/refresh/row gates rather than adding parallel owners. Retryable
   controls reset their gates.

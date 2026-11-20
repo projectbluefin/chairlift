@@ -248,7 +248,7 @@ esac`
 			},
 			// ListUpdates now ends with the installed-refs read it uses to
 			// drop phantom updates; TestUpdateListArgs covers remote-ls.
-			want: []string{"list", "--user", "--all", "--columns=application,arch,branch,active,options"},
+			want: []string{"list", "--user", "--all", "--columns=application,arch,branch,version,active,options"},
 		},
 		{name: "remove all user apps", run: RemoveAllUser, want: []string{"uninstall", "--user", "--all", "-y"}},
 	}
@@ -377,40 +377,41 @@ func TestListUpdatesDropsPhantomOCIUpdate(t *testing.T) {
 		{
 			name:          "OCI alt-id matches the remote checksum",
 			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster",
-			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\t1.3.0\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa",
 			wantUpdates:   nil,
 		},
 		{
 			name:          "OSTree active commit matches the remote checksum",
 			remoteRow:     "Firefox\torg.mozilla.firefox\t131.0\taaaaaaaaaaaa\tx86_64\tstable",
-			installedRows: "org.mozilla.firefox\tx86_64\tstable\taaaaaaaaaaaa\tcurrent",
+			installedRows: "org.mozilla.firefox\tx86_64\tstable\t131.0\taaaaaaaaaaaa\tcurrent",
 			wantUpdates:   nil,
 		},
 		{
 			name:          "rebuild keeps the version but changes the checksum",
 			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\tbbbbbbbbbbbb\tx86_64\tmaster",
-			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\t1.3.1\taaaaaaaaaaaa\tcurrent",
 			wantUpdates: []UpdateInfo{{
-				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.1",
+				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", CurrentVersion: "1.3.1", NewVersion: "1.3.1",
 				Commit: "bbbbbbbbbbbb", Arch: "x86_64", Branch: "master", Installation: "user",
 			}},
 		},
 		{
 			name:      "another branch's commit does not clear this ref",
 			remoteRow: "Foo\tcom.example.Foo\t2.0\tbbbbbbbbbbbb\tx86_64\tstable",
-			installedRows: "com.example.Foo\tx86_64\tstable\taaaaaaaaaaaa\tcurrent\n" +
-				"com.example.Foo\tx86_64\tbeta\tbbbbbbbbbbbb\tcurrent",
+			installedRows: "com.example.Foo\tx86_64\tstable\t2.0\taaaaaaaaaaaa\tcurrent\n" +
+				"com.example.Foo\tx86_64\tbeta\t1.9\tbbbbbbbbbbbb\tcurrent",
 			wantUpdates: []UpdateInfo{{
-				Name: "Foo", ApplicationID: "com.example.Foo", NewVersion: "2.0",
+				Name: "Foo", ApplicationID: "com.example.Foo", CurrentVersion: "2.0", NewVersion: "2.0",
 				Commit: "bbbbbbbbbbbb", Arch: "x86_64", Branch: "stable", Installation: "user",
 			}},
 		},
 		{
-			name:          "missing remote checksum keeps the update",
-			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1",
-			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent",
+			name:          "missing remote checksum keeps the update with its installed version",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\t\tx86_64\tmaster",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\t1.3.0\taaaaaaaaaaaa\tcurrent",
 			wantUpdates: []UpdateInfo{{
-				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.1", Installation: "user",
+				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", CurrentVersion: "1.3.0", NewVersion: "1.3.1",
+				Arch: "x86_64", Branch: "master", Installation: "user",
 			}},
 		},
 	}
@@ -623,7 +624,7 @@ func TestListUpdatesIgnoresABrokenUnusedRemote(t *testing.T) {
 		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user flathub",
 		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user test-center",
 		"remote-ls --updates --all --columns=name,application,version,commit,arch,branch --user fedora",
-		"list --user --all --columns=application,arch,branch,active,options",
+		"list --user --all --columns=application,arch,branch,version,active,options",
 		"list --user --all --columns=origin",
 	}
 	if got := loggedCalls(t, logPath); !reflect.DeepEqual(got, want) {

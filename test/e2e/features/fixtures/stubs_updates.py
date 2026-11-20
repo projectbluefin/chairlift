@@ -18,7 +18,14 @@ import os
 
 from stubs import fake_executable, stub
 
-FIREFOX_UPDATE = "Firefox\torg.mozilla.firefox\t131.0\n"
+# The remote row names commit/arch/branch so the update keeps its branch
+# identity, and the installed row names the version it moves from. The two
+# commits differ, so the phantom filter keeps this as a real update.
+FIREFOX_UPDATE = "Firefox\torg.mozilla.firefox\t131.0\tbbbbbbbbbbbb\tx86_64\tstable\n"
+FLATPAK_INSTALLED = (
+    "org.mozilla.firefox\tx86_64\tstable\t130.0\taaaaaaaaaaaa\t\n"
+    "org.freedesktop.Platform\tx86_64\t26.08\t25.08\told\t\n"
+)
 JQ_OUTDATED = {
     "formulae": [
         {"name": "jq", "installed_versions": ["1.7.1"], "current_version": "1.8.0", "pinned": False}
@@ -81,6 +88,8 @@ list)
     *--columns=origin*)
         echo flathub
         [ -f "$state/flatpak-remote-in-use" ] && echo test-center ;;
+    *--columns=application,arch,branch,version,active,options*)
+        cat "$state/flatpak-installed" 2>/dev/null ;;
     esac
     exit 0 ;;
 remote-ls)
@@ -110,6 +119,7 @@ esac
 exit 0
 """,
     )
+    write_state(context, "flatpak-installed", FLATPAK_INSTALLED)
     for scope in ("user", "system"):
         path = os.path.join(state, f"flatpak-remote-ls-{scope}")
         if not os.path.exists(path):

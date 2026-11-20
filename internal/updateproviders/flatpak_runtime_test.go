@@ -70,7 +70,7 @@ func TestRuntimeRowUpdateTargetsAndVerifiesItsBranch(t *testing.T) {
 update) [ "$3" = --user ] && [ "$4" = org.freedesktop.Platform/x86_64/25.08 ] || exit 1 ;;
 remotes) printf 'flathub\n' ;;
 remote-ls) printf 'Platform\torg.freedesktop.Platform\t\tnew\tx86_64\t`+branch+`\n' ;;
-list) printf 'org.freedesktop.Platform\tx86_64\t`+branch+`\told\t\n' ;;
+list) printf 'org.freedesktop.Platform\tx86_64\t`+branch+`\t`+branch+`\told\t\n' ;;
 esac`)
 			result, err := UpdateItem(context.Background(), updateflow.Applications, updateflow.Item{ID: "org.freedesktop.Platform/x86_64/25.08", Name: "Platform", Scope: "user"})
 			if err != nil || result.Changed != (branch != "25.08") {

@@ -14,7 +14,7 @@ func TestRuntimeOnlyUpdatesRemainVisible(t *testing.T) {
 				installCapturingFlatpak(t, `case "$1" in
 remotes) [ "$2" = `+scope+` ] || exit 1; printf 'flathub\n' ;;
 remote-ls) case " $* " in *' --all '*) printf 'Freedesktop Platform\t`+id+`\t26.08\tnew\tx86_64\t26.08\n' ;; esac ;;
-list) case " $* " in *' --all '*) printf '`+id+`\tx86_64\t26.08\told\t\n' ;; esac ;;
+list) case " $* " in *' --all '*) printf '`+id+`\tx86_64\t26.08\t26.08\told\t\n' ;; esac ;;
 esac`)
 				updates, err := ListUpdates(context.Background(), user)
 				if err != nil || len(updates) != 1 {
@@ -32,7 +32,7 @@ func TestRuntimePhantomUpdateIsFiltered(t *testing.T) {
 	installCapturingFlatpak(t, `case "$1" in
 remotes) printf 'flathub\n' ;;
 remote-ls) printf 'Platform\torg.freedesktop.Platform\t\tcurrent\tx86_64\t26.08\n' ;;
-list) case " $* " in *' --all '*) printf 'org.freedesktop.Platform\tx86_64\t26.08\tcurrent\t\n' ;; esac ;;
+list) case " $* " in *' --all '*) printf 'org.freedesktop.Platform\tx86_64\t26.08\t26.08\tcurrent\t\n' ;; esac ;;
 esac`)
 	updates, err := ListUpdates(context.Background(), true)
 	if err != nil || len(updates) != 0 {

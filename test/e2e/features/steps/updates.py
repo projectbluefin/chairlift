@@ -176,7 +176,7 @@ def _calls(context, program):
 @step("Flatpak now offers an update for Firefox")
 def step_flatpak_offers_firefox(context):
     with open(_state(context, "flatpak-remote-ls-user"), "w", encoding="utf-8") as handle:
-        handle.write("Firefox\torg.mozilla.firefox\t131.0\n")
+        handle.write("Firefox\torg.mozilla.firefox\t131.0\tbbbbbbbbbbbb\tx86_64\tstable\n")
 
 
 @step("the Flatpak remote is reachable again")

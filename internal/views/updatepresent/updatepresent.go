@@ -218,25 +218,20 @@ func ItemTitle(item updateflow.Item) string {
 }
 
 // ItemSubtitle returns the version detail shown beneath one pending item.
+// The install scope is deliberately not part of it: per-user and system-wide
+// installs are an implementation detail a person updating an app has no use
+// for, so the row names the version moving and the version now available.
 func ItemSubtitle(item updateflow.Item) string {
-	var subtitle string
 	switch {
 	case item.CurrentVersion != "" && item.AvailableVersion != "":
-		subtitle = gotext.Get("%s → %s", item.CurrentVersion, item.AvailableVersion)
+		return gotext.Get("Installed: %s · Available: %s", item.CurrentVersion, item.AvailableVersion)
 	case item.AvailableVersion != "":
-		subtitle = gotext.Get("Available: %s", item.AvailableVersion)
+		return gotext.Get("Available: %s", item.AvailableVersion)
 	case item.CurrentVersion != "":
-		subtitle = gotext.Get("Installed: %s", item.CurrentVersion)
+		return gotext.Get("Installed: %s", item.CurrentVersion)
 	default:
-		subtitle = gotext.Get("Update available")
+		return gotext.Get("Update available")
 	}
-	switch item.Scope {
-	case "user":
-		subtitle += gotext.Get(", for you only")
-	case "system":
-		subtitle += gotext.Get(", for everyone")
-	}
-	return subtitle
 }
 
 // ShowProgress reports whether the aggregate progress bar belongs on screen.

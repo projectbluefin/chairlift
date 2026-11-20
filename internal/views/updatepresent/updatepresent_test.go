@@ -559,9 +559,11 @@ func TestVersionDetailsMappedByItemSubtitle(t *testing.T) {
 		item updateflow.Item
 		want string
 	}{
-		{updateflow.Item{CurrentVersion: "1", AvailableVersion: "2"}, "1 → 2"},
+		{updateflow.Item{CurrentVersion: "1", AvailableVersion: "2"}, "Installed: 1 · Available: 2"},
 		{updateflow.Item{AvailableVersion: "2"}, "Available: 2"},
 		{updateflow.Item{CurrentVersion: "1"}, "Installed: 1"},
+		{updateflow.Item{CurrentVersion: "1", AvailableVersion: "2", Scope: "system"}, "Installed: 1 · Available: 2"},
+		{updateflow.Item{AvailableVersion: "2", Scope: "user"}, "Available: 2"},
 		{updateflow.Item{}, "Update available"},
 	}
 	for _, tt := range tests {
