@@ -20,7 +20,7 @@ Feature: Updates
     And the Updates page offers only the "Update All" action
     And the "Update All" button is sensitive
     And the "Applications" row says "1 update available"
-    And the "Firefox" row says "Available: 131.0"
+    And the "Firefox" row says "Installed: 130.0 · Available: 131.0"
     And the update for "Firefox" is listed once with an accessible action
     And the "Developer Tools" row says "Up to date"
     And the Updates page shows no "System Components" row
@@ -34,6 +34,7 @@ Feature: Updates
     And the "Applications" row says "1 update available"
     And the "Update All" button is sensitive
     And the update for "Freedesktop Platform" is listed once with an accessible action
+    And the "Freedesktop Platform" row says "Installed: 25.08 · Available: 26.08"
     When I click the "Update All" button
     Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user"
     And the "Update All" button is sensitive
@@ -47,7 +48,7 @@ Feature: Updates
     Given ChairLift is running
     Then the Updates status reads "1 update available"
     And the "Printer Drivers" row says "1 update available · couldn't check Ghostscript"
-    And the "HPLIP" row says "aaaaaaaaaaaa → bbbbbbbbbbbb"
+    And the "HPLIP" row says "Installed: aaaaaaaaaaaa · Available: bbbbbbbbbbbb"
     And the "Update All" button is sensitive
 
   @stub.updates-flatpak-current @stub.updates-brew-current
@@ -147,7 +148,7 @@ Feature: Updates
     Given ChairLift is running
     Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
-    And the "Firefox" row says "Available: 131.0"
+    And the "Firefox" row says "Installed: 130.0 · Available: 131.0"
     And I do not see "Unable to load summary"
 
   @stub.updates-flatpak-partial-check @stub.updates-brew-current
@@ -160,7 +161,7 @@ Feature: Updates
     And the Updates page offers only the "Update All" action
     And the "Update All" button is sensitive
     When I click the "Update" button in the "Firefox" row
-    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox"
+    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox/x86_64/stable"
     And the "Update" button in the "Firefox" row is sensitive
     And the Updates sidebar badge shows "1"
     And the "Applications" row says "1 update available · couldn't check the test-center remote"
@@ -193,7 +194,7 @@ Feature: Updates
     And I click the "<control>" button
     Then the Updates status reads "1 update available"
     And the "Applications" row says "1 update available"
-    And the "Firefox" row says "Available: 131.0"
+    And the "Firefox" row says "Installed: 130.0 · Available: 131.0"
     And the Updates sidebar badge shows "1"
 
     Examples:
@@ -351,10 +352,10 @@ Feature: Updates
   @stub.updates-flatpak-one-update @stub.updates-brew-current
   Scenario: Updating one app from its row in a dry run previews that app only and restores the row
     Given ChairLift is running
-    Then the "Firefox" row says "Available: 131.0, for you only"
+    Then the "Firefox" row says "Installed: 130.0 · Available: 131.0"
     And the update for "Firefox" is listed once with an accessible action
     When I click the "Update" button in the "Firefox" row
-    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox"
+    Then the application log contains "[DRY-RUN] Would execute: flatpak update -y --user org.mozilla.firefox/x86_64/stable"
     And I see "[DRY-RUN] Preview: Firefox would be updated — no changes made"
     And the "Update" button in the "Firefox" row is sensitive
     And the flatpak tool was never asked to "update"

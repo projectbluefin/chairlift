@@ -137,11 +137,13 @@ commit `a819741d13` compare the remote checksum, an image digest, to the
 deployed OSTree commit rather than the deployed alternative ID, so the entry
 never clears and every run applies nothing (issue #810). The installed identity
 is read per ref (`application/arch/branch`) from `list --columns=application,
-arch,branch,active,options`, and an update is dropped only when its remote
-checksum equals the deployed active commit or the deployed `alt-id` from the
-options column. A differing checksum stays a real update, including a rebuild
-that keeps the version; an update with no checksum or no matching ref is kept
-because incomplete data is not evidence that nothing is pending. Cancellation
+arch,branch,version,active,options`, and an update is dropped only when its
+remote checksum equals the deployed active commit or the deployed `alt-id`
+from the options column. The deployed version from that read becomes the row's
+installed version, shown beside the version the update would install. A
+differing checksum stays a real update, including a rebuild that keeps the
+version; an update with no checksum or no matching ref is kept because
+incomplete data is not evidence that nothing is pending. Cancellation
 of that read propagates; any other failure logs and keeps the reported
 inventory. The post-apply reconciliation reads through the same function, so
 the phantom is also seen as cleared instead of producing "no update was

@@ -502,13 +502,14 @@ func Update(ctx context.Context, appID string, user bool) error {
 
 // UpdateInfo represents an available Flatpak update.
 type UpdateInfo struct {
-	Name          string `json:"name"`
-	ApplicationID string `json:"application"`
-	NewVersion    string `json:"new_version"`
-	Commit        string `json:"commit"` // remote checksum, short form
-	Arch          string `json:"arch"`
-	Branch        string `json:"branch"`
-	Installation  string `json:"installation"` // "user" or "system"
+	Name           string `json:"name"`
+	ApplicationID  string `json:"application"`
+	CurrentVersion string `json:"current_version"`
+	NewVersion     string `json:"new_version"`
+	Commit         string `json:"commit"` // remote checksum, short form
+	Arch           string `json:"arch"`
+	Branch         string `json:"branch"`
+	Installation   string `json:"installation"` // "user" or "system"
 }
 
 // UpdateRef preserves the architecture and branch when updating one row.
@@ -775,11 +776,13 @@ func parseUpdateList(output string, user bool) ([]UpdateInfo, error) {
 	return updates, nil
 }
 
-// installedRef is the installed identity of one ref: the deployed OSTree
-// commit and, for an OCI install, the deployed alternative image digest.
+// installedRef is the installed identity of one ref: the deployed version,
+// the deployed OSTree commit, and, for an OCI install, the deployed
+// alternative image digest.
 type installedRef struct {
-	Active string
-	AltID  string
+	Version string
+	Active  string
+	AltID   string
 }
 
 // refKey identifies one ref within an installation. Flatpak's `list` and
@@ -794,9 +797,10 @@ func refKey(applicationID, arch, branch string) string {
 // a phantom update: an OCI remote's `remote-ls --updates` lists an
 // application whose deployed image is already current, comparing the remote
 // checksum against the alternative ID that only the deploy data carries
-// (issue #810, flatpak commit a819741d13).
+// (issue #810, flatpak commit a819741d13). The deployed version it returns is
+// also what a surviving update shows as its installed version.
 func installedRefs(ctx context.Context, user bool) (map[string]installedRef, error) {
-	output, err := readCtx(ctx, "list", installationFlag(user), "--all", "--columns=application,arch,branch,active,options")
+	output, err := readCtx(ctx, "list", installationFlag(user), "--all", "--columns=application,arch,branch,version,active,options")
 	if err != nil {
 		return nil, err
 	}
@@ -804,16 +808,19 @@ func installedRefs(ctx context.Context, user bool) (map[string]installedRef, err
 	refs := make(map[string]installedRef)
 	for _, line := range strings.Split(output, "\n") {
 		fields, ok := splitColumns(line)
-		if !ok || len(fields) < 4 {
+		if !ok || len(fields) < 5 {
 			continue
 		}
 		appID := strings.TrimSpace(fields[0])
 		if appID == "" {
 			continue
 		}
-		ref := installedRef{Active: strings.TrimSpace(fields[3])}
-		if len(fields) >= 5 {
-			ref.AltID = parseAltID(fields[4])
+		ref := installedRef{
+			Version: strings.TrimSpace(fields[3]),
+			Active:  strings.TrimSpace(fields[4]),
+		}
+		if len(fields) >= 6 {
+			ref.AltID = parseAltID(fields[5])
 		}
 		refs[refKey(appID, strings.TrimSpace(fields[1]), strings.TrimSpace(fields[2]))] = ref
 	}
@@ -838,10 +845,15 @@ func parseAltID(options string) string {
 // checksum matches neither is a real update, including a rebuild that keeps
 // the version. An update with no remote checksum, or whose installed ref is
 // unknown, is kept: incomplete data is not evidence that nothing is pending.
+// A kept update whose installed ref is known carries that ref's deployed
+// version as CurrentVersion.
 func dropPhantomUpdates(updates []UpdateInfo, installed map[string]installedRef) []UpdateInfo {
 	kept := updates[:0]
 	for _, update := range updates {
 		ref, ok := installed[refKey(update.ApplicationID, update.Arch, update.Branch)]
+		if ok {
+			update.CurrentVersion = ref.Version
+		}
 		if !ok || update.Commit == "" {
 			kept = append(kept, update)
 			continue

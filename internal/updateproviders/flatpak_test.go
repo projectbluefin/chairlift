@@ -205,29 +205,29 @@ func TestFlatpakCheckDropsOnlyPhantomOCIUpdates(t *testing.T) {
 		{
 			name:         "OCI alt-id matches the remote checksum",
 			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster`,
-			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\t1.3.0\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa`,
 			wantItems:    nil,
 		},
 		{
 			name:         "OSTree active commit matches the remote checksum",
 			remoteRow:    `Firefox\torg.mozilla.firefox\t131.0\taaaaaaaaaaaa\tx86_64\tstable`,
-			installedRow: `org.mozilla.firefox\tx86_64\tstable\taaaaaaaaaaaa\tcurrent`,
+			installedRow: `org.mozilla.firefox\tx86_64\tstable\t131.0\taaaaaaaaaaaa\tcurrent`,
 			wantItems:    nil,
 		},
 		{
 			name:         "rebuild keeps the version but changes the checksum",
 			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.1\tbbbbbbbbbbbb\tx86_64\tmaster`,
-			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\t1.3.1\taaaaaaaaaaaa\tcurrent`,
 			wantItems: []updateflow.Item{{
-				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", AvailableVersion: "1.3.1", Scope: "user",
+				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", CurrentVersion: "1.3.1", AvailableVersion: "1.3.1", Scope: "user",
 			}},
 		},
 		{
 			name:         "new version and checksum",
 			remoteRow:    `Ghostty\tcom.mitchellh.ghostty\t1.3.2\tbbbbbbbbbbbb\tx86_64\tmaster`,
-			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\taaaaaaaaaaaa\tcurrent`,
+			installedRow: `com.mitchellh.ghostty\tx86_64\tmaster\t1.3.1\taaaaaaaaaaaa\tcurrent`,
 			wantItems: []updateflow.Item{{
-				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", AvailableVersion: "1.3.2", Scope: "user",
+				ID: "com.mitchellh.ghostty/x86_64/master", Name: "Ghostty", CurrentVersion: "1.3.1", AvailableVersion: "1.3.2", Scope: "user",
 			}},
 		},
 	}
