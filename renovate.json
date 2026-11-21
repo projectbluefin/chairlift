@@ -62,6 +62,12 @@
       "matchPackageNames": ["ubuntu"],
       "matchFileNames": [".github/workflows/docker-system.yml"],
       "enabled": false
+    },
+    {
+      "description": "release.yml are human-merge paths in the hive. Give their updates their own branches, so a pin-only update to them is a PR of its own that the hive's pin-only exception can merge, instead of being held with other workflows. Renovate doesn't merge these updates itself, because its own merge would skip the hive's hold on these files. The hive merges a pin-only update, and anything else, a major included, waits for a person.",
+      "matchFileNames": [".github/workflows/release.yml"],
+      "additionalBranchPrefix": "human-merge-paths-",
+      "automerge": false
     }
   ]
 }
