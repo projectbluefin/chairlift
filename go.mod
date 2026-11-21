@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	codeberg.org/puregotk/puregotk v0.0.0-20261003054014-d92056b0aa41
-	github.com/frostyard/snowkit v0.1.1
+	github.com/frostyard/snowkit v0.1.2
 	github.com/frostyard/std v0.5.0
 	github.com/frostyard/updex/v2 v2.3.1
 	github.com/leonelquinteros/gotext v1.8.0
