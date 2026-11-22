@@ -22,7 +22,10 @@ walk **Livery**, **Features**, **Apps**, and **Agents**. Welcome presents the
 running distribution's wordmark (Bazzite, Aurora, or the default Bluefin
 mark), an introduction confirming the system is ready and guiding
 developer-tool, automated-troubleshooting, and system-default customization,
-and the Zavala quote. Unavailable pages are skipped;
+and the Zavala quote. When the image provides the introduction video, Welcome
+also opens it in the desktop's default player and offers **Watch Intro Video**
+to reopen it; with no media installed the assistant silently omits both.
+Unavailable pages are skipped;
 the ordinary page controls perform actions. **Bluefin CLI** is selected by
 default for Bash unless previously disabled; **Next** from Features applies
 that choice and waits for completion. Failures stay on Features for retry.

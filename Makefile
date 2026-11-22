@@ -250,6 +250,19 @@ install: build
 	install -Dm644 data/io.projectbluefin.chairlift.desktop $(DESTDIR)$(APPLICATIONSDIR)/io.projectbluefin.chairlift.desktop
 	# Install package-maintainer defaults; /etc/chairlift/config.yml remains the administrator-owned override
 	install -Dm644 config.yml $(DESTDIR)$(CONFIGDIR)/config.yml
+	# Install the setup assistant's introduction video when this build supplies
+	# one. Like the privileged helpers and the bootc stage script, the OS image
+	# provides the media at the fixed path internal/firstrun.IntroVideoPath
+	# names; a source install includes it by dropping data/chairlift/intro.mp4.
+	# Media is optional: when it is absent the assistant runs and omits the
+	# introduction instead of failing. A non-/usr PREFIX installs the video
+	# somewhere the running binary does not look, exactly as the fixed policy
+	# paths assume PREFIX=/usr.
+	@if [ -f data/chairlift/intro.mp4 ]; then \
+		install -Dm644 data/chairlift/intro.mp4 $(DESTDIR)$(CONFIGDIR)/intro.mp4; \
+	else \
+		echo "==> no data/chairlift/intro.mp4; the assistant will omit the introduction video"; \
+	fi
 	# Install icons
 	install -Dm644 data/icons/hicolor/scalable/apps/io.projectbluefin.chairlift.svg $(DESTDIR)$(ICONSDIR)/hicolor/scalable/apps/io.projectbluefin.chairlift.svg
 	install -Dm644 data/icons/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg $(DESTDIR)$(ICONSDIR)/hicolor/symbolic/apps/io.projectbluefin.chairlift-symbolic.svg

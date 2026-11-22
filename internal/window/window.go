@@ -21,6 +21,7 @@ import (
 	"github.com/projectbluefin/chairlift/internal/updateflow"
 	"github.com/projectbluefin/chairlift/internal/updateproviders"
 	"github.com/projectbluefin/chairlift/internal/version"
+	"github.com/projectbluefin/chairlift/internal/videoplay"
 	"github.com/projectbluefin/chairlift/internal/views"
 	"github.com/projectbluefin/chairlift/internal/views/activity"
 	"github.com/projectbluefin/chairlift/internal/views/updatepresent"
@@ -251,11 +252,11 @@ func (w *Window) buildUI() {
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"Welcome to",
 		"Your system is set up and ready to go. Continue through the next few pages to customize your developer tools, set up automated troubleshooting, and change other system defaults.",
-		"Be the one who moves, not the one who is moved.", "Zavala", brand), "welcome")
+		"Be the one who moves, not the one who is moved.", "Zavala", brand, true), "welcome")
 	w.ui.SetupStack.AddNamed(w.buildFirstRunBookend(
 		"You Are Ready",
 		"You can return to this app at any time by choosing "+branding.AppName+" in your app menu.",
-		"There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton", brand), "conclusion")
+		"There are two ways of spreading light: to be the candle or the mirror that reflects it.", "Edith Wharton", brand, false), "conclusion")
 	w.bindFirstRunFooter()
 
 	// The product name has one owner, so the About item is added here rather
@@ -476,6 +477,18 @@ func (w *Window) setupActions() {
 	}
 	setupAction.ConnectActivate(&setupActivateCb)
 	w.AddAction(setupAction)
+
+	// Watch intro video action (win.watch-intro): the welcome bookend's
+	// button re-opens the image-provided introduction if the user closed it
+	// or missed it. Off the GTK thread, like the automatic launch.
+	introAction := gio.NewSimpleAction("watch-intro", nil)
+	introActivateCb := func(action gio.SimpleAction, param uintptr) {
+		if path, ok := firstrun.IntroVideo(); ok {
+			w.launchIntroVideo(path, true)
+		}
+	}
+	introAction.ConnectActivate(&introActivateCb)
+	w.AddAction(introAction)
 
 	// Show shortcuts action
 	shortcutsAction := gio.NewSimpleAction("show-shortcuts", nil)
@@ -769,7 +782,35 @@ func (w *Window) PresentFirstRun() {
 	w.syncCollapsed()
 	w.splitView.SetShowContent(true)
 	w.firstRunFooter.SetRevealBottomBars(true)
+	// Fire-and-forget: hand the intro to the desktop's default player so the
+	// assistant keeps stepping alongside the open video window. The
+	// firstRunActive guard above makes this once per wizard session; a missing
+	// video or absent handler must never block or reorder the flow.
+	if path, ok := firstrun.IntroVideo(); ok {
+		w.launchIntroVideo(path, false)
+	}
 	w.showFirstRunStep()
+}
+
+// launchIntroVideo opens the introduction video at path in the desktop's
+// default player. The whole launch runs off the GTK thread: launcher.Start
+// only backgrounds Wait, so LookPath and the fork/exec inside Start would
+// otherwise run in the action or PresentFirstRun callback. A later player
+// failure arrives on the launcher's wait goroutine. reportToUser surfaces a
+// failure as a toast — the button wants that, the automatic launch does not,
+// because the video is an aside and never a gate on setup.
+func (w *Window) launchIntroVideo(path string, reportToUser bool) {
+	go func() {
+		report := func(err error) {
+			log.Printf("firstrun: intro video: %v", err)
+			if reportToUser {
+				sgtk.RunOnMainThread(func() { w.ShowErrorToast("Couldn't open the introduction video.") })
+			}
+		}
+		if err := videoplay.Launch(path, report); err != nil {
+			report(err)
+		}
+	}()
 }
 
 // NavigateToAgentsPage opens the Agent Mode page. It is the GTK half of the
@@ -928,12 +969,17 @@ func (w *Window) finishFirstRun(completed bool) {
 	}()
 }
 
-func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string, brand firstrun.ImageBrand) *gtk.Widget {
+func (w *Window) buildFirstRunBookend(eyebrowText, message, quotation, author string, brand firstrun.ImageBrand, showIntro bool) *gtk.Widget {
 	var view bookendUI
 	ui.Bind(&view)
 	view.Eyebrow.SetLabel(eyebrowText)
 	view.Message.SetLabel(message)
 	view.Message.SetVisible(message != "")
+	// Only the welcome step offers the introduction, and only when the media
+	// is present. The button carries win.watch-intro, so no per-instance
+	// callback is registered for this templated widget.
+	_, introAvailable := firstrun.IntroVideo()
+	view.IntroButton.SetVisible(showIntro && introAvailable)
 	// The conclusion quote is from projectbluefin.io's Mission section.
 	view.Quote.SetLabel("“" + quotation + "”")
 	view.Attribution.SetLabel("— " + author)

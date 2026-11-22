@@ -37,6 +37,7 @@ type bookendUI struct {
 	Eyebrow     *gtk.Label       `ui:"eyebrow"`
 	Wordmark    *gtk.Picture     `ui:"wordmark"`
 	Message     *gtk.Label       `ui:"message"`
+	IntroButton *gtk.Button      `ui:"intro_button"`
 	Quote       *gtk.Label       `ui:"quote"`
 	Attribution *gtk.Label       `ui:"attribution"`
 }
