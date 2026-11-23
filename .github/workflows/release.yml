@@ -157,7 +157,7 @@ jobs:
           distribution: goreleaser
           # Exact reviewed release (latest stable v2 at time of #88);
           # `~> v2` would let the same tag publish under a newer GoReleaser.
-          version: "v2.20.2"
+          version: "v2.20.3"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
