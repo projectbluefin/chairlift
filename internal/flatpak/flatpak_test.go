@@ -414,6 +414,30 @@ func TestListUpdatesDropsPhantomOCIUpdate(t *testing.T) {
 				Arch: "x86_64", Branch: "master", Installation: "user",
 			}},
 		},
+		// An installed app need not publish a version, so `flatpak list`
+		// leaves that column blank. The blank must not shift the active
+		// commit or options columns the phantom check reads.
+		{
+			name:          "blank installed version still matches the OSTree active commit",
+			remoteRow:     "Firefox\torg.mozilla.firefox\t131.0\taaaaaaaaaaaa\tx86_64\tstable",
+			installedRows: "org.mozilla.firefox\tx86_64\tstable\t\taaaaaaaaaaaa\tcurrent",
+			wantUpdates:   nil,
+		},
+		{
+			name:          "blank installed version still matches the OCI alt-id",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.1\taaaaaaaaaaaa\tx86_64\tmaster",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\t\tbbbbbbbbbbbb\tcurrent,alt-id=aaaaaaaaaaaa",
+			wantUpdates:   nil,
+		},
+		{
+			name:          "blank installed version keeps a real update without an installed version",
+			remoteRow:     "Ghostty\tcom.mitchellh.ghostty\t1.3.2\tbbbbbbbbbbbb\tx86_64\tmaster",
+			installedRows: "com.mitchellh.ghostty\tx86_64\tmaster\t\taaaaaaaaaaaa\tcurrent",
+			wantUpdates: []UpdateInfo{{
+				Name: "Ghostty", ApplicationID: "com.mitchellh.ghostty", NewVersion: "1.3.2",
+				Commit: "bbbbbbbbbbbb", Arch: "x86_64", Branch: "master", Installation: "user",
+			}},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
