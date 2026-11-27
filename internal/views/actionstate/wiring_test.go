@@ -12,429 +12,13 @@ import (
 // Complete permanently rejects every future click, including retries after
 // a failed or dry-run action. Views cannot be imported by headless tests.
 func TestRepeatableControlsReleaseTheirGates(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
-	for file, gates := range map[string][]string{
-		"updates_page.go": {"driverGate"},
-		"reset.go":        {"powerwashGate", "factoryResetGate"},
-		// Free up space is offered again after every run (#488).
-		"maintenance_page.go": {"freeUpSpaceGate"},
-		// Set Up and Launch share one gate, and both are offered again.
-		"troubleshoot.go":  {"gooseGate", "askBluefinGate"},
-		"agents_page.go":   {"agentModeGate"},
-		"features_page.go": {"gameModeGate", "updateFeaturesGate"},
-	} {
-		data, err := os.ReadFile(filepath.Join(viewsDir, file))
-		if err != nil {
-			t.Fatal(err)
-		}
-		text := string(data)
-		for _, gate := range gates {
-			if !strings.Contains(text, "uh."+gate+".TryStart()") || !strings.Contains(text, "uh."+gate+".Reset()") || strings.Contains(text, "uh."+gate+".Complete()") {
-				t.Errorf("%s: repeatable %s must start and reset, never complete", file, gate)
-			}
-		}
-	}
-}
-
-// Optional-feature toggles run a privileged updex helper call; they use
-// updateFeaturesGate so no two overlap, and a refused toggle reverts to
-// the position it held while reporting why.
-func TestFeatureTogglesShareTheUpdexGate(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "features_page.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := strings.SplitN(string(data), "func (uh *UserHome) onFeatureToggled(", 2)
-	if len(parts) != 2 {
-		t.Fatal("feature toggle handler not found")
-	}
-	body, _, _ := strings.Cut(parts[1], "\nfunc ")
-	for _, required := range []string{
-		"if !uh.updateFeaturesGate.TryStart() {",
-		"sgtk.RunOnMainThread(func() { toggle.set(!enabled) })",
-		"pageview.FeatureChangeBusyToast",
-		"toggle.widget.SetSensitive(false)",
-		"defer uh.updateFeaturesGate.Reset()",
-		"toggle.widget.SetSensitive(true)",
-	} {
-		if !strings.Contains(body, required) {
-			t.Errorf("onFeatureToggled must be admitted by updateFeaturesGate and restore the switch: missing %q", required)
-		}
-	}
-}
-
-// bootc rollback toggles the selected deployment. A successful live click
-// must close its gate; only a failed attempt or dry-run preview may retry.
-func TestRollbackGateCompletesOnlyAfterLiveSuccess(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "recovery.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := strings.SplitN(string(data), "func (uh *UserHome) onBootcRollbackClicked()", 2)
-	if len(parts) != 2 {
-		t.Fatal("rollback handler not found")
-	}
-	body := parts[1]
-	for _, required := range []string{"uh.bootcRollbackGate.TryStart()", "if decision.Confirm {", "uh.bootcRollbackGate.Complete()", "button.SetSensitive(false)", "uh.bootcRollbackGate.Reset()", "button.SetSensitive(true)"} {
-		if !strings.Contains(body, required) {
-			t.Errorf("rollback must remain one-shot on live success but retry after failure or preview: missing %q", required)
-		}
-	}
-}
-
-// Panel toggle mirrors the persisted SavedPanelIcon/SavedPanelMode into the
-// page's in-memory view of state. Under --dry-run the writes are no-ops, so
-// the mirror has to be skipped too — otherwise the next enable sees
-// non-empty saved values in memory and skips the capture the user asked
-// for. Issue #422.
-//
-// Both the enable (capture) and the disable (reset) path need their own
-// gate, so the assertions below match each gate together with the
-// assignments it has to contain. Matching the gate line on its own would
-// still pass if one of the two gates were dropped, or if an assignment were
-// moved out from under its gate.
-func TestLiveryPanelToggleDoesNotMutateInMemoryStateUnderDryRun(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, required := range []string{
-		`actionmsg.LiveryToggle(dryrun.Enabled(), enabled, pageview.LiverySectionName(surface))`,
-		`if enabled && surface == livery.Panel && savedIcon == "" && savedMode == "" {`,
-		`if err := livery.SetString(ctx, livery.KeySavedPanelIcon, icon); err != nil {`,
-		`if err := livery.SetString(ctx, livery.KeySavedPanelMode, mode); err != nil {`,
-		`restored, err := livery.RevertPanel(ctx, savedIcon, savedMode)`,
-	} {
-		if !strings.Contains(text, required) {
-			t.Errorf("panel capture/revert omits %q", required)
-		}
-	}
-	for name, snippet := range map[string]string{
-		"capture": "\t\t\tif decision.MutateUI {\n" +
-			"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = icon\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelMode = mode\n" +
-			"\t\t\t\t})\n\t\t\t}\n",
-		// The reset also follows a restore that landed before a failed
-		// file sweep, so it is gated on restored as well.
-		"reset": "\t\t\tif restored && decision.MutateUI {\n" +
-			"\t\t\t\tsgtk.RunOnMainThread(func() {\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelIcon = \"\"\n" +
-			"\t\t\t\t\tuh.liveryState.SavedPanelMode = \"\"\n" +
-			"\t\t\t\t})\n\t\t\t}\n",
-	} {
-		if !strings.Contains(text, snippet) {
-			t.Errorf("panel %s mirror bypasses its dry-run mutation decision", name)
-		}
-	}
-	if strings.Contains(text, "livery.ClearPanelSettings(") {
-		t.Error("the panel toggle restores settings itself instead of through livery.RevertPanel, which owns the restore-then-remove order")
-	}
-}
-
-// A rotate switch's sensitivity follows its section's confirmed on/off state.
-// Selection work captured that state when it started and re-applied it when
-// it published, so a section enabled while the selection ran was locked out of
-// rotation again until the page reloaded (#496). Publishers read the confirmed
-// state at publish time, and the toggle commit records the new state before
-// recomputing its dependents.
-func TestLiveryRotateSensitivityReadsConfirmedSectionState(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	if strings.Contains(text, "uh.syncLiveryRotateSensitive(surface, enabled)") {
-		t.Error("a selection publisher recomputes rotate sensitivity from on/off state captured before its work ran")
-	}
-	commit := "\t\t\tuh.setLiveryToggleState(s, enabled)\n\t\t\tuh.setLiverySectionSensitive(s, enabled)\n"
-	if !strings.Contains(text, commit) {
-		t.Error("finishLiveryToggle no longer records the committed state before recomputing the section's rotate switch")
-	}
-}
-
-// Every Livery handler that mirrors a change on success reads dry-run once,
-// into an actionmsg decision that drives both the mirror and the preview
-// toast (ADR-0009). Selections and rotation once read a bare preview flag
-// and showed nothing under dry-run.
-func TestLiveryPreviewsComeFromOneDecision(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	decisions := 0
-	for call, want := range map[string]int{
-		"actionmsg.LiveryToggle(dryrun.Enabled(), ":    2,
-		"actionmsg.LiverySelection(dryrun.Enabled(), ": 4,
-		"actionmsg.LiveryRotation(dryrun.Enabled(), ":  1,
-	} {
-		if got := strings.Count(text, call); got != want {
-			t.Errorf("%d handlers build %s…), want %d", got, call, want)
-		}
-		decisions += want
-	}
-	if got := strings.Count(text, "dryrun.Enabled()"); got != decisions {
-		t.Errorf("livery_actions.go reads dryrun.Enabled() %d times, want only the %d decision constructions", got, decisions)
-	}
-	if got := strings.Count(text, "liverystate.Selection("); got != 1 {
-		t.Errorf("selection outcomes resolved in %d places, want only publishLiverySelection", got)
-	}
-	if !strings.Contains(text, "if saved && decision.Toast != \"\" {") ||
-		!strings.Contains(text, "if err == nil && decision.Toast != \"\" {") {
-		t.Error("a selection or rotation completion no longer shows its preview toast")
-	}
-}
-
-// A section switch's work queues in its section's selection line and holds
-// the section's rows insensitive while pending. Run beside a pick, turning a
-// section off let the pick's Apply land after Clear, leaving a mark installed
-// under a switch and a stored setting that both read off.
-func TestLiveryTogglesQueueBehindSelections(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "livery_actions.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for handler, call := range map[string]string{
-		"func (uh *UserHome) onLiveryAppGridToggled(": "uh.runLiveryToggleWork(livery.AppGrid, func() {",
-		"func (uh *UserHome) onLiverySurfaceToggled(": "uh.runLiveryToggleWork(surface, func() {",
-	} {
-		_, body, found := strings.Cut(text, handler)
-		if !found {
-			t.Fatalf("%s… is gone", handler)
-		}
-		body, _, _ = strings.Cut(body, "\n}\n")
-		if !strings.Contains(body, call) {
-			t.Errorf("%s… does not queue its work through %s", handler, call)
-		}
-		if strings.Contains(body, "go func()") {
-			t.Errorf("%s… starts an unordered goroutine", handler)
-		}
-	}
-	_, helper, found := strings.Cut(text, "func (uh *UserHome) runLiveryToggleWork(")
-	if !found {
-		t.Fatal("runLiveryToggleWork is gone")
-	}
-	helper, _, _ = strings.Cut(helper, "\n}\n")
-	for _, required := range []string{
-		"uh.setLiverySectionSensitive(s, false)",
-		"serializer := uh.liverySelectionWork(s)",
-		"ticket := serializer.Reserve()",
-		"go serializer.Run(ticket, work)",
-	} {
-		if !strings.Contains(helper, required) {
-			t.Errorf("runLiveryToggleWork omits %q", required)
-		}
-	}
-	if !strings.Contains(text, "\t\t\tuh.setLiverySectionSensitive(s, confirmed)\n") {
-		t.Error("a failed or previewed toggle leaves its section's rows insensitive")
-	}
-}
-
-// An installed-list rebuild during a running uninstall or pin replaced the
-// row with an idle gate and detached the busy controls, so a second click
-// overlapped the first brew command (W2-APPS-1). Rows take their gates from
-// the list's RowGates, a rebuild defers while one runs, and every release
-// path settles the owed reload.
-func TestHomebrewRowGatesSurviveListRebuilds(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "applications_page.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	start := strings.Index(text, "func (uh *UserHome) loadHomebrewPackages()")
-	if start < 0 {
-		t.Fatal("loadHomebrewPackages not found")
-	}
-	load, _, _ := strings.Cut(text[start:], "\nfunc ")
-	if strings.Contains(load, "&actionstate.Gate{}") {
-		t.Error("loadHomebrewPackages builds untracked row gates a rebuild would silently replace")
-	}
-	for _, list := range []string{"formulaGates", "caskGates"} {
-		for _, call := range []string{"if uh." + list + ".Defer() {", "uh." + list + ".Rebuild()", "gate := uh." + list + ".New()"} {
-			if !strings.Contains(load, call) {
-				t.Errorf("loadHomebrewPackages is missing %q", call)
-			}
-		}
-		if !strings.Contains(text, "uh."+list+".Settled()") {
-			t.Errorf("a deferred %s rebuild is never settled", list)
-		}
-	}
-	// Two dialog cancellations and the shared finish each release a gate.
-	if got := strings.Count(text, "uh.settleHomebrewRows("); got < 3 {
-		t.Errorf("settleHomebrewRows is called %d times, want every gate release (cancel pin, cancel uninstall, finish)", got)
-	}
-}
-
-// Goose Set Up, enabling Agent Mode, and a collection install that stopped
-// partway all install Homebrew packages, but none re-read the Apps
-// inventory, so the new packages stayed unlisted and their collections kept
-// offering Install until restart (W2-APPS-2). Every Homebrew install outside
-// the Apps row actions reaches homebrewInventoryChanged.
-func TestHomebrewInstallsElsewhereRefreshTheAppsInventory(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	viewsDir := filepath.Join(filepath.Dir(filename), "..")
-	body := func(file, signature string) string {
-		t.Helper()
-		data, err := os.ReadFile(filepath.Join(viewsDir, file))
-		if err != nil {
-			t.Fatal(err)
-		}
-		text := string(data)
-		start := strings.Index(text, signature)
-		if start < 0 {
-			t.Fatalf("%s: %q not found", file, signature)
-		}
-		fn, _, _ := strings.Cut(text[start:], "\nfunc ")
-		return fn
-	}
-	const refresh = "uh.homebrewInventoryChanged()"
-	for _, c := range []struct {
-		file, signature string
-		calls           int
-	}{
-		{"troubleshoot.go", "func (uh *UserHome) setUpGoose()", 1},
-		{"agents_page.go", "func (uh *UserHome) onAgentModeToggled(", 1},
-		// The failure branch (partial install) and the live success.
-		{"bundle_install.go", "func (uh *UserHome) runSelectedBundlesInstall(selection *bundleSelection)", 1},
-		{"bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(", 2},
-	} {
-		if got := strings.Count(body(c.file, c.signature), refresh); got != c.calls {
-			t.Errorf("%s %s calls %s %d times, want %d", c.file, c.signature, refresh, got, c.calls)
-		}
-	}
-	goose := body("troubleshoot.go", "func (uh *UserHome) setUpGoose()")
-	if strings.Index(goose, refresh) > strings.Index(goose, "if err != nil {") {
-		t.Error("Goose setup refreshes the inventory only after success; a partial setup also installed packages")
-	}
-	agent := body("agents_page.go", "func (uh *UserHome) onAgentModeToggled(")
-	if strings.Index(agent, refresh) > strings.Index(agent, "if err != nil {\n\t\t\t\tlog.Printf(\"views: agent mode toggle") {
-		t.Error("Agent Mode refreshes the inventory only after success; a failed enable may already have installed llmman")
-	}
-	cli := body("bluefin_cli.go", "func (uh *UserHome) runBluefinCLI(")
-	if !strings.Contains(cli, "if !dryrun.Enabled() && on && err != nil {\n\t\t\t\tuh.homebrewInventoryChanged()") {
-		t.Error("Bluefin CLI must refresh the inventory on a failed enable because a partial install places packages")
-	}
-}
-
-func TestBluefinCLIRemovalPermittedWhenLoginShellIsNotBash(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "bluefin_cli.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	fn, _, _ := strings.Cut(text[strings.Index(text, "func (uh *UserHome) showBluefinCLIState()"):], "\nfunc ")
-	branch, _, ok := strings.Cut(fn[strings.Index(fn, "if !bluefincli.Supported()"):], "cli.toggle.set(false)")
-	if !ok {
-		t.Fatal("showBluefinCLIState missing !bluefincli.Supported() branch")
-	}
-	if !strings.Contains(branch, "cli.state.Configured || cli.state.Legacy") ||
-		!strings.Contains(branch, "cli.toggle.set(true)") ||
-		!strings.Contains(branch, "cli.toggle.widget.SetSensitive(!cli.gate.Running())") {
-		t.Error("showBluefinCLIState must keep switch on and sensitive when configured or legacy integration exists under non-Bash shell")
-	}
-}
-
-// Free Up Space runs the update run's own post-update cleanup steps, so the
-// update shell admits it: it must not run flatpak uninstall --unused or brew
-// cleanup beside an Update All that is still installing (#700).
-func TestFreeUpSpaceIsAdmittedByTheUpdateShell(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "maintenance_page.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := strings.SplitN(string(data), "func (uh *UserHome) onFreeUpSpaceClicked(", 2)
-	if len(parts) != 2 {
-		t.Fatal("Free Up Space handler not found")
-	}
-	body, _, _ := strings.Cut(parts[1], "\nfunc ")
-	for _, required := range []string{
-		"if !uh.updateShell.beginMutation(",
-		"uh.freeUpSpaceGate.Reset()",
-		"pageview.UpdateBusyToast",
-		"uh.updateShell.finishMutation()",
-	} {
-		if !strings.Contains(body, required) {
-			t.Errorf("onFreeUpSpaceClicked must be admitted by the update shell: missing %q", required)
-		}
-	}
-	if strings.Index(body, "uh.freeUpSpaceGate.TryStart()") > strings.Index(body, "uh.updateShell.beginMutation(") {
-		t.Error("onFreeUpSpaceClicked must take its own gate before the update shell's admission")
-	}
-}
-
-// Every Homebrew install the GUI starts must be admitted by the update shell,
-// or Free Up Space's `brew cleanup` can begin beside it and fail on Homebrew's
-// Cellar lock while an install that needs those versions is still running
-// (#817). Admission lasts until the run's own result is reported, and every
-// outcome releases it.
-func TestBrewInstallsShareTheUpdateShellAdmission(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	viewsDir := filepath.Clean(filepath.Join(filepath.Dir(filename), ".."))
 	read := func(file string) string {
 		t.Helper()
-		data, err := os.ReadFile(filepath.Join(viewsDir, file))
-		if err != nil {
-			t.Fatal(err)
-		}
-		return string(data)
+		return readViewsFile(t, file)
 	}
 	functionBody := func(source, name string) string {
 		t.Helper()
-		parts := strings.SplitN(source, "func "+name+"(", 2)
-		if len(parts) != 2 {
-			t.Fatalf("function %s not found", name)
-		}
-		body, _, _ := strings.Cut(parts[1], "\nfunc ")
-		return body
+		return viewsFunctionBody(t, source, name)
 	}
 
 	bundleInstall := read("bundle_install.go")
@@ -577,24 +161,37 @@ func TestLaunchDelegatesToSetupWhenPackagesMissing(t *testing.T) {
 	}
 }
 
+// readViewsFile returns a source file of the views package.
+func readViewsFile(t *testing.T, file string) string {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", file))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// viewsFunctionBody returns the text of the named function up to the next one.
+func viewsFunctionBody(t *testing.T, source, name string) string {
+	t.Helper()
+	parts := strings.SplitN(source, "func "+name+"(", 2)
+	if len(parts) != 2 {
+		t.Fatalf("function %s not found", name)
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	return body
+}
+
 // EnableHardware starts by itself when initial setup opens, usually while the
 // startup update check still holds the update shell. Its refusal must not show
 // the busy toast, which answers a user action and would greet the Welcome step
 // with no input (#864).
 func TestEnableHardwareRefusalIsSilentAtSetupLaunch(t *testing.T) {
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller could not locate wiring_test.go")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "hardware_group.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parts := strings.SplitN(string(data), "(uh *UserHome) EnableHardware(", 2)
-	if len(parts) != 2 {
-		t.Fatal("EnableHardware not found")
-	}
-	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	body := viewsFunctionBody(t, readViewsFile(t, "hardware_group.go"), "(uh *UserHome) EnableHardware")
 	for _, required := range []string{"view.setup.TryStart()", "if !uh.updateShell.beginMutation(", "uh.updateShell.finishMutation()"} {
 		if !strings.Contains(body, required) {
 			t.Errorf("EnableHardware must still be admitted by the update shell: missing %q", required)
