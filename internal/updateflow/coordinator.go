@@ -120,7 +120,7 @@ func (c *Coordinator) Check(
 
 	stateMu.Lock()
 	state.Sources = cloneSources(sources)
-	state.LastChecked = time.Now()
+	state.LastChecked = now()
 	state.Generation = generation
 	state.Current = ""
 	state.Progress = ""
@@ -553,4 +553,19 @@ func hasPendingWork(state Snapshot) bool {
 		}
 	}
 	return false
+}
+
+// now supplies the LastChecked timestamp. It is a variable only so the
+// screenshot walkthrough can pin the clock; see SetClock.
+var now = time.Now
+
+// SetClock replaces the clock that stamps LastChecked, so two screenshot
+// captures show the same "checked at" time. It is called exclusively from
+// ChairLift's chairlift_e2e-tagged build; no released binary contains a call
+// site.
+func SetClock(replacement func() time.Time) {
+	if replacement == nil {
+		return
+	}
+	now = replacement
 }

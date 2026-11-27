@@ -6,11 +6,15 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
+	"github.com/projectbluefin/chairlift/internal/avatar"
 	"github.com/projectbluefin/chairlift/internal/capability"
 	"github.com/projectbluefin/chairlift/internal/gpu"
+	"github.com/projectbluefin/chairlift/internal/homebrew"
 	"github.com/projectbluefin/chairlift/internal/ublue"
+	"github.com/projectbluefin/chairlift/internal/updateflow"
 )
 
 // applyImageInfoOverride points the unprivileged image-descriptor read at
@@ -52,5 +56,26 @@ func applyImageInfoOverride() {
 	// walkthrough never resolves a capability production would not.
 	if capabilities := os.Getenv("CHAIRLIFT_CAPABILITIES"); capabilities != "" {
 		capability.SetProbe(capability.ProbeFromNames(strings.Split(capabilities, ",")...))
+	}
+
+	// The walkthrough must not depend on Homebrew, the network, the time of
+	// day, or the toolkit's random avatar colour, or two captures differ.
+	// CHAIRLIFT_STUB_PAUSED_UPDATES=1 reports no paused sources instead of
+	// the "Couldn't Check for Paused Updates" error card.
+	if os.Getenv("CHAIRLIFT_STUB_PAUSED_UPDATES") != "" {
+		homebrew.SetUntrustedTapsCheck(func() ([]homebrew.UntrustedTap, error) {
+			return nil, nil
+		})
+	}
+	// CHAIRLIFT_PIN_CLOCK is an RFC 3339 time the update check stamps as
+	// "checked at".
+	if spec := os.Getenv("CHAIRLIFT_PIN_CLOCK"); spec != "" {
+		if pinned, err := time.Parse(time.RFC3339, spec); err == nil {
+			updateflow.SetClock(func() time.Time { return pinned })
+		}
+	}
+	// CHAIRLIFT_PIN_AVATAR_SEED fixes the placeholder avatar's colour.
+	if seed := os.Getenv("CHAIRLIFT_PIN_AVATAR_SEED"); seed != "" {
+		avatar.SetPlaceholderSeed(seed)
 	}
 }

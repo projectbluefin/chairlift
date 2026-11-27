@@ -68,7 +68,7 @@ func (uh *UserHome) buildAccountGroup(page *adw.PreferencesPage) {
 	p.row.SetTitle(current.Title)
 	p.row.SetSubtitle(current.Subtitle)
 
-	p.avatar = adw.NewAvatar(48, "", false)
+	p.avatar = adw.NewAvatar(48, avatar.PlaceholderSeed(), false)
 	p.row.AddPrefix(&p.avatar.Widget)
 
 	choose := gtk.NewButtonWithLabel(pageview.AvatarChooseLabel)

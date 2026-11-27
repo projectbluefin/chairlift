@@ -92,7 +92,8 @@ not require a skill update, knowledge lookup, documentation tour, or new doc.
 - E2E-only display stubs stay exclusively in
   `internal/app/imageinfo_override_e2e.go` behind `chairlift_e2e`:
   `CHAIRLIFT_IMAGE_INFO`, `CHAIRLIFT_AUTO_UPDATES`, `CHAIRLIFT_GPU_VENDORS`,
-  `CHAIRLIFT_CAPABILITIES`. Privileged helpers never trust these overrides.
+  `CHAIRLIFT_CAPABILITIES`, `CHAIRLIFT_STUB_PAUSED_UPDATES`,
+  `CHAIRLIFT_PIN_CLOCK`, `CHAIRLIFT_PIN_AVATAR_SEED`. Privileged helpers never trust these overrides.
 
 ## Scope, documentation, and delivery
 

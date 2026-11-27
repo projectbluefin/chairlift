@@ -408,6 +408,28 @@ func withoutTrusted(names []string, trusted map[string]bool) []string {
 // installed and not yet trusted on its own, with qualified package names
 // ready for `brew trust`.
 func ListUntrustedTaps() ([]UntrustedTap, error) {
+	return listUntrustedTaps()
+}
+
+// listUntrustedTaps is the check ListUntrustedTaps runs. It is a variable
+// only so the screenshot walkthrough can stub it; see SetUntrustedTapsCheck.
+var listUntrustedTaps = listUntrustedTapsFromBrew
+
+// SetUntrustedTapsCheck replaces the untrusted-tap check.
+//
+// It exists so the screenshot walkthrough can report a normal state on a
+// runner with no Homebrew, instead of capturing a "Couldn't Check for Paused
+// Updates" error card. It is called exclusively from ChairLift's
+// chairlift_e2e-tagged build (internal/app/imageinfo_override_e2e.go); no
+// released binary contains a call site.
+func SetUntrustedTapsCheck(replacement func() ([]UntrustedTap, error)) {
+	if replacement == nil {
+		return
+	}
+	listUntrustedTaps = replacement
+}
+
+func listUntrustedTapsFromBrew() ([]UntrustedTap, error) {
 	output, err := runBrewCommand("tap-info", "--installed", "--json")
 	if err != nil {
 		return nil, err
