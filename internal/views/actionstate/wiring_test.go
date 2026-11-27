@@ -520,7 +520,6 @@ func TestBrewInstallsShareTheUpdateShellAdmission(t *testing.T) {
 		{"agents_page.go", "(uh *UserHome) onAgentModeToggled", "uh.agentModeGate.TryStart()", 1},
 		{"troubleshoot.go", "(uh *UserHome) setUpGoose", "uh.gooseGate.TryStart()", 1},
 		{"developer_apps.go", "(uh *UserHome) installDeveloperApp", "uh.developerGate.TryStart()", 1},
-		{"hardware_group.go", "(uh *UserHome) EnableHardware", "view.setup.TryStart()", 1},
 		{"wallpapers.go", "(uh *UserHome) runWallpaperInstall", "uh.wallpaperGate.TryStart()", 2},
 	} {
 		body = functionBody(read(site.file), site.function)
@@ -575,5 +574,33 @@ func TestLaunchDelegatesToSetupWhenPackagesMissing(t *testing.T) {
 	branch, _, _ := strings.Cut(body[strings.Index(body, "if state.CanSetUp() {"):], "\n\t\t}\n")
 	if !strings.Contains(branch, "uh.setUpGoose()") || !strings.Contains(branch, "return") {
 		t.Error("the CanSetUp branch must delegate to setUpGoose and return")
+	}
+}
+
+// EnableHardware starts by itself when initial setup opens, usually while the
+// startup update check still holds the update shell. Its refusal must not show
+// the busy toast, which answers a user action and would greet the Welcome step
+// with no input (#864).
+func TestEnableHardwareRefusalIsSilentAtSetupLaunch(t *testing.T) {
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller could not locate wiring_test.go")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(filename), "..", "hardware_group.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "(uh *UserHome) EnableHardware(", 2)
+	if len(parts) != 2 {
+		t.Fatal("EnableHardware not found")
+	}
+	body, _, _ := strings.Cut(parts[1], "\nfunc ")
+	for _, required := range []string{"view.setup.TryStart()", "if !uh.updateShell.beginMutation(", "uh.updateShell.finishMutation()"} {
+		if !strings.Contains(body, required) {
+			t.Errorf("EnableHardware must still be admitted by the update shell: missing %q", required)
+		}
+	}
+	if strings.Contains(body, "pageview.UpdateBusyToast") {
+		t.Error("EnableHardware runs without user input at setup launch and must not show the busy toast")
 	}
 }

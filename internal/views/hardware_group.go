@@ -10,7 +10,6 @@ import (
 	"github.com/projectbluefin/chairlift/internal/hardware"
 	"github.com/projectbluefin/chairlift/internal/livery"
 	"github.com/projectbluefin/chairlift/internal/views/actionstate"
-	"github.com/projectbluefin/chairlift/internal/views/pageview"
 
 	sgtk "github.com/frostyard/snowkit/gtk"
 
@@ -81,7 +80,10 @@ func (uh *UserHome) EnableHardware() {
 	// Free Up Space's `brew cleanup` or an update run (#817).
 	if !uh.updateShell.beginMutation("Installing hardware support") {
 		view.setup.Reset()
-		uh.toastAdder.ShowToast(pageview.UpdateBusyToast)
+		// This runs on its own when the setup wizard opens, while the startup
+		// update check still owns the shell. A toast would answer no user
+		// action, so say it on the row instead.
+		view.row.SetSubtitle("Waiting for the update check to finish. Run initial setup again to install hardware support.")
 		return
 	}
 	generation := view.refresh.Begin()
