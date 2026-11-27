@@ -164,3 +164,16 @@ func FetchAvatar(id string) ([]byte, error) {
 	}
 	return data, nil
 }
+
+// placeholderSeed is the text the empty avatar widget derives its colour
+// from. Empty means the toolkit picks a colour at random each launch.
+var placeholderSeed string
+
+// PlaceholderSeed returns the text that colours the placeholder avatar. It is
+// empty in every released binary.
+func PlaceholderSeed() string { return placeholderSeed }
+
+// SetPlaceholderSeed fixes the placeholder avatar's colour, so two screenshot
+// captures match. It is called exclusively from ChairLift's chairlift_e2e-tagged
+// build; no released binary contains a call site.
+func SetPlaceholderSeed(seed string) { placeholderSeed = seed }

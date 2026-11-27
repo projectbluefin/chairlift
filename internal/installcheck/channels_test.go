@@ -87,7 +87,8 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 	const autoUpdatesEnvVar = "CHAIRLIFT_AUTO_UPDATES"
 	const gpuEnvVar = "CHAIRLIFT_GPU_VENDORS"
 	const capabilitiesEnvVar = "CHAIRLIFT_CAPABILITIES"
-	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar}
+	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar,
+		"CHAIRLIFT_STUB_PAUSED_UPDATES", "CHAIRLIFT_PIN_CLOCK", "CHAIRLIFT_PIN_AVATAR_SEED"}
 
 	taggedOverrideRel := filepath.Join("internal", "app", "imageinfo_override_e2e.go")
 	overrideSource := readRepoFile(t, taggedOverrideRel)

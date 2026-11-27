@@ -124,6 +124,17 @@ export CHAIRLIFT_AUTO_UPDATES
 : "${CHAIRLIFT_CAPABILITIES:=image-descriptor,flatpak,brew,podman,bootc-stage}"
 export CHAIRLIFT_CAPABILITIES
 
+# Pin everything that would make two captures differ. The paused-updates check
+# reports a normal state (no error card), the "checked at" clock is fixed, and
+# the placeholder avatar's colour no longer varies per launch. The time is
+# written in UTC so the pinned "checked at" label does not depend on the
+# runner's timezone.
+: "${CHAIRLIFT_STUB_PAUSED_UPDATES:=1}"
+: "${CHAIRLIFT_PIN_CLOCK:=2026-01-01T12:00:00Z}"
+: "${CHAIRLIFT_PIN_AVATAR_SEED:=Bluefin}"
+export CHAIRLIFT_STUB_PAUSED_UPDATES CHAIRLIFT_PIN_CLOCK CHAIRLIFT_PIN_AVATAR_SEED
+export TZ=UTC
+
 
 # Setup is explicit, including on a new account. The existing-page wizard
 # starts at Welcome with its navigation footer; Escape dismisses it before
