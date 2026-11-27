@@ -61,7 +61,8 @@ One button covers all of them. It reads **Check Again** when nothing is
 pending, **Update All** when something is, and **Retry Failed** if a source
 didn't finish. A staged system version adds its own **Restart Now** to the
 right of the **Operating System** row, so the header offers no button then;
-the source that fails does not stop the others. A run long enough that you
+**System Version** names the version waiting for that restart when available.
+The source that fails does not stop the others. A run long enough that you
 wandered off finishes with a desktop notification.
 While checking or installing, an animated activity bar takes the button's
 place and stays moving even when the underlying tool has no new output. It
@@ -494,6 +495,8 @@ that its reset method is still experimental.
 Those stay hidden normally until turned on or until a rollback exists; the
 Powerwash entry's subtitle names only what the detail currently offers, and
 when the reset actions are off the detail says so at the top.
+The Roll Back row names the previous version when available, or its release
+date if only the date is known.
 
 ---
 

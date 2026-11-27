@@ -177,7 +177,7 @@ Feature: Maintenance and its Powerwash detail
     Given ChairLift is running
     When I open the "Maintenance" page
     And I open the Powerwash detail
-    Then the "Go Back to the Previous Version" row says "Return to version 44.20260913 from 13 September 2026 the next time you restart."
+    Then the "Go Back to the Previous Version" row says "Return to version 44.20260913 the next time you restart."
     When I click the "Roll Back" button in the "Go Back to the Previous Version" row
     Then I see "[DRY-RUN] Preview: would go back to the previous version — no changes made"
     And the action journal records "rollback" as dry-run

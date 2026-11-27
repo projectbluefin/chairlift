@@ -12,9 +12,8 @@ from stubs import fake_executable, stub
 
 CALLS_LOG = "tool-calls.log"
 
-# `bootc status --format json` on a host that keeps a previous deployment.
-# The versions and timestamps are what the Roll Back row reads its subtitle
-# from (pageview.BootcRollbackRow).
+# Like the unprivileged OSTree reader, this status can name the previous
+# version without a release date.
 BOOTC_STATUS_WITH_ROLLBACK = {
     "spec": {"image": {"image": "ghcr.io/projectbluefin/dakota:latest", "transport": "registry"}},
     "status": {
@@ -32,7 +31,6 @@ BOOTC_STATUS_WITH_ROLLBACK = {
             "image": {
                 "image": {"image": "ghcr.io/projectbluefin/dakota:latest", "transport": "registry"},
                 "version": "44.20260913",
-                "timestamp": "2026-09-13T06:00:00Z",
                 "imageDigest": "sha256:" + "a" * 64,
             },
             "pinned": False,
