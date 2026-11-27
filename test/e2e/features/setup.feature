@@ -152,3 +152,19 @@ Feature: Explicit first-run software setup
     When I use the setup "Next" button
     Then the setup wizard shows "Apps"
     And the action journal is empty
+
+  @args.--setup @stub.setup-intro-video
+  Scenario: Welcome offers the introduction video when the image provides one
+    Given ChairLift is running
+    Then the setup wizard shows "Welcome"
+    And the setup offers a "Watch Intro Video" button
+    And the intro video opened in the default handler
+    When I use the setup "Watch Intro Video" button
+    Then the intro video opened again from the button
+    And the action journal is empty
+
+  @args.--setup
+  Scenario: Welcome omits the introduction video when no media is installed
+    Given ChairLift is running
+    Then the setup wizard shows "Welcome"
+    And the setup does not offer a "Watch Intro Video" button

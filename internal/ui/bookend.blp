@@ -69,6 +69,16 @@ Adw.ToolbarView bookend {
           ]
         }
 
+        Button intro_button {
+          halign: center;
+          visible: false;
+
+          icon-name: "video-display-symbolic";
+          label: _("Watch Intro Video");
+
+          action-name: "win.watch-intro";
+        }
+
         Box {
           orientation: vertical;
           spacing: 6;

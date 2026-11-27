@@ -87,7 +87,8 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 	const autoUpdatesEnvVar = "CHAIRLIFT_AUTO_UPDATES"
 	const gpuEnvVar = "CHAIRLIFT_GPU_VENDORS"
 	const capabilitiesEnvVar = "CHAIRLIFT_CAPABILITIES"
-	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar}
+	const introVideoEnvVar = "CHAIRLIFT_INTRO_VIDEO"
+	stubbed := []string{envVar, autoUpdatesEnvVar, gpuEnvVar, capabilitiesEnvVar, introVideoEnvVar}
 
 	taggedOverrideRel := filepath.Join("internal", "app", "imageinfo_override_e2e.go")
 	overrideSource := readRepoFile(t, taggedOverrideRel)
@@ -99,7 +100,7 @@ func TestDescriptorOverrideStaysBehindTheE2EBuildTag(t *testing.T) {
 	}
 	// The automatic-updates probe override shares the same file and the same
 	// build tag, so it is covered by the same guard.
-	for _, required := range []string{autoUpdatesEnvVar, gpuEnvVar} {
+	for _, required := range []string{autoUpdatesEnvVar, gpuEnvVar, introVideoEnvVar} {
 		if !strings.Contains(overrideSource, required) {
 			t.Errorf("the tagged override does not read %s", required)
 		}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/projectbluefin/chairlift/internal/autoupdate"
 	"github.com/projectbluefin/chairlift/internal/capability"
+	"github.com/projectbluefin/chairlift/internal/firstrun"
 	"github.com/projectbluefin/chairlift/internal/gpu"
 	"github.com/projectbluefin/chairlift/internal/ublue"
 )
@@ -52,5 +53,13 @@ func applyImageInfoOverride() {
 	// walkthrough never resolves a capability production would not.
 	if capabilities := os.Getenv("CHAIRLIFT_CAPABILITIES"); capabilities != "" {
 		capability.SetProbe(capability.ProbeFromNames(strings.Split(capabilities, ",")...))
+	}
+
+	// $CHAIRLIFT_INTRO_VIDEO points the setup assistant's introduction video
+	// at a fixture. The Dakota harness masks /usr/share/chairlift with a
+	// read-only tmpfs, so a scenario cannot plant the media at the fixed path
+	// and must redirect the assistant instead.
+	if path := os.Getenv("CHAIRLIFT_INTRO_VIDEO"); path != "" {
+		firstrun.SetIntroVideoPath(path)
 	}
 }
