@@ -25,7 +25,8 @@ import (
 //     [origin] container-image-reference;
 //   - the image's OCI manifest digest is a commit metadata key in the
 //     repository, which `ostree show --print-metadata-key` prints;
-//   - the booted version is /usr/lib/os-release's IMAGE_VERSION;
+//   - each deployment has its own usr/lib/os-release; the booted deployment
+//     uses the running system's copy;
 //   - /run/ostree/staged-deployment exists while a deployment is staged.
 //
 // The staged marker is a binary GVariant, so its presence is the signal and
@@ -61,7 +62,7 @@ func readOstreeStatus(ctx context.Context, fsys fs.FS) (*Status, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bootc: reading the booted deployment: %w", err)
 	}
-	booted.Image.Version = imageVersion(fsys)
+	booted.Image.Version = imageVersion(fsys, osReleasePath)
 
 	status := &Status{Status: StatusInfo{Booted: booted}}
 	if booted.Image != nil {
@@ -74,14 +75,18 @@ func readOstreeStatus(ctx context.Context, fsys fs.FS) (*Status, error) {
 		return nil, err
 	}
 	if stagedName != "" {
-		staged, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, stagedName))
+		deployPath := ostreeDeploymentPath(osName, stagedName)
+		staged, err := readOstreeDeployment(ctx, fsys, deployPath)
 		if err != nil {
 			return nil, fmt.Errorf("bootc: reading the staged deployment: %w", err)
 		}
+		staged.Image.Version = imageVersion(fsys, path.Join(deployPath, osReleasePath))
 		status.Status.Staged = staged
 	}
 	if rollbackName != "" {
-		if rollback, err := readOstreeDeployment(ctx, fsys, ostreeDeploymentPath(osName, rollbackName)); err == nil {
+		deployPath := ostreeDeploymentPath(osName, rollbackName)
+		if rollback, err := readOstreeDeployment(ctx, fsys, deployPath); err == nil {
+			rollback.Image.Version = imageVersion(fsys, path.Join(deployPath, osReleasePath))
 			status.Status.Rollback = rollback
 		}
 	}

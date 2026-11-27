@@ -80,6 +80,7 @@ Feature: Updates
   Scenario: A staged deployment keeps restart in its row and says so in one status line
     Given ChairLift is running
     Then the "Operating System" row says "Deployment staged"
+    And the "System Version" row says "Version 42.20260920.0, released 20 September 2026. Version 42.20261002.0 installs when you restart."
     And the "Restart Now" button in the "Operating System" row is sensitive
     And the Updates page offers no primary action
     And the Updates status reads "Restart to finish updating"

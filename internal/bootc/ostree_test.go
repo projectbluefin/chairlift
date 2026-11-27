@@ -48,6 +48,9 @@ func ostreeHost() fstest.MapFS {
 		deploy + ostreeStagedCsum + ".0.origin":   withModTime(ostreeOrigin("ostree-unverified-registry:"+ostreeRef), ostreeStagedAt),
 		deploy + ostreeRollbackCsum + ".0.origin": withModTime(ostreeOrigin("ostree-unverified-registry:"+ostreeRef), ostreeRollbackAt),
 		"usr/lib/os-release":                      {Data: []byte("NAME=\"Bluefin\"\nIMAGE_VERSION=\"20261117\"\n")},
+
+		deploy + ostreeStagedCsum + ".0/usr/lib/os-release":   {Data: []byte("VERSION_ID=44\nIMAGE_VERSION=\"20261124\"\n")},
+		deploy + ostreeRollbackCsum + ".0/usr/lib/os-release": {Data: []byte("VERSION_ID='20261110'\n")},
 	}
 }
 
@@ -87,8 +90,14 @@ func TestOstreeStatusReadsDeploymentsWithoutRoot(t *testing.T) {
 	if got := status.Status.Staged.ImageRef(); got != ostreeRef {
 		t.Errorf("staged image = %q, want %q", got, ostreeRef)
 	}
+	if got := status.Status.Staged.Version(); got != "20261124" {
+		t.Errorf("staged version = %q, want its own IMAGE_VERSION 20261124", got)
+	}
 	if got := status.Status.Rollback.ImageRef(); got != ostreeRef {
 		t.Errorf("rollback image = %q, want %q", got, ostreeRef)
+	}
+	if got := status.Status.Rollback.Version(); got != "20261110" {
+		t.Errorf("rollback version = %q, want its own VERSION_ID 20261110", got)
 	}
 	if status.Spec.Image == nil || status.Spec.Image.Image != ostreeRef {
 		t.Errorf("spec image = %+v, want %q", status.Spec.Image, ostreeRef)
@@ -98,6 +107,26 @@ func TestOstreeStatusReadsDeploymentsWithoutRoot(t *testing.T) {
 	// than comparing an empty digest.
 	if got := status.Status.Booted.Digest(); got != "" {
 		t.Errorf("booted digest = %q, want empty when the repository read fails", got)
+	}
+}
+
+func TestOstreeStatusKeepsDeploymentsWithoutVersions(t *testing.T) {
+	noOstreeDigest(t)
+	host := ostreeHost()
+	const deploy = "ostree/deploy/" + ostreeOS + "/deploy/"
+	delete(host, deploy+ostreeStagedCsum+".0/usr/lib/os-release")
+	host[deploy+ostreeRollbackCsum+".0/usr/lib/os-release"] = &fstest.MapFile{Data: []byte("NAME=Bluefin\n")}
+
+	status, err := readOstreeStatus(t.Context(), host)
+	if err != nil {
+		t.Fatalf("readOstreeStatus: %v", err)
+	}
+	for name, deployment := range map[string]*Deployment{"staged": status.Status.Staged, "rollback": status.Status.Rollback} {
+		if deployment == nil {
+			t.Errorf("%s deployment was dropped when its version was unavailable", name)
+		} else if got := deployment.Version(); got != "" {
+			t.Errorf("%s version = %q, want empty rather than the running version", name, got)
+		}
 	}
 }
 
@@ -120,6 +149,9 @@ func TestOstreeStatusWithoutStagedDeployment(t *testing.T) {
 	}
 	if got := status.Status.Rollback.ImageRef(); got != ostreeRef {
 		t.Errorf("rollback image = %q, want %q", got, ostreeRef)
+	}
+	if got := status.Status.Rollback.Version(); got != "20261124" {
+		t.Errorf("rollback version = %q, want newest non-booted deployment's version 20261124", got)
 	}
 }
 

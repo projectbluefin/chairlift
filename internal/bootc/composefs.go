@@ -65,7 +65,7 @@ func readComposefsStatus(fsys fs.FS) (*Status, error) {
 		return nil, fmt.Errorf("bootc: reading the booted deployment: %w", err)
 	}
 	if booted.Image != nil {
-		booted.Image.Version = imageVersion(fsys)
+		booted.Image.Version = imageVersion(fsys, osReleasePath)
 	}
 
 	status := &Status{Status: StatusInfo{Booted: booted}}
@@ -264,23 +264,30 @@ func parseOrigin(data []byte) map[string]string {
 	return values
 }
 
-// imageVersion is the booted image's version from os-release, the same
-// value `bootc status` reports from the image's version label.
-func imageVersion(fsys fs.FS) string {
-	data, err := fs.ReadFile(fsys, osReleasePath)
+// imageVersion reads a deployment's os-release. Prefer its image build
+// version to the distribution version; neither is required for status.
+func imageVersion(fsys fs.FS, filename string) string {
+	data, err := fs.ReadFile(fsys, filename)
 	if err != nil {
 		return ""
 	}
-	fields := make(map[string]string)
-	for _, line := range strings.Split(string(data), "\n") {
-		if key, value, ok := strings.Cut(line, "="); ok {
-			fields[key] = strings.Trim(value, `"'`)
+	var image, distro string
+	for line := range strings.SplitSeq(string(data), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "IMAGE_VERSION":
+			image = strings.Trim(value, `"'`)
+		case "VERSION_ID":
+			distro = strings.Trim(value, `"'`)
 		}
 	}
-	if v := fields["IMAGE_VERSION"]; v != "" {
-		return v
+	if image != "" {
+		return image
 	}
-	return fields["VERSION_ID"]
+	return distro
 }
 
 // splitImageReference splits "registry/repo:tag" into the repository and the
